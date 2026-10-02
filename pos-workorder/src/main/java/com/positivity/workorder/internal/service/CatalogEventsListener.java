@@ -3,6 +3,7 @@ package com.positivity.workorder.internal.service;
 import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.catalog.CatalogServiceUpdatedV1;
 import com.positivity.domainevents.catalog.ProductUpdatedV1;
+import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import com.positivity.workorder.internal.entity.ExtCatalogServiceReplica;
 import com.positivity.workorder.internal.entity.ExtProductUomReplica;
 import com.positivity.workorder.internal.entity.ProcessedEvent;
@@ -16,7 +17,6 @@ import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -118,9 +118,11 @@ public class CatalogEventsListener {
                         .processedAt(Instant.now(clock))
                         .build());
             });
-        } catch (TransientDataAccessException e) {
-            throw e;
         } catch (Exception e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // The container retries with backoff, then publishes to {topic}.dlq (ADR-0044 §4).
+                throw e;
+            }
             log.warn("Skipping malformed catalog event eventId={}", eventId, e);
         }
     }

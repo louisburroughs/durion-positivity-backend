@@ -9,6 +9,7 @@ import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.entity.ProcessedEvent;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.repository.ProcessedEventRepository;
+import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -19,7 +20,6 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -121,9 +121,11 @@ public class OrderEventsListener {
                 }
                 recordProcessed(eventId);
             });
-        } catch (TransientDataAccessException e) {
-            throw e;
         } catch (Exception e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // The container retries with backoff, then publishes to {topic}.dlq (ADR-0044 §4).
+                throw e;
+            }
             log.warn("Skipping malformed order event eventId={}", eventId, e);
             handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId));
         }
@@ -175,9 +177,11 @@ public class OrderEventsListener {
                         .transactionUserId("pos-order")
                         .notes("Counter sale, order " + (orderNumber != null ? orderNumber : orderId))
                         .build());
-            } catch (TransientDataAccessException e) {
-                throw e;
             } catch (Exception e) {
+                if (RetryableConsumerFailures.isRetryable(e)) {
+                    // The container retries with backoff, then publishes to {topic}.dlq (ADR-0044 §4).
+                    throw e;
+                }
                 // The sale already happened; stock truth reconciles by hand (spec R8.2).
                 log.warn("Counter-sale consumption failed for order {} sku {}: {}", orderId, sku, e.getMessage());
                 publishConsumptionFailed(orderId, orderNumber, orderLineId, sku, quantity, locationId, e.getMessage());
@@ -218,9 +222,11 @@ public class OrderEventsListener {
                         .transactionUserId("pos-order")
                         .notes("Return to stock, return " + returnOrderId + " (order " + originalOrderId + ")")
                         .build());
-            } catch (TransientDataAccessException e) {
-                throw e;
             } catch (Exception e) {
+                if (RetryableConsumerFailures.isRetryable(e)) {
+                    // The container retries with backoff, then publishes to {topic}.dlq (ADR-0044 §4).
+                    throw e;
+                }
                 // The refund already happened; stock truth reconciles by hand, as for consumption.
                 log.warn("Return restock failed for return {} sku {}: {}", returnOrderId, sku, e.getMessage());
             }

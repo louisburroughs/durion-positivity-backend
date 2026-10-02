@@ -31,6 +31,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,10 +42,7 @@ public class PaymentServiceImpl implements PaymentService {
 
     private static final BigDecimal PAYMENT_LIMIT_THRESHOLD = new BigDecimal("500.00");
 
-    private static final String PROCESS_PAYMENT = "PROCESS_PAYMENT";
-    private static final String OVERRIDE_PAYMENT_LIMIT = "OVERRIDE_PAYMENT_LIMIT";
-    private static final String SELECT_PAYMENT_FLOW = "SELECT_PAYMENT_FLOW";
-    private static final String MANUAL_CAPTURE = "MANUAL_CAPTURE";
+    private static final String MISSING_AUTHORITY = "Missing authority: ";
 
     private final PaymentGatewayPort gatewayPort;
     private final InvoiceRepository invoiceRepository;
@@ -68,20 +66,33 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     @NonNull
     public InitiatePaymentResponse initiatePayment(@NonNull UUID invoiceId, @NonNull InitiatePaymentRequest request) {
-        requireAuthority(PROCESS_PAYMENT);
+        // #2393: catalog permissions, not the raw strings no role could hold. The controller's
+        // @PreAuthorize already demands PAYMENT_PROCESS; it is repeated here as defence in depth,
+        // like the void/refund checks (#2226).
+        requireAuthority(InvoicePermissions.PAYMENT_PROCESS);
 
-        if (request.getAmount().compareTo(PAYMENT_LIMIT_THRESHOLD) > 0) {
-            requireAuthority(OVERRIDE_PAYMENT_LIMIT);
+        // The two conditional codes depend on the request body, so this is the only place they
+        // are enforced. Written as SecurityContextHelper.hasAuthority on one line, like the
+        // #2226 override checks: scripts/audit-rbac.py reads that shape as the in-body gate that
+        // makes the location-scope decision below safe for these two permissions (#1890).
+        if (exceedsPaymentLimit(request)
+                && !SecurityContextHelper.hasAuthority(InvoicePermissions.PAYMENT_LIMIT_OVERRIDE)) {
+            throw new AccessDeniedException(MISSING_AUTHORITY + InvoicePermissions.PAYMENT_LIMIT_OVERRIDE);
         }
 
-        if (request.getPaymentFlow() == PaymentFlow.AUTH_ONLY) {
-            requireAuthority(SELECT_PAYMENT_FLOW);
+        if (request.getPaymentFlow() == PaymentFlow.AUTH_ONLY
+                && !SecurityContextHelper.hasAuthority(InvoicePermissions.PAYMENT_FLOW_SELECT)) {
+            throw new AccessDeniedException(MISSING_AUTHORITY + InvoicePermissions.PAYMENT_FLOW_SELECT);
         }
 
         return paymentIntentRepository
                 .findByIdempotencyKey(request.getIdempotencyKey())
                 .map(paymentIntent -> {
                     validateIdempotentReplayPayload(paymentIntent, invoiceId, request);
+                    // ADR-0061 §3 (#2393): a replay hands back the stored intent, so it is scoped
+                    // like the original call. The payload check above has already established that
+                    // the intent belongs to this invoice.
+                    requirePaymentLocationInReach(paymentIntent.getInvoice(), request);
                     return toResponse(paymentIntent);
                 })
                 .orElseGet(() -> createAndProcessPaymentIntent(invoiceId, request));
@@ -94,7 +105,8 @@ public class PaymentServiceImpl implements PaymentService {
             @NonNull UUID paymentIntentId,
             @NonNull BigDecimal amount,
             @NonNull String captureIdempotencyKey) {
-        requireAuthority(MANUAL_CAPTURE);
+        // #2393: repeated from the controller's @PreAuthorize as defence in depth (see #2226).
+        requireAuthority(InvoicePermissions.PAYMENT_CAPTURE);
 
         PaymentIntent paymentIntent = paymentIntentRepository
                 .findById(paymentIntentId)
@@ -105,6 +117,10 @@ public class PaymentServiceImpl implements PaymentService {
             throw new PaymentIntentNotFoundException(
                     "Payment intent " + paymentIntentId + " not found under invoice " + invoiceId);
         }
+
+        // ADR-0061 §3 (#2393): after the existence check, so a denial cannot be used to probe
+        // which payment intent ids exist; mirrors PaymentReversalServiceImpl.voidPayment.
+        requireLocationInReach(InvoicePermissions.PAYMENT_CAPTURE, paymentIntent.getInvoice());
 
         if (paymentIntent.getStatus() != PaymentIntentStatus.AUTHORIZED) {
             throw new InvalidPaymentStateException(
@@ -153,6 +169,10 @@ public class PaymentServiceImpl implements PaymentService {
             @NonNull UUID invoiceId, @NonNull InitiatePaymentRequest request) {
         Invoice invoice =
                 invoiceRepository.findById(invoiceId).orElseThrow(() -> new InvoiceNotFoundException(invoiceId));
+
+        // ADR-0061 §3 (#2393): after the existence check and before anything is saved or sent to
+        // the gateway.
+        requirePaymentLocationInReach(invoice, request);
 
         PaymentIntent paymentIntent = new PaymentIntent();
         paymentIntent.setInvoice(invoice);
@@ -262,8 +282,12 @@ public class PaymentServiceImpl implements PaymentService {
 
     private void requireAuthority(@NonNull String authority) {
         if (!SecurityContextHelper.hasAuthority(authority)) {
-            throw new AccessDeniedException("Missing authority: " + authority);
+            throw new AccessDeniedException(MISSING_AUTHORITY + authority);
         }
+    }
+
+    private static boolean exceedsPaymentLimit(@NonNull InitiatePaymentRequest request) {
+        return request.getAmount().compareTo(PAYMENT_LIMIT_THRESHOLD) > 0;
     }
 
     /** ADR-0061 §3 (#2226, #2215): gates a payment read on the invoice's location, mirroring
@@ -271,9 +295,36 @@ public class PaymentServiceImpl implements PaymentService {
      *  scoped caller cannot cover (fail closed); an unscoped or pre-rollout caller is unchanged.
      */
     private static void requireLocationInReach(@NonNull Invoice invoice) {
-        UUID invoiceLocation = invoice.getLocationId();
+        requireLocationInReach(InvoicePermissions.VIEW, invoice);
+    }
+
+    /**
+     * ADR-0061 §3 (#2393): gates a payment mutation on the invoice's location under the permission
+     * that mutation requires, mirroring {@code PaymentReversalServiceImpl}. Same fail-closed rule
+     * as the read gate: an invoice without a location answers "".
+     */
+    private static void requireLocationInReach(@NonNull String permission, @Nullable Invoice invoice) {
+        UUID invoiceLocation = invoice == null ? null : invoice.getLocationId();
         SecurityContextHelper.locationScope()
-                .require(InvoicePermissions.VIEW, invoiceLocation == null ? "" : invoiceLocation.toString());
+                .require(permission, invoiceLocation == null ? "" : invoiceLocation.toString());
+    }
+
+    /**
+     * ADR-0061 §3 (#2393): every permission {@code initiatePayment} relied on for this request must
+     * reach the invoice's location: {@code invoice:payment:process} always, and the two elevations
+     * when the request needed them, so a limit override or flow selection granted for one shop
+     * cannot be spent at another. The authorities themselves were already checked by
+     * {@link #initiatePayment}; a permission the caller holds unscoped is not narrowed here.
+     */
+    private static void requirePaymentLocationInReach(
+            @Nullable Invoice invoice, @NonNull InitiatePaymentRequest request) {
+        requireLocationInReach(InvoicePermissions.PAYMENT_PROCESS, invoice);
+        if (exceedsPaymentLimit(request)) {
+            requireLocationInReach(InvoicePermissions.PAYMENT_LIMIT_OVERRIDE, invoice);
+        }
+        if (request.getPaymentFlow() == PaymentFlow.AUTH_ONLY) {
+            requireLocationInReach(InvoicePermissions.PAYMENT_FLOW_SELECT, invoice);
+        }
     }
 
     @NonNull

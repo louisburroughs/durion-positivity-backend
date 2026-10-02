@@ -5,6 +5,7 @@ import com.positivity.people.internal.entity.ExtRoleAssignmentReplica;
 import com.positivity.people.internal.entity.ProcessedEvent;
 import com.positivity.people.internal.repository.ExtRoleAssignmentReplicaRepository;
 import com.positivity.people.internal.repository.ProcessedEventRepository;
+import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
@@ -13,7 +14,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -135,15 +135,16 @@ public class SecurityEventsListener {
                 }
                 markProcessed(eventId);
             });
-        } catch (TransientDataAccessException e) {
-            // Retry with backoff / DLQ via the container error handler (ADR-0044 §4).
-            throw e;
         } catch (DatabindException e) {
             if (payloadRejectedCounter != null) {
                 payloadRejectedCounter.increment();
             }
             log.error("Rejected malformed security event payload eventId={}: {}", eventId, e.getMessage(), e);
         } catch (Exception e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // Retry with backoff / DLQ via the container error handler (ADR-0044 §4).
+                throw e;
+            }
             log.warn("Skipping malformed security event eventId={}", eventId, e);
         }
     }

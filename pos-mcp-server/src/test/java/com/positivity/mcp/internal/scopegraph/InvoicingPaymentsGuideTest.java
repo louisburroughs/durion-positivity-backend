@@ -168,10 +168,65 @@ class InvoicingPaymentsGuideTest {
 
         assertThat(named)
                 .as("codes the guide names")
-                .contains("invoice:invoice:view", "accounting:payment:apply", "invoice:payment:refund");
+                .contains(
+                        "invoice:invoice:view",
+                        "accounting:payment:apply",
+                        "invoice:payment:refund",
+                        "invoice:payment:process",
+                        "invoice:payment:limit_override",
+                        "invoice:payment:flow_select",
+                        "invoice:payment:capture");
         assertThat(registered)
                 .as("pos-invoice, pos-accounting and pos-workorder permissions.yaml")
                 .containsAll(named);
+    }
+
+    @Test
+    @DisplayName("#2393: the card payment permissions the guide names are the ones pos-invoice enforces")
+    void cardPaymentPermissionsMatchTheCode() throws IOException {
+        String permissions = Files.readString(INVOICE_SRC.resolve("security/InvoicePermissions.java"));
+        String controller = Files.readString(INVOICE_SRC.resolve("controller/PaymentController.java"));
+        String service = Files.readString(INVOICE_SRC.resolve("service/PaymentServiceImpl.java"));
+        String doc = flatGuideText();
+
+        assertThat(permissions)
+                .contains("PAYMENT_PROCESS = \"invoice:payment:process\"")
+                .contains("PAYMENT_LIMIT_OVERRIDE = \"invoice:payment:limit_override\"")
+                .contains("PAYMENT_FLOW_SELECT = \"invoice:payment:flow_select\"")
+                .contains("PAYMENT_CAPTURE = \"invoice:payment:capture\"");
+        // The two unconditional codes are the endpoints' own @PreAuthorize...
+        assertThat(controller)
+                .containsPattern(
+                        "@PostMapping\\(\"/\\{invoiceId}/payments\"\\)\\s*"
+                                + "@PreAuthorize\\(\"hasAuthority\\('\" \\+ InvoicePermissions\\.PAYMENT_PROCESS \\+ \"'\\)\"\\)")
+                .containsPattern(
+                        "@PostMapping\\(\"/\\{invoiceId}/payments/\\{paymentId}/capture\"\\)\\s*"
+                                + "@PreAuthorize\\(\"hasAuthority\\('\" \\+ InvoicePermissions\\.PAYMENT_CAPTURE \\+ \"'\\)\"\\)");
+        // ...and the two conditional ones are checked in the service against the 500.00 threshold
+        // (strictly above it) and the AUTH_ONLY flow.
+        assertThat(service)
+                .contains("PAYMENT_LIMIT_THRESHOLD = new BigDecimal(\"500.00\")")
+                .contains("request.getAmount().compareTo(PAYMENT_LIMIT_THRESHOLD) > 0")
+                .containsPattern("exceedsPaymentLimit\\(request\\)\\s*&& !SecurityContextHelper\\.hasAuthority\\("
+                        + "InvoicePermissions\\.PAYMENT_LIMIT_OVERRIDE\\)")
+                .containsPattern("request\\.getPaymentFlow\\(\\) == PaymentFlow\\.AUTH_ONLY\\s*"
+                        + "&& !SecurityContextHelper\\.hasAuthority\\(InvoicePermissions\\.PAYMENT_FLOW_SELECT\\)");
+
+        assertThat(doc)
+                .contains("| Take card tender | `POST /v1/invoices/{invoiceId}/payments` | `invoice:payment:process` ")
+                .contains(
+                        "| Capture an authorized hold | `POST /v1/invoices/{invoiceId}/payments/{paymentId}/capture` |"
+                                + " `invoice:payment:capture` |")
+                .contains("`invoice:payment:limit_override` when the amount is above 500.00")
+                .contains("`invoice:payment:flow_select` when the request asks for the `AUTH_ONLY` flow");
+
+        // The retired raw strings no role could hold are gone from the guide and from the code.
+        for (String legacy :
+                List.of("PROCESS_PAYMENT", "OVERRIDE_PAYMENT_LIMIT", "SELECT_PAYMENT_FLOW", "MANUAL_CAPTURE")) {
+            assertThat(doc).as("guide").doesNotContain(legacy);
+            assertThat(controller).as("PaymentController").doesNotContain(legacy);
+            assertThat(service).as("PaymentServiceImpl").doesNotContain(legacy);
+        }
     }
 
     @Test

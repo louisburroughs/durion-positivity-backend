@@ -1,5 +1,7 @@
 package com.positivity.shopmanager.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import com.positivity.shopmanager.internal.enums.MechanicStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
@@ -18,8 +20,20 @@ import lombok.NoArgsConstructor;
 @Schema(description = "HR-synchronized mechanic roster entry")
 public class MechanicRosterEntryResponse {
 
-    private UUID mechanicId;
-    private UUID personId;
+    @Schema(
+            description = "The mechanic's People-domain person id (ADR-0015 §7 I7) - the value createAssignment "
+                    + "takes as mechanicPersonId. Use this to identify the mechanic across services.",
+            example = "01960003-0000-7000-8000-000000000010",
+            requiredMode = REQUIRED)
+    private UUID mechanicPersonId;
+
+    @Schema(
+            description = "Internal shop-manager mechanic record id (a local surrogate key). Not a person id and "
+                    + "not a stable cross-service identifier; do not send it to other services.",
+            example = "01960003-0000-7000-8000-000000000011",
+            requiredMode = REQUIRED)
+    private UUID mechanicRecordId;
+
     private String firstName;
     private String lastName;
     private MechanicStatus status;

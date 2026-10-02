@@ -1613,13 +1613,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 94")
+    @DisplayName("CATALOG_VERSION is 96")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(94);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(96);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 543")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 547")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1952,8 +1952,18 @@ class SecurityGatewayConfigTest {
         // catalog v94 (#2301, SPEC-manual-bank-reconciliation D3): approving bank reconciliation work,
         // excluding and restoring bank transactions, separated from preparing them (bit 543)
         assertThat(GatewayPermissionCatalog.authorityForBit(543)).isEqualTo("PERM_accounting:reconciliation:approve");
+        // catalog v95 (#2393, BILL-DEC-008): taking card tender and capturing an authorized hold,
+        // the two unconditional payment permissions PaymentController names in @PreAuthorize
+        // (bits 544-545)
+        assertThat(GatewayPermissionCatalog.authorityForBit(544)).isEqualTo("PERM_invoice:payment:capture");
+        assertThat(GatewayPermissionCatalog.authorityForBit(545)).isEqualTo("PERM_invoice:payment:process");
+        // catalog v96 (#2393, BILL-DEC-008 / BILL-DEC-010): the two conditional payment
+        // permissions, enforced only in the body of PaymentServiceImpl.initiatePayment (AUTH_ONLY
+        // flow; amount above 500.00), hand-assigned like bits 540-541 (bits 546-547)
+        assertThat(GatewayPermissionCatalog.authorityForBit(546)).isEqualTo("PERM_invoice:payment:flow_select");
+        assertThat(GatewayPermissionCatalog.authorityForBit(547)).isEqualTo("PERM_invoice:payment:limit_override");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(544)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(548)).isNull();
     }
 
     @Test

@@ -11,7 +11,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
@@ -75,11 +74,8 @@ public class TenantEventsListener {
         // provisioning transaction below runs entirely under the new tenant's own binding.
         List<BaySpecialtyMapProvisioningService.PlatformRow> platformRows = provisioningService.readPlatformTemplate();
 
-        try {
-            TenantContext.runAs(tenantId, () -> provisioningService.provisionIfNeeded(tenantId, eventId, platformRows));
-        } catch (TransientDataAccessException e) {
-            // Let the container error handler retry with backoff and route to {topic}.dlq.
-            throw e;
-        }
+        // No catch: every failure propagates, so the container error handler retries with backoff
+        // and routes to {topic}.dlq (ADR-0044 §4).
+        TenantContext.runAs(tenantId, () -> provisioningService.provisionIfNeeded(tenantId, eventId, platformRows));
     }
 }

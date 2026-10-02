@@ -55,10 +55,12 @@ class TechnicianControllerTest {
     @Test
     @WithMockUser(authorities = "shop:technician:view")
     void listLocationTechniciansMapsFiltersAndReturnsPage() throws Exception {
+        UUID mechanicId = UUID.fromString("01960011-0000-7000-8000-000000000001");
         UUID personId = UUID.fromString("01960011-0000-7000-8000-000000000002");
         LocationTechnicianRosterEntryResponse entry = LocationTechnicianRosterEntryResponse.builder()
                 .locationId(LOCATION_ID)
-                .personId(personId)
+                .mechanicPersonId(personId)
+                .mechanicRecordId(mechanicId)
                 .status(MechanicStatus.ON_LEAVE)
                 .credentials(List.of(TechnicianCredentialResponse.builder()
                         .skillCode("BRAKES-MEDIUM_HEAVY")
@@ -74,7 +76,11 @@ class TechnicianControllerTest {
                         .param("status", "ON_LEAVE")
                         .param("skillCode", "BRAKES"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content[0].personId").value(personId.toString()))
+                .andExpect(jsonPath("$.content[0].mechanicPersonId").value(personId.toString()))
+                .andExpect(jsonPath("$.content[0].mechanicRecordId").value(mechanicId.toString()))
+                // #2363: the surrogate is no longer published as mechanicId, nor the person id twice.
+                .andExpect(jsonPath("$.content[0].mechanicId").doesNotExist())
+                .andExpect(jsonPath("$.content[0].personId").doesNotExist())
                 .andExpect(jsonPath("$.content[0].credentials[0].skillCode").value("BRAKES-MEDIUM_HEAVY"))
                 .andExpect(jsonPath("$.content[0].credentials[0].status").value("ACTIVE"))
                 .andExpect(jsonPath("$.content[0].locationId").value(LOCATION_ID.toString()))
@@ -88,7 +94,7 @@ class TechnicianControllerTest {
         LocalDate date = LocalDate.parse("2026-09-15");
         LocationTechnicianRosterEntryResponse entry = LocationTechnicianRosterEntryResponse.builder()
                 .locationId(LOCATION_ID)
-                .personId(UUID.fromString("01960011-0000-7000-8000-000000000002"))
+                .mechanicPersonId(UUID.fromString("01960011-0000-7000-8000-000000000002"))
                 .status(MechanicStatus.ACTIVE)
                 .credentials(List.of())
                 .shiftStart(Instant.parse("2026-09-15T12:00:00Z"))

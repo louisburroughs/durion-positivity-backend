@@ -29,6 +29,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
@@ -206,6 +207,20 @@ class PurchaseOrderProjectionListenerTest {
 
         assertThatThrownBy(() -> listener.onOrderEvent(event("evt-1", 3, "APPROVED", "4")))
                 .isInstanceOf(QueryTimeoutException.class);
+
+        // Marking it processed here would drop the order out of the projection permanently, and
+        // availability-to-promise would keep quoting a figure short by that order with nothing to
+        // show why.
+        verify(processedEventRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("lost-connection database trouble is retried, not swallowed")
+    void lostConnectionFailureIsRethrownAndNotMarkedProcessed() {
+        when(orderRepository.save(any())).thenThrow(new DataAccessResourceFailureException("connection reset"));
+
+        assertThatThrownBy(() -> listener.onOrderEvent(event("evt-1", 3, "APPROVED", "4")))
+                .isInstanceOf(DataAccessResourceFailureException.class);
 
         // Marking it processed here would drop the order out of the projection permanently, and
         // availability-to-promise would keep quoting a figure short by that order with nothing to

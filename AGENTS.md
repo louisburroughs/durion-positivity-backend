@@ -66,10 +66,34 @@
   example. Such a table is not relocated into `V1` after the fact: moving DDL out of a migration other databases
   have already run needs the same reset or repair, and the next flattening folds it into the new baseline for
   free. Data reconciliation and any index over pre-existing rows always stay in a post-baseline migration.
-- Kafka consumers (ADR-0044 §4, amended 2026-09-23 by #2146): a `@KafkaListener` that writes a
-  `processed_events` mark is **not** `@Transactional`. It runs the handler and the mark together in the handler's
-  own transaction (`TransactionTemplate` with `PROPAGATION_REQUIRES_NEW`) and rethrows
-  `TransientDataAccessException`. It logs any other exception as permanent and, if the consumer records failures,
+- Kafka consumers (ADR-0044 §4, amended 2026-09-23 by #2146 and 2026-10-02 by #2355): a `@KafkaListener` that
+  writes a `processed_events` mark is **not** `@Transactional`. It runs the handler and the mark together in the
+  handler's own transaction (`TransactionTemplate` with `PROPAGATION_REQUIRES_NEW`) and rethrows the retryable set
+  for container retry. That set has one definition, `RetryableConsumerFailures` in `pos-tenancy-common`
+  (`com.positivity.tenancy.kafka`): `TransientDataAccessException`, `RecoverableDataAccessException`,
+  `DataAccessResourceFailureException`, `CannotCreateTransactionException`, `TransactionSystemException` and
+  `TransactionTimedOutException`, anywhere in the cause chain. Every other `TransactionException`
+  (`UnexpectedRollbackException`, `IllegalTransactionStateException`, `NoTransactionException`, ...) is permanent:
+  it reports a state the same code reaches again on redelivery. A dropped
+  connection is a `DataAccessResourceFailureException`, which Spring files as non-transient, so don't write
+  `catch (TransientDataAccessException e) { throw e; }`; the permanent catch asks the classifier first, before it
+  logs, records or marks anything:
+
+  ```java
+  } catch (Exception e) {
+      if (RetryableConsumerFailures.isRetryable(e)) {
+          throw e; // container retries with backoff, then {topic}.dlq (ADR-0044 §4)
+      }
+      log.warn("Skipping malformed event eventId={}", eventId, e); // permanent: log, record, drop
+      recordFailed(eventId); // in a transaction of its own
+  }
+  ```
+
+  `pos-archunit`'s `KafkaConsumerRetryArchitectureTest` rejects a consumer that catches
+  `TransientDataAccessException` or swallows a handler failure without asking the classifier; pin the behaviour
+  with a propagation test that throws `DataAccessResourceFailureException` (a `QueryTimeoutException` is transient
+  and proves nothing about this) and asserts no `processed_events` mark was written. The consumer logs any other
+  exception as permanent and, if the consumer records failures,
   writes the mark for the failed record in a separate transaction. If the method were
   `@Transactional`, a handler exception crossing a `@Transactional` service or a Spring Data repository would mark
   the shared transaction rollback-only. The commit after the catch would then throw, and the container would retry

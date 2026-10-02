@@ -22,6 +22,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
@@ -220,6 +221,21 @@ class CatalogEventsListenerTest {
         assertThatThrownBy(
                         () -> listener.onCatalogEvent(serviceUpdated("01990000-0000-7000-8000-000000000c08", 14, true)))
                 .isInstanceOf(QueryTimeoutException.class);
+
+        verify(processedEventRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("a lost-connection DB error reaches the container for retry/DLQ, and nothing is marked processed")
+    void lostConnectionDataAccessErrorRethrown() {
+        when(replicaRepository.findById(SERVICE_ID)).thenReturn(Optional.empty());
+        doThrow(new DataAccessResourceFailureException("connection reset"))
+                .when(replicaRepository)
+                .save(any());
+
+        assertThatThrownBy(
+                        () -> listener.onCatalogEvent(serviceUpdated("01990000-0000-7000-8000-000000000c08", 14, true)))
+                .isInstanceOf(DataAccessResourceFailureException.class);
 
         verify(processedEventRepository, never()).save(any());
     }

@@ -23,7 +23,7 @@ public final class DownstreamPermissionCatalog {
      * {@code PermissionCode.CATALOG_VERSION}.
      * Updated automatically by {@code scripts/generate-permissions.py --sync}.
      */
-    public static final int CATALOG_VERSION = 94;
+    public static final int CATALOG_VERSION = 96;
 
     /**
      * Index-to-authority mapping. Entry at position N is the {@code PERM_*}-prefixed
@@ -746,7 +746,18 @@ public final class DownstreamPermissionCatalog {
         "PERM_appointments:reschedule:approve", // 542
 
         // ── New batch (bits 543–543) ──────────────────────────────────────────
-        "PERM_accounting:reconciliation:approve" // 543
+        "PERM_accounting:reconciliation:approve", // 543
+
+        // ── New batch (bits 544–545) ──────────────────────────────────────────
+        "PERM_invoice:payment:capture", // 544
+        "PERM_invoice:payment:process", // 545
+
+        // ── New batch (bits 546–547): #2393 conditional permissions, hand-assigned because
+        // scripts/generate-permissions.sh --sync only discovers permissions named in a
+        // @PreAuthorize annotation, and these two are enforced only via an in-body
+        // SecurityContextHelper.hasAuthority check ──────────────────────────────
+        "PERM_invoice:payment:flow_select", // 546
+        "PERM_invoice:payment:limit_override" // 547
     };
 
     public static String authorityForBit(int bitIndex) {

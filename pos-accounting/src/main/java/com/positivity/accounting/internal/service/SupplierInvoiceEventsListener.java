@@ -9,6 +9,7 @@ import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.accounting.internal.repository.VendorRepository;
 import com.positivity.domainevents.supplier.SupplierInvoiceReceivedV1;
+import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -148,6 +149,12 @@ public class SupplierInvoiceEventsListener {
             // Better a retry, or a dead letter somebody has to look at, than a debt that vanishes.
             throw e;
         } catch (Exception e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // Not a DataAccessException, but as retryable as one: the transaction could not be
+                // opened, failed to commit or timed out, or a lost connection came wrapped.
+                // Rethrown before the mark below for the same reason as above (ADR-0044 §4, #2355).
+                throw e;
+            }
             // Genuinely unreadable: a payload this build cannot parse will not parse on retry
             // either, and blocking the partition would stop every other vendor's invoices too.
             log.warn("Skipping malformed supplier invoice event eventId={}", eventId, e);

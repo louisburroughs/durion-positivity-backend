@@ -70,8 +70,8 @@ public class MechanicRosterQueryServiceImpl implements MechanicRosterQueryServic
         Map<UUID, List<TechnicianCredentialResponse>> credentialsByPerson =
                 loadCredentials(mechanics.getContent(), onDate);
         return mechanics.map(mechanic -> MechanicRosterEntryResponse.builder()
-                .mechanicId(mechanic.getMechanicId())
-                .personId(mechanic.getPersonId())
+                .mechanicPersonId(mechanic.getPersonId())
+                .mechanicRecordId(mechanic.getMechanicId())
                 .firstName(mechanic.getFirstName())
                 .lastName(mechanic.getLastName())
                 .status(mechanic.getStatus())
@@ -112,8 +112,8 @@ public class MechanicRosterQueryServiceImpl implements MechanicRosterQueryServic
                 loadCredentials(mechanics.getContent(), onDate);
         return mechanics.map(mechanic -> LocationTechnicianRosterEntryResponse.builder()
                 .locationId(locationId)
-                .mechanicId(mechanic.getMechanicId())
-                .personId(mechanic.getPersonId())
+                .mechanicPersonId(mechanic.getPersonId())
+                .mechanicRecordId(mechanic.getMechanicId())
                 .firstName(mechanic.getFirstName())
                 .lastName(mechanic.getLastName())
                 .status(mechanic.getStatus())

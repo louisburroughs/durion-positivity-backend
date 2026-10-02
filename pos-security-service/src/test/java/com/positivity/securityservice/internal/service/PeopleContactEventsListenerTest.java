@@ -1,6 +1,7 @@
 package com.positivity.securityservice.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -21,6 +22,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
@@ -121,6 +124,29 @@ class PeopleContactEventsListenerTest {
         listener.onPeopleContactEvent(linkUpdated("00000000-0000-7000-8000-000000000e05", PERSON_ID, "ACTIVE"));
 
         verify(userRepository, never()).save(any());
+        verify(processedEventRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("A lost connection propagates for container retry and leaves no processed mark (#2355)")
+    void lostConnectionPropagatesUnmarked() {
+        when(userRepository.findByUsername("jane"))
+                .thenThrow(new DataAccessResourceFailureException("connection reset"));
+
+        assertThatThrownBy(() -> listener.onPeopleContactEvent(
+                        linkUpdated("00000000-0000-7000-8000-000000000e06", PERSON_ID, "ACTIVE")))
+                .isInstanceOf(DataAccessResourceFailureException.class);
+
+        verify(processedEventRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("A permanent database rejection is still recorded as failed rather than retried")
+    void permanentRejectionIsRecorded() {
+        when(userRepository.findByUsername("jane")).thenThrow(new DataIntegrityViolationException("duplicate key"));
+
+        listener.onPeopleContactEvent(linkUpdated("00000000-0000-7000-8000-000000000e07", PERSON_ID, "ACTIVE"));
+
         verify(processedEventRepository).save(any());
     }
 }

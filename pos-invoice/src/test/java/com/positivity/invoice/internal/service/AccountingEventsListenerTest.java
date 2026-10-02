@@ -34,6 +34,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
@@ -248,6 +249,20 @@ class AccountingEventsListenerTest {
         assertThatThrownBy(() ->
                         listener.onAccountingEvent(glPosted("evt-8", INVOICE_ID.toString(), "POSTED", FINALIZED_AT)))
                 .isInstanceOf(QueryTimeoutException.class);
+
+        verify(processedEventRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("a lost-connection database error is rethrown so the container retries instead of losing the fact")
+    void lostConnectionDatabaseErrorIsRethrown() {
+        doThrow(new DataAccessResourceFailureException("connection reset"))
+                .when(invoiceRepository)
+                .findById(any());
+
+        assertThatThrownBy(() ->
+                        listener.onAccountingEvent(glPosted("evt-8", INVOICE_ID.toString(), "POSTED", FINALIZED_AT)))
+                .isInstanceOf(DataAccessResourceFailureException.class);
 
         verify(processedEventRepository, never()).save(any());
     }

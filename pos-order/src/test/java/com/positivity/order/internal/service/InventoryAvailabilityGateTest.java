@@ -35,6 +35,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
@@ -296,6 +297,18 @@ class InventoryAvailabilityGateTest {
 
             assertThatThrownBy(() -> listener().onInventoryEvent(availabilityEnvelope("e3", 1L, 1)))
                     .isInstanceOf(QueryTimeoutException.class);
+            verify(processedEventRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("rethrows a lost-connection database error so the container retries")
+        void rethrowsLostConnection() {
+            when(processedEventRepository.existsById("e3")).thenReturn(false);
+            when(extInventoryAvailabilityRepository.findById(AGGREGATE_ID))
+                    .thenThrow(new DataAccessResourceFailureException("connection reset"));
+
+            assertThatThrownBy(() -> listener().onInventoryEvent(availabilityEnvelope("e3", 1L, 1)))
+                    .isInstanceOf(DataAccessResourceFailureException.class);
             verify(processedEventRepository, never()).save(any());
         }
     }

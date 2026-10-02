@@ -52,27 +52,45 @@ public class SystemPromptWriter {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void upsert(@NonNull String name, @NonNull String content) {
         try {
-            Optional<SystemPrompt> existing = systemPromptRepository.findByName(name);
-            if (existing.isPresent()) {
-                SystemPrompt prompt = existing.get();
-                if (!content.equals(prompt.getContent())) {
-                    prompt.setContent(content);
-                    systemPromptRepository.saveAndFlush(prompt);
-                    LOGGER.info("Updated role persona prompt name={}", name);
-                }
-                return;
-            }
-
-            SystemPrompt prompt = new SystemPrompt();
-            prompt.setName(name);
-            prompt.setContent(content);
-            systemPromptRepository.saveAndFlush(prompt);
-            LOGGER.info("Seeded role persona prompt name={}", name);
+            writeRow(name, content);
         } catch (Exception exception) {
             // The losing side of that race lands here. The winner wrote the same rendered persona,
             // so the outcome is already correct and the request continues.
             LOGGER.warn("Failed to persist role persona prompt name={}", name, exception);
         }
+    }
+
+    /**
+     * {@link #upsert} for the Kafka path: the same write, but a failure propagates to the caller.
+     *
+     * <p>A request can carry on without the row; a consumed event cannot, because returning
+     * normally commits its offset and nothing brings the persona back. So nothing is caught here.
+     * The exception leaves through the transaction proxy, which rolls this method's own
+     * {@code REQUIRES_NEW} transaction back and rethrows the original, and the listener decides
+     * whether it is one the container should retry (ADR-0044 §4, #2355).
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void upsertOrThrow(@NonNull String name, @NonNull String content) {
+        writeRow(name, content);
+    }
+
+    private void writeRow(@NonNull String name, @NonNull String content) {
+        Optional<SystemPrompt> existing = systemPromptRepository.findByName(name);
+        if (existing.isPresent()) {
+            SystemPrompt prompt = existing.get();
+            if (!content.equals(prompt.getContent())) {
+                prompt.setContent(content);
+                systemPromptRepository.saveAndFlush(prompt);
+                LOGGER.info("Updated role persona prompt name={}", name);
+            }
+            return;
+        }
+
+        SystemPrompt prompt = new SystemPrompt();
+        prompt.setName(name);
+        prompt.setContent(content);
+        systemPromptRepository.saveAndFlush(prompt);
+        LOGGER.info("Seeded role persona prompt name={}", name);
     }
 
     /**
@@ -83,13 +101,23 @@ public class SystemPromptWriter {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void remove(@NonNull String name) {
         try {
-            systemPromptRepository.findByName(name).ifPresent(prompt -> {
-                systemPromptRepository.delete(prompt);
-                systemPromptRepository.flush();
-                LOGGER.info("Removed role persona prompt name={} (role is no longer persona-eligible)", name);
-            });
+            deleteRow(name);
         } catch (Exception exception) {
             LOGGER.warn("Failed to remove role persona prompt name={}", name, exception);
         }
+    }
+
+    /** {@link #remove} for the Kafka path: a failure propagates, for the reason {@link #upsertOrThrow} gives. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void removeOrThrow(@NonNull String name) {
+        deleteRow(name);
+    }
+
+    private void deleteRow(@NonNull String name) {
+        systemPromptRepository.findByName(name).ifPresent(prompt -> {
+            systemPromptRepository.delete(prompt);
+            systemPromptRepository.flush();
+            LOGGER.info("Removed role persona prompt name={} (role is no longer persona-eligible)", name);
+        });
     }
 }

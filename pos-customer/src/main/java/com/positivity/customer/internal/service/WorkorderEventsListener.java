@@ -16,6 +16,7 @@ import com.positivity.customer.internal.repository.ServiceHistoryRepository;
 import com.positivity.domainevents.workorder.WorkorderNoteAddedV1;
 import com.positivity.domainevents.workorder.WorkorderServiceCompletedV1;
 import com.positivity.domainevents.workorder.WorkorderServiceLineDeclinedV1;
+import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
@@ -25,7 +26,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -162,9 +162,6 @@ public class WorkorderEventsListener {
                 }
                 recordProcessed(eventId);
             });
-        } catch (TransientDataAccessException e) {
-            // Retry with backoff / DLQ via the container error handler (ADR-0044 §4).
-            throw e;
         } catch (DatabindException e) {
             if (payloadRejectedCounter != null) {
                 payloadRejectedCounter.increment();
@@ -172,6 +169,10 @@ public class WorkorderEventsListener {
             log.error("Rejected malformed workorder event payload eventId={}: {}", eventId, e.getMessage(), e);
             handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId));
         } catch (Exception e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // Retry with backoff / DLQ via the container error handler (ADR-0044 §4).
+                throw e;
+            }
             log.warn("Skipping malformed workorder event eventId={} type={}", eventId, eventType, e);
             handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId));
         }

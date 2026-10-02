@@ -1,6 +1,7 @@
 package com.positivity.warranty.internal.service;
 
 import com.positivity.domainevents.invoice.InvoiceUpdatedV1;
+import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import com.positivity.warranty.internal.entity.ExtInvoiceLineReplica;
 import com.positivity.warranty.internal.entity.ExtInvoiceReplica;
 import com.positivity.warranty.internal.entity.ProcessedEvent;
@@ -17,7 +18,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -125,8 +125,6 @@ public class InvoiceEventsListener {
                 }
                 markProcessed(eventId);
             });
-        } catch (TransientDataAccessException e) {
-            throw e;
         } catch (DatabindException e) {
             if (payloadRejectedCounter != null) {
                 payloadRejectedCounter.increment();
@@ -134,6 +132,10 @@ public class InvoiceEventsListener {
             log.error("Rejected malformed invoice event payload eventId={}: {}", eventId, e.getMessage(), e);
             handlerTransaction.executeWithoutResult(_ -> markProcessed(eventId));
         } catch (Exception e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // The container retries with backoff, then publishes to {topic}.dlq (ADR-0044 §4).
+                throw e;
+            }
             log.warn("Skipping malformed invoice event eventId={}", eventId, e);
             handlerTransaction.executeWithoutResult(_ -> markProcessed(eventId));
         }

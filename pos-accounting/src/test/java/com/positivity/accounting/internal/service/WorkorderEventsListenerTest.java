@@ -23,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
@@ -194,6 +195,19 @@ class WorkorderEventsListenerTest {
                 .thenThrow(new QueryTimeoutException("db timeout"));
 
         assertThatExceptionOfType(QueryTimeoutException.class)
+                .isThrownBy(() -> listener.onWorkorderEvent(updatedEvent("e-3", INVOICE_ID, "2026-08-27T12:00:05Z")));
+
+        verify(processedEvents, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Propagates lost-connection DB errors so the container retries, and does not save ProcessedEvent")
+    void propagatesLostConnectionErrors() {
+        when(processedEvents.existsById("e-3")).thenReturn(false);
+        when(requests.findByWorkorderIdAndStatus(WORKORDER_ID, InvoiceRegenerationRequest.STATUS_PENDING))
+                .thenThrow(new DataAccessResourceFailureException("connection reset"));
+
+        assertThatExceptionOfType(DataAccessResourceFailureException.class)
                 .isThrownBy(() -> listener.onWorkorderEvent(updatedEvent("e-3", INVOICE_ID, "2026-08-27T12:00:05Z")));
 
         verify(processedEvents, never()).save(any());

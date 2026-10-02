@@ -32,7 +32,14 @@ import org.junit.jupiter.api.Test;
 @DisplayName("PermissionCode catalog contract (PERM-001)")
 class PermissionCodeTest {
 
-    // 544 / 94: catalog v94 added accounting:reconciliation:approve (543, #2301
+    // 548 / 96: catalog v96 added invoice:payment:flow_select (546) and
+    // invoice:payment:limit_override (547, #2393 BILL-DEC-008 / BILL-DEC-010) — hand-assigned
+    // immediately after v95, because both are enforced only via an in-body
+    // SecurityContextHelper.hasAuthority check in PaymentServiceImpl.initiatePayment, which
+    // scripts/generate-permissions.sh --sync cannot discover — on top of v95, which added
+    // invoice:payment:capture (544) and invoice:payment:process (545, #2393 BILL-DEC-008), the
+    // two the payment endpoints name in @PreAuthorize, on top of v94, which added
+    // accounting:reconciliation:approve (543, #2301
     // SPEC-manual-bank-reconciliation D3) — excluding and restoring bank transactions, separated
     // from preparing them, on top of v93's appointments:reschedule:approve (542, #2270
     // DECISION-SHOPMGMT-004) — approving a third or later non-exempt reschedule of one
@@ -59,8 +66,8 @@ class PermissionCodeTest {
     // people:employee_pii:view (519), v82's crm:fact:replay (518), v81's people:self:view (517)
     // and v80's catalog:service:ingest (516). Both numbers move together by design: the version
     // bump is what tells a running gateway its cached catalog is stale.
-    private static final int EXPECTED_PERMISSION_COUNT = 544;
-    private static final int EXPECTED_CATALOG_VERSION = 94;
+    private static final int EXPECTED_PERMISSION_COUNT = 548;
+    private static final int EXPECTED_CATALOG_VERSION = 96;
 
     // -------------------------------------------------------------------------
     // AC-1: Catalog size — EXPECTED_PERMISSION_COUNT entries

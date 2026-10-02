@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.domainevents.location.LocationAncestry.AncestorSets;
@@ -69,15 +70,14 @@ import org.springframework.security.core.context.SecurityContextHolder;
  * <li>AC1 — SALE_CAPTURE flow: PaymentIntent is created in PENDING then
  * transitions to CAPTURED</li>
  * <li>AC2 — AUTH_ONLY flow: PaymentIntent transitions PENDING → AUTHORIZED;
- * requires SELECT_PAYMENT_FLOW</li>
+ * requires invoice:payment:flow_select</li>
  * <li>AC3 — Explicit manual capture: AUTHORIZED → CAPTURED; partial capture
  * voids remainder</li>
  * <li>AC4 — Idempotent retry: same idempotency key returns same result without
  * re-calling gateway</li>
  * <li>AC5 — Unknown gateway outcome triggers status inquiry before retry</li>
- * <li>AC6 — Authorization over $500 requires OVERRIDE_PAYMENT_LIMIT
- * permission</li>
- * <li>AC7 — AUTH_ONLY requires SELECT_PAYMENT_FLOW permission when explicitly
+ * <li>AC6 — Authorization over $500 requires invoice:payment:limit_override</li>
+ * <li>AC7 — AUTH_ONLY requires invoice:payment:flow_select when explicitly
  * requested</li>
  * <li>AC9 — PaymentIntent stores gatewayProvider and raw gatewayResponse</li>
  * </ul>
@@ -144,7 +144,7 @@ class PaymentServiceImplTest {
      */
     @Test
     void initiatePayment_saleCapture_capturesImmediately() {
-        withAuthorities("PROCESS_PAYMENT");
+        withAuthorities(InvoicePermissions.PAYMENT_PROCESS);
         var request = buildRequest(PaymentFlow.SALE_CAPTURE, AMOUNT_BELOW_LIMIT, IDEMPOTENCY_KEY);
         when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice(INVOICE_ID)));
         when(paymentIntentRepository.findByIdempotencyKey(IDEMPOTENCY_KEY)).thenReturn(Optional.empty());
@@ -165,13 +165,13 @@ class PaymentServiceImplTest {
     // -------------------------------------------------------------------------
 
     /**
-     * AC2: AUTH_ONLY flow with SELECT_PAYMENT_FLOW permission creates an
+     * AC2: AUTH_ONLY flow with invoice:payment:flow_select creates an
      * authorization hold; PaymentIntent is created in PENDING then transitions
      * to AUTHORIZED.
      */
     @Test
     void initiatePayment_authOnly_createsHold() {
-        withAuthorities("PROCESS_PAYMENT", "SELECT_PAYMENT_FLOW");
+        withAuthorities(InvoicePermissions.PAYMENT_PROCESS, InvoicePermissions.PAYMENT_FLOW_SELECT);
         var request = buildRequest(PaymentFlow.AUTH_ONLY, AMOUNT_BELOW_LIMIT, IDEMPOTENCY_KEY);
         when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice(INVOICE_ID)));
         when(paymentIntentRepository.findByIdempotencyKey(IDEMPOTENCY_KEY)).thenReturn(Optional.empty());
@@ -196,7 +196,7 @@ class PaymentServiceImplTest {
      */
     @Test
     void initiatePayment_idempotent_returnsSameResult() {
-        withAuthorities("PROCESS_PAYMENT");
+        withAuthorities(InvoicePermissions.PAYMENT_PROCESS);
         var request = buildRequest(PaymentFlow.SALE_CAPTURE, AMOUNT_BELOW_LIMIT, IDEMPOTENCY_KEY);
         when(paymentIntentRepository.findByIdempotencyKey(IDEMPOTENCY_KEY))
                 .thenReturn(Optional.of(capturedPaymentIntent()));
@@ -210,7 +210,7 @@ class PaymentServiceImplTest {
 
     @Test
     void initiatePayment_idempotent_differentInvoice_throwsConflict() {
-        withAuthorities("PROCESS_PAYMENT");
+        withAuthorities(InvoicePermissions.PAYMENT_PROCESS);
         var request = buildRequest(PaymentFlow.SALE_CAPTURE, AMOUNT_BELOW_LIMIT, IDEMPOTENCY_KEY);
         var existing = capturedPaymentIntent();
         existing.setInvoice(invoice(OTHER_INVOICE_ID));
@@ -227,7 +227,7 @@ class PaymentServiceImplTest {
 
     @Test
     void initiatePayment_idempotent_differentAmount_throwsConflict() {
-        withAuthorities("PROCESS_PAYMENT");
+        withAuthorities(InvoicePermissions.PAYMENT_PROCESS);
         var request = buildRequest(PaymentFlow.SALE_CAPTURE, BigDecimal.valueOf(210_00, 2), IDEMPOTENCY_KEY);
         when(paymentIntentRepository.findByIdempotencyKey(IDEMPOTENCY_KEY))
                 .thenReturn(Optional.of(capturedPaymentIntent()));
@@ -252,7 +252,7 @@ class PaymentServiceImplTest {
      */
     @Test
     void initiatePayment_unknownOutcome_performsStatusInquiry() {
-        withAuthorities("PROCESS_PAYMENT");
+        withAuthorities(InvoicePermissions.PAYMENT_PROCESS);
         var request = buildRequest(PaymentFlow.SALE_CAPTURE, AMOUNT_BELOW_LIMIT, IDEMPOTENCY_KEY);
         var unknownResult = unknownOutcomeResult();
         when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice(INVOICE_ID)));
@@ -269,7 +269,7 @@ class PaymentServiceImplTest {
 
     @Test
     void initiatePayment_authOnly_unknownOutcome_performsStatusInquiry() {
-        withAuthorities("PROCESS_PAYMENT", "SELECT_PAYMENT_FLOW");
+        withAuthorities(InvoicePermissions.PAYMENT_PROCESS, InvoicePermissions.PAYMENT_FLOW_SELECT);
         var request = buildRequest(PaymentFlow.AUTH_ONLY, AMOUNT_BELOW_LIMIT, IDEMPOTENCY_KEY);
         var unknownResult = unknownOutcomeResult();
         var successResult = authorizedResult(AMOUNT_BELOW_LIMIT);
@@ -288,7 +288,7 @@ class PaymentServiceImplTest {
 
     @Test
     void initiatePayment_saleCapture_setsCaptureFailedWhenDeclined() {
-        withAuthorities("PROCESS_PAYMENT");
+        withAuthorities(InvoicePermissions.PAYMENT_PROCESS);
         var request = buildRequest(PaymentFlow.SALE_CAPTURE, AMOUNT_BELOW_LIMIT, IDEMPOTENCY_KEY);
         when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice(INVOICE_ID)));
         when(paymentIntentRepository.findByIdempotencyKey(IDEMPOTENCY_KEY)).thenReturn(Optional.empty());
@@ -311,42 +311,112 @@ class PaymentServiceImplTest {
     // -------------------------------------------------------------------------
 
     /**
-     * Initiating a payment without PROCESS_PAYMENT permission must throw
-     * an authorization exception (AC6 baseline permission).
+     * Initiating a payment without invoice:payment:process must throw an
+     * authorization exception (AC6 baseline permission), whatever else is held.
      */
     @Test
     void initiatePayment_requiresProcessPaymentPermission() {
-        withAuthorities("SOME_OTHER_PERMISSION");
+        withAuthorities(
+                InvoicePermissions.MANAGE,
+                InvoicePermissions.PAYMENT_CAPTURE,
+                InvoicePermissions.PAYMENT_LIMIT_OVERRIDE,
+                InvoicePermissions.PAYMENT_FLOW_SELECT);
+        var request = buildRequest(PaymentFlow.SALE_CAPTURE, AMOUNT_BELOW_LIMIT, IDEMPOTENCY_KEY);
+
+        assertThatThrownBy(() -> paymentService.initiatePayment(INVOICE_ID, request))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining(InvoicePermissions.PAYMENT_PROCESS);
+        verifyNoInteractions(gatewayPort, paymentIntentRepository, invoiceRepository);
+    }
+
+    /**
+     * #2393: the four retired raw strings are no longer authorities the service recognises, so a
+     * caller holding only them is denied on every path.
+     */
+    @Test
+    void initiatePayment_legacyRawAuthorities_areNotRecognised() {
+        withAuthorities("PROCESS_PAYMENT", "OVERRIDE_PAYMENT_LIMIT", "SELECT_PAYMENT_FLOW", "MANUAL_CAPTURE");
         var request = buildRequest(PaymentFlow.SALE_CAPTURE, AMOUNT_BELOW_LIMIT, IDEMPOTENCY_KEY);
 
         assertThatThrownBy(() -> paymentService.initiatePayment(INVOICE_ID, request))
                 .isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> paymentService.capturePayment(
+                        INVOICE_ID, PAYMENT_INTENT_ID, AMOUNT_BELOW_LIMIT, CAPTURE_IDEMPOTENCY_KEY))
+                .isInstanceOf(AccessDeniedException.class);
+        verifyNoInteractions(gatewayPort, paymentIntentRepository, invoiceRepository);
     }
 
     /**
-     * AC6: Authorization amount over $500 without OVERRIDE_PAYMENT_LIMIT
-     * permission must throw an authorization exception.
+     * AC6: Authorization amount over $500 without invoice:payment:limit_override
+     * must throw an authorization exception naming that code.
      */
     @Test
     void initiatePayment_overThreshold_requiresOverridePermission() {
-        withAuthorities("PROCESS_PAYMENT");
+        withAuthorities(InvoicePermissions.PAYMENT_PROCESS, InvoicePermissions.PAYMENT_FLOW_SELECT);
         var request = buildRequest(PaymentFlow.SALE_CAPTURE, AMOUNT_ABOVE_LIMIT, IDEMPOTENCY_KEY);
 
         assertThatThrownBy(() -> paymentService.initiatePayment(INVOICE_ID, request))
-                .isInstanceOf(AccessDeniedException.class);
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining(InvoicePermissions.PAYMENT_LIMIT_OVERRIDE);
+        verifyNoInteractions(gatewayPort, paymentIntentRepository, invoiceRepository);
+    }
+
+    /** AC6: with invoice:payment:limit_override an over-$500 payment goes through. */
+    @Test
+    void initiatePayment_overThreshold_withOverridePermission_captures() {
+        withAuthorities(InvoicePermissions.PAYMENT_PROCESS, InvoicePermissions.PAYMENT_LIMIT_OVERRIDE);
+        var request = buildRequest(PaymentFlow.SALE_CAPTURE, AMOUNT_ABOVE_LIMIT, IDEMPOTENCY_KEY);
+        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice(INVOICE_ID)));
+        when(paymentIntentRepository.findByIdempotencyKey(IDEMPOTENCY_KEY)).thenReturn(Optional.empty());
+        when(gatewayPort.saleCapture(any())).thenReturn(capturedResult(AMOUNT_ABOVE_LIMIT));
+        when(paymentIntentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        InitiatePaymentResponse response = paymentService.initiatePayment(INVOICE_ID, request);
+
+        assertThat(response.getStatus()).isEqualTo(PaymentIntentStatus.CAPTURED);
+        assertThat(response.getCapturedAmount()).isEqualByComparingTo(AMOUNT_ABOVE_LIMIT);
+    }
+
+    /** AC6 boundary: exactly $500.00 is not over the threshold, so the override is not needed. */
+    @Test
+    void initiatePayment_atThreshold_doesNotRequireOverridePermission() {
+        withAuthorities(InvoicePermissions.PAYMENT_PROCESS);
+        var atLimit = new BigDecimal("500.00");
+        var request = buildRequest(PaymentFlow.SALE_CAPTURE, atLimit, IDEMPOTENCY_KEY);
+        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice(INVOICE_ID)));
+        when(paymentIntentRepository.findByIdempotencyKey(IDEMPOTENCY_KEY)).thenReturn(Optional.empty());
+        when(gatewayPort.saleCapture(any())).thenReturn(capturedResult(atLimit));
+        when(paymentIntentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThat(paymentService.initiatePayment(INVOICE_ID, request).getStatus())
+                .isEqualTo(PaymentIntentStatus.CAPTURED);
     }
 
     /**
      * AC7: AUTH_ONLY flow explicitly requested by cashier without
-     * SELECT_PAYMENT_FLOW permission must throw an authorization exception.
+     * invoice:payment:flow_select must throw an authorization exception naming that code.
      */
     @Test
     void initiatePayment_authOnly_requiresSelectPaymentFlowPermission() {
-        withAuthorities("PROCESS_PAYMENT"); // SELECT_PAYMENT_FLOW intentionally absent
+        // flow_select intentionally absent; limit_override held to prove it is not a substitute
+        withAuthorities(InvoicePermissions.PAYMENT_PROCESS, InvoicePermissions.PAYMENT_LIMIT_OVERRIDE);
         var request = buildRequest(PaymentFlow.AUTH_ONLY, AMOUNT_BELOW_LIMIT, IDEMPOTENCY_KEY);
 
         assertThatThrownBy(() -> paymentService.initiatePayment(INVOICE_ID, request))
-                .isInstanceOf(AccessDeniedException.class);
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining(InvoicePermissions.PAYMENT_FLOW_SELECT);
+        verifyNoInteractions(gatewayPort, paymentIntentRepository, invoiceRepository);
+    }
+
+    /** AC6 + AC7: an over-$500 AUTH_ONLY hold needs both conditional codes. */
+    @Test
+    void initiatePayment_authOnlyOverThreshold_requiresBothConditionalPermissions() {
+        withAuthorities(InvoicePermissions.PAYMENT_PROCESS, InvoicePermissions.PAYMENT_FLOW_SELECT);
+        var request = buildRequest(PaymentFlow.AUTH_ONLY, AMOUNT_ABOVE_LIMIT, IDEMPOTENCY_KEY);
+
+        assertThatThrownBy(() -> paymentService.initiatePayment(INVOICE_ID, request))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining(InvoicePermissions.PAYMENT_LIMIT_OVERRIDE);
     }
 
     // -------------------------------------------------------------------------
@@ -359,7 +429,7 @@ class PaymentServiceImplTest {
      */
     @Test
     void capturePayment_partialCapture_voidRemainderAutomatically() {
-        withAuthorities("PROCESS_PAYMENT", "MANUAL_CAPTURE");
+        withAuthorities(InvoicePermissions.PAYMENT_CAPTURE);
         var authorizedAmount = BigDecimal.valueOf(300_00, 2);
         var partialAmount = BigDecimal.valueOf(200_00, 2);
         var expectedVoided = authorizedAmount.subtract(partialAmount);
@@ -387,26 +457,28 @@ class PaymentServiceImplTest {
     }
 
     /**
-     * AC3: Explicit capture without MANUAL_CAPTURE permission must throw
-     * an authorization exception.
+     * AC3: Explicit capture without invoice:payment:capture must throw
+     * an authorization exception naming that code; invoice:payment:process is not a substitute.
      */
     @Test
     void capturePayment_requiresManualCapturePermission() {
-        withAuthorities("PROCESS_PAYMENT"); // MANUAL_CAPTURE intentionally absent
+        withAuthorities(InvoicePermissions.PAYMENT_PROCESS); // invoice:payment:capture intentionally absent
         var captureAmount = BigDecimal.valueOf(200);
 
         assertThatThrownBy(() -> paymentService.capturePayment(
                         INVOICE_ID, PAYMENT_INTENT_ID, captureAmount, CAPTURE_IDEMPOTENCY_KEY))
-                .isInstanceOf(AccessDeniedException.class);
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining(InvoicePermissions.PAYMENT_CAPTURE);
+        verifyNoInteractions(gatewayPort, paymentIntentRepository);
     }
 
     /**
-     * AC3: Explicit manual capture with MANUAL_CAPTURE permission must
+     * AC3: Explicit manual capture with invoice:payment:capture must
      * transition PaymentIntent AUTHORIZED → CAPTURED; full amount captured.
      */
     @Test
     void capturePayment_transitionsAuthorizedToCaptured() {
-        withAuthorities("PROCESS_PAYMENT", "MANUAL_CAPTURE");
+        withAuthorities(InvoicePermissions.PAYMENT_CAPTURE);
         var authorizedAmount = BigDecimal.valueOf(300_00, 2);
         when(paymentIntentRepository.findById(PAYMENT_INTENT_ID))
                 .thenReturn(Optional.of(authorizedPaymentIntent(authorizedAmount)));
@@ -422,7 +494,7 @@ class PaymentServiceImplTest {
 
     @Test
     void capturePayment_unknownOutcome_performsStatusInquiry() {
-        withAuthorities("PROCESS_PAYMENT", "MANUAL_CAPTURE");
+        withAuthorities(InvoicePermissions.PAYMENT_CAPTURE);
         var captureAmount = BigDecimal.valueOf(200_00, 2);
         var unknownResult = unknownOutcomeResult();
         var successResult = capturedResult(captureAmount);
@@ -441,7 +513,7 @@ class PaymentServiceImplTest {
 
     @Test
     void capturePayment_throws_whenPaymentIntentNotInAuthorizedState() {
-        withAuthorities("PROCESS_PAYMENT", "MANUAL_CAPTURE");
+        withAuthorities(InvoicePermissions.PAYMENT_CAPTURE);
         var captureAmount = BigDecimal.valueOf(200, 2);
         var paymentIntent = new PaymentIntent();
         paymentIntent.setId(PAYMENT_INTENT_ID);
@@ -457,7 +529,7 @@ class PaymentServiceImplTest {
 
     @Test
     void capturePayment_throws_whenPaymentIntentNotFound() {
-        withAuthorities("PROCESS_PAYMENT", "MANUAL_CAPTURE");
+        withAuthorities(InvoicePermissions.PAYMENT_CAPTURE);
         var captureAmount = BigDecimal.valueOf(200, 2);
         when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.empty());
 
@@ -478,7 +550,7 @@ class PaymentServiceImplTest {
      */
     @Test
     void initiatePayment_saleCapture_storesGatewayMetadata() {
-        withAuthorities("PROCESS_PAYMENT");
+        withAuthorities(InvoicePermissions.PAYMENT_PROCESS);
         var request = buildRequest(PaymentFlow.SALE_CAPTURE, AMOUNT_BELOW_LIMIT, IDEMPOTENCY_KEY);
         var result = capturedResult(AMOUNT_BELOW_LIMIT);
         when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice(INVOICE_ID)));
@@ -826,6 +898,200 @@ class PaymentServiceImplTest {
             RefundRecord record = refundRecord(amount, status);
             record.setPaymentIntent(paymentIntent);
             return record;
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // initiatePayment / capturePayment location scope (#2393, ADR-0061)
+    // -------------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("initiatePayment / capturePayment are gated on the invoice's location (#2393, ADR-0061)")
+    class PaymentMutationScopeTests {
+
+        /** The node a scoped caller is assigned: a region above the test invoice's location. */
+        private final UUID regionNode = UUID.fromString("019200aa-0000-7000-8000-00000000a000");
+
+        private final UUID otherShop = UUID.fromString("019200aa-0000-7000-8000-00000000000b");
+
+        private final UUID testLocation = UUID.fromString("01960003-0000-7000-8000-000000000001");
+
+        /** Replica stand-in: testLocation sits under regionNode on the OTHER dimension; otherShop does not. */
+        private final LocationAncestorResolver resolver = id -> {
+            if (id.equals(testLocation)) {
+                return new AncestorSets(Set.of(id), Set.of(id, regionNode));
+            }
+            if (id.equals(otherShop)) {
+                return new AncestorSets(Set.of(id), Set.of(id));
+            }
+            return AncestorSets.EMPTY;
+        };
+
+        /** Authenticates a caller holding {@code held}, of which {@code scoped} are bound to {@code node}. */
+        private void authenticate(Set<String> held, Set<String> scoped, UUID node) {
+            var authentication = new UsernamePasswordAuthenticationToken(
+                    "invoice-test-user",
+                    null,
+                    held.stream().map(SimpleGrantedAuthority::new).toList());
+            authentication.setDetails(Map.of(
+                    GatewaySecurityConstants.DETAIL_USERNAME,
+                    "invoice-test-user",
+                    GatewaySecurityConstants.DETAIL_LOCATION_SCOPE,
+                    LocationScope.of(Set.of(), scoped, Optional.of(Set.of(node)), true, resolver)));
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+        }
+
+        private Invoice scopedInvoice() {
+            Invoice invoice = invoice(INVOICE_ID);
+            invoice.setLocationId(testLocation);
+            return invoice;
+        }
+
+        private PaymentIntent scopedAuthorizedIntent() {
+            PaymentIntent intent = authorizedPaymentIntent(AMOUNT_BELOW_LIMIT);
+            intent.setInvoice(scopedInvoice());
+            return intent;
+        }
+
+        @Test
+        @DisplayName("initiatePayment: invoice location in reach takes the payment")
+        void initiatePayment_inReach_captures() {
+            Set<String> process = Set.of(InvoicePermissions.PAYMENT_PROCESS);
+            authenticate(process, process, regionNode);
+            var request = buildRequest(PaymentFlow.SALE_CAPTURE, AMOUNT_BELOW_LIMIT, IDEMPOTENCY_KEY);
+            when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(scopedInvoice()));
+            when(paymentIntentRepository.findByIdempotencyKey(IDEMPOTENCY_KEY)).thenReturn(Optional.empty());
+            when(gatewayPort.saleCapture(any())).thenReturn(capturedResult(AMOUNT_BELOW_LIMIT));
+            when(paymentIntentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            assertThat(paymentService.initiatePayment(INVOICE_ID, request).getStatus())
+                    .isEqualTo(PaymentIntentStatus.CAPTURED);
+        }
+
+        @Test
+        @DisplayName("initiatePayment: invoice location out of reach denies before anything is saved or charged")
+        void initiatePayment_outOfReach_denies() {
+            Set<String> process = Set.of(InvoicePermissions.PAYMENT_PROCESS);
+            authenticate(process, process, otherShop);
+            var request = buildRequest(PaymentFlow.SALE_CAPTURE, AMOUNT_BELOW_LIMIT, IDEMPOTENCY_KEY);
+            when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(scopedInvoice()));
+            when(paymentIntentRepository.findByIdempotencyKey(IDEMPOTENCY_KEY)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> paymentService.initiatePayment(INVOICE_ID, request))
+                    .isInstanceOf(LocationScopeDeniedException.class);
+
+            verify(paymentIntentRepository, never()).save(any(PaymentIntent.class));
+            verifyNoInteractions(gatewayPort);
+        }
+
+        @Test
+        @DisplayName("initiatePayment: a missing invoice 404s before any scope decision")
+        void initiatePayment_missingInvoice_throws404() {
+            Set<String> process = Set.of(InvoicePermissions.PAYMENT_PROCESS);
+            authenticate(process, process, otherShop);
+            var request = buildRequest(PaymentFlow.SALE_CAPTURE, AMOUNT_BELOW_LIMIT, IDEMPOTENCY_KEY);
+            when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.empty());
+            when(paymentIntentRepository.findByIdempotencyKey(IDEMPOTENCY_KEY)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> paymentService.initiatePayment(INVOICE_ID, request))
+                    .isInstanceOf(InvoiceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName(
+                "initiatePayment: an idempotent replay is scope-checked too, so it cannot read back another location's intent")
+        void initiatePayment_replayOutOfReach_denies() {
+            Set<String> process = Set.of(InvoicePermissions.PAYMENT_PROCESS);
+            authenticate(process, process, otherShop);
+            var request = buildRequest(PaymentFlow.SALE_CAPTURE, AMOUNT_BELOW_LIMIT, IDEMPOTENCY_KEY);
+            PaymentIntent existing = capturedPaymentIntent();
+            existing.setInvoice(scopedInvoice());
+            when(paymentIntentRepository.findByIdempotencyKey(IDEMPOTENCY_KEY)).thenReturn(Optional.of(existing));
+
+            assertThatThrownBy(() -> paymentService.initiatePayment(INVOICE_ID, request))
+                    .isInstanceOf(LocationScopeDeniedException.class);
+        }
+
+        @Test
+        @DisplayName(
+                "initiatePayment: a limit override scoped away from the invoice does not lift the 500.00 threshold")
+        void initiatePayment_overThreshold_overrideScopedElsewhere_denies() {
+            // process is held globally; only the override is bound to another shop
+            authenticate(
+                    Set.of(InvoicePermissions.PAYMENT_PROCESS, InvoicePermissions.PAYMENT_LIMIT_OVERRIDE),
+                    Set.of(InvoicePermissions.PAYMENT_LIMIT_OVERRIDE),
+                    otherShop);
+            var request = buildRequest(PaymentFlow.SALE_CAPTURE, AMOUNT_ABOVE_LIMIT, IDEMPOTENCY_KEY);
+            when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(scopedInvoice()));
+            when(paymentIntentRepository.findByIdempotencyKey(IDEMPOTENCY_KEY)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> paymentService.initiatePayment(INVOICE_ID, request))
+                    .isInstanceOf(LocationScopeDeniedException.class);
+
+            verify(paymentIntentRepository, never()).save(any(PaymentIntent.class));
+            verifyNoInteractions(gatewayPort);
+        }
+
+        @Test
+        @DisplayName("initiatePayment: a flow-select grant scoped away from the invoice does not allow AUTH_ONLY")
+        void initiatePayment_authOnly_flowSelectScopedElsewhere_denies() {
+            authenticate(
+                    Set.of(InvoicePermissions.PAYMENT_PROCESS, InvoicePermissions.PAYMENT_FLOW_SELECT),
+                    Set.of(InvoicePermissions.PAYMENT_FLOW_SELECT),
+                    otherShop);
+            var request = buildRequest(PaymentFlow.AUTH_ONLY, AMOUNT_BELOW_LIMIT, IDEMPOTENCY_KEY);
+            when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(scopedInvoice()));
+            when(paymentIntentRepository.findByIdempotencyKey(IDEMPOTENCY_KEY)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> paymentService.initiatePayment(INVOICE_ID, request))
+                    .isInstanceOf(LocationScopeDeniedException.class);
+
+            verify(paymentIntentRepository, never()).save(any(PaymentIntent.class));
+            verifyNoInteractions(gatewayPort);
+        }
+
+        @Test
+        @DisplayName("capturePayment: invoice location in reach captures the hold")
+        void capturePayment_inReach_captures() {
+            Set<String> capture = Set.of(InvoicePermissions.PAYMENT_CAPTURE);
+            authenticate(capture, capture, regionNode);
+            when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(scopedAuthorizedIntent()));
+            when(gatewayPort.capture(any())).thenReturn(capturedResult(AMOUNT_BELOW_LIMIT));
+            when(paymentIntentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            assertThat(paymentService
+                            .capturePayment(INVOICE_ID, PAYMENT_INTENT_ID, AMOUNT_BELOW_LIMIT, CAPTURE_IDEMPOTENCY_KEY)
+                            .getStatus())
+                    .isEqualTo(PaymentIntentStatus.CAPTURED);
+        }
+
+        @Test
+        @DisplayName("capturePayment: invoice location out of reach denies and leaves the hold AUTHORIZED")
+        void capturePayment_outOfReach_denies() {
+            Set<String> capture = Set.of(InvoicePermissions.PAYMENT_CAPTURE);
+            authenticate(capture, capture, otherShop);
+            PaymentIntent intent = scopedAuthorizedIntent();
+            when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(intent));
+
+            assertThatThrownBy(() -> paymentService.capturePayment(
+                            INVOICE_ID, PAYMENT_INTENT_ID, AMOUNT_BELOW_LIMIT, CAPTURE_IDEMPOTENCY_KEY))
+                    .isInstanceOf(LocationScopeDeniedException.class);
+
+            assertThat(intent.getStatus()).isEqualTo(PaymentIntentStatus.AUTHORIZED);
+            verify(paymentIntentRepository, never()).save(any(PaymentIntent.class));
+            verifyNoInteractions(gatewayPort);
+        }
+
+        @Test
+        @DisplayName("capturePayment: an intent under another invoice 404s before any scope decision")
+        void capturePayment_wrongInvoice_throws404() {
+            Set<String> capture = Set.of(InvoicePermissions.PAYMENT_CAPTURE);
+            authenticate(capture, capture, otherShop);
+            when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(scopedAuthorizedIntent()));
+
+            assertThatThrownBy(() -> paymentService.capturePayment(
+                            OTHER_INVOICE_ID, PAYMENT_INTENT_ID, AMOUNT_BELOW_LIMIT, CAPTURE_IDEMPOTENCY_KEY))
+                    .isInstanceOf(PaymentIntentNotFoundException.class);
         }
     }
 }

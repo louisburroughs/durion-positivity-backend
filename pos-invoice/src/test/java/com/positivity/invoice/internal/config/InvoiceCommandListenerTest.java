@@ -22,6 +22,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -100,6 +101,19 @@ class InvoiceCommandListenerTest {
                 .thenThrow(new QueryTimeoutException("db timeout"));
 
         assertThatExceptionOfType(QueryTimeoutException.class)
+                .isThrownBy(() -> listener.onCommand(generationCommand("c-retry")));
+
+        verify(processedEvents, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("a lost-connection createInvoice failure propagates and records nothing, so the container retries")
+    void lostConnectionGenerationFailurePropagatesUnrecorded() {
+        when(processedEvents.existsById("c-retry")).thenReturn(false);
+        when(invoiceService.createInvoice(any(InvoiceCreationRequest.class)))
+                .thenThrow(new DataAccessResourceFailureException("connection reset"));
+
+        assertThatExceptionOfType(DataAccessResourceFailureException.class)
                 .isThrownBy(() -> listener.onCommand(generationCommand("c-retry")));
 
         verify(processedEvents, never()).save(any());
@@ -197,6 +211,18 @@ class InvoiceCommandListenerTest {
         when(processedEvents.existsById(anyString())).thenThrow(new QueryTimeoutException("db timeout"));
 
         assertThatExceptionOfType(QueryTimeoutException.class)
+                .isThrownBy(() -> listener.onCommand(generationCommand("c-3")));
+
+        verify(invoiceService, never()).createInvoice(any(InvoiceCreationRequest.class));
+    }
+
+    @Test
+    @DisplayName("lost-connection DB errors propagate so the container retries")
+    void lostConnectionErrorsPropagate() {
+        when(processedEvents.existsById(anyString()))
+                .thenThrow(new DataAccessResourceFailureException("connection reset"));
+
+        assertThatExceptionOfType(DataAccessResourceFailureException.class)
                 .isThrownBy(() -> listener.onCommand(generationCommand("c-3")));
 
         verify(invoiceService, never()).createInvoice(any(InvoiceCreationRequest.class));

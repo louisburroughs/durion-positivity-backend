@@ -2,6 +2,7 @@ package com.positivity.workorder.internal.service;
 
 import com.positivity.domainevents.supplier.SupplierWorkorderAuthDeniedV1;
 import com.positivity.domainevents.supplier.SupplierWorkorderAuthGrantedV1;
+import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import com.positivity.workorder.internal.entity.ProcessedEvent;
 import com.positivity.workorder.internal.enums.FleetAuthorizationStatus;
 import com.positivity.workorder.internal.repository.ProcessedEventRepository;
@@ -10,7 +11,6 @@ import java.time.Instant;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -112,11 +112,12 @@ public class SupplierFleetAuthEventsListener {
                 }
                 processedEventRepository.save(processedMark(eventId));
             });
-        } catch (TransientDataAccessException e) {
-            // Rethrown so the container retries. Marking this processed would leave a workorder
-            // gated on an authorization the fleet has already granted, with nothing to correct it.
-            throw e;
         } catch (Exception e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // Rethrown so the container retries. Marking this processed would leave a workorder
+                // gated on an authorization the fleet has already granted, with nothing to correct it.
+                throw e;
+            }
             log.warn("Skipping malformed supplier fleet-authorization event eventId={}", eventId, e);
             recordFailure(eventId);
         }

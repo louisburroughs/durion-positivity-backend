@@ -1022,13 +1022,23 @@ public enum PermissionCode {
     // ── Appointments (new) ─────────────────────────────────────────────────────
     APPOINTMENTS__RESCHEDULE__APPROVE(542, "appointments:reschedule:approve"),
     // ── Accounting (new) ───────────────────────────────────────────────────────
-    ACCOUNTING__RECONCILIATION__APPROVE(543, "accounting:reconciliation:approve");
+    ACCOUNTING__RECONCILIATION__APPROVE(543, "accounting:reconciliation:approve"),
+    // ── Invoice (new) ──────────────────────────────────────────────────────────
+    INVOICE__PAYMENT__CAPTURE(544, "invoice:payment:capture"),
+    INVOICE__PAYMENT__PROCESS(545, "invoice:payment:process"),
+    // #2393 (BILL-DEC-008 / BILL-DEC-010): conditional permissions enforced only via an in-body
+    // SecurityContextHelper.hasAuthority check in PaymentServiceImpl.initiatePayment (the amount
+    // exceeds 500.00; the request asks for AUTH_ONLY), never a @PreAuthorize annotation, so
+    // scripts/generate-permissions.sh --sync cannot discover them — hand assigned here immediately
+    // after the batch --sync just registered, as #2226 did for bits 540-541.
+    INVOICE__PAYMENT__FLOW_SELECT(546, "invoice:payment:flow_select"),
+    INVOICE__PAYMENT__LIMIT_OVERRIDE(547, "invoice:payment:limit_override");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 94;
+    public static final int CATALOG_VERSION = 96;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

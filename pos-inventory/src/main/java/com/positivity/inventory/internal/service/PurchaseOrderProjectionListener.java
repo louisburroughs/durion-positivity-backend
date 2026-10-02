@@ -11,6 +11,7 @@ import com.positivity.inventory.internal.repository.ExtPurchaseOrderLineReposito
 import com.positivity.inventory.internal.repository.ExtPurchaseOrderReceiptRepository;
 import com.positivity.inventory.internal.repository.ExtPurchaseOrderRepository;
 import com.positivity.inventory.internal.repository.ProcessedEventRepository;
+import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -21,7 +22,6 @@ import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -151,12 +151,13 @@ public class PurchaseOrderProjectionListener {
                 }
                 recordProcessed(eventId);
             });
-        } catch (TransientDataAccessException e) {
-            // Rethrown so the container retries. Recording this as processed would leave the order
-            // out of the projection permanently, and availability-to-promise would keep quoting a
-            // supply figure short by that order with nothing to show why.
-            throw e;
         } catch (Exception e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // Rethrown so the container retries. Recording this as processed would leave the order
+                // out of the projection permanently, and availability-to-promise would keep quoting a
+                // supply figure short by that order with nothing to show why.
+                throw e;
+            }
             log.warn("Skipping malformed order event eventId={}", eventId, e);
             handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId));
         }

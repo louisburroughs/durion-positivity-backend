@@ -20,6 +20,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
@@ -146,6 +147,20 @@ class OrderEventsListenerTest {
                 .finalizeFromOrderSettlement(any(), any(), any());
 
         assertThatExceptionOfType(QueryTimeoutException.class)
+                .isThrownBy(() -> listener.onOrderEvent(orderCompleted("e-6", "\"" + WORKORDER_ID + "\"")));
+
+        verify(processedEvents, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("lost-connection DB errors propagate unwrapped for container retry / DLQ")
+    void lostConnectionErrorPropagates() {
+        when(processedEvents.existsById("e-6")).thenReturn(false);
+        doThrow(new DataAccessResourceFailureException("connection reset"))
+                .when(stateMachine)
+                .finalizeFromOrderSettlement(any(), any(), any());
+
+        assertThatExceptionOfType(DataAccessResourceFailureException.class)
                 .isThrownBy(() -> listener.onOrderEvent(orderCompleted("e-6", "\"" + WORKORDER_ID + "\"")));
 
         verify(processedEvents, never()).save(any());

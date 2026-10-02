@@ -23,6 +23,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.ObjectMapper;
@@ -196,6 +197,18 @@ class PeopleCommandListenerTest {
         assertThatThrownBy(() -> listener.onCommand(command(
                         "people.outbox.replay-requested", NOW.minusSeconds(600).toString(), null)))
                 .isInstanceOf(QueryTimeoutException.class);
+    }
+
+    @Test
+    @DisplayName("rethrows a lost-connection database error so the container retries and can reach the DLQ")
+    void lostConnectionErrorIsRethrown() {
+        when(outboxReplayService.replaySince(any()))
+                .thenThrow(new DataAccessResourceFailureException("connection reset"));
+
+        // Replay is idempotent, so a redelivery is harmless — losing the repair request is not.
+        assertThatThrownBy(() -> listener.onCommand(command(
+                        "people.outbox.replay-requested", NOW.minusSeconds(600).toString(), null)))
+                .isInstanceOf(DataAccessResourceFailureException.class);
     }
 
     @Test

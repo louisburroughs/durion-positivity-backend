@@ -6,6 +6,7 @@ import com.positivity.location.internal.entity.ExtPersonReplica;
 import com.positivity.location.internal.entity.ProcessedEvent;
 import com.positivity.location.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.location.internal.repository.ProcessedEventRepository;
+import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
@@ -16,7 +17,6 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -115,8 +115,6 @@ public class PeopleContactEventsListener {
                 }
                 recordProcessed(eventId);
             });
-        } catch (TransientDataAccessException e) {
-            throw e;
         } catch (DatabindException e) {
             if (payloadRejectedCounter != null) {
                 payloadRejectedCounter.increment();
@@ -124,6 +122,10 @@ public class PeopleContactEventsListener {
             log.error("Rejected malformed people-contact event payload eventId={}: {}", eventId, e.getMessage(), e);
             handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId));
         } catch (Exception e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // The container retries with backoff, then publishes to {topic}.dlq (ADR-0044 §4).
+                throw e;
+            }
             log.warn("Skipping malformed people-contact event eventId={}", eventId, e);
             handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId));
         }

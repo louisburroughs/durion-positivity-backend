@@ -4,12 +4,12 @@ import com.positivity.customer.internal.dto.AddSuppressionRequest;
 import com.positivity.customer.internal.enums.ConsentChangeSource;
 import com.positivity.customer.internal.enums.MarketingChannel;
 import com.positivity.customer.internal.enums.SuppressionReason;
+import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import java.util.Locale;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
-import org.springframework.dao.TransientDataAccessException;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 
@@ -72,9 +72,11 @@ public class CustomerCommandHandlers {
                     .resolveAndPublish(requestId, segmentId)
                     .ifPresent(count ->
                             log.info("Resolved segment {} for request {}: {} party(ies)", segmentId, requestId, count));
-        } catch (TransientDataAccessException e) {
-            throw e;
         } catch (RuntimeException e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // The container retries with backoff, then publishes to {topic}.dlq (ADR-0044 §4).
+                throw e;
+            }
             log.warn("Segment {} could not be resolved for request {}: {}", segmentId, requestId, e.getMessage());
         }
     }

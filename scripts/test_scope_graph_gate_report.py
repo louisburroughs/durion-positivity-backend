@@ -215,6 +215,254 @@ class JoinTest(unittest.TestCase):
         self.assertEqual(dict(skipped), {"actorMismatch": 1})
         self.assertEqual(mismatches, [{"turnId": _uuid(1), "role": "ROLE_ADMIN", "fixtureIds": ["neg"]}])
 
+    def test_actor_proxy_joins_fixtures_that_expect_a_document(self):
+        positive = _fixture("pos", "what is a vin", ["glossary.vin"], role="ROLE_TECHNICIAN")
+        negative = _fixture("neg", "who can approve", [], forbidden=["admin.governance"], role="ROLE_TECHNICIAN")
+        proxy = "ROLE_SYSTEM_ADMINISTRATOR"
+        vin = _trace(1, "what is a vin", _scope("LOW", [], []), role=proxy)
+        approve = _trace(2, "who can approve", _scope("LOW", [], []), role=proxy)
+        stranger = _trace(3, "what is a vin", _scope("LOW", [], []), role="ROLE_USER")
+        fixtures = [positive, negative]
+        joined, skipped, mismatches = report.join_traces([vin, approve, stranger], fixtures, actor_proxy=proxy)
+        self.assertEqual(_ids(joined, fixtures), {"pos": _uuid(1)})
+        self.assertEqual(dict(skipped), {"proxyNoExpected": 1, "actorMismatch": 1})
+        self.assertEqual(mismatches[0]["turnId"], _uuid(3))
+
+    def test_actor_proxy_joins_no_fixture_without_actor_role(self):
+        # Fail closed under the proxy too: a fixture that names no actor is evidence for no turn.
+        fixture = _fixture("f", "q", ["d"])
+        del fixture["actor"]
+        trace = _trace(1, "q", _scope("LOW", [], []), role="ROLE_SYSTEM_ADMINISTRATOR")
+        joined, skipped, _ = report.join_traces([trace], [fixture], actor_proxy="ROLE_SYSTEM_ADMINISTRATOR")
+        self.assertEqual(joined, {})
+        self.assertEqual(dict(skipped), {"actorMismatch": 1})
+
+    def test_actor_proxy_prefers_a_role_match(self):
+        own = _fixture("own", "q", ["d"], role="ROLE_SYSTEM_ADMINISTRATOR")
+        other = _fixture("other", "q", ["d"], role="ROLE_TECHNICIAN")
+        trace = _trace(1, "q", _scope("LOW", [], []), role="ROLE_SYSTEM_ADMINISTRATOR")
+        joined, _, _ = report.join_traces([trace], [own, other], actor_proxy="ROLE_SYSTEM_ADMINISTRATOR")
+        self.assertEqual(_ids(joined, [own, other]), {"own": _uuid(1)})
+
+    def test_own_actor_turn_wins_over_a_proxy_turn_in_either_order(self):
+        # "A role match still wins" holds per fixture, not per turn: a later proxy turn does not replace
+        # the fixture's own actor's turn, and an own-actor turn replaces an earlier or later proxy turn.
+        proxy = "ROLE_SYSTEM_ADMINISTRATOR"
+        fixture = _fixture("f", "q", ["d"], role="ROLE_TECHNICIAN")
+        own = _trace(1, "q", _scope("LOW", [], []), role="ROLE_TECHNICIAN")
+        later_proxy = _trace(2, "q", _scope("LOW", [], []), role=proxy)
+        later_proxy["startedAt"] = "2026-10-02T11:00:00Z"
+        newer_proxy = _trace(3, "q", _scope("LOW", [], []), role=proxy)
+        newer_proxy["startedAt"] = "2026-10-02T11:30:00Z"
+        for turns in ([own, later_proxy], [newer_proxy, own], [newer_proxy, own, later_proxy]):
+            joined, skipped, _ = report.join_traces(turns, [fixture], actor_proxy=proxy)
+            self.assertEqual(_ids(joined, [fixture]), {"f": _uuid(1)})
+            self.assertEqual(dict(skipped), {"duplicateTurn": len(turns) - 1})
+
+    def test_a_proxy_turn_cannot_hide_an_own_actor_enforce_leak(self):
+        proxy = "ROLE_SYSTEM_ADMINISTRATOR"
+        fixture = _fixture("f", "q", ["d"], forbidden=["secret"], role="ROLE_TECHNICIAN")
+        own = _trace(1, "q", _scope("LOW", [_doc("d")], []), role="ROLE_TECHNICIAN")
+        later_proxy = _trace(2, "q", _scope("LOW", [_doc("d")], []), role=proxy)
+        later_proxy["startedAt"] = "2026-10-02T11:00:00Z"
+        leak = _enforce(own, [_doc("d"), _doc("secret", "admin")])
+        result = report.build_report([own, later_proxy], [fixture], enforce_traces=[leak], actor_proxy=proxy)
+        self.assertEqual(result["proxiedSamples"], 0)
+        self.assertEqual(result["gate"]["verdict"], "FAIL")
+
+    def test_own_actor_shadow_against_a_proxy_enforce_turn_is_an_invalid_pair(self):
+        proxy = "ROLE_SYSTEM_ADMINISTRATOR"
+        fixture = _fixture("f", "q", ["d"], role="ROLE_TECHNICIAN")
+        own = _trace(1, "q", _scope("LOW", [_doc("d")], []), role="ROLE_TECHNICIAN")
+        proxied = _trace(2, "q", _scope("LOW", [_doc("d")], []), role=proxy)
+        result = report.build_report([own], [fixture], enforce_traces=[_enforce(proxied, [_doc("d")])],
+                                     actor_proxy=proxy)
+        self.assertEqual(result["roleMismatches"], 1)
+        self.assertEqual(result["gate"]["verdict"], "INVALID_PAIR")
+        self.assertIn("1 pair(s) were asked as another role", report.render_text(result))
+
+    def test_own_actor_shadow_against_a_proxy_baseline_turn_is_nondeterministic(self):
+        proxy = "ROLE_SYSTEM_ADMINISTRATOR"
+        fixture = _fixture("f", "q", ["d"], role="ROLE_TECHNICIAN")
+        own = _trace(1, "q", _scope("LOW", [_doc("d")], []), role="ROLE_TECHNICIAN")
+        proxied = _trace(2, "q", _scope("LOW", [_doc("d")], []), role=proxy)
+        result = report.build_report([own], [fixture], baseline_traces=[proxied], actor_proxy=proxy, verbose=True)
+        self.assertEqual(result["nondeterministicList"][0]["differs"], ["role"])
+        self.assertEqual(result["gate"]["verdict"], "NONDETERMINISTIC")
+
+    def test_actor_proxy_ignores_the_forbidden_list(self):
+        fixture = _fixture("f", "q", ["d"], forbidden=["secret"], role="ROLE_TECHNICIAN")
+        trace = _trace(1, "q", _scope("LOW", [_doc("d", "order"), _doc("secret", "admin")], []),
+                       role="ROLE_SYSTEM_ADMINISTRATOR")
+        result = report.build_report([trace], [fixture], actor_proxy="ROLE_SYSTEM_ADMINISTRATOR")
+        self.assertEqual(result["samples"], 1)
+        self.assertEqual(result["proxiedSamples"], 1)
+        self.assertEqual(result["overall"]["today"]["forbiddenHits"], 0)
+        self.assertIn("Actor proxy ROLE_SYSTEM_ADMINISTRATOR: 1 sample(s)", report.render_text(result))
+
+    def test_simple_chat_fixture_is_exempt_not_missing(self):
+        # The simple-chat path resolves no scope and retrieves nothing: the rag consumer never acts on it.
+        scoped = _fixture("scoped", "where is WO-1234", ["workorder.guide"])
+        chatty = _fixture("chatty", "how do orders work", ["order.guide"])
+        hit = _trace(1, "where is WO-1234", _scope("HIGH", [_doc("workorder.guide")], ["workorder.guide"]))
+        simple = _trace(2, "how do orders work", None)
+        simple["simpleChat"] = True
+        result = report.build_report([hit, simple], [scoped, chatty], verbose=True)
+        self.assertEqual(result["fixturesWithoutTrace"], 0)
+        self.assertEqual(result["fixturesExempt"], {"simpleChat": 1})
+        self.assertEqual(result["fixturesExemptIds"], {"simpleChat": ["chatty"]})
+        self.assertNotEqual(result["gate"]["verdict"], "INCOMPLETE")
+        self.assertIn("exempt (simpleChat): chatty", report.render_text(result))
+
+    def test_proxy_untestable_visibility_fixture_is_exempt(self):
+        positive = _fixture("pos", "who can approve", ["admin.governance"], role="ROLE_ADMIN")
+        negative = _fixture("neg", "who can approve", [], forbidden=["admin.governance"], role="ROLE_TECHNICIAN")
+        proxy = "ROLE_SYSTEM_ADMINISTRATOR"
+        turn = _trace(1, "who can approve", _scope("LOW", [_doc("admin.governance", "admin")], []), role=proxy)
+        result = report.build_report([turn], [positive, negative], actor_proxy=proxy)
+        self.assertEqual(result["fixturesJoined"], 1)
+        self.assertEqual(result["fixturesWithoutTrace"], 0)
+        self.assertEqual(result["fixturesExempt"], {"proxyUntestable": 1})
+        text = report.render_text(result)
+        self.assertIn("proxyUntestable=1 (another actor's visibility check", text)
+        self.assertNotIn("simple-chat", text)
+
+    def test_visibility_fixture_without_actor_role_is_not_exempt_under_the_proxy(self):
+        negative = _fixture("neg", "who can approve", [], forbidden=["admin.governance"])
+        del negative["actor"]
+        result = report.build_report([], [negative], actor_proxy="ROLE_SYSTEM_ADMINISTRATOR")
+        self.assertEqual(result["fixturesWithoutTrace"], 1)
+        self.assertEqual(result["fixturesExempt"], {})
+
+    def test_a_fixture_one_run_joined_is_exempt_from_no_run(self):
+        # The technician's visibility fixture joined the shadow run by its own role, so it is testable:
+        # a missing enforce turn is missing evidence, not a proxyUntestable exemption.
+        positive = _fixture("pos", "what is a vin", ["glossary.vin"], role="ROLE_TECHNICIAN")
+        negative = _fixture("neg", "who can approve", [], forbidden=["admin.governance"], role="ROLE_TECHNICIAN")
+        vin = _trace(1, "what is a vin", _scope("LOW", [_doc("glossary.vin", "master")], []), role="ROLE_TECHNICIAN")
+        approve = _trace(2, "who can approve", _scope("LOW", [], []), role="ROLE_TECHNICIAN")
+        result = report.build_report([vin, approve], [positive, negative], verbose=True,
+                                     enforce_traces=[_enforce(vin, vin["scope"]["retrievedDocuments"])],
+                                     actor_proxy="ROLE_SYSTEM_ADMINISTRATOR")
+        self.assertEqual(result["fixturesExempt"], {})
+        self.assertEqual(result["fixturesWithoutEnforceTraceIds"], ["neg"])
+        self.assertEqual(result["gate"]["verdict"], "INCOMPLETE")
+
+    def test_simple_chat_in_one_run_does_not_excuse_a_fixture_another_run_joined(self):
+        fixture = _fixture("f", "how do orders work", ["order.guide"])
+        shadow = _trace(1, "how do orders work", _scope("LOW", [_doc("order.guide")], []))
+        simple = _trace(2, "how do orders work", None)
+        simple["simpleChat"] = True
+        result = report.build_report([shadow], [fixture], enforce_traces=[simple])
+        self.assertEqual(result["fixturesExempt"], {})
+        self.assertEqual(result["fixturesWithoutEnforceTrace"], 1)
+        self.assertEqual(result["gate"]["verdict"], "INCOMPLETE")
+
+    def test_a_scopeless_turn_that_is_not_simple_chat_exempts_nothing(self):
+        fixture = _fixture("f", "how do orders work", ["order.guide"])
+        broken = _trace(1, "how do orders work", None)
+        result = report.build_report([broken], [fixture])
+        self.assertEqual(result["fixturesExempt"], {})
+        self.assertEqual(result["fixturesWithoutTrace"], 1)
+
+    def test_without_proxy_a_visibility_fixture_still_needs_its_trace(self):
+        negative = _fixture("neg", "who can approve", [], forbidden=["admin.governance"], role="ROLE_TECHNICIAN")
+        result = report.build_report([], [negative])
+        self.assertEqual(result["fixturesWithoutTrace"], 1)
+        self.assertEqual(result["fixturesExempt"], {})
+
+    def _tool_pair(self, shadow_tags, enforce_tags, **kwargs):
+        # A tags dict of None: the turn carries no tagging record (AlphaEvalTurnTraceRecorder writes null).
+        fixture = _fixture("f", "q", ["d"])
+        shadow = _trace(1, "q", _scope("HIGH", [_doc("d")], ["d"]))
+        enforce = _trace(2, "q", _scope("HIGH", [_doc("d")], ["d"]))
+        enforce["scope"]["mode"] = "ENFORCE"
+        enforce["scope"]["enforced"] = ["RAG"]
+        shadow["selectedTools"], enforce["selectedTools"] = ["A", "B"], ["A"]
+        for trace, tags in ((shadow, shadow_tags), (enforce, enforce_tags)):
+            trace["tags"] = None if tags is None else {
+                "tags": [{"name": n, "actingValue": v} for n, v in tags.items()]}
+        return report.build_report([shadow], [fixture], enforce_traces=[enforce], verbose=True, **kwargs)
+
+    def test_a_tag_that_acted_in_neither_turn_is_no_drift(self):
+        # A null actingValue (no answer acted) and an entry no tagger answered both mean consumers read
+        # nothing: the tool change counts.
+        result = self._tool_pair({"workflow_state": "IDLE", "entity_work-order": None}, {"workflow_state": "IDLE"})
+        self.assertEqual(result["toolChangeList"][0]["tagDrift"], [])
+        self.assertEqual(result["toolSelectionChanges"], 1)
+        self.assertEqual(result["gate"]["verdict"], "FAIL")
+
+    def test_a_turn_without_a_tagging_record_shows_no_drift(self):
+        result = self._tool_pair({"workflow_state": "IDLE"}, None)
+        self.assertEqual(result["toolChangeList"][0]["tagDrift"], [])
+        self.assertEqual(result["toolSelectionChanges"], 1)
+        self.assertEqual(result["gate"]["verdict"], "FAIL")
+
+    def test_tool_change_under_the_same_tags_fails(self):
+        result = self._tool_pair({"workflow_state": "IDLE"}, {"workflow_state": "IDLE"})
+        self.assertEqual(result["gate"]["verdict"], "FAIL")
+        self.assertEqual(result["toolSelectionChanges"], 1)
+        self.assertEqual(result["tagDriftToolChanges"], 0)
+
+    def test_tool_change_under_drifted_tags_is_listed_not_counted(self):
+        # One pair of one: let the cap allow every pair, the cap has its own tests.
+        result = self._tool_pair({"workflow_state": "IDLE"}, {"workflow_state": "RECEIVING_ASN"}, max_tag_drift=1.0)
+        self.assertEqual(result["gate"]["verdict"], "PASS")
+        self.assertEqual(result["toolSelectionChanges"], 0)
+        self.assertEqual(result["tagDriftToolChanges"], 1)
+        self.assertEqual(result["toolChangeList"][0]["tagDrift"], ["workflow_state"])
+        self.assertIn("tagDrift=['workflow_state']", report.render_text(result))
+
+    def _drift_run(self, pairs, drifted, **kwargs):
+        fixtures, shadow, enforce = [], [], []
+        for n in range(pairs):
+            fixtures.append(_fixture(f"f{n}", f"q{n}", ["d"]))
+            turn = _trace(n + 1, f"q{n}", _scope("HIGH", [_doc("d")], ["d"]))
+            turn["tags"] = {"tags": [{"name": "workflow_state", "actingValue": "IDLE"}]}
+            other = _enforce(turn, [_doc("d")])
+            if n < drifted:
+                turn["selectedTools"] = ["A", "B"]
+                other["selectedTools"] = ["A"]
+                other["tags"] = {"tags": [{"name": "workflow_state", "actingValue": "RECEIVING_ASN"}]}
+            shadow.append(turn)
+            enforce.append(other)
+        return report.build_report(shadow, fixtures, enforce_traces=enforce, **kwargs)
+
+    def test_tag_drift_up_to_the_cap_is_excused(self):
+        result = self._drift_run(10, 1)
+        self.assertEqual(result["tagDriftToolChanges"], 1)
+        self.assertEqual(result["gate"]["verdict"], "PASS")
+
+    def test_tag_drift_over_the_cap_is_incomplete(self):
+        result = self._drift_run(10, 2)
+        self.assertEqual(result["gate"]["verdict"], "INCOMPLETE")
+        self.assertIn("drifted tags in 2 of 10 pair(s), over the 10% cap", result["gate"]["reasons"][0])
+        self.assertEqual(self._drift_run(10, 2, max_tag_drift=0.2)["gate"]["verdict"], "PASS")
+
+    def test_an_all_proxied_pass_says_the_forbidden_criterion_was_not_exercised(self):
+        proxy = "ROLE_SYSTEM_ADMINISTRATOR"
+        fixture = _fixture("f", "q", ["d"], forbidden=["secret"], role="ROLE_TECHNICIAN")
+        turn = _trace(1, "q", _scope("LOW", [_doc("d")], []), role=proxy)
+        result = report.build_report([turn], [fixture], enforce_traces=[_enforce(turn, [_doc("d")])],
+                                     actor_proxy=proxy)
+        self.assertEqual(result["gate"]["verdict"], "PASS")
+        self.assertEqual((result["forbiddenListsScored"], result["forbiddenListsIgnored"]), (0, 1))
+        self.assertFalse(result["forbiddenCriterionExercised"])
+        self.assertIn("forbidden-document criterion not exercised", result["gate"]["reasons"][0])
+        self.assertIn("the forbidden-document criterion was not exercised", report.render_text(result))
+
+    def test_one_own_actor_forbidden_list_exercises_the_criterion(self):
+        proxy = "ROLE_SYSTEM_ADMINISTRATOR"
+        proxied = _fixture("p", "q", ["d"], forbidden=["secret"], role="ROLE_TECHNICIAN")
+        own = _fixture("o", "r", ["d"], forbidden=["secret"], role=proxy)
+        turns = [_trace(1, "q", _scope("LOW", [_doc("d")], []), role=proxy),
+                 _trace(2, "r", _scope("LOW", [_doc("d")], []), role=proxy)]
+        result = report.build_report(turns, [proxied, own], enforce_traces=[_enforce(t, [_doc("d")]) for t in turns],
+                                     actor_proxy=proxy)
+        self.assertEqual((result["forbiddenListsScored"], result["forbiddenListsIgnored"]), (1, 1))
+        self.assertTrue(result["forbiddenCriterionExercised"])
+        self.assertEqual(result["gate"]["reasons"], [])
+
     def test_fixture_without_actor_role_joins_no_turn(self):
         # Fail closed: a fixture that names no actor cannot say which turn is evidence for it.
         fixture = _fixture("f", "q", ["d"])

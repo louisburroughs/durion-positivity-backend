@@ -33,6 +33,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
@@ -171,6 +172,18 @@ class PeopleContactEventsListenerTest {
 
             assertThatThrownBy(() -> listener.onPeopleContactEvent(personUpdated("evt-1", 1, "[]")))
                     .isInstanceOf(QueryTimeoutException.class);
+
+            verify(processedEventRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("rethrows a lost-connection database error so the container retries instead of losing the fact")
+        void lostConnectionErrorIsRethrown() {
+            when(extPersonReplicaRepository.findById(PERSON_ID))
+                    .thenThrow(new DataAccessResourceFailureException("connection reset"));
+
+            assertThatThrownBy(() -> listener.onPeopleContactEvent(personUpdated("evt-1", 1, "[]")))
+                    .isInstanceOf(DataAccessResourceFailureException.class);
 
             verify(processedEventRepository, never()).save(any());
         }

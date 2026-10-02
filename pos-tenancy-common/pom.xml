@@ -29,6 +29,12 @@
             <groupId>org.springframework</groupId>
             <artifactId>spring-jdbc</artifactId>
         </dependency>
+        <!-- RetryableConsumerFailures names the org.springframework.dao / .transaction exception types.
+             spring-jdbc already brings spring-tx transitively; declared because it is used directly. -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-tx</artifactId>
+        </dependency>
         <!-- Hibernate @TenantId / CurrentTenantIdentifierResolver and Boot's HibernatePropertiesCustomizer;
              optional so a module without JPA does not pull Hibernate in. -->
         <dependency>
