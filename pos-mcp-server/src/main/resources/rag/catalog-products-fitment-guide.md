@@ -46,7 +46,7 @@ A product carries several identifiers. Use the one the caller gives you and do n
 | Identifier | Field | Rules in the platform |
 | --- | --- | --- |
 | Product id | `id` | UUID, opaque to callers. Most product endpoints address a product by this id. |
-| SKU | `sku` | Required at create, unique (case-insensitive), immutable afterwards. Client-supplied text with no enforced pattern or length and no auto-generation. |
+| SKU | `sku` | Client-supplied text with no pattern and no auto-generation, stored in a column of at most 255 characters and unique per tenant. The product-master endpoints (`createProduct`, `updateProduct`) require it at create, reject a duplicate (case-insensitive) with 409 and refuse to change it afterwards. The generic item endpoints (`createCatalogItem`, `updateCatalogItem`) neither require nor check it and copy whatever the body carries, including on update. |
 | Manufacturer part number | `mpn` / `manufacturerPartNumber` | Required at create. The pair manufacturer id plus MPN is unique. |
 | Product code | `productCode` with `productCodeType` | A `UPC` or `EAN` value, unique within its scheme. A UPC supplied at create also becomes the product code. |
 
@@ -149,7 +149,8 @@ count. Matching rules, from the service code:
 - The result is product ids only. To answer "rotors and brake pads for a 2019 Civic", filter by the vehicle, then read
   or search the catalog for those products (for example with the subcategory filter) to get names, SKUs and
   lifecycle, and ask inventory for stock.
-- An empty attribute map returns no products rather than every product.
+- `vehicleAttributes` is required and must not be empty: an empty or missing map is rejected with 400 before any
+  matching runs.
 - An empty result means no hint matched. It does not prove the part does not fit; fitment data may simply not have
   been recorded for that product.
 
@@ -207,7 +208,7 @@ own permissions, never from a role name.
 Platform sources:
 
 - `pos-catalog/openapi.yaml` (operations `searchCatalogProducts`, `findProductByCode`, `getProductById`,
-  `getProductDetailView`, `createProduct`, `updateProduct`, `createCatalogItem`, `getProductLifecycle`,
+  `getProductDetailView`, `createProduct`, `updateProduct`, `createCatalogItem`, `updateCatalogItem`, `getProductLifecycle`,
   `updateProductLifecycle`, `listProductReplacements`, `getPartSubstitutes`, `listServicePackages`; schemas
   `ProductDto`, `ProductDetailView`, `PricingInfo`, `AvailabilityInfo`)
 - `pos-catalog/README.md` (sell-price boundary, product facts, supplier stock on product detail, labor standards)
@@ -215,9 +216,14 @@ Platform sources:
   `pos-catalog/src/main/java/com/positivity/catalog/internal/security/CatalogPermissions.java`
 - `pos-catalog/src/main/java/com/positivity/catalog/internal/repository/ProductRepository.java` (search matching)
 - `pos-catalog/src/main/java/com/positivity/catalog/internal/service/ProductDetailServiceImpl.java`
+- `pos-catalog/src/main/java/com/positivity/catalog/internal/service/ProductMasterDataServiceImpl.java` (SKU
+  uniqueness and immutability) and `.../CatalogServiceImpl.java` (generic item create and update)
+- `pos-catalog/src/main/resources/db/migration/V1__baseline_catalog.sql` (`product.sku` column and unique constraint)
 - `pos-catalog/src/main/resources/db/migration/R__seed_reference_catalog.sql` (category taxonomy)
 - `pos-vehicle-fitment/openapi.yaml` (operations `filterProductsByVehicleAttributes`, `listVehicleHintsByProduct`,
   `createVehicleHint`, `bulkIngestVehicleFitments`, `listManufacturers`; schema `FitmentTagDto`)
+- `pos-vehicle-fitment/src/main/java/com/positivity/vehiclefitment/internal/dto/FilterProductsRequest.java`
+  (`vehicleAttributes` validation)
 - `pos-vehicle-fitment/src/main/resources/permissions.yaml` and
   `pos-vehicle-fitment/src/main/java/com/positivity/vehiclefitment/internal/security/VehicleFitmentPermissions.java`
 - `pos-vehicle-fitment/src/main/java/com/positivity/vehiclefitment/internal/service/VehicleApplicabilityHintServiceImpl.java`
