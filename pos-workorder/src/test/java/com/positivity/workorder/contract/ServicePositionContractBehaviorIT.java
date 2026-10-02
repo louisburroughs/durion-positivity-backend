@@ -2,6 +2,7 @@ package com.positivity.workorder.contract;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 
 import com.positivity.workorder.internal.entity.ExtBayReplica;
@@ -235,8 +236,8 @@ class ServicePositionContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     @Test
-    @DisplayName("SP-005: #1983 a bay at another site, and an unknown one, are both 422")
-    void foreignAndUnknownPositionsAreUnprocessable() {
+    @DisplayName("SP-005: #1983 a bay at another site is 422; #1994 an unknown one is 503 LOCATION_REPLICATION_PENDING")
+    void foreignBayIsUnprocessableAndUnknownBayIsReplicationPending() {
         UUID workorderId = seedWorkorderAtSite(WorkorderStatus.APPROVED);
 
         givenWithGatewayAuth()
@@ -250,8 +251,24 @@ class ServicePositionContractBehaviorIT extends BaseContractIntegrationTest {
                 .statusCode(422)
                 .body("code", equalTo("SERVICE_POSITION_INVALID"));
 
-        assignPosition(
-                workorderId, Map.of("resourceType", "BAY", "resourceId", "00000000-0000-0000-0000-0000000019ff"), 422);
+        // Neither replica holds this id: it may be a bay Location published a moment ago, so it is
+        // "not yet", not "no" (#1994), and the caller is told to retry rather than sent away.
+        String unknownBay = "00000000-0000-0000-0000-0000000019ff";
+        givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .body(Map.of("resourceType", "BAY", "resourceId", unknownBay))
+                .when()
+                .put(URL, workorderId)
+                .then()
+                .log()
+                .ifValidationFails()
+                .statusCode(503)
+                .header("Retry-After", notNullValue())
+                .body("code", equalTo("LOCATION_REPLICATION_PENDING"))
+                .body("referenceId", equalTo(unknownBay));
+
+        assertThat(workorderRepository.findById(workorderId).orElseThrow().getResourceId())
+                .isNull();
     }
 
     @Test
