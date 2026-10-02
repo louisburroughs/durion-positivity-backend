@@ -5363,9 +5363,7 @@
           "supplier"
         ]
       },
-      "hard_negative_for": [
-        "simple_chat"
-      ],
+      "hard_negative_for": [],
       "notes": ""
     },
     {
@@ -5550,9 +5548,7 @@
           "bank-reconciliation"
         ]
       },
-      "hard_negative_for": [
-        "simple_chat"
-      ],
+      "hard_negative_for": [],
       "notes": ""
     },
     {
@@ -5604,9 +5600,7 @@
           "bank-reconciliation"
         ]
       },
-      "hard_negative_for": [
-        "simple_chat"
-      ],
+      "hard_negative_for": [],
       "notes": ""
     },
     {

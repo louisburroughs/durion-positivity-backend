@@ -50,6 +50,14 @@ numbers. The report prints a warning next to an unreviewed language.
   derives different hard negatives.
   The two platform-event utterances added per language on 2026-09-30 (`en-0329`/`0330`,
   `fr-CA-0356`/`0357`, `es-0356`/`0357`) carry an empty list, confirmed by the derivation on 2026-10-01.
+  Re-derived on 2026-10-02 after #2371 widened the admin fast path's veto list: `en-0120` and
+  `en-0122` (a customer registering, a customer's access to a loaner car) lost `admin_account_question`.
+  The same change made `bank`, `ledger`, `supplier`, `vendor` (fr `banque`, `bancaire`, `fournisseur`;
+  es `banco`, `bancaria`, `bancario`, `proveedor`) simple-chat business keywords, so a vetoed question
+  reaches tool selection: `en-0152`, `en-0209`, `en-0216`, `en-0218` and `0209`, `0216`, `0218` in
+  fr-CA and es lost `simple_chat`.
+  Adding fr `recevable`/`recevables` and es `cobrar`/`pagar` as business keywords then removed
+  `simple_chat` from `es-0353` ("facturas sin pagar").
 - `notes`: why the label is what it is, where it is not obvious.
 
 ## Labelling rules (from the tag questions)
