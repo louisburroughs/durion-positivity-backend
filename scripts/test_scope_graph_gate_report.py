@@ -157,55 +157,109 @@ class ScoreTest(unittest.TestCase):
         self.assertEqual(scored["forbiddenHits"], ["admin.governance"])
 
 
+def _enforce(trace, retrieved, n=None, enforced=("RAG",), graph_hash=None):
+    """The enforce run's turn for the same question: a new turnId, mode ENFORCE, its own top-K."""
+    copy = json.loads(json.dumps(trace))
+    copy["turnId"] = _uuid(n if n is not None else 500 + int(trace["turnId"][-12:], 16))
+    copy["scope"].update({"mode": "ENFORCE", "enforced": list(enforced), "retrievedDocuments": retrieved,
+                          "ragFilterApplied": True})
+    if graph_hash:
+        copy["scope"]["graphHash"] = graph_hash
+    return copy
+
+
+# The enforce run of the five situations, as the real hook would serve them when it agrees with the
+# replay: billing.invoices (out of scope) gone, the dropped hit gone, the master chunk at rank 1.
+ENFORCE_ALL = [
+    _enforce(KEPT_HIT[0], [_doc("order.codes"), _doc("order.returns-refunds")]),
+    _enforce(DROPPED_HIT[0], [_doc("workorder.public")]),
+    _enforce(MASTER_RESCUED[0], [_doc("glossary.identifiers", "master")]),
+    _enforce(LOW_PASS_THROUGH[0], LOW_PASS_THROUGH[0]["scope"]["retrievedDocuments"]),
+    _enforce(FORBIDDEN[0], FORBIDDEN[0]["scope"]["retrievedDocuments"]),
+]
+PASSING = [KEPT_HIT, MASTER_RESCUED, LOW_PASS_THROUGH, FORBIDDEN]
+ENFORCE_PASSING = [ENFORCE_ALL[0], ENFORCE_ALL[2], ENFORCE_ALL[3], ENFORCE_ALL[4]]
+
+
+def _ids(joined, fixtures):
+    return {fixtures[i]["fixture_id"]: t["turnId"] for i, t in joined.items()}
+
+
 class JoinTest(unittest.TestCase):
     def test_exact_then_normalised_join(self):
         fixture = _fixture("f", "What is a   VIN", ["g"])
         trace = _trace(1, "what is a vin", _scope("LOW", [], []))
-        matches, skipped, ambiguous = report.join_traces([trace], [fixture])
-        self.assertEqual([(t["turnId"], f["fixture_id"]) for t, f in matches], [(_uuid(1), "f")])
+        joined, skipped, mismatches = report.join_traces([trace], [fixture])
+        self.assertEqual(_ids(joined, [fixture]), {"f": _uuid(1)})
         self.assertEqual(dict(skipped), {})
-        self.assertEqual(ambiguous, [])
+        self.assertEqual(mismatches, [])
 
-    def test_same_query_disambiguated_by_role(self):
+    def test_same_query_settled_by_role(self):
         positive = _fixture("pos", "who can approve", ["admin.governance"], role="ROLE_ADMIN")
         negative = _fixture("neg", "who can approve", [], forbidden=["admin.governance"], role="ROLE_TECHNICIAN")
         admin = _trace(1, "who can approve", _scope("LOW", [], []), role="ROLE_ADMIN")
         tech = _trace(2, "who can approve", _scope("LOW", [], []), role="ROLE_TECHNICIAN")
         other = _trace(3, "who can approve", _scope("LOW", [], []), role="ROLE_USER")
-        matches, skipped, ambiguous = report.join_traces([admin, tech, other], [positive, negative])
-        self.assertEqual([f["fixture_id"] for _, f in matches], ["pos", "neg"])
-        self.assertEqual(skipped["ambiguousFixture"], 1)
-        self.assertEqual(ambiguous[0]["turnId"], _uuid(3))
+        fixtures = [positive, negative]
+        joined, skipped, mismatches = report.join_traces([admin, tech, other], fixtures)
+        self.assertEqual(_ids(joined, fixtures), {"pos": _uuid(1), "neg": _uuid(2)})
+        self.assertEqual(skipped["actorMismatch"], 1)
+        self.assertEqual(mismatches[0]["turnId"], _uuid(3))
 
-    def test_duplicate_fixtures_with_one_expectation_are_one_fixture(self):
+    def test_unique_query_asked_as_another_actor_is_not_joined(self):
+        # A visibility fixture asked as an admin is no evidence that a technician cannot see the document.
+        negative = _fixture("neg", "who can approve", [], forbidden=["admin.governance"], role="ROLE_TECHNICIAN")
+        admin = _trace(1, "who can approve", _scope("LOW", [_doc("admin.governance", "admin")], []), role="ROLE_ADMIN")
+        joined, skipped, mismatches = report.join_traces([admin], [negative])
+        self.assertEqual(joined, {})
+        self.assertEqual(dict(skipped), {"actorMismatch": 1})
+        self.assertEqual(mismatches, [{"turnId": _uuid(1), "role": "ROLE_ADMIN", "fixtureIds": ["neg"]}])
+
+    def test_fixture_without_actor_role_accepts_any_role(self):
+        fixture = _fixture("f", "q", ["d"])
+        del fixture["actor"]
+        joined, _, _ = report.join_traces([_trace(1, "q", _scope("LOW", [], []), role="ROLE_USER")], [fixture])
+        self.assertEqual(_ids(joined, [fixture]), {"f": _uuid(1)})
+
+    def test_one_turn_scores_every_fixture_of_its_question_and_actor(self):
+        # rag-retrieval has two technician fixtures for "who can approve a permission change" with
+        # different forbidden lists: one turn is evidence for both, so neither is left without a trace.
         a = _fixture("a", "who can approve", [], forbidden=["admin.governance"], role="ROLE_TECHNICIAN")
-        b = _fixture("b", "who can approve", [], forbidden=["admin.governance"], role="ROLE_TECHNICIAN")
+        c = _fixture("c", "who can approve", [], forbidden=["admin.governance", "security.matrix"],
+                     role="ROLE_TECHNICIAN")
         tech = _trace(1, "who can approve", _scope("LOW", [], []), role="ROLE_TECHNICIAN")
-        matches, skipped, ambiguous = report.join_traces([tech], [a, b])
-        self.assertEqual([f["fixture_id"] for _, f in matches], ["a"])
+        joined, skipped, _ = report.join_traces([tech], [a, c])
+        self.assertEqual(_ids(joined, [a, c]), {"a": _uuid(1), "c": _uuid(1)})
         self.assertEqual(dict(skipped), {})
-        # Two expectations under one role stay ambiguous.
-        c = _fixture("c", "who can approve", ["admin.governance"], role="ROLE_TECHNICIAN")
-        matches, skipped, _ = report.join_traces([tech], [a, c])
-        self.assertEqual(matches, [])
-        self.assertEqual(skipped["ambiguousFixture"], 1)
+
+    def test_second_turn_for_a_joined_fixture_is_counted_not_scored(self):
+        fixture = _fixture("f", "q", ["d"])
+        first, second = _trace(1, "q", _scope("LOW", [], [])), _trace(2, "q", _scope("LOW", [], []))
+        joined, skipped, _ = report.join_traces([first, second], [fixture])
+        self.assertEqual(_ids(joined, [fixture]), {"f": _uuid(1)})
+        self.assertEqual(skipped["duplicateTurn"], 1)
 
     def test_unmatched_trace_is_counted(self):
-        matches, skipped, _ = report.join_traces([_trace(1, "nothing like this", _scope("LOW", [], []))],
-                                                 [_fixture("f", "q", ["d"])])
-        self.assertEqual(matches, [])
+        joined, skipped, _ = report.join_traces([_trace(1, "nothing like this", _scope("LOW", [], []))],
+                                                [_fixture("f", "q", ["d"])])
+        self.assertEqual(joined, {})
         self.assertEqual(skipped["noFixture"], 1)
 
 
 class BuildReportTest(unittest.TestCase):
     def setUp(self):
-        self.report = report.build_report([t for t, _ in ALL], [f for _, f in ALL], verbose=True)
+        self.report = report.build_report([t for t, _ in ALL], [f for _, f in ALL], verbose=True,
+                                          enforce_traces=ENFORCE_ALL)
 
     def test_sample_accounting(self):
         self.assertEqual(self.report["samples"], 5)
         self.assertEqual(self.report["fixturesJoined"], 5)
         self.assertEqual(self.report["fixturesWithoutTrace"], 0)
-        self.assertEqual(self.report["modes"], {"SHADOW": 5})
+        self.assertEqual(self.report["fixturesEnforceJoined"], 5)
+        self.assertEqual(self.report["fixturesWithoutEnforceTrace"], 0)
+        self.assertEqual(self.report["graphHashes"], {"c878c7206d2ed660": 10})
+        self.assertEqual(self.report["enforcedConsumers"], {"RAG": 5})
+        self.assertEqual(self.report["overall"]["paired"], 5)
 
     def test_today_metrics(self):
         today = self.report["overall"]["today"]
@@ -217,7 +271,7 @@ class BuildReportTest(unittest.TestCase):
 
     def test_enforce_metrics_and_fail_verdict(self):
         enforce = self.report["overall"]["enforce"]
-        # The dropped hit is gone; the rescued one moves up to rank 1; the LOW turns are untouched.
+        # The dropped hit is gone; the rescued one is at rank 1; the LOW turns are untouched.
         self.assertEqual(enforce["hitAtK"], 0.75)
         self.assertAlmostEqual(enforce["mrr"], (0.5 + 0.0 + 1.0 + 1.0) / 4)
         self.assertEqual(enforce["recallAtK"], 0.75)
@@ -230,7 +284,18 @@ class BuildReportTest(unittest.TestCase):
         self.assertIn("rag-lexical", gate["failingSets"])
         self.assertEqual(self.report["bySet"]["rag-retrieval"]["gate"]["verdict"], "PASS")
 
-    def test_regression_list_names_the_dropped_document(self):
+    def test_simulated_preview_metrics(self):
+        simulated = self.report["overall"]["simulated"]
+        self.assertEqual(simulated["hitAtK"], 0.75)
+        self.assertAlmostEqual(simulated["mrr"], (0.5 + 0.0 + 1.0 + 1.0) / 4)
+        self.assertEqual(self.report["gate"]["simulated"]["verdict"], "FAIL")
+
+    def test_loss_and_regression_lists_name_the_document(self):
+        self.assertEqual(self.report["losses"], 1)
+        [loss] = self.report["lossList"]
+        self.assertEqual(loss["fixtureId"], "dropped-hit")
+        self.assertEqual(loss["lost"], ["glossary.identifiers"])
+        self.assertEqual(loss["enforce"], ["workorder.public"])
         self.assertEqual(self.report["regressions"], 1)
         [entry] = self.report["regressionList"]
         self.assertEqual(entry["fixtureId"], "dropped-hit")
@@ -242,33 +307,111 @@ class BuildReportTest(unittest.TestCase):
         high = self.report["byConfidence"]["HIGH"]
         self.assertEqual(high["samples"], 3)
         self.assertEqual(high["dropped"], 1)
+        self.assertEqual(high["lost"], 1)
         low = self.report["byConfidence"]["LOW"]
         self.assertEqual(low["today"], low["enforce"])
+        self.assertEqual(low["today"], low["simulated"])
 
     def test_forbidden_list(self):
         [entry] = self.report["forbiddenList"]
         self.assertEqual(entry["fixtureId"], "forbidden-neg")
         self.assertEqual(entry["today"], ["admin.governance"])
+        self.assertEqual(entry["simulated"], ["admin.governance"])
         self.assertEqual(entry["enforce"], ["admin.governance"])
 
 
-class PassAndEdgeCaseTest(unittest.TestCase):
-    def test_pass_when_nothing_regresses(self):
-        cases = [KEPT_HIT, MASTER_RESCUED, LOW_PASS_THROUGH, FORBIDDEN]
-        result = report.build_report([t for t, _ in cases], [f for _, f in cases])
+class VerdictTest(unittest.TestCase):
+    def _build(self, cases=PASSING, enforce=ENFORCE_PASSING, **kwargs):
+        return report.build_report([t for t, _ in cases], [f for _, f in cases], enforce_traces=enforce, **kwargs)
+
+    def test_pass_when_the_enforce_run_regresses_nothing(self):
+        result = self._build()
         self.assertEqual(result["gate"]["verdict"], "PASS")
+        self.assertEqual(result["gate"]["reasons"], [])
         self.assertEqual(result["gate"]["failingSets"], [])
         # MRR improved: the rescued document moved from rank 2 to rank 1.
         self.assertGreater(result["gate"]["overall"]["deltas"]["mrr"], 0)
-        self.assertNotIn("regressionList", result)
+        self.assertNotIn("lossList", result)
 
-    def test_forbidden_increase_fails_even_with_rank_metrics_held(self):
-        # A HIGH turn where the filter would drop an in-scope decoy and keep... nothing changes for
-        # the forbidden set; so build the increase artificially: forbidden counted over kept documents
-        # can never exceed today's (the filter only removes). Assert that invariant instead.
-        trace, fixture = DROPPED_HIT
-        result = report.build_report([trace], [_fixture("f", fixture["query"], [], forbidden=["workorder.public"])])
-        self.assertLessEqual(result["overall"]["enforce"]["forbiddenHits"], result["overall"]["today"]["forbiddenHits"])
+    def test_shadow_alone_never_passes(self):
+        # The simulation finds nothing to drop, but it cannot see the all-scope pool: no verdict.
+        result = self._build(enforce=None)
+        self.assertEqual(result["gate"]["verdict"], "NO_ENFORCE_RUN")
+        self.assertEqual(result["gate"]["simulated"]["verdict"], "PASS")
+        self.assertIsNone(result["gate"]["overall"])
+        self.assertIsNone(result["fixturesWithoutEnforceTrace"])
+
+    def test_all_scope_candidate_displacing_a_hit_fails_though_the_simulation_passes(self):
+        # Under enforce the retrievers span every scope: an in-scope document of another domain, never
+        # in the shadow pool, enters the fusion and outranks the hit. The replay cannot see it.
+        shadow = _trace(1, "refund rules", _scope("HIGH", [_doc("order.returns-refunds", "order")],
+                                                  ["order.returns-refunds", "billing.refund-policy"]))
+        fixture = _fixture("displaced", "refund rules", ["order.returns-refunds"])
+        enforce = _enforce(shadow, [_doc("billing.refund-policy", "billing"), _doc("order.returns-refunds", "order")])
+        result = report.build_report([shadow], [fixture], enforce_traces=[enforce], verbose=True)
+        self.assertEqual(result["gate"]["simulated"]["verdict"], "PASS")
+        self.assertEqual(result["gate"]["verdict"], "FAIL")
+        self.assertEqual(result["gate"]["overall"]["deltas"]["mrr"], -0.5)
+
+    def test_candidate_promoted_from_below_the_cut_counts_in_the_enforce_run(self):
+        shadow = _trace(1, "refund rules", _scope("HIGH", [_doc("billing.x", "billing")], ["order.returns-refunds"]))
+        fixture = _fixture("promoted", "refund rules", ["order.returns-refunds"])
+        enforce = _enforce(shadow, [_doc("order.returns-refunds", "order")])
+        result = report.build_report([shadow], [fixture], enforce_traces=[enforce])
+        self.assertEqual(result["overall"]["today"]["hitAtK"], 0.0)
+        self.assertEqual(result["overall"]["enforce"]["hitAtK"], 1.0)
+        self.assertEqual(result["gate"]["verdict"], "PASS")
+
+    def test_forbidden_increase_fails_with_rank_metrics_held(self):
+        trace, fixture = KEPT_HIT
+        negative = _fixture("neg", "who sees payroll", [], forbidden=["people.payroll"])
+        neg_trace = _trace(7, "who sees payroll", _scope("HIGH", [], ["people.payroll"]))
+        enforce = [ENFORCE_ALL[0], _enforce(neg_trace, [_doc("people.payroll", "people")])]
+        result = report.build_report([trace, neg_trace], [fixture, negative], enforce_traces=enforce)
+        self.assertEqual(result["gate"]["verdict"], "FAIL")
+        self.assertEqual(result["gate"]["overall"]["deltas"]["forbiddenHits"], 1)
+
+    def test_fixture_without_a_shadow_trace_is_incomplete(self):
+        cases = PASSING + [DROPPED_HIT]
+        result = report.build_report([t for t, _ in PASSING], [f for _, f in cases], enforce_traces=ENFORCE_PASSING,
+                                     verbose=True)
+        self.assertEqual(result["gate"]["verdict"], "INCOMPLETE")
+        self.assertEqual(result["fixturesWithoutTraceIds"], ["dropped-hit"])
+        self.assertIn("1 fixture(s) without a shadow trace", result["gate"]["reasons"])
+
+    def test_fixture_without_an_enforce_trace_is_incomplete(self):
+        result = self._build(enforce=ENFORCE_PASSING[1:], verbose=True)
+        self.assertEqual(result["gate"]["verdict"], "INCOMPLETE")
+        self.assertEqual(result["fixturesWithoutEnforceTraceIds"], ["kept-hit"])
+        self.assertEqual(result["overall"]["paired"], 3)
+        self.assertEqual(result["overall"]["todayPaired"]["hitAtK"], 1.0)
+
+    def test_enforce_traces_in_the_shadow_input_are_rejected(self):
+        # An ENFORCE turn is already filtered: replaying the rule over it compares the list with itself.
+        mixed = report.build_report([t for t, _ in PASSING] + [ENFORCE_ALL[1]], [f for _, f in ALL],
+                                    enforce_traces=ENFORCE_ALL)
+        self.assertEqual(mixed["skipped"], {"wrongMode": 1})
+        self.assertEqual(mixed["gate"]["verdict"], "INCOMPLETE")
+
+    def test_enforce_input_needs_enforce_mode_with_rag_enforced(self):
+        tools_only = _enforce(KEPT_HIT[0], [_doc("order.returns-refunds")], n=801, enforced=("TOOLS",))
+        shadow_copy = json.loads(json.dumps(KEPT_HIT[0]))
+        shadow_copy["turnId"] = _uuid(802)
+        result = self._build(enforce=[tools_only, shadow_copy] + ENFORCE_PASSING[1:])
+        self.assertEqual(result["enforceSkipped"], {"wrongMode": 2})
+        self.assertEqual(result["gate"]["verdict"], "INCOMPLETE")
+
+    def test_two_graph_snapshots_are_mixed_evidence(self):
+        enforce = [_enforce(KEPT_HIT[0], [_doc("order.returns-refunds")], graph_hash="0000aaaa")] + ENFORCE_PASSING[1:]
+        result = self._build(enforce=enforce)
+        self.assertEqual(result["gate"]["verdict"], "MIXED_GRAPH")
+        self.assertEqual(result["graphHashes"], {"0000aaaa": 1, "c878c7206d2ed660": 7})
+
+    def test_negative_fixtures_alone_are_no_data(self):
+        result = self._build(cases=[FORBIDDEN], enforce=[ENFORCE_ALL[4]])
+        self.assertEqual(result["samples"], 1)
+        self.assertEqual(result["overall"]["scored"], 0)
+        self.assertEqual(result["gate"]["verdict"], "NO_DATA")
 
     def test_counts_only_trace_is_skipped_not_scored(self):
         old = _trace(9, "REFUND_FAILED retryable return status",
@@ -437,24 +580,37 @@ class LoadersAndCliTest(unittest.TestCase):
         fixtures = report.load_fixture_file("/x/eval/rag-lexical/codes.json", json.dumps({"fixtures": [{"fixture_id": "f"}]}))
         self.assertEqual(fixtures[0]["_set"], "rag-lexical")
 
+    @staticmethod
+    def _write_ndjson(path, traces):
+        with open(path, "w", encoding="utf-8") as handle:
+            for trace in traces:
+                handle.write(json.dumps(trace) + "\n")
+
     def test_cli_text_json_and_exit_codes(self):
         with tempfile.TemporaryDirectory() as tmp:
             os.makedirs(os.path.join(tmp, "rag-lexical"))
             traces_path = os.path.join(tmp, "traces.ndjson")
-            with open(traces_path, "w", encoding="utf-8") as handle:
-                for trace, _ in ALL:
-                    handle.write(json.dumps(trace) + "\n")
+            enforce_path = os.path.join(tmp, "enforce.ndjson")
+            self._write_ndjson(traces_path, [t for t, _ in ALL])
+            self._write_ndjson(enforce_path, ENFORCE_ALL)
             fixture_path = os.path.join(tmp, "rag-lexical", "f.json")
-            with open(fixture_path, "w", encoding="utf-8") as handle:
-                json.dump({"fixtures": [{k: v for k, v in f.items() if k != "_set"} for _, f in ALL]}, handle)
 
-            out = io.StringIO()
-            with contextlib.redirect_stdout(out):
-                code = report.main(["--file", traces_path, "--fixture", fixture_path, "--verbose"])
+            def write_fixtures(cases):
+                with open(fixture_path, "w", encoding="utf-8") as handle:
+                    json.dump({"fixtures": [{k: v for k, v in f.items() if k != "_set"} for _, f in cases]}, handle)
+
+            def run(*argv):
+                out = io.StringIO()
+                with contextlib.redirect_stdout(out):
+                    code = report.main(list(argv))
+                return code, out.getvalue()
+
+            write_fixtures(ALL)
+            code, text = run("--file", traces_path, "--enforce-file", enforce_path, "--fixture", fixture_path,
+                             "--verbose")
             self.assertEqual(code, 1)
-            text = out.getvalue()
             self.assertIn("GATE: FAIL", text)
-            self.assertIn("dropped-hit", text)
+            self.assertIn("lost dropped-hit", text)
             self.assertIn("Tools (shadow metric only", text)
 
             lexicon_path = os.path.join(tmp, "entities.yaml")
@@ -463,26 +619,33 @@ class LoadersAndCliTest(unittest.TestCase):
                 handle.write(LEXICON_YML)
             with open(preload_path, "w", encoding="utf-8") as handle:
                 handle.write(PRELOAD_YML)
-            out = io.StringIO()
-            with contextlib.redirect_stdout(out):
-                code = report.main(["--file", traces_path, "--fixture", fixture_path, "--json",
-                                    "--lexicon", lexicon_path, "--preload", preload_path])
+            code, text = run("--file", traces_path, "--enforce-file", enforce_path, "--fixture", fixture_path,
+                             "--json", "--lexicon", lexicon_path, "--preload", preload_path)
             self.assertEqual(code, 1)
-            parsed = json.loads(out.getvalue())
+            parsed = json.loads(text)
             self.assertEqual(parsed["gate"]["verdict"], "FAIL")
             self.assertEqual(parsed["coverage"]["lexiconEntities"], 3)
             self.assertEqual(parsed["coverage"]["entitiesWithNoDocument"], ["campaign"])
 
-            # Without the dropped hit the gate passes and the exit code is 0.
-            with open(traces_path, "w", encoding="utf-8") as handle:
-                for trace, _ in ALL:
-                    if trace["turnId"] != DROPPED_HIT[0]["turnId"]:
-                        handle.write(json.dumps(trace) + "\n")
-            out = io.StringIO()
-            with contextlib.redirect_stdout(out):
-                code = report.main(["--file", traces_path, "--fixture", fixture_path])
+            # Dropping the failing turn but keeping its fixture is incomplete evidence, not a PASS.
+            self._write_ndjson(traces_path, [t for t, _ in PASSING])
+            self._write_ndjson(enforce_path, ENFORCE_PASSING)
+            code, text = run("--file", traces_path, "--enforce-file", enforce_path, "--fixture", fixture_path)
+            self.assertEqual(code, 1)
+            self.assertIn("GATE: INCOMPLETE (1 fixture(s) without a shadow trace; "
+                          "1 fixture(s) without an enforce trace)", text)
+
+            # Every fixture joined on both sides and nothing regresses: PASS, exit code 0.
+            write_fixtures(PASSING)
+            code, text = run("--file", traces_path, "--enforce-file", enforce_path, "--fixture", fixture_path)
             self.assertEqual(code, 0)
-            self.assertIn("GATE: PASS", out.getvalue())
+            self.assertIn("GATE: PASS", text)
+
+            # The shadow run alone decides nothing, whatever the preview says.
+            code, text = run("--file", traces_path, "--fixture", fixture_path)
+            self.assertEqual(code, 1)
+            self.assertIn("GATE: NO_ENFORCE_RUN", text)
+            self.assertIn("Simulated preview (not evidence: it cannot see the all-scope candidate pool): PASS", text)
 
 
 if __name__ == "__main__":

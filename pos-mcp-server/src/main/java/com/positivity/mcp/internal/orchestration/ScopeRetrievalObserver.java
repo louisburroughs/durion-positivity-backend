@@ -14,9 +14,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
 
 /**
- * ADR-0069 §9 (shadow): notes which documents a turn's retrieval handed to the model, in rank
- * order with each chunk's {@code rag_scope}, so the trace can say how many of them the turn's scope
- * contained and the §9 gate can replay the {@code rag} filter rule offline against the fixtures.
+ * ADR-0069 §9 (shadow and enforce): notes which documents a turn's retrieval handed to the model, in
+ * rank order with each chunk's {@code rag_scope}, so the trace can say how many of them the turn's
+ * scope contained and the §9 gate can score a shadow run against an enforce run on the fixtures.
  *
  * <p>It sits after the final top-K cut and <strong>returns the delegate's list untouched</strong>:
  * same instance, same order, nothing added or dropped. It observes only when a scope was published

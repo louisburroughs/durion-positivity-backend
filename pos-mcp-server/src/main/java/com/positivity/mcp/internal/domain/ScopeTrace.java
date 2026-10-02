@@ -15,8 +15,9 @@ import org.jspecify.annotations.Nullable;
  *
  * <p>The identity lists ({@code retrievedDocuments}, {@code scopeDocumentIds}, {@code
  * scopeToolNames}, {@code addedToolNames}) exist so the §9 promotion gate for the {@code rag}
- * consumer can be computed offline from shadow traces: knowing <em>how many</em> retrieved documents
- * were in scope cannot say whether the filter would have kept the <em>right</em> one. Every entry is a
+ * consumer can be computed offline, from a shadow run and an enforce run of the same fixtures: knowing
+ * <em>how many</em> retrieved documents were in scope cannot say whether the filter kept the
+ * <em>right</em> one. Every entry is a
  * platform definition (ADR-0069 §8): a RAG {@code document_id}, a {@code rag_scope} name or an
  * {@code mcp_tool.name}. None of them is message text or instance data. All four are null in a
  * payload written before they existed; the two scope lists are bounded ({@link #IDENTITY_LIST_CAP})
