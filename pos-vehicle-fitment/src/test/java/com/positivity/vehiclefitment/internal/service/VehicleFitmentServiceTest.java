@@ -57,6 +57,12 @@ class VehicleFitmentServiceTest {
     private static final UUID MANUFACTURER_ID = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
     private static final UUID MAKE_ID = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
     private static final UUID VARIABLE_ID = UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc");
+    private static final UUID MODEL_ID = UUID.fromString("dddddddd-dddd-dddd-dddd-dddddddddddd");
+    /**
+     * Must match {@code VehicleFitmentServiceImpl.NHTSA_API_BASE}. Spelled out here rather than
+     * read from the service so a wrong base path there fails the suite instead of agreeing with it.
+     */
+    private static final String VPIC_BASE = "https://vpic.nhtsa.dot.gov/api/vehicles";
 
     @Spy
     Clock clock = TEST_CLOCK;
@@ -353,6 +359,223 @@ class VehicleFitmentServiceTest {
         assertThatThrownBy(() -> service.getVehicleTypesForMake(MAKE_ID))
                 .isInstanceOf(VehicleFitmentException.class)
                 .hasMessageContaining("Failed to parse vehicle types for make");
+    }
+
+    // ─── 24h vPIC cache (#2395) ────────────────────────────────────────────────
+    //
+    // All six lookups share one rule: serve the cached rows while they are inside the
+    // 24-hour window, otherwise refetch from vPIC. The helper behind that rule used to be
+    // named isCacheExpired while answering "is still fresh", and three call sites negated
+    // it on top of that — those three called vPIC on every request while the cache was
+    // warm and never again once it went stale. Each method is pinned on both sides of the
+    // window so the name and the call sites cannot drift apart again.
+    //
+    // The stale-side tests also pin the request URL: vPIC serves under /api/vehicles, and
+    // /v1/vehicles redirects to its NotFound page.
+
+    @Test
+    void getVehicleVariables_freshCache_servesCacheWithoutCallingVpic() {
+        VehicleVariable cached = vehicleVariable(hourOld());
+        when(vehicleVariableRepository.findAll()).thenReturn(List.of(cached));
+
+        assertThat(service.getVehicleVariables()).containsExactly(cached);
+
+        verify(restClient, never()).get();
+    }
+
+    @Test
+    void getVehicleVariables_staleCache_refetchesFromVpicOnce() {
+        when(vehicleVariableRepository.findAll()).thenReturn(List.of(vehicleVariable(dayOld())));
+        when(responseSpec.body(String.class))
+                .thenReturn("{\"Results\":[{\"Name\":\"ABS\",\"Description\":\"Anti-lock Braking\"}]}");
+
+        service.getVehicleVariables();
+
+        verifySingleVpicCall(VPIC_BASE + "/GetVehicleVariableList?format=json");
+    }
+
+    @Test
+    void getVehicleVariableValues_freshCache_servesCacheWithoutCallingVpic() {
+        VehicleVariableValue cached = vehicleVariableValue(hourOld());
+        when(vehicleVariableValueRepository.findByVariable_Id(VARIABLE_ID)).thenReturn(List.of(cached));
+
+        assertThat(service.getVehicleVariableValues(VARIABLE_ID)).containsExactly(cached);
+
+        verify(restClient, never()).get();
+    }
+
+    @Test
+    void getVehicleVariableValues_staleCache_refetchesFromVpicOnce() {
+        when(vehicleVariableValueRepository.findByVariable_Id(VARIABLE_ID))
+                .thenReturn(List.of(vehicleVariableValue(dayOld())));
+        when(responseSpec.body(String.class)).thenReturn("{\"Results\":[{\"Value\":\"Car\",\"ValueId\":\"1\"}]}");
+
+        service.getVehicleVariableValues(VARIABLE_ID);
+
+        verifySingleVpicCall(VPIC_BASE + "/GetVehicleVariableValuesList/" + VARIABLE_ID + "?format=json");
+    }
+
+    @Test
+    void getManufacturers_freshCache_servesCacheWithoutCallingVpic() {
+        when(manufacturerRepository.findAll()).thenReturn(List.of(manufacturer(hourOld())));
+
+        assertThat(service.getManufacturers())
+                .singleElement()
+                .extracting(ManufacturerResponse::getName)
+                .isEqualTo("Toyota");
+
+        verify(restClient, never()).get();
+    }
+
+    @Test
+    void getManufacturers_staleCache_refetchesFromVpicOnce() {
+        when(manufacturerRepository.findAll()).thenReturn(List.of(manufacturer(dayOld())));
+        // Mfr_ID must be a valid UUID string (service calls UUID.fromString on it)
+        when(responseSpec.body(String.class))
+                .thenReturn("{\"Results\":[{\"Mfr_ID\":\"" + MANUFACTURER_ID + "\",\"Mfr_CommonName\":\"Toyota\"}]}");
+
+        service.getManufacturers();
+
+        verifySingleVpicCall(VPIC_BASE + "/getallmanufacturers?format=json");
+    }
+
+    @Test
+    void getMakesByManufacturer_freshCache_servesCacheWithoutCallingVpic() {
+        when(manufacturerRepository.findById(MANUFACTURER_ID)).thenReturn(Optional.of(manufacturer(hourOld())));
+        when(makeRepository.findByManufacturerId(MANUFACTURER_ID)).thenReturn(List.of(make(hourOld())));
+
+        assertThat(service.getMakesByManufacturer(MANUFACTURER_ID))
+                .singleElement()
+                .extracting(MakeResponse::getName)
+                .isEqualTo("Toyota");
+
+        verify(restClient, never()).get();
+    }
+
+    @Test
+    void getMakesByManufacturer_staleCache_refetchesFromVpicOnce() {
+        when(manufacturerRepository.findById(MANUFACTURER_ID)).thenReturn(Optional.of(manufacturer(hourOld())));
+        when(makeRepository.findByManufacturerId(MANUFACTURER_ID)).thenReturn(List.of(make(dayOld())));
+        // Make_ID must be a valid UUID string
+        when(responseSpec.body(String.class))
+                .thenReturn("{\"Results\":[{\"Make_ID\":\"" + MAKE_ID + "\",\"Make_Name\":\"Toyota\"}]}");
+
+        service.getMakesByManufacturer(MANUFACTURER_ID);
+
+        verifySingleVpicCall(VPIC_BASE + "/GetMakeForManufacturer/" + MANUFACTURER_ID + "?format=json");
+    }
+
+    @Test
+    void getModelsByMake_freshCache_servesCacheWithoutCallingVpic() {
+        when(makeRepository.findById(MAKE_ID)).thenReturn(Optional.of(make(hourOld())));
+        when(modelRepository.findByMakeId(MAKE_ID)).thenReturn(List.of(model(hourOld())));
+
+        assertThat(service.getModelsByMake(MAKE_ID))
+                .singleElement()
+                .extracting(ModelResponse::getName)
+                .isEqualTo("Camry");
+
+        verify(restClient, never()).get();
+    }
+
+    @Test
+    void getModelsByMake_staleCache_refetchesFromVpicOnce() {
+        when(makeRepository.findById(MAKE_ID)).thenReturn(Optional.of(make(hourOld())));
+        when(modelRepository.findByMakeId(MAKE_ID)).thenReturn(List.of(model(dayOld())));
+        // Model_ID must be a valid UUID string
+        when(responseSpec.body(String.class))
+                .thenReturn("{\"Results\":[{\"Model_ID\":\"" + MODEL_ID + "\",\"Model_Name\":\"Camry\"}]}");
+
+        service.getModelsByMake(MAKE_ID);
+
+        verifySingleVpicCall(VPIC_BASE + "/GetModelsForMakeId/" + MAKE_ID + "?format=json");
+    }
+
+    @Test
+    void getVehicleTypesForMake_freshCache_servesCacheWithoutCallingVpic() {
+        when(makeRepository.findById(MAKE_ID)).thenReturn(Optional.of(make(hourOld())));
+        when(vehicleTypeRepository.findByMakeId(MAKE_ID)).thenReturn(List.of(vehicleType(hourOld())));
+
+        assertThat(service.getVehicleTypesForMake(MAKE_ID))
+                .singleElement()
+                .extracting(VehicleTypeResponse::getVehicleTypeName)
+                .isEqualTo("Passenger Car");
+
+        verify(restClient, never()).get();
+    }
+
+    @Test
+    void getVehicleTypesForMake_staleCache_refetchesFromVpicOnce() {
+        when(makeRepository.findById(MAKE_ID)).thenReturn(Optional.of(make(hourOld())));
+        when(vehicleTypeRepository.findByMakeId(MAKE_ID)).thenReturn(List.of(vehicleType(dayOld())));
+        when(responseSpec.body(String.class))
+                .thenReturn("{\"Results\":[{\"VehicleTypeId\":\"1\",\"VehicleTypeName\":\"Passenger Car\"}]}");
+
+        service.getVehicleTypesForMake(MAKE_ID);
+
+        verifySingleVpicCall(VPIC_BASE + "/GetVehicleTypesForMakeId/" + MAKE_ID + "?format=json");
+    }
+
+    /** Cached an hour before {@link #TEST_CLOCK}: inside the 24-hour window. */
+    private static LocalDateTime hourOld() {
+        return LocalDateTime.now(TEST_CLOCK).minusHours(1);
+    }
+
+    /** Cached 25 hours before {@link #TEST_CLOCK}: outside the 24-hour window. */
+    private static LocalDateTime dayOld() {
+        return LocalDateTime.now(TEST_CLOCK).minusHours(25);
+    }
+
+    /** Exactly one outbound request, and to the given vPIC URL. */
+    private void verifySingleVpicCall(String expectedUrl) {
+        verify(restClient).get();
+        verify(requestUriSpec).uri(expectedUrl);
+    }
+
+    private static VehicleVariable vehicleVariable(LocalDateTime cachedAt) {
+        VehicleVariable variable = new VehicleVariable();
+        variable.setId(VARIABLE_ID);
+        variable.setName("ABS");
+        variable.setCacheTimestamp(cachedAt);
+        return variable;
+    }
+
+    private static VehicleVariableValue vehicleVariableValue(LocalDateTime cachedAt) {
+        VehicleVariableValue value = new VehicleVariableValue();
+        value.setValue("Car");
+        value.setCacheTimestamp(cachedAt);
+        return value;
+    }
+
+    private static Manufacturer manufacturer(LocalDateTime cachedAt) {
+        Manufacturer manufacturer = new Manufacturer();
+        manufacturer.setId(MANUFACTURER_ID);
+        manufacturer.setName("Toyota");
+        manufacturer.setCacheTimestamp(cachedAt);
+        return manufacturer;
+    }
+
+    private static Make make(LocalDateTime cachedAt) {
+        Make make = new Make();
+        make.setId(MAKE_ID);
+        make.setName("Toyota");
+        make.setCacheTimestamp(cachedAt);
+        return make;
+    }
+
+    private static Model model(LocalDateTime cachedAt) {
+        Model model = new Model();
+        model.setId(MODEL_ID);
+        model.setName("Camry");
+        model.setCacheTimestamp(cachedAt);
+        return model;
+    }
+
+    private static VehicleType vehicleType(LocalDateTime cachedAt) {
+        VehicleType vehicleType = new VehicleType();
+        vehicleType.setVehicleTypeName("Passenger Car");
+        vehicleType.setCacheTimestamp(cachedAt);
+        return vehicleType;
     }
 
     // ─── createFitment ─────────────────────────────────────────────────────────
