@@ -179,7 +179,10 @@ domain agent, 2026-09-30; keep future edits consistent with these rules.
   the record's module owns its history. `master` for a bare follow-up, a compound question spanning
   two areas, and the assistant or platform in general.
 - `entity`: lexicon keys named or clearly referred to; the audit log, a period and a metric are not
-  entities.
+  entities, with one exception (#2384): a money figure (sales, revenue, margin, profit, spend) or a
+  comparison of the business's periods ("How did Q3 compare to Q2?") is `sales-report`, beside any
+  customer, supplier, product or location it is about. The `domain` labels of those utterances are
+  unchanged; `sales tax` is `tax`, not `sales-report`.
 - fr-CA and es keep deliberate anglicisms that real shop talk uses and the English keyword heuristics
   trip on (PO, purchase orders, sales tax, online, web, store, location, part, part time, access, bay;
   "po" as pouces). Each is marked in `notes`. The native reviewer may replace one, but replacing it

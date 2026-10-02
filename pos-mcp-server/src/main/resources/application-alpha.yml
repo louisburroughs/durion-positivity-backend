@@ -137,6 +137,13 @@ mcp:
           rag-scope: "accounting"
           entities: [bank-reconciliation, journal-entry]
           required-permissions: ["accounting:reconciliation:view"]
+        # #2384: money analytics — rationale in application.yml.
+        - id: "accounting.sales-analytics"
+          source-path: "classpath:rag/sales-analytics-guide.md"
+          rag-scope: "accounting"
+          entities: [sales-report, financial-report, customer, supplier]
+          required-permissions:
+            ["reporting:view:financial-statements", "accounting:analytics:view", "invoice:analytics:view"]
         - id: "inventory.inv-cntrl"
           source-path: "classpath:rag/inv-cntrl-rag.md"
           rag-scope: "inventory"

@@ -876,7 +876,9 @@
         "complexity": "SINGLE_LOOKUP",
         "risk": "LOW",
         "domain": "reporting",
-        "entity": []
+        "entity": [
+          "sales-report"
+        ]
       },
       "hard_negative_for": [
         "follows_previous_turn"
@@ -1922,7 +1924,9 @@
         "complexity": "SINGLE_LOOKUP",
         "risk": "LOW",
         "domain": "reporting",
-        "entity": []
+        "entity": [
+          "sales-report"
+        ]
       },
       "hard_negative_for": [],
       "notes": "revenue totals are not about orders"
@@ -2235,7 +2239,9 @@
         "complexity": "SINGLE_LOOKUP",
         "risk": "LOW",
         "domain": "reporting",
-        "entity": []
+        "entity": [
+          "sales-report"
+        ]
       },
       "hard_negative_for": [],
       "notes": ""
@@ -2258,7 +2264,9 @@
         "complexity": "SINGLE_LOOKUP",
         "risk": "LOW",
         "domain": "reporting",
-        "entity": []
+        "entity": [
+          "sales-report"
+        ]
       },
       "hard_negative_for": [
         "simple_chat"
@@ -2309,7 +2317,8 @@
         "risk": "LOW",
         "domain": "accounting",
         "entity": [
-          "supplier"
+          "supplier",
+          "sales-report"
         ]
       },
       "hard_negative_for": [],
@@ -2333,10 +2342,12 @@
         "complexity": "MULTI_DOMAIN",
         "risk": "LOW",
         "domain": "reporting",
-        "entity": []
+        "entity": [
+          "sales-report"
+        ]
       },
       "hard_negative_for": [],
-      "notes": ""
+      "notes": "a bare quarter comparison compares the business's results: sales-report (#2384)"
     },
     {
       "id": "es-0095",
@@ -2357,7 +2368,8 @@
         "risk": "LOW",
         "domain": "reporting",
         "entity": [
-          "location"
+          "location",
+          "sales-report"
         ]
       },
       "hard_negative_for": [],
@@ -2406,7 +2418,9 @@
         "complexity": "SINGLE_LOOKUP",
         "risk": "LOW",
         "domain": "reporting",
-        "entity": []
+        "entity": [
+          "sales-report"
+        ]
       },
       "hard_negative_for": [],
       "notes": ""
@@ -2455,7 +2469,8 @@
         "risk": "LOW",
         "domain": "accounting",
         "entity": [
-          "supplier"
+          "supplier",
+          "sales-report"
         ]
       },
       "hard_negative_for": [],
@@ -2479,7 +2494,9 @@
         "complexity": "SINGLE_LOOKUP",
         "risk": "LOW",
         "domain": "reporting",
-        "entity": []
+        "entity": [
+          "sales-report"
+        ]
       },
       "hard_negative_for": [],
       "notes": "metric implies a period"
@@ -2527,7 +2544,9 @@
         "complexity": "SINGLE_LOOKUP",
         "risk": "LOW",
         "domain": "reporting",
-        "entity": []
+        "entity": [
+          "sales-report"
+        ]
       },
       "hard_negative_for": [],
       "notes": ""
@@ -3180,7 +3199,8 @@
         "domain": "master",
         "entity": [
           "stock-item",
-          "product"
+          "product",
+          "sales-report"
         ]
       },
       "hard_negative_for": [],
@@ -3310,7 +3330,8 @@
         "risk": "LOW",
         "domain": "master",
         "entity": [
-          "user"
+          "user",
+          "sales-report"
         ]
       },
       "hard_negative_for": [],
@@ -3362,7 +3383,8 @@
         "domain": "master",
         "entity": [
           "customer",
-          "workorder"
+          "workorder",
+          "sales-report"
         ]
       },
       "hard_negative_for": [],
@@ -7910,10 +7932,12 @@
         "complexity": "SINGLE_LOOKUP",
         "risk": "LOW",
         "domain": "reporting",
-        "entity": []
+        "entity": [
+          "sales-report"
+        ]
       },
       "hard_negative_for": [],
-      "notes": ""
+      "notes": "daily sales is a money figure: sales-report (#2384); the dashboard wording does not make it an operational KPI"
     },
     {
       "id": "es-0309",
@@ -7935,7 +7959,8 @@
         "domain": "reporting",
         "entity": [
           "employee",
-          "workorder"
+          "workorder",
+          "sales-report"
         ]
       },
       "hard_negative_for": [],
@@ -8013,7 +8038,8 @@
         "risk": "LOW",
         "domain": "reporting",
         "entity": [
-          "customer"
+          "customer",
+          "sales-report"
         ]
       },
       "hard_negative_for": [],
