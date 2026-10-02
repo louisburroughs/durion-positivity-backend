@@ -7,12 +7,12 @@ import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderLineRequest;
 import com.positivity.order.internal.entity.ProcessedEvent;
 import com.positivity.order.internal.repository.ProcessedEventRepository;
 import com.positivity.order.internal.repository.PurchaseOrderRepository;
+import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import java.time.Clock;
 import java.time.Instant;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -122,12 +122,13 @@ public class PurchaseOrderCommandListener {
             // retry finds the order (or the processed mark committed with it) and returns early.
             log.info("Purchase order already placed by a concurrent delivery; retry will no-op", e);
             throw e;
-        } catch (TransientDataAccessException e) {
-            // Rethrown so the container retries. Recording this as processed would drop a
-            // replenishment decision on the floor: the suggestions are already marked converted,
-            // so nothing would ever ask for the order again.
-            throw e;
         } catch (Exception e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // Rethrown so the container retries. Recording this as processed would drop a
+                // replenishment decision on the floor: the suggestions are already marked converted,
+                // so nothing would ever ask for the order again.
+                throw e;
+            }
             log.warn("Skipping malformed order command eventId={}", eventId, e);
             handlerTransaction.executeWithoutResult(_ -> markProcessed(eventId));
         }

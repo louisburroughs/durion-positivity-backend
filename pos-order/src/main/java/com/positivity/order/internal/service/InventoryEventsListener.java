@@ -15,6 +15,7 @@ import com.positivity.order.internal.repository.ExtInventoryAvailabilityReposito
 import com.positivity.order.internal.repository.ProcessedEventRepository;
 import com.positivity.order.internal.repository.PurchaseOrderRepository;
 import com.positivity.order.internal.repository.SalesOrderLineRepository;
+import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -25,7 +26,6 @@ import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -160,12 +160,13 @@ public class InventoryEventsListener {
                 }
                 markProcessed(eventId);
             });
-        } catch (TransientDataAccessException e) {
-            // Rethrown so the container retries. Recording this as processed would leave goods on
-            // the shelf that the order still believes are outstanding, and no later event would
-            // ever correct it — the receipt has already happened.
-            throw e;
         } catch (Exception e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // Rethrown so the container retries. Recording this as processed would leave goods on
+                // the shelf that the order still believes are outstanding, and no later event would
+                // ever correct it — the receipt has already happened.
+                throw e;
+            }
             log.warn("Skipping malformed inventory event eventId={}", eventId, e);
             handlerTransaction.executeWithoutResult(_ -> markProcessed(eventId));
         }

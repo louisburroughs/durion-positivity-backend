@@ -26,6 +26,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
@@ -189,6 +190,17 @@ class SupplierArticleCodeEventsListenerTest {
 
         assertThatThrownBy(() -> listener.onCatalogEvent(factEvent("e-6", 100L, "michelin-eu", "999908")))
                 .isInstanceOf(QueryTimeoutException.class);
+
+        verify(processedEventRepository, never()).save(any());
+    }
+
+    @Test
+    void rethrowsLostConnectionDatabaseErrorsSoTheContainerRetries() {
+        when(extSupplierArticleCodeRepository.findBySupplierRefAndProductId("michelin-eu", PRODUCT_ID))
+                .thenThrow(new DataAccessResourceFailureException("connection reset"));
+
+        assertThatThrownBy(() -> listener.onCatalogEvent(factEvent("e-6", 100L, "michelin-eu", "999908")))
+                .isInstanceOf(DataAccessResourceFailureException.class);
 
         verify(processedEventRepository, never()).save(any());
     }

@@ -28,6 +28,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
@@ -248,6 +249,19 @@ class SupplierOrderResultListenerTest {
 
         assertThatThrownBy(() -> listener.onSupplierEvent(confirmed("evt-9", "2026-08-16T11:00:00Z")))
                 .isInstanceOf(QueryTimeoutException.class);
+
+        // Marking it processed would leave the buyer looking at an order that says it is still
+        // waiting for an answer the vendor has already given, with nothing left to correct it.
+        verify(processedEventRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("lost-connection database trouble is retried, not swallowed")
+    void lostConnectionFailureIsRethrown() {
+        when(purchaseOrderRepository.save(any())).thenThrow(new DataAccessResourceFailureException("connection reset"));
+
+        assertThatThrownBy(() -> listener.onSupplierEvent(confirmed("evt-9", "2026-08-16T11:00:00Z")))
+                .isInstanceOf(DataAccessResourceFailureException.class);
 
         // Marking it processed would leave the buyer looking at an order that says it is still
         // waiting for an answer the vendor has already given, with nothing left to correct it.
