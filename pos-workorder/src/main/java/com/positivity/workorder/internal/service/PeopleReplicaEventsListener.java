@@ -7,6 +7,7 @@ import com.positivity.domainevents.peoplecontact.PersonDeletedV1;
 import com.positivity.domainevents.peoplecontact.PersonUpdatedV1;
 import com.positivity.domainevents.peoplecontact.UserPersonLinkRemovedV1;
 import com.positivity.domainevents.peoplecontact.UserPersonLinkUpdatedV1;
+import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import com.positivity.workorder.internal.entity.ExtEmployeeReplica;
 import com.positivity.workorder.internal.entity.ExtPersonCredentialReplica;
 import com.positivity.workorder.internal.entity.ExtPersonReplica;
@@ -27,7 +28,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -164,8 +164,6 @@ public class PeopleReplicaEventsListener {
                 }
                 processedEventRepository.save(processedMark(eventId, owner));
             });
-        } catch (TransientDataAccessException e) {
-            throw e;
         } catch (DatabindException e) {
             Counter counter = OWNER_PEOPLE_CONTACT.equals(owner)
                     ? payloadRejectedCounterPeopleContact
@@ -176,6 +174,10 @@ public class PeopleReplicaEventsListener {
             log.error("Rejected malformed {} event payload eventId={}: {}", owner, eventId, e.getMessage(), e);
             recordFailure(eventId, owner);
         } catch (Exception e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // The container retries with backoff, then publishes to {topic}.dlq (ADR-0044 §4).
+                throw e;
+            }
             log.warn("Skipping malformed {} event eventId={}", owner, eventId, e);
             recordFailure(eventId, owner);
         }

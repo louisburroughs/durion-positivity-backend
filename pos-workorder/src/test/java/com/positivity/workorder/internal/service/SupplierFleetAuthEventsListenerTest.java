@@ -22,6 +22,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.json.JsonMapper;
@@ -140,6 +141,29 @@ class SupplierFleetAuthEventsListenerTest {
                                     "authorizedAmount":null,"currency":null,"occurredAt":"2026-08-17T09:00:00Z"}}
                         """))
                 .isInstanceOf(TransientDataAccessException.class);
+
+        // Marking this processed would leave a workorder gated on an authorization the fleet
+        // already granted, with nothing to correct it.
+        verify(processedEventRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("a lost-connection failure is rethrown for retry rather than marked processed")
+    void lostConnectionFailureIsRethrown() {
+        when(processedEventRepository.existsById("e-4")).thenReturn(false);
+        org.mockito.Mockito.doThrow(new DataAccessResourceFailureException("connection reset"))
+                .when(fleetAuthorizationService)
+                .recordDecision(any(), any(), any(), any(), any(), any());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> listener.onSupplierEvent("""
+                        {"eventId":"e-4","eventType":"supplier.workorderauth.granted","schemaVersion":1,
+                         "aggregateId":"019200aa-0000-7000-8000-0000000000a1","aggregateVersion":1,
+                         "payload":{"vendorProfileId":"019200aa-0000-7000-8000-0000000000d1",
+                                    "supplierRef":"michelin-de","workorderId":"019200aa-0000-7000-8000-0000000000c1",
+                                    "vendorAuthorizationId":"WO-42","contractReference":null,
+                                    "authorizedAmount":null,"currency":null,"occurredAt":"2026-08-17T09:00:00Z"}}
+                        """))
+                .isInstanceOf(DataAccessResourceFailureException.class);
 
         // Marking this processed would leave a workorder gated on an authorization the fleet
         // already granted, with nothing to correct it.

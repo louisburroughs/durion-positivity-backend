@@ -19,7 +19,8 @@ import org.springframework.util.backoff.ExponentialBackOff;
  * published to {@code {topic}.dlq} so poison messages surface for alerting instead of silently
  * blocking or dropping. Without this bean Spring Kafka's default handler retries a propagated
  * failure a few times back to back and then logs and skips the record, so a
- * {@code TransientDataAccessException} that a listener rethrows on purpose would still be lost.
+ * failure that a listener rethrows on purpose (the {@code RetryableConsumerFailures} set, #2355)
+ * would still be lost.
  *
  * <p>Redelivery is safe for every listener here: the fact listeners guard on
  * {@code processed_events}, invoice generation is idempotent per workorder, replay and backfill
