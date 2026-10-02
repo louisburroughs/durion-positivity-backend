@@ -301,24 +301,25 @@ set has 328 (en) or 355 (fr-CA, es) utterances. Send each language in batches of
 turns (150 below), export each batch right after it, and check the export is short of the cap:
 
 ```bash
-export MCP_CHAT_URL=http://localhost:18086/mcp-server/v1/mcp/chat   # scripts/analytics_gate_run.py default
-export MCP_BEARER_TOKEN=...                                          # the actor above
+export GATE_PASSWORD=...                       # the actor's password; never an argument
 GATE=pos-mcp-server/src/test/resources/eval/tagging-gate
-MODEL=tev1 LANG_FILE=en START=0 END=150 BATCH=1
-since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-jq -c ".utterances[$START:$END][] | {message: .text}" "$GATE/$LANG_FILE.json" |
-  while read -r body; do                         # no conversationId: every turn is a fresh conversation
-    curl -sS --fail -o /dev/null -X POST "$MCP_CHAT_URL" -H "Authorization: Bearer $MCP_BEARER_TOKEN" \
-      -H "X-API-Version: 1" -H "Content-Type: application/json" -d "$body" || echo "turn failed: $body" >&2
-  done
-curl -sS -G "${MCP_CHAT_URL%/v1/mcp/chat}/v1/eval/turn-traces" --data-urlencode "since=$since" \
-  --data-urlencode "limit=200" -H "Authorization: Bearer $MCP_BEARER_TOKEN" -H "X-API-Version: 1" \
-  > "traces-$MODEL-$LANG_FILE-$BATCH.json"
-jq length "traces-$MODEL-$LANG_FILE-$BATCH.json"   # 200 means turns were cut off: rerun smaller
+scripts/gate_chat_run.sh --label tev1 --fixture "$GATE/en.json" --fixture "$GATE/fr-CA.json" \
+  --fixture "$GATE/es.json"                    # --dry-run prints the plan first
 ```
 
-Repeat with `START=150 END=300 BATCH=2` and `START=300 END=400 BATCH=3` for each language. Overlapping
-exports are safe: the report keeps a `turnId` once. Rerunning a batch after a capped export:
+`scripts/gate_chat_run.sh --help` lists the options and the alpha preconditions. For each
+fixture it sends the turns in batches (`--batch-size`, default 150, rejected at 200 or more),
+as fresh conversations with `X-API-Version: 1`; mints a token before every batch and every
+export (tokens live 1 h); records `since` just before the first turn; and writes
+`traces-<label>-<fixture>-f<n>-<batch>.json` (`n`: the fixture's position on the command line,
+so two fixtures sharing a basename never overwrite each other), `run.log` (failed turns by HTTP
+code and fixture id) and `manifest.json` (batch plan, failures and trace counts) to
+`./gate-runs/<label>-<UTC timestamp>/`.
+An export of exactly 200 traces means turns were cut off: the script deletes it, exits non-zero and
+names the batch; rerun with a smaller `--batch-size`. The same script runs the RAG fixtures
+(`eval/rag-lexical/*.json`, `eval/rag-retrieval/*.json`, message at `.fixtures[].query`).
+
+Overlapping exports are safe: the report keeps a `turnId` once. Rerunning a batch after a capped export:
 delete the truncated export first (the rerun's turns get new `turnId`s; keeping both scores them twice).
 
 ### Report
@@ -326,9 +327,9 @@ delete the truncated export first (the rerun's turns get new `turnId`s; keeping 
 One report per language and candidate, all of that language's batch exports at once:
 
 ```bash
-python3 scripts/tagging_shadow_report.py --file traces-tev1-en-*.json --expected "$GATE/en.json" --verbose
-python3 scripts/tagging_shadow_report.py --file traces-tev1-fr-CA-*.json --expected "$GATE/fr-CA.json"
-python3 scripts/tagging_shadow_report.py --file traces-tev1-es-*.json --expected "$GATE/es.json"
+python3 scripts/tagging_shadow_report.py --file gate-runs/tev1-*/traces-tev1-en-*.json --expected "$GATE/en.json" --verbose
+python3 scripts/tagging_shadow_report.py --file gate-runs/tev1-*/traces-tev1-fr-CA-*.json --expected "$GATE/fr-CA.json"
+python3 scripts/tagging_shadow_report.py --file gate-runs/tev1-*/traces-tev1-es-*.json --expected "$GATE/es.json"
 ```
 
 Every utterance should join a trace (`utterances without a trace=0`); the report skips turns

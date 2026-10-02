@@ -167,6 +167,15 @@ jobs:
         run: |
           python3 -m unittest scripts.test_scope_graph_gate_report
 
+      - name: Gate chat runner tests (test_gate_chat_run.py)
+        # scripts/gate_chat_run.sh drives the tagging-gate / RAG bake-off. Pins the batch
+        # boundaries for both fixture shapes and that a batch size at the 200-trace export cap is
+        # rejected (--dry-run), and the run itself against a fake curl on PATH: token per batch and
+        # export, failed turns logged, a capped export deleted while the run goes on, the manifest,
+        # and the password never in an argv. No network, no credentials (jq ships on the runner).
+        run: |
+          python3 -m unittest scripts.test_gate_chat_run
+
       - name: Tagging gate fixture tests (test_tagging_gate_fixtures.py)
         # ADR-0068 §6 / spec §2.9: the gate fixtures are the ground truth the tagging model is
         # promoted on. This pins their schema, that every utterance carries every tag with an
