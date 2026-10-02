@@ -115,7 +115,7 @@ class RefusalTest(unittest.TestCase):
     def test_accepts_real_answers(self):
         for text in [
             "A VIN is exactly 17 characters long.",
-            "Purchase orders are owned by pos-inventory.",
+            "Purchase orders are owned by pos-order.",
             "The workorder number format is WO-YYYY-NNNN.",
         ]:
             self.assertFalse(refusal.is_refusal(text), text)
