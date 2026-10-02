@@ -54,7 +54,7 @@ ENTITY_DOMAIN = {
     "warranty-claim": "warranty", "employee": "people", "user": "security-service",
     "role": "security-service", "journal-entry": "accounting", "gl-account": "accounting",
     "financial-report": "accounting", "bank-reconciliation": "accounting", "vendor-bill": "accounting",
-    "credit-memo": "accounting", "campaign": "marketing",
+    "credit-memo": "accounting", "sales-report": "accounting", "campaign": "marketing",
 }
 ENTITY_KEYS = tuple(ENTITY_DOMAIN)
 

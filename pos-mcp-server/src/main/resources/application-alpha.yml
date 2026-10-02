@@ -120,6 +120,30 @@ mcp:
           # #1525: dual-listed for the reshaped facade JE surface — rationale in application.yml.
           required-permissions:
             ["accounting:je:view", "reporting:view:financial-statements"]
+        - id: "accounting.invoicing-payments"
+          source-path: "classpath:rag/invoicing-payments-guide.md"
+          rag-scope: "accounting"
+          entities: [invoice, payment]
+          # #2382: scope and audience rationale in application.yml.
+          required-permissions: ["invoice:invoice:view", "accounting:payment:apply"]
+        # #2383: rationale for both entries in application.yml.
+        - id: "accounting.supplier-vendor-bills"
+          source-path: "classpath:rag/supplier-vendor-bills-guide.md"
+          rag-scope: "accounting"
+          entities: [supplier, vendor-bill, credit-memo]
+          required-permissions: ["accounting:ap:view", "accounting:credit-memo:read"]
+        - id: "accounting.bank-reconciliation"
+          source-path: "classpath:rag/accounting-bank-reconciliation-rag.md"
+          rag-scope: "accounting"
+          entities: [bank-reconciliation, journal-entry]
+          required-permissions: ["accounting:reconciliation:view"]
+        # #2384: money analytics — rationale in application.yml.
+        - id: "accounting.sales-analytics"
+          source-path: "classpath:rag/sales-analytics-guide.md"
+          rag-scope: "accounting"
+          entities: [sales-report, financial-report, customer, supplier]
+          required-permissions:
+            ["reporting:view:financial-statements", "accounting:analytics:view", "invoice:analytics:view"]
         - id: "inventory.inv-cntrl"
           source-path: "classpath:rag/inv-cntrl-rag.md"
           rag-scope: "inventory"
@@ -146,6 +170,12 @@ mcp:
           entities: [purchase-order, asn, stock-item, stock-transfer, stock-adjustment]
           # #1525: retargeted to the live pos-order code — rationale in application.yml.
           required-permissions: ["order:purchase_order:view"]
+        - id: "catalog.products-fitment"
+          source-path: "classpath:rag/catalog-products-fitment-guide.md"
+          # #2381: inventory scope and OR-gated read codes — rationale in application.yml.
+          rag-scope: "inventory"
+          entities: [product]
+          required-permissions: ["catalog:product:view", "vehicle-fitment:catalog:view"]
         - id: "people.human-resources"
           source-path: "classpath:rag/hr-functions-guide.md"
           rag-scope: "hr"

@@ -56,9 +56,9 @@ class TaggingQuestionsTest {
         TaggingQuestions.QuestionSet set = TaggingQuestions.build(LEXICON, preload(profile));
         List<TagQuestion> questions = set.questions();
 
-        // 12 fixed tags + domain + one Noul per lexicon entity (31 today): 44, well under 64.
+        // 12 fixed tags + domain + one Noul per lexicon entity (32 today, sales-report since #2384): 45, well under 64.
         assertThat(questions).hasSize(12 + 1 + LEXICON.entities().size());
-        assertThat(questions).hasSizeBetween(44, 46);
+        assertThat(questions).hasSizeBetween(45, 47);
         assertThat(questions).hasSizeLessThanOrEqualTo(TaggingQuestions.MAX_QUESTIONS);
         assertThat(questions.stream().map(TagQuestion::wireName).toList()).doesNotHaveDuplicates();
         for (TagQuestion question : questions) {
@@ -239,7 +239,7 @@ class TaggingQuestionsTest {
                 .isFalse();
         assertThat(new TaggingQuestions(LEXICON, preload(profile), false).questions())
                 .hasSize(13);
-        assertThat(new TaggingQuestions(LEXICON, preload(profile)).questions()).hasSize(44);
+        assertThat(new TaggingQuestions(LEXICON, preload(profile)).questions()).hasSize(45);
         byte[] body = new ObjectMapper()
                 .writeValueAsBytes(JevClient.requestBody(
                         TaggingProperties.Provider.defaults(),
@@ -251,9 +251,10 @@ class TaggingQuestionsTest {
     }
 
     /**
-     * PR #2367 review: the default model ({@code tev1:0.8b}) reads about 2,000 tokens, which the 44-question
-     * set (about 4.6k tokens) overflows. The defaults, as {@code application.yml} binds them with no
-     * environment override and as the record defaults them, must ask the fixed set only.
+     * PR #2367 review: the default model ({@code tev1:0.8b}) reads about 2,000 tokens, which the 45-question
+     * set (a ~22 KB request body, as the test above prints it) overflows. The defaults, as {@code
+     * application.yml} binds them with no environment override and as the record defaults them, must ask the
+     * fixed set only.
      */
     @Test
     @DisplayName("the request built from the default properties asks the fixed questions only, no entity Nouls")

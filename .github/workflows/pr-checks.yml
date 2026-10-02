@@ -159,6 +159,14 @@ jobs:
         run: |
           python3 -m unittest scripts.test_tagging_shadow_report
 
+      - name: Scope-graph gate report unit tests (test_scope_graph_gate_report.py)
+        # ADR-0069 §9: the rag consumer is promoted on this report's verdict, computed offline from
+        # shadow traces (hit@5, MRR, recall@5, forbidden hits, today vs the simulated §6 filter), so a
+        # wrong rank metric or filter rule would promote a regression. Stdlib only, no build, no
+        # network, no database.
+        run: |
+          python3 -m unittest scripts.test_scope_graph_gate_report
+
       - name: Gate chat runner tests (test_gate_chat_run.py)
         # scripts/gate_chat_run.sh drives the tagging-gate / RAG bake-off. Pins the batch
         # boundaries for both fixture shapes and that a batch size at the 200-trace export cap is

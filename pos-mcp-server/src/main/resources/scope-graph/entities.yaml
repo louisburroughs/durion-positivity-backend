@@ -59,6 +59,8 @@ domain_scopes:
   price: pricing
   people: hr
   security-service: security
+  # #2382: pos-invoice's documents (accounting.invoicing-payments) live in the accounting scope.
+  invoice: accounting
 
 domains:
   accounting: "General ledger, journal entries, chart of accounts, financial statements, revenue, margin and profit figures, customer invoices and payments, credit memos, receivables and payables, vendor bills, bank reconciliation."
@@ -66,7 +68,7 @@ domains:
   customer: "Customers, their accounts and contacts, the vehicles they own, communication with them."
   events: "Platform events published by the pos-event modules: event types, event history and notifications."
   hr: "Employees as staff: employment, pay rates, time off, HR functions."
-  inventory: "Stock on hand, availability, parts, reorder points, receiving and ASNs, transfers, adjustments, counts, suppliers and purchase orders to suppliers."
+  inventory: "Stock on hand, availability, parts and the product catalog (SKUs, part numbers, which parts fit a vehicle by year, make and model), reorder points, receiving and ASNs, transfers, adjustments, counts, suppliers and purchase orders to suppliers."
   marketing: "Marketing campaigns to customers: campaigns and their audiences (customer segments), email and SMS message templates, campaign sends and results."
   order: "Customer sales orders and carts, returns and refunds (not purchase orders to suppliers)."
   pricing: "Prices, price lists, promotions, discounts, overrides, restrictions."
@@ -358,12 +360,27 @@ entities:
       - 'inventory:(.*Adjustment.*|.*Scrap.*|.*Revaluation.*)'
 
   # ---- catalog, pricing, tax -------------------------------------------------------------------
+  # #2381: fitment is not an entity of its own. A fitment question asks which PRODUCTS fit a vehicle
+  # described by attributes (year, make, model), and pos-vehicle-fitment answers it with product ids
+  # (rag/catalog-products-fitment-guide.md); the vehicle registry entity stays `vehicle`. So the
+  # fitment vocabulary, and the part kinds named after the seeded catalog subcategories
+  # (pos-catalog R__seed_reference_catalog.sql: brake pads, rotors, wiper blades, filters, batteries,
+  # spark plugs), denote `product`. Bare "fit" is left out: "can you fit him in" is scheduling. Tires
+  # are left out too: in the tagging gate fixtures "tire" names a service ("tire rotation"), a fee or
+  # a stock count more often than a product, and adding it halved the term's precision for no gain in
+  # F1. A hyphenated word takes no plural fold, so its plural is listed as well.
   - key: product
     domain: catalog
     terms:
-      en: [product, spare part, auto part, catalog item, sku]
-      fr: [produit, pièce, article du catalogue]
-      es: [producto, pieza, repuesto, artículo del catálogo]
+      en: [product, spare part, auto part, catalog item, sku, part number, fitment, part fitment, fits, compatible,
+           compatibility, year make model, year/make/model, ymm, brake pad, brake rotor, rotor, brake shoe,
+           wiper blade, oil filter, air filter, cabin air filter, battery, spark plug]
+      fr: [produit, pièce, article du catalogue, numéro de pièce, compatibilité, compatible, année/marque/modèle,
+           plaquette de frein, disque de frein, rotor, essuie-glace, essuie-glaces, filtre à huile, filtre à air,
+           filtre d'habitacle, batterie, bougie d'allumage]
+      es: [producto, pieza, repuesto, artículo del catálogo, número de parte, compatibilidad, compatible,
+           año/marca/modelo, balata, pastilla de freno, disco de freno, rotor, plumilla,
+           limpiaparabrisas, filtro de aceite, filtro de aire, filtro de cabina, batería, bujía]
     relates_to:
       - {entity: price, label: priced_by}
       - {entity: stock-item, label: stocked_as}
@@ -373,6 +390,9 @@ entities:
       - 'catalog:ProductDetailView'
     schema_patterns:
       - 'catalog:(?!(PriceBook|.*Msrp|EffectiveLocationPrice|LocationPriceOverride|ResolvePrice|SupplierPrice|UpdateStandardCost|ItemCost|Pricing|GuardrailPolicy)).*'
+      # The product side of pos-vehicle-fitment: applicability hints and the product-by-vehicle
+      # filter. The vehicle taxonomy DTOs (manufacturer, make, model, type) stay on `vehicle` only.
+      - 'vehicle-fitment:(.*Hint.*|FilterProducts.*|FitmentTagDto|.*FitmentBulkIngest.*)'
     facade_tools:
       - {tool: CatalogFacadeTool, access: reads}
       - {tool: PricingFacadeTool, access: reads}
@@ -591,12 +611,58 @@ entities:
       - {tool: ReportingFacadeTool, access: reads}
       - {tool: AccountingFacadeTool, access: reads}
 
+  # #2384: the period money analytics (sales and revenue, margin and profit, vendor spend, period
+  # comparisons), apart from the statements themselves (financial-report). Domain accounting, not
+  # reporting: the domains: sentences put money figures in accounting and leave reporting to the
+  # operational KPIs, and every figure behind it is served by pos-accounting or pos-invoice.
+  # Deliberately absent: bare "margin" / "marge" / "margen" (the catalog's price-override
+  # guardrail margin, minMarginPercent, is a pricing concept), bare "trend" (WIP and cycle-time
+  # trends are operational), "top customers" (it would shadow the customer seed; the glossary
+  # aliases "top customers by revenue" / "by value" link both), and "vendor spend" (the glossary
+  # alias already denotes supplier and this entity; a lexicon copy would shadow supplier).
+  # A quarter label alone (Q3, T3) is not a term: "work orders completed in Q3" is operational. Only a
+  # comparison of quarters names the business's results, so the quarter terms are comparison phrases
+  # ("compare to q2", "vs q2", "se compare-t-il au t2", "frente al t2"); a phrase is matched as a
+  # whole, on word boundaries, so "How did Q3 compare to Q2?" matches "compare to q2".
+  # Known widenings, accepted because a seed adds scope: "spend time", fr "sont revenus" (came
+  # back), es "ingreso" as an entry or admission, and "point de vente".
+  - key: sales-report
+    domain: accounting
+    terms:
+      en: [sales, revenue, sales report, revenue report, gross margin, profit margin, gross profit,
+           net profit, net income, profit, spend, spent, year over year, quarter over quarter, compare q1,
+           compare q2, compare q3, compare q4, compare to q1, compare to q2, compare to q3, compare to q4,
+           compared to q1, compared to q2, compared to q3, compared to q4, vs q1, vs q2, vs q3, vs q4]
+      fr: [vente, chiffre d'affaires, revenu, rapport des ventes, marge brute, marge bénéficiaire,
+           bénéfice brut, bénéfice net, bénéfice, profit, dépense, d'une année à l'autre,
+           se compare-t-il au t1, se compare-t-il au t2, se compare-t-il au t3, se compare-t-il au t4,
+           comparé au t1, comparé au t2, comparé au t3, comparé au t4, par rapport au t1, par rapport au t2,
+           par rapport au t3, par rapport au t4, vs t1, vs t2, vs t3, vs t4]
+      es: [venta, ingreso, informe de ventas, margen bruto, margen de utilidad, utilidad bruta, utilidad neta,
+           utilidad, ganancia, gasto, gastamos, interanual, frente al t1, frente al t2, frente al t3,
+           frente al t4, comparado con el t1, comparado con el t2, comparado con el t3, comparado con el t4,
+           vs t1, vs t2, vs t3, vs t4]
+    relates_to:
+      - {entity: financial-report, label: derived_from}
+      - {entity: invoice, label: derived_from}
+      - {entity: customer, label: ranks}
+      - {entity: supplier, label: ranks}
+    schemas:
+      - 'accounting:IncomeStatementReport'
+      - 'accounting:VendorSpendReport'
+      - 'accounting:CollectionsAnalyticsReport'
+      - 'invoice:RevenueByCustomerReport'
+    facade_tools:
+      - {tool: ReportingFacadeTool, access: reads}
+      - {tool: AccountingFacadeTool, access: reads}
+      - {tool: InvoiceFacadeTool, access: reads}
+
   - key: bank-reconciliation
     domain: accounting
     terms:
       en: [bank reconciliation, bank statement, bank import, bank account, bank transaction]
-      fr: [rapprochement bancaire, relevé bancaire, compte bancaire]
-      es: [conciliación bancaria, extracto bancario, cuenta bancaria]
+      fr: [rapprochement bancaire, relevé bancaire, compte bancaire, transaction bancaire]
+      es: [conciliación bancaria, extracto bancario, cuenta bancaria, movimiento bancario, transacción bancaria]
     relates_to:
       - {entity: journal-entry, label: adjusts_via}
     schemas:
@@ -608,7 +674,7 @@ entities:
   - key: vendor-bill
     domain: accounting
     terms:
-      en: [vendor bill, supplier invoice, accounts payable, ap payment]
+      en: [vendor bill, supplier invoice, accounts payable, ap payment, we owe]
       fr: [facture fournisseur, comptes fournisseurs, paiement fournisseur]
       es: [factura de proveedor, cuentas por pagar, pago a proveedor]
     relates_to:
@@ -625,7 +691,7 @@ entities:
     terms:
       en: [credit memo, customer credit, store credit]
       fr: [note de crédit, crédit client, crédit en magasin]
-      es: [nota de crédito, crédito de cliente, crédito en tienda]
+      es: [nota de crédito, crédito de cliente, crédito del cliente, crédito en tienda]
     relates_to:
       - {entity: customer, label: belongs_to}
       - {entity: invoice, label: applied_to}

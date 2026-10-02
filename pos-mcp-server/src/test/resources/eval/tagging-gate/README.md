@@ -50,6 +50,14 @@ numbers. The report prints a warning next to an unreviewed language.
   derives different hard negatives.
   The two platform-event utterances added per language on 2026-09-30 (`en-0329`/`0330`,
   `fr-CA-0356`/`0357`, `es-0356`/`0357`) carry an empty list, confirmed by the derivation on 2026-10-01.
+  Re-derived on 2026-10-02 after #2371 widened the admin fast path's veto list: `en-0120` and
+  `en-0122` (a customer registering, a customer's access to a loaner car) lost `admin_account_question`.
+  The same change made `bank`, `ledger`, `supplier`, `vendor` (fr `banque`, `bancaire`, `fournisseur`;
+  es `banco`, `bancaria`, `bancario`, `proveedor`) simple-chat business keywords, so a vetoed question
+  reaches tool selection: `en-0152`, `en-0209`, `en-0216`, `en-0218` and `0209`, `0216`, `0218` in
+  fr-CA and es lost `simple_chat`.
+  Adding fr `recevable`/`recevables` and es `cobrar`/`pagar` as business keywords then removed
+  `simple_chat` from `es-0353` ("facturas sin pagar").
 - `notes`: why the label is what it is, where it is not obvious.
 
 ## Labelling rules (from the tag questions)
@@ -171,7 +179,10 @@ domain agent, 2026-09-30; keep future edits consistent with these rules.
   the record's module owns its history. `master` for a bare follow-up, a compound question spanning
   two areas, and the assistant or platform in general.
 - `entity`: lexicon keys named or clearly referred to; the audit log, a period and a metric are not
-  entities.
+  entities, with one exception (#2384): a money figure (sales, revenue, margin, profit, spend) or a
+  comparison of the business's periods ("How did Q3 compare to Q2?") is `sales-report`, beside any
+  customer, supplier, product or location it is about. The `domain` labels of those utterances are
+  unchanged; `sales tax` is `tax`, not `sales-report`.
 - fr-CA and es keep deliberate anglicisms that real shop talk uses and the English keyword heuristics
   trip on (PO, purchase orders, sales tax, online, web, store, location, part, part time, access, bay;
   "po" as pouces). Each is marked in `notes`. The native reviewer may replace one, but replacing it
@@ -212,6 +223,15 @@ python3 scripts/tagging_shadow_report.py --file traces.json \
   --expected pos-mcp-server/src/test/resources/eval/tagging-gate/fr-CA.json \
   --expected pos-mcp-server/src/test/resources/eval/tagging-gate/es.json --verbose
 ```
+
+## Scope-graph gate (ADR-0069 section 9)
+
+The `rag` consumer of the scope graph is promoted on a different report:
+`scripts/scope_graph_gate_report.py` joins the traces of two runs of the RAG fixtures (`eval/rag-lexical/`,
+`eval/rag-retrieval/`), one in `mcp.scope-graph.mode: shadow` and one with the `rag` consumer in `enforce`,
+and compares their top-K (hit@5, MRR, recall@5, forbidden hits), plus a documentation-coverage table.
+`scripts/gate_chat_run.sh` drives both runs (one per fixture actor role); the procedure and the trace
+fields the report reads are in the module README, "Scope-graph gate report".
 
 ## Bake-off procedure (ADR-0068 section 6, spec 2.9)
 

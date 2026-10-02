@@ -309,6 +309,10 @@ class ToolInvocationRecorderTest {
 
         verify(traceRecorder).recordScope(scope);
         verify(traceRecorder).recordRetrievedDocuments(java.util.List.of("workorder.public"));
+        java.util.List<com.positivity.mcp.internal.domain.ScopeTrace.RetrievedDocument> ordered = java.util.List.of(
+                new com.positivity.mcp.internal.domain.ScopeTrace.RetrievedDocument("workorder.public", "workorder"));
+        recorder.recordRetrievedDocuments(ordered);
+        verify(traceRecorder).recordRetrievedDocuments(ordered);
 
         org.mockito.Mockito.doThrow(new IllegalStateException("trace store down"))
                 .when(traceRecorder)

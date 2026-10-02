@@ -242,6 +242,95 @@ class EvalTurnTraceJsonCompatibilityTest {
                 .doesNotContain("WO-20391");
     }
 
+    /** A scope written before the identity lists existed (counts only): the first ADR-0069 shape. */
+    private static final String COUNTS_ONLY_SCOPE_PAYLOAD = """
+            {"mode":"SHADOW","enforced":[],"graphHash":"c878c7206d2ed660","graphBuiltAt":"2026-09-30T12:00:00Z",
+             "confidence":"HIGH","seeds":[{"entity":"workorder","matchKind":"IDENTIFIER"}],
+             "entityCount":3,"toolCount":5,"documentCount":4,"screenCount":2,"addedTools":0,
+             "ragFilterApplied":false,"calledToolsInScope":1,"calledTools":1,
+             "retrievedDocsInScope":2,"retrievedDocs":5}
+            """;
+
+    @Test
+    @DisplayName("ADR-0069 §9: a counts-only scope payload reads back with null identity lists and nothing truncated")
+    void aCountsOnlyScopePayloadReadsBackWithNullIdentityLists() throws Exception {
+        ScopeTrace read = mapper.readValue(COUNTS_ONLY_SCOPE_PAYLOAD, ScopeTrace.class);
+
+        assertThat(read.retrievedDocs()).isEqualTo(5);
+        assertThat(read.retrievedDocsInScope()).isEqualTo(2);
+        assertThat(read.retrievedDocuments()).isNull();
+        assertThat(read.scopeDocumentIds()).isNull();
+        assertThat(read.scopeDocumentIdsTruncated()).isFalse();
+        assertThat(read.scopeToolNames()).isNull();
+        assertThat(read.scopeToolNamesTruncated()).isFalse();
+        assertThat(read.addedToolNames()).isNull();
+        // The counts-only constructor still exists and produces the same value.
+        assertThat(read)
+                .isEqualTo(new ScopeTrace(
+                        "SHADOW",
+                        java.util.List.of(),
+                        "c878c7206d2ed660",
+                        java.time.Instant.parse("2026-09-30T12:00:00Z"),
+                        "HIGH",
+                        java.util.List.of(new ScopeTrace.SeedTrace("workorder", "IDENTIFIER")),
+                        3,
+                        5,
+                        4,
+                        2,
+                        0,
+                        false,
+                        1,
+                        1,
+                        2,
+                        5));
+    }
+
+    @Test
+    @DisplayName(
+            "ADR-0069 §9: a current scope payload round-trips its identity lists, ordered, with a null rag_scope kept")
+    void aCurrentScopePayloadRoundTripsItsIdentityLists() throws Exception {
+        ScopeTrace scope = new ScopeTrace(
+                "SHADOW",
+                java.util.List.of(),
+                "c878c7206d2ed660",
+                java.time.Instant.parse("2026-09-30T12:00:00Z"),
+                "HIGH",
+                java.util.List.of(new ScopeTrace.SeedTrace("workorder", "IDENTIFIER")),
+                3,
+                2,
+                2,
+                1,
+                1,
+                false,
+                1,
+                1,
+                1,
+                3,
+                java.util.List.of(
+                        new ScopeTrace.RetrievedDocument("billing.invoices", "billing"),
+                        new ScopeTrace.RetrievedDocument("workorder.public", "workorder"),
+                        new ScopeTrace.RetrievedDocument("order.codes", null)),
+                java.util.List.of("workorder.status-lifecycle", "workorder.public"),
+                false,
+                java.util.List.of("WorkorderFacadeTool", "workorder_getworkorder"),
+                false,
+                java.util.List.of("WorkorderFacadeTool"));
+
+        String json = mapper.writeValueAsString(scope);
+        ScopeTrace roundTripped = mapper.readValue(json, ScopeTrace.class);
+
+        assertThat(roundTripped).isEqualTo(scope);
+        assertThat(roundTripped.retrievedDocuments())
+                .extracting(ScopeTrace.RetrievedDocument::documentId)
+                .containsExactly("billing.invoices", "workorder.public", "order.codes");
+        assertThat(json)
+                .contains("\"retrievedDocuments\":[{\"documentId\":\"billing.invoices\",\"ragScope\":\"billing\"}")
+                .contains("\"scopeDocumentIds\":[\"workorder.status-lifecycle\",\"workorder.public\"]")
+                .contains("\"scopeDocumentIdsTruncated\":false")
+                .contains("\"scopeToolNames\":[\"WorkorderFacadeTool\",\"workorder_getworkorder\"]")
+                .contains("\"addedToolNames\":[\"WorkorderFacadeTool\"]");
+    }
+
     @Test
     @DisplayName("ADR-0068: every payload written before tagging existed reads back with null tags")
     void aPayloadWrittenBeforeTagsExistedReadsBackWithNullTags() throws Exception {
