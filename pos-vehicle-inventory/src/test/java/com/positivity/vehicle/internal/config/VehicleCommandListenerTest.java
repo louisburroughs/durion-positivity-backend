@@ -17,6 +17,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.ObjectMapper;
@@ -81,6 +82,16 @@ class VehicleCommandListenerTest {
         when(replayService.replayBetween(any(), any())).thenThrow(new QueryTimeoutException("db timeout"));
 
         assertThatExceptionOfType(QueryTimeoutException.class)
+                .isThrownBy(() -> listener.onCommand(replayCommand("2026-07-12T10:00:00Z", "2026-07-12T11:00:00Z")));
+    }
+
+    @Test
+    @DisplayName("lost-connection DB errors rethrow for container retry/DLQ (ADR-0044 §4, PR #865 review)")
+    void rethrowsLostConnectionErrors() {
+        when(replayService.replayBetween(any(), any()))
+                .thenThrow(new DataAccessResourceFailureException("connection reset"));
+
+        assertThatExceptionOfType(DataAccessResourceFailureException.class)
                 .isThrownBy(() -> listener.onCommand(replayCommand("2026-07-12T10:00:00Z", "2026-07-12T11:00:00Z")));
     }
 }
