@@ -756,6 +756,15 @@ as `DataAccessResourceFailureException`, which Spring classes as non-transient, 
 swallowed by those listeners; widening the rethrow is a platform-wide decision under ADR-0044, not
 a module one.
 
+The five reconciliation-manifest listeners (`CustomerManifestListener`, `LocationManifestListener`,
+`InventoryManifestListener`, `InvoiceManifestListener`, `PeopleManifestListener`) need no rethrow
+(#2354). Their only data access is the `processed_events` ledger read, which sits outside both of
+their catch blocks, so any failure of it, transient or not, already reaches the handler. The two
+catches cover a manifest that does not parse and a replay request that could not be handed to
+Kafka; neither touches the database. A manifest writes nothing, so redelivering one only re-runs
+the comparison: a window that still mismatches counts `replica.drift` again and repeats the same
+replay request, and the replayed events are deduplicated by the `processed_events` primary key.
+
 ## Multitenancy (ADR-0062, WS3 wave 3)
 
 This module runs on the ADR-0062 runtime: it depends on `pos-tenancy-common`, every scoped entity
