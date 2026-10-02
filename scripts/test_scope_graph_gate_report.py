@@ -215,6 +215,36 @@ class JoinTest(unittest.TestCase):
         self.assertEqual(dict(skipped), {"actorMismatch": 1})
         self.assertEqual(mismatches, [{"turnId": _uuid(1), "role": "ROLE_ADMIN", "fixtureIds": ["neg"]}])
 
+    def test_actor_proxy_joins_fixtures_that_expect_a_document(self):
+        positive = _fixture("pos", "what is a vin", ["glossary.vin"], role="ROLE_TECHNICIAN")
+        negative = _fixture("neg", "who can approve", [], forbidden=["admin.governance"], role="ROLE_TECHNICIAN")
+        proxy = "ROLE_SYSTEM_ADMINISTRATOR"
+        vin = _trace(1, "what is a vin", _scope("LOW", [], []), role=proxy)
+        approve = _trace(2, "who can approve", _scope("LOW", [], []), role=proxy)
+        stranger = _trace(3, "what is a vin", _scope("LOW", [], []), role="ROLE_USER")
+        fixtures = [positive, negative]
+        joined, skipped, mismatches = report.join_traces([vin, approve, stranger], fixtures, actor_proxy=proxy)
+        self.assertEqual(_ids(joined, fixtures), {"pos": _uuid(1)})
+        self.assertEqual(dict(skipped), {"proxyNoExpected": 1, "actorMismatch": 1})
+        self.assertEqual(mismatches[0]["turnId"], _uuid(3))
+
+    def test_actor_proxy_prefers_a_role_match(self):
+        own = _fixture("own", "q", ["d"], role="ROLE_SYSTEM_ADMINISTRATOR")
+        other = _fixture("other", "q", ["d"], role="ROLE_TECHNICIAN")
+        trace = _trace(1, "q", _scope("LOW", [], []), role="ROLE_SYSTEM_ADMINISTRATOR")
+        joined, _, _ = report.join_traces([trace], [own, other], actor_proxy="ROLE_SYSTEM_ADMINISTRATOR")
+        self.assertEqual(_ids(joined, [own, other]), {"own": _uuid(1)})
+
+    def test_actor_proxy_ignores_the_forbidden_list(self):
+        fixture = _fixture("f", "q", ["d"], forbidden=["secret"], role="ROLE_TECHNICIAN")
+        trace = _trace(1, "q", _scope("LOW", [_doc("d", "order"), _doc("secret", "admin")], []),
+                       role="ROLE_SYSTEM_ADMINISTRATOR")
+        result = report.build_report([trace], [fixture], actor_proxy="ROLE_SYSTEM_ADMINISTRATOR")
+        self.assertEqual(result["samples"], 1)
+        self.assertEqual(result["proxiedSamples"], 1)
+        self.assertEqual(result["overall"]["today"]["forbiddenHits"], 0)
+        self.assertIn("Actor proxy ROLE_SYSTEM_ADMINISTRATOR: 1 sample(s)", report.render_text(result))
+
     def test_fixture_without_actor_role_joins_no_turn(self):
         # Fail closed: a fixture that names no actor cannot say which turn is evidence for it.
         fixture = _fixture("f", "q", ["d"])

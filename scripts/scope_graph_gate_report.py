@@ -101,6 +101,12 @@ The trace is scored against every candidate left (two fixtures may ask one quest
 with different expectations). A fixture joined by more than one turn of a run keeps the latest by
 `startedAt` (`duplicateTurn`), so a rerun's turn replaces an older attempt's.
 
+Actor proxy (--actor-proxy ROLE): where no candidate's role matches, a turn asked as ROLE joins every
+candidate that expects at least one document (a fixture expecting none is a pure visibility check,
+`proxyNoExpected`). Its forbidden list is ignored: the proxy sees what the fixture's actor may not, so a
+forbidden hit says nothing. Proxy evidence measures whether the filter drops expected documents, not
+per-role visibility; the report says how many samples rest on it.
+
 Stdlib only, like scripts/tagging_shadow_report.py.
 """
 
@@ -200,13 +206,15 @@ def score(documents, expected, forbidden, k):
     return {"hitAtK": hit, "mrr": mrr, "recallAtK": recall, "forbiddenHits": forbidden_hits}
 
 
-def join_traces(traces, fixtures):
+def join_traces(traces, fixtures, actor_proxy=None):
     """Pair fixtures with the turns that asked them.
 
     Returns (joined, skipped, mismatches): joined maps a fixture's index in `fixtures` to its latest
     trace (by startedAt); skipped is a Counter of noUserMessage, noFixture, actorMismatch (the query
     matched, no candidate's actor role did; a fixture without one matches no turn) and duplicateTurn
-    (a turn for an already joined fixture); mismatches lists the actor-mismatched turns.
+    (a turn for an already joined fixture); mismatches lists the actor-mismatched turns. With
+    actor_proxy, a turn asked as that role joins the candidates that expect a document (see the module
+    docstring); one whose candidates expect none counts as proxyNoExpected.
     """
     exact, normalised = defaultdict(list), defaultdict(list)
     for index, fixture in enumerate(fixtures):
@@ -226,6 +234,11 @@ def join_traces(traces, fixtures):
             continue
         role = trace.get("role")
         by_role = [i for i in candidates if _actor_role(fixtures[i]) == role]
+        if not by_role and actor_proxy is not None and role == actor_proxy:
+            by_role = [i for i in candidates if _expected(fixtures[i], DEFAULT_K)[0]]
+            if not by_role:
+                skipped["proxyNoExpected"] += 1
+                continue
         if not by_role:
             skipped["actorMismatch"] += 1
             mismatches.append({"turnId": trace.get("turnId"), "role": role,
@@ -243,6 +256,11 @@ def join_traces(traces, fixtures):
         if duplicate:
             skipped["duplicateTurn"] += 1
     return joined, skipped, mismatches
+
+
+def _proxied(trace, fixture, actor_proxy):
+    """Whether a joined pair rests on the actor proxy rather than on the fixture's own actor."""
+    return actor_proxy is not None and trace.get("role") == actor_proxy and _actor_role(fixture) != actor_proxy
 
 
 def _actor_role(fixture):
@@ -376,19 +394,20 @@ def _differences(trace, other):
 
 
 def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=None, preload_docs=None,
-                 enforce_traces=None, baseline_traces=None):
+                 enforce_traces=None, baseline_traces=None, actor_proxy=None):
     """Aggregate the shadow traces, the enforce traces (None: no enforce run given), the baseline
-    traces (a second shadow run for the A/A check; None: not given) and the fixtures."""
+    traces (a second shadow run for the A/A check; None: not given) and the fixtures. actor_proxy: see
+    the module docstring."""
     skipped, enforce_skipped, baseline_skipped = Counter(), Counter(), Counter()
     shadow = _usable(traces, SHADOW, skipped)
     enforce = _usable(enforce_traces or [], ENFORCE, enforce_skipped)
     baseline = _usable(baseline_traces or [], SHADOW, baseline_skipped)
 
-    joined, join_skipped, mismatches = join_traces(shadow, fixtures)
+    joined, join_skipped, mismatches = join_traces(shadow, fixtures, actor_proxy)
     skipped.update(join_skipped)
-    enforce_joined, enforce_join_skipped, enforce_mismatches = join_traces(enforce, fixtures)
+    enforce_joined, enforce_join_skipped, enforce_mismatches = join_traces(enforce, fixtures, actor_proxy)
     enforce_skipped.update(enforce_join_skipped)
-    baseline_joined, baseline_join_skipped, baseline_mismatches = join_traces(baseline, fixtures)
+    baseline_joined, baseline_join_skipped, baseline_mismatches = join_traces(baseline, fixtures, actor_proxy)
     baseline_skipped.update(baseline_join_skipped)
 
     samples = []
@@ -396,6 +415,9 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
         trace, fixture = joined[index], fixtures[index]
         scope = trace["scope"]
         expected, forbidden, fixture_k = _expected(fixture, k)
+        proxied = _proxied(trace, fixture, actor_proxy)
+        if proxied:
+            forbidden = []
         retrieved = scope.get("retrievedDocuments") or []
         kept = simulate_enforce(scope)
         enforce_trace = enforce_joined.get(index)
@@ -412,6 +434,7 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
             "enforceTurnId": enforce_trace.get("turnId") if enforce_trace else None,
             "fixtureId": fixture.get("fixture_id"),
             "set": fixture["_set"],
+            "proxied": proxied,
             "confidence": str(scope.get("confidence") or "UNKNOWN").upper(),
             "enforceConfidence": None if enforce_trace is None
             else str(enforce_trace["scope"].get("confidence") or "UNKNOWN").upper(),
@@ -523,6 +546,8 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
         "samples": len(samples),
         "fixtures": len(fixtures),
         "fixturesJoined": len(joined),
+        "actorProxy": actor_proxy,
+        "proxiedSamples": sum(1 for s in samples if s["proxied"]),
         "fixturesWithoutTrace": len(without_trace),
         "fixturesEnforceJoined": len(enforce_joined),
         "fixturesWithoutEnforceTrace": None if enforce_traces is None else len(without_enforce),
@@ -786,6 +811,9 @@ def render_text(report):
     out = [f"Scope-graph rag gate (ADR-0069 section 9), k={k}",
            f"Shadow traces: {report['traces']}; joined samples: {report['samples']}; fixtures: {report['fixtures']} "
            f"(joined {report['fixturesJoined']}, without a trace {report['fixturesWithoutTrace']})"]
+    if report["actorProxy"] is not None:
+        out.append(f"Actor proxy {report['actorProxy']}: {report['proxiedSamples']} sample(s) joined through it "
+                   "(forbidden lists ignored; per-role visibility not tested)")
     if report["enforceTraces"] is None:
         out.append("Enforce traces: none given (--enforce-file)")
     else:
@@ -938,6 +966,9 @@ def main(argv=None):
     parser.add_argument("--preload", metavar="PATH",
                         help="application.yml whose mcp.rag.preload.docs[].entities give the static document count "
                              "per entity")
+    parser.add_argument("--actor-proxy", metavar="ROLE",
+                        help="trace role (e.g. ROLE_SYSTEM_ADMINISTRATOR) whose turns stand in for fixtures of any "
+                             "actor that expect a document; their forbidden lists are ignored")
     parser.add_argument("--verbose", action="store_true",
                         help="list the regressed fixtures, tool-selection changes, nondeterministic turns, dropped "
                              "expected documents, forbidden hits, unmatched fixtures, actor-mismatched turns and the "
@@ -964,7 +995,7 @@ def main(argv=None):
             preload_docs = read_preload_docs(handle.read())
 
     report = build_report(traces, fixtures, args.k, args.verbose, lexicon_entities, preload_docs, enforce_traces,
-                          baseline_traces)
+                          baseline_traces, args.actor_proxy)
     print(json.dumps(report, indent=2) if args.json else render_text(report))
     return 0 if report["gate"]["verdict"] == "PASS" else 1
 
