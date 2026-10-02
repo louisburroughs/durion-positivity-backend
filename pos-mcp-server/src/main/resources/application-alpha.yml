@@ -126,6 +126,17 @@ mcp:
           entities: [invoice, payment]
           # #2382: scope and audience rationale in application.yml.
           required-permissions: ["invoice:invoice:view", "accounting:payment:apply"]
+        # #2383: rationale for both entries in application.yml.
+        - id: "accounting.supplier-vendor-bills"
+          source-path: "classpath:rag/supplier-vendor-bills-guide.md"
+          rag-scope: "accounting"
+          entities: [supplier, vendor-bill, credit-memo]
+          required-permissions: ["accounting:ap:view", "accounting:credit-memo:read"]
+        - id: "accounting.bank-reconciliation"
+          source-path: "classpath:rag/accounting-bank-reconciliation-rag.md"
+          rag-scope: "accounting"
+          entities: [bank-reconciliation, journal-entry]
+          required-permissions: ["accounting:reconciliation:view"]
         - id: "inventory.inv-cntrl"
           source-path: "classpath:rag/inv-cntrl-rag.md"
           rag-scope: "inventory"

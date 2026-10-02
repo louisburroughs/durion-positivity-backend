@@ -282,6 +282,21 @@ mcp:
           # receivables, so the ADR-0068 domain options stay unchanged. invoice:invoice:view is the
           # pos-invoice read audience; accounting:payment:apply covers staff who apply payments.
           required-permissions: ["invoice:invoice:view", "accounting:payment:apply"]
+        # #2383: accounts payable (supplier records, vendor bills, matching, payments, open balances) and the
+        # customer credit memo / vendor credit note distinction. Dual-listed: accounting:ap:view is the AP
+        # audience, accounting:credit-memo:read the credit-memo audience (any one code makes it visible).
+        - id: "accounting.supplier-vendor-bills"
+          source-path: "classpath:rag/supplier-vendor-bills-guide.md"
+          rag-scope: "accounting"
+          entities: [supplier, vendor-bill, credit-memo]
+          required-permissions: ["accounting:ap:view", "accounting:credit-memo:read"]
+        # #2383: manual bank reconciliation (statement import, matching, outstanding items, adjustments,
+        # submit and approve). Its adjustments post journal entries, hence journal-entry.
+        - id: "accounting.bank-reconciliation"
+          source-path: "classpath:rag/accounting-bank-reconciliation-rag.md"
+          rag-scope: "accounting"
+          entities: [bank-reconciliation, journal-entry]
+          required-permissions: ["accounting:reconciliation:view"]
         - id: "inventory.inv-cntrl"
           source-path: "classpath:rag/inv-cntrl-rag.md"
           rag-scope: "inventory"
