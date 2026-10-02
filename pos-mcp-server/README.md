@@ -89,7 +89,7 @@ Permission constants are defined in `McpPermissions`. Errors use the standard `A
 | `mcp.model.simple`                          | `MCP_MODEL_SIMPLE` _(blank)_                | T2-simple executor. Blank = the default executor model. Setting it to a genuinely smaller pulled model is the precondition for turning tiering back on                                                                                                                                                                                                                     |
 | `mcp.server.aggregate-spec-url`             | `MCP_AGGREGATE_SPEC_URL`                    | Gateway aggregate OpenAPI URL                                                                                                                                                                                                                                                                                                                                              |
 | `mcp.server.excluded-path-fragments`        | `/admin/`, `/actuator/`, `/internal/`       | Substrings that drop a whole path (every method) from tool discovery                                                                                                                                                                                                                                                                                                       |
-| `mcp.server.excluded-write-path-patterns`   | see [Tool discovery](#tool-discovery)       | Regexes over the routing-prefixed path whose non-GET operations are never discovered as tools (#2370); GET stays                                                                                                                                                                                                                                                            |
+| `mcp.server.excluded-write-path-patterns`   | see [Tool discovery](#tool-discovery)       | Regexes over the routing-prefixed path whose non-GET operations are never discovered as tools (#2370, #2374); GET stays                                                                                                                                                                                                                                                     |
 | `pos.tools.http.connect-timeout`            | `POS_TOOLS_HTTP_CONNECT_TIMEOUT` `2s`       | Connect timeout on `loadBalancedRestClientBuilder` (facade HTTP calls, #1660)                                                                                                                                                                                                                                                                                              |
 | `pos.tools.http.read-timeout`               | `POS_TOOLS_HTTP_READ_TIMEOUT` `30s`         | Read timeout on `loadBalancedRestClientBuilder`; a stalled downstream now fails with a named `SocketTimeoutException` instead of holding the chat turn (#1660)                                                                                                                                                                                                             |
 | Exa web search                              | `EXA_API_KEY`                               | External web-search API key                                                                                                                                                                                                                                                                                                                                                |
@@ -104,20 +104,44 @@ platform-event **writes** are additionally never offered as agent tools (#2370):
 may *cause* an audit event in the service that performs the action, but the assistant never emits, alters or
 deletes evidence itself, and platform event emission and registration are service-to-service. The
 `mcp.server.excluded-write-path-patterns` defaults drop every non-GET operation on `pos-security-service`
-`/v1/audit/**` (`POST /v1/audit/events`, `PUT`/`DELETE /v1/audit/events/**`, `POST /v1/audit/exports`,
+`/v1/audit/**` except the export (`POST /v1/audit/events`, `PUT`/`DELETE /v1/audit/events/**`,
 `POST /v1/audit/pricing-snapshots`), `pos-accounting` `/v1/accounting/audit/**` (`POST cancellation`,
-`price-override`, `refund`: audit-trail writes), `pos-event-receiver` `/v1/events` (emit) and `/v1/eventTypes`
-(register, update, delete), and this module's own `/v1/mcp/audit` or `/v1/nlt/audit` should they gain writes.
-`GET` on the same paths stays discoverable (reading the audit log is a legitimate admin question, ADR-0068). The
-patterns are anchored on the routing prefix so business paths that merely contain `audit` or `events`
-(pos-accounting's event submit, retry and reprocess, for instance) keep their writes; rows registered before the
-exclusion are pruned on the next discovery run. The per-service Eureka fallback applies the same exclusion: when
+`price-override`, `refund`: audit-trail writes), `pos-accounting` `POST /v1/accounting/events`
+(`submitAccountingEvent`, #2374: a call would make the assistant the upstream producer of a source-system fact,
+which Billing and the other source domains own; a manual posting is `createJournalEntry`), `pos-event-receiver`
+`/v1/events` (emit) and `/v1/eventTypes` (register, update, delete), and this module's own `/v1/mcp/audit` or
+`/v1/nlt/audit` should they gain writes. `GET` on the same paths stays discoverable (reading the audit log is a
+legitimate admin question, ADR-0068), and so does `POST /v1/audit/exports` (`requestAuditExport`, a bulk read of
+the log for holders of `security:audit:export`, #2374). The patterns are anchored on the routing prefix so business
+paths that merely contain `audit` or `events` (pos-accounting's event retry and reprocess, for instance) keep their
+writes; rows registered before the exclusion are pruned on the next discovery run. The per-service Eureka fallback applies the same exclusion: when
 the aggregate yields no tools, or a partial aggregate's failed prefixes are retried service by service, each
 service's own spec carries unprefixed paths (`/v1/audit/events`), so they are matched with the service's routing
 prefix prepended (its Eureka id, lower-cased, `pos-` stripped: `security-service` or `pos-security-service` →
 `/security-service/v1/audit/events`). Neither fallback can put an excluded write on the live tool list.
 `DiscoveryAuditWriteExclusionRealSpecsTest` checks all of this, for the aggregate and the fallback mapping,
 against the module specs in the reactor checkout.
+
+#### Guarded writes: accounting event retry and reprocess (#2374)
+
+`retryAccountingEvent` and `reprocessSuspendedEvent` stay tools, offered only to holders of
+`accounting:events:retry` / `accounting:events:reprocess`, behind `AccountingEventWriteGuard`. Both re-run a
+posting, so a confirmed call can put a journal entry on the ledger that only a reversing entry corrects.
+
+| Rule | Write plan (`POST /v1/nlt/requests` → confirm) | Chat (`/v1/mcp/chat`) |
+| ---- | ---------------------------------------------- | --------------------- |
+| Risk | HIGH whatever the classifier said; `retry`, `reprocess` and `resubmit` classify as a HIGH ACTION | the tool description carries the rules; the WRITE-GATE layer asks for preview and confirmation |
+| Status | read as the caller (`getAccountingEvent`) before the preview: FAILED for retry, SUSPENDED for reprocess, else `NEEDS_CLARIFICATION` with `meta.preconditionFailed` and no plan; read again at confirm, where a changed status cancels the plan (409 `WRITE_PLAN_STALE`) | read before every call; any other status answers an `Error:` result and nothing runs |
+| No blind retry | RECEIVED or PROCESSING (an earlier attempt may still be running) refuses, and points at the event and its reprocessing history | same |
+| One event | the plan's arguments name exactly one `pathParams.eventId` and run verbatim | the first call that names an event spends the turn; a second, on any event, is refused |
+| Preview | event id, type, source, amount (or payload fields), mapping version (reprocess), that a journal entry will post, and that there is no undo | the model previews the same, from the description |
+
+On the chat path a guarded write is offered together with `getAccountingEvent` and `getEventReprocessingHistory`
+(through the same permission gate), so the model can read the event for its preview and poll an unknown outcome.
+The guard fails closed: an event it cannot read (missing, not permitted, unreachable), a malformed `eventId` or an
+answer without a status refuses, and without the guard wired the chat path does not offer the two tools at all.
+The preview's read needs the caller's token, so `POST /v1/nlt/requests` relays its `Authorization` header to the
+write gate. Holders of retry or reprocess also need `accounting:events:view` for the status read.
 
 ### Static RAG preload (`alpha` profile)
 

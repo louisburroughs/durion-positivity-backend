@@ -254,6 +254,7 @@ class NltiRequestServiceImplTest {
                         org.mockito.ArgumentMatchers.any(),
                         org.mockito.ArgumentMatchers.any(),
                         org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(),
                         org.mockito.ArgumentMatchers.any()))
                 .thenReturn(preview);
 
@@ -262,6 +263,7 @@ class NltiRequestServiceImplTest {
         org.assertj.core.api.Assertions.assertThat(response.status()).isEqualTo("PENDING_CONFIRMATION");
         org.mockito.Mockito.verify(writePlanService)
                 .previewAction(
+                        org.mockito.ArgumentMatchers.any(),
                         org.mockito.ArgumentMatchers.any(),
                         org.mockito.ArgumentMatchers.any(),
                         org.mockito.ArgumentMatchers.any(),
@@ -280,6 +282,7 @@ class NltiRequestServiceImplTest {
     void submit_actionIntent_emitsWriteTelemetryForTheCorrelationId() {
         stubActionIntent("HIGH");
         when(writePlanService.previewAction(
+                        org.mockito.ArgumentMatchers.any(),
                         org.mockito.ArgumentMatchers.any(),
                         org.mockito.ArgumentMatchers.any(),
                         org.mockito.ArgumentMatchers.any(),

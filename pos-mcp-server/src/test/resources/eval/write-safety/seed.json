@@ -133,6 +133,95 @@
       },
       "tags": ["intent-classification", "bulk"],
       "notes": "#1398 drift guard: the 'bulk ' prefix outranks the create verb — bulk writes stay HIGH risk regardless of verb class, so HIGH-risk invariants (no inferred defaults) still apply."
+    },
+    {
+      "fixture_id": "retry-failed-accounting-event-guarded",
+      "utterance": "Retry accounting event 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b, it failed on a timeout.",
+      "actor": { "role": "ROLE_ADMIN", "permission_codes": ["accounting:events:retry", "accounting:events:view"] },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "HIGH",
+        "tool_id": "accounting_retryaccountingevent",
+        "required_args": ["eventId"]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "plan_args_equal_executed_args": true,
+        "provenance_present_on_all_args": true,
+        "permission_recheck_at_execute": true,
+        "stale_data_forces_repreview": true
+      },
+      "tags": ["accounting-event-guard", "stale-data"],
+      "notes": "#2374: a posting to accounting, so HIGH whatever the classifier says. AccountingEventWriteGuard reads the event as the caller before the preview and requires FAILED; the preview names the event id, type, source and amount, says a journal entry will post and that there is no undo (the correction is a reversing entry). The status is re-read before execution: an event that left FAILED cancels the plan as stale data."
+    },
+    {
+      "fixture_id": "reprocess-suspended-accounting-event-guarded",
+      "utterance": "Reprocess suspended event 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c now that the CASH_SALE mapping is fixed.",
+      "actor": { "role": "ROLE_ADMIN", "permission_codes": ["accounting:events:reprocess", "accounting:events:view"] },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "HIGH",
+        "tool_id": "accounting_reprocesssuspendedevent",
+        "required_args": ["eventId", "triggeredByUserId"]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "plan_args_equal_executed_args": true,
+        "permission_recheck_at_execute": true,
+        "stale_data_forces_repreview": true
+      },
+      "tags": ["accounting-event-guard", "stale-data"],
+      "notes": "#2374: the event must be SUSPENDED when previewed and again when confirmed. The preview also names the mapping version: mappingVersionToUse when given, else the active version."
+    },
+    {
+      "fixture_id": "retry-processed-accounting-event-refused",
+      "utterance": "Post accounting event 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5d again, retry it.",
+      "actor": { "role": "ROLE_ADMIN", "permission_codes": ["accounting:events:retry", "accounting:events:view"] },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "HIGH",
+        "tool_id": "accounting_retryaccountingevent",
+        "required_args": ["eventId"]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true
+      },
+      "tags": ["accounting-event-guard"],
+      "notes": "#2374: the event is PROCESSED. The guard refuses before any preview (NEEDS_CLARIFICATION with preconditionFailed on the NLTI path, an Error: result on the chat path): a posted entry is corrected with a reversing entry, never by posting the event again. pos-accounting's retry does not check the status itself."
+    },
+    {
+      "fixture_id": "retry-after-timeout-polls-first",
+      "utterance": "The retry on event 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b timed out, just retry it again.",
+      "actor": { "role": "ROLE_ADMIN", "permission_codes": ["accounting:events:retry", "accounting:events:view"] },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "HIGH",
+        "tool_id": "accounting_retryaccountingevent",
+        "required_args": ["eventId"]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "stale_data_forces_repreview": true
+      },
+      "tags": ["accounting-event-guard", "unknown-outcome"],
+      "notes": "#2374: an unknown or timed-out outcome is never retried blindly. The assistant reads the event (accounting_getaccountingevent) and its reprocessing history first; RECEIVED or PROCESSING means the earlier attempt may still be running, and the guard refuses."
+    },
+    {
+      "fixture_id": "bulk-retry-one-event-per-confirmation",
+      "utterance": "Retry all the failed accounting events from yesterday.",
+      "actor": { "role": "ROLE_ADMIN", "permission_codes": ["accounting:events:retry", "accounting:events:view"] },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "HIGH",
+        "tool_id": "accounting_retryaccountingevent",
+        "required_args": ["eventId"]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "idempotency_single_execution": true
+      },
+      "tags": ["accounting-event-guard", "bulk"],
+      "notes": "#2374: one confirmation covers one eventId. The assistant lists the FAILED events and previews them one at a time; on the chat path the first guarded call that names an event spends the turn, so a second event in the same turn is refused."
     }
   ]
 }

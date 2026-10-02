@@ -57,6 +57,12 @@ import org.springframework.stereotype.Service;
  * caller's escape hatch. Every step lands in the append-only audit ledger
  * (PLAN → CONFIRMATION → EXECUTION_STEP → EXECUTION_COMPLETE/EXECUTION_FAILED).
  *
+ * <p>#2374: a plan for pos-accounting's event retry or reprocess also passes {@link
+ * AccountingEventWriteGuard}: it is HIGH risk, the event's status is read as the caller before the
+ * preview (a wrong status answers {@code NEEDS_CLARIFICATION} with {@code preconditionFailed}) and
+ * again before execution (a changed status cancels the plan as stale data), and the preview says
+ * what will post and that there is no undo.
+ *
  * <p><strong>Transactionality:</strong> deliberately not wrapped in a single transaction — the
  * status transitions around the remote tool call must survive an execution failure (each
  * {@code save} commits on its own), so a failed execution leaves an {@code ERROR} plan rather than
@@ -78,6 +84,9 @@ public class NltiWritePlanService {
     static final String CONTEXT_ENTITY_VERSIONS = "entityVersions";
 
     static final String STATUS_NEEDS_CLARIFICATION = "NEEDS_CLARIFICATION";
+
+    /** #2374: meta key naming why a guarded write could not be previewed. */
+    static final String META_PRECONDITION_FAILED = "preconditionFailed";
 
     /**
      * Terminal confirmation outcomes, mirrored out of the audit ledger onto the telemetry stream
@@ -108,6 +117,7 @@ public class NltiWritePlanService {
     private final ToolMetadataRepository toolMetadataRepository;
     private final WritePlanExecutor writePlanExecutor;
     private final SourceEntityVersionProbe versionProbe;
+    private final AccountingEventWriteGuard writeGuard;
     private final AuditLedgerService auditLedgerService;
     private final NltiRequestTelemetryPublisher telemetryPublisher;
     private final MeterRegistry meterRegistry;
@@ -124,6 +134,7 @@ public class NltiWritePlanService {
             @NonNull ToolMetadataRepository toolMetadataRepository,
             @NonNull WritePlanExecutor writePlanExecutor,
             @NonNull SourceEntityVersionProbe versionProbe,
+            @NonNull AccountingEventWriteGuard writeGuard,
             @NonNull AuditLedgerService auditLedgerService,
             @NonNull NltiRequestTelemetryPublisher telemetryPublisher,
             @NonNull MeterRegistry meterRegistry,
@@ -135,6 +146,7 @@ public class NltiWritePlanService {
         this.toolMetadataRepository = toolMetadataRepository;
         this.writePlanExecutor = writePlanExecutor;
         this.versionProbe = versionProbe;
+        this.writeGuard = writeGuard;
         this.auditLedgerService = auditLedgerService;
         this.telemetryPublisher = telemetryPublisher;
         this.meterRegistry = meterRegistry;
@@ -149,12 +161,16 @@ public class NltiWritePlanService {
      * <strong>not</strong> invoked. A missing target tool yields a {@code NEEDS_CLARIFICATION}
      * response (never a guessed value); a pending plan on the session whose material content
      * differs is cancelled and replaced; an identical pending plan is returned as-is.
+     *
+     * @param authHeader the caller's {@code Authorization} header, relayed on a guarded tool's
+     *     precondition read (#2374)
      */
     public @NonNull NltiResponseV1 previewAction(
             @NonNull NltiRequest request,
             @NonNull NltiRequestDTO dto,
             @NonNull IntentV1 intent,
-            @NonNull Set<String> callerPermissionCodes) {
+            @NonNull Set<String> callerPermissionCodes,
+            @Nullable String authHeader) {
         String targetTool = stringFromContext(dto.clientContext(), CONTEXT_TARGET_TOOL);
         if (targetTool == null) {
             // G6.5: a required plan input is missing — ask, never guess.
@@ -181,7 +197,9 @@ public class NltiWritePlanService {
             provenance.put(entry.getKey(), ArgProvenance.USER_CONTEXT);
         }
 
-        NltiRiskLevel riskLevel = riskOf(intent.riskLevel());
+        // #2374: a guarded tool (an accounting posting) is HIGH whatever the classifier said, so the
+        // HIGH-risk rules below and at confirmation apply to it.
+        NltiRiskLevel riskLevel = AccountingEventWriteGuard.riskFloor(targetTool, riskOf(intent.riskLevel()));
         // Drift guards (G6.4): every arg carries provenance; HIGH risk must not ride on inferred
         // defaults. Both hold by construction here, but the invariants are enforced regardless so
         // future plan producers cannot silently regress them.
@@ -201,6 +219,23 @@ public class NltiWritePlanService {
         // Dual permission check, side one: the caller must be permitted for the target tool at
         // PLAN time (fail-closed — an unknown tool or a tool with zero grants is never plannable).
         requireToolPermission(targetTool, callerPermissionCodes);
+
+        // #2374: the guarded tool's precondition, read as the caller before anything is previewed or
+        // reused: a pending plan for the same event is no use once its status has moved on.
+        String guardPreview = null;
+        if (AccountingEventWriteGuard.guards(targetTool)) {
+            AccountingEventWriteGuard.Inspection inspection = writeGuard.inspect(targetTool, args, authHeader);
+            if (!inspection.permitted()) {
+                return new NltiResponseV1(
+                        request.getId(),
+                        request.getCorrelationId(),
+                        request.getSessionId(),
+                        STATUS_NEEDS_CLARIFICATION,
+                        intent,
+                        Map.of(META_PRECONDITION_FAILED, inspection.message()));
+            }
+            guardPreview = inspection.message();
+        }
 
         String argsJson = toJson(args);
         // Single-pending rule (G6.5): an identical pending plan is reused; any materially
@@ -239,7 +274,7 @@ public class NltiWritePlanService {
         plan.setRiskLevel(riskLevel);
         Map<String, String> entityVersions = stringMapFromContext(dto.clientContext(), CONTEXT_ENTITY_VERSIONS);
         plan.setSourceEntityVersionsJson(entityVersions.isEmpty() ? null : toJson(entityVersions));
-        plan.setSummaryText(buildSummary(targetTool, args, provenance, riskLevel));
+        plan.setSummaryText(buildSummary(targetTool, args, provenance, riskLevel, guardPreview));
         plan.setStatus(NltiRequestStatus.PENDING_CONFIRMATION);
         plan.setExpiresAt(now.plusMinutes(ttlMinutes));
         planRepository.save(plan);
@@ -315,6 +350,21 @@ public class NltiWritePlanService {
         // Dual permission check, side two: the caller must STILL hold the permission at execution
         // time — a grant revoked after plan time must block execution.
         requireToolPermission(plan.getTargetTool(), callerPermissionCodes);
+
+        // #2374: a guarded tool's status is re-read as the caller just before execution. A status that
+        // moved on since the preview (another retry, a timed-out attempt that did land) is stale data:
+        // the plan is cancelled rather than run into a second posting.
+        if (AccountingEventWriteGuard.guards(plan.getTargetTool())) {
+            AccountingEventWriteGuard.Inspection inspection =
+                    writeGuard.inspect(plan.getTargetTool(), fromJson(plan.getArgsJson(), MAP_OF_OBJECT), authHeader);
+            if (!inspection.permitted()) {
+                transition(plan, request, NltiRequestStatus.CANCELLED);
+                appendPlanAudit(plan, request, NltiAuditEventType.CONFIRMATION, "outcome=stale-data");
+                recordConfirmationOutcome(
+                        plan, request.getCorrelationId(), OUTCOME_STALE_DATA, elapsedMs(startedAtNanos));
+                throw new WritePlanStaleException("Write plan cancelled before execution: " + inspection.message());
+            }
+        }
 
         // G6.7: stale-data protection for risk >= MEDIUM when versions were captured at plan time.
         if (plan.getRiskLevel() != NltiRiskLevel.LOW && plan.getSourceEntityVersionsJson() != null) {
@@ -548,7 +598,8 @@ public class NltiWritePlanService {
             @NonNull String targetTool,
             @NonNull Map<String, Object> args,
             @NonNull Map<String, ArgProvenance> provenance,
-            @NonNull NltiRiskLevel riskLevel) {
+            @NonNull NltiRiskLevel riskLevel,
+            @Nullable String guardPreview) {
         StringBuilder summary = new StringBuilder("Will call ")
                 .append(targetTool)
                 .append(" (risk ")
@@ -568,7 +619,11 @@ public class NltiWritePlanService {
         if (!inferred.isEmpty()) {
             summary.append(". Inferred defaults (please review): ").append(String.join(", ", inferred));
         }
-        summary.append(". Confirm to execute.");
+        if (guardPreview != null) {
+            summary.append(". ").append(guardPreview).append(" Confirm to execute.");
+        } else {
+            summary.append(". Confirm to execute.");
+        }
         return summary.toString();
     }
 

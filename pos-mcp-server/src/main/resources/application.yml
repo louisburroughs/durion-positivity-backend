@@ -109,11 +109,16 @@ mcp:
     # discoverable (reading the audit log is a legitimate admin question, ADR-0068). Entries are regexes
     # over the routing-prefixed path (the aggregate's, and a per-service fallback spec's with the
     # service's routing prefix prepended), anchored on the prefix because a bare "/audit/" or "/events"
-    # would also drop business writes (pos-accounting's event submit/retry/reprocess, for instance).
+    # would also drop business writes (pos-accounting's event retry and reprocess, for instance).
+    # #2374: requestAuditExport (POST /v1/audit/exports) is a bulk READ of audit data, not an emit, so
+    # the security-service entry skips it; and pos-accounting's event submit is excluded because a
+    # call would make the assistant the upstream producer of a source-system fact (Billing and the
+    # other source domains own those). Retry and reprocess stay, behind AccountingEventWriteGuard.
     # Configuration, not a vendor extension: ADR-0042.
     excluded-write-path-patterns:
-      - ^/security-service/v1/audit/           # /v1/audit/events, /events/**, /exports, /pricing-snapshots
+      - ^/security-service/v1/audit/(?!exports(/|$))  # /v1/audit/events, /events/**, /pricing-snapshots
       - ^/accounting/v1/accounting/audit/      # POST cancellation, price-override, refund (audit-trail writes)
+      - ^/accounting/v1/accounting/events$     # POST submitAccountingEvent (the list GET stays)
       - ^/event-receiver/v1/events(/|$)        # POST /v1/events (emit)
       - ^/event-receiver/v1/eventTypes(/|$)    # POST /v1/eventTypes, PUT/DELETE /v1/eventTypes/{id}
       - ^/mcp-server/v1/(mcp|nlt)/audit(/|$)   # this module's own audit surface, should it gain writes

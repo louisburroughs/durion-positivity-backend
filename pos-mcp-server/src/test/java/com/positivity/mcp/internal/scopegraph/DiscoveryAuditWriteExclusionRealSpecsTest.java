@@ -51,9 +51,15 @@ import reactor.core.publisher.Mono;
  *   <li>the GET operations on those same paths do survive (reading the audit log is a legitimate
  *       admin question, ADR-0068);
  *   <li>nothing outside those paths was removed: a path that merely contains {@code audit} or {@code
- *       events} in another service (pos-accounting's event submit, retry and reprocess, for
- *       instance) keeps its writes.
+ *       events} in another service (pos-accounting's event retry and reprocess, for instance) keeps
+ *       its writes.
  * </ul>
+ *
+ * <p>#2374 moved two operations across that line. pos-accounting's {@code submitAccountingEvent} is
+ * in scope: a call would make the assistant the upstream producer of a source-system fact, so it is
+ * excluded while the event list GET on the same path stays. pos-security-service's {@code
+ * requestAuditExport} is out of scope: it is a bulk read of audit data, not an emit, so it is a tool
+ * again.
  *
  * <p>The same checks run over the per-service Eureka fallback ({@code toToolSpecifications}, used by
  * the full fallback when the aggregate yields nothing and by the targeted fallback for a partial
@@ -71,8 +77,11 @@ class DiscoveryAuditWriteExclusionRealSpecsTest {
      * The in-scope surfaces of #2370, stated independently of the configured patterns so the test
      * checks the configuration rather than restating it. Paths are routing-prefixed.
      */
-    private static final Predicate<String> IN_SCOPE = path -> path.startsWith("/security-service/v1/audit/")
+    private static final Predicate<String> IN_SCOPE = path -> (path.startsWith("/security-service/v1/audit/")
+                    && !path.equals("/security-service/v1/audit/exports")
+                    && !path.startsWith("/security-service/v1/audit/exports/"))
             || path.startsWith("/accounting/v1/accounting/audit/")
+            || path.equals("/accounting/v1/accounting/events")
             || path.equals("/event-receiver/v1/events")
             || path.startsWith("/event-receiver/v1/events/")
             || path.equals("/event-receiver/v1/eventTypes")
@@ -85,11 +94,11 @@ class DiscoveryAuditWriteExclusionRealSpecsTest {
             "security-service_createauditevent",
             "security-service_rejectauditeventupdate",
             "security-service_rejectauditeventdelete",
-            "security-service_requestauditexport",
             "security-service_createpricingsnapshot",
             "accounting_recordcancellationaudit",
             "accounting_recordpriceoverrideaudit",
             "accounting_recordrefundaudit",
+            "accounting_submitaccountingevent",
             "event-receiver_receiveevent",
             "event-receiver_createeventtype",
             "event-receiver_upserteventtype",
@@ -100,7 +109,6 @@ class DiscoveryAuditWriteExclusionRealSpecsTest {
     private static final Set<String> KNOWN_KEPT_READS = Set.of(
             "security-service_searchauditevents",
             "security-service_getauditevent",
-            "security-service_getauditexportjob",
             "security-service_getpricingsnapshot",
             "accounting_getaudittrailbyactor",
             "accounting_getaudittrailbyorder_1",
@@ -108,6 +116,7 @@ class DiscoveryAuditWriteExclusionRealSpecsTest {
             "accounting_getaudittrailbyorder",
             "accounting_getaudittrailbydaterange",
             "accounting_getaudittrailbytype",
+            "accounting_listaccountingevents",
             "event-receiver_queryeventsbyentity",
             "event-receiver_geteventsummarylastday",
             "event-receiver_listeventtypes",
@@ -116,18 +125,22 @@ class DiscoveryAuditWriteExclusionRealSpecsTest {
 
     /**
      * Business writes whose paths merely contain "audit" or "events"; each must stay discoverable.
-     * (pos-accounting's audit-trail writes under {@code /v1/accounting/audit/} are in scope and
-     * excluded above.)
+     * (pos-accounting's audit-trail writes under {@code /v1/accounting/audit/} and its event submit
+     * are in scope and excluded above.) Retry and reprocess stay behind {@code
+     * AccountingEventWriteGuard}; the audit export is a read of the log (#2374).
      */
     private static final Set<String> KNOWN_KEPT_LOOKALIKE_WRITES = Set.of(
-            "accounting_submitaccountingevent",
             "accounting_reprocesssuspendedevent",
-            "accounting_retryaccountingevent");
+            "accounting_retryaccountingevent",
+            "security-service_requestauditexport");
 
     /** Every operation of every module spec, keyed by discovered tool name: "METHOD prefixed-path". */
     private static Map<String, String> allOperations;
 
     private static Map<String, String> discovered;
+
+    /** The permissions each discovered operation is granted to, keyed by discovered tool name. */
+    private static Map<String, List<String>> discoveredPermissions;
 
     private static McpServerProperties properties;
 
@@ -147,10 +160,17 @@ class DiscoveryAuditWriteExclusionRealSpecsTest {
                                 OpenApiToolMapper.discoveredToolName(path, operation), method + " " + path)));
 
         OpenApiToolMapper mapper = new OpenApiToolMapper(properties, mock(OperationProxyFactory.class));
-        discovered = mapper.toDiscoveredOperations("pos-api-gateway", aggregate).stream()
+        List<DiscoveredOperation> operations = mapper.toDiscoveredOperations("pos-api-gateway", aggregate);
+        discovered = operations.stream()
                 .collect(Collectors.toMap(
                         DiscoveredOperation::name,
                         operation -> operation.httpMethod() + " " + operation.httpPath(),
+                        (first, second) -> first,
+                        LinkedHashMap::new));
+        discoveredPermissions = operations.stream()
+                .collect(Collectors.toMap(
+                        DiscoveredOperation::name,
+                        DiscoveredOperation::requiredPermissions,
                         (first, second) -> first,
                         LinkedHashMap::new));
     }
@@ -221,7 +241,7 @@ class DiscoveryAuditWriteExclusionRealSpecsTest {
 
         assertThat(outOfScope)
                 .as(
-                        "mcp.server.excluded-write-path-patterns removed operations outside the #2370 scope. All"
+                        "mcp.server.excluded-write-path-patterns removed operations outside the #2370/#2374 scope. All"
                                 + " removed by the exclusion: %s",
                         describe(removedByWriteExclusion))
                 .isEmpty();
@@ -234,6 +254,29 @@ class DiscoveryAuditWriteExclusionRealSpecsTest {
         assertThat(discovered.keySet())
                 .as("pos-accounting's reconciliation audit read is outside the audit-trail surface and untouched")
                 .contains("accounting_getreconciliationaudit");
+    }
+
+    @Test
+    @DisplayName(
+            "#2374: the writes kept on the event and export paths are offered only to holders of their own permission")
+    void keptWritesStayBehindTheirOwnPermission() {
+        // The tool gate is the operation's x-required-permissions: a caller without the grant never
+        // sees the tool, so retry and reprocess reach only accounting:events:retry / :reprocess holders.
+        assertThat(discoveredPermissions.get("accounting_retryaccountingevent"))
+                .as("retryAccountingEvent permissions")
+                .containsExactly("accounting:events:retry");
+        assertThat(discoveredPermissions.get("accounting_reprocesssuspendedevent"))
+                .as("reprocessSuspendedEvent permissions")
+                .containsExactly("accounting:events:reprocess");
+        assertThat(discoveredPermissions.get("security-service_requestauditexport"))
+                .as("requestAuditExport permissions")
+                .containsExactly("security:audit:export");
+        assertThat(discovered)
+                .as("the guard's status read is a discoverable tool on the same surface")
+                .containsEntry("accounting_getaccountingevent", "GET /accounting/v1/accounting/events/{eventId}");
+        assertThat(discovered)
+                .as("the export's job poll stays a tool beside the export request")
+                .containsEntry("security-service_getauditexportjob", "GET /security-service/v1/audit/exports/{jobId}");
     }
 
     @Test

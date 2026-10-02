@@ -12,4 +12,11 @@ public interface NltiRequestService {
 
     @NonNull
     NltiResponseV1 submit(@NonNull NltiRequestDTO request, @Nullable UUID correlationId);
+
+    /**
+     * @param authHeader the caller's {@code Authorization} header, relayed on the reads a write
+     *     plan's preview makes as the caller (#2374: the accounting event status check)
+     */
+    @NonNull
+    NltiResponseV1 submit(@NonNull NltiRequestDTO request, @Nullable UUID correlationId, @Nullable String authHeader);
 }

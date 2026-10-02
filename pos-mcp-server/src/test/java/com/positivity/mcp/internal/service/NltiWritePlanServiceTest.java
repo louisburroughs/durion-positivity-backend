@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -114,6 +115,7 @@ class NltiWritePlanServiceTest {
                 toolMetadataRepository,
                 writePlanExecutor,
                 versionProbe,
+                new AccountingEventWriteGuard(writePlanExecutor, objectMapper),
                 auditLedgerService,
                 telemetry.publisher(),
                 meterRegistry,
@@ -190,7 +192,8 @@ class NltiWritePlanServiceTest {
                 SESSION_ID,
                 Map.of("targetTool", TOOL, "args", Map.of("poNumber", "PO-77")));
 
-        NltiResponseV1 response = service.previewAction(request, dto, actionIntent("MEDIUM", List.of()), CALLER_PERMS);
+        NltiResponseV1 response =
+                service.previewAction(request, dto, actionIntent("MEDIUM", List.of()), CALLER_PERMS, null);
 
         assertThat(response.status()).isEqualTo("PENDING_CONFIRMATION");
         ArgumentCaptor<NltiWritePlan> planCaptor = ArgumentCaptor.forClass(NltiWritePlan.class);
@@ -216,7 +219,8 @@ class NltiWritePlanServiceTest {
                 request(),
                 new NltiRequestDTO("delete everything", SESSION_ID, null),
                 actionIntent("HIGH", List.of()),
-                CALLER_PERMS);
+                CALLER_PERMS,
+                null);
 
         assertThat(response.status()).isEqualTo("NEEDS_CLARIFICATION");
         verify(planRepository, never()).save(any());
@@ -235,7 +239,7 @@ class NltiWritePlanServiceTest {
                 "actually make it PO-77", SESSION_ID, Map.of("targetTool", TOOL, "args", Map.of("poNumber", "PO-77")));
 
         NltiResponseV1 response =
-                service.previewAction(request(), dto, actionIntent("MEDIUM", List.of()), CALLER_PERMS);
+                service.previewAction(request(), dto, actionIntent("MEDIUM", List.of()), CALLER_PERMS, null);
 
         assertThat(existing.getStatus()).isEqualTo(NltiRequestStatus.CANCELLED);
         assertThat(response.status()).isEqualTo("PENDING_CONFIRMATION");
@@ -257,7 +261,7 @@ class NltiWritePlanServiceTest {
                 Map.of("targetTool", TOOL, "args", Map.of("poNumber", "PO-77")));
 
         NltiResponseV1 response =
-                service.previewAction(request(), dto, actionIntent("MEDIUM", List.of()), CALLER_PERMS);
+                service.previewAction(request(), dto, actionIntent("MEDIUM", List.of()), CALLER_PERMS, null);
 
         assertThat(response.status()).isEqualTo("PENDING_CONFIRMATION");
         assertThat(((WritePlanResponseV1) response.result()).planId()).isEqualTo(PLAN_ID);
@@ -271,7 +275,8 @@ class NltiWritePlanServiceTest {
         when(toolMetadataRepository.listToolPermissions(TOOL_ID)).thenReturn(List.of("other:perm:code"));
         NltiRequestDTO dto = new NltiRequestDTO("create po", SESSION_ID, Map.of("targetTool", TOOL));
 
-        assertThatThrownBy(() -> service.previewAction(request(), dto, actionIntent("MEDIUM", List.of()), CALLER_PERMS))
+        assertThatThrownBy(() ->
+                        service.previewAction(request(), dto, actionIntent("MEDIUM", List.of()), CALLER_PERMS, null))
                 .isInstanceOf(AccessDeniedException.class);
         verify(planRepository, never()).save(any());
     }
@@ -561,13 +566,150 @@ class NltiWritePlanServiceTest {
                 request(),
                 new NltiRequestDTO("create a purchase order", SESSION_ID, Map.of("targetTool", TOOL)),
                 actionIntent("MEDIUM", List.of(new IntentSlot("poNumber", "PO-NEW", 1.0))),
-                CALLER_PERMS);
+                CALLER_PERMS,
+                null);
 
         assertThat(outcomeCount(NltiWritePlanService.OUTCOME_SUPERSEDED)).isEqualTo(1.0);
         NltiRequestTelemetry event = telemetry.only();
         assertThat(event.write().confirmationOutcome()).isEqualTo(NltiWritePlanService.OUTCOME_SUPERSEDED);
         // Not a call of its own — it happened while another request was being served.
         assertThat(event.latency()).isNull();
+    }
+
+    // ─── #2374: guarded accounting event writes ──────────────────────────────
+
+    private static final String RETRY_TOOL = AccountingEventWriteGuard.RETRY_TOOL;
+    private static final String RETRY_PERMISSION = "accounting:events:retry";
+    private static final String EVENT_ID = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b";
+    private static final String RETRY_ARGS_JSON = "{\"pathParams\":{\"eventId\":\"" + EVENT_ID + "\"}}";
+    private static final String AUTH = "Bearer tok";
+
+    private void stubRetryPermission() {
+        when(toolMetadataRepository.findDiscoveredToolIdByName(RETRY_TOOL)).thenReturn(Optional.of(TOOL_ID));
+        when(toolMetadataRepository.listToolPermissions(TOOL_ID)).thenReturn(List.of(RETRY_PERMISSION));
+    }
+
+    private void eventReads(String status) {
+        when(writePlanExecutor.execute(AccountingEventWriteGuard.EVENT_READ_TOOL, RETRY_ARGS_JSON, AUTH))
+                .thenReturn("{\"eventId\":\"" + EVENT_ID + "\",\"eventType\":\"INVOICE_FINALIZED\","
+                        + "\"sourceSystem\":\"POS\",\"status\":\"" + status + "\","
+                        + "\"payload\":{\"totalAmount\":150.00}}");
+    }
+
+    private static NltiRequestDTO retryRequest() {
+        return new NltiRequestDTO(
+                "retry accounting event " + EVENT_ID,
+                SESSION_ID,
+                Map.of("targetTool", RETRY_TOOL, "args", Map.of("pathParams", Map.of("eventId", EVENT_ID))));
+    }
+
+    private NltiWritePlan guardedPlan() {
+        NltiWritePlan plan = pendingPlan();
+        plan.setTargetTool(RETRY_TOOL);
+        plan.setArgsJson(RETRY_ARGS_JSON);
+        plan.setArgProvenanceJson("{\"pathParams\":\"USER_CONTEXT\"}");
+        plan.setRiskLevel(NltiRiskLevel.HIGH);
+        return plan;
+    }
+
+    @Test
+    @DisplayName("#2374: a retry of a FAILED event previews as a HIGH plan that says what posts, and runs nothing")
+    void previewAction_guardedRetryOfFailedEvent_highRiskPlanWithPostingPreview() {
+        stubRetryPermission();
+        eventReads("FAILED");
+        when(planRepository.findBySessionIdAndStatus(SESSION_ID, NltiRequestStatus.PENDING_CONFIRMATION))
+                .thenReturn(List.of());
+
+        NltiResponseV1 response = service.previewAction(
+                request(), retryRequest(), actionIntent("LOW", List.of()), Set.of(RETRY_PERMISSION), AUTH);
+
+        assertThat(response.status()).isEqualTo("PENDING_CONFIRMATION");
+        ArgumentCaptor<NltiWritePlan> planCaptor = ArgumentCaptor.forClass(NltiWritePlan.class);
+        verify(planRepository).save(planCaptor.capture());
+        NltiWritePlan saved = planCaptor.getValue();
+        // The classifier said LOW; a posting to accounting is HIGH whatever it said.
+        assertThat(saved.getRiskLevel()).isEqualTo(NltiRiskLevel.HIGH);
+        assertThat(saved.getArgsJson()).isEqualTo(RETRY_ARGS_JSON);
+        assertThat(saved.getSummaryText())
+                .contains("risk HIGH", EVENT_ID, "INVOICE_FINALIZED", "totalAmount=150.00", "is FAILED")
+                .contains("a journal entry will post", "There is no undo", "reversing entry")
+                .endsWith("Confirm to execute.");
+        // Only the status read ran; the retry itself waits for confirmation.
+        verify(writePlanExecutor).execute(AccountingEventWriteGuard.EVENT_READ_TOOL, RETRY_ARGS_JSON, AUTH);
+        verify(writePlanExecutor, never()).execute(eq(RETRY_TOOL), anyString(), any());
+    }
+
+    @Test
+    @DisplayName("#2374: a retry of a PROCESSED event is not previewed: NEEDS_CLARIFICATION, no plan")
+    void previewAction_guardedRetryOfProcessedEvent_preconditionFailedWithoutPlan() {
+        stubRetryPermission();
+        eventReads("PROCESSED");
+
+        NltiResponseV1 response = service.previewAction(
+                request(), retryRequest(), actionIntent("HIGH", List.of()), Set.of(RETRY_PERMISSION), AUTH);
+
+        assertThat(response.status()).isEqualTo("NEEDS_CLARIFICATION");
+        assertThat(response.meta())
+                .extractingByKey(NltiWritePlanService.META_PRECONDITION_FAILED)
+                .asString()
+                .contains(EVENT_ID, "already posted", "reversing entry");
+        verify(planRepository, never()).save(any());
+        verify(auditLedgerService, never()).append(any());
+        verify(writePlanExecutor, never()).execute(eq(RETRY_TOOL), anyString(), any());
+    }
+
+    @Test
+    @DisplayName("#2374: a caller without the retry permission is denied before the event is read")
+    void previewAction_guardedRetryWithoutPermission_deniedBeforeAnyRead() {
+        stubRetryPermission();
+
+        assertThatThrownBy(() -> service.previewAction(
+                        request(), retryRequest(), actionIntent("HIGH", List.of()), CALLER_PERMS, AUTH))
+                .isInstanceOf(AccessDeniedException.class);
+
+        org.mockito.Mockito.verifyNoInteractions(writePlanExecutor);
+    }
+
+    @Test
+    @DisplayName("#2374: confirm re-reads the status, then executes the exact persisted args")
+    void confirm_guardedRetryStillFailed_readsThenExecutes() {
+        stubOwnership();
+        stubRetryPermission();
+        NltiWritePlan plan = guardedPlan();
+        when(planRepository.findByRequestId(REQUEST_ID)).thenReturn(Optional.of(plan));
+        when(requestRepository.findById(REQUEST_ID)).thenReturn(Optional.of(request()));
+        eventReads("FAILED");
+        when(writePlanExecutor.execute(RETRY_TOOL, RETRY_ARGS_JSON, AUTH)).thenReturn("{\"status\":\"RECEIVED\"}");
+
+        WritePlanResponseV1 outcome = service.confirm(REQUEST_ID, SUBJECT, Set.of(RETRY_PERMISSION), null, AUTH);
+
+        assertThat(outcome.status()).isEqualTo("COMPLETE");
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(writePlanExecutor);
+        order.verify(writePlanExecutor).execute(AccountingEventWriteGuard.EVENT_READ_TOOL, RETRY_ARGS_JSON, AUTH);
+        order.verify(writePlanExecutor).execute(RETRY_TOOL, RETRY_ARGS_JSON, AUTH);
+    }
+
+    @Test
+    @DisplayName("#2374: a status that moved on since the preview cancels the plan as stale data and runs nothing")
+    void confirm_guardedRetryStatusMovedOn_cancelledAsStaleWithoutExecution() {
+        stubOwnership();
+        stubRetryPermission();
+        NltiWritePlan plan = guardedPlan();
+        when(planRepository.findByRequestId(REQUEST_ID)).thenReturn(Optional.of(plan));
+        when(requestRepository.findById(REQUEST_ID)).thenReturn(Optional.of(request()));
+        // An earlier attempt whose outcome the caller never saw has landed in the meantime.
+        eventReads("RECEIVED");
+
+        assertThatThrownBy(() -> service.confirm(REQUEST_ID, SUBJECT, Set.of(RETRY_PERMISSION), null, AUTH))
+                .isInstanceOf(WritePlanStaleException.class)
+                .hasMessageContaining("earlier attempt may still be running");
+
+        assertThat(plan.getStatus()).isEqualTo(NltiRequestStatus.CANCELLED);
+        verify(writePlanExecutor, never()).execute(eq(RETRY_TOOL), anyString(), any());
+        assertThat(outcomeCount(NltiWritePlanService.OUTCOME_STALE_DATA)).isEqualTo(1.0);
+        ArgumentCaptor<AuditEventAppend> auditCaptor = ArgumentCaptor.forClass(AuditEventAppend.class);
+        verify(auditLedgerService).append(auditCaptor.capture());
+        assertThat(auditCaptor.getValue().payloadRef()).contains("outcome=stale-data");
     }
 
     private double outcomeCount(String outcome) {
