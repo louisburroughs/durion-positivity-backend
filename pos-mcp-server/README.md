@@ -241,18 +241,20 @@ records `retrievedDocuments` after the top-K cut and returns the retriever's lis
 the way §9 states it: a recorded run with the `rag` consumer in `enforce`, against the same run in `shadow`, on one graph
 snapshot. It reads both runs' trace exports (`--file` the shadow run, `--enforce-file` the enforce run), joins each trace to
 a RAG fixture by `userMessage` (exact, then trim + collapse whitespace + casefold, like `tagging_shadow_report.py`) and by
-`role` against the fixture's `actor.role` (a turn asked as another actor is not joined: it is no evidence for the fixture's
-visibility; one turn scores every fixture that asks its question as its actor), and scores each side's recorded top-K:
+`role` against the fixture's `actor.role` (a turn asked as another actor, or for a fixture that names none, is not
+joined: it is no evidence for the fixture's visibility; one turn scores every fixture that asks its question as its
+actor; of several turns for one fixture the latest `startedAt` wins, so a rerun replaces an older attempt), and scores
+each side's recorded top-K:
 hit@k, MRR, recall@k and forbidden-document hits, `k` from the fixture, default 5. Before the join a `--file` trace must be
 `SHADOW` and an `--enforce-file` trace `ENFORCE` with `RAG` in `enforced`; others are skipped and counted (`wrongMode`).
 
 | Verdict          | When                                                                                                       |
 | ---------------- | ---------------------------------------------------------------------------------------------------------- |
-| `NO_DATA`        | No trace joined a fixture, or no joined fixture expects a document (no rank metric to compare).            |
-| `MIXED_GRAPH`    | The scored traces carry more than one `graphHash`: the evidence is for no single deployable snapshot.      |
+| `NO_DATA`        | No trace joined a fixture, no joined fixture expects a document (no rank metric to compare), or today's hit@5 is 0 (an empty or broken RAG store would compare 0 with 0). |
+| `MIXED_GRAPH`    | The joined traces carry more than one `graphHash`: the evidence is for no single deployable snapshot.      |
 | `INCOMPLETE`     | A loaded fixture has no joined shadow trace, or no joined enforce trace.                                   |
 | `NO_ENFORCE_RUN` | Complete shadow evidence but no `--enforce-file`.                                                          |
-| `FAIL`           | Overall or within a fixture set (`rag-lexical`, `rag-retrieval`), the enforce hit@5, MRR or recall@5 fell below today's, or the forbidden hits grew. |
+| `FAIL`           | Overall or within a fixture set (`rag-lexical`, `rag-retrieval`), the enforce hit@5, MRR or recall@5 fell below today's, the forbidden hits grew, or any fixture surfaced a forbidden document it did not surface today. |
 | `PASS`           | Otherwise. The exit code is 0 on `PASS` only.                                                              |
 
 The report also prints a **simulated** preview from the shadow run alone: the §6 rule replayed over the shadow top-K (on
@@ -261,7 +263,11 @@ The report also prints a **simulated** preview from the shadow run alone: the §
 every scope, so an in-scope document of another domain, never in the shadow pool, can enter the fusion and outrank a hit,
 and the hook filters the pool before the cut, so a candidate below rank K can move up; the replay sees neither. An
 expected document it drops is out of scope and not `master`, so the real filter drops it too: use it to decide whether
-an enforce run is worth making. Lists (ids under `--verbose`): the fixtures whose expected document the enforce run lost
+an enforce run is worth making. The rank metrics are gated as means (§9); the per-fixture losses and the per-confidence
+blocks are printed for review, not gated, and a pair whose enforce turn resolved another confidence than its shadow
+turn is flagged. §9's "tool selection hit rate at least equal" is not computed here: the `rag` consumer acts on
+retrieval only, so with `rag` the only enforced consumer tool selection is today's by construction (the report prints
+the enforce run's enforced consumers). Lists (ids under `--verbose`): the fixtures whose expected document the enforce run lost
 from today's top-k, the ones the simulation dropped, forbidden hits, fixtures without a trace on either side and
 actor-mismatched turns. Two more sections ride along: a shadow-only tools table (share of the model's calls that were
 inside the scope, per confidence; the `tools` consumer is additive and needs its own gate) and a documentation-coverage

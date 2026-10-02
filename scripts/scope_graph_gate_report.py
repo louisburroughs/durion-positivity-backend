@@ -28,16 +28,19 @@ document it drops is out of scope and not master, so the real filter drops it to
 enforce run decides.
 
 The gate verdict, exit code 0 only on PASS:
-  NO_DATA         no trace joined a fixture, or no joined fixture expects a document (no rank metric);
-  MIXED_GRAPH     the scored traces come from more than one `graphHash`: the evidence is for no
+  NO_DATA         no trace joined a fixture, no joined fixture expects a document (no rank metric), or
+                  today's hit@k is 0 (an empty or broken RAG store would otherwise compare 0 with 0);
+  MIXED_GRAPH     the joined traces come from more than one `graphHash`: the evidence is for no
                   single deployable snapshot;
   INCOMPLETE      a loaded fixture has no joined shadow trace, or (with --enforce-file) no joined
                   enforce trace: the evidence does not cover the fixture set;
   NO_ENFORCE_RUN  complete shadow evidence but no --enforce-file: the simulated preview is printed,
                   nothing is decided;
   FAIL            overall or within a fixture set (rag-lexical, rag-retrieval), the enforce hit@k, MRR
-                  or recall@k fell below today's, or the forbidden hits grew;
-  PASS            otherwise.
+                  or recall@k fell below today's, the forbidden hits grew, or any fixture surfaced a
+                  forbidden document it did not surface today (a total could hide it behind a fix);
+  PASS            otherwise. The rank metrics are compared as means (section 9); the per-fixture
+                  losses and the per-confidence blocks are printed for review, not gated.
 Traces are filtered before the join: a `--file` trace not in SHADOW, or an `--enforce-file` trace not
 in ENFORCE with RAG enforced, is skipped and counted (`wrongMode`); so are traces without a scope and
 traces written before the identity lists existed (`retrievedDocuments` null, counts only).
@@ -60,7 +63,12 @@ lexicon missed; the messages are test fixtures). The two yml files are read by a
 
 A shadow trace whose `scopeDocumentIdsTruncated` is true cannot be replayed exactly (an in-scope
 document beyond the cap looks out of scope); such samples are counted and flagged. The enforce run is
-not affected: the hook reads the whole scope.
+not affected: the hook reads the whole scope. A pair whose enforce turn resolved another confidence
+than its shadow turn (same graph, different tags) is counted and flagged.
+
+Not computed here: section 9's "tool selection hit rate at least equal". The `rag` consumer acts on
+retrieval only, so with RAG the only enforced consumer the tool selection is today's by construction;
+the enforced consumer sets of the enforce run are printed so a run with more is visible.
 
 Input:
   --file PATH          JSON array or NDJSON of EvalTurnTrace objects from the shadow run ('-' reads
@@ -74,10 +82,11 @@ Input:
 
 Join: a trace's candidates are the fixtures whose `query` equals its `userMessage` exactly, else
 after trim + collapse whitespace + casefold (as scripts/tagging_shadow_report.py joins the tagging
-gate). A candidate whose `actor.role` differs from the trace's `role` is not joined (`actorMismatch`):
-a turn asked as another actor is no evidence for the fixture's visibility. The trace is scored
-against every candidate left (two fixtures may ask one question as one actor with different
-expectations). A fixture joined by more than one turn of a run keeps the first (`duplicateTurn`).
+gate). A candidate whose `actor.role` differs from the trace's `role`, or that names none, is not
+joined (`actorMismatch`): a turn asked as another actor is no evidence for the fixture's visibility.
+The trace is scored against every candidate left (two fixtures may ask one question as one actor
+with different expectations). A fixture joined by more than one turn of a run keeps the latest by
+`startedAt` (`duplicateTurn`), so a rerun's turn replaces an older attempt's.
 
 Stdlib only, like scripts/tagging_shadow_report.py.
 """
@@ -181,10 +190,10 @@ def score(documents, expected, forbidden, k):
 def join_traces(traces, fixtures):
     """Pair fixtures with the turns that asked them.
 
-    Returns (joined, skipped, mismatches): joined maps a fixture's index in `fixtures` to its first
-    trace; skipped is a Counter of noUserMessage, noFixture, actorMismatch (the query matched, no
-    candidate's actor role did) and duplicateTurn (a later turn for an already joined fixture);
-    mismatches lists the actor-mismatched turns.
+    Returns (joined, skipped, mismatches): joined maps a fixture's index in `fixtures` to its latest
+    trace (by startedAt); skipped is a Counter of noUserMessage, noFixture, actorMismatch (the query
+    matched, no candidate's actor role did; a fixture without one matches no turn) and duplicateTurn
+    (a turn for an already joined fixture); mismatches lists the actor-mismatched turns.
     """
     exact, normalised = defaultdict(list), defaultdict(list)
     for index, fixture in enumerate(fixtures):
@@ -203,18 +212,23 @@ def join_traces(traces, fixtures):
             skipped["noFixture"] += 1
             continue
         role = trace.get("role")
-        by_role = [i for i in candidates if _actor_role(fixtures[i]) in (None, role)]
+        by_role = [i for i in candidates if _actor_role(fixtures[i]) == role]
         if not by_role:
             skipped["actorMismatch"] += 1
             mismatches.append({"turnId": trace.get("turnId"), "role": role,
                                "fixtureIds": [fixtures[i].get("fixture_id") for i in candidates]})
             continue
-        fresh = [i for i in by_role if i not in joined]
-        if not fresh:
-            skipped["duplicateTurn"] += 1
-            continue
-        for index in fresh:
+        duplicate = False
+        for index in by_role:
+            current = joined.get(index)
+            if current is not None:
+                duplicate = True
+                # A rerun's turn replaces an older attempt's (ISO-8601 UTC sorts as text).
+                if str(trace.get("startedAt") or "") <= str(current.get("startedAt") or ""):
+                    continue
             joined[index] = trace
+        if duplicate:
+            skipped["duplicateTurn"] += 1
     return joined, skipped, mismatches
 
 
@@ -255,14 +269,17 @@ def aggregate(samples):
         out["todayPaired"] = _side(paired, "today")
         out["enforce"] = _side(paired, "enforce")
         out["lost"] = sum(1 for s in paired if s["lost"])
-        out["gate"] = verdict(out["todayPaired"], out["enforce"])
+        out["newLeaks"] = sum(1 for s in paired if s["newForbidden"])
+        out["gate"] = verdict(out["todayPaired"], out["enforce"], out["newLeaks"])
     else:
-        out["todayPaired"] = out["enforce"] = out["lost"] = out["gate"] = None
+        out["todayPaired"] = out["enforce"] = out["lost"] = out["newLeaks"] = out["gate"] = None
     return out
 
 
-def verdict(today, enforce):
-    """PASS when every rank metric held or improved and the forbidden hits did not grow; else FAIL + deltas."""
+def verdict(today, enforce, new_leaks=0):
+    """PASS when every rank metric held or improved, the forbidden hits did not grow and no sample
+    gained a forbidden document it did not have today (`new_leaks`: a total can hide one leak behind
+    another sample's fix); else FAIL + deltas."""
     deltas, failures = {}, []
     for metric in METRICS:
         before, after = today.get(metric), enforce.get(metric)
@@ -275,6 +292,8 @@ def verdict(today, enforce):
     deltas["forbiddenHits"] = enforce["forbiddenHits"] - today["forbiddenHits"]
     if enforce["forbiddenHits"] > today["forbiddenHits"]:
         failures.append(f"forbiddenHits {today['forbiddenHits']} -> {enforce['forbiddenHits']}")
+    if new_leaks:
+        failures.append(f"new forbidden hit in {new_leaks} sample(s)")
     return {"verdict": "FAIL" if failures else "PASS", "deltas": deltas, "failures": failures}
 
 
@@ -334,18 +353,25 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
         kept = simulate_enforce(scope)
         enforce_trace = enforce_joined.get(index)
         enforce_docs = enforce_trace["scope"].get("retrievedDocuments") or [] if enforce_trace else None
+        today = score(retrieved, expected, forbidden, fixture_k)
+        enforce_score = None if enforce_docs is None else score(enforce_docs, expected, forbidden, fixture_k)
         samples.append({
             "turnId": trace.get("turnId"),
             "enforceTurnId": enforce_trace.get("turnId") if enforce_trace else None,
             "fixtureId": fixture.get("fixture_id"),
             "set": fixture["_set"],
             "confidence": str(scope.get("confidence") or "UNKNOWN").upper(),
+            "enforceConfidence": None if enforce_trace is None
+            else str(enforce_trace["scope"].get("confidence") or "UNKNOWN").upper(),
             "scopeTruncated": bool(scope.get("scopeDocumentIdsTruncated")),
             "retrievedCount": len(retrieved),
             "keptCount": len(kept),
-            "today": score(retrieved, expected, forbidden, fixture_k),
+            "today": today,
             "simulated": score(kept, expected, forbidden, fixture_k),
-            "enforce": None if enforce_docs is None else score(enforce_docs, expected, forbidden, fixture_k),
+            "enforce": enforce_score,
+            # Forbidden documents the enforce run surfaced that today's run did not.
+            "newForbidden": [] if enforce_score is None
+            else sorted(set(enforce_score["forbiddenHits"]) - set(today["forbiddenHits"])),
             # The expected documents the simulated filter removed from the top-K: the preview's regressions.
             "dropped": sorted(set(expected) & {d.get("documentId") for d in retrieved}
                               - {d.get("documentId") for d in kept}),
@@ -370,14 +396,18 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
     fixture_ids = [f.get("fixture_id") for f in fixtures]
     without_trace = [fixture_ids[i] for i in range(len(fixtures)) if i not in joined]
     without_enforce = [fixture_ids[i] for i in range(len(fixtures)) if i not in enforce_joined]
-    scored_traces = shadow + enforce
-    graph_hashes = Counter(str((t["scope"]).get("graphHash")) for t in scored_traces)
+    # The joined turns only: a stray turn that scores nothing does not split the evidence.
+    scored_traces = {id(t): t for t in list(joined.values()) + list(enforce_joined.values())}.values()
+    graph_hashes = Counter(str(t["scope"].get("graphHash")) for t in scored_traces)
 
     failing_sets = [name for name, block in sets.items() if block["gate"] and block["gate"]["verdict"] == "FAIL"]
     reasons = []
     if not samples or not overall["scored"]:
         gate_verdict = "NO_DATA"
         reasons.append("no joined fixture expects a document" if samples else "no trace joined a fixture")
+    elif not overall["today"]["hitAtK"]:
+        gate_verdict = "NO_DATA"
+        reasons.append("today's hit@k is 0: the shadow run retrieved no expected document (empty or broken RAG store?)")
     elif len(graph_hashes) > 1:
         gate_verdict = "MIXED_GRAPH"
         reasons.append("graphHash " + ", ".join(f"{h}={n}" for h, n in sorted(graph_hashes.items())))
@@ -411,6 +441,8 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
         "fixturesEnforceJoined": len(enforce_joined),
         "fixturesWithoutEnforceTrace": None if enforce_traces is None else len(without_enforce),
         "scopeTruncatedSamples": sum(1 for s in samples if s["scopeTruncated"]),
+        "confidenceMismatches": sum(1 for s in samples
+                                    if s["enforceConfidence"] is not None and s["enforceConfidence"] != s["confidence"]),
         "overall": overall,
         "bySet": sets,
         "byConfidence": confidences,
@@ -442,7 +474,8 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
         report["forbiddenList"] = [
             {"fixtureId": s["fixtureId"], "turnId": s["turnId"], "today": s["today"]["forbiddenHits"],
              "simulated": s["simulated"]["forbiddenHits"],
-             "enforce": None if s["enforce"] is None else s["enforce"]["forbiddenHits"]}
+             "enforce": None if s["enforce"] is None else s["enforce"]["forbiddenHits"],
+             "new": s["newForbidden"]}
             for s in samples
             if s["today"]["forbiddenHits"] or s["simulated"]["forbiddenHits"]
             or (s["enforce"] is not None and s["enforce"]["forbiddenHits"])
@@ -670,6 +703,9 @@ def render_text(report):
     if report["scopeTruncatedSamples"]:
         out.append(f"WARNING: {report['scopeTruncatedSamples']} sample(s) have a truncated scopeDocumentIds list; "
                    "their simulation may drop an in-scope document")
+    if report["confidenceMismatches"]:
+        out.append(f"WARNING: {report['confidenceMismatches']} pair(s) resolved a different scope confidence in the "
+                   "enforce run (same graph, different tags?); they are bucketed by the shadow confidence")
     out.append("")
     out += render_block("overall", report["overall"], k)
     for name, block in report["bySet"].items():
@@ -704,7 +740,7 @@ def render_text(report):
                    f"dropped={entry['dropped']} retrieved={entry['retrieved']} scope={entry['scopeDocumentIds']}")
     for entry in report.get("forbiddenList", []):
         out.append(f"    forbidden {entry['fixtureId']} turn={entry['turnId']} today={entry['today']} "
-                   f"simulated={entry['simulated']} enforce={entry['enforce']}")
+                   f"simulated={entry['simulated']} enforce={entry['enforce']} new={entry['new']}")
     if report.get("fixturesWithoutTraceIds"):
         out.append("    no shadow trace for: " + ", ".join(str(f) for f in report["fixturesWithoutTraceIds"]))
     if report.get("fixturesWithoutEnforceTraceIds"):

@@ -215,11 +215,13 @@ class JoinTest(unittest.TestCase):
         self.assertEqual(dict(skipped), {"actorMismatch": 1})
         self.assertEqual(mismatches, [{"turnId": _uuid(1), "role": "ROLE_ADMIN", "fixtureIds": ["neg"]}])
 
-    def test_fixture_without_actor_role_accepts_any_role(self):
+    def test_fixture_without_actor_role_joins_no_turn(self):
+        # Fail closed: a fixture that names no actor cannot say which turn is evidence for it.
         fixture = _fixture("f", "q", ["d"])
         del fixture["actor"]
-        joined, _, _ = report.join_traces([_trace(1, "q", _scope("LOW", [], []), role="ROLE_USER")], [fixture])
-        self.assertEqual(_ids(joined, [fixture]), {"f": _uuid(1)})
+        joined, skipped, _ = report.join_traces([_trace(1, "q", _scope("LOW", [], []), role="ROLE_USER")], [fixture])
+        self.assertEqual(joined, {})
+        self.assertEqual(skipped["actorMismatch"], 1)
 
     def test_one_turn_scores_every_fixture_of_its_question_and_actor(self):
         # rag-retrieval has two technician fixtures for "who can approve a permission change" with
@@ -232,12 +234,16 @@ class JoinTest(unittest.TestCase):
         self.assertEqual(_ids(joined, [a, c]), {"a": _uuid(1), "c": _uuid(1)})
         self.assertEqual(dict(skipped), {})
 
-    def test_second_turn_for_a_joined_fixture_is_counted_not_scored(self):
+    def test_a_rerun_turn_replaces_the_older_attempt(self):
         fixture = _fixture("f", "q", ["d"])
-        first, second = _trace(1, "q", _scope("LOW", [], [])), _trace(2, "q", _scope("LOW", [], []))
-        joined, skipped, _ = report.join_traces([first, second], [fixture])
+        rerun, old = _trace(1, "q", _scope("LOW", [], [])), _trace(2, "q", _scope("LOW", [], []))
+        rerun["startedAt"] = "2026-10-02T12:00:00Z"
+        # Glob order puts the older attempt's export first; the later startedAt still wins.
+        joined, skipped, _ = report.join_traces([old, rerun], [fixture])
         self.assertEqual(_ids(joined, [fixture]), {"f": _uuid(1)})
         self.assertEqual(skipped["duplicateTurn"], 1)
+        joined, _, _ = report.join_traces([rerun, old], [fixture])
+        self.assertEqual(_ids(joined, [fixture]), {"f": _uuid(1)})
 
     def test_unmatched_trace_is_counted(self):
         joined, skipped, _ = report.join_traces([_trace(1, "nothing like this", _scope("LOW", [], []))],
@@ -357,10 +363,66 @@ class VerdictTest(unittest.TestCase):
         shadow = _trace(1, "refund rules", _scope("HIGH", [_doc("billing.x", "billing")], ["order.returns-refunds"]))
         fixture = _fixture("promoted", "refund rules", ["order.returns-refunds"])
         enforce = _enforce(shadow, [_doc("order.returns-refunds", "order")])
-        result = report.build_report([shadow], [fixture], enforce_traces=[enforce])
-        self.assertEqual(result["overall"]["today"]["hitAtK"], 0.0)
+        result = report.build_report([shadow, KEPT_HIT[0]], [fixture, KEPT_HIT[1]],
+                                     enforce_traces=[enforce, ENFORCE_ALL[0]])
+        self.assertEqual(result["overall"]["today"]["hitAtK"], 0.5)
         self.assertEqual(result["overall"]["enforce"]["hitAtK"], 1.0)
         self.assertEqual(result["gate"]["verdict"], "PASS")
+
+    def test_a_new_leak_hidden_behind_a_fixed_one_fails(self):
+        # Totals 1 -> 1, but fixture b now surfaces a document it must not see.
+        a = _fixture("a", "leak a", [], forbidden=["x.doc"])
+        b = _fixture("b", "leak b", [], forbidden=["y.doc"])
+        ta = _trace(11, "leak a", _scope("HIGH", [_doc("x.doc")], []))
+        tb = _trace(12, "leak b", _scope("HIGH", [], []))
+        result = report.build_report([KEPT_HIT[0], ta, tb], [KEPT_HIT[1], a, b], verbose=True,
+                                     enforce_traces=[ENFORCE_ALL[0], _enforce(ta, []), _enforce(tb, [_doc("y.doc")])])
+        self.assertEqual(result["gate"]["overall"]["deltas"]["forbiddenHits"], 0)
+        self.assertEqual(result["overall"]["newLeaks"], 1)
+        self.assertEqual(result["gate"]["verdict"], "FAIL")
+        self.assertIn("new forbidden hit in 1 sample(s)", result["gate"]["overall"]["failures"])
+        self.assertEqual([e["new"] for e in result["forbiddenList"]], [[], ["y.doc"]])
+
+    def test_a_set_regression_fails_though_the_overall_means_hold(self):
+        # rag-lexical MRR 1.0 -> 0.5, rag-retrieval 0.5 -> 1.0: the overall mean is unchanged.
+        lex = _trace(21, "lex q", _scope("HIGH", [_doc("e1"), _doc("o1")], ["e1", "o1"]))
+        ret = _trace(22, "ret q", _scope("HIGH", [_doc("o2"), _doc("e2")], ["e2", "o2"]))
+        fixtures = [_fixture("lex", "lex q", ["e1"]), _fixture("ret", "ret q", ["e2"], set_name="rag-retrieval")]
+        enforce = [_enforce(lex, [_doc("o1"), _doc("e1")]), _enforce(ret, [_doc("e2"), _doc("o2")])]
+        result = report.build_report([lex, ret], fixtures, enforce_traces=enforce)
+        self.assertEqual(result["gate"]["overall"]["verdict"], "PASS")
+        self.assertEqual(result["gate"]["failingSets"], ["rag-lexical"])
+        self.assertEqual(result["gate"]["verdict"], "FAIL")
+
+    def test_lost_reads_todays_top_k_only(self):
+        # The expected document sits at rank 6 today: outside the top-5, so enforce cannot lose it.
+        docs = [_doc(f"d{i}") for i in range(5)] + [_doc("e")]
+        shadow = _trace(31, "deep q", _scope("LOW", docs, []))
+        result = report.build_report([shadow, KEPT_HIT[0]], [_fixture("deep", "deep q", ["e"]), KEPT_HIT[1]],
+                                     enforce_traces=[_enforce(shadow, docs[:5]), ENFORCE_ALL[0]], verbose=True)
+        self.assertEqual(result["losses"], 0)
+
+    def test_empty_retrieval_on_both_sides_is_no_data(self):
+        # An empty or broken RAG store compares 0 with 0; that is no evidence.
+        shadow = _trace(41, "q", _scope("HIGH", [], []))
+        result = report.build_report([shadow], [_fixture("f", "q", ["d"])], enforce_traces=[_enforce(shadow, [])])
+        self.assertEqual(result["gate"]["verdict"], "NO_DATA")
+        self.assertIn("hit@k is 0", result["gate"]["reasons"][0])
+
+    def test_a_stray_turn_from_another_graph_does_not_split_the_evidence(self):
+        stray = _trace(51, "unrelated chat", _scope("LOW", [], []))
+        stray["scope"]["graphHash"] = "0000aaaa"
+        result = report.build_report([t for t, _ in PASSING] + [stray], [f for _, f in PASSING],
+                                     enforce_traces=ENFORCE_PASSING)
+        self.assertEqual(result["graphHashes"], {"c878c7206d2ed660": 8})
+        self.assertEqual(result["gate"]["verdict"], "PASS")
+
+    def test_confidence_mismatch_between_the_runs_is_flagged(self):
+        enforce = [json.loads(json.dumps(ENFORCE_PASSING[0]))] + ENFORCE_PASSING[1:]
+        enforce[0]["scope"]["confidence"] = "NONE"
+        result = self._build(enforce=enforce)
+        self.assertEqual(result["confidenceMismatches"], 1)
+        self.assertIn("1 pair(s) resolved a different scope confidence", report.render_text(result))
 
     def test_forbidden_increase_fails_with_rank_metrics_held(self):
         trace, fixture = KEPT_HIT
