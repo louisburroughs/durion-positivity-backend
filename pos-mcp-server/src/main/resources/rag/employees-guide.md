@@ -104,8 +104,8 @@ Three different things are called "role", and they must not be confused.
 | **Assignment role** | `pos-people` staffing assignment | What the person does at one location, for example `TECHNICIAN`. | Not directly; it places the person at a location, which a location-scoped application role then uses. |
 
 In HR terms the ILO defines a job as "a set of tasks and duties performed, or meant to be performed, by one person"
-(see Sources [3]); in access-control terms a role is a job function to which permissions are attached, and users get
-permissions only through the roles they are assigned (see Sources [4]). The platform keeps the two apart on purpose: changing someone's job title never changes
+(see Sources [3]); in role-based access control, by contrast, each user is assigned roles and each role carries the
+privileges permitted to its holders, so access follows the role, not the person (see Sources [4]). The platform keeps the two apart on purpose: changing someone's job title never changes
 what they can do in the system, and granting a permission never edits their HR record.
 
 - List the job roles (`people:jobRole:view`) to pick one for an employee; add one with `people:jobRole:manage`. A code
@@ -215,5 +215,6 @@ External sources:
 3. "International Standard Classification of Occupations", Wikipedia, Wikimedia Foundation (quoting the ILO
    definition of a job). <https://en.wikipedia.org/wiki/International_Standard_Classification_of_Occupations>
    (accessed 2026-10-02).
-4. "Role-based access control", Wikipedia, Wikimedia Foundation.
-   <https://en.wikipedia.org/wiki/Role-based_access_control> (accessed 2026-10-02).
+4. "Role Based Access Control" project overview, Computer Security Resource Center, National Institute of Standards
+   and Technology (NIST); archived project page. <https://csrc.nist.gov/projects/role-based-access-control>
+   (accessed 2026-10-02).

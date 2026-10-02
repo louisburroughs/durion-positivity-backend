@@ -94,8 +94,9 @@ person link for good. Prefer disabling when the history may matter.
 
 ## Roles and permissions
 
-In role-based access control, permissions are attached to roles and users receive permissions only through the roles
-they are assigned, so access follows job function rather than being granted person by person (see Sources [2]). On the
+In role-based access control, as NIST describes it, "each user is assigned one or more roles, and each role is assigned
+one or more privileges that are permitted to users in that role", so administration means deciding what each job must
+do and putting people in the right roles rather than granting access person by person (see Sources [2]). On the
 platform:
 
 - A **permission** is a code of the form `domain:resource:action` (for example `security:user:create`). Each service
@@ -147,10 +148,23 @@ picked up at the next sign-in or refresh. Role assignments for a person can also
 through `pos-people-contact` (`people-contact:role:assign`, `people-contact:role:revoke`), which forwards to this
 service through the person's user link. Reading assignments needs `security:role:view` (or `people-contact:role:view`).
 
-**Least privilege.** Grant the narrowest role that does the job, and the narrowest permission set within a role; a
-system should give each user only the access their tasks need (see Sources [3]). `ADMIN` holds every domain and is the
-intentional high-blast-radius role; `SYSTEM_ADMINISTRATOR` holds the security and assistant-administration surface
-only and is deliberately not a superuser.
+---
+
+## Least privilege and separation of duties
+
+**Least privilege.** Grant the narrowest role that does the job, and the narrowest permission set within a role: NIST
+defines least privilege as restricting users' access privileges "to the minimum necessary to accomplish assigned
+tasks" (see Sources [3]). `ADMIN` holds every domain and is the intentional high-blast-radius role;
+`SYSTEM_ADMINISTRATOR` holds the security and assistant-administration surface only and is deliberately not a
+superuser.
+
+**Separation of duties.** NIST describes separation of duty as the principle "that no user should be given enough
+privileges to misuse the system on their own", enforced either statically, through conflicting roles one user may not
+hold, or dynamically, when the action is taken (see Sources [4]). The security service enforces **no static
+separation**: any roles can be assigned to the same user, and one role can hold permissions that conflict (for example
+both raising and approving something). Keeping incompatible duties apart is a role-design decision for the
+administrator. A few workflows check it at action time; bank reconciliation approval, for instance, refuses the person
+who submitted the reconciliation unless the business's policy allows self-approval.
 
 ---
 
@@ -216,6 +230,8 @@ Platform sources:
 - `pos-people-contact/README.md` (Role assignments); `pos-people-contact/src/main/resources/permissions.yaml`;
   `pos-people-contact/src/main/java/com/positivity/peoplecontact/internal/controller/PersonAccessController.java`,
   `UserPersonLinkController.java`
+- `pos-accounting/src/main/java/com/positivity/accounting/internal/bankrec/service/ReconciliationApprovalServiceImpl.java`,
+  `BankRecPolicy.java` (`BANK_REC_ALLOW_SELF_APPROVAL`); no separation-of-duty constraint in `pos-security-service`
 - `pos-people/src/main/java/com/positivity/people/internal/controller/PeopleComplianceController.java`,
   `JobRoleController.java`
 - `pos-mcp-server/src/main/java/com/positivity/mcp/internal/orchestration/TaggingQuestions.java` (the `risk` question)
@@ -229,7 +245,10 @@ External sources:
 
 1. "User (computing)", Wikipedia, Wikimedia Foundation. <https://en.wikipedia.org/wiki/User_(computing)>
    (accessed 2026-10-02).
-2. "Role-based access control", Wikipedia, Wikimedia Foundation.
-   <https://en.wikipedia.org/wiki/Role-based_access_control> (accessed 2026-10-02).
-3. "Principle of least privilege", Wikipedia, Wikimedia Foundation.
-   <https://en.wikipedia.org/wiki/Principle_of_least_privilege> (accessed 2026-10-02).
+2. "Role Based Access Control" project overview, Computer Security Resource Center, National Institute of Standards
+   and Technology (NIST); archived project page. <https://csrc.nist.gov/projects/role-based-access-control>
+   (accessed 2026-10-02).
+3. "least privilege", CSRC Glossary, NIST (definition from CNSSI 4009-2022 and NIST SP 800-12 Rev. 1).
+   <https://csrc.nist.gov/glossary/term/least_privilege> (accessed 2026-10-02).
+4. "Separation of Duty (SOD)", CSRC Glossary, NIST (definition from NIST SP 800-192).
+   <https://csrc.nist.gov/glossary/term/separation_of_duty> (accessed 2026-10-02).

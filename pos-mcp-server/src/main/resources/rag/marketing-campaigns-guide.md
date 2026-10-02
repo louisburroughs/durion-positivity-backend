@@ -95,12 +95,21 @@ Canada's anti-spam law lets marketers email only those who have opted in and req
 (see Sources [3]); the US CAN-SPAM Act requires a visible, operable unsubscribe mechanism and that opt-outs be honoured
 (see Sources [4]). The platform enforces its side of this from replicated CRM data:
 
-- **Suppression first.** A party suppressed on a channel is never sent to on that channel.
-- **Consent must be known and fresh.** A party with no consent decision on record, or whose decision is older than the
-  configured maximum age (24 hours by default), is refused. The platform fails closed: a delayed message can be sent
-  later, an unwanted one cannot be taken back.
+- **Suppression first.** A party suppressed on a channel (a hard block such as a bounce, a complaint or a legal
+  do-not-contact) is never sent to on that channel.
+- **Only an explicit opt-in sends.** The CRM records consent per channel as `OPT_IN`, `OPT_OUT` or `UNSET` (never
+  asked), and only `OPT_IN` permits a marketing send. For a commercial account, an account-level marketing opt-out
+  blocks everything; otherwise the primary business contact's own consent governs. There is no implied-consent
+  category: Canadian law treats consent implied from, for example, a purchase as time-limited (see Sources [3]), but
+  the platform never infers consent, so a past purchase alone does not make a customer reachable.
+- **The replicated decision must be recent.** A party with no decision replicated to marketing, or whose decision the
+  CRM published more than the configured age ago (24 hours by default), is refused. This guards against a stale copy;
+  it is not an expiry of the customer's consent. `CONSENT_STALE` means marketing's copy is behind, not that the
+  customer withdrew. The platform fails closed: a delayed message can be sent later, an unwanted one cannot be taken
+  back.
 - The same check runs at preview and again at send time, so a customer who opts out after the preview is still
-  skipped.
+  skipped. Opt-outs are recorded in the CRM (by staff, through self-service, from an unsubscribe link or by import)
+  and reach marketing as a new decision.
 
 **Audience preview** (`marketing:campaign:view`) reports, per channel: the number of segment members in the snapshot
 (and whether the CRM capped it), how many are eligible after consent, staleness and suppression, whether a template is
@@ -125,8 +134,9 @@ preview also asks for a fresher snapshot. A campaign with no segment cannot be p
 Available tokens: `accountName` and `accountTier` (commercial only); `vehicleMake`, `vehicleModel` and `vehicleYear`
 (individual only); `contactFirstName`, `customerNumber`, `campaignCode`, `offerCode`, `shopName` and `unsubscribeUrl`
 (both). Today only `campaignCode` is filled in at send time; the other tokens render empty until recipient data is
-supplied by the platform sender, so a template should read well without them. Editing a template changes the wording
-of campaigns that use it from their next dispatch.
+supplied by the platform sender, so a template should read well without them. That includes `unsubscribeUrl`:
+pos-marketing does not yet produce an unsubscribe link, so do not tell anyone a campaign message carries one.
+Editing a template changes the wording of campaigns that use it from their next dispatch.
 
 | Action | Permission |
 | --- | --- |
@@ -186,7 +196,11 @@ Platform sources:
   `LoggingMessageChannel.java`; `internal/client/PlatformSenderClient.java`
 - `pos-marketing/src/main/resources/permissions.yaml`, `pos-marketing/src/main/resources/application.yml`,
   `pos-marketing/README.md`
-- `pos-customer/src/main/resources/permissions.yaml` (segment, consent and suppression codes)
+- `pos-customer/src/main/resources/permissions.yaml` (segment, consent and suppression codes);
+  `pos-customer/src/main/java/com/positivity/customer/internal/enums/MarketingConsent.java`,
+  `ConsentChangeSource.java`; `internal/service/MarketingConsentResolver.java`
+- `pos-marketing/src/main/java/com/positivity/marketing/internal/entity/PartyConsentReplica.java`;
+  `internal/service/CustomerEventsListener.java` (`decidedAt` is when the CRM published the decision)
 - `pos-mcp-server/src/main/java/com/positivity/mcp/internal/orchestration/TaggingQuestions.java` (the `risk` question)
 - `durion/docs/adr/0044-platform-event-only-domain-walls.adr.md`,
   `durion/docs/adr/0068-mcp-pre-llm-question-tagging-decision-model.adr.md`
@@ -200,5 +214,8 @@ External sources:
    (accessed 2026-10-02).
 3. "Fighting Internet and Wireless Spam Act", Wikipedia, Wikimedia Foundation (the article on Canada's Anti-Spam
    Legislation, CASL). <https://en.wikipedia.org/wiki/Fighting_Internet_and_Wireless_Spam_Act> (accessed 2026-10-02).
+   The Government of Canada pages (fightspam.gc.ca, canada.ca, laws-lois.justice.gc.ca) could not be reached from
+   this environment to confirm it against the primary source.
 4. "CAN-SPAM Act of 2003", Wikipedia, Wikimedia Foundation. <https://en.wikipedia.org/wiki/CAN-SPAM_Act_of_2003>
-   (accessed 2026-10-02).
+   (accessed 2026-10-02). The FTC's compliance guide (ftc.gov) refused automated access, so the primary source was not
+   checked.
