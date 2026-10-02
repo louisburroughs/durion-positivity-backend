@@ -9120,9 +9120,7 @@
           "payment"
         ]
       },
-      "hard_negative_for": [
-        "simple_chat"
-      ],
+      "hard_negative_for": [],
       "notes": ""
     },
     {

@@ -56,6 +56,8 @@ numbers. The report prints a warning next to an unreviewed language.
   es `banco`, `bancaria`, `bancario`, `proveedor`) simple-chat business keywords, so a vetoed question
   reaches tool selection: `en-0152`, `en-0209`, `en-0216`, `en-0218` and `0209`, `0216`, `0218` in
   fr-CA and es lost `simple_chat`.
+  Adding fr `recevable`/`recevables` and es `cobrar`/`pagar` as business keywords then removed
+  `simple_chat` from `es-0353` ("facturas sin pagar").
 - `notes`: why the label is what it is, where it is not obvious.
 
 ## Labelling rules (from the tag questions)

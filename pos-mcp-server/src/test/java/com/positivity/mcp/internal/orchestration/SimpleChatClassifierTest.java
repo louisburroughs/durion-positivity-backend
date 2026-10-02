@@ -109,7 +109,10 @@ class SimpleChatClassifierTest {
                 "qui a accès au compte du fournisseur",
                 "quién tiene acceso a la cuenta bancaria",
                 "quién tiene acceso al banco",
-                "quién tiene acceso a la cuenta del proveedor"
+                "quién tiene acceso a la cuenta del proveedor",
+                "quién tiene acceso a las cuentas por cobrar",
+                "quién puede ver las cuentas por pagar",
+                "qui a accès aux comptes recevables"
             })
     @DisplayName("bank, supplier, vendor and ledger vocabulary keeps a short question on the agent path")
     void isSimpleChat_withAccountHolderVocabulary_returnsFalse(String message) {
