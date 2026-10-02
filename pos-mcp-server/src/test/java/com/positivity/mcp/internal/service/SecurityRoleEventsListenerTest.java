@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.mcp.internal.entity.SystemPrompt;
@@ -11,6 +12,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.transaction.CannotCreateTransactionException;
 
 /**
  * Issue #1613, D4: the event tier, which covers what the pull tiers cannot — a persona edited on a
@@ -115,5 +118,32 @@ class SecurityRoleEventsListenerTest {
         assertThat(holder.get().isIneligible("ROLE_CUSTOMER")).isTrue();
         assertThat(holder.get().rankedAuthorities()).isEmpty();
         Mockito.verify(repository, Mockito.never()).save(Mockito.any(SystemPrompt.class));
+    }
+
+    @Test
+    @DisplayName("a persona transaction that cannot open propagates so the container retries (#2355)")
+    void transactionFailureWhileApplyingPropagates() {
+        // SystemPromptWriter is fail-soft about the row itself, so what reaches the listener from
+        // the database is the REQUIRES_NEW proxy failing to open or commit its transaction.
+        RolePersonaRefresher refresher = Mockito.mock(RolePersonaRefresher.class);
+        Mockito.doThrow(new CannotCreateTransactionException("could not open JPA EntityManager"))
+                .when(refresher)
+                .applyPersona(Mockito.any());
+        SecurityRoleEventsListener failing = new SecurityRoleEventsListener(new ObjectMapper(), refresher);
+
+        assertThatThrownBy(() -> failing.onSecurityEvent(PERSONA_EVENT))
+                .isInstanceOf(CannotCreateTransactionException.class);
+    }
+
+    @Test
+    @DisplayName("a permanent failure while applying the persona is still logged and dropped")
+    void permanentFailureWhileApplyingIsStillSwallowed() {
+        RolePersonaRefresher refresher = Mockito.mock(RolePersonaRefresher.class);
+        Mockito.doThrow(new DataIntegrityViolationException("duplicate key"))
+                .when(refresher)
+                .applyPersona(Mockito.any());
+        SecurityRoleEventsListener failing = new SecurityRoleEventsListener(new ObjectMapper(), refresher);
+
+        assertThatCode(() -> failing.onSecurityEvent(PERSONA_EVENT)).doesNotThrowAnyException();
     }
 }

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.domainevents.security.RolePersonaChangedV1;
 import com.positivity.mcp.internal.domain.RolePersona;
+import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,6 +72,15 @@ public class SecurityRoleEventsListener {
                     payload.name(),
                     payload.mcpPersonaEligible());
         } catch (Exception exception) {
+            if (exception instanceof RuntimeException failure && RetryableConsumerFailures.isRetryable(failure)) {
+                // Applying a persona opens a REQUIRES_NEW transaction for the system-prompt row.
+                // One that cannot open or commit is not a malformed event: the container retries
+                // with backoff, then publishes to {topic}.dlq (ADR-0044 §4, #2355). The write is
+                // idempotent, so redelivery is safe. SystemPromptWriter stays fail-soft about the
+                // row itself, as its request-path callers need. The only checked exception here
+                // is Jackson 2's parse failure, which is permanent.
+                throw failure;
+            }
             LOGGER.warn("Skipping malformed role persona event: {}", exception.getMessage(), exception);
         }
     }
