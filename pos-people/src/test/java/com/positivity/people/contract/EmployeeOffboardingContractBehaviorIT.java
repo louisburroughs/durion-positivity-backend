@@ -157,7 +157,8 @@ class EmployeeOffboardingContractBehaviorIT extends BaseContractIntegrationTest 
     @Test
     @DisplayName("#2121: the worker's sweep ends open assignments an offboarding left behind, and only those")
     void sweepEndsOpenAssignmentsOfSettledOffboardedEmployees() throws Exception {
-        // Process died after the disable committed: DISABLED an hour ago, assignment still open.
+        // Offboarded an hour ago with no queue row, assignment still open: what a termination applied
+        // through updateEmployee leaves behind (a disable always writes a row, #2360).
         UUID stranded = offboardedEmployee(
                 "EMP-117-020", "employee.117.020@example.com", Instant.now().minusSeconds(3600));
         UUID strandedAssignment = createAssignment(stranded);
@@ -166,7 +167,7 @@ class EmployeeOffboardingContractBehaviorIT extends BaseContractIntegrationTest 
                 "EMP-117-021", "employee.117.021@example.com", Instant.now().minusSeconds(3600));
         UUID queuedAssignment = createAssignment(queued);
         retryRow(queued, 0);
-        // Disabled a moment ago: the after-commit handler has not necessarily run yet.
+        // Offboarded a moment ago: still inside the settle window.
         UUID fresh = offboardedEmployee("EMP-117-022", "employee.117.022@example.com", Instant.now());
         UUID freshAssignment = createAssignment(fresh);
         // The retry gave up: its row is exhausted, so it must not hold this one open forever.

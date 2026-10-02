@@ -3,8 +3,6 @@ package com.positivity.people.internal.service;
 import com.positivity.people.internal.entity.EmployeeOffboardingRetry;
 import com.positivity.people.internal.event.EmployeeOffboardedEvent;
 import com.positivity.people.internal.repository.EmployeeOffboardingRetryRepository;
-import java.time.Clock;
-import java.time.Instant;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Component;
@@ -16,26 +14,34 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Applies an employee's assignment termination policy once {@code disableEmployee} has committed
- * (#2121), and queues a retry when that fails.
+ * (#2121), and settles the queue row that disable wrote for it (#2360).
  *
  * <p>Why after commit: a Spring Data call that throws inside {@code disableEmployee}'s own
- * transaction marks it rollback-only, and the retry row written in that same transaction would
- * roll back with it, on exactly the failure the queue exists for. Here the disable is already
- * durable, the policy runs in its own {@code REQUIRES_NEW} transaction, and a failure is caught
- * and queued through a second {@code REQUIRES_NEW} transaction that commits regardless. Nothing
- * thrown here reaches the caller: the disable is durable by now, and an exception out of an
- * after-commit callback would report it as a 500.
+ * transaction marks it rollback-only, and applying the policy must not be able to undo the disable.
+ * The policy is durable before this handler runs: {@code disableEmployee} inserts the
+ * {@code employee_offboarding_retry_queue} row in its own transaction, so the row exists whenever
+ * the disable does. Here the policy is applied and that row deleted in one {@code REQUIRES_NEW}
+ * transaction: both commit, or neither does and the row stays for the
+ * {@link EmployeeOffboardingRetryWorker}, which applies the same policy and end date from it. That
+ * holds on every way of not finishing: a failure applying the policy, a failure committing, or the
+ * process dying before this handler ran at all. There is nothing to write on failure, so nothing
+ * that can fail to be written.
  *
- * <p>Both transactions are explicit {@link TransactionTemplate}s rather than
- * {@code @Transactional} on this method: a {@code @Transactional} proxy around a method that
- * swallows the exception still tries to commit a rollback-only transaction and throws {@code
- * UnexpectedRollbackException} out of the listener. The handler runs on the request thread inside
- * the committing transaction's after-commit callback, so the request's tenant binding still
- * holds for both connections.
+ * <p>A failure here is not counted as an attempt: the row keeps {@code attempts = 0} and the first
+ * due time {@code disableEmployee} gave it, which is what the worker's backoff and attempt cap
+ * count from. Nothing thrown here reaches the caller: the disable is durable by now, and an
+ * exception out of an after-commit callback would report it as a 500.
  *
- * <p>A crash between the commit and this handler leaves no retry row; the
- * {@link EmployeeOffboardingRetryWorker} sweep ends the assignments of any DISABLED or TERMINATED
- * employee that are still open, which covers it.
+ * <p>The transaction is an explicit {@link TransactionTemplate} rather than {@code @Transactional}
+ * on this method: a {@code @Transactional} proxy around a method that swallows the exception still
+ * tries to commit a rollback-only transaction and throws {@code UnexpectedRollbackException} out of
+ * the listener. The handler runs on the request thread inside the committing transaction's
+ * after-commit callback, so the request's tenant binding still holds for its connection.
+ *
+ * <p>The worker does not race this handler in the ordinary case: the row is not due until the
+ * worker's first delay has passed. Should the handler be held up for longer than that, the row is
+ * re-read here and skipped if the worker has already settled it, and applying a policy twice is
+ * idempotent.
  */
 @Component
 @Slf4j
@@ -43,17 +49,14 @@ public class OffboardingEventListener {
 
     private final OffboardingAssignmentEnder assignmentEnder;
     private final EmployeeOffboardingRetryRepository retryRepository;
-    private final Clock clock;
     private final TransactionTemplate requiresNew;
 
     public OffboardingEventListener(
             OffboardingAssignmentEnder assignmentEnder,
             EmployeeOffboardingRetryRepository retryRepository,
-            Clock clock,
             PlatformTransactionManager transactionManager) {
         this.assignmentEnder = assignmentEnder;
         this.retryRepository = retryRepository;
-        this.clock = clock;
         this.requiresNew = new TransactionTemplate(transactionManager);
         this.requiresNew.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -61,41 +64,29 @@ public class OffboardingEventListener {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onEmployeeOffboarded(@NonNull EmployeeOffboardedEvent event) {
         try {
-            requiresNew.executeWithoutResult(status -> assignmentEnder.apply(
-                    event.personId(), event.policy(), event.assignmentEndDate(), event.actorId()));
+            requiresNew.executeWithoutResult(status -> applyAndSettle(event));
         } catch (RuntimeException exception) {
+            // Swallowed on purpose: the disable is already committed, and an exception out of an
+            // after-commit callback would turn that committed disable into a 500 for the caller.
+            // The queue row committed with the disable and this transaction's delete rolled back
+            // with the rest, so the worker picks the row up with the request's own policy.
             log.warn(
-                    "Offboarding downstream action failed for employee {}. Queuing retry. Reason: {}",
+                    "Offboarding downstream action failed for employee {}; retry {} stays queued for the"
+                            + " worker. Reason: {}",
                     event.personId(),
+                    event.retryId(),
                     exception.getMessage());
-            queueRetry(event, exception.getMessage());
         }
     }
 
-    private void queueRetry(EmployeeOffboardedEvent event, String failureReason) {
-        EmployeeOffboardingRetry retry = new EmployeeOffboardingRetry();
-        retry.setEmployeeId(event.personId());
-        retry.setAssignmentPolicy(event.policy());
-        retry.setAssignmentEndDate(event.assignmentEndDate());
-        retry.setDisableReason(event.disableReason());
-        retry.setActorId(event.actorId());
-        retry.setFailureReason(EmployeeOffboardingRetryWorker.failureReason(failureReason));
-        retry.setAttempts(0);
-        retry.setNextAttemptAt(Instant.now(clock).plusSeconds(EmployeeOffboardingRetryWorker.BASE_DELAY_SECONDS));
-        try {
-            requiresNew.executeWithoutResult(status -> retryRepository.save(retry));
-        } catch (RuntimeException queueFailure) {
-            // Swallowed on purpose: the disable is already committed, and an exception out of an
-            // after-commit callback would turn that committed disable into a 500 for the caller.
-            // Without a queue row the worker's sweep of still-open assignments of offboarded
-            // employees converges on the same result (at today's date rather than a grace date).
-            log.error(
-                    "Offboarding retry for employee {} (policy {}) could not be queued after the downstream"
-                            + " action failed ({}); the sweep of open assignments will end them instead",
-                    event.personId(),
-                    event.policy(),
-                    failureReason,
-                    queueFailure);
+    /** Re-read the row (the worker may have settled it), apply its policy and delete it. */
+    private void applyAndSettle(EmployeeOffboardedEvent event) {
+        EmployeeOffboardingRetry row = retryRepository.findById(event.retryId()).orElse(null);
+        if (row == null) {
+            return;
         }
+        assignmentEnder.apply(
+                row.getEmployeeId(), row.getAssignmentPolicy(), row.getAssignmentEndDate(), row.getActorId());
+        retryRepository.delete(row);
     }
 }

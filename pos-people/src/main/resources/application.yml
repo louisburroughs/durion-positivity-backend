@@ -93,9 +93,9 @@ pos:
       rollover:
         enabled: ${POS_PEOPLE_TIME_PERIOD_ROLLOVER_ENABLED:true}
         cron: ${POS_PEOPLE_TIME_PERIOD_ROLLOVER_CRON:0 15 0 * * *}
-    # Offboarding retry worker (#2121): re-applies a failed assignment-termination policy from
-    # employee_offboarding_retry_queue with exponential backoff and ends the assignments an
-    # offboarding left open; per tenant.
+    # Offboarding retry worker (#2121): applies the assignment-termination policy of every
+    # employee_offboarding_retry_queue row the after-commit handler did not finish (#2360), with
+    # exponential backoff, and ends the assignments an offboarding left open; per tenant.
     offboarding-retry:
       enabled: ${POS_PEOPLE_OFFBOARDING_RETRY_ENABLED:true}
       interval: ${POS_PEOPLE_OFFBOARDING_RETRY_INTERVAL:PT60S}
