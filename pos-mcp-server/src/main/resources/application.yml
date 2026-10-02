@@ -277,10 +277,10 @@ mcp:
           source-path: "classpath:rag/invoicing-payments-guide.md"
           rag-scope: "accounting"
           entities: [invoice, payment]
-          # #2382: the invoice and payment entities' own document. rag-scope accounting (the
-          # accounting domains: sentence names customer invoices, payments and receivables), so the
-          # ADR-0068 domain options stay unchanged. invoice:invoice:view is the pos-invoice read
-          # audience; accounting:payment:apply covers staff who apply payments to invoices.
+          # #2382: the invoice and payment entities' own document. rag-scope accounting, whose
+          # domains: description in entities.yaml already names customer invoices, payments and
+          # receivables, so the ADR-0068 domain options stay unchanged. invoice:invoice:view is the
+          # pos-invoice read audience; accounting:payment:apply covers staff who apply payments.
           required-permissions: ["invoice:invoice:view", "accounting:payment:apply"]
         - id: "inventory.inv-cntrl"
           source-path: "classpath:rag/inv-cntrl-rag.md"
