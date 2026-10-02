@@ -1,5 +1,6 @@
 package com.positivity.customer.internal.config;
 
+import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -10,7 +11,6 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
@@ -98,11 +98,12 @@ public class CustomerCommandListener {
                 return;
             }
             log.debug("Ignoring unsupported commandType={} message={}", commandType, message);
-        } catch (TransientDataAccessException e) {
-            // Let the container error handler retry with backoff and route to {topic}.dlq
-            // (ADR-0044 §4) — replay is idempotent, so redelivery is harmless.
-            throw e;
         } catch (Exception e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // Let the container error handler retry with backoff and route to {topic}.dlq
+                // (ADR-0044 §4) — replay is idempotent, so redelivery is harmless.
+                throw e;
+            }
             // Malformed/unsupported commands are permanent failures: retrying cannot fix them,
             // so log and drop instead of poisoning the partition.
             log.error("Failed to process Kafka command message: {}", message, e);

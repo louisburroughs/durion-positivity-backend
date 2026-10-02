@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
@@ -341,6 +342,19 @@ class PeopleContactEventsListenerTest {
             when(personReplica.save(any())).thenThrow(new QueryTimeoutException("statement timeout"));
 
             assertThatExceptionOfType(QueryTimeoutException.class)
+                    .isThrownBy(() -> listener.onPeopleContactEvent(personUpdated(5)));
+
+            // Not recorded as processed: the event must be redelivered.
+            verify(processedEvents, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("rethrows a lost-connection data-access failure so Kafka retries it")
+        void lostConnectionFailure_isRethrown() {
+            when(personReplica.findById(PERSON_ID)).thenReturn(Optional.empty());
+            when(personReplica.save(any())).thenThrow(new DataAccessResourceFailureException("connection reset"));
+
+            assertThatExceptionOfType(DataAccessResourceFailureException.class)
                     .isThrownBy(() -> listener.onPeopleContactEvent(personUpdated(5)));
 
             // Not recorded as processed: the event must be redelivered.

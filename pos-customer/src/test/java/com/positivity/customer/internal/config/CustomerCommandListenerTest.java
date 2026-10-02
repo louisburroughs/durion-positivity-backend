@@ -22,6 +22,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.ObjectMapper;
@@ -145,6 +146,16 @@ class CustomerCommandListenerTest {
     }
 
     @Test
+    @DisplayName("lost-connection DB errors rethrow for container retry/DLQ (ADR-0044 §4)")
+    void rethrowsLostConnectionErrors() {
+        when(replayService.replayBetween(any(), any()))
+                .thenThrow(new DataAccessResourceFailureException("connection reset"));
+
+        assertThatExceptionOfType(DataAccessResourceFailureException.class)
+                .isThrownBy(() -> listener.onCommand(replayCommand("2026-07-13T10:00:00Z", "2026-07-13T11:00:00Z")));
+    }
+
+    @Test
     @DisplayName("A segment that cannot be resolved is dropped, not retried")
     void dropsUnresolvableSegmentCommand() {
         // Load-bearing for CustomerCommandHandlers declaring no transaction of its own. The handler
@@ -163,6 +174,16 @@ class CustomerCommandListenerTest {
         when(segmentService.resolveAndPublish(any(), any())).thenThrow(new QueryTimeoutException("db timeout"));
 
         assertThatExceptionOfType(QueryTimeoutException.class)
+                .isThrownBy(() -> listener.onCommand(segmentResolveCommand()));
+    }
+
+    @Test
+    @DisplayName("a lost-connection DB error resolving a segment still rethrows for container retry/DLQ")
+    void rethrowsLostConnectionSegmentErrors() {
+        when(segmentService.resolveAndPublish(any(), any()))
+                .thenThrow(new DataAccessResourceFailureException("connection reset"));
+
+        assertThatExceptionOfType(DataAccessResourceFailureException.class)
                 .isThrownBy(() -> listener.onCommand(segmentResolveCommand()));
     }
 
