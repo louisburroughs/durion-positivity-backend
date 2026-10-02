@@ -94,12 +94,14 @@ public class NltiController {
                     NltiRequestDTO request,
             @RequestHeader(value = NltiCorrelationIdSupport.CORRELATION_ID_HEADER, required = false)
                     String correlationIdHeader,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             @NonNull HttpServletRequest servletRequest) {
         // resolveFromRequest reuses the id CorrelationIdMdcFilter already resolved (request
         // attribute), so the MDC/telemetry id and the persisted request id can never diverge when
         // the header is absent or invalid. resolveFromHeader here would mint a second id.
         UUID resolvedCorrelationId = NltiCorrelationIdSupport.resolveFromRequest(servletRequest);
-        NltiResponseV1 response = nltiRequestService.submit(request, resolvedCorrelationId);
+        // #2374: a guarded write plan's preview reads the target as the caller, so the token rides along.
+        NltiResponseV1 response = nltiRequestService.submit(request, resolvedCorrelationId, authorizationHeader);
         return ResponseEntity.accepted()
                 .header(
                         NltiCorrelationIdSupport.CORRELATION_ID_HEADER,

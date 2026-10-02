@@ -107,6 +107,12 @@ public class NltiRequestServiceImpl implements NltiRequestService {
 
     @Override
     public @NonNull NltiResponseV1 submit(@NonNull NltiRequestDTO request, @Nullable UUID correlationId) {
+        return submit(request, correlationId, null);
+    }
+
+    @Override
+    public @NonNull NltiResponseV1 submit(
+            @NonNull NltiRequestDTO request, @Nullable UUID correlationId, @Nullable String authHeader) {
         Timer.Sample sample = Timer.start(meterRegistry);
         long startedAtNanos = System.nanoTime();
         UUID effectiveCorrelationId = (correlationId != null) ? correlationId : UUIDv7Generator.generate();
@@ -164,7 +170,7 @@ public class NltiRequestServiceImpl implements NltiRequestService {
                 // write.isWrite counts write intents detected, not writes ultimately performed.
                 telemetry.isWrite = true;
                 Set<String> callerPermissionCodes = PermissionCodes.extract(SecurityContextHelper.getAuthorities());
-                return writePlanService.previewAction(nltiRequest, request, intent, callerPermissionCodes);
+                return writePlanService.previewAction(nltiRequest, request, intent, callerPermissionCodes, authHeader);
             }
 
             return new NltiResponseV1(newRequestId, effectiveCorrelationId, resolvedSessionId, "ACCEPTED", null, null);

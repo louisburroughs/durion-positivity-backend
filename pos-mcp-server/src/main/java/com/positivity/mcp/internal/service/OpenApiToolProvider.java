@@ -1,6 +1,7 @@
 package com.positivity.mcp.internal.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.mcp.internal.config.CurrentUserContext;
@@ -20,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.NonNull;
@@ -47,6 +49,12 @@ import org.springframework.stereotype.Component;
  * the calling thread before tool resolution runs (the streaming assistant resolves callbacks
  * synchronously at Flux-assembly time, while the context is still set), and clear it afterwards. If no
  * request context is present, this returns <em>no</em> tools — fail-closed.
+ *
+ * <p><strong>Guarded writes (#2374).</strong> pos-accounting's event retry and reprocess are offered
+ * only through {@link AccountingEventWriteGuard}: their description carries the guard's rules, each
+ * call first re-reads the event's status as the caller and is refused unless it is FAILED (retry) or
+ * SUSPENDED (reprocess), and one turn (one user confirmation) runs at most one of them. Without the
+ * guard wired they are not offered at all.
  */
 @Component
 public class OpenApiToolProvider {
@@ -193,6 +201,9 @@ public class OpenApiToolProvider {
     /** ADR-0069 §6: the consumer switch; absent means the discovered slot step never runs. */
     private volatile @Nullable ScopeConsumers scopeConsumers;
 
+    /** #2374: absent means the guarded accounting event writes are never offered (fail-closed). */
+    private volatile @Nullable AccountingEventWriteGuard writeGuard;
+
     public OpenApiToolProvider(
             @NonNull ToolMetadataRepository repository,
             @NonNull EmbeddingModel embeddingModel,
@@ -219,6 +230,15 @@ public class OpenApiToolProvider {
     @Autowired(required = false)
     public void setScopeConsumers(@Nullable ScopeConsumers scopeConsumers) {
         this.scopeConsumers = scopeConsumers;
+    }
+
+    /**
+     * #2374: wires the guard on pos-accounting's event retry and reprocess. Setter-injected so the
+     * hand-built constructions of this class keep compiling; without it those two tools are skipped.
+     */
+    @Autowired(required = false)
+    public void setWriteGuard(@Nullable AccountingEventWriteGuard writeGuard) {
+        this.writeGuard = writeGuard;
     }
 
     public @NonNull List<ToolCallback> resolveToolCallbacks(@Nullable String userMessage) {
@@ -252,11 +272,30 @@ public class OpenApiToolProvider {
                     .toList());
         }
 
+        AccountingEventWriteGuard guard = writeGuard;
+        List<String> companions = guard == null ? List.of() : guardCompanionsMissingFrom(ops);
+        if (!companions.isEmpty()) {
+            // #2374: a guarded write is offered with the tools its preview and its "never retry
+            // blindly" rule depend on (the event read, its history, the rules dry run); the gate
+            // decides, so a caller who may not use them gets none.
+            ops = new ArrayList<>(ops);
+            ops.addAll(repository.findDiscoveredByNamesForPermissions(
+                    companions, caller.permissionCodes(), WorkflowState.DEFAULT.name()));
+        }
+
         List<ToolCallback> tools = new ArrayList<>();
         boolean writeCapableToolsPresent = false;
+        // #2374: one turn is one user confirmation, so it runs at most one guarded write; shared by
+        // this turn's guarded callbacks only.
+        AtomicReference<String> guardedCallThisTurn = new AtomicReference<>();
         for (DiscoveredOperation op : ops) {
             if (!op.isExecutable()) {
                 LOGGER.debug("MCP openapi op missing execution coordinates name={}; skipping", op.name());
+                continue;
+            }
+            boolean guarded = AccountingEventWriteGuard.guards(op.name());
+            if (guarded && guard == null) {
+                LOGGER.debug("MCP openapi guarded op name={} has no write guard wired; skipping", op.name());
                 continue;
             }
             writeCapableToolsPresent = writeCapableToolsPresent || isWriteCapable(op);
@@ -265,10 +304,15 @@ public class OpenApiToolProvider {
             ToolCallback callback = new OpenApiSpringAiToolCallback(
                     DefaultToolDefinition.builder()
                             .name(op.name())
-                            .description(describeOperation(op))
+                            .description(describeOperation(op)
+                                    + (guarded ? AccountingEventWriteGuard.guardNote(op.name()) : ""))
                             .inputSchema(buildParameterSchema(op))
                             .build(),
                     executor);
+            if (guarded) {
+                callback = new GuardedWriteToolCallback(
+                        callback, guard, op.name(), authHeader, guardedCallThisTurn, objectMapper);
+            }
             // #1422: per-execution invocation logging; discovered names match mcp_tool.name exactly.
             tools.add(invocationRecorder != null ? invocationRecorder.wrap(callback, op.name()) : callback);
         }
@@ -294,6 +338,21 @@ public class OpenApiToolProvider {
                 caller.permissionCodes().size(),
                 tools.size());
         return List.copyOf(tools);
+    }
+
+    /**
+     * #2374: the guard's companion tools (the event read, its reprocessing history, the rules dry
+     * run) not already among {@code ops}, when some op is a guarded write; empty otherwise.
+     */
+    private static @NonNull List<String> guardCompanionsMissingFrom(@NonNull List<DiscoveredOperation> ops) {
+        if (ops.stream().noneMatch(op -> AccountingEventWriteGuard.guards(op.name()))) {
+            return List.of();
+        }
+        Set<String> present = new HashSet<>();
+        ops.forEach(op -> present.add(op.name()));
+        return AccountingEventWriteGuard.COMPANION_TOOLS.stream()
+                .filter(name -> !present.contains(name))
+                .toList();
     }
 
     /**
@@ -327,6 +386,80 @@ public class OpenApiToolProvider {
                 .distinct()
                 .limit(remaining)
                 .toList();
+    }
+
+    /**
+     * #2374: a guarded accounting event write on the chat path. The chat path keeps no persisted
+     * plan: the WRITE-GATE prompt layer has the model preview and wait for the user's confirmation.
+     * This wrapper enforces what code can around that. The event's status is re-read as the caller
+     * before the call runs, so an unknown or timed-out earlier outcome is never retried blindly. The
+     * first call that names an event spends the turn, whether it then runs or is refused, so one
+     * confirmation never reaches a second event (a call with malformed arguments names none and may
+     * be corrected). A refusal is an {@code Error:} result the model reads.
+     */
+    private static final class GuardedWriteToolCallback implements ToolCallback {
+
+        private final ToolCallback delegate;
+        private final AccountingEventWriteGuard guard;
+        private final String toolName;
+        private final @Nullable String authHeader;
+        private final AtomicReference<String> guardedCallThisTurn;
+        private final ObjectMapper objectMapper;
+
+        private GuardedWriteToolCallback(
+                @NonNull ToolCallback delegate,
+                @NonNull AccountingEventWriteGuard guard,
+                @NonNull String toolName,
+                @Nullable String authHeader,
+                @NonNull AtomicReference<String> guardedCallThisTurn,
+                @NonNull ObjectMapper objectMapper) {
+            this.delegate = delegate;
+            this.guard = guard;
+            this.toolName = toolName;
+            this.authHeader = authHeader;
+            this.guardedCallThisTurn = guardedCallThisTurn;
+            this.objectMapper = objectMapper;
+        }
+
+        @Override
+        public ToolDefinition getToolDefinition() {
+            return delegate.getToolDefinition();
+        }
+
+        @Override
+        public ToolMetadata getToolMetadata() {
+            return delegate.getToolMetadata();
+        }
+
+        @Override
+        public String call(String toolInput) {
+            String spent = guardedCallThisTurn.get();
+            if (spent != null) {
+                return oneEventPerConfirmation(spent);
+            }
+            Map<String, Object> arguments;
+            try {
+                arguments = toolInput == null || toolInput.isBlank()
+                        ? Map.of()
+                        : objectMapper.readValue(toolInput, new TypeReference<Map<String, Object>>() {});
+            } catch (JsonProcessingException e) {
+                return "Error: invalid tool arguments; nothing was run.";
+            }
+            AccountingEventWriteGuard.Inspection inspection = guard.inspect(toolName, arguments, authHeader);
+            if (inspection.eventId() != null
+                    && !guardedCallThisTurn.compareAndSet(null, toolName + " for event " + inspection.eventId())) {
+                return oneEventPerConfirmation(guardedCallThisTurn.get());
+            }
+            if (!inspection.permitted()) {
+                return "Error: " + inspection.message();
+            }
+            return delegate.call(toolInput);
+        }
+
+        private static String oneEventPerConfirmation(String spent) {
+            return "Error: one confirmation covers one accounting event, and this turn has already used it (" + spent
+                    + "). Nothing was run; ask the user to confirm this event on its own.";
+        }
     }
 
     private static final class OpenApiSpringAiToolCallback implements ToolCallback {

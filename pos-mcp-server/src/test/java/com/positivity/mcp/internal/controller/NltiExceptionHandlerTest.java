@@ -103,7 +103,8 @@ class NltiExceptionHandlerTest {
     @WithMockUser(authorities = "nlti:request:submit")
     @DisplayName("RateLimitExceededException from service → 429 with RATE_LIMIT_EXCEEDED code")
     void submitRequest_whenRateLimitExceeded_returns429WithRateLimitExceededCode() throws Exception {
-        when(nltiRequestService.submit(any(), any())).thenThrow(new RateLimitExceededException("Rate limit exceeded"));
+        when(nltiRequestService.submit(any(), any(), any()))
+                .thenThrow(new RateLimitExceededException("Rate limit exceeded"));
 
         mockMvc.perform(post("/v1/nlt/requests")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -125,7 +126,7 @@ class NltiExceptionHandlerTest {
     void submitRequest_whenCorrelationHeaderInvalidAndServiceThrows_usesControllerResolvedCorrelationId()
             throws Exception {
         AtomicReference<UUID> capturedCorrelationId = new AtomicReference<>();
-        when(nltiRequestService.submit(any(), any())).thenAnswer(invocation -> {
+        when(nltiRequestService.submit(any(), any(), any())).thenAnswer(invocation -> {
             capturedCorrelationId.set(invocation.getArgument(1, UUID.class));
             throw new RateLimitExceededException("Rate limit exceeded");
         });
@@ -156,7 +157,7 @@ class NltiExceptionHandlerTest {
     @WithMockUser(authorities = "nlti:request:submit")
     @DisplayName("SessionOwnershipViolationException from service → 403 with SESSION_ACCESS_DENIED code")
     void submitRequest_whenSessionOwnershipViolation_returns403WithSessionAccessDeniedCode() throws Exception {
-        when(nltiRequestService.submit(any(), any()))
+        when(nltiRequestService.submit(any(), any(), any()))
                 .thenThrow(new SessionOwnershipViolationException("Provided sessionId is not owned by subject"));
 
         mockMvc.perform(post("/v1/nlt/requests")
@@ -174,7 +175,7 @@ class NltiExceptionHandlerTest {
     @WithMockUser(authorities = "nlti:request:submit")
     @DisplayName("UnsupportedOperationException from service → 501 with NOT_IMPLEMENTED code")
     void submitRequest_whenUnsupportedOperation_returns501WithNotImplementedCode() throws Exception {
-        when(nltiRequestService.submit(any(), any()))
+        when(nltiRequestService.submit(any(), any(), any()))
                 .thenThrow(new UnsupportedOperationException("feature not yet implemented"));
 
         mockMvc.perform(post("/v1/nlt/requests")
@@ -192,7 +193,7 @@ class NltiExceptionHandlerTest {
     @WithMockUser(authorities = "nlti:request:submit")
     @DisplayName("ConstraintViolationException from service → 400 with VALIDATION_ERROR code")
     void submitRequest_whenConstraintViolation_returns400WithValidationErrorCode() throws Exception {
-        when(nltiRequestService.submit(any(), any()))
+        when(nltiRequestService.submit(any(), any(), any()))
                 .thenThrow(new ConstraintViolationException("field must not be blank", Set.of()));
 
         mockMvc.perform(post("/v1/nlt/requests")

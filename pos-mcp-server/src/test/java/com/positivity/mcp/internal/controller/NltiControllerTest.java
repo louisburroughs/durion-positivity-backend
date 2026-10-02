@@ -97,7 +97,7 @@ class NltiControllerTest {
         NltiResponseV1 stubResponse =
                 new NltiResponseV1(REQUEST_ID, CORRELATION_ID, SESSION_ID, "ACCEPTED", null, null);
         when(nltiRequestService.submit(any())).thenReturn(stubResponse);
-        when(nltiRequestService.submit(any(), any())).thenReturn(stubResponse);
+        when(nltiRequestService.submit(any(), any(), any())).thenReturn(stubResponse);
 
         String body = objectMapper.writeValueAsString(new NltiRequestDTO("close workorder 123", null, null));
 
@@ -110,6 +110,26 @@ class NltiControllerTest {
                 .andExpect(jsonPath("$.correlationId").value(CORRELATION_ID.toString()))
                 .andExpect(jsonPath("$.sessionId").value(SESSION_ID.toString()))
                 .andExpect(jsonPath("$.status").value("ACCEPTED"));
+    }
+
+    @Test
+    @WithMockUser(authorities = "nlti:request:submit")
+    @DisplayName("#2374: POST /v1/nlt/requests relays the caller's Authorization header to the service")
+    void submitRequest_relaysAuthorizationHeader() throws Exception {
+        NltiResponseV1 stubResponse =
+                new NltiResponseV1(REQUEST_ID, CORRELATION_ID, SESSION_ID, "ACCEPTED", null, null);
+        when(nltiRequestService.submit(any(), any(), any())).thenReturn(stubResponse);
+
+        String body = objectMapper.writeValueAsString(new NltiRequestDTO("retry accounting event", null, null));
+
+        mockMvc.perform(post("/v1/nlt/requests")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer caller-token")
+                        .content(body))
+                .andExpect(status().isAccepted());
+
+        // A guarded write plan's preview reads the target as the caller (the accounting event status).
+        verify(nltiRequestService).submit(any(), any(), eq("Bearer caller-token"));
     }
 
     // ─── AC-2: POST without prompt → 400 validation ───────────────────────────
@@ -163,7 +183,7 @@ class NltiControllerTest {
         UUID inboundCorrId = UUID.fromString("00000000-0000-7000-8000-000000000099");
         NltiResponseV1 stubResponse = new NltiResponseV1(REQUEST_ID, inboundCorrId, SESSION_ID, "ACCEPTED", null, null);
         when(nltiRequestService.submit(any())).thenReturn(stubResponse);
-        when(nltiRequestService.submit(any(), any())).thenReturn(stubResponse);
+        when(nltiRequestService.submit(any(), any(), any())).thenReturn(stubResponse);
 
         String body = objectMapper.writeValueAsString(new NltiRequestDTO("check inventory levels", null, null));
 

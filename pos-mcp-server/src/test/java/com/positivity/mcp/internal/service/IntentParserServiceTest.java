@@ -274,6 +274,36 @@ class IntentParserServiceTest {
         assertThat(result.riskLevel()).isEqualTo("LOW");
     }
 
+    /**
+     * #2374: re-running an accounting posting is a write and HIGH risk, so a retry or reprocess
+     * prompt reaches the write gate (where the accounting event guard reads the status first)
+     * rather than resolving as UNKNOWN or a read.
+     */
+    @Test
+    @DisplayName("parse: retry / reprocess / resubmit of an accounting event is a HIGH-risk ACTION")
+    void parse_postingRerunPrompt_returnsHighRiskAction() {
+        for (String prompt : new String[] {
+            "Retry accounting event 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+            "Reprocess the suspended CASH_SALE event now that the mapping is fixed",
+            "Show me the failed event and resubmit it"
+        }) {
+            IntentV1 result = service.parse(prompt, SESSION_ID, CORRELATION_ID);
+
+            assertThat(result.intentType()).as(prompt).isEqualTo("ACTION");
+            assertThat(result.riskLevel()).as(prompt).isEqualTo("HIGH");
+        }
+    }
+
+    /** #2374: posting verbs match whole words, like the other verb classes. */
+    @Test
+    @DisplayName("parse: a posting verb inside another word does not classify as ACTION")
+    void parse_postingVerbInsideWord_staysQuery() {
+        IntentV1 result = service.parse("Show the retryable events in the pipeline", SESSION_ID, CORRELATION_ID);
+
+        assertThat(result.intentType()).isEqualTo("QUERY");
+        assertThat(result.riskLevel()).isEqualTo("LOW");
+    }
+
     // ─── AC5: metric emission ────────────────────────────────────────────────
 
     /**

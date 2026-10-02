@@ -41,6 +41,10 @@ public class IntentParserServiceImpl implements IntentParserService {
     // create/update phrasings reach the Gate 6 write gate instead of dead-ending as UNKNOWN.
     // Keyword lists are an interim classifier; the T1 router model is the planned successor.
     private static final Set<String> HIGH_RISK_VERBS = Set.of("delete", "remove");
+    // #2374: re-running an accounting posting (retry a FAILED event, reprocess a SUSPENDED one) is a
+    // write, and HIGH: a posting to accounting under the ADR-0068 risk wording. Whole words, so
+    // "retry" does not need a destructive verb beside it to reach the write gate.
+    private static final Set<String> POSTING_VERBS = Set.of("retry", "reprocess", "resubmit");
     private static final Set<String> MEDIUM_RISK_VERBS = Set.of(
             "create",
             "update",
@@ -186,6 +190,9 @@ public class IntentParserServiceImpl implements IntentParserService {
             return NltiRiskLevel.HIGH;
         }
         Set<String> words = wordsOf(lower);
+        if (POSTING_VERBS.stream().anyMatch(words::contains)) {
+            return NltiRiskLevel.HIGH;
+        }
         // Mutating verbs outrank additive ones so a mixed prompt carries the higher risk.
         if (MEDIUM_RISK_VERBS.stream().anyMatch(words::contains)) {
             return NltiRiskLevel.MEDIUM;

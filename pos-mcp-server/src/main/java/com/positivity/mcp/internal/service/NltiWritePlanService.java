@@ -35,6 +35,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
@@ -57,6 +58,13 @@ import org.springframework.stereotype.Service;
  * caller's escape hatch. Every step lands in the append-only audit ledger
  * (PLAN → CONFIRMATION → EXECUTION_STEP → EXECUTION_COMPLETE/EXECUTION_FAILED).
  *
+ * <p>#2374: a plan for pos-accounting's event retry or reprocess also passes {@link
+ * AccountingEventWriteGuard}: it is HIGH risk, the event's status is read as the caller before the
+ * preview (a wrong status answers {@code NEEDS_CLARIFICATION} with {@code preconditionFailed}), the
+ * preview says what will post, under which rules, and that there is no undo, and its fingerprint is
+ * pinned with the plan. Before execution the event is inspected again: a changed status, or anything
+ * the preview showed that no longer holds, cancels the plan as stale data.
+ *
  * <p><strong>Transactionality:</strong> deliberately not wrapped in a single transaction — the
  * status transitions around the remote tool call must survive an execution failure (each
  * {@code save} commits on its own), so a failed execution leaves an {@code ERROR} plan rather than
@@ -78,6 +86,9 @@ public class NltiWritePlanService {
     static final String CONTEXT_ENTITY_VERSIONS = "entityVersions";
 
     static final String STATUS_NEEDS_CLARIFICATION = "NEEDS_CLARIFICATION";
+
+    /** #2374: meta key naming why a guarded write could not be previewed. */
+    static final String META_PRECONDITION_FAILED = "preconditionFailed";
 
     /**
      * Terminal confirmation outcomes, mirrored out of the audit ledger onto the telemetry stream
@@ -108,6 +119,7 @@ public class NltiWritePlanService {
     private final ToolMetadataRepository toolMetadataRepository;
     private final WritePlanExecutor writePlanExecutor;
     private final SourceEntityVersionProbe versionProbe;
+    private final AccountingEventWriteGuard writeGuard;
     private final AuditLedgerService auditLedgerService;
     private final NltiRequestTelemetryPublisher telemetryPublisher;
     private final MeterRegistry meterRegistry;
@@ -124,6 +136,7 @@ public class NltiWritePlanService {
             @NonNull ToolMetadataRepository toolMetadataRepository,
             @NonNull WritePlanExecutor writePlanExecutor,
             @NonNull SourceEntityVersionProbe versionProbe,
+            @NonNull AccountingEventWriteGuard writeGuard,
             @NonNull AuditLedgerService auditLedgerService,
             @NonNull NltiRequestTelemetryPublisher telemetryPublisher,
             @NonNull MeterRegistry meterRegistry,
@@ -135,6 +148,7 @@ public class NltiWritePlanService {
         this.toolMetadataRepository = toolMetadataRepository;
         this.writePlanExecutor = writePlanExecutor;
         this.versionProbe = versionProbe;
+        this.writeGuard = writeGuard;
         this.auditLedgerService = auditLedgerService;
         this.telemetryPublisher = telemetryPublisher;
         this.meterRegistry = meterRegistry;
@@ -149,12 +163,16 @@ public class NltiWritePlanService {
      * <strong>not</strong> invoked. A missing target tool yields a {@code NEEDS_CLARIFICATION}
      * response (never a guessed value); a pending plan on the session whose material content
      * differs is cancelled and replaced; an identical pending plan is returned as-is.
+     *
+     * @param authHeader the caller's {@code Authorization} header, relayed on a guarded tool's
+     *     precondition read (#2374)
      */
     public @NonNull NltiResponseV1 previewAction(
             @NonNull NltiRequest request,
             @NonNull NltiRequestDTO dto,
             @NonNull IntentV1 intent,
-            @NonNull Set<String> callerPermissionCodes) {
+            @NonNull Set<String> callerPermissionCodes,
+            @Nullable String authHeader) {
         String targetTool = stringFromContext(dto.clientContext(), CONTEXT_TARGET_TOOL);
         if (targetTool == null) {
             // G6.5: a required plan input is missing — ask, never guess.
@@ -181,7 +199,9 @@ public class NltiWritePlanService {
             provenance.put(entry.getKey(), ArgProvenance.USER_CONTEXT);
         }
 
-        NltiRiskLevel riskLevel = riskOf(intent.riskLevel());
+        // #2374: a guarded tool (an accounting posting) is HIGH whatever the classifier said, so the
+        // HIGH-risk rules below and at confirmation apply to it.
+        NltiRiskLevel riskLevel = AccountingEventWriteGuard.riskFloor(targetTool, riskOf(intent.riskLevel()));
         // Drift guards (G6.4): every arg carries provenance; HIGH risk must not ride on inferred
         // defaults. Both hold by construction here, but the invariants are enforced regardless so
         // future plan producers cannot silently regress them.
@@ -202,7 +222,35 @@ public class NltiWritePlanService {
         // PLAN time (fail-closed — an unknown tool or a tool with zero grants is never plannable).
         requireToolPermission(targetTool, callerPermissionCodes);
 
+        // #2374: the guarded tool's precondition, read as the caller before anything is previewed or
+        // reused: a pending plan for the same event is no use once its status has moved on.
+        String guardPreview = null;
+        String guardFingerprint = null;
+        if (AccountingEventWriteGuard.guards(targetTool)) {
+            AccountingEventWriteGuard.Inspection inspection = writeGuard.inspect(targetTool, args, authHeader);
+            if (!inspection.permitted()) {
+                return new NltiResponseV1(
+                        request.getId(),
+                        request.getCorrelationId(),
+                        request.getSessionId(),
+                        STATUS_NEEDS_CLARIFICATION,
+                        intent,
+                        Map.of(META_PRECONDITION_FAILED, inspection.message()));
+            }
+            guardPreview = inspection.message();
+            guardFingerprint = inspection.fingerprint();
+        }
+
         String argsJson = toJson(args);
+        Map<String, String> entityVersions =
+                new LinkedHashMap<>(stringMapFromContext(dto.clientContext(), CONTEXT_ENTITY_VERSIONS));
+        if (guardFingerprint != null) {
+            // #2374: pins everything the guarded preview showed (status, amount, the rules it posts
+            // under); confirm compares it before executing. Set after the client's versions so a
+            // client cannot overwrite it.
+            entityVersions.put(AccountingEventWriteGuard.PIN_KEY, guardFingerprint);
+        }
+        String entityVersionsJson = entityVersions.isEmpty() ? null : toJson(entityVersions);
         // Single-pending rule (G6.5): an identical pending plan is reused; any materially
         // different pending plan on the session is cancelled and replaced.
         List<NltiWritePlan> pending =
@@ -210,6 +258,9 @@ public class NltiWritePlanService {
         for (NltiWritePlan existing : pending) {
             if (existing.getTargetTool().equals(targetTool)
                     && existing.getArgsJson().equals(argsJson)
+                    // #2374: a guarded plan is reused only while its preview still holds.
+                    && (guardFingerprint == null
+                            || Objects.equals(existing.getSourceEntityVersionsJson(), entityVersionsJson))
                     && !WritePlanPolicy.isExpired(existing.getExpiresAt(), OffsetDateTime.now(clock))) {
                 return pendingResponse(request, existing);
             }
@@ -237,9 +288,8 @@ public class NltiWritePlanService {
         plan.setArgsJson(argsJson);
         plan.setArgProvenanceJson(toJson(provenance));
         plan.setRiskLevel(riskLevel);
-        Map<String, String> entityVersions = stringMapFromContext(dto.clientContext(), CONTEXT_ENTITY_VERSIONS);
-        plan.setSourceEntityVersionsJson(entityVersions.isEmpty() ? null : toJson(entityVersions));
-        plan.setSummaryText(buildSummary(targetTool, args, provenance, riskLevel));
+        plan.setSourceEntityVersionsJson(entityVersionsJson);
+        plan.setSummaryText(buildSummary(targetTool, args, provenance, riskLevel, guardPreview));
         plan.setStatus(NltiRequestStatus.PENDING_CONFIRMATION);
         plan.setExpiresAt(now.plusMinutes(ttlMinutes));
         planRepository.save(plan);
@@ -316,10 +366,39 @@ public class NltiWritePlanService {
         // time — a grant revoked after plan time must block execution.
         requireToolPermission(plan.getTargetTool(), callerPermissionCodes);
 
+        // #2374: a guarded tool is re-inspected as the caller just before execution. A status that moved
+        // on since the preview (another retry, a timed-out attempt that did land) refuses; anything else
+        // the preview showed that changed, the rules an unpinned posting follows included, no longer
+        // matches the pinned fingerprint. Either is stale data: the plan is cancelled rather than run.
+        if (AccountingEventWriteGuard.guards(plan.getTargetTool())) {
+            AccountingEventWriteGuard.Inspection inspection =
+                    writeGuard.inspect(plan.getTargetTool(), fromJson(plan.getArgsJson(), MAP_OF_OBJECT), authHeader);
+            String pinned = plan.getSourceEntityVersionsJson() == null
+                    ? null
+                    : fromJson(plan.getSourceEntityVersionsJson(), MAP_OF_STRING)
+                            .get(AccountingEventWriteGuard.PIN_KEY);
+            String stale = !inspection.permitted()
+                    ? inspection.message()
+                    : !Objects.equals(pinned, inspection.fingerprint())
+                            ? "what the preview showed has changed. Now: " + inspection.message()
+                            : null;
+            if (stale != null) {
+                transition(plan, request, NltiRequestStatus.CANCELLED);
+                appendPlanAudit(plan, request, NltiAuditEventType.CONFIRMATION, "outcome=stale-data");
+                recordConfirmationOutcome(
+                        plan, request.getCorrelationId(), OUTCOME_STALE_DATA, elapsedMs(startedAtNanos));
+                throw new WritePlanStaleException("Write plan cancelled before execution: " + stale);
+            }
+        }
+
         // G6.7: stale-data protection for risk >= MEDIUM when versions were captured at plan time.
         if (plan.getRiskLevel() != NltiRiskLevel.LOW && plan.getSourceEntityVersionsJson() != null) {
-            Map<String, String> captured = fromJson(plan.getSourceEntityVersionsJson(), MAP_OF_STRING);
-            Map<String, String> current = versionProbe.currentVersions(plan.getTargetTool(), captured);
+            Map<String, String> captured =
+                    new LinkedHashMap<>(fromJson(plan.getSourceEntityVersionsJson(), MAP_OF_STRING));
+            // #2374: the guard's pin was checked above; the generic probe only sees entity versions.
+            captured.remove(AccountingEventWriteGuard.PIN_KEY);
+            Map<String, String> current =
+                    captured.isEmpty() ? captured : versionProbe.currentVersions(plan.getTargetTool(), captured);
             if (!captured.equals(current)) {
                 transition(plan, request, NltiRequestStatus.CANCELLED);
                 appendPlanAudit(plan, request, NltiAuditEventType.CONFIRMATION, "outcome=stale-data");
@@ -548,7 +627,8 @@ public class NltiWritePlanService {
             @NonNull String targetTool,
             @NonNull Map<String, Object> args,
             @NonNull Map<String, ArgProvenance> provenance,
-            @NonNull NltiRiskLevel riskLevel) {
+            @NonNull NltiRiskLevel riskLevel,
+            @Nullable String guardPreview) {
         StringBuilder summary = new StringBuilder("Will call ")
                 .append(targetTool)
                 .append(" (risk ")
@@ -568,7 +648,11 @@ public class NltiWritePlanService {
         if (!inferred.isEmpty()) {
             summary.append(". Inferred defaults (please review): ").append(String.join(", ", inferred));
         }
-        summary.append(". Confirm to execute.");
+        if (guardPreview != null) {
+            summary.append(". ").append(guardPreview).append(" Confirm to execute.");
+        } else {
+            summary.append(". Confirm to execute.");
+        }
         return summary.toString();
     }
 
