@@ -18,18 +18,26 @@ import com.positivity.catalog.internal.repository.TreadDesignRepository;
 import com.positivity.catalog.internal.repository.TreadDesignTextRepository;
 import com.positivity.domainevents.supplier.SupplierCatalogEnrichmentImage;
 import com.positivity.domainevents.supplier.SupplierCatalogEnrichmentText;
+import com.positivity.domainevents.supplier.SupplierCatalogRepublishCompletedV1;
 import com.positivity.domainevents.supplier.SupplierCatalogUpdatedV1;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.stereotype.Component;
@@ -44,8 +52,8 @@ import tools.jackson.databind.ObjectMapper;
  * ADR-0044 §6, R1).
  *
  * <p>This class is not a Kafka consumer: {@link SupplierEventsListener} is the single consumer of
- * {@code supplier.events.v1} and routes {@code supplier.catalog.updated} here after its
- * {@code processed_events} guard (#2177).
+ * {@code supplier.events.v1} and routes {@code supplier.catalog.updated} and
+ * {@code supplier.catalog.republish.completed} here after its {@code processed_events} guard (#2177).
  *
  * <h2>Content-hash staleness, not a version counter</h2>
  *
@@ -53,6 +61,23 @@ import tools.jackson.databind.ObjectMapper;
  * {@code aggregateVersion=0} — because content has no ordering requirement a stale write could
  * violate the way a price or a quantity would. An unchanged republication (same
  * {@code contentHash}) is a no-op; any changed one is applied, last write wins.
+ *
+ * <p>That no-op is what makes the owner's re-emit-all safe (#2356). pos-supplier answers
+ * {@code supplier.catalog.republish.requested} by publishing every variant it has staged for a
+ * vendor profile again, under new event ids the {@code processed_events} guard has never seen. A
+ * design this module already holds arrives with the hash it already has and is left exactly as it
+ * is — no re-match, no candidate rows replaced, no review decision or worklist position disturbed —
+ * and only a design that was lost, or whose newer content was, is applied.
+ *
+ * <h2>Seeing a gap, since nothing else shows one (#2356)</h2>
+ *
+ * A lost enrichment leaves no trace: a design that never arrived looks exactly like one the vendor
+ * never published. The re-publication's closing event carries how many variants the owner holds for
+ * the profile, and {@link #reportRepublishGap} compares that against the designs held here, as a
+ * WARN and as the {@value #DESIGN_GAP_METRIC} gauge. It reports and does nothing else: unlike a
+ * short PRICAT import, a shortfall here does not ask the owner to re-emit again, because the
+ * re-emit that just finished <em>was</em> the remedy and asking again from inside its own completion
+ * would loop.
  *
  * <h2>Matching is scoped, never run against the whole catalog</h2>
  *
@@ -108,6 +133,12 @@ public class SupplierCatalogEnrichmentHandler {
      */
     static final int MAX_STORED_REVIEW_CANDIDATES = 20;
 
+    /**
+     * Gauge of tread designs the owner re-emitted for a vendor profile that this module does not
+     * hold, as of that profile's last re-publication. Tagged {@code vendorProfileId}.
+     */
+    static final String DESIGN_GAP_METRIC = "catalog.enrichment.design.gap";
+
     /** Matches {@code numeric(5,4)} in V20 — the stored score must equal the compared score. */
     private static final int SCORE_SCALE = 4;
 
@@ -121,6 +152,12 @@ public class SupplierCatalogEnrichmentHandler {
     private final SupplierPriceEntryRepository supplierPriceEntryRepository;
     private final ProductRepository productRepository;
     private final TreadDesignMatcher treadDesignMatcher;
+
+    @Nullable
+    private final MeterRegistry meterRegistry;
+
+    /** The value behind each vendor profile's {@value #DESIGN_GAP_METRIC} gauge. */
+    private final Map<UUID, AtomicLong> designGaps = new ConcurrentHashMap<>();
 
     /** The apply and its processed mark, in one transaction of their own; see the class doc. */
     private final TransactionTemplate handlerTransaction;
@@ -136,6 +173,7 @@ public class SupplierCatalogEnrichmentHandler {
             SupplierPriceEntryRepository supplierPriceEntryRepository,
             ProductRepository productRepository,
             TreadDesignMatcher treadDesignMatcher,
+            ObjectProvider<MeterRegistry> meterRegistry,
             PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
@@ -147,21 +185,27 @@ public class SupplierCatalogEnrichmentHandler {
         this.supplierPriceEntryRepository = supplierPriceEntryRepository;
         this.productRepository = productRepository;
         this.treadDesignMatcher = treadDesignMatcher;
+        this.meterRegistry = meterRegistry.getIfAvailable();
         this.handlerTransaction = new TransactionTemplate(transactionManager);
         this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     /**
-     * Applies one {@code supplier.catalog.updated} event and marks it processed in the same
-     * transaction.
+     * Applies one {@code supplier.catalog.updated} or {@code supplier.catalog.republish.completed}
+     * event and marks it processed in the same transaction.
      *
      * @param envelope the parsed event envelope, already de-duplicated by the dispatcher
      * @param eventId the envelope's non-blank {@code eventId}
      */
     public void handle(@NonNull JsonNode envelope, @NonNull String eventId) {
+        String eventType = envelope.path("eventType").stringValue(null);
         try {
             handlerTransaction.executeWithoutResult(_ -> {
-                applyUpdate(envelope);
+                if (SupplierCatalogRepublishCompletedV1.EVENT_TYPE.equals(eventType)) {
+                    reportRepublishGap(envelope);
+                } else {
+                    applyUpdate(envelope);
+                }
                 processedEventRepository.save(ProcessedEvent.builder()
                         .eventId(eventId)
                         .owner(OWNER)
@@ -222,6 +266,66 @@ public class SupplierCatalogEnrichmentHandler {
                 "Applied tread design vendorProfileId={} vendorVariantId={}",
                 payload.vendorProfileId(),
                 payload.vendorVariantId());
+    }
+
+    /**
+     * Compares the variants the owner just re-emitted for a vendor profile against the designs held
+     * for it here, and reports the difference (#2356).
+     *
+     * <p>Every {@code supplier.catalog.updated} creates or updates exactly one design keyed on
+     * {@code (vendorProfileId, vendorVariantId)} and nothing on this path deletes one, so after a
+     * re-publication has been applied this module holds at least as many designs as the owner
+     * re-emitted. Holding fewer means enrichments are missing.
+     *
+     * <p>The count is taken when this event is handled, and the events it counts are keyed per
+     * variant while this one is keyed per vendor profile. On a topic with more than one partition
+     * it can therefore be handled while re-emitted variants are still in flight, and a shortfall
+     * reported here can close by itself. The gauge holds the value until the profile's next
+     * re-publication restates it; a gap that survives a second one is real.
+     */
+    private void reportRepublishGap(JsonNode envelope) {
+        SupplierCatalogRepublishCompletedV1 payload =
+                objectMapper.treeToValue(envelope.path("payload"), SupplierCatalogRepublishCompletedV1.class);
+
+        long held = treadDesignRepository.countByVendorProfileId(payload.vendorProfileId());
+        long missing = Math.max(0, payload.variantCount() - held);
+        recordGap(payload.vendorProfileId(), missing);
+
+        if (missing > 0) {
+            log.warn(
+                    "MKCAT re-publication for vendorProfileId={} ({}) re-emitted {} designs but {} are held:"
+                            + " {} missing. Expected only while re-emitted events are still being applied;"
+                            + " if it persists after another re-publication, enrichments are being lost",
+                    payload.vendorProfileId(),
+                    payload.supplierRef(),
+                    payload.variantCount(),
+                    held,
+                    missing);
+        } else {
+            log.info(
+                    "MKCAT re-publication for vendorProfileId={} ({}) complete: {} designs re-emitted, {} held",
+                    payload.vendorProfileId(),
+                    payload.supplierRef(),
+                    payload.variantCount(),
+                    held);
+        }
+    }
+
+    /** Sets the vendor profile's gap gauge, registering it the first time the profile is seen. */
+    private void recordGap(UUID vendorProfileId, long missing) {
+        designGaps
+                .computeIfAbsent(vendorProfileId, id -> {
+                    AtomicLong value = new AtomicLong();
+                    if (meterRegistry != null) {
+                        Gauge.builder(DESIGN_GAP_METRIC, value, AtomicLong::get)
+                                .description("Tread designs the supplier re-emitted for a vendor profile that"
+                                        + " pos-catalog does not hold, as of the last MKCAT re-publication")
+                                .tag("vendorProfileId", id.toString())
+                                .register(meterRegistry);
+                    }
+                    return value;
+                })
+                .set(missing);
     }
 
     /** Wholesale replacement: the event carries the design's full text set on every apply. */

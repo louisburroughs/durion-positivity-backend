@@ -305,6 +305,71 @@ is keyed by event id alone and every consumer records every event it sees, so a 
 topic would record ids the first group still had to act on — silently dropping purchase orders or
 recoveries depending on which group won the race.
 
+### MKCAT re-publication on request (#2356)
+
+`supplier.catalog.republish.requested` on `supplier.commands.v1` (payload
+`SupplierCatalogRepublishRequestedV1`: `vendorProfileId`, `requestedBy`, optional `reason`) asks this
+module to re-emit **every** MKCAT tread design variant it has staged for one vendor profile. It is the
+ADR-0044 §4 administrative re-emit-all for marketing enrichment, the counterpart of the PRICAT
+re-publication above, and it exists because nothing else can bring a lost enrichment back:
+
+- a replay of the original `supplier.catalog.updated` event carries the event id the consumer already
+  recorded, so its `processed_events` guard skips it again;
+- an ordinary import publishes a variant only when its `contentHash` changed
+  (`MktCatVariantStager.stageAndPublish`), so a vendor that keeps sending the same content never
+  causes a second event;
+- the consumer cannot read the staged rows — ADR-0044 R1 forbids the synchronous call.
+
+`MktCatRepublisher` answers the command by reading `supplier_mktcat_variant` for the profile a page
+at a time (`pos.supplier.mktcat.republish-page-size`, default 200) and queueing each row through the
+outbox as a `supplier.catalog.updated` event with a **new `eventId`**, the row's own id as the record
+key, and the content exactly as staged — stored `contentHash`, stored texts and images, no vendor
+call. The run ends with one `supplier.catalog.republish.completed` event
+(`SupplierCatalogRepublishCompletedV1`: `vendorProfileId`, `supplierRef`, `variantCount`,
+`requestedBy`, `completedAt`), keyed on the vendor profile, which is what lets the consumer compare
+its own count against this module's.
+
+What it deliberately does not do:
+
+- **It does not touch the hash guard.** Nothing is written back to the staged rows, so the import
+  after a re-publication still sees the hash it stored and still publishes nothing for an unchanged
+  variant.
+- **It has no cooldown and no attempt cap**, unlike the PRICAT path. No consumer requests it
+  automatically, so there is no loop to bound. A redelivery of the same command stops at the
+  listener's event-id guard (the outbox rows and the `processed_events` mark commit together); a
+  *second* command re-emits everything again. That is acceptable only because the consumer is
+  idempotent on content: pos-catalog treats an unchanged `contentHash` for a design it already holds
+  as a no-op.
+- **It never emits a partial catalogue as if it were whole.** A staged row whose stored JSON cannot be
+  read back fails the whole run (`IllegalStateException`, rethrown by the listener as this module's
+  own inconsistent state). A profile with nothing staged in the command's tenant emits nothing, not
+  even a completion with a count of zero, and logs at error.
+
+The tenant is the command's: the record's `tenantId` header (else the transitional default tenant)
+binds it, the staged rows read are that tenant's, and the outbox stamps the same tenant on every
+re-emitted event.
+
+**Sending it.** There is no endpoint; like the PRICAT request it is a command on the topic. One
+command per vendor profile that has a `MARKETING_CATALOG` binding (`GET /v1/supplier/admin/profiles`
+lists them; `GET /v1/supplier/mktcat/{supplierRef}/variants` shows what is staged):
+
+```bash
+# supplier.commands.v1 — eventId must be a fresh UUID per command; a reused one is skipped as a repeat
+docker exec -i kafka-positivity /opt/kafka/bin/kafka-console-producer.sh \
+  --bootstrap-server localhost:9092 --topic supplier.commands.v1 <<'EOF'
+{"eventId":"<fresh uuid>","eventType":"supplier.catalog.republish.requested","schemaVersion":1,"aggregateId":"<vendorProfileId>","aggregateVersion":0,"occurredAtUtc":"<now, ISO-8601 UTC>","sourceService":"pos-catalog","payload":{"vendorProfileId":"<vendorProfileId>","requestedBy":"operator","reason":"#2356 recover lost MKCAT enrichments"}}
+EOF
+```
+
+Sent like this the record has no `tenantId` header and is processed as the default tenant
+(`pos.tenancy.default-tenant-id`), which is the alpha tenant. For any other tenant the header is
+required: add `--property parse.headers=true` and prefix the line with `tenantId:<tenant uuid>` and a
+tab.
+
+Expected on this side: a WARN `Re-published N MKCAT variants of vendor profile …` and `N + 1` new
+`supplier_event_outbox` rows. The consumer side, and how to read the result, is in
+`pos-catalog/README.md` → "Recovering lost enrichments".
+
 ### Gateway routing
 
 `Path=/supplier/**` with `StripPrefix=1`, plus the gateway's global `ApiVersionHeaderToPathFilter`:
@@ -629,4 +694,9 @@ nothing), then update the Angular SDK.
 - Re-publication accounting (`republish_count`, `last_republished_at`) is visible only in the logs and
   the table. An import stuck at the attempt cap is the signal an operator most needs and the admin API
   does not surface it yet.
+- The MKCAT re-publication is sent by an operator. Nothing requests it automatically and no staged
+  count is published outside a re-publication, so the staged-versus-held comparison in pos-catalog
+  is as fresh as the last command, not continuous. Publishing the count at the end of every sweep
+  would close that, at the cost of an event per sweep from an import that today emits nothing for
+  unchanged content.
 - `EndpointBindingRequest.version` is bounded but not validated against the adapter registry.

@@ -1,11 +1,8 @@
 package com.positivity.supplier.internal.mktcat.service;
 
-import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.DomainTopics;
 import com.positivity.domainevents.supplier.SupplierCatalogEnrichmentImage;
 import com.positivity.domainevents.supplier.SupplierCatalogEnrichmentText;
-import com.positivity.domainevents.supplier.SupplierCatalogUpdatedV1;
-import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.supplier.internal.domain.model.MarketingVariant;
 import com.positivity.supplier.internal.domain.model.SupplierRef;
 import com.positivity.supplier.internal.entity.SupplierMktCatVariantEntity;
@@ -37,8 +34,6 @@ import tools.jackson.databind.ObjectMapper;
 @Service
 @RequiredArgsConstructor
 public class MktCatVariantStager {
-
-    private static final String SOURCE = "pos-supplier";
 
     private final SupplierMktCatVariantRepository variantRepository;
     private final SupplierOutboxEventWriter outboxEventWriter;
@@ -96,37 +91,10 @@ public class MktCatVariantStager {
         row.setLastPublishedAt(now);
         SupplierMktCatVariantEntity saved = variantRepository.save(row);
 
+        // Read off the staged row rather than the vendor document, so this publication and a later
+        // re-publication of the same row (MktCatRepublisher, #2356) cannot describe it differently.
         outboxEventWriter.publish(
-                DomainTopics.events("supplier"),
-                new DomainEventEnvelope<>(
-                        UUIDv7Generator.generate(),
-                        SupplierCatalogUpdatedV1.EVENT_TYPE,
-                        SupplierCatalogUpdatedV1.SCHEMA_VERSION,
-                        // Keyed on the staged row, so every enrichment for one variant lands on one
-                        // partition in order: a stale republication overtaking a newer one would put
-                        // withdrawn marketing copy back on a product.
-                        saved.getSupplierMktCatVariantId(),
-                        0L,
-                        now,
-                        SOURCE,
-                        // tenantId: stamped by the outbox writer from the bound tenant (ADR-0062 §3)
-                        null,
-                        null,
-                        SOURCE,
-                        new SupplierCatalogUpdatedV1(
-                                vendorProfileId,
-                                supplierRef.value(),
-                                variant.vendorVariantId(),
-                                variant.brand(),
-                                variant.treadDesign(),
-                                variant.treadDesign2(),
-                                variant.productName(),
-                                variant.vehicleType(),
-                                variant.seasonality(),
-                                contentHash,
-                                texts,
-                                images,
-                                now)));
+                DomainTopics.events("supplier"), MktCatEventFactory.variantUpdated(saved, texts, images, now, now));
         return true;
     }
 }

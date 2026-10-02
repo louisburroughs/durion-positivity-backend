@@ -170,11 +170,11 @@ touched by this path, so a vendor's marketing feed can never redefine what a pro
 The former second group, `pos-catalog-supplier-catalog-enrichment`, is retired: `processed_events` is
 keyed by `event_id` alone, so two groups on one topic suppressed each other (#2177). A new supplier
 event type gets a branch in `SupplierEventsListener`, not a listener of its own. Enrichments the
-race already lost are not recovered by this change or by a replay: the PRICAT group recorded every
+race already lost are not recovered by that change or by a replay: the PRICAT group recorded every
 skipped `supplier.catalog.updated` id as ignored, so the same id republished is skipped again, and
-pos-supplier only re-publishes a design whose `contentHash` changed. Recovering them means deleting
-the `processed_events` rows for `supplier.catalog.updated` ids that have no matching `tread_design`
-and resetting the group's offsets, or an owner-side re-emit of the MKCAT designs under new ids.
+an ordinary pos-supplier import only re-publishes a design whose `contentHash` changed. They are
+recovered by the owner's re-emit-all (#2356, *Recovering lost enrichments* below), which delivers
+every staged design again under a new event id.
 An unchanged republication (same `contentHash`) is a no-op; a changed one is
 applied and re-matched, last write wins. Candidates are deliberately scoped, never the whole catalog:
 only the products the design's own vendor has actually priced via PRICAT
@@ -189,6 +189,57 @@ matching nothing is an ordinary, queryable-for-review outcome, not a failure.
 both under `catalog:tread_design:view`; the only write is the reviewer's `resolveTreadDesign` (below).
 An enrichment exists only because a vendor said so, and this module never mutates product identity
 or structure to accommodate one.
+
+### Recovering lost enrichments (#2356)
+
+An enrichment this module never applied leaves no trace — a design that never arrived looks exactly
+like one the vendor never published — and neither an outbox replay nor a consumer-group offset reset
+brings it back, because the original event ids are already in `processed_events`. Recovery is the
+owner's re-emit-all (ADR-0044 §4): pos-supplier answers a `supplier.catalog.republish.requested`
+command by publishing every MKCAT variant it has staged for one vendor profile again, as
+`supplier.catalog.updated` events with **new** event ids and the stored `contentHash`, and closes the
+run with `supplier.catalog.republish.completed`. Do **not** repair this by deleting
+`processed_events` rows or resetting offsets.
+
+What this module does with a re-emit:
+
+- **A design it already holds with the same `contentHash` is untouched**, whatever its state. The
+  handler returns before anything is written: no re-match, no candidate rows replaced, no product
+  attached or detached, `matchState` and `matchStateAt` unchanged — so no review decision is reset
+  and no worklist entry re-opens or re-ages. Only the delivery is recorded in `processed_events`.
+  This is what makes re-emitting everything safe, and why the owner needs no cooldown.
+- **A design it does not hold is applied and matched** like any first arrival: `UNMATCHED`, `REVIEW`
+  or `MATCHED` by the confidence tiers below. These are the recovered enrichments.
+- **A design it holds with an older `contentHash`** (a later change was the one lost) is applied as a
+  changed republication: content replaced and re-matched, except that a design a reviewer attached
+  by hand keeps its attachments (#1645).
+
+**Seeing the gap.** `supplier.catalog.republish.completed` carries `variantCount`, the number of
+variants pos-supplier holds and re-emitted for the vendor profile. `SupplierCatalogEnrichmentHandler`
+compares it with the `tread_design` rows held for that profile and publishes the shortfall as the
+gauge `catalog.enrichment.design.gap` (tag `vendorProfileId`; 0 when nothing is missing), with a
+WARN naming both counts when it is above zero and an INFO otherwise. It only reports: a shortfall
+does not request another re-emit, because the re-emit that just completed was the remedy. The
+comparison is made when the completion event is handled, and that event is keyed on the vendor
+profile while each design is keyed on its own variant — on a topic with more than one partition the
+completion can be handled while re-emitted designs are still being applied, so a gap right after a
+re-publication can be transient. The gauge keeps the last comparison until the profile's next
+re-publication (and resets on restart); a gap that is still there after a second command is real.
+
+**Procedure** (alpha, per vendor profile with a marketing catalogue; the command and its exact
+shape are in `pos-supplier/README.md` → "MKCAT re-publication on request"):
+
+1. Send one `supplier.catalog.republish.requested` command naming the `vendorProfileId`.
+2. pos-supplier logs `Re-published N MKCAT variants of vendor profile …`.
+3. This module logs `MKCAT re-publication for vendorProfileId=… complete: N designs re-emitted, M held`
+   or the WARN above. Designs that were missing now appear in `GET /v1/catalog/tread-designs/unmatched`
+   (the review worklist) or attached to their products; designs already held are unchanged.
+4. If the WARN reported a gap, send the command once more after the consumer has caught up and
+   confirm the gauge returns to 0. Sending it again is harmless.
+
+Matching is scoped to products the vendor has priced via PRICAT, so run the recovery after the
+vendor's price catalog has been applied; a design recovered before that parks as `UNMATCHED` and is
+re-matched automatically only when its content next changes (a reviewer can still attach it by hand).
 
 ### Enrichment review (#1645)
 

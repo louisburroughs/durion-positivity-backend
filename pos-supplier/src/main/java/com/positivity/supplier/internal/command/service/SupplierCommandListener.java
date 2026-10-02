@@ -1,8 +1,10 @@
 package com.positivity.supplier.internal.command.service;
 
+import com.positivity.domainevents.supplier.SupplierCatalogRepublishRequestedV1;
 import com.positivity.domainevents.supplier.SupplierOrderRequestedV1;
 import com.positivity.domainevents.supplier.SupplierPriceCatalogRepublishRequestedV1;
 import com.positivity.supplier.internal.entity.ProcessedEvent;
+import com.positivity.supplier.internal.mktcat.service.MktCatRepublisher;
 import com.positivity.supplier.internal.order.service.TransmissionIntentWriter;
 import com.positivity.supplier.internal.pricecatalog.service.PriceCatalogRepublisher;
 import com.positivity.supplier.internal.repository.ProcessedEventRepository;
@@ -23,7 +25,8 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * The single consumer of {@code supplier.commands.v1} (ADR-0049 §3): purchase-order transmission
- * requests from pos-order, and PRICAT re-publication requests from pos-catalog (ADR-0044 §4).
+ * requests from pos-order, PRICAT re-publication requests from pos-catalog, and MKCAT
+ * re-publication requests sent on pos-catalog's behalf (ADR-0044 §4, #2356).
  *
  * <h2>Why one consumer and not one per command</h2>
  *
@@ -40,7 +43,7 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <h2>This consumer does no network I/O</h2>
  *
- * Both branches record intent and stop — a transmission intent for the scheduler to dispatch, or
+ * Every branch records intent and stops — a transmission intent for the scheduler to dispatch, or
  * outbox rows for the publisher to drain. A vendor call or a broker send inside a Kafka transaction
  * is exactly the ambiguity ADR-0052 exists to prevent.
  *
@@ -54,7 +57,11 @@ import tools.jackson.databind.ObjectMapper;
  *       blocking the partition would stall every other tenant's commands behind one bad message.
  *   <li><strong>A repeat</strong> — a no-op. The event-id guard covers redelivery; beyond it, an
  *       order that already has an active intent is ignored by {@link TransmissionIntentWriter} and
- *       a re-publication inside its cooldown is refused by {@link PriceCatalogRepublisher}.
+ *       a re-publication inside its cooldown is refused by {@link PriceCatalogRepublisher}. An
+ *       MKCAT re-publication has no such second guard: a new command for the same vendor profile
+ *       re-emits every staged variant again ({@link MktCatRepublisher}). That is acceptable only
+ *       because the consumer is idempotent — pos-catalog treats an unchanged {@code contentHash}
+ *       as a no-op — so the repeat costs topic volume and changes nothing.
  * </ul>
  *
  * <h2>Transaction shape (#2146)</h2>
@@ -75,7 +82,7 @@ public class SupplierCommandListener {
     /** Producing domain of a purchase-order command, per the repo-wide {@code processed_events} convention. */
     static final String ORDER_OWNER = "order";
 
-    /** Producing domain of a PRICAT re-publication request. */
+    /** Producing domain of a re-publication request, PRICAT or MKCAT. */
     static final String CATALOG_OWNER = "catalog";
 
     /** Owner recorded for a command this module does not handle and whose source is unstated. */
@@ -86,6 +93,7 @@ public class SupplierCommandListener {
     private final ProcessedEventRepository processedEventRepository;
     private final TransmissionIntentWriter intentWriter;
     private final PriceCatalogRepublisher republisher;
+    private final MktCatRepublisher mktCatRepublisher;
 
     /** A handler and its processed mark in one transaction; a failure's mark in its own. */
     private final TransactionTemplate handlerTransaction;
@@ -96,12 +104,14 @@ public class SupplierCommandListener {
             ProcessedEventRepository processedEventRepository,
             TransmissionIntentWriter intentWriter,
             PriceCatalogRepublisher republisher,
+            MktCatRepublisher mktCatRepublisher,
             PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.intentWriter = intentWriter;
         this.republisher = republisher;
+        this.mktCatRepublisher = mktCatRepublisher;
         this.handlerTransaction = new TransactionTemplate(transactionManager);
         this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -133,6 +143,8 @@ public class SupplierCommandListener {
                     applyOrderRequested(envelope, eventId);
                 } else if (SupplierPriceCatalogRepublishRequestedV1.EVENT_TYPE.equals(eventType)) {
                     applyRepublishRequested(envelope);
+                } else if (SupplierCatalogRepublishRequestedV1.EVENT_TYPE.equals(eventType)) {
+                    applyCatalogRepublishRequested(envelope);
                 } else {
                     log.debug("Ignoring supplier command type={} eventId={}", eventType, eventId);
                 }
@@ -185,6 +197,12 @@ public class SupplierCommandListener {
         republisher.republish(request);
     }
 
+    private void applyCatalogRepublishRequested(JsonNode envelope) {
+        SupplierCatalogRepublishRequestedV1 request =
+                objectMapper.treeToValue(envelope.path("payload"), SupplierCatalogRepublishRequestedV1.class);
+        mktCatRepublisher.republish(request);
+    }
+
     /**
      * The producing domain, so a manifest scan keyed on owner reconciles against the right
      * producer. Commands this module ignores still get an owner from the envelope's source, because
@@ -194,7 +212,10 @@ public class SupplierCommandListener {
         if (SupplierOrderRequestedV1.EVENT_TYPE.equals(eventType)) {
             return ORDER_OWNER;
         }
-        if (SupplierPriceCatalogRepublishRequestedV1.EVENT_TYPE.equals(eventType)) {
+        if (SupplierPriceCatalogRepublishRequestedV1.EVENT_TYPE.equals(eventType)
+                || SupplierCatalogRepublishRequestedV1.EVENT_TYPE.equals(eventType)) {
+            // The MKCAT request is recorded against the catalog domain too: pos-catalog is the
+            // consumer it recovers, whether pos-catalog or an operator put it on the topic.
             return CATALOG_OWNER;
         }
         String source = envelope.path("source").stringValue(null);

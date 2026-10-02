@@ -5,13 +5,14 @@
  *
  * The commands here are addressed to different parts of this module — a purchase-order request
  * belongs to {@code internal.order}, a PRICAT re-publication request to
- * {@code internal.pricecatalog} — but they arrive on one topic, and one topic can only safely have
- * one consumer group in this module: the {@code processed_events} idempotency log is keyed by event
- * id alone, so a second group would record ids the first group still needed to act on.
+ * {@code internal.pricecatalog}, an MKCAT re-publication request to {@code internal.mktcat} — but
+ * they arrive on one topic, and one topic can only safely have one consumer group in this module:
+ * the {@code processed_events} idempotency log is keyed by event id alone, so a second group would
+ * record ids the first group still needed to act on.
  *
- * <p>Putting the consumer in either domain slice would make that slice depend on the other. Putting
- * it in {@code internal.service} would point a shared package at both domains while both already
- * depend on it. So the topic gets a slice of its own that depends on the domains and is depended on
+ * <p>Putting the consumer in any one domain slice would make that slice depend on the others.
+ * Putting it in {@code internal.service} would point a shared package at those domains while they
+ * already depend on it. So the topic gets a slice of its own that depends on the domains and is depended on
  * by nothing.
  *
  * <h2>What belongs here</h2>

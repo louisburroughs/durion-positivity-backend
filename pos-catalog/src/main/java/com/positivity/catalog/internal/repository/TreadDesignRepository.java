@@ -16,6 +16,12 @@ public interface TreadDesignRepository extends JpaRepository<TreadDesignEntity, 
     Optional<TreadDesignEntity> findByVendorProfileIdAndVendorVariantId(UUID vendorProfileId, String vendorVariantId);
 
     /**
+     * How many designs this module holds for one vendor profile — the figure compared against the
+     * count the owner states when it closes an MKCAT re-publication (#2356).
+     */
+    long countByVendorProfileId(UUID vendorProfileId);
+
+    /**
      * The review worklist (#1645): designs in any of {@code states}, optionally narrowed to one
      * vendor profile, most recently changed first.
      *

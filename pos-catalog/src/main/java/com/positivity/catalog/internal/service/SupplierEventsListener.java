@@ -2,6 +2,7 @@ package com.positivity.catalog.internal.service;
 
 import com.positivity.catalog.internal.entity.ProcessedEvent;
 import com.positivity.catalog.internal.repository.ProcessedEventRepository;
+import com.positivity.domainevents.supplier.SupplierCatalogRepublishCompletedV1;
 import com.positivity.domainevents.supplier.SupplierCatalogUpdatedV1;
 import com.positivity.domainevents.supplier.SupplierPriceCatalogImportCompletedV1;
 import com.positivity.domainevents.supplier.SupplierPriceCatalogUpdatedV1;
@@ -35,6 +36,15 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <p>So the topic gets one consumer that dispatches by event type. Adding a new supplier event type
  * means adding a branch here, not a listener elsewhere.
+ *
+ * <h2>What that race lost stays lost to a replay (#2356)</h2>
+ *
+ * The guard below is also why the enrichments #2177 dropped cannot be replayed: their ids are in
+ * {@code processed_events}, recorded as ignored, and the same id delivered again stops here again.
+ * They come back only as <em>new</em> events — pos-supplier's answer to
+ * {@code supplier.catalog.republish.requested}, which re-emits every staged variant under a new id
+ * and closes with {@code supplier.catalog.republish.completed}. Both types route to
+ * {@link SupplierCatalogEnrichmentHandler}.
  *
  * <h2>Who marks what</h2>
  *
@@ -102,7 +112,8 @@ public class SupplierEventsListener {
         if (SupplierPriceCatalogUpdatedV1.EVENT_TYPE.equals(eventType)
                 || SupplierPriceCatalogImportCompletedV1.EVENT_TYPE.equals(eventType)) {
             priceCatalogHandler.handle(envelope, eventId);
-        } else if (SupplierCatalogUpdatedV1.EVENT_TYPE.equals(eventType)) {
+        } else if (SupplierCatalogUpdatedV1.EVENT_TYPE.equals(eventType)
+                || SupplierCatalogRepublishCompletedV1.EVENT_TYPE.equals(eventType)) {
             enrichmentHandler.handle(envelope, eventId);
         } else {
             recordIgnored(eventId, eventType);
