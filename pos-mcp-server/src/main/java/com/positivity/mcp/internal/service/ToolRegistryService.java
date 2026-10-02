@@ -69,14 +69,13 @@ public class ToolRegistryService {
      * ranking rather than being collapsed to the admin tool alone.
      *
      * <p>#2371 added the vocabulary of accounts the admin tool does not hold: a customer's or
-     * party's (CRM), a supplier's or vendor's, a bank account, a GL or ledger account, an account
-     * balance, and the fr/es words for customer, supplier and bank. The {@code AdminFacadeTool}
-     * answers about platform users, roles, permissions and the audit log only, so "show the
-     * customer's account state" must reach semantic ranking even though {@code account state} is an
-     * admin phrase.
+     * party's (CRM), a supplier's or vendor's, a bank account, a ledger account, an account balance,
+     * and the fr/es words for customer, supplier and bank. The {@code AdminFacadeTool} answers about
+     * platform users, roles, permissions and the audit log only, so "show the customer's account
+     * state" must reach semantic ranking even though {@code account state} is an admin phrase.
      *
      * <p>The fr/es terms follow the standard accounting and banking usage of each language: fr
-     * {@code client} ("comptes clients" is the French term for accounts receivable, Sources [1]) and
+     * {@code client} ("comptes clients" is the French term for accounts receivable, [1]) and
      * {@code fournisseur} ("comptes fournisseurs", accounts payable, [2]); es {@code cliente} [4] and
      * {@code proveedor} [5]. A bank account is "compte bancaire", "compte en banque" or "compte de
      * banque" in French [3] and "cuenta bancaria" in Spanish, where "bancario, bancaria" is the
@@ -96,14 +95,15 @@ public class ToolRegistryService {
      * <p>Sources (accessed 2026-10-02): [1] "accounts receivable", TERMIUM Plus, Translation Bureau,
      * Government of Canada,
      * https://www.btb.termiumplus.gc.ca/tpv2alpha/alpha-fra.html?lang=fra&amp;i=1&amp;index=alt&amp;srchtxt=ACCOUNTS+RECEIVABLE;
-     * [2] "accounts payable", TERMIUM Plus,
+     * [2] "accounts payable", TERMIUM Plus, Translation Bureau, Government of Canada,
      * https://www.btb.termiumplus.gc.ca/tpv2alpha/alpha-fra.html?lang=fra&amp;i=&amp;index=alt&amp;srchtxt=ACCOUNTS+PAYABLE;
      * [3] "compte bancaire", Grand dictionnaire terminologique, Office québécois de la langue
      * française, https://vitrinelinguistique.oqlf.gouv.qc.ca/fiche-gdt/fiche/8381273/compte-bancaire;
      * [4] "cliente", Diccionario panhispánico del español jurídico, Real Academia Española,
      * https://dpej.rae.es/lema/cliente; [5] "proveedor, proveedora", Diccionario de la lengua
-     * española, Real Academia Española, https://dle.rae.es/proveedor; [6] "banco", ibid.,
-     * https://dle.rae.es/banco; [7] "bancario, bancaria", ibid., https://dle.rae.es/bancario.
+     * española, Real Academia Española, https://dle.rae.es/proveedor; [6] "banco", Diccionario de la
+     * lengua española, Real Academia Española, https://dle.rae.es/banco; [7] "bancario, bancaria",
+     * Diccionario de la lengua española, Real Academia Española, https://dle.rae.es/bancario.
      */
     private static final Set<String> FAST_PATH_VETO_TERMS = Set.of(
             "receivable",
