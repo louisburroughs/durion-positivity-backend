@@ -2,11 +2,14 @@ package com.positivity.workorder.internal.service;
 
 import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -55,9 +58,12 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -978,6 +984,153 @@ class ReplicaAndManifestListenerContractTest {
             assertThat(meterRegistry.find("replica.manifest.skipped").counters())
                     .extracting(c -> c.getId().getTag("owner"))
                     .containsExactlyInAnyOrder("customer", "location");
+        }
+
+        private Consumer<String> customerManifests() {
+            CustomerManifestListener listener = new CustomerManifestListener(
+                    processedEventRepository, kafkaTemplate, objectMapper, meterRegistryProvider);
+            ReflectionTestUtils.setField(listener, "customerCommandsTopic", "customer.commands.v1");
+            return listener::onManifest;
+        }
+
+        private Consumer<String> locationManifests() {
+            LocationManifestListener listener = new LocationManifestListener(
+                    processedEventRepository, kafkaTemplate, objectMapper, meterRegistryProvider);
+            ReflectionTestUtils.setField(listener, "locationCommandsTopic", "location.commands.v1");
+            return listener::onManifest;
+        }
+
+        private Consumer<String> inventoryManifests() {
+            InventoryManifestListener listener = new InventoryManifestListener(
+                    processedEventRepository, kafkaTemplate, objectMapper, meterRegistryProvider);
+            ReflectionTestUtils.setField(listener, "inventoryCommandsTopic", "inventory.commands.v1");
+            return listener::onManifest;
+        }
+
+        private Consumer<String> invoiceManifests() {
+            InvoiceManifestListener listener = new InvoiceManifestListener(
+                    processedEventRepository, kafkaTemplate, objectMapper, meterRegistryProvider);
+            ReflectionTestUtils.setField(listener, "invoiceCommandsTopic", "invoice.commands.v1");
+            return listener::onManifest;
+        }
+
+        private Consumer<String> peopleManifests() {
+            PeopleManifestListener listener = new PeopleManifestListener(
+                    processedEventRepository, kafkaTemplate, objectMapper, meterRegistryProvider);
+            ReflectionTestUtils.setField(listener, "peopleCommandsTopic", "people.commands.v1");
+            return listener::onManifest;
+        }
+
+        /** Every manifest listener of the module, keyed by the {@code owner} tag of its drift metric. */
+        private Map<String, Consumer<String>> manifestListeners() {
+            Map<String, Consumer<String>> listeners = new LinkedHashMap<>();
+            listeners.put("customer", customerManifests());
+            listeners.put("location", locationManifests());
+            listeners.put("inventory", inventoryManifests());
+            listeners.put("invoice", invoiceManifests());
+            listeners.put("people", peopleManifests());
+            return listeners;
+        }
+
+        /**
+         * The ledger read is a manifest listener's only data access and sits outside both of its
+         * catch blocks, so a lock or query timeout there must leave {@code onManifest} for the
+         * container's error handler (retry with backoff, then {@code {topic}.dlq}, ADR-0044 §4)
+         * instead of being logged and committed as consumed. Nothing is counted or sent before
+         * the read, so the redelivery starts from scratch.
+         */
+        private void assertTransientLedgerFailurePropagates(Consumer<String> onManifest) {
+            when(processedEventRepository.findEventIdsInRange(anyString(), any(), anyString(), anyString()))
+                    .thenThrow(new QueryTimeoutException("lock wait"));
+
+            assertThatThrownBy(() -> onManifest.accept(manifestMessage(2, "owner-checksum")))
+                    .isInstanceOf(QueryTimeoutException.class);
+
+            verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
+            assertThat(meterRegistry.find("replica.drift").counters()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("#2354 customer manifest: a transient database error on the ledger read propagates so the"
+                + " container retries")
+        void customerManifestTransientFailurePropagates() {
+            assertTransientLedgerFailurePropagates(customerManifests());
+        }
+
+        @Test
+        @DisplayName("#2354 location manifest: a transient database error on the ledger read propagates so the"
+                + " container retries")
+        void locationManifestTransientFailurePropagates() {
+            assertTransientLedgerFailurePropagates(locationManifests());
+        }
+
+        @Test
+        @DisplayName("#2354 inventory manifest: a transient database error on the ledger read propagates so the"
+                + " container retries")
+        void inventoryManifestTransientFailurePropagates() {
+            assertTransientLedgerFailurePropagates(inventoryManifests());
+        }
+
+        @Test
+        @DisplayName("#2354 invoice manifest: a transient database error on the ledger read propagates so the"
+                + " container retries")
+        void invoiceManifestTransientFailurePropagates() {
+            assertTransientLedgerFailurePropagates(invoiceManifests());
+        }
+
+        @Test
+        @DisplayName("#2354 people manifest: a transient database error on the ledger read propagates so the"
+                + " container retries")
+        void peopleManifestTransientFailurePropagates() {
+            assertTransientLedgerFailurePropagates(peopleManifests());
+        }
+
+        @Test
+        @DisplayName("#2354 every manifest listener still swallows a permanent failure: an unparseable manifest"
+                + " and a failed replay publish")
+        void permanentFailuresStaySwallowed() {
+            when(processedEventRepository.findEventIdsInRange(anyString(), any(), anyString(), anyString()))
+                    .thenReturn(List.of());
+            when(kafkaTemplate.send(any(ProducerRecord.class))).thenThrow(new IllegalStateException("broker down"));
+
+            manifestListeners().forEach((owner, onManifest) -> {
+                assertThatCode(() -> onManifest.accept("{not json"))
+                        .as("%s: unparseable manifest", owner)
+                        .doesNotThrowAnyException();
+                assertThat(driftCount(owner)).isZero();
+
+                assertThatCode(() -> onManifest.accept(manifestMessage(3, "owner-checksum")))
+                        .as("%s: failed replay publish", owner)
+                        .doesNotThrowAnyException();
+                assertThat(driftCount(owner)).isEqualTo(1.0);
+            });
+        }
+
+        @Test
+        @DisplayName("#2354 every manifest listener: a redelivered manifest re-runs the comparison and repeats the"
+                + " same replay request for the same window")
+        @SuppressWarnings("unchecked")
+        void redeliveryRepeatsTheSameReplayRequest() {
+            when(processedEventRepository.findEventIdsInRange(anyString(), any(), anyString(), anyString()))
+                    .thenReturn(List.of());
+
+            manifestListeners().forEach((owner, onManifest) -> {
+                clearInvocations(kafkaTemplate);
+                String manifest = manifestMessage(3, "owner-checksum");
+
+                onManifest.accept(manifest);
+                onManifest.accept(manifest);
+
+                ArgumentCaptor<ProducerRecord<String, String>> sent = ArgumentCaptor.forClass(ProducerRecord.class);
+                verify(kafkaTemplate, times(2)).send(sent.capture());
+                ProducerRecord<String, String> first = sent.getAllValues().get(0);
+                ProducerRecord<String, String> second = sent.getAllValues().get(1);
+                assertThat(first.topic()).as(owner).isEqualTo(owner + ".commands.v1");
+                assertThat(first.key()).as(owner).isEqualTo(WINDOW_START.toString());
+                assertThat(second.topic()).as(owner).isEqualTo(first.topic());
+                assertThat(second.key()).as(owner).isEqualTo(first.key());
+                assertThat(second.value()).as(owner).isEqualTo(first.value());
+            });
         }
     }
 
