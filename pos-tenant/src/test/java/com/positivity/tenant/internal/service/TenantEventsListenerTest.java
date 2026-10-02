@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -76,5 +77,15 @@ class TenantEventsListenerTest {
         doThrow(new QueryTimeoutException("slow")).when(handler).apply(any(), any());
         assertThatThrownBy(() -> listener.onEvent(event("tenant.provisioned", TENANT.toString())))
                 .isInstanceOf(QueryTimeoutException.class);
+    }
+
+    @Test
+    @DisplayName("a lost-connection database failure propagates so the container retries and dead-letters")
+    void lostConnectionFailurePropagates() {
+        doThrow(new DataAccessResourceFailureException("connection reset"))
+                .when(handler)
+                .apply(any(), any());
+        assertThatThrownBy(() -> listener.onEvent(event("tenant.provisioned", TENANT.toString())))
+                .isInstanceOf(DataAccessResourceFailureException.class);
     }
 }
