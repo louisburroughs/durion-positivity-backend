@@ -30,6 +30,14 @@ public interface FinancialReportingService {
      * Aggregates all POSTED journal lines within the period, grouped by
      * statement line mappings.
      *
+     * On a line, each mapped account contributes its balance on its normal side
+     * (revenue as credits minus debits, expenses as debits minus credits), then the
+     * mapping's operation applies. Total revenue and total expenses are taken from
+     * the account types instead: every mapped REVENUE account counts once as
+     * credits minus debits, every mapped EXPENSE account once as debits minus
+     * credits. Neither the statement line code nor the operation plays a part in
+     * the totals (issue #2394).
+     *
      * @param startDate period start date (inclusive)
      * @param endDate   period end date (inclusive)
      * @return income statement report with revenue, expenses, and net income
@@ -43,6 +51,13 @@ public interface FinancialReportingService {
      *
      * Aggregates all POSTED journal lines up to and including the specified date,
      * grouped by statement line mappings.
+     *
+     * On a line, each mapped account contributes its balance on its normal side
+     * (assets as debits minus credits, liabilities and equity as credits minus
+     * debits), then the mapping's operation applies. The three totals are taken
+     * from the account types, each mapped account once: assets as debits minus
+     * credits, liabilities and equity as credits minus debits. Revenue and expense
+     * accounts mapped here are earnings not yet closed and count toward equity.
      *
      * Validates: Assets = Liabilities + Equity (within tolerance).
      *
@@ -82,8 +97,9 @@ public interface FinancialReportingService {
     /**
      * Drill down from a statement line to see contributing GL accounts.
      *
-     * Returns all accounts mapped to the specified statement line code,
-     * with their period balances.
+     * Returns all accounts mapped to the specified statement line code, each
+     * with the amount it contributes to that line for the period (signed as on
+     * the statement, so the rows add up to the line).
      *
      * Example: "PL_EXPENSE_OPERATING" → [Salaries: $50k, Rent: $20k, Utilities:
      * $5k]

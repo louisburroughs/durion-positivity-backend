@@ -178,7 +178,8 @@ class JournalEntryReversalNetZeroContractBehaviorIT extends BaseContractIntegrat
                 .get(REVENUE_LINE);
         BigDecimal augustCashBefore =
                 reportingService.generateBalanceSheet(AUG_END).getLineItems().get(CASH_LINE);
-        assertThat(augustRevenueBefore).isEqualByComparingTo("-100.00");
+        // Revenue reads on its normal (credit) side: Cr Sales 100 is +100 (issue #2394).
+        assertThat(augustRevenueBefore).isEqualByComparingTo("100.00");
 
         journalEntryService.reverseJournalEntry(original, "reversed in September", LocalDate.of(2026, 9, 5));
 
@@ -196,7 +197,7 @@ class JournalEntryReversalNetZeroContractBehaviorIT extends BaseContractIntegrat
                         .getLineItems()
                         .get(REVENUE_LINE))
                 .as("September carries the reversal")
-                .isEqualByComparingTo("100.00");
+                .isEqualByComparingTo("-100.00");
         assertThat(ledgerSection(
                                 reportingService.generateGeneralLedger(
                                         cash.getGlAccountId().toString(), SEP_START, SEP_END),

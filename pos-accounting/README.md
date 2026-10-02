@@ -256,6 +256,32 @@ Accounting is event-only inbound and outbound (ADR-0044 §6). Invoice revenue re
   writer is conditional on `pos.accounting.kafka.enabled`; with Kafka off the posting still happens and the
   publish is a no-op. (`event_outbox` / `OutboxProcessor` is the unrelated in-process Spring-event outbox.)
 
+## Statement Lines: Signs and Totals (issue #2394)
+
+The income statement and balance sheet are built from `statement_line_mappings` (GL account → statement line,
+with an operation). `FinancialReportingServiceImpl` reads the account's type (`gl_account.account_type`) for both
+the sign and the totals; the statement line code is a label only and carries no meaning.
+
+- **Line amounts** — each mapped account contributes its posted balance on its normal side: assets and expenses
+  as debits minus credits; liabilities, equity and revenue as credits minus debits. So a revenue or liability
+  account mapped with `SUM` reads as a positive amount. `SUBTRACT` takes that amount off the line. `NEGATE`
+  keeps its older meaning, credits minus debits whatever the type: on a credit-normal account it equals `SUM`
+  (the sign is not flipped twice), on a debit-normal account it reverses the balance. The account drill-down
+  returns the same per-account amounts, so its rows add up to the line.
+- **Totals** — taken from the account types, each mapped account once, independent of line code and operation.
+  Income statement: `totalRevenue` is credits minus debits over the mapped `REVENUE` accounts, `totalExpenses`
+  debits minus credits over the mapped `EXPENSE` accounts, `netIncome` the difference. Balance sheet:
+  `totalAssets` from `ASSET` accounts, `totalLiabilities` from `LIABILITY` accounts, `totalEquity` from `EQUITY`
+  accounts plus any mapped `REVENUE` / `EXPENSE` accounts (earnings not yet closed), the last three as credits
+  minus debits.
+- **Mixed lines** — a line may aggregate accounts of different types (a gross-profit line of sales less cost of
+  sales). It is not rejected: the line shows the combined amount and each account still goes to its own total.
+  An asset, liability or equity account mapped onto the income statement shows on its line and joins neither
+  total (logged at WARN).
+- **Only mapped accounts count.** The shipped seed (`R__seed_reference_accounting.sql`) maps one income
+  statement line, `REVENUE` over 4000 Service Revenue, and no balance sheet line; no expense account is mapped,
+  so on the seed alone `totalExpenses` is zero and `netIncome` equals revenue.
+
 ## Payment Application Concurrency
 
 `ReceivablePayment` uses JPA optimistic locking (`@Version`, V10). `RetryingPaymentApplicationService`
