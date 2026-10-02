@@ -40,6 +40,10 @@ class InvoicingPaymentsGuideTest {
     private static final Path MODULE_DIR = Paths.get(System.getProperty("user.dir"));
     private static final Path INVOICE_ENUMS =
             MODULE_DIR.resolve("../pos-invoice/src/main/java/com/positivity/invoice/internal/enums");
+    private static final Path INVOICE_SRC =
+            MODULE_DIR.resolve("../pos-invoice/src/main/java/com/positivity/invoice/internal");
+    private static final Path ACCOUNTING_SRC =
+            MODULE_DIR.resolve("../pos-accounting/src/main/java/com/positivity/accounting/internal");
     private static final Path ACCOUNTING_ENUMS =
             MODULE_DIR.resolve("../pos-accounting/src/main/java/com/positivity/accounting/internal/enums");
 
@@ -170,6 +174,49 @@ class InvoicingPaymentsGuideTest {
                 .containsAll(named);
     }
 
+    @Test
+    @DisplayName("a declined payment persists nothing: class-level transaction, unchecked decline exception")
+    void declinedPaymentRollsBack() throws IOException {
+        String service = Files.readString(INVOICE_SRC.resolve("service/PaymentServiceImpl.java"));
+        String exception = Files.readString(INVOICE_SRC.resolve("exception/PaymentDeclinedException.java"));
+
+        assertThat(service).containsPattern("(?m)^@Transactional\\s*\\npublic class PaymentServiceImpl");
+        assertThat(service).doesNotContain("noRollbackFor");
+        assertThat(exception).contains("class PaymentDeclinedException extends RuntimeException");
+        assertThat(flatGuideText()).contains("leaves **no** payment intent").contains("leaves the intent `AUTHORIZED`");
+    }
+
+    @Test
+    @DisplayName("application reversal: single reversal refused for multi-invoice requests, whole-payment endpoint")
+    void applicationReversalRulesMatchTheCode() throws IOException {
+        String handler = Files.readString(ACCOUNTING_SRC.resolve("config/AccountingExceptionHandler.java"));
+        String controller = Files.readString(ACCOUNTING_SRC.resolve("controller/PaymentApplicationController.java"));
+        String permissions = Files.readString(ACCOUNTING_SRC.resolve("security/AccountingPermissions.java"));
+        String doc = flatGuideText();
+
+        assertThat(handler).containsPattern("UNPROCESSABLE_CONTENT,\\s*\"WHOLE_REQUEST_REVERSAL_REQUIRED\"");
+        assertThat(controller)
+                .containsPattern(
+                        "@PostMapping\\(\"/payments/\\{paymentId}/reverse\"\\)(?s:(?!@PostMapping).)*AccountingPermissions\\.AP_PAY\\b");
+        assertThat(permissions).contains("AP_PAY = \"accounting:ap:pay\"");
+        assertThat(doc)
+                .contains("422 `WHOLE_REQUEST_REVERSAL_REQUIRED`")
+                .contains("`POST /v1/accounting/payments/{paymentId}/reverse` (`accounting:ap:pay`");
+    }
+
+    @Test
+    @DisplayName("no invoice or payment-status response exposes the due date, as the guide says")
+    void noResponseExposesTheDueDate() throws IOException {
+        for (Path dto : List.of(
+                INVOICE_SRC.resolve("dto/InvoiceDetailsResponse.java"),
+                INVOICE_SRC.resolve("dto/InvoiceSearchResult.java"),
+                ACCOUNTING_SRC.resolve("dto/InvoiceStatusResponse.java"),
+                ACCOUNTING_SRC.resolve("dto/AgedReceivablesRow.java"))) {
+            assertThat(Files.readString(dto)).as("%s", dto.getFileName()).doesNotContainIgnoringCase("dueDate");
+        }
+        assertThat(guideText()).contains("**No invoice-level overdue lookup.**");
+    }
+
     private static StaticDocEntry guide(String profile) {
         return ScopeGraphRealConfigValidationTest.ragDocs(profile).stream()
                 .filter(doc -> DOC_ID.equals(doc.id()))
@@ -180,6 +227,11 @@ class InvoicingPaymentsGuideTest {
     private static Set<String> seededEntities(String message) {
         return new LexiconLookup()
                 .seeds(message).stream().map(ScopeSet.Seed::entity).collect(Collectors.toSet());
+    }
+
+    /** The guide with every whitespace run folded to one space, so assertions survive re-wrapping. */
+    private static String flatGuideText() throws IOException {
+        return guideText().replaceAll("\\s+", " ");
     }
 
     private static String guideText() throws IOException {

@@ -163,9 +163,13 @@ payment initiation or capture as a configuration gap rather than naming a permis
   `EXPIRED`.
 - **Idempotency.** Every payment initiation carries an `idempotencyKey`; a replay with the same
   payload returns the existing intent, a different payload is 409 `PAYMENT_IDEMPOTENCY_CONFLICT`.
-- **Declines.** A gateway decline marks the intent `CAPTURE_FAILED` and answers 422
-  `PAYMENT_DECLINED`; an ambiguous gateway answer is resolved by one status inquiry first. There is
-  no automatic retry of a declined payment: a new attempt is a new initiation.
+- **Declines.** A gateway decline answers 422 `PAYMENT_DECLINED` (an ambiguous gateway answer is
+  resolved by one status inquiry first). The service sets `CAPTURE_FAILED` and then throws inside its
+  transaction, so nothing of the attempt is persisted: a declined initiation leaves **no** payment
+  intent (it does not appear in the invoice's payment list, and its `idempotencyKey` is not
+  recorded, so a retry with the same key is a fresh gateway attempt), and a declined capture leaves
+  the intent `AUTHORIZED`. Do not tell a user to look up a failed payment afterwards. There is no
+  automatic retry: a new attempt is a new initiation.
 - **Gateway binding.** The only `PaymentGatewayPort` implementation in this codebase is a
   placeholder that refuses every call until an environment supplies a real adapter. If card
   payments fail everywhere, that is the likely reason; do not promise a processor.
@@ -215,7 +219,7 @@ code enforces them:
   have a positive balance due (409 otherwise).
 - The sum requested may not exceed the payment's unapplied amount (400); a payment in a currency
   other than the ledger's is refused (422 `CURRENCY_NOT_SUPPORTED`).
-- Each line is capped at that invoice's balance; the excess becomes a **customer credit**.
+- Each line is capped at that invoice's balance; see the overpayment rule in the next section.
 - All lines apply in one transaction, or none do.
 - **Allocation order.** `allocationStrategy` is optional. `CALLER_ORDER` (the default when it is
   omitted) keeps the order sent; `OLDEST_FIRST` orders the lines by due date ascending, falling
@@ -224,11 +228,27 @@ code enforces them:
   listed rather than choosing invoices for the customer. Oldest-first (FIFO) is a common
   cash-application convention when a customer sends no remittance instruction (see Sources [5]);
   on this platform someone must still choose it.
-- **Journal entries.** An application posts Dr Undeposited Funds, Cr Accounts Receivable; the
-  overpayment credit posts Dr Undeposited Funds, Cr Customer Credit Liability.
-- **Reversal.** An application is undone with
-  `POST /v1/accounting/payment-applications/{applicationId}/reverse` (`accounting:payment:reverse`);
-  the list is `GET /v1/accounting/payment-applications` (`accounting:analytics:view`).
+- **Journal entry.** An application posts Dr Undeposited Funds, Cr Accounts Receivable.
+- **Listing.** `GET /v1/accounting/payment-applications` (`accounting:analytics:view`).
+
+## Overpayment credit and reversing applications (pos-accounting)
+
+- **Overpayment.** When any requested line exceeds its invoice's balance, the payment's **whole
+  remaining unapplied amount** after the capped lines becomes one customer credit, not only that
+  line's excess, and the payment becomes fully applied. Example: a 200.00 payment with 110.00
+  requested against an invoice whose balance is 100.00 applies 100.00 and credits 100.00 (not
+  10.00); nothing stays available on the payment. The credit posts Dr Undeposited Funds, Cr
+  Customer Credit Liability. When no line exceeds its balance, the unrequested remainder stays
+  available on the payment.
+- **One application.** `POST /v1/accounting/payment-applications/{applicationId}/reverse`
+  (`accounting:payment:reverse`) reverses a single application. It is refused with 422
+  `WHOLE_REQUEST_REVERSAL_REQUIRED` when the application came from a request that applied the
+  payment to several invoices, because that request's journal entry covers all of them; an
+  application already reversed is 409.
+- **Whole payment.** `POST /v1/accounting/payments/{paymentId}/reverse` (`accounting:ap:pay`, with a
+  reason of 10 to 1000 characters) reverses every not-yet-reversed application of the payment,
+  multi-invoice requests included. A payment with no applications is 409; one whose applications
+  are all reversed already is a no-op.
 
 ## Invoice balance due and paid status (pos-accounting)
 
@@ -236,10 +256,15 @@ code enforces them:
 credits − applied deposit credits.
 
 From the balance due, `pos-accounting` derives `PAID_IN_FULL` (balance ≤ 0), `PARTIALLY_PAID`
-(between zero and the total) or `OPEN`, and the payment-status endpoint
-(`GET /v1/accounting/invoice/{invoiceId}/status`, `accounting:ap:view`) answers `PAID`,
-`PARTIALLY_PAID` or `UNPAID`. `FAILED` and `CHARGEBACK` are written by accounting's payment-outcome
-processing.
+(between zero and the total) or `OPEN`.
+
+The payment-status endpoint (`GET /v1/accounting/invoice/{invoiceId}/status`, `accounting:ap:view`)
+returns accounting's stored payment-status view of the invoice when one exists. Only when there is
+none does it derive the answer from the balance due above: `PAID`, `PARTIALLY_PAID` or `UNPAID`
+(also `UNPAID` for a `DRAFT` or `ERROR` invoice). In the stored view, `FAILED` belongs to an
+individual payment event and is left out of the paid total; it is not the invoice's overall status,
+so an invoice whose only payment failed reads `UNPAID`. `CHARGEBACK` is an overall status the view
+can carry from accounting's payment-outcome processing.
 
 How a chargeback is worked, and who reconciles processor settlements (`pos-accounting` consumes the
 settlement facts; the default settlement feed binding is a placeholder), is not defined for staff
@@ -315,8 +340,12 @@ email endpoints record an outcome only; they do not deliver an invoice either.
   `days61To90` and `days90Plus`, with totals. The first bucket mixes not-yet-due and up to 30 days
   late, unlike the common layout with a separate "current" column (see Sources [1]). Balances are
   today's, even for a back-dated `asOfDate`, and `customerName` is empty in this version.
-- For "which invoices are past due?" answer from aged receivables (amounts per customer) and, per
-  invoice, the `pos-accounting` payment status plus its due date; never from `InvoiceStatus` alone.
+- **No invoice-level overdue lookup.** The frozen due date is stored but no response returns it:
+  the invoice detail and search results of `pos-invoice` and the accounting payment-status response
+  carry no due date, and aged receivables returns totals per customer, not invoices. For "which
+  invoices are past due?", say so and offer customer-level aging (which customers owe how much in
+  each bucket); for one customer, pair their bucket totals with each invoice's payment status.
+  Never infer past due from `InvoiceStatus`.
 
 ## How invoices relate to other records
 
@@ -367,6 +396,13 @@ Platform sources in `durion-positivity-backend` (repository-relative):
   `PaymentApplicationController`, `InvoicePaymentController`, `FinancialReportingController`
 - `pos-accounting/src/main/java/com/positivity/accounting/internal/handler/`:
   `PaymentApplicationGLPostingEventHandler`, `CustomerCreditIssuanceGLPostingEventHandler`
+- `pos-accounting/src/main/java/com/positivity/accounting/internal/config/AccountingExceptionHandler.java`
+  (`WHOLE_REQUEST_REVERSAL_REQUIRED`), `.../internal/entity/ReceivablePayment.java`,
+  `.../internal/dto/InvoiceStatusResponse.java`, `.../internal/dto/AgedReceivablesRow.java`;
+  `pos-accounting/src/test/java/com/positivity/accounting/internal/service/InvoicePaymentStatusServiceTest.java`
+  (`testFailedPayment`)
+- `pos-invoice/src/main/java/com/positivity/invoice/internal/dto/`: `InvoiceDetailsResponse`,
+  `InvoiceSearchResult` (no due date); `pos-invoice/src/main/java/com/positivity/invoice/internal/exception/PaymentDeclinedException.java`
 - `pos-accounting/src/main/resources/permissions.yaml`
 - `pos-workorder/src/main/java/com/positivity/workorder/internal/controller/WorkorderController.java`
   (`generateWorkorderInvoice`), `pos-workorder/src/main/resources/permissions.yaml`
