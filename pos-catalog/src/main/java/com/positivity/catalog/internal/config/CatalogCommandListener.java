@@ -5,6 +5,7 @@ import com.positivity.catalog.internal.dto.ServiceFactReplayResultDto;
 import com.positivity.catalog.internal.dto.SupplierArticleCodeReplayResultDto;
 import com.positivity.catalog.internal.exception.CatalogBusinessRuleException;
 import com.positivity.tenancy.TenantResolver;
+import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import java.time.Instant;
 import java.util.Locale;
@@ -17,7 +18,6 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DataAccessException;
-import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
@@ -141,8 +141,8 @@ import tools.jackson.databind.ObjectMapper;
  * one scope's non-transient failure cannot poison another's transaction.
  *
  * <p>Each {@code replayXxx} helper below also now catches {@link DataAccessException} (excluding
- * {@link TransientDataAccessException}, which is rethrown so the container can retry) around its own
- * {@code replayPage} call: a non-transient failure in one scope is logged and skipped, and the
+ * the {@link RetryableConsumerFailures} set, which is rethrown so the container can retry) around
+ * its own {@code replayPage} call: a permanent failure in one scope is logged and skipped, and the
  * remaining scopes in the same command still run, instead of one scope's exception unwinding past
  * the others and silently discarding their work.
  *
@@ -236,11 +236,12 @@ public class CatalogCommandListener {
                 return;
             }
             log.debug("Ignoring unsupported commandType={} message={}", commandType, message);
-        } catch (TransientDataAccessException e) {
-            // Let the container error handler retry with backoff and route to {topic}.dlq
-            // (ADR-0044 §4) — replay is idempotent, so redelivery is harmless.
-            throw e;
         } catch (Exception e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // Let the container error handler retry with backoff and route to {topic}.dlq
+                // (ADR-0044 §4) — replay is idempotent, so redelivery is harmless.
+                throw e;
+            }
             // Malformed/unsupported commands are permanent failures: retrying cannot fix them,
             // so log and drop instead of poisoning the partition.
             log.error("Failed to process Kafka command message: {}", message, e);
@@ -302,12 +303,14 @@ public class CatalogCommandListener {
             // Publication disabled — a permanent condition for this attempt, not a defect; skip
             // this scope and let the other scopes (if any) still be attempted.
             log.warn("Skipping product replay: {}", e.getMessage());
-        } catch (TransientDataAccessException e) {
-            throw e; // let the outer catch rethrow for container retry/DLQ (ADR-0044 §4)
         } catch (DataAccessException e) {
-            // Non-transient failure for this scope only (#1537 S1): log and let sibling scopes in
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // let the outer catch rethrow for container retry/DLQ (ADR-0044 §4)
+                throw e;
+            }
+            // Permanent failure for this scope only (#1537 S1): log and let sibling scopes in
             // this command still run, instead of one scope's exception discarding all of them.
-            log.error("Product replay failed (non-transient); continuing with other scopes", e);
+            log.error("Product replay failed (not retryable); continuing with other scopes", e);
         }
     }
 
@@ -331,10 +334,12 @@ public class CatalogCommandListener {
             }
         } catch (CatalogBusinessRuleException e) {
             log.warn("Skipping service replay: {}", e.getMessage());
-        } catch (TransientDataAccessException e) {
-            throw e;
         } catch (DataAccessException e) {
-            log.error("Service replay failed (non-transient); continuing with other scopes", e);
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // The container retries with backoff, then publishes to {topic}.dlq (ADR-0044 §4).
+                throw e;
+            }
+            log.error("Service replay failed (not retryable); continuing with other scopes", e);
         }
     }
 
@@ -360,10 +365,12 @@ public class CatalogCommandListener {
             }
         } catch (CatalogBusinessRuleException e) {
             log.warn("Skipping supplier-article-code replay: {}", e.getMessage());
-        } catch (TransientDataAccessException e) {
-            throw e;
         } catch (DataAccessException e) {
-            log.error("Supplier-article-code replay failed (non-transient); continuing with other scopes", e);
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // The container retries with backoff, then publishes to {topic}.dlq (ADR-0044 §4).
+                throw e;
+            }
+            log.error("Supplier-article-code replay failed (not retryable); continuing with other scopes", e);
         }
     }
 

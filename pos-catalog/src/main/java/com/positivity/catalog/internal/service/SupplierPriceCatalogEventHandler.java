@@ -19,13 +19,13 @@ import com.positivity.domainevents.supplier.SupplierPriceCatalogLine;
 import com.positivity.domainevents.supplier.SupplierPriceCatalogRepublishRequestedV1;
 import com.positivity.domainevents.supplier.SupplierPriceCatalogUpdatedV1;
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.dao.TransientDataAccessException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -140,11 +140,12 @@ public class SupplierPriceCatalogEventHandler {
                 }
                 recordProcessed(eventId, OWNER);
             });
-        } catch (TransientDataAccessException e) {
-            // Rethrown for container retry. Recording this as processed would lose an import's
-            // worth of prices with no way to notice: the rows would simply never exist.
-            throw e;
         } catch (Exception e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // Rethrown for container retry. Recording this as processed would lose an import's
+                // worth of prices with no way to notice: the rows would simply never exist.
+                throw e;
+            }
             log.warn("Skipping malformed supplier event eventId={} type={}", eventId, eventType, e);
             handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId, OWNER));
         }
