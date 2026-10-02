@@ -33,7 +33,6 @@ class TaggingQuestionsTest {
             "vehicle-inventory",
             "people-contact",
             "supplier",
-            "marketing",
             "location",
             "catalog",
             "vehicle-fitment",
@@ -108,6 +107,8 @@ class TaggingQuestionsTest {
         assertThat(domain.instructions()).endsWith("social chat, or the assistant itself.");
         // TierSelector's risky domains are spelled in this vocabulary.
         assertThat(domain.options()).contains("accounting", "tax", "admin", "security");
+        // #2385: marketing gained a document, so it is a rag-scope spelled like its tool domain.
+        assertThat(domain.options()).contains("marketing");
     }
 
     @Test

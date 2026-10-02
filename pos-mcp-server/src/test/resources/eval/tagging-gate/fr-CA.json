@@ -5796,7 +5796,7 @@
         "intent": "ACTION",
         "complexity": "MULTI_DOMAIN",
         "risk": "HIGH",
-        "domain": "customer",
+        "domain": "marketing",
         "entity": [
           "campaign",
           "customer",
@@ -5823,7 +5823,7 @@
         "intent": "QUERY",
         "complexity": "SINGLE_LOOKUP",
         "risk": "LOW",
-        "domain": "customer",
+        "domain": "marketing",
         "entity": [
           "campaign"
         ]
@@ -5848,7 +5848,7 @@
         "intent": "ACTION",
         "complexity": "SINGLE_LOOKUP",
         "risk": "MEDIUM",
-        "domain": "customer",
+        "domain": "marketing",
         "entity": [
           "campaign"
         ]
@@ -9281,6 +9281,85 @@
         "simple_chat"
       ],
       "notes": "platform event history is the pos-event modules: events. last hour is a named period"
+    },
+    {
+      "id": "fr-CA-0358",
+      "text": "Quelles campagnes sont prévues pour cette semaine?",
+      "source": "new",
+      "expected_tags": {
+        "follows_previous_turn": false,
+        "simple_chat": false,
+        "needs_web_search": false,
+        "about_inventory": false,
+        "about_orders": false,
+        "implies_date_window": true,
+        "admin_account_question": false,
+        "compound_question": false,
+        "workflow_state": "IDLE",
+        "intent": "QUERY",
+        "complexity": "SINGLE_LOOKUP",
+        "risk": "LOW",
+        "domain": "marketing",
+        "entity": [
+          "campaign"
+        ]
+      },
+      "hard_negative_for": [],
+      "notes": "#2385: marketing domain option (new rag-scope)."
+    },
+    {
+      "id": "fr-CA-0359",
+      "text": "Mets en pause la campagne de service de freins",
+      "source": "new",
+      "expected_tags": {
+        "follows_previous_turn": false,
+        "simple_chat": false,
+        "needs_web_search": false,
+        "about_inventory": false,
+        "about_orders": false,
+        "implies_date_window": false,
+        "admin_account_question": false,
+        "compound_question": false,
+        "workflow_state": "IDLE",
+        "intent": "ACTION",
+        "complexity": "SINGLE_LOOKUP",
+        "risk": "MEDIUM",
+        "domain": "marketing",
+        "entity": [
+          "campaign"
+        ]
+      },
+      "hard_negative_for": [
+        "simple_chat"
+      ],
+      "notes": "#2385: marketing domain option (new rag-scope)."
+    },
+    {
+      "id": "fr-CA-0360",
+      "text": "Montre les résultats de la campagne de rappel de changement d'huile",
+      "source": "new",
+      "expected_tags": {
+        "follows_previous_turn": false,
+        "simple_chat": false,
+        "needs_web_search": false,
+        "about_inventory": false,
+        "about_orders": false,
+        "implies_date_window": false,
+        "admin_account_question": false,
+        "compound_question": false,
+        "workflow_state": "IDLE",
+        "intent": "QUERY",
+        "complexity": "SINGLE_LOOKUP",
+        "risk": "LOW",
+        "domain": "marketing",
+        "entity": [
+          "campaign"
+        ]
+      },
+      "hard_negative_for": [
+        "simple_chat"
+      ],
+      "notes": "#2385: marketing domain option (new rag-scope)."
     }
   ]
 }

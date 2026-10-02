@@ -194,7 +194,7 @@ spend with", "vendor spend", "top customers by revenue") denotes it too, so such
 1. Put the file under `src/main/resources/rag/` with a header that matches the entry (or none).
 2. Add the entry to **both** `application.yml` and `application-alpha.yml`: `id`, `source-path`, `rag-scope`, `required-permissions`, `entities`.
 3. Use entity keys from `entities.yaml`, or `[none]` only for a platform-wide document; list what the document substantively explains, not everything it mentions.
-4. A new `rag-scope` spelled differently from a tool domain needs a `domain_scopes` line in `entities.yaml`. So does a tool domain whose documents live in an existing scope instead of a new one. Example: the `pos-invoice` guide (`accounting.invoicing-payments`) is in the `accounting` scope, so `invoice: accounting` lets an acting `domain` of `accounting` also seed the `invoice` Domain node, with no new `domain` option.
+4. A new `rag-scope` needs a one-sentence entry under `domains:` in `entities.yaml` (the criteria of the `domain` tag); `marketing` is an example. One spelled differently from its tool domain also needs a `domain_scopes` line in `entities.yaml`. So does a tool domain whose documents live in an existing scope instead of a new one. Example: the `pos-invoice` guide (`accounting.invoicing-payments`) is in the `accounting` scope, so `invoice: accounting` lets an acting `domain` of `accounting` also seed the `invoice` Domain node, with no new `domain` option.
 5. Run the module tests: the parity, header-agreement and real-config tests cover the rest.
 
 ### Per-turn resolution and shadow recording
@@ -394,11 +394,11 @@ assistant; may be in English, French or Spanish."):
   `needs_web_search`, `about_inventory`, `about_orders`, `implies_date_window`, `admin_account_question`,
   `compound_question`, `intent`, `complexity`, `risk` (a Score over LOW/MEDIUM/HIGH);
 - `domain`, a Choice whose options are **permanently the curated RAG-scope vocabulary**: the distinct `rag-scope` values
-  of `mcp.rag.preload.docs` plus `master` (15 today; never the 33 tool-catalog domains). Each option's criteria sentence
-  comes from the `domains:` block of `scope-graph/entities.yaml`; `ScopeGraphRealConfigValidationTest` requires a sentence
-  for every rag-scope of both preload lists and rejects any other key. `TierSelector`'s risky domains (`accounting`,
+  of `mcp.rag.preload.docs` plus `master` (16 today, `marketing` since #2385; never the 33 tool-catalog domains). Each
+  option's criteria sentence comes from the `domains:` block of `scope-graph/entities.yaml`;
+  `ScopeGraphRealConfigValidationTest` requires a sentence for every rag-scope of both preload lists and rejects any other key. `TierSelector`'s risky domains (`accounting`,
   `tax`, `admin`, `security`) are spelled in this vocabulary. Tool domains with no rag-scope (`vehicle-inventory`,
-  `people-contact`, `supplier`, `marketing`, `location`, `catalog`, `vehicle-fitment`) are never options. A list over
+  `people-contact`, `supplier`, `location`, `catalog`, `vehicle-fitment`) are never options. A list over
   the local models' 26-option cap skips the question (one WARN at startup), as a list under 2 options does;
 - one Noul per lexicon entity, `entity_<key>` (`entity_workorder`), asking "Is this message about any of these: <en
   terms> (French: <fr>; Spanish: <es>)?" from the entity's terms, only when `entity-questions` is true and

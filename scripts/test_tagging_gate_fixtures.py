@@ -38,8 +38,8 @@ CHOICE_OPTIONS = {
     "complexity": ("SINGLE_LOOKUP", "MULTI_DOMAIN"),
     "risk": ("LOW", "MEDIUM", "HIGH"),
     "domain": (
-        "accounting", "admin", "customer", "events", "hr", "inventory", "master", "order", "pricing",
-        "reporting", "security", "shopmanager", "tax", "warranty", "workorder",
+        "accounting", "admin", "customer", "events", "hr", "inventory", "marketing", "master", "order",
+        "pricing", "reporting", "security", "shopmanager", "tax", "warranty", "workorder",
     ),
 }
 ALL_TAGS = NOUL_TAGS + tuple(CHOICE_OPTIONS) + ("entity",)

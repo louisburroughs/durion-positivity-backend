@@ -25,7 +25,7 @@ All platform API calls pass through the API gateway, which validates the caller'
 
 | Term | What it means |
 |---|---|
-| **User** | A login account that can authenticate to the platform. Each user is linked to exactly one Person record. Only one active user account per person is permitted at any time. |
+| **User** | A login account that can authenticate to the platform. Each user (username) is linked to at most one Person record; a person may have more than one linked account, and only self-registration refuses a person who already has an active account. |
 | **Person** | The canonical human identity record managed by the people service. The person identifier is the stable audit actor used across all platform services — it does not change when a username changes. |
 | **Role** | A named grouping of permissions that is assigned to a user. The frontend uses roles for high-level access decisions (e.g. showing or hiding features). |
 | **Permission** | A granular authorisation unit in the form `domain:resource:action` (e.g. `security:user:create`). Backend services enforce permissions on individual API operations. Permissions are derived from a user's assigned roles. |
@@ -127,7 +127,7 @@ Account state flags control whether a user can authenticate. Any flag that is no
 | Flag | Blocked condition | How it is set |
 |---|---|---|
 | **Enabled** | Account is disabled. | Manually by an administrator. |
-| **Locked** | Account is locked. | Automatically by the lockout policy, or manually by an administrator. |
+| **Locked** | Account is locked. | Automatically by the lockout policy; administrators can unlock but there is no manual lock action. |
 | **Account expired** | Account has expired. | Manually by an administrator. |
 | **Credentials expired** | Password has expired. | Manually by an administrator; also used to force password resets. |
 
@@ -163,12 +163,12 @@ The platform enforces an automatic account lockout after repeated failed login a
 |---|---|
 | Failed attempts before lockout | 5 |
 | Rolling evaluation window | 10 minutes |
-| Progressive backoff multiplier | 2× per successive lockout |
+| Backoff multiplier (lock length = window × multiplier, capped) | 2 |
 | Maximum backoff duration | 30 minutes |
 
-Failed attempts older than the rolling window are not counted. After the threshold is reached, the account is locked automatically. Each successive lockout after the first doubles the lockout duration up to the maximum.
+Each wrong password on an existing account increments a failure counter that is reset only by a successful login, an unlock, or the end of a lock. The account locks when the counter reaches the threshold and the previous failure was within the evaluation window. The lock lasts the window times the multiplier, capped at the maximum: 20 minutes with the defaults. While locked, login is refused with `ACCOUNT_LOCKED` before the password is checked.
 
-Locked accounts must be unlocked manually by an administrator via the account state controls. The lockout parameters are configurable at deployment time.
+A timed lock lifts on its own: the first login attempt after it expires clears it and resets the counter. An administrator can unlock sooner through the account state controls. The lockout parameters are configurable at deployment time (`pos.security.lockout.*`).
 
 ---
 
@@ -214,7 +214,7 @@ Role assignments link a user to a role. Assignments can have an effective date r
 
 ### Assigning a role to a user
 
-A role is assigned to a user with an optional effective date range and optional location scope.
+A role is assigned to a user with an optional effective date range. An assignment carries no location: how far a role reaches across locations is a property of the role itself (`ALL` or `LOCATION` scope, ADR-0061), resolved against the user's staffing assignments when a token is issued. See the users and roles guide (`admin.users-roles`).
 
 **Required role(s):** Admin, Manager, General Manager
 
@@ -238,7 +238,7 @@ Returns the full list of permissions the user currently holds across all their a
 
 ### Checking whether a user has a specific permission
 
-An administrator or system component can check whether a named user holds a specific permission, optionally scoped to a location.
+An administrator or system component can check whether a named user holds a specific permission (see Authorization Decisions). Location-sensitive checks are made by the service that owns the data, from the location-scope claims in the user's token.
 
 **Required role(s):** Admin, Manager, General Manager
 
@@ -317,3 +317,16 @@ The table below shows which platform roles grant which security-service capabili
 | Create audit events | ✓ | |
 | Export audit data | ✓ | |
 | Evaluate authorization decisions | ✓ | |
+
+---
+
+## Sources
+
+Platform sources (role-assignment and location-scope corrections of 2026-10-02, #2385):
+
+- `pos-security-service/src/main/java/com/positivity/securityservice/internal/controller/RoleController.java`
+  (`createRoleAssignment`: location reach is not set on an assignment)
+- `pos-security-service/README.md` (Role location scope; Role grants vs. role assignments)
+- `pos-security-service/src/main/java/com/positivity/securityservice/internal/service/LockoutServiceImpl.java`,
+  `AuthenticationServiceImpl.java`, `AdminAccountStateServiceImpl.java`; `internal/config/LockoutPolicy.java` (lockout correction)
+- `durion/docs/adr/0061-location-scope-authorization-ownership.adr.md`

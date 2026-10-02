@@ -6,11 +6,11 @@ This guide describes the workforce management capabilities of the `pos-people` s
 
 ## Overview
 
-`pos-people` is the authoritative HR and workforce management service in the Durion Positivity platform. It owns the lifecycle of every employee and person record, tracks where people are assigned, records when they work, manages the approval of time, and controls what roles they hold in the system.
+`pos-people` is the authoritative HR and workforce management service in the Durion Positivity platform. It owns the lifecycle of every employee record, tracks where people are assigned, records when they work, and manages the approval of time. Person identity records, user–person links and the people screens' role assignments live in the sibling service `pos-people-contact`, and are described here because HR administrators use them alongside employee records. Employee records, job roles and technician staffing are covered in more depth by the employee guide (`people.employees`).
 
 The service exposes a REST API. All endpoints require a valid bearer token, and each operation is protected by a specific permission scope described below.
 
-Security note: the current built-in role mappings in `pos-security-service` grant the core HR employee/staffing/role-management permissions only to `ADMIN` by default. Work-session endpoints require authentication but no specific permission. Several advanced people/time/reporting/user-link permissions exist in `pos-people` but are not included in any standard role by default; those must be granted explicitly through Security Admin.
+Security note: which roles hold each permission in this guide is tenant configuration in `pos-security-service` (the baseline seed plus whatever a security administrator grants); see the role-permission matrix (`security.role-permission-matrix`). Work-session endpoints require authentication, and a caller may act only for themself unless they hold `people:timekeeping:approve`.
 
 ---
 
@@ -33,29 +33,28 @@ Security note: the current built-in role mappings in `pos-security-service` gran
 
 ### Creating an employee
 
-An employee is created with a legal name, a preferred name (optional), a unique employee number, a status, and a hire date. Contact information (primary email and phone) can be provided at creation time.
+An employee is created with a first and last name, a preferred name (optional), a unique employee number, a status, a hire date and, optionally, a job role. Contact information (primary email and phone) can be provided at creation time.
 
-The `duplicatePolicy` field controls what happens if a potential duplicate is detected. The default is `STRICT`, which rejects the request. Use `LENIENT` or `IGNORE` if importing from a legacy system where duplicates are expected.
+The `duplicatePolicy` field controls what happens if a potential duplicate (same employee number, primary email or phone) is detected. The default is `STRICT`, which rejects the request with 409. `BALANCED` accepts a suspected duplicate and returns warnings in the response instead.
 
-**Required permission(s):** `people:employee:create`  
-**Roles with permission:** `ADMIN`
+**Required permission(s):** `people:employee:create`
 
 ### Updating an employee
 
 Employee profile information can be updated at any time: name, employee number, status, hire date, termination date, and contact details.
 
-**Required permission(s):** `people:employee:edit`  
-**Roles with permission:** `ADMIN`
+**Required permission(s):** `people:employee:edit`
 
 ### Disabling (offboarding) an employee
 
-Disabling an employee marks them as inactive. An optional reason can be recorded. The `assignmentPolicy` field controls what happens to their active staffing assignments:
+Disabling an `ACTIVE` employee sets the status `DISABLED`; other statuses are refused (409). It does not disable the person's user account, which is a separate security task. The `assignmentPolicy` field controls what happens to their active staffing assignments:
 
 - `IMMEDIATE` — all active assignments are ended right away (default).
 - `GRACE_PERIOD` — assignments are ended on the date specified in `assignmentEndDate`, allowing a transition period.
 
-**Required permission(s):** `people:employee:deactivate`  
-**Roles with permission:** `ADMIN`
+A `DISABLED` employee can be re-enabled (back to `ACTIVE`); ended assignments are not restored. `TERMINATED` is irreversible.
+
+**Required permission(s):** `people:employee:activation`
 
 ### Employee statuses
 
@@ -69,10 +68,9 @@ Disabling an employee marks them as inactive. An optional reason can be recorded
 
 ### Viewing an employee
 
-Retrieve an employee profile by their employee ID.
+Retrieve the full employee profile by the employee's person ID, including personal contact detail (address, personal phone and email, emergency contact). Looking an employee up by employee number returns a slim record and needs only `people:employee:view`.
 
-**Required permission(s):** `people:employee:view`  
-**Roles with permission:** `ADMIN`
+**Required permission(s):** `people:employee_pii:view`
 
 ### Searching employees
 
@@ -81,14 +79,13 @@ case-insensitive substring against first name, last name, preferred name, and em
 blank lists every employee, paged. Use this for listing or typeahead lookups; use "Viewing an employee" instead
 once the employee's id is already known.
 
-**Required permission(s):** `people:employee:view`  
-**Roles with permission:** `ADMIN`
+**Required permission(s):** `people:employee:view`
 
 ---
 
 ## Person Records
 
-Person records are the underlying identity layer beneath employee records. They can exist independently of an employment relationship (e.g. for contractors or historical records).
+Person records are the underlying identity layer beneath employee records, owned by `pos-people-contact`. They can exist independently of an employment relationship (e.g. for contractors or historical records).
 
 ### Available operations
 
@@ -100,20 +97,18 @@ Person records are the underlying identity layer beneath employee records. They 
 - **Delete** — remove a person record. This is a hard delete; use with caution.
 
 **Required permission(s):**
-- List all people / get by ID: `people:person:view`
-- Create / resolve: `people:person:create`
-- Update: `people:person:edit`
-- Delete: `people:person:delete`
-
-**Roles with permission:** `None by default`
+- List all people / get by ID: `people-contact:person:view`
+- Create / resolve: `people-contact:person:create`
+- Update: `people-contact:person:edit`
+- Delete: `people-contact:person:delete`
 
 ---
 
 ## Bulk Employee Import
 
-For large-scale onboarding (e.g. system migrations or importing from an HRIS), employees can be created in bulk via a single request. Each record in the batch requires:
+For large-scale onboarding (e.g. system migrations or importing from an HRIS), employees can be created in bulk via a single request. Every record is created `ACTIVE` under the `STRICT` duplicate policy. The request names a `jobId` and a `locationId` for the batch, and each record in it requires:
 
-- `legalName`
+- `firstName` and `lastName`
 - `employeeNumber`
 - `hireDate` (format: `YYYY-MM-DD`)
 - `preferredName` (optional)
@@ -122,8 +117,7 @@ For large-scale onboarding (e.g. system migrations or importing from an HRIS), e
 
 The response reports how many records succeeded and how many failed, with per-row error detail for failures. Successful rows are not rolled back if other rows fail.
 
-**Required permission(s):** `people:employee:create`  
-**Roles with permission:** `ADMIN`
+**Required permission(s):** `people:employee:create`
 
 ---
 
@@ -133,31 +127,27 @@ Staffing assignments define where a person works and in what role. A person can 
 
 ### Creating an assignment
 
-Provide the person ID, location ID, role, effective start date, and whether this is the primary assignment. An optional end date can be set for fixed-term placements. If an overlapping active assignment already exists for the same person and location, the request is rejected with a 409 conflict.
+Provide the person ID, location ID, role (for example `TECHNICIAN`), effective start date, and whether this is the primary assignment. An optional end date can be set for fixed-term placements. The person must hold an `ACTIVE` employee record and the location must be active. If an overlapping assignment already exists for the same person, location and role, the request is rejected with a 409 conflict. A new primary assignment ends any overlapping old primary, and a person's first active assignment is always primary.
 
-**Required permission(s):** `people:employee:edit`  
-**Roles with permission:** `ADMIN`
+**Required permission(s):** `people:employee:edit`
 
 ### Viewing assignments
 
 Retrieve all assignments for a given person by providing their person ID as a query parameter. Individual assignments can also be fetched by their assignment ID.
 
-**Required permission(s):** `people:employee:view`  
-**Roles with permission:** `ADMIN`
+**Required permission(s):** `people:employee:view`
 
 ### Updating an assignment
 
 Role, dates, and the primary flag can all be updated. Overlap validation applies the same way as on creation.
 
-**Required permission(s):** `people:employee:edit`  
-**Roles with permission:** `ADMIN`
+**Required permission(s):** `people:employee:edit`
 
 ### Ending an assignment
 
 Assignments are soft-deleted — the record is retained for audit purposes but the assignment is marked as `ENDED`. Use this when a person transfers locations or leaves a role.
 
-**Required permission(s):** `people:employee:edit`  
-**Roles with permission:** `ADMIN`
+**Required permission(s):** `people:employee:edit`
 
 ### Assignment statuses
 
@@ -172,17 +162,18 @@ Assignments are soft-deleted — the record is retained for audit purposes but t
 
 The availability query returns which people are assigned to a location and available to work on a given date, based on their active staffing assignments.
 
-- Filter by `locationId` to see availability at a specific site. If omitted, the current user's location is used.
+- Filter by `locationId` to see availability at a specific site. If omitted, the current user's location is used. A location outside the caller's location reach is refused (403 `LOCATION_SCOPE_DENIED`).
 - Filter by `date` (ISO format `YYYY-MM-DD`) to check a specific day.
 
 The response includes each person's name, their role, whether the assignment is their primary one, and the assignment's effective date range.
 
 ### Current user's primary location
 
-An authenticated user can query their own primary location without needing to know their person or assignment ID. This returns the location ID of their active primary staffing assignment.
+An authenticated user can query their own primary location without needing to know their person or assignment ID. This returns the location ID of their active primary staffing assignment, or the top-level location (flagged as defaulted) when they have none. A user can also list all of their locations active today.
 
-**Required permission(s):** `people:availability:view`  
-**Roles with permission:** `None by default`
+**Required permission(s):**
+- Availability at a location: `people:availability:view`
+- Own primary location and own locations: `people:self:view`
 
 ---
 
@@ -202,8 +193,7 @@ Provide the person ID to close the active session. The system records the curren
 
 While a session is active, breaks can be started and stopped against the session's ID. Break time is tracked separately and excluded from net hours worked.
 
-**Required permission(s):** Authentication only  
-**Roles with permission:** `Any authenticated user`
+**Required permission(s):** Authentication; acting for another person needs `people:timekeeping:approve`
 
 ---
 
@@ -236,8 +226,6 @@ Rejections require a `rejectionReason` for each entry — the API will return 40
 - Batch approval: `people:timeEntry:approve`
 - Batch rejection: `people:timeEntry:reject`
 
-**Roles with permission:** `None by default`
-
 ---
 
 ## Time Entry Adjustments
@@ -255,22 +243,19 @@ An adjustment requires:
 
 The new adjustment starts in `PENDING` status.
 
-**Required permission(s):** `people:timeAdjustment:create`  
-**Roles with permission:** `None by default`
+**Required permission(s):** `people:timeAdjustment:create`
 
 ### Viewing adjustments
 
 All adjustments for a given time entry can be listed by providing the time entry ID.
 
-**Required permission(s):** `people:timeAdjustment:view`  
-**Roles with permission:** `None by default`
+**Required permission(s):** `people:timeAdjustment:view`
 
 ### Approving an adjustment
 
 A pending adjustment can be approved by a user with the approval permission. Once approved, the underlying time entry is corrected.
 
-**Required permission(s):** `people:timeAdjustment:approve`  
-**Roles with permission:** `None by default`
+**Required permission(s):** `people:timeAdjustment:approve`
 
 ---
 
@@ -289,15 +274,13 @@ Exceptions are system-generated or manually raised flags that indicate something
 
 Exceptions can be raised manually or by the system during timekeeping ingestion.
 
-**Required permission(s):** `people:timeException:create`  
-**Roles with permission:** `None by default`
+**Required permission(s):** `people:timeException:create`
 
 ### Viewing exceptions
 
 Exceptions can be listed for all employees or filtered to a specific employee.
 
-**Required permission(s):** `people:timeException:view`  
-**Roles with permission:** `None by default`
+**Required permission(s):** `people:timeException:view`
 
 ### Resolving, acknowledging, or waiving an exception
 
@@ -312,79 +295,70 @@ Exceptions can be listed for all employees or filtered to a specific employee.
 - Resolve: `people:timeException:resolve`
 - Waive: `people:timeException:resolve`
 
-**Roles with permission:** `None by default`
-
 ---
 
 ## Access Control (Role Assignments)
 
-Roles control what a person can do within the platform. The access control APIs allow managers and administrators to view, assign, and revoke roles on individual person records.
+Application roles control what a person can do within the platform. The access control APIs in `pos-people-contact` let managers and administrators view, assign, and revoke roles on individual person records; they forward to `pos-security-service` through the person's user–person link. These are not job roles: a job role on the employee record grants no permissions (see `people.employees`).
 
 ### Viewing available roles
 
 Retrieve the list of roles that can be assigned to a person.
 
-**Required permission(s):** `people:role:view`  
-**Roles with permission:** `ADMIN`
+**Required permission(s):** `people-contact:role:view`
 
 ### Viewing a person's current role assignments
 
 Role assignments can be retrieved with optional history (including past assignments) and an optional end-date filter.
 
-**Required permission(s):** `people:role:view`  
-**Roles with permission:** `ADMIN`
+**Required permission(s):** `people-contact:role:view`
 
 ### Assigning a role
 
 Assign a role to a person by providing:
 
-- `roleCode` — the role identifier.
-- `locationId` (optional) — scope the role to a specific location.
-- `startDate` / `endDate` (optional) — date range for the assignment.
+- `roleCode` — the role identifier (a role's name is its code).
+- `startDate` / `endDate` (optional) — date-time window for the assignment, start inclusive and end exclusive.
 
-**Required permission(s):** `people:role:assign`  
-**Roles with permission:** `ADMIN`
+An assignment carries no location: how far a role reaches is a property of the role (`ALL` or `LOCATION` scope, ADR-0061), combined with the person's staffing assignments.
+
+**Required permission(s):** `people-contact:role:assign`
 
 ### Revoking a role
 
 Remove a role assignment from a person. An optional `endDate` can be provided to end the assignment at a specific point in the past rather than immediately.
 
-**Required permission(s):** `people:role:revoke`  
-**Roles with permission:** `ADMIN`
+**Required permission(s):** `people-contact:role:revoke`
 
 ---
 
 ## User–Person Links
 
-Every user account in the authentication system must be linked to a person record before the platform can associate that user's activity with an employee. This link is created during onboarding and removed during offboarding.
+Every user account in the authentication system must be linked to a person record before the platform can associate that user's activity with an employee. Links are owned by `pos-people-contact` and keyed by username. A link is created during onboarding and removed during offboarding; deleting a user account removes its link.
 
 ### Linking a user to a person
 
-Provide the user ID (from the authentication system) and the person ID. If the link already exists, the existing link is returned without error. A user cannot be linked to more than one person — attempting this returns a 409 conflict.
+Provide the username and the person ID. If the identical link already exists, it is returned without error. A username cannot be linked to more than one person — attempting this returns a 409 conflict.
 
-**Required permission(s):** `people:userLink:write`  
-**Roles with permission:** `None by default`
+**Required permission(s):** `people-contact:userLink:write`
 
 ### Looking up the person for a user
 
-Given a user ID, retrieve the person record that is linked to it. This is used by other services to resolve the person behind an authenticated request.
+Given a username, retrieve the person record that is linked to it. This is used by other services to resolve the person behind an authenticated request.
 
-**Required permission(s):** `people:userLink:view`  
-**Roles with permission:** `None by default`
+**Required permission(s):** `people-contact:userLink:view`
 
 ### Looking up users for a person
 
-Given a person ID, retrieve all user account IDs that are linked to that person.
+Given a person ID, retrieve the user accounts linked to that person.
 
-**Required permission(s):** `people:userLink:view`  
-**Roles with permission:** `None by default`
+**Required permission(s):** `people-contact:userLink:view`
 
 ### Removing a link
 
 Unlink a user from their person record. This is typically done as part of offboarding or when correcting a mis-linked account.
 
-**Required permission(s):** `people:userLink:write`  
-**Roles with permission:** `None by default`
+**Required permission(s):** `people-contact:userLink:write`
 
 ---
 
@@ -402,8 +376,7 @@ Parameters:
 - `technicianIds` (optional list of person IDs to limit the report)
 - `flaggedOnly` — when `true`, only returns rows where a discrepancy was detected
 
-**Required permission(s):** `people:time:export:read` or `accounting:time:export`  
-**Roles with permission:** `None by default`
+**Required permission(s):** `accounting:time:export`
 
 ### Approved time export
 
@@ -416,5 +389,20 @@ Parameters:
 - `startDate` / `endDate` (inclusive)
 - `locationId` — one or more location IDs (required)
 
-**Required permission(s):** `people:time:export:read` or `accounting:time:export`  
-**Roles with permission:** `None by default`
+**Required permission(s):** `accounting:time:export`
+
+---
+
+## Sources
+
+Platform sources (corrections of 2026-10-02, #2385):
+
+- `pos-people/src/main/java/com/positivity/people/internal/controller/EmployeeController.java`,
+  `PersonBulkIngestController.java`, `StaffingAssignmentController.java`, `PeopleAvailabilityController.java`,
+  `WorkSessionController.java`, `PeopleReportsController.java`, `TimeEntryExceptionController.java`
+- `pos-people/src/main/java/com/positivity/people/internal/enums/DuplicatePolicy.java`, `EmployeeStatus.java`;
+  `pos-people/src/main/resources/permissions.yaml`
+- `pos-people-contact/src/main/java/com/positivity/peoplecontact/internal/controller/PersonController.java`,
+  `PersonAccessController.java`, `UserPersonLinkController.java`; `pos-people-contact/README.md`;
+  `pos-people-contact/src/main/resources/permissions.yaml`
+- `durion/docs/adr/0061-location-scope-authorization-ownership.adr.md`

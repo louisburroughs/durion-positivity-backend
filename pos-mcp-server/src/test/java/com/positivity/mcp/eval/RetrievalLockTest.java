@@ -117,10 +117,17 @@ class RetrievalLockTest {
             "shop.management.guidelines");
 
     /**
-     * {@code domain:resource:action}, snake_case, plus the synthetic {@code AUTHENTICATED} code that
-     * {@code PermissionAwareMetadataFilter} treats as "any authenticated caller".
+     * {@code domain:resource:action} or the two-part {@code domain:action} some modules register
+     * ({@code location:read}, {@code invoice:manage}), lower case, plus the synthetic {@code AUTHENTICATED}
+     * code that {@code PermissionAwareMetadataFilter} treats as "any authenticated caller".
+     *
+     * <p>This is a shape check only (#2385): visibility is an exact string match of the comma-split
+     * metadata against the caller's bare codes ({@code ScopeCallerFilter.ragDocumentVisible},
+     * {@code PermissionCodes.extract}, neither of which normalises or splits on {@code :}), so a
+     * registered two-part code gates a document exactly like a three-part one. Whether a code is
+     * registered and granted is {@code RagRequiredPermissionSeedTest}'s job.
      */
-    private static final Pattern PERMISSION_CODE = Pattern.compile("^[a-z][a-z0-9_-]*(:[a-z0-9_-]+){2}$");
+    private static final Pattern PERMISSION_CODE = Pattern.compile("^[a-z][a-z0-9_-]*(:[a-z0-9_-]+){1,2}$");
 
     private static final String AUTHENTICATED = "AUTHENTICATED";
 
@@ -213,7 +220,24 @@ class RetrievalLockTest {
     }
 
     @Test
-    @DisplayName("retrieval lock: declared permission codes are well-formed domain:resource:action")
+    @DisplayName("retrieval lock: the code shape accepts two- and three-part codes and rejects malformed ones")
+    void permissionCodeShape() {
+        assertThat(List.of("location:read", "invoice:manage", "location:bay:read", "people-contact:role:view"))
+                .allMatch(code -> PERMISSION_CODE.matcher(code).matches());
+        assertThat(List.of(
+                        "location",
+                        "location:",
+                        ":read",
+                        "Location:read",
+                        "location:read:all:extra",
+                        "location read",
+                        "location:read,location:write",
+                        "location::read"))
+                .noneMatch(code -> PERMISSION_CODE.matcher(code).matches());
+    }
+
+    @Test
+    @DisplayName("retrieval lock: declared permission codes are well-formed domain[:resource]:action")
     void permissionCodesAreWellFormed() {
         List<String> violations = new ArrayList<>();
 
