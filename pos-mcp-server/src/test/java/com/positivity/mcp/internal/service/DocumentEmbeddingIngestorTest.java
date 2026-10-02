@@ -124,7 +124,7 @@ class DocumentEmbeddingIngestorTest {
 
                 ## PO number
 
-                POs are owned by pos-inventory. Format: 8-character zero-padded base-36 code.
+                POs are owned by pos-order. Format: 8-character zero-padded base-36 code.
 
                 ## GL account code
 
@@ -142,7 +142,7 @@ class DocumentEmbeddingIngestorTest {
         List<Document> segments = segmentCaptor.getValue();
         assertTrue(segments.stream()
                 .anyMatch(segment -> segment.getText().contains("## PO number")
-                        && segment.getText().contains("pos-inventory")
+                        && segment.getText().contains("pos-order")
                         && !segment.getText().contains("GL account code")));
         assertTrue(segments.stream()
                 .anyMatch(segment -> segment.getText().contains("## GL account code")

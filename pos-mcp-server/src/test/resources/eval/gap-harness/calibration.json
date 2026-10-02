@@ -20,10 +20,10 @@
       "id": "cal-po-misleading-owner",
       "query": "which service owns purchase order numbers and what do they look like",
       "expected_facts": [
-        "Purchase orders are owned by pos-inventory (not pos-order).",
+        "Purchase orders are owned by pos-order (not pos-inventory).",
         "A PO number is an 8-character, zero-padded, uppercase base-36 code from a Postgres sequence; there is no PO-/year prefix."
       ],
-      "answer": "Purchase orders are owned by the pos-order service, and PO numbers follow the format PO-2026-00042 with the year embedded.",
+      "answer": "Purchase orders are owned by the pos-inventory service, and PO numbers follow the format PO-2026-00042 with the year embedded.",
       "human_verdict": "misleading"
     },
     {
