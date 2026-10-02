@@ -46,7 +46,14 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
     private final Clock clock;
 
     private static final Duration CACHE_EXPIRY = Duration.ofHours(24);
-    private static final String NHTSA_API_BASE = "https://vpic.nhtsa.dot.gov/v1/vehicles";
+    /**
+     * vPIC API base. Must be {@code /api/vehicles} — this previously read
+     * {@code /v1/vehicles}, which is not a vPIC path: it redirects to vPIC's NotFound page
+     * (#2395). Same base as {@code pos-vehicle-reference-nhtsa}; vPIC's own example is
+     * {@code https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVin/5UXWX7C5*BA?format=xml&modelyear=2011}.
+     */
+    private static final String NHTSA_API_BASE = "https://vpic.nhtsa.dot.gov/api/vehicles";
+
     private final ManufacturerRepository manufacturerRepository;
     private final MakeRepository makeRepository;
     private final ModelRepository modelRepository;
@@ -189,7 +196,7 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
     @Override
     public List<VehicleVariable> getVehicleVariables() {
         List<VehicleVariable> cached = vehicleVariableRepository.findAll();
-        if (!cached.isEmpty() && !isCacheExpired(cached.getFirst().getCacheTimestamp())) {
+        if (!cached.isEmpty() && isCacheFresh(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
         String url = NHTSA_API_BASE + "/GetVehicleVariableList?format=json";
@@ -214,7 +221,7 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
     @Override
     public List<VehicleVariableValue> getVehicleVariableValues(UUID variableId) {
         List<VehicleVariableValue> cached = vehicleVariableValueRepository.findByVariable_Id(variableId);
-        if (!cached.isEmpty() && !isCacheExpired(cached.getFirst().getCacheTimestamp())) {
+        if (!cached.isEmpty() && isCacheFresh(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
         String url = NHTSA_API_BASE + "/GetVehicleVariableValuesList/" + variableId + FORMAT_JSON;
@@ -246,7 +253,7 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
 
     private List<Manufacturer> fetchManufacturers() {
         List<Manufacturer> cached = manufacturerRepository.findAll();
-        if (!cached.isEmpty() && isCacheExpired(cached.getFirst().getCacheTimestamp())) {
+        if (!cached.isEmpty() && isCacheFresh(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
         String url = NHTSA_API_BASE + "/getallmanufacturers?format=json";
@@ -282,7 +289,7 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
                 .findById(manufacturerId)
                 .orElseThrow(() -> new IllegalArgumentException("Manufacturer not found with ID: " + manufacturerId));
         List<Make> cached = makeRepository.findByManufacturerId(manufacturerId);
-        if (!cached.isEmpty() && isCacheExpired(cached.getFirst().getCacheTimestamp())) {
+        if (!cached.isEmpty() && isCacheFresh(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
         String url = NHTSA_API_BASE + "/GetMakeForManufacturer/" + manufacturerId + FORMAT_JSON;
@@ -319,7 +326,7 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
                 .findById(makeId)
                 .orElseThrow(() -> new IllegalArgumentException("Make not found with ID: " + makeId));
         List<Model> cached = modelRepository.findByMakeId(makeId);
-        if (!cached.isEmpty() && isCacheExpired(cached.getFirst().getCacheTimestamp())) {
+        if (!cached.isEmpty() && isCacheFresh(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
         String url = NHTSA_API_BASE + "/GetModelsForMakeId/" + makeId + FORMAT_JSON;
@@ -356,7 +363,7 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
                 .findById(makeId)
                 .orElseThrow(() -> new IllegalArgumentException("Make not found with ID: " + makeId));
         List<VehicleType> cached = vehicleTypeRepository.findByMakeId(makeId);
-        if (!cached.isEmpty() && !isCacheExpired(cached.getFirst().getCacheTimestamp())) {
+        if (!cached.isEmpty() && isCacheFresh(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
         String url = NHTSA_API_BASE + "/GetVehicleTypesForMakeId/" + makeId + FORMAT_JSON;
@@ -379,7 +386,12 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
         return vehicleTypeRepository.findByMakeId(makeId);
     }
 
-    private boolean isCacheExpired(LocalDateTime cacheTimestamp) {
+    /**
+     * Returns {@code true} while the cached rows are still inside the 24-hour
+     * window, i.e. while they may be served without calling vPIC. A {@code null}
+     * timestamp cannot be shown to be fresh, so it is treated as needing a refetch.
+     */
+    private boolean isCacheFresh(LocalDateTime cacheTimestamp) {
         return cacheTimestamp != null && !cacheTimestamp.plus(CACHE_EXPIRY).isBefore(LocalDateTime.now(clock));
     }
 }
