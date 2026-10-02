@@ -3051,9 +3051,7 @@
           "customer"
         ]
       },
-      "hard_negative_for": [
-        "admin_account_question"
-      ],
+      "hard_negative_for": [],
       "notes": "customer registration is crm"
     },
     {
@@ -3107,9 +3105,7 @@
           "vehicle"
         ]
       },
-      "hard_negative_for": [
-        "admin_account_question"
-      ],
+      "hard_negative_for": [],
       "notes": ""
     },
     {

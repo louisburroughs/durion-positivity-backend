@@ -20,6 +20,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -320,6 +323,194 @@ class ToolRegistryServiceTest {
         List<ToolMetadata> result = service.resolveCandidateTools(context, 2);
 
         assertThat(result).containsExactly(ADMIN_TOOL);
+    }
+
+    @Test
+    @DisplayName("#2371: a customer's account state vetoes the fast path although 'account state' is an admin phrase")
+    void resolveCandidateTools_customerAccountState_vetoesFastPath() {
+        ToolSelectionContext context = new ToolSelectionContext(
+                "Show the customer's account state", "ROLE_SYSTEM_ADMINISTRATOR", "IDLE", ADMIN_PERMISSIONS);
+        float[] vector = new float[] {0.3f, 0.6f};
+
+        when(repository.findEnabledByPermissionsAndWorkflow(ADMIN_PERMISSIONS, "IDLE"))
+                .thenReturn(List.of(ADMIN_TOOL, SAMPLE_TOOL));
+        when(embeddingModel.embed(anyString())).thenReturn(vector);
+        when(repository.findTopKByEmbeddingForPermissions(
+                        any(float[].class), anyInt(), eq(ADMIN_PERMISSIONS), eq("IDLE")))
+                .thenReturn(List.of(SAMPLE_TOOL));
+
+        ToolRegistryService.CandidateSelection selection = service.resolveCandidateSelection(context, 2);
+
+        assertThat(selection.adminFastPath()).isFalse();
+        assertThat(selection.candidates()).containsExactly(SAMPLE_TOOL);
+    }
+
+    @Test
+    @DisplayName("#2371: a platform user's account state still takes the fast path")
+    void resolveCandidateTools_platformUserAccountState_usesAdminFastPath() {
+        ToolSelectionContext context = new ToolSelectionContext(
+                "Show the account state for user jdoe", "ROLE_SYSTEM_ADMINISTRATOR", "IDLE", ADMIN_PERMISSIONS);
+
+        when(repository.findEnabledByPermissionsAndWorkflow(ADMIN_PERMISSIONS, "IDLE"))
+                .thenReturn(List.of(ADMIN_TOOL, SAMPLE_TOOL));
+
+        ToolRegistryService.CandidateSelection selection = service.resolveCandidateSelection(context, 2);
+
+        assertThat(selection.adminFastPath()).isTrue();
+        assertThat(selection.candidates()).containsExactly(ADMIN_TOOL);
+    }
+
+    /**
+     * #2371: every term the issue added vetoes an otherwise-admin question ("who has access" is an admin
+     * phrase, "access" a keyword). Terms that contain an older or shorter term ({@code ledger account},
+     * {@code accounts receivable}, {@code customers}, {@code cliente}, {@code bank account}) veto either
+     * way; {@link #adminAccountRule_namesTheNewVetoTerm} pins the ones that act on their own.
+     */
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(
+            strings = {
+                "customer",
+                "customers",
+                "party",
+                "parties",
+                "supplier",
+                "vendor",
+                "bank",
+                "bank account",
+                "ledger account",
+                "account balance",
+                "accounts receivable",
+                "accounts payable",
+                "client",
+                "cliente",
+                "fournisseur",
+                "proveedor",
+                "banque",
+                "bancaire",
+                "banco",
+                "bancaria",
+                "bancario"
+            })
+    @DisplayName("#2371: each added veto term blocks the fast path when an admin phrase is present")
+    void isAdminAccountQuestion_addedVetoTerm_blocksFastPath(String term) {
+        String message = "who has access to the " + term;
+
+        assertThat(ToolRegistryService.isAdminAccountQuestion(message)).isFalse();
+        assertThat(ToolRegistryService.adminAccountRule(message))
+                .hasValueSatisfying(rule -> assertThat(rule).startsWith("veto:"));
+    }
+
+    /**
+     * #2371: en, fr and es questions that fired the fast path before the change, each vetoed by exactly
+     * the new term the trace names (the first matched veto term in sorted order).
+     */
+    @ParameterizedTest(name = "{0}")
+    @CsvSource(
+            delimiter = '|',
+            quoteCharacter = '"',
+            value = {
+                "show the customer's account state|customer",
+                "what is the account state of the party record|party",
+                "which parties have user accounts|parties",
+                "show the supplier's account state|supplier",
+                "who has access to the vendor portal|vendor",
+                "who has access to the bank account|bank",
+                "which users can see the account balance|account balance",
+                "who has access to accounts receivable|accounts receivable",
+                "who has access to accounts payable|accounts payable",
+                "Quelle permission faut-il pour voir le compte du client?|client",
+                "Le fournisseur a-t-il la permission d'accéder au portail?|fournisseur",
+                "Quelle permission faut-il pour le compte bancaire?|bancaire",
+                "Quelle permission faut-il pour le compte en banque?|banque",
+                "¿El cliente tiene access a su cuenta?|client",
+                "¿El proveedor tiene access al portal?|proveedor",
+                "¿Quién tiene access a la cuenta bancaria?|bancaria",
+                "¿Quién tiene access al banco?|banco",
+                "¿Qué empleado bancario tiene access?|bancario"
+            })
+    @DisplayName("#2371: the trace names the added veto term that blocked an otherwise-admin question")
+    void adminAccountRule_namesTheNewVetoTerm(String message, String vetoTerm) {
+        assertThat(ToolRegistryService.isAdminAccountQuestion(message)).isFalse();
+        assertThat(ToolRegistryService.adminAccountRule(message)).contains("veto:" + vetoTerm);
+    }
+
+    /**
+     * #2371: veto terms match as substrings, a deliberate choice (see {@code FAST_PATH_VETO_TERMS}): a
+     * spurious veto only sends the question to semantic ranking. These pin the accepted substring hits.
+     */
+    @ParameterizedTest(name = "{0}")
+    @CsvSource(
+            delimiter = '|',
+            quoteCharacter = '"',
+            value = {
+                "which third-party users have access|party",
+                "who has access to online banking|bank",
+                "which API clients have access|client",
+                "¿Qué proveedores tienen access al portal?|proveedor"
+            })
+    @DisplayName("#2371: a veto term inside a longer word still vetoes (accepted substring hit)")
+    void adminAccountRule_vetoTermInsideLongerWord_stillVetoes(String message, String vetoTerm) {
+        assertThat(ToolRegistryService.isAdminAccountQuestion(message)).isFalse();
+        assertThat(ToolRegistryService.adminAccountRule(message)).contains("veto:" + vetoTerm);
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(
+            strings = {
+                "list all users",
+                "which roles can approve a purchase",
+                "reset the permission for user jdoe",
+                "show the account state for user jdoe",
+                "Is this user account still active?",
+                "who has access to the admin console",
+                "deactivate account for the technician who left",
+                "how many registered users do we have",
+                "show the audit log for logins"
+            })
+    @DisplayName("#2371: a pure user, role, permission or audit question still takes the fast path")
+    void isAdminAccountQuestion_pureAdminQuestion_stillFires(String message) {
+        assertThat(ToolRegistryService.isAdminAccountQuestion(message)).isTrue();
+        assertThat(ToolRegistryService.adminAccountRule(message))
+                .hasValueSatisfying(rule -> assertThat(rule).startsWith("match:"));
+    }
+
+    /**
+     * #2371: no veto term may occur inside an admin keyword or phrase, or it would veto every question that
+     * uses it. Each one alone must still fire. Mirrors {@code ADMIN_QUERY_KEYWORDS} and {@code
+     * ADMIN_QUERY_PHRASES}; extend it when either list grows.
+     */
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(
+            strings = {
+                "user",
+                "users",
+                "role",
+                "roles",
+                "permission",
+                "permissions",
+                "access",
+                "audit",
+                "audits",
+                "registered",
+                "registration",
+                "login",
+                "logins",
+                "who has access",
+                "who can access",
+                "audit log",
+                "access review",
+                "user count",
+                "registered users",
+                "account state",
+                "user account",
+                "user accounts",
+                "account access",
+                "disable account",
+                "deactivate account"
+            })
+    @DisplayName("#2371: no veto term hides inside an admin keyword or phrase")
+    void isAdminAccountQuestion_adminVocabularyAlone_fires(String adminTerm) {
+        assertThat(ToolRegistryService.isAdminAccountQuestion(adminTerm)).isTrue();
     }
 
     @Test

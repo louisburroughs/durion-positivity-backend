@@ -67,6 +67,43 @@ public class ToolRegistryService {
      * answer. Any hit vetoes the fast path outright, so a query that mixes an admin keyword with
      * domain vocabulary ("who has access to the receivables ledger") still reaches semantic
      * ranking rather than being collapsed to the admin tool alone.
+     *
+     * <p>#2371 added the vocabulary of accounts the admin tool does not hold: a customer's or
+     * party's (CRM), a supplier's or vendor's, a bank account, a GL or ledger account, an account
+     * balance, and the fr/es words for customer, supplier and bank. The {@code AdminFacadeTool}
+     * answers about platform users, roles, permissions and the audit log only, so "show the
+     * customer's account state" must reach semantic ranking even though {@code account state} is an
+     * admin phrase.
+     *
+     * <p>The fr/es terms follow the standard accounting and banking usage of each language: fr
+     * {@code client} ("comptes clients" is the French term for accounts receivable, Sources [1]) and
+     * {@code fournisseur} ("comptes fournisseurs", accounts payable, [2]); es {@code cliente} [4] and
+     * {@code proveedor} [5]. A bank account is "compte bancaire", "compte en banque" or "compte de
+     * banque" in French [3] and "cuenta bancaria" in Spanish, where "bancario, bancaria" is the
+     * adjective of "banco" [6, 7]. Neither adjective contains its noun, so {@code bancaire}, {@code
+     * bancaria} and {@code bancario} are listed beside {@code banque} and {@code banco}.
+     *
+     * <p>Terms match as plain substrings ({@link #matchedVetoTerms}), deliberately. A veto that fires
+     * too often costs little: the question goes to semantic ranking, where the admin tool still
+     * competes. A fast path that fires wrongly costs the whole turn, since every other tool is
+     * withheld. So the substring hits are accepted: {@code party} vetoes "third-party", {@code bank}
+     * vetoes "banking", {@code client} vetoes "clients", "clientele" and an "API client", {@code
+     * proveedor} vetoes "proveedores". What a term must never do is occur inside an admin keyword or
+     * phrase, which would veto every admin question; none does, and {@code ToolRegistryServiceTest}
+     * pins that. {@code parties} is listed because, unlike "customers" or "vendors", it does not
+     * contain its singular.
+     *
+     * <p>Sources (accessed 2026-10-02): [1] "accounts receivable", TERMIUM Plus, Translation Bureau,
+     * Government of Canada,
+     * https://www.btb.termiumplus.gc.ca/tpv2alpha/alpha-fra.html?lang=fra&amp;i=1&amp;index=alt&amp;srchtxt=ACCOUNTS+RECEIVABLE;
+     * [2] "accounts payable", TERMIUM Plus,
+     * https://www.btb.termiumplus.gc.ca/tpv2alpha/alpha-fra.html?lang=fra&amp;i=&amp;index=alt&amp;srchtxt=ACCOUNTS+PAYABLE;
+     * [3] "compte bancaire", Grand dictionnaire terminologique, Office québécois de la langue
+     * française, https://vitrinelinguistique.oqlf.gouv.qc.ca/fiche-gdt/fiche/8381273/compte-bancaire;
+     * [4] "cliente", Diccionario panhispánico del español jurídico, Real Academia Española,
+     * https://dpej.rae.es/lema/cliente; [5] "proveedor, proveedora", Diccionario de la lengua
+     * española, Real Academia Española, https://dle.rae.es/proveedor; [6] "banco", ibid.,
+     * https://dle.rae.es/banco; [7] "bancario, bancaria", ibid., https://dle.rae.es/bancario.
      */
     private static final Set<String> FAST_PATH_VETO_TERMS = Set.of(
             "receivable",
@@ -87,6 +124,27 @@ public class ToolRegistryService {
             "income statement",
             "chart of accounts",
             "gl account",
+            "ledger account",
+            "account balance",
+            "accounts receivable",
+            "accounts payable",
+            "bank",
+            "bank account",
+            "customer",
+            "customers",
+            "party",
+            "parties",
+            "supplier",
+            "vendor",
+            "client",
+            "cliente",
+            "fournisseur",
+            "proveedor",
+            "banque",
+            "bancaire",
+            "banco",
+            "bancaria",
+            "bancario",
             "workorder",
             "work order");
 

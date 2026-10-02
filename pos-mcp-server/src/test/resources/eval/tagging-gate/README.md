@@ -50,6 +50,8 @@ numbers. The report prints a warning next to an unreviewed language.
   derives different hard negatives.
   The two platform-event utterances added per language on 2026-09-30 (`en-0329`/`0330`,
   `fr-CA-0356`/`0357`, `es-0356`/`0357`) carry an empty list, confirmed by the derivation on 2026-10-01.
+  Re-derived on 2026-10-02 after #2371 widened the admin fast path's veto list: `en-0120` and
+  `en-0122` (a customer registering, a customer's access to a loaner car) lost `admin_account_question`.
 - `notes`: why the label is what it is, where it is not obvious.
 
 ## Labelling rules (from the tag questions)
