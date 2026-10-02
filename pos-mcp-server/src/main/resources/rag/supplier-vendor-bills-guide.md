@@ -28,15 +28,18 @@ These definitions are general accounting knowledge, not platform behaviour.
 
 - **Accounts payable** is "money owed by a business to its suppliers, shown as a liability on a company's balance
   sheet" (Sources [1]).
-- **Two-way and three-way matching.** The simplest check pairs the invoice with the purchase order; the three-way
-  match also compares what was physically received, so an invoice is paid only when the order, the receipt and the
-  invoice agree (Sources [1], [2]).
-- **Credit note or credit memo.** A seller issues it to reduce what a buyer owes under an earlier invoice, for
-  example after a return (Sources [3]). Seen from the buyer, a vendor's credit note reduces payables; seen from the
-  seller, a credit memo reduces receivables. A debit note is the related document either party may use about an
-  amount due (Sources [4]).
-- **Payment run.** Larger AP systems select many approved invoices that fall due by a date and pay them together as
-  one batch (Sources [5]). The platform has no such batch run; see "Paying vendor bills".
+- **Three-way match:** matching "the invoice, the purchase order, and the receiving report" before an invoice is
+  paid. A **two-way match** "compares the authorizing purchase order to the supplier invoice, to ensure that the
+  billed price is correct", without checking what was received (Sources [2]). The platform does neither exactly; see
+  "Matching an invoice to a receipt".
+- **Credit memo:** issued by the seller to the buyer, "reducing the amount that the buyer owes to the seller under
+  the terms of an earlier invoice", for example after a return (Sources [3]). A **debit memo** is the opposite: the
+  seller notifies the customer "of an additional billing" (Sources [4]). Seen from the buyer, a vendor's credit
+  memo (credit note) reduces payables; seen from the seller, a credit memo reduces receivables. The platform has
+  no debit memo document.
+- **Payment run:** in a system such as Oracle Payables, "a payment process request is a group of installments
+  submitted for payment", selected by a window of due dates and other criteria, and it can be scheduled to run
+  regularly (Sources [5]). The platform has no such batch run; see "Paying vendor bills".
 
 ## Supplier records
 
@@ -76,12 +79,12 @@ A bill carries `billNumber`, `billDate`, an optional `dueDate`, `totalAmount`, `
 ## How a vendor bill arrives
 
 1. **From a goods receipt.** `POST /v1/accounting/vendor-bills` (`accounting:ap:pay`) takes the receipt: vendor,
-   purchase order, received date and lines (product, description, quantity, unit price). It creates a bill in
-   `PENDING_RECEIPT_MATCH` totalling the lines, assigns a number
+   purchase order id, received date and lines (product, description, quantity, unit price). Purchase orders belong
+   to pos-order (`/v1/orders/purchase-orders`); accounting stores only the id and does not read the order. It
+   creates a bill in `PENDING_RECEIPT_MATCH` totalling the lines, assigns a number
    `BILL_<first 8 characters of vendorId, upper case>_<yyyyMMdd>_<7-digit sequence>` (the date is the day the bill is
-   recorded), and emits a GL posting event for the bill. A
-   repeated `eventId` returns the existing bill. Receiving an ASN in pos-inventory does not call this endpoint
-   automatically today.
+   recorded), and emits a GL posting event for the bill. A repeated `eventId` returns the existing bill. Receiving
+   an ASN in pos-inventory does not call this endpoint automatically today.
 2. **From a supplier's electronic invoice.** pos-supplier fetches invoices over EDIWheel and publishes each new one;
    pos-accounting records it as a bill under the vendor's own invoice number and creates no journal entry when it
    arrives. Such a bill has no due date. A missing amount parks it in `MATCH_EXCEPTION`; a foreign currency parks it
@@ -105,8 +108,10 @@ vendor in `PENDING_RECEIPT_MATCH`:
   (`APPROVED`) and leaves a medium-confidence one in `MATCH_EXCEPTION`; either way the bill takes the invoice's number
   and due date.
 
-The code calls this a three-way match, but the vendor invoice carries no purchase-order reference, so the order is
-only checked for presence; the comparison is invoice against receipt.
+The code calls this a three-way match, but by the standard definitions it is neither a three-way nor a two-way
+match: the vendor invoice carries no purchase-order reference, prices and quantities are compared with the goods
+receipt's lines rather than the purchase order's, and the order is only checked for presence (5 points). The
+comparison is invoice against receipt.
 
 Clearing an exception:
 
@@ -189,6 +194,7 @@ Platform sources (repository-relative):
 - `pos-supplier/README.md`
 - `pos-supplier/src/main/java/com/positivity/supplier/internal/controller/SupplierInvoiceFetchController.java`
 - `pos-domain-events/src/main/java/com/positivity/domainevents/supplier/SupplierInvoiceReceivedV1.java`
+- `pos-order/src/main/java/com/positivity/order/internal/controller/PurchaseOrderController.java` (purchase orders)
 - `pos-order/src/main/java/com/positivity/order/internal/service/ReturnOrderServiceImpl.java`
 - `pos-invoice/src/main/java/com/positivity/invoice/internal/service/InvoiceServiceImpl.java`
 - `durion/domains/accounting/.business-rules/AGENT_GUIDE.md`
@@ -199,10 +205,11 @@ External sources:
 
 1. "Accounts payable", Wikipedia, Wikimedia Foundation. <https://en.wikipedia.org/wiki/Accounts_payable>. Accessed
    2026-10-02.
-2. "Invoice processing", Wikipedia, Wikimedia Foundation. <https://en.wikipedia.org/wiki/Invoice_processing>.
+2. "Three-way matching definition", AccountingTools.
+   <https://www.accountingtools.com/articles/what-is-three-way-matching.html>. Accessed 2026-10-02.
+3. "Credit memo definition", AccountingTools. <https://www.accountingtools.com/articles/credit-memo>.
    Accessed 2026-10-02.
-3. "Credit note", Wikipedia, Wikimedia Foundation. <https://en.wikipedia.org/wiki/Credit_note>. Accessed 2026-10-02.
-4. "Debit note", Wikipedia, Wikimedia Foundation. <https://en.wikipedia.org/wiki/Debit_note>. Accessed 2026-10-02.
-5. "Payment Process Requests", Oracle Fusion Cloud Financials: Using Payables Invoice to Pay 25D, Oracle.
-   <https://docs.oracle.com/en/cloud/saas/financials/25d/fappp/payment-process-requests.html>. Accessed 2026-10-02
-   (cited from a search-result extract; the page could not be opened from the authoring environment).
+4. "Debit memo definition", AccountingTools.
+   <https://www.accountingtools.com/articles/what-is-a-debit-memo.html>. Accessed 2026-10-02.
+5. "Payment Process Request Template", Oracle Fusion Cloud Financials: Using Payables Invoice to Pay 25D, Oracle.
+   <https://docs.oracle.com/en/cloud/saas/financials/25d/fappp/payment-process-requests.html>. Accessed 2026-10-02.

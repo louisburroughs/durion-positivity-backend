@@ -24,14 +24,18 @@ reconciliation. It covers the journal entries a reconciliation posts and how lat
 General accounting knowledge, not platform behaviour.
 
 - A bank reconciliation compares the cash balance in the books with "the balance reported by the financial
-  institution in the most recent bank statement", and every difference is examined and, where appropriate,
-  corrected (Sources [1]).
-- Differences come mainly from timing, from items the bank recorded that the books have not, and from errors
-  (Sources [1]). A typical timing item is an outstanding cheque, issued but "not been presented at the bank for
-  payment" (Sources [1]). The platform records it, and the deposit in transit, as an outstanding item on the
-  reconciliation.
-- Fees, interest, missing or duplicate transactions and errors also appear as reconciling items, and reconciling at
-  frequent intervals is good practice (Sources [1]).
+  institution in the most recent bank statement"; differences come mainly from timing, from items the bank recorded
+  that the books have not, and from errors (Sources [1]).
+- The standard method adjusts both sides. **Balance per bank:** outstanding checks, "written and recorded in its
+  Cash account" but not yet cleared, are subtracted; deposits in transit, recorded in the books but "not been
+  processed by the bank", are added; bank errors are corrected. **Balance per books:** items on the statement that
+  the books lack, such as bank fees, NSF (returned) checks, interest and electronic transfers, are recorded as
+  entries. The statement is reconciled when the adjusted balance per bank equals the adjusted balance per books
+  (Sources [2]).
+- How the platform maps this (from the code, below): bank-side items are **outstanding items**, which post nothing
+  (`DEPOSIT_IN_TRANSIT`, `OUTSTANDING_CHECK`, `BANK_ERROR_PENDING`, `OTHER_LEDGER_TIMING`); book-side items are
+  **adjustments**, which post a journal entry to the cash account (`BANK_FEE`, `NSF_FEE`, `INTEREST_EARNED`,
+  `TRANSFER`, `OTHER`).
 
 ## Permissions and roles
 
@@ -207,3 +211,5 @@ External sources:
 
 1. "Reconciliation (accounting)", sections "In banking" and "Methods", Wikipedia, Wikimedia Foundation.
    <https://en.wikipedia.org/wiki/Reconciliation_(accounting)>. Accessed 2026-10-02.
+2. "Bank Reconciliation: In-Depth Explanation with Examples", AccountingCoach.
+   <https://www.accountingcoach.com/bank-reconciliation/explanation>. Accessed 2026-10-02.
