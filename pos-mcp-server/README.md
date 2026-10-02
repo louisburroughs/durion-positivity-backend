@@ -270,7 +270,7 @@ than 26 rag-scope options).
 | `mcp.tagging.thresholds.<tag>`     | `0.75`                                                 | Per-tag confidence threshold (§1); shadow data sets per-tag values before any promotion. `thresholds.entity` covers every entity Noul; `thresholds.entity.<key>` overrides it for one entity. |
 | `mcp.tagging.thresholds.workflow_state.non-idle` | `thresholds.workflow_state`               | The stricter threshold a non-`IDLE` `workflow_state` answer must also meet (the one tag that removes tools, spec §2.6); `thresholds.workflow_state` alone governs an `IDLE` answer. Write dotted keys quoted in YAML (`"workflow_state.non-idle": 0.9`), as for `entity.<key>`. |
 | `mcp.tagging.max-state-chars`      | `MCP_TAGGING_MAX_STATE_CHARS` `4000`                   | The message is cut here before it becomes the request `state`; a cut message is still tagged and the cut is counted.                                            |
-| `mcp.tagging.entity-questions`     | `MCP_TAGGING_ENTITY_QUESTIONS` `false`                 | Whether the `entity_<key>` Nouls are asked (45 questions since #2384 added `sales-report`; ~22 KB body as `TaggingQuestionsTest` prints it) or only the 13 fixed ones (~8 KB, about 2k tokens). They are asked only when this is `true` **and** `mcp.scope-graph.mode` is not `off` (the scope graph is their only consumer). Off by default: the default model `tev1:0.8b` reads about 2,000 tokens, which the wide request overflows. The bake-off decides the setting per model; `optionListHash` reflects the set asked. |
+| `mcp.tagging.entity-questions`     | `MCP_TAGGING_ENTITY_QUESTIONS` `false`                 | Whether the `entity_<key>` Nouls are asked (45 questions since #2384 added `sales-report`; ~22 KB body as `TaggingQuestionsTest` prints it) or only the 13 fixed ones (~10 KB, about 2k tokens). They are asked only when this is `true` **and** `mcp.scope-graph.mode` is not `off` (the scope graph is their only consumer). Off by default: the default model `tev1:0.8b` reads about 2,000 tokens, which the wide request overflows. The bake-off decides the setting per model; `optionListHash` reflects the set asked. |
 
 Quote a literal mode in YAML (`"off"`): bare `off` is the boolean `false`.
 
@@ -283,7 +283,7 @@ against an older Ollama simply records a `fallback` on every turn.
 
 **The request** carries only `model`, `state` (the message), `keep_alive` and the fixed `questions` (every one with
 `instructions`, as Ollama requires): never the caller, the tenant, the history or a forwarded header (§4). The tag set is
-closed and lives in code (`TaggingQuestions`): 13 questions by default (~8 KB, about 2k tokens), 45 for today's lexicon
+closed and lives in code (`TaggingQuestions`): 13 questions by default (~10 KB, about 2k tokens), 45 for today's lexicon
 with `entity-questions: true` and the scope graph on (cap 64; ~22 KB body for a one-line message;
 body cap 64 KiB). Every
 instruction starts with one short context clause ("Message from staff at a tire and auto service shop to its management

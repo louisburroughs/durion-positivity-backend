@@ -18,7 +18,8 @@ This document is reference context only and grants no access; each figure is gat
 It defines the money analytics behind questions such as "What's our gross margin?", "Show revenue by month",
 "How did Q3 compare to Q2?" and "What did we spend with Michelin in 2025?": which platform report answers each one,
 on what basis the figure is computed, and what the platform does not compute. Money figures belong to accounting;
-operational KPIs (work in progress, cycle time, utilization) are in the reporting metrics guide.
+operational KPIs (work in progress, cycle time, utilization) are in the reporting metrics guide
+(`reporting.metrics`).
 
 General definitions marked [n] come from the external sources listed under Sources; everything said about what a
 report returns comes from the platform's own code and API specifications.
@@ -50,8 +51,9 @@ The platform has three revenue figures and they are not interchangeable:
   pos-accounting posts `Dr Accounts Receivable` for the invoice total, `Cr Service Revenue` for the total less tax and
   `Cr Sales Tax Payable` for the tax, dated at the invoice's finalization. Reverting or cancelling a finalized
   invoice posts the mirror entry, and a credit memo debits revenue. Deposit-take invoices and zero-total invoices
-  post nothing: a deposit is a liability, not a sale. So this figure is accrual revenue, net of tax and of posted credit memos,
-  in the period the invoice was finalized. It is the platform's answer to "what was our revenue" or "total sales".
+  post nothing: a deposit is a liability, not a sale. So this figure is accrual revenue, net of tax and of posted
+  credit memos, in the period the invoice was finalized. It is the platform's answer to "what was our revenue" or
+  "total sales".
 - **Revenue by customer** (`revenue` per row). The sum of the invoice `total` (subtotal plus adjustments plus tax)
   of each customer's FINALIZED or POSTED invoices whose creation date falls in the window, with deposit-take
   invoices excluded and window days taken in UTC. It includes sales tax, is not reduced by credit memos or refunds,
@@ -67,9 +69,9 @@ thing. A quotation or estimate amount is never revenue, and a DRAFT invoice has 
 ## Margin and profit
 
 Gross profit is net sales less the cost of goods sold, an amount; gross margin is that difference divided by
-revenue, a percentage [2][4]. Cost of goods sold is the carrying value of the goods sold in the period [4]. Net
-profit margin is net profit divided by revenue [3]: it comes after every expense, not only the cost of what was
-sold.
+revenue, a percentage [2][4]. Cost of goods sold is "the carrying value of goods sold during a particular period"
+[4]. Net profit margin is "net profit divided by revenue" [3]: it comes after every expense, not only the cost of
+what was sold.
 
 What the platform computes:
 
@@ -134,16 +136,17 @@ procurement cost and keep control of it [6]. On this platform the one spend repo
 
 ## Top customers
 
-"Top customers by revenue" and "largest customers" rank customers by revenue: use revenue by customer and state
-its basis. The glossary defines "best customers" by contribution margin, which needs costs the platform does not
-compute, so it cannot be answered as defined: say so, and offer the revenue ranking as the largest customers.
-"Who are our top customers?" names no metric; ask which one is meant.
+"Top customers by revenue" and "largest customers" rank customers by revenue: use revenue by customer
+(`getRevenueByCustomer`) and state its basis (invoice totals including tax, by invoice creation date). The glossary
+defines "best customers" by contribution margin, which needs costs the platform does not compute, so it cannot be
+answered as defined: say so, and offer the revenue ranking as the largest customers. "Who are our top customers?"
+names no metric; ask which one is meant.
 
 ## Common questions
 
 | Question | How to answer |
 | --- | --- |
-| "What's our gross margin?" | Not computed (no cost of goods sold on sales). Offer revenue and net income for a period, with the caveats above. |
+| "What's our gross margin?" | Not computed (no cost of goods sold on sales). Offer revenue and net income for a period, noting that net income depends on the statement-line mapping. |
 | "Show sales trend for the past 12 weeks" | No weekly buckets. Offer the 12-week total, or up to three shorter periods. |
 | "How did Q3 compare to Q2?" | Two income statements, one per quarter; revenue, net income, the difference and the percentage change. |
 | "What did we spend with Michelin in 2025?" | `getVendorSpend` for 2025; the vendor's `paidAmount` (cash paid) and bills issued; mention the top-20 cap and the glossary difference. |
@@ -154,8 +157,8 @@ compute, so it cannot be answered as defined: say so, and offer the revenue rank
 
 Platform sources:
 
-- `pos-accounting/openapi.yaml`: `generateIncomeStatement`, `getVendorSpend`, `getCollectionsAnalytics`, the
-  `IncomeStatementReport`, `VendorSpendReport`, `VendorSpendRow` and `CollectionsAnalyticsReport` schemas
+- `pos-accounting/openapi.yaml` (`generateIncomeStatement`, `getVendorSpend`, `getCollectionsAnalytics`, the
+  `IncomeStatementReport`, `VendorSpendReport`, `VendorSpendRow` and `CollectionsAnalyticsReport` schemas)
 - `pos-accounting/src/main/java/com/positivity/accounting/internal/service/FinancialReportingServiceImpl.java`
   (statement lines, revenue and expense classification, totals)
 - `pos-accounting/src/main/java/com/positivity/accounting/internal/repository/JournalEntryRepository.java`
@@ -167,7 +170,7 @@ Platform sources:
 - `pos-accounting/src/main/resources/db/migration/R__seed_reference_accounting.sql` (account 4000 statement mapping,
   posting categories, 5000 Cost of Goods Sold)
 - `pos-accounting/src/main/resources/permissions.yaml`
-- `pos-invoice/openapi.yaml`: `getRevenueByCustomer`, `RevenueByCustomerReport`, `RevenueByCustomerRow`
+- `pos-invoice/openapi.yaml` (`getRevenueByCustomer`, `RevenueByCustomerReport`, `RevenueByCustomerRow`)
 - `pos-invoice/src/main/java/com/positivity/invoice/internal/repository/InvoiceRepository.java`
   (`revenueByCustomer`), `internal/service/InvoiceAnalyticsServiceImpl.java` (revenue statuses, UTC window) and
   `internal/service/InvoiceFinalizationServiceImpl.java` (invoice total = subtotal + adjustments + tax)

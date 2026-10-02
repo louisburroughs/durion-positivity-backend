@@ -37,7 +37,7 @@ import org.springframework.boot.context.properties.bind.ConstructorBinding;
  * @param maxStateChars the message is cut at this length before it becomes the {@code state}
  * @param entityQuestions whether the {@code entity_<key>} Nouls are asked (default false: the 13 fixed
  *     questions, about 2k tokens, fit the default {@code tev1:0.8b}, which reads about 2,000 tokens;
- *     the 45-question set is about 4.6k tokens and would overflow it). The §6 bake-off turns it on per
+ *     the 45-question set, a request body of about 22 KB, would overflow it). The §6 bake-off turns it on per
  *     model where the context allows
  */
 @ConfigurationProperties(prefix = "mcp.tagging")

@@ -48,11 +48,11 @@ Money figures (sales and revenue, margin and profit, vendor spend, and period co
 | "Which location is behind?" | Requires comparable scope and all-location visibility. |
 
 ## Sources
-Platform sources for the financial reporting section:
+Platform sources for the financial reporting section and the permission codes in the purpose section:
 
 - `pos-accounting/openapi.yaml` (`generateIncomeStatement`, `getVendorSpend`, `getCollectionsAnalytics`)
 - `pos-accounting/src/main/java/com/positivity/accounting/internal/service/FinancialReportingServiceImpl.java`
 - `pos-invoice/openapi.yaml` (`getRevenueByCustomer`)
 - `pos-mcp-server/src/main/resources/rag/sales-analytics-guide.md`
 - `durion/domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md` (invoice revenue recognition)
-- `pos-accounting` and `pos-workorder` `permissions.yaml` (the permission codes in the header)
+- `pos-accounting/src/main/resources/permissions.yaml` and `pos-workorder/src/main/resources/permissions.yaml` (`accounting:report:export`, `workorder:dashboard:view`)
