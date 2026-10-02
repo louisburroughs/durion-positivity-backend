@@ -49,8 +49,8 @@ class MechanicRosterControllerTest {
         UUID mechanicId = UUID.fromString("01960011-0000-7000-8000-000000000001");
         UUID personId = UUID.fromString("01960011-0000-7000-8000-000000000002");
         MechanicRosterEntryResponse entry = MechanicRosterEntryResponse.builder()
-                .mechanicId(mechanicId)
-                .personId(personId)
+                .mechanicPersonId(personId)
+                .mechanicRecordId(mechanicId)
                 .firstName("Ada")
                 .lastName("Lovelace")
                 .status(MechanicStatus.INACTIVE)
@@ -68,8 +68,11 @@ class MechanicRosterControllerTest {
                         .param("page", "0")
                         .param("size", "20"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content[0].mechanicId").value(mechanicId.toString()))
-                .andExpect(jsonPath("$.content[0].personId").value(personId.toString()))
+                .andExpect(jsonPath("$.content[0].mechanicPersonId").value(personId.toString()))
+                .andExpect(jsonPath("$.content[0].mechanicRecordId").value(mechanicId.toString()))
+                // #2363: the surrogate is no longer published as mechanicId, nor the person id twice.
+                .andExpect(jsonPath("$.content[0].mechanicId").doesNotExist())
+                .andExpect(jsonPath("$.content[0].personId").doesNotExist())
                 .andExpect(jsonPath("$.content[0].status").value("INACTIVE"))
                 .andExpect(jsonPath("$.content[0].credentials[0].skillCode").value("ALIGNMENT"))
                 .andExpect(jsonPath("$.content[0].credentials[0].status").value("EXPIRED"))

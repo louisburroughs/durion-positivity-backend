@@ -997,6 +997,8 @@ paths:
 
         Emits a SHOPMGR_MECHANIC_ROSTER_LIST audit event; no state changes occur, and rows trail the People/HR authority by the event-propagation delay.
 
+        Each row identifies the mechanic by mechanicPersonId, the People-domain person id that createAssignment takes (its sort key is still personId); mechanicRecordId is an internal shop-manager record id and not a cross-service identifier.
+
         Returns 403 when the caller lacks shop:technician:view, and an empty page rather than an error when no mechanic matches the filters.
 
         '
@@ -1067,7 +1069,7 @@ paths:
       - shop:technician:view
   /v1/shop-manager/{locationId}/technicians:
     get:
-      description: 'Returns the technicians whose ACTIVE technician staffing assignment at one shop location is effective on a date, the same assignments a booking on that date counts, enriched with mechanic identity and skills from the eventually consistent HR read model, plus a PLACEHOLDER shift window per technician.
+      description: 'Returns the technicians whose ACTIVE technician staffing assignment at one shop location is effective on a date, the same assignments a booking on that date counts, enriched with mechanic identity (mechanicPersonId, the People-domain person id that createAssignment takes; mechanicRecordId is an internal record id) and skills from the eventually consistent HR read model, plus a PLACEHOLDER shift window per technician.
 
         PLACEHOLDER: shiftStart, shiftEnd, shiftMinutes, shiftSource and shiftStatus are derived from the shop location''s operating hours for the requested date, not from the person''s own roster, so every technician at the location carries the same window and staggered shifts, part-time hours, overtime and PTO are invisible to it; shiftSource reads LOCATION_HOURS until the real per-person shift schedule (issue 71, blocked on issue 271) replaces it, so read that field rather than this prose to tell a placeholder window from a real one; an unknown timezone or unreadable hours give shiftStatus UNKNOWN with null bounds rather than a default window, and a dated holiday closure gives CLOSED.
 
@@ -2147,10 +2149,14 @@ components:
         locationId:
           format: uuid
           type: string
-        mechanicId:
+        mechanicPersonId:
+          description: The mechanic's People-domain person id (ADR-0015 §7 I7) - the value createAssignment takes as mechanicPersonId. Use this to identify the mechanic across services.
+          example: 01960003-0000-7000-8000-000000000010
           format: uuid
           type: string
-        personId:
+        mechanicRecordId:
+          description: Internal shop-manager mechanic record id (a local surrogate key). Not a person id and not a stable cross-service identifier; do not send it to other services.
+          example: 01960003-0000-7000-8000-000000000011
           format: uuid
           type: string
         shiftEnd:
@@ -2192,6 +2198,8 @@ components:
           format: date
           type: string
       required:
+      - mechanicPersonId
+      - mechanicRecordId
       - shiftSource
       - shiftStatus
       type: object
@@ -2230,10 +2238,14 @@ components:
         lastSyncedAt:
           format: date-time
           type: string
-        mechanicId:
+        mechanicPersonId:
+          description: The mechanic's People-domain person id (ADR-0015 §7 I7) - the value createAssignment takes as mechanicPersonId. Use this to identify the mechanic across services.
+          example: 01960003-0000-7000-8000-000000000010
           format: uuid
           type: string
-        personId:
+        mechanicRecordId:
+          description: Internal shop-manager mechanic record id (a local surrogate key). Not a person id and not a stable cross-service identifier; do not send it to other services.
+          example: 01960003-0000-7000-8000-000000000011
           format: uuid
           type: string
         status:
@@ -2245,6 +2257,9 @@ components:
         terminationDate:
           format: date
           type: string
+      required:
+      - mechanicPersonId
+      - mechanicRecordId
       type: object
     Opening:
       description: 'One opening: bay, technician, and the constraints actually evaluated'
