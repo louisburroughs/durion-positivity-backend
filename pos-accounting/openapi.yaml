@@ -3715,13 +3715,13 @@ paths:
       x-required-permissions:
       - accounting:events:view
     post:
-      description: 'Submits a business event into the accounting pipeline, where the posting engine converts it into journal entries via published posting rules or default GL mappings.
+      description: 'Injects a source-system business event into the accounting pipeline on behalf of its producer, where the posting engine converts it into journal entries via published posting rules or default GL mappings.
 
-        Use this tool to feed source-system activity into the ledger; do not use createJournalEntry, which bypasses the rules engine for manual entries, and use resolveTestMapping to preview the rules first.
+        Use this endpoint as the source system that owns the event (Billing and the other source domains publish their own facts) or as an operator replaying a producer''s event; do not use it for a manual posting, which is createJournalEntry, or to re-run a FAILED or SUSPENDED event, which is retryAccountingEvent or reprocessSuspendedEvent, and use resolveTestMapping to preview the rules first.
 
         Preconditions: no event with the same eventId may already be ingested; duplicates are rejected rather than reprocessed.
 
-        Required inputs: eventType (max 100 chars) and payload (JSON object); eventId, sourceSystem and transactionDate (ISO-8601) are optional, eventId being generated when omitted. organizationId is deprecated and ignored — omit it.
+        Required inputs: eventType (max 100 chars) and payload (JSON object); eventId, sourceSystem and transactionDate (ISO-8601) are optional, eventId being generated when omitted.
 
         Emits an ACCOUNTING_EVENT_SUBMIT event and returns 202 while processing continues asynchronously; callers poll getAccountingEvent for the outcome.
 

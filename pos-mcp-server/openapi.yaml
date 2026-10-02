@@ -1143,6 +1143,11 @@ paths:
         required: false
         schema:
           type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          type: string
       requestBody:
         content:
           application/json:
