@@ -640,7 +640,7 @@
   }, {
     "id" : "admin-veto-1",
     "message" : "who has access to the receivables ledger",
-    "simpleChat" : true,
+    "simpleChat" : false,
     "followsPreviousTurn" : false,
     "workflowState" : "IDLE",
     "impliesDateWindow" : true,
@@ -648,7 +648,8 @@
     "aboutInventory" : false,
     "aboutOrders" : false,
     "adminFastPath" : false,
-    "compoundQuestion" : false
+    "compoundQuestion" : false,
+    "note" : "#2371 review: simpleChat departs from the capture (true then). 'ledger' is now a simple-chat business keyword, so this question reaches tool selection instead of the no-tool T0 path."
   }, {
     "id" : "admin-1",
     "message" : "list all users",
@@ -773,7 +774,7 @@
   }, {
     "id" : "admin-veto-5",
     "message" : "who has access to the bank account",
-    "simpleChat" : true,
+    "simpleChat" : false,
     "followsPreviousTurn" : false,
     "workflowState" : "IDLE",
     "impliesDateWindow" : false,
@@ -782,7 +783,7 @@
     "aboutOrders" : false,
     "adminFastPath" : false,
     "compoundQuestion" : false,
-    "note" : "#2371: added after the capture. The pre-ADR-0068 heuristic took the admin fast path here ('who has access' phrase, no veto term); 'bank' is now a veto term, a deliberate change."
+    "note" : "#2371: added after the capture. The pre-ADR-0068 heuristic took the admin fast path here ('who has access' phrase, no veto term); 'bank' is now a veto term, a deliberate change. 'bank' is also a simple-chat business keyword, so the question reaches tool selection (and the ranked tools) instead of the no-tool T0 path."
   }, {
     "id" : "admin-veto-6",
     "message" : "which users can see the vendor account balance",

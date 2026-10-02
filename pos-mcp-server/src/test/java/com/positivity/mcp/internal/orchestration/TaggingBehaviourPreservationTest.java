@@ -114,12 +114,19 @@ class TaggingBehaviourPreservationTest {
                 .filteredOn(f -> f.note().startsWith("#2371"))
                 .extracting(Fixture::id, Fixture::adminFastPath)
                 .containsExactlyInAnyOrder(
+                        tuple("admin-veto-1", false),
                         tuple("admin-veto-4", false),
                         tuple("admin-veto-5", false),
                         tuple("admin-veto-6", false),
                         tuple("admin-veto-7-fr", false),
                         tuple("admin-veto-8-es", false),
                         tuple("admin-7", true));
+        // #2371 review: a vetoed question must also reach tool selection, so these two are no longer
+        // simple chat ('ledger' and 'bank' are business keywords).
+        assertThat(fixtures)
+                .filteredOn(f -> f.id().equals("admin-veto-1") || f.id().equals("admin-veto-5"))
+                .extracting(Fixture::simpleChat)
+                .containsExactly(false, false);
     }
 
     @ParameterizedTest(name = "{0}")
