@@ -29,8 +29,8 @@ request as high risk (ADR-0068), confirms the exact account, role and scope befo
 | **Person** | `pos-people-contact` | The human behind the account, and the stable identifier used in audit trails. |
 | **Employee** | `pos-people` | Employment facts (employee number, status, job role) and staffing assignments. |
 
-A user account is what lets someone authenticate and then be authorised to use resources (see Sources [1]). It is not
-an HR record: a customer who registers online has an account and no employee record, and a technician who never signs
+A user account "allows a user to authenticate to a system and potentially to receive authorization to access
+resources" (see Sources [1]). It is not an HR record: a customer who registers online has an account and no employee record, and a technician who never signs
 in has an employee record and no account. One account is linked to one person, and a person may have only one active
 account at a time. Employee records are covered by the employee guide (`people.employees`).
 
@@ -211,10 +211,9 @@ Platform sources:
 
 External sources:
 
-1. "User (computing)", Wikipedia, Wikimedia Foundation: a user account "allows a user to authenticate to a system and
-   potentially receive authorization to access resources". <https://en.wikipedia.org/wiki/User_(computing)>
+1. "User (computing)", Wikipedia, Wikimedia Foundation. <https://en.wikipedia.org/wiki/User_(computing)>
    (accessed 2026-10-02).
-2. "Role-based access control", Wikipedia, Wikimedia Foundation (summarising the NIST/ANSI INCITS 359-2004 RBAC
-   standard). <https://en.wikipedia.org/wiki/Role-based_access_control> (accessed 2026-10-02).
+2. "Role-based access control", Wikipedia, Wikimedia Foundation.
+   <https://en.wikipedia.org/wiki/Role-based_access_control> (accessed 2026-10-02).
 3. "Principle of least privilege", Wikipedia, Wikimedia Foundation.
    <https://en.wikipedia.org/wiki/Principle_of_least_privilege> (accessed 2026-10-02).

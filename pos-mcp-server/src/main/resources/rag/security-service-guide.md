@@ -238,7 +238,7 @@ Returns the full list of permissions the user currently holds across all their a
 
 ### Checking whether a user has a specific permission
 
-An administrator or system component can check whether a named user holds a specific permission (see Authorization Decisions below). Location-sensitive checks are made by the service that owns the data, from the location-scope claims in the user's token.
+An administrator or system component can check whether a named user holds a specific permission (see Authorization Decisions). Location-sensitive checks are made by the service that owns the data, from the location-scope claims in the user's token.
 
 **Required role(s):** Admin, Manager, General Manager
 

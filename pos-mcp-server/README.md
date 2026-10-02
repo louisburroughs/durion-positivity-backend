@@ -287,9 +287,9 @@ assistant; may be in English, French or Spanish."):
   `needs_web_search`, `about_inventory`, `about_orders`, `implies_date_window`, `admin_account_question`,
   `compound_question`, `intent`, `complexity`, `risk` (a Score over LOW/MEDIUM/HIGH);
 - `domain`, a Choice whose options are **permanently the curated RAG-scope vocabulary**: the distinct `rag-scope` values
-  of `mcp.rag.preload.docs` plus `master` (16 today, `marketing` since #2385; never the 33 tool-catalog domains). Each option's criteria sentence
-  comes from the `domains:` block of `scope-graph/entities.yaml`; `ScopeGraphRealConfigValidationTest` requires a sentence
-  for every rag-scope of both preload lists and rejects any other key. `TierSelector`'s risky domains (`accounting`,
+  of `mcp.rag.preload.docs` plus `master` (16 today, `marketing` since #2385; never the 33 tool-catalog domains). Each
+  option's criteria sentence comes from the `domains:` block of `scope-graph/entities.yaml`;
+  `ScopeGraphRealConfigValidationTest` requires a sentence for every rag-scope of both preload lists and rejects any other key. `TierSelector`'s risky domains (`accounting`,
   `tax`, `admin`, `security`) are spelled in this vocabulary. Tool domains with no rag-scope (`vehicle-inventory`,
   `people-contact`, `supplier`, `location`, `catalog`, `vehicle-fitment`) are never options. A list over
   the local models' 26-option cap skips the question (one WARN at startup), as a list under 2 options does;

@@ -17,10 +17,10 @@ read its results. It answers questions such as "Which campaigns are active?", "L
 
 ## Concepts
 
-Email marketing is the sending of a commercial message, typically to a group of people, by email (see Sources [1]); the
-platform also supports SMS. The group is usually a **segment**: a meaningful sub-group of current or potential
-customers, defined differently for business customers (company type, industry, location) and for consumers
-(demographics, behaviour) (see Sources [2]).
+Email marketing is "the act of sending a commercial message, typically to a group of people, using email" (see
+Sources [1]); the platform also supports SMS. The group is usually a **segment**, one of the "meaningful sub-groups of
+current or potential customers" a market is divided into, defined differently for business customers (company type,
+industry, location) and for consumers (demographics, behaviour) (see Sources [2]).
 
 | Term | On the platform |
 | --- | --- |
@@ -60,7 +60,8 @@ time (and by program).
    `DRAFT`; nobody is contacted. A code already in use is refused (409).
 2. **Edit** (`marketing:campaign:edit`): replace the definition while it is still `DRAFT` (bind the segment, attach
    templates, set the offer, window and schedule). The audience type cannot change.
-3. **Preview the audience** (`marketing:campaign:view`): see the reach per channel before going further (below).
+3. **Preview the audience** (`marketing:campaign:view`): see the reach per channel before going further (see Audience, consent and
+   suppression).
 4. **Schedule** (`marketing:campaign:schedule`): checks readiness and moves the campaign to `SCHEDULED`. It needs at
    least one channel; a bound segment that is known, active and of the same audience type; a template for every
    channel; any promotion offer `ACTIVE` in pricing with today inside its dates; and a well-formed catalog focus. Every
@@ -78,8 +79,8 @@ the dispatch action is called.
 **Pause, resume and cancel** (`marketing:campaign:manage`). Pausing a `SCHEDULED` or `SENDING` campaign stops the
 background delivery; queued messages stay queued. Resuming returns it to `SCHEDULED`: the background delivery picks
 the queued messages up again, and dispatching once more moves it back to `SENDING` without re-sending anyone already
-sent. Cancelling is permanent and does not recall messages already delivered. There
-is no delete operation for campaigns.
+sent. Cancelling is permanent and does not recall messages already delivered. There is no delete operation for
+campaigns.
 
 **Launching is high risk.** Dispatch sends messages outside the shop to real customers and cannot be undone, so the
 assistant treats it as a high-risk action (ADR-0068), states the campaign, channels and expected reach, and asks for
@@ -195,10 +196,9 @@ External sources:
 
 1. "Email marketing", Wikipedia, Wikimedia Foundation. <https://en.wikipedia.org/wiki/Email_marketing>
    (accessed 2026-10-02).
-2. "Market segmentation", Wikipedia, Wikimedia Foundation: "the process of dividing a consumer or business market into
-   meaningful sub-groups of current or potential customers". <https://en.wikipedia.org/wiki/Market_segmentation>
+2. "Market segmentation", Wikipedia, Wikimedia Foundation. <https://en.wikipedia.org/wiki/Market_segmentation>
    (accessed 2026-10-02).
-3. "Canada's Anti-Spam Legislation", Wikipedia, Wikimedia Foundation.
-   <https://en.wikipedia.org/wiki/Canada%27s_Anti-Spam_Legislation> (accessed 2026-10-02).
+3. "Fighting Internet and Wireless Spam Act", Wikipedia, Wikimedia Foundation (the article on Canada's Anti-Spam
+   Legislation, CASL). <https://en.wikipedia.org/wiki/Fighting_Internet_and_Wireless_Spam_Act> (accessed 2026-10-02).
 4. "CAN-SPAM Act of 2003", Wikipedia, Wikimedia Foundation. <https://en.wikipedia.org/wiki/CAN-SPAM_Act_of_2003>
    (accessed 2026-10-02).

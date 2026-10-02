@@ -65,7 +65,7 @@ Every status change stamps `statusEffectiveAt`. A termination date may not be ea
 | Look up by employee number | Returns the person id, number, status and an active flag. | `people:employee:view` |
 | Read the full profile | Includes personal contact detail: address, personal phone and email, emergency contact. | `people:employee_pii:view` |
 | Update | Full replacement of the profile, including status and job role. | `people:employee:edit` |
-| Offboard (disable) | See below. | `people:employee:activation` |
+| Offboard (disable) | Sets `DISABLED` and ends the staffing assignments; see Offboarding. | `people:employee:activation` |
 | Re-enable a disabled employee | `DISABLED` to `ACTIVE`, with the last-read `updatedAt` as a concurrency check. | `people:employee:activation` |
 
 **Duplicates.** By default (`duplicatePolicy: STRICT`) a create or update is refused with 409 when another employee
@@ -103,9 +103,9 @@ Three different things are called "role", and they must not be confused.
 | **Application role** | `pos-security-service` | A named set of permissions (for example `SERVICE_ADVISOR`) assigned to a user account. | **Yes.** It is the only thing that grants permissions. |
 | **Assignment role** | `pos-people` staffing assignment | What the person does at one location, for example `TECHNICIAN`. | Not directly; it places the person at a location, which a location-scoped application role then uses. |
 
-In HR terms a job is a set of tasks and duties performed by one person (see Sources [3]); in access-control terms a role
-is a job function to which permissions are attached, and users get permissions only through the roles they are
-assigned (see Sources [4]). The platform keeps the two apart on purpose: changing someone's job title never changes
+In HR terms the ILO defines a job as "a set of tasks and duties performed, or meant to be performed, by one person"
+(see Sources [3]); in access-control terms a role is a job function to which permissions are attached, and users get
+permissions only through the roles they are assigned (see Sources [4]). The platform keeps the two apart on purpose: changing someone's job title never changes
 what they can do in the system, and granting a permission never edits their HR record.
 
 - List the job roles (`people:jobRole:view`) to pick one for an employee; add one with `people:jobRole:manage`. A code
@@ -210,10 +210,10 @@ External sources:
 
 1. "Human resource management system", Wikipedia, Wikimedia Foundation.
    <https://en.wikipedia.org/wiki/Human_resource_management_system> (accessed 2026-10-02).
-2. "Identity management", Wikipedia, Wikimedia Foundation. <https://en.wikipedia.org/wiki/Identity_management>
+2. "Identity and access management", Wikipedia, Wikimedia Foundation.
+   <https://en.wikipedia.org/wiki/Identity_and_access_management> (accessed 2026-10-02).
+3. "International Standard Classification of Occupations", Wikipedia, Wikimedia Foundation (quoting the ILO
+   definition of a job). <https://en.wikipedia.org/wiki/International_Standard_Classification_of_Occupations>
    (accessed 2026-10-02).
-3. "International Standard Classification of Occupations", Wikipedia, Wikimedia Foundation (reached from "Job title"):
-   a job is "a set of tasks and duties performed, or meant to be performed, by one person".
-   <https://en.wikipedia.org/wiki/Job_title> (accessed 2026-10-02).
-4. "Role-based access control", Wikipedia, Wikimedia Foundation (summarising the NIST/ANSI INCITS 359-2004 RBAC
-   standard). <https://en.wikipedia.org/wiki/Role-based_access_control> (accessed 2026-10-02).
+4. "Role-based access control", Wikipedia, Wikimedia Foundation.
+   <https://en.wikipedia.org/wiki/Role-based_access_control> (accessed 2026-10-02).

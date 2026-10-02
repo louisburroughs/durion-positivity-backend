@@ -138,7 +138,8 @@ eventually consistent copy of those assignments together with the mechanic's ide
 
 - **One location, one day:** the location technician roster (`shop:technician:view`) lists the technicians whose
   technician assignment at that location is effective on a date (today in the location's timezone by default), with
-  their skills and the placeholder shift window described above. It can be narrowed by status and skill code.
+  their skills and the placeholder shift window taken from the location's opening hours
+  (`shiftSource: LOCATION_HOURS`). It can be narrowed by status and skill code.
 - **The whole business:** the mechanic roster (`shop:technician:view`) lists every mechanic projected from active
   technician assignments, across locations.
 - **One person's assignments:** `pos-people` lists a person's assignments and their primary location

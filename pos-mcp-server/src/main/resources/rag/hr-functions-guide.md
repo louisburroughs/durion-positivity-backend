@@ -10,7 +10,7 @@ This guide describes the workforce management capabilities of the `pos-people` s
 
 The service exposes a REST API. All endpoints require a valid bearer token, and each operation is protected by a specific permission scope described below.
 
-Security note: which roles hold each permission below is tenant configuration in `pos-security-service` (the baseline seed plus whatever a security administrator grants); see the role-permission matrix (`security.role-permission-matrix`). Work-session endpoints require authentication, and a caller may act only for themself unless they hold `people:timekeeping:approve`.
+Security note: which roles hold each permission in this guide is tenant configuration in `pos-security-service` (the baseline seed plus whatever a security administrator grants); see the role-permission matrix (`security.role-permission-matrix`). Work-session endpoints require authentication, and a caller may act only for themself unless they hold `people:timekeeping:approve`.
 
 ---
 
@@ -101,7 +101,6 @@ Person records are the underlying identity layer beneath employee records, owned
 - Create / resolve: `people-contact:person:create`
 - Update: `people-contact:person:edit`
 - Delete: `people-contact:person:delete`
-
 
 ---
 
@@ -227,7 +226,6 @@ Rejections require a `rejectionReason` for each entry — the API will return 40
 - Batch approval: `people:timeEntry:approve`
 - Batch rejection: `people:timeEntry:reject`
 
-
 ---
 
 ## Time Entry Adjustments
@@ -296,7 +294,6 @@ Exceptions can be listed for all employees or filtered to a specific employee.
 - Acknowledge: `people:timeException:acknowledge`
 - Resolve: `people:timeException:resolve`
 - Waive: `people:timeException:resolve`
-
 
 ---
 
