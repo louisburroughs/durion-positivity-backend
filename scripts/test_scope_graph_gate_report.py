@@ -383,15 +383,37 @@ class VerdictTest(unittest.TestCase):
         self.assertIn("new forbidden hit in 1 sample(s)", result["gate"]["overall"]["failures"])
         self.assertEqual([e["new"] for e in result["forbiddenList"]], [[], ["y.doc"]])
 
-    def test_a_set_regression_fails_though_the_overall_means_hold(self):
-        # rag-lexical MRR 1.0 -> 0.5, rag-retrieval 0.5 -> 1.0: the overall mean is unchanged.
+    def test_a_fixture_regression_offset_in_the_means_fails(self):
+        # rag-lexical MRR 1.0 -> 0.5, rag-retrieval 0.5 -> 1.0: every overall mean is unchanged, but
+        # one fixture got worse, and that is what the gate is for.
         lex = _trace(21, "lex q", _scope("HIGH", [_doc("e1"), _doc("o1")], ["e1", "o1"]))
         ret = _trace(22, "ret q", _scope("HIGH", [_doc("o2"), _doc("e2")], ["e2", "o2"]))
         fixtures = [_fixture("lex", "lex q", ["e1"]), _fixture("ret", "ret q", ["e2"], set_name="rag-retrieval")]
         enforce = [_enforce(lex, [_doc("o1"), _doc("e1")]), _enforce(ret, [_doc("e2"), _doc("o2")])]
-        result = report.build_report([lex, ret], fixtures, enforce_traces=enforce)
-        self.assertEqual(result["gate"]["overall"]["verdict"], "PASS")
+        result = report.build_report([lex, ret], fixtures, enforce_traces=enforce, verbose=True)
+        deltas = result["gate"]["overall"]["deltas"]
+        self.assertEqual((deltas["hitAtK"], deltas["mrr"], deltas["recallAtK"]), (0.0, 0.0, 0.0))
+        self.assertEqual(result["regressedFixtures"], 1)
+        self.assertIn("1 fixture(s) regressed (lost an expected document or MRR fell)",
+                      result["gate"]["overall"]["failures"])
         self.assertEqual(result["gate"]["failingSets"], ["rag-lexical"])
+        self.assertEqual(result["gate"]["failingConfidences"], ["HIGH"])
+        self.assertEqual(result["gate"]["verdict"], "FAIL")
+        [entry] = result["lossList"]
+        self.assertEqual((entry["fixtureId"], entry["lost"], entry["mrr"]), ("lex", [], [1.0, 0.5]))
+
+    def test_a_lost_document_fails_though_every_mean_improves(self):
+        # Two expected documents; enforce keeps the first at rank 1 and loses the second: its MRR
+        # holds and its recall@5 falls, while another fixture's gain lifts every mean.
+        shadow = _trace(23, "two docs", _scope("HIGH", [_doc("e1"), _doc("e2")], ["e1", "e2"]))
+        lose = _enforce(shadow, [_doc("e1"), _doc("o1")])
+        gain_t = _trace(24, "other q", _scope("HIGH", [_doc("o3"), _doc("e3")], ["e3", "e4"]))
+        gain = _enforce(gain_t, [_doc("e3"), _doc("e4"), _doc("e5")])
+        fixtures = [_fixture("two", "two docs", ["e1", "e2"]), _fixture("other", "other q", ["e3", "e4", "e5"])]
+        result = report.build_report([shadow, gain_t], fixtures, enforce_traces=[lose, gain])
+        deltas = result["gate"]["overall"]["deltas"]
+        self.assertTrue(all(deltas[m] >= 0 for m in ("hitAtK", "mrr", "recallAtK")), deltas)
+        self.assertEqual(result["losses"], 1)
         self.assertEqual(result["gate"]["verdict"], "FAIL")
 
     def test_lost_reads_todays_top_k_only(self):
@@ -417,12 +439,44 @@ class VerdictTest(unittest.TestCase):
         self.assertEqual(result["graphHashes"], {"c878c7206d2ed660": 8})
         self.assertEqual(result["gate"]["verdict"], "PASS")
 
-    def test_confidence_mismatch_between_the_runs_is_flagged(self):
+    def test_confidence_mismatch_between_the_runs_is_an_invalid_pair(self):
         enforce = [json.loads(json.dumps(ENFORCE_PASSING[0]))] + ENFORCE_PASSING[1:]
         enforce[0]["scope"]["confidence"] = "NONE"
         result = self._build(enforce=enforce)
         self.assertEqual(result["confidenceMismatches"], 1)
+        self.assertEqual(result["gate"]["verdict"], "INVALID_PAIR")
         self.assertIn("1 pair(s) resolved a different scope confidence", report.render_text(result))
+
+    def test_enforce_run_with_another_consumer_enforced_is_rejected(self):
+        # With tools or card also enforced, more than the rag filter differs from the shadow run.
+        both = _enforce(KEPT_HIT[0], ENFORCE_ALL[0]["scope"]["retrievedDocuments"], n=803, enforced=("RAG", "TOOLS"))
+        result = self._build(enforce=[both] + ENFORCE_PASSING[1:])
+        self.assertEqual(result["enforceSkipped"], {"wrongMode": 1})
+        self.assertEqual(result["gate"]["verdict"], "INCOMPLETE")
+
+    def test_changed_tool_selection_fails(self):
+        # Section 9's tool criterion: under RAG-only enforcement every pair must be given today's tools.
+        enforce = [json.loads(json.dumps(e)) for e in ENFORCE_PASSING]
+        enforce[0]["selectedTools"] = ["OrderFacadeTool"]
+        enforce[1]["offeredTools"] = [{"name": "inventory_getstock", "description": "d", "inputSchema": "{}"}]
+        result = self._build(enforce=enforce, verbose=True)
+        self.assertEqual(result["toolSelectionChanges"], 2)
+        self.assertEqual(result["gate"]["verdict"], "FAIL")
+        self.assertIn("tool selection changed in 2 pair(s)", result["gate"]["reasons"])
+        self.assertEqual([e["changed"] for e in result["toolChangeList"]], [["selectedTools"], ["offeredTools"]])
+
+    def test_tool_selection_compares_names_not_order_or_descriptions(self):
+        shadow = [json.loads(json.dumps(t)) for t, _ in PASSING]
+        enforce = [json.loads(json.dumps(e)) for e in ENFORCE_PASSING]
+        shadow[0]["selectedTools"] = ["a", "b"]
+        shadow[0]["offeredTools"] = [{"name": "a", "description": "x", "inputSchema": "{}"}]
+        enforce[0]["selectedTools"] = ["b", "a"]
+        enforce[0]["offeredTools"] = [{"name": "a", "description": "y", "inputSchema": "{}"}]
+        result = report.build_report(shadow, [f for _, f in PASSING], enforce_traces=enforce)
+        self.assertEqual(result["toolSelectionChanges"], 0)
+        self.assertEqual(result["gate"]["verdict"], "PASS")
+
+
 
     def test_forbidden_increase_fails_with_rank_metrics_held(self):
         trace, fixture = KEPT_HIT
@@ -505,6 +559,59 @@ class VerdictTest(unittest.TestCase):
         self.assertAlmostEqual(high["calledInScopeShare"], 2 / 3)
         # The raw name match sees only the discovered tool: a facade call is logged under its method name.
         self.assertAlmostEqual(high["nameMatchShare"], 1 / 3)
+
+
+class BaselineTest(unittest.TestCase):
+    """The A/A check: a second shadow run of the same fixtures must resolve every turn identically."""
+
+    @staticmethod
+    def _baseline(trace, n, **changes):
+        copy = json.loads(json.dumps(trace))
+        copy["turnId"] = _uuid(n)
+        copy["scope"].update(changes.pop("scope", {}))
+        copy.update(changes)
+        return copy
+
+    def _build(self, baseline, **kwargs):
+        return report.build_report([t for t, _ in PASSING], [f for _, f in PASSING], enforce_traces=ENFORCE_PASSING,
+                                   baseline_traces=baseline, **kwargs)
+
+    def test_identical_baseline_passes(self):
+        baseline = [self._baseline(t, 700 + i) for i, (t, _) in enumerate(PASSING)]
+        result = self._build(baseline)
+        self.assertEqual(result["nondeterministicFixtures"], 0)
+        self.assertEqual(result["gate"]["verdict"], "PASS")
+
+    def test_any_difference_is_nondeterministic(self):
+        baseline = [self._baseline(t, 700 + i) for i, (t, _) in enumerate(PASSING)]
+        baseline[0]["scope"]["retrievedDocuments"] = list(reversed(baseline[0]["scope"]["retrievedDocuments"]))
+        baseline[1]["scope"]["confidence"] = "LOW"
+        baseline[2]["selectedTools"] = ["x"]
+        result = self._build(baseline, verbose=True)
+        self.assertEqual(result["nondeterministicFixtures"], 3)
+        self.assertEqual(result["gate"]["verdict"], "NONDETERMINISTIC")
+        self.assertEqual([e["differs"] for e in result["nondeterministicList"]],
+                         [["retrievedDocuments"], ["confidence"], ["selectedTools"]])
+
+    def test_nondeterminism_is_reported_without_an_enforce_run(self):
+        baseline = [self._baseline(t, 700 + i) for i, (t, _) in enumerate(PASSING)]
+        baseline[0]["scope"]["confidence"] = "NONE"
+        result = report.build_report([t for t, _ in PASSING], [f for _, f in PASSING], baseline_traces=baseline)
+        self.assertEqual(result["gate"]["verdict"], "NONDETERMINISTIC")
+
+    def test_baseline_must_cover_every_fixture_and_be_shadow(self):
+        baseline = [self._baseline(t, 700 + i) for i, (t, _) in enumerate(PASSING)]
+        baseline[0]["scope"]["mode"] = "ENFORCE"
+        result = self._build(baseline)
+        self.assertEqual(result["baselineSkipped"], {"wrongMode": 1})
+        self.assertEqual(result["fixturesWithoutBaselineTrace"], 1)
+        self.assertEqual(result["gate"]["verdict"], "INCOMPLETE")
+        self.assertIn("1 fixture(s) without a baseline trace", result["gate"]["reasons"])
+
+    def test_baseline_from_another_graph_is_mixed(self):
+        baseline = [self._baseline(t, 700 + i) for i, (t, _) in enumerate(PASSING)]
+        baseline[0]["scope"]["graphHash"] = "0000aaaa"
+        self.assertEqual(self._build(baseline)["gate"]["verdict"], "MIXED_GRAPH")
 
 
 LEXICON_YML = """\
@@ -672,7 +779,7 @@ class LoadersAndCliTest(unittest.TestCase):
                              "--verbose")
             self.assertEqual(code, 1)
             self.assertIn("GATE: FAIL", text)
-            self.assertIn("lost dropped-hit", text)
+            self.assertIn("regressed dropped-hit", text)
             self.assertIn("Tools (shadow metric only", text)
 
             lexicon_path = os.path.join(tmp, "entities.yaml")
@@ -702,6 +809,17 @@ class LoadersAndCliTest(unittest.TestCase):
             code, text = run("--file", traces_path, "--enforce-file", enforce_path, "--fixture", fixture_path)
             self.assertEqual(code, 0)
             self.assertIn("GATE: PASS", text)
+
+            # A second shadow run as the A/A baseline: identical turns keep the PASS.
+            baseline_path = os.path.join(tmp, "baseline.ndjson")
+            baseline = [json.loads(json.dumps(t)) for t, _ in PASSING]
+            for i, trace in enumerate(baseline):
+                trace["turnId"] = _uuid(700 + i)
+            self._write_ndjson(baseline_path, baseline)
+            code, text = run("--file", traces_path, "--enforce-file", enforce_path, "--baseline-file", baseline_path,
+                             "--fixture", fixture_path)
+            self.assertEqual(code, 0)
+            self.assertIn("Baseline traces: 4; fixtures without a trace 0; nondeterministic 0", text)
 
             # The shadow run alone decides nothing, whatever the preview says.
             code, text = run("--file", traces_path, "--fixture", fixture_path)

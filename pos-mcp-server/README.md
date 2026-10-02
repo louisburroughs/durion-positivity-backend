@@ -239,23 +239,36 @@ records `retrievedDocuments` after the top-K cut and returns the retriever's lis
 
 **Scope-graph gate report (ADR-0069 §9, offline).** `scripts/scope_graph_gate_report.py` computes the `rag` promotion gate
 the way §9 states it: a recorded run with the `rag` consumer in `enforce`, against the same run in `shadow`, on one graph
-snapshot. It reads both runs' trace exports (`--file` the shadow run, `--enforce-file` the enforce run), joins each trace to
-a RAG fixture by `userMessage` (exact, then trim + collapse whitespace + casefold, like `tagging_shadow_report.py`) and by
-`role` against the fixture's `actor.role` (a turn asked as another actor, or for a fixture that names none, is not
-joined: it is no evidence for the fixture's visibility; one turn scores every fixture that asks its question as its
-actor; of several turns for one fixture the latest `startedAt` wins, so a rerun replaces an older attempt), and scores
-each side's recorded top-K:
-hit@k, MRR, recall@k and forbidden-document hits, `k` from the fixture, default 5. Before the join a `--file` trace must be
-`SHADOW` and an `--enforce-file` trace `ENFORCE` with `RAG` in `enforced`; others are skipped and counted (`wrongMode`).
+snapshot. It reads the runs' trace exports — `--file` the shadow run, `--enforce-file` the enforce run, and
+`--baseline-file` a second shadow run for the A/A check — joins each trace to a RAG fixture by `userMessage` (exact,
+then trim + collapse whitespace + casefold, like `tagging_shadow_report.py`) and by `role` against the fixture's
+`actor.role` (a turn asked as another actor, or for a fixture that names none, is not joined: it is no evidence for the
+fixture's visibility; one turn scores every fixture that asks its question as its actor; of several turns for one
+fixture the latest `startedAt` wins, so a rerun replaces an older attempt), and scores each side's recorded top-K:
+hit@k, MRR, recall@k and forbidden-document hits, `k` from the fixture, default 5. Before the join a `--file` or
+`--baseline-file` trace must be `SHADOW` and an `--enforce-file` trace `ENFORCE` with `enforced` exactly `[RAG]` (with
+`tools`, `card` or `lookups` also enforced, more than the filter would differ); others are skipped and counted
+(`wrongMode`).
 
-| Verdict          | When                                                                                                       |
-| ---------------- | ---------------------------------------------------------------------------------------------------------- |
-| `NO_DATA`        | No trace joined a fixture, no joined fixture expects a document (no rank metric to compare), or today's hit@5 is 0 (an empty or broken RAG store would compare 0 with 0). |
-| `MIXED_GRAPH`    | The joined traces carry more than one `graphHash`: the evidence is for no single deployable snapshot.      |
-| `INCOMPLETE`     | A loaded fixture has no joined shadow trace, or no joined enforce trace.                                   |
-| `NO_ENFORCE_RUN` | Complete shadow evidence but no `--enforce-file`.                                                          |
-| `FAIL`           | Overall or within a fixture set (`rag-lexical`, `rag-retrieval`), the enforce hit@5, MRR or recall@5 fell below today's, the forbidden hits grew, or any fixture surfaced a forbidden document it did not surface today. |
-| `PASS`           | Otherwise. The exit code is 0 on `PASS` only.                                                              |
+The gate compares **per fixture**, which is stricter than §9's means: across the 75 fixtures that expect a document one
+fixture moves a mean by 1.3 %, so a mean lets one fixture's loss hide behind another's gain. This holds because
+retrieval is deterministic once the question tags are (fixed query paraphrases, deterministic fusion and rerank, no LLM
+call before the cut), which the A/A check proves for each gate run.
+
+| Verdict            | When                                                                                                       |
+| ------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `NO_DATA`          | No trace joined a fixture, no joined fixture expects a document (no rank metric to compare), or today's hit@5 is 0 (an empty or broken RAG store would compare 0 with 0). |
+| `MIXED_GRAPH`      | The joined traces carry more than one `graphHash`: the evidence is for no single deployable snapshot.      |
+| `INCOMPLETE`       | A loaded fixture has no joined shadow trace, or no joined enforce or baseline trace when that run is given. |
+| `NONDETERMINISTIC` | The baseline run resolved a fixture differently from the shadow run (top-K order, scope confidence, selected or offered tools): a per-fixture comparison would measure noise. Pin the tagging mode, change nothing between the runs, rerun. |
+| `NO_ENFORCE_RUN`   | Complete shadow evidence but no `--enforce-file`.                                                          |
+| `INVALID_PAIR`     | A pair's enforce turn resolved another scope confidence than its shadow turn: the runs did not ask the graph the same question. |
+| `FAIL`             | Any paired fixture regressed (an expected document of today's top-5 missing from the enforce top-5, or its MRR fell) or surfaced a forbidden document it did not surface today; or a mean hit@5, MRR or recall@5 fell, or the forbidden total grew, overall, in a fixture set (`rag-lexical`, `rag-retrieval`) or in a confidence bucket; or any pair was given different tools. |
+| `PASS`             | Otherwise. The exit code is 0 on `PASS` only.                                                              |
+
+§9's "tool selection hit rate at least equal": the RAG fixtures name no expected tools, so a hit rate cannot be scored on
+them. The gate checks the stronger property instead — every pair was given the same tools (`selectedTools` and the
+`offeredTools` names, order-free); identical selection has an identical hit rate against any ground truth.
 
 The report also prints a **simulated** preview from the shadow run alone: the §6 rule replayed over the shadow top-K (on
 `confidence: HIGH` keep a document whose `documentId` is in `scopeDocumentIds` or whose `ragScope` is `master`, on
@@ -263,33 +276,45 @@ The report also prints a **simulated** preview from the shadow run alone: the §
 every scope, so an in-scope document of another domain, never in the shadow pool, can enter the fusion and outrank a hit,
 and the hook filters the pool before the cut, so a candidate below rank K can move up; the replay sees neither. An
 expected document it drops is out of scope and not `master`, so the real filter drops it too: use it to decide whether
-an enforce run is worth making. The rank metrics are gated as means (§9); the per-fixture losses and the per-confidence
-blocks are printed for review, not gated, and a pair whose enforce turn resolved another confidence than its shadow
-turn is flagged. §9's "tool selection hit rate at least equal" is not computed here: the `rag` consumer acts on
-retrieval only, so with `rag` the only enforced consumer tool selection is today's by construction (the report prints
-the enforce run's enforced consumers). Lists (ids under `--verbose`): the fixtures whose expected document the enforce run lost
-from today's top-k, the ones the simulation dropped, forbidden hits, fixtures without a trace on either side and
-actor-mismatched turns. Two more sections ride along: a shadow-only tools table (share of the model's calls that were
-inside the scope, per confidence; the `tools` consumer is additive and needs its own gate) and a documentation-coverage
-table (per seed entity: turns seeded, turns whose scope had no document, mean scope documents, and with
-`--lexicon`/`--preload` the static number of RAG documents annotated with the entity, so "entities with no document"
-comes out of every run; `--verbose` adds the `NONE`-confidence messages, the vocabulary the lexicon missed).
+an enforce run is worth making. Lists (ids under `--verbose`): the regressed fixtures (lost documents, MRR before and
+after), tool-selection changes, nondeterministic fixtures, the documents the simulation dropped, forbidden hits,
+fixtures without a trace on any side and actor-mismatched turns. Two more sections ride along: a shadow-only tools table
+(share of the model's calls that were inside the scope, per confidence; the `tools` consumer is additive and needs its
+own gate) and a documentation-coverage table (per seed entity: turns seeded, turns whose scope had no document, mean
+scope documents, and with `--lexicon`/`--preload` the static number of RAG documents annotated with the entity, so
+"entities with no document" comes out of every run; `--verbose` adds the `NONE`-confidence messages, the vocabulary the
+lexicon missed).
+
+Run conditions — what makes the runs differ by the `rag` filter alone:
+
+- **Question tags fixed.** `MCP_TAGGING_MODE` `off` or `shadow` (the heuristic tagger acts) in every run, never
+  `enforce`: model-tagger answers vary between runs, and the tags feed the reranker and the scope seeds.
+- **One deploy, nothing re-ingested.** Same image, catalog, `entities.yaml`, RAG sources and embedding model in every run;
+  `graphHash` covers the graph's document ids, not their content or embeddings.
+- **Actors.** Per fixture role, a gate user holding exactly the fixture's `permission_codes` (a trace records the role
+  only, so a user with more codes tests the wrong visibility).
+- **Same day.** Turn traces expire after 24 h on alpha (`MCP_EVAL_TURN_TRACE_RETENTION`): run all three and the report
+  within a day.
 
 ```bash
-# 1. With mcp.scope-graph.mode: shadow, run every rag-lexical and rag-retrieval fixture query as the actor its fixture
-#    names: one scripts/gate_chat_run.sh run per actor role, logged in as a user holding that role, over the
-#    fixture files that have queries for it (the runner rejects a file with none). Repeat for each role.
+# 1. Shadow run (MCP_SCOPE_GRAPH_MODE=shadow, MCP_TAGGING_MODE off or shadow): every rag-lexical and rag-retrieval
+#    fixture query as the actor its fixture names — one scripts/gate_chat_run.sh run per actor role, logged in as that
+#    role's gate user, over the fixture files that have queries for it (the runner rejects a file with none).
 ROLE=ROLE_SERVICE_ADVISOR; F=".fixtures[] | select(.actor.role == \"$ROLE\")"; args=()
 for f in pos-mcp-server/src/test/resources/eval/rag-{lexical,retrieval}/*.json; do
   jq -e "[$F] | length > 0" "$f" > /dev/null && args+=(--fixture "$f")
 done
 scripts/gate_chat_run.sh --label "scope-shadow-$ROLE" --user <that user> \
   --messages-jq "$F | .query" --ids-jq "$F | .fixture_id" "${args[@]}"
-# 2. Restart with MCP_SCOPE_GRAPH_MODE=enforce, MCP_SCOPE_GRAPH_ENFORCE=rag (same graph: same catalog and
-#    entities.yaml) and repeat every role with --label "scope-enforce-$ROLE".
-# 3. Score both runs:
+# 2. Baseline: restart, still in shadow, and repeat every role with --label "scope-baseline-$ROLE" (the A/A run also
+#    covers the restart the enforce run needs).
+# 3. Enforce: restart with MCP_SCOPE_GRAPH_MODE=enforce, MCP_SCOPE_GRAPH_ENFORCE=rag (rag only), tagging mode unchanged,
+#    and repeat every role with --label "scope-enforce-$ROLE".
+# 4. Score:
 python3 scripts/scope_graph_gate_report.py \
-  --file gate-runs/scope-shadow-*/traces-*.json --enforce-file gate-runs/scope-enforce-*/traces-*.json \
+  --file gate-runs/scope-shadow-*/traces-*.json \
+  --baseline-file gate-runs/scope-baseline-*/traces-*.json \
+  --enforce-file gate-runs/scope-enforce-*/traces-*.json \
   --fixture pos-mcp-server/src/test/resources/eval/rag-lexical/*.json \
             pos-mcp-server/src/test/resources/eval/rag-retrieval/*.json \
   --lexicon pos-mcp-server/src/main/resources/scope-graph/entities.yaml \
