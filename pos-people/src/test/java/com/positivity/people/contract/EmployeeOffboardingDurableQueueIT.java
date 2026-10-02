@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -17,6 +19,7 @@ import com.positivity.people.internal.entity.EmployeeOffboardingRetry;
 import com.positivity.people.internal.enums.AssignmentStatus;
 import com.positivity.people.internal.enums.AssignmentTerminationPolicy;
 import com.positivity.people.internal.enums.EmployeeStatus;
+import com.positivity.people.internal.event.EmployeeOffboardedEvent;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
 import com.positivity.people.internal.repository.EmployeeOffboardingRetryRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
@@ -31,6 +34,11 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -39,6 +47,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * #2360: the offboarding queue row is written with the disable, not by the after-commit handler on
@@ -63,7 +72,7 @@ class EmployeeOffboardingDurableQueueIT extends BaseContractIntegrationTest {
     @Autowired
     private EmployeeOffboardingRetryRepository retryRepository;
 
-    @Autowired
+    @MockitoSpyBean
     private OffboardingAssignmentEnder assignmentEnder;
 
     @Autowired
@@ -244,6 +253,62 @@ class EmployeeOffboardingDurableQueueIT extends BaseContractIntegrationTest {
      * scheduled bean off, and a worker built here can be moved past a row's due time without
      * touching the row.
      */
+    @Test
+    @DisplayName("Handler held up while another transaction holds the row: it waits for the row lock, finds"
+            + " the row settled and applies nothing")
+    void handlerWaitsForWhoeverHoldsTheRow() throws Exception {
+        UUID employeeId = createEmployee("EMP-2360-007", "employee.2360.007@example.com");
+        UUID assignmentId = createAssignment(employeeId);
+        // The handler is held back, as when it is stalled past the row's first due time.
+        doNothing().when(offboardingEventListener).onEmployeeOffboarded(any());
+        disable(employeeId, AssignmentTerminationPolicy.IMMEDIATE, null);
+        UUID retryId = onlyQueueRow().getId();
+        reset(offboardingEventListener);
+
+        // Stands in for a worker that has claimed the row: it holds the row lock, settles the row
+        // and commits only once the handler has had time to reach its own read of that row.
+        CountDownLatch claimed = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> holder = pool.submit(() -> transaction.executeWithoutResult(status -> {
+                retryRepository.delete(
+                        retryRepository.findByIdForUpdate(retryId).orElseThrow());
+                retryRepository.flush();
+                claimed.countDown();
+                awaitQuietly(release);
+            }));
+            assertThat(claimed.await(10, TimeUnit.SECONDS)).isTrue();
+            pool.submit(() -> {
+                Thread.sleep(300);
+                release.countDown();
+                return null;
+            });
+
+            offboardingEventListener.onEmployeeOffboarded(new EmployeeOffboardedEvent(employeeId, retryId));
+
+            holder.get(10, TimeUnit.SECONDS);
+        } finally {
+            release.countDown();
+            pool.shutdownNow();
+        }
+
+        // A plain read would have seen the row (its delete was not yet committed) and applied the
+        // policy alongside the holder.
+        verify(assignmentEnder, never()).apply(any(), any(), any(), any());
+        assertOpenAndActive(assignmentId);
+        assertThat(retryRepository.count()).isZero();
+    }
+
+    private static void awaitQuietly(CountDownLatch latch) {
+        try {
+            latch.await(10, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
     private EmployeeOffboardingRetryWorker workerAt(Clock workerClock) {
         return new EmployeeOffboardingRetryWorker(
                 retryRepository,

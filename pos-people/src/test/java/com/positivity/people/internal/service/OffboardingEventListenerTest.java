@@ -70,7 +70,7 @@ class OffboardingEventListenerTest {
         row.setFailureReason(EmployeeOffboardingRetryWorker.NOT_YET_APPLIED);
         row.setAttempts(0);
         row.setNextAttemptAt(DUE);
-        when(retryRepository.findById(RETRY_ID)).thenReturn(Optional.of(row));
+        when(retryRepository.findByIdForUpdate(RETRY_ID)).thenReturn(Optional.of(row));
         return row;
     }
 
@@ -131,7 +131,7 @@ class OffboardingEventListenerTest {
     @Test
     @DisplayName("a row the worker has already settled is skipped")
     void rowAlreadySettledIsSkipped() {
-        when(retryRepository.findById(RETRY_ID)).thenReturn(Optional.empty());
+        when(retryRepository.findByIdForUpdate(RETRY_ID)).thenReturn(Optional.empty());
 
         listener.onEmployeeOffboarded(EVENT);
 

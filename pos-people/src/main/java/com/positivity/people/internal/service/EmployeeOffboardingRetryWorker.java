@@ -196,9 +196,14 @@ public class EmployeeOffboardingRetryWorker {
         }
     }
 
-    /** Re-read the row (another instance may have finished it) and apply its policy. */
+    /**
+     * Claim the row and apply its policy. The row lock makes another instance, or the after-commit
+     * handler, wait here; once it is granted the row is re-checked, since whoever held it has either
+     * deleted it or pushed its next attempt back.
+     */
     private void process(UUID retryId) {
-        EmployeeOffboardingRetry row = retryRepository.findById(retryId).orElse(null);
+        EmployeeOffboardingRetry row =
+                retryRepository.findByIdForUpdate(retryId).orElse(null);
         if (row == null || !isDue(row)) {
             return;
         }
@@ -224,7 +229,8 @@ public class EmployeeOffboardingRetryWorker {
     }
 
     private void recordFailure(UUID retryId, RuntimeException failure) {
-        EmployeeOffboardingRetry row = retryRepository.findById(retryId).orElse(null);
+        EmployeeOffboardingRetry row =
+                retryRepository.findByIdForUpdate(retryId).orElse(null);
         if (row == null) {
             return;
         }

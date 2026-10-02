@@ -39,9 +39,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * after-commit callback, so the request's tenant binding still holds for its connection.
  *
  * <p>The worker does not race this handler in the ordinary case: the row is not due until the
- * worker's first delay has passed. Should the handler be held up for longer than that, the row is
- * re-read here and skipped if the worker has already settled it, and applying a policy twice is
- * idempotent.
+ * worker's first delay has passed. Should the handler be held up for longer than that, the two are
+ * serialized by the row itself: each reads it with a row lock before applying it, so the second
+ * waits for the first to finish and then finds the row deleted and does nothing.
  */
 @Component
 @Slf4j
@@ -79,9 +79,10 @@ public class OffboardingEventListener {
         }
     }
 
-    /** Re-read the row (the worker may have settled it), apply its policy and delete it. */
+    /** Claim the row (the worker may hold or have settled it), apply its policy and delete it. */
     private void applyAndSettle(EmployeeOffboardedEvent event) {
-        EmployeeOffboardingRetry row = retryRepository.findById(event.retryId()).orElse(null);
+        EmployeeOffboardingRetry row =
+                retryRepository.findByIdForUpdate(event.retryId()).orElse(null);
         if (row == null) {
             return;
         }

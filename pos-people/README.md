@@ -201,8 +201,9 @@ and not counted as an attempt.
 **The worker.** `EmployeeOffboardingRetryWorker` applies the policy of every due row, with the row's own
 policy and end date, and deletes it on success; a failing row backs off five minutes x 2^attempts (capped
 at a day). A row is first due five minutes after its disable, which leaves a fresh row to the after-commit
-handler; should the two ever work the same row, the handler re-reads it and skips one the worker has
-settled, and applying a policy twice changes and publishes nothing. So a `GRACE_PERIOD` disable whose
+handler. Whoever applies a queue row, the handler or a worker on any instance, first reads it with a row
+lock (`findByIdForUpdate`), so should two ever reach the same row the second waits for the first, then
+finds the row deleted or pushed back and does nothing. So a `GRACE_PERIOD` disable whose
 handler never ran is dated to the requested end date by the worker, about five minutes late, rather than
 ended. At the attempt limit the worker logs at error and leaves the row for an operator.
 
@@ -216,7 +217,8 @@ has used up its attempts, which no longer counts as pending; that last case is t
 `GRACE_PERIOD` can still end early, and the gauge below is its alert. The sweep reads the candidate ids in
 one query and ends each assignment in a `REQUIRES_NEW` transaction of its own, so one assignment that
 cannot be ended does not roll back the others. It runs per tenant. There is no scheduler lock: with several
-instances a row may be worked twice, which is safe because applying a policy is idempotent.
+instances a queue row is serialized by its row lock, and an open-ended assignment may be swept twice, which
+is safe when the passes follow one another because ending an already ended assignment changes nothing.
 
 | Property                                    | Env override                               | Default | Description                                   |
 | ------------------------------------------- | ------------------------------------------ | ------- | --------------------------------------------- |
