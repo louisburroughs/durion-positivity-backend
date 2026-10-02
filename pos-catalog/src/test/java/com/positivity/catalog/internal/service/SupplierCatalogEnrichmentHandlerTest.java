@@ -50,6 +50,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.JsonNode;
@@ -900,6 +901,17 @@ class SupplierCatalogEnrichmentHandlerTest {
 
             assertThatThrownBy(() -> handle(enrichmentEvent("e-11", "VAR-1", "hash-1", false)))
                     .isInstanceOf(QueryTimeoutException.class);
+
+            verify(processedEventRepository, never()).save(any());
+        }
+
+        @Test
+        void rethrowsALostConnectionDatabaseErrorSoTheContainerRetries() {
+            when(treadDesignRepository.findByVendorProfileIdAndVendorVariantId(any(), any()))
+                    .thenThrow(new DataAccessResourceFailureException("connection reset"));
+
+            assertThatThrownBy(() -> handle(enrichmentEvent("e-11", "VAR-1", "hash-1", false)))
+                    .isInstanceOf(DataAccessResourceFailureException.class);
 
             verify(processedEventRepository, never()).save(any());
         }

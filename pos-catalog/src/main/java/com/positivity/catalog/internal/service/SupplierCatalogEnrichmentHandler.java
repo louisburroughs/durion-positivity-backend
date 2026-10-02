@@ -20,6 +20,7 @@ import com.positivity.domainevents.supplier.SupplierCatalogEnrichmentImage;
 import com.positivity.domainevents.supplier.SupplierCatalogEnrichmentText;
 import com.positivity.domainevents.supplier.SupplierCatalogRepublishCompletedV1;
 import com.positivity.domainevents.supplier.SupplierCatalogUpdatedV1;
+import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
@@ -39,7 +40,6 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.dao.TransientDataAccessException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -212,11 +212,12 @@ public class SupplierCatalogEnrichmentHandler {
                         .processedAt(Instant.now(clock))
                         .build());
             });
-        } catch (TransientDataAccessException e) {
-            // Rethrown for container retry. Recording this as processed would lose the enrichment
-            // with no way to notice: the design would simply never appear.
-            throw e;
         } catch (Exception e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // Rethrown for container retry. Recording this as processed would lose the enrichment
+                // with no way to notice: the design would simply never appear.
+                throw e;
+            }
             log.warn("Skipping malformed supplier catalog event eventId={}", eventId, e);
         }
     }
