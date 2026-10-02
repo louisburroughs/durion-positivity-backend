@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.positivity.mcp.internal.config.StaticRagPreloadProperties.StaticDocEntry;
 import com.positivity.mcp.internal.scopegraph.ScopeSet.Seed;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -12,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.core.io.ClassPathResource;
 
 /**
  * #2383: the accounts-payable and bank-reconciliation RAG documents, and the lexicon terms that let the
@@ -115,5 +118,25 @@ class AccountsPayableBankRecRagCoverageTest {
         assertThat(seededEntities("Show open invoices for ACME Fleet"))
                 .contains("invoice")
                 .doesNotContainAnyElementsOf(guarded);
+    }
+
+    @Test
+    @DisplayName(
+            "the bank reconciliation guide states the currency tolerance, both invalidation paths and the close override")
+    void bankReconciliationGuideStatesTheReviewedRules() throws IOException {
+        String guide;
+        try (var in = new ClassPathResource("rag/accounting-bank-reconciliation-rag.md").getInputStream()) {
+            guide = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        }
+
+        // FunctionalCurrency.tolerance(): one minor unit of the ledger currency, not a fixed 0.01.
+        assertThat(guide).contains("one minor unit of the ledger currency").doesNotContain("within 0.01");
+        // BankReconciliationLedgerChangeService.onReversed: the owners of broken matches and the window of the
+        // reversal date are both invalidated.
+        assertThat(guide).contains("match-owner path", "date path", "LEDGER_LINE_REVERSED", "LEDGER_LINE_POSTED");
+        // BankReconciliationCloseReadiness.decide: an exception needs close and override, and a justification.
+        assertThat(guide)
+                .contains("accounting:period:close", "accounting:period:override")
+                .contains("PERIOD_CLOSE_EXCEPTION_NOT_PERMITTED", "bankReconciliationException.justification");
     }
 }

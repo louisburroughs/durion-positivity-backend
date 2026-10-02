@@ -95,9 +95,11 @@ on a contiguous one, and moves the account's baseline.
 - `POST .../{id}/auto-match` proposes a `ONE_TO_ONE` match for each unexplained bank row whose top candidate scores
   at least 90 and leads the next by at least 20. Proposals are `PROPOSED`; the system never accepts one.
 - `POST .../{id}/matches` records an accepted match of bank rows to posted ledger lines (one-to-one, one-to-many or
-  many-to-one) that agree within 0.01; a non-1:1 match, tolerance use, out-of-window dates or a former duplicate
-  need a justification of at least 10 characters. Proposals are accepted or rejected with `.../matches/{matchId}/accept`
-  or `/reject`; `/unmatch` undoes an accepted match.
+  many-to-one) whose totals agree within the matching tolerance; a non-1:1 match, tolerance use, out-of-window dates
+  or a former duplicate need a justification of at least 10 characters. Proposals are accepted or rejected with
+  `.../matches/{matchId}/accept` or `/reject`; `/unmatch` undoes an accepted match.
+- The matching tolerance is one minor unit of the ledger currency: `0.01` for a two-decimal currency such as USD or
+  CAD, `1` for a currency without decimals such as JPY. The same tolerance applies to the submit and approval gate.
 - `MatchState`: `PROPOSED`, `ACCEPTED`, `REJECTED`, `UNMATCHED`, `BROKEN`. `MatchKind`: `ONE_TO_ONE`, `ONE_TO_MANY`,
   `MANY_TO_ONE`, `ADJUSTMENT`.
 
@@ -127,9 +129,10 @@ endpoints below are under `/v1/accounting/reconciliations`.
 
 1. Review: `GET .../{id}/review` returns the whole workspace and `readiness.canSubmit`; `.../report` the printable
    report; `.../audit` the audit trail.
-2. Submit (preparer): `POST .../{id}/submit`. Allowed only when the live difference is within 0.01 and no bank row or
-   ledger line from the baseline on is unexplained (`422 RECONCILIATION_NOT_BALANCED` or
-   `RECONCILIATION_HAS_UNEXPLAINED_ITEMS` otherwise). The opening difference never blocks.
+2. Submit (preparer): `POST .../{id}/submit`. Allowed only when the live difference is within one minor unit of the
+   ledger currency and no bank row or ledger line from the baseline on is unexplained
+   (`422 RECONCILIATION_NOT_BALANCED` or `RECONCILIATION_HAS_UNEXPLAINED_ITEMS` otherwise). The opening difference
+   never blocks.
 3. Approve (approver): `POST .../{id}/finalize` recomputes everything under a lock and, if the gate still holds,
    seals the matches and snapshots the approved ending balance. `.../return` sends it back with a reason;
    `.../cancel` abandons it (matches released, posted adjustments stay posted).
@@ -137,10 +140,36 @@ endpoints below are under `/v1/accounting/reconciliations`.
    matches; when it is approved the predecessor becomes `SUPERSEDED`. A corrected statement is re-imported with
    `supersedesStatementId`.
 
-A journal entry posted or reversed into an approved window makes that reconciliation `INVALIDATED` in the same
-transaction. Period close reads a bank-reconciliation readiness check
-(`GET /v1/accounting/periods/{periodCode}/close-readiness`); under the default policy `REQUIRED_WITH_EXCEPTION` an
-unreconciled bank account blocks the close unless an exception is justified.
+## After approval: invalidation
+
+A `FINALIZED` reconciliation becomes `INVALIDATED` in the same transaction as the ledger change that undermines it;
+the ledger change itself is never refused. Only `FINALIZED` reconciliations are invalidated.
+
+- **Posting:** a journal entry posted on the reconciled account, dated inside the approved window, invalidates it
+  (reason `LEDGER_LINE_POSTED`). This holds whether the period was open, reopened or overridden, and a `TRANSFER`'s
+  counter line invalidates the counter account's window too.
+- **Reversal, match-owner path:** reversing an entry breaks every active match that holds one of the original's
+  lines (state `BROKEN`, bank rows back to `UNMATCHED`), voids every `OPEN` outstanding item on those lines, and
+  invalidates the `FINALIZED` reconciliation that owns each broken match, even when the reversal is dated outside
+  that reconciliation's window (reason `LEDGER_LINE_REVERSED`).
+- **Reversal, date path:** the reversal also invalidates any `FINALIZED` reconciliation of the account whose window
+  contains the reversal's date, whether or not it held a match on the original.
+- The fix for an invalidated window is `.../supersede` (above).
+
+## Period close and bank reconciliation
+
+Period close reads a bank-reconciliation readiness check (`GET /v1/accounting/periods/{periodCode}/close-readiness`)
+under the tenant's close policy:
+
+- `ADVISORY`: the close goes ahead and is recorded as not ready.
+- `REQUIRED`: a blocking check refuses the close with `422 PERIOD_BANK_RECONCILIATION_INCOMPLETE`; no exception is
+  accepted.
+- `REQUIRED_WITH_EXCEPTION` (the default): a blocking check refuses the close with the same 422 unless the close
+  request carries `bankReconciliationException.justification` **and** the caller holds both `accounting:period:close`
+  and `accounting:period:override` (seeded for ADMIN and CONTROLLER). A caller missing either gets
+  `403 PERIOD_CLOSE_EXCEPTION_NOT_PERMITTED` and the period stays open. The justification must be 10 to 1000
+  characters (`400` otherwise). A granted exception is audited as `PERIOD_CLOSE_BANKREC_EXCEPTION` with the readiness
+  snapshot.
 
 ## Verified facts
 
@@ -161,6 +190,13 @@ Platform sources (repository-relative):
 
 - `pos-accounting/src/main/java/com/positivity/accounting/internal/bankrec/` (controllers, enums, services)
 - `pos-accounting/src/main/java/com/positivity/accounting/internal/bankfeed/file/` (statement-file import)
+- `pos-accounting/src/main/java/com/positivity/accounting/internal/bankrec/service/FunctionalCurrency.java`
+  (`tolerance()`: one minor unit), used by `ReconciliationMatchingServiceImpl` and `ApprovalGate`
+- `pos-accounting/src/main/java/com/positivity/accounting/internal/bankrec/service/BankReconciliationLedgerChangeService.java`
+  (`onPosted`, `onReversed`) and `ReconciliationLifecycle.invalidate` (only `FINALIZED` is invalidated)
+- `pos-accounting/src/main/java/com/positivity/accounting/internal/bankrec/readmodel/BankReconciliationCloseReadiness.java`
+  (`decide`), `AccountingPeriodGate.OVERRIDE_AUTHORITY`, `bankrec/intake/Justification.java` (`MIN_LENGTH = 10`),
+  `dto/PeriodCloseRequest.java`
 - `pos-accounting/README.md` ("Bank reconciliation close readiness and policy (#2305)", "Error codes",
   "Configuration")
 - `pos-accounting/src/main/resources/permissions.yaml`
