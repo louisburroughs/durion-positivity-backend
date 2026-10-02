@@ -114,8 +114,8 @@ public class MechanicAvailabilityServiceImpl implements MechanicAvailabilityServ
         AvailabilityStatus status = computeStatus(conflicts, windowStart, windowEnd);
 
         return MechanicAvailabilityResult.builder()
-                .mechanicId(mechanic.getMechanicId())
-                .personId(personId)
+                .mechanicPersonId(personUuid)
+                .mechanicRecordId(mechanic.getMechanicId())
                 .overallStatus(status)
                 .windowStart(windowStart)
                 .windowEnd(windowEnd)
