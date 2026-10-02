@@ -55,6 +55,12 @@ Sources [1], [2]). Because a SKU has no platform format, a value such as `BRK-99
 by exact match, never by guessing its structure. The SKU entry in the identifier glossary
 (`glossary.identifiers`) says the same.
 
+EAN-13 extends UPC-A by putting one extra digit in front of the 12-digit UPC (see Sources [2]), so the same item can
+reach a scanner or a vendor file as a 12-digit UPC or as a 13-digit code starting with `0`. The platform stores each
+code under one scheme and compares it as text, so those two spellings do not match each other. When a code is not
+found, retry it under the other scheme (with or without the leading `0`) before saying the product is not in the
+catalog.
+
 ## Looking a product up
 
 | Need | Operation | Permission |
@@ -125,10 +131,11 @@ and takes no part in sell-price resolution. Questions about why a price is what 
 
 ## Vehicle fitment
 
-**Fitment** answers which vehicles a part applies to. In the aftermarket, fitment is usually expressed by year, make
-and model, refined where needed by engine, submodel or other attributes; the industry exchange standard for this
-application data is ACES, maintained by the Auto Care Association, with PIES covering the product record itself (see
-Sources [3]). The platform does not import ACES or PIES files; it records fitment in its own form.
+**Fitment** answers which vehicles a part applies to. In the automotive aftermarket the exchange standard for it is
+ACES, the Auto Care Association's "data standard for the management and communication of product fitment data";
+a typical ACES use is a part that needs a year, make and model lookup to be found (see Sources [3]). PIES is the
+companion standard for the product record itself: descriptions, attributes, pricing, warranty, interchanges (see
+Sources [5]). The platform does not import ACES or PIES files; it records fitment in its own, simpler form.
 
 In `pos-vehicle-fitment`, a product's fitment is held as **vehicle applicability hints**. A hint belongs to one product
 (by product id) and carries a list of fitment tags, each a tag type and a value. The tag types are `MAKE`, `MODEL`,
@@ -161,10 +168,13 @@ hints is an empty list. Creating, changing and deleting hints need `vehicle-fitm
 
 **Choosing the vehicle.** The manufacturer, make, model and vehicle-type lists (`listManufacturers`,
 `listMakesByManufacturer`, `listModelsByMake`, `listVehicleTypesByMake`, all `vehicle-fitment:catalog:view`) are a
-local copy of vehicle reference data from NHTSA's public vPIC service (see Sources [4]), cached in
-`pos-vehicle-fitment` and filled from that service on demand. They help a user pick a valid make and model; they hold
-reference data shared by every tenant, not a customer's vehicle. A customer's own vehicle record (VIN, plate, year,
-make, model) lives in `pos-vehicle-inventory` and is covered by the customer and vehicle guide.
+local copy of vehicle reference data from NHTSA's public vPIC service, cached in `pos-vehicle-fitment`. vPIC is built
+from the VIN information vehicle manufacturers submit to NHTSA (see Sources [4]): it says which makes, models and
+vehicle types exist, not which parts fit them. The platform asks vPIC for models by make only, with no model year, so
+`listModelsByMake` cannot tell whether a model was sold in a given year, even though vPIC itself can list models by
+make and model year for model years after 1995 (see Sources [4]). These lists help a user pick a valid make and model; they are reference data
+shared by every tenant, not a customer's vehicle. A customer's own vehicle record (VIN, plate, year, make, model)
+lives in `pos-vehicle-inventory` and is covered by the customer and vehicle guide.
 
 **Bulk-loaded part fitment rows.** `bulkIngestVehicleFitments` (`POST /v1/fitments/bulk-ingest`, permission
 `vehicle-fitment:hint:create`) loads part-to-vehicle rows keyed by a numeric part number id, with manufacturer, make,
@@ -173,6 +183,23 @@ product-by-vehicle filter does not use them: fitment questions are answered from
 
 **Labor times are not fitment.** Vehicle-specific book times for a service (`catalog:labor_standard:view`) are keyed by
 year, make, model, submodel and engine too, but they say how long a job takes on a vehicle, not which parts fit it.
+
+## What platform fitment cannot express
+
+ACES describes vehicles with coded reference data from the Vehicle Configuration database, at whatever level of
+detail a product needs (see Sources [3]), and replaces free-text fitment notes with coded qualifiers from the
+Qualifier database (see Sources [6]). The platform's applicability hints are much narrower, so say so rather than
+guess when a question goes beyond them:
+
+- Only seven attributes exist: `MAKE`, `MODEL`, `YEAR_RANGE`, `TIRE_SIZE`, `AXLE_POSITION`, `ENGINE_SIZE` and
+  `TRIM_LEVEL`. There is no tag for transmission, drive type, body style, fuel type or brake system, and no way to
+  key a hint to a VIN.
+- Tag values are free text of at most 120 characters, compared case-insensitively. "Chevrolet" and "Chevy" are
+  different values, and nothing checks a value against the vPIC make and model lists.
+- There are no qualifiers or notes on a hint, so a condition such as "except with off-road package" cannot be
+  recorded. The bulk-loaded part fitment rows carry a notes field, but nothing reads those rows.
+- A missing tag means "any", so a hint with fewer tags matches more vehicles. A match is "nothing recorded rules it
+  out", not a confirmed fit.
 
 ## Staff questions and answer patterns
 
@@ -238,10 +265,14 @@ External sources:
    accessed 2026-10-02.
 2. "Universal Product Code", Wikipedia (Wikimedia Foundation), <https://en.wikipedia.org/wiki/Universal_Product_Code>,
    accessed 2026-10-02.
-3. "Data Standards" (ACES and PIES), Auto Care Association, <https://www.autocare.org/data-standards>, accessed
-   2026-10-02. Not opened: the network proxy blocked the page, so the title and the ACES and PIES description rest on
-   search-result summaries only.
-4. "vPIC API", National Highway Traffic Safety Administration (U.S. Department of Transportation),
-   <https://vpic.nhtsa.dot.gov/api/>, accessed 2026-10-02. Not opened: the network proxy blocked the page, so the
-   title and the description of vPIC rest on search-result summaries only; the base URL the module calls is in
-   `VehicleFitmentServiceImpl.java`.
+3. "Aftermarket Catalog Exchange Standard (ACES)", Auto Care Association, <https://www.autocare.org/aces>, accessed
+   2026-10-02; with "Vehicle Configuration database (VCdb)", Auto Care Association,
+   <https://www.autocare.org/data-and-information/data-standards/databases/vehicle-configuration-database-vcdb>,
+   accessed 2026-10-02.
+4. "Vehicle API" (vPIC, Product Information Catalog Vehicle Listing), National Highway Traffic Safety Administration,
+   U.S. Department of Transportation, <https://vpic.nhtsa.dot.gov/api/>, accessed 2026-10-02.
+5. "Product Information Exchange Standard (PIES)", Auto Care Association, <https://www.autocare.org/pies>, accessed
+   2026-10-02.
+6. "Qualifier database (Qdb)", Auto Care Association,
+   <https://www.autocare.org/data-and-information/data-standards/databases/qualifier-database-qdb>, accessed
+   2026-10-02.
