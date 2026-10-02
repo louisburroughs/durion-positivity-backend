@@ -40,6 +40,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
@@ -459,6 +460,25 @@ class LocationEventsListenerTest {
         when(extLocationReplicaRepository.findById(any())).thenThrow(new QueryTimeoutException("lock wait"));
         assertThatThrownBy(() -> listener.onLocationEvent(locationUpdated("evt-7", 5, true)))
                 .isInstanceOf(QueryTimeoutException.class);
+        verify(processedEventRepository, never()).save(any());
+
+        Mockito.reset(extLocationReplicaRepository);
+        listener.onLocationEvent("""
+                {"eventId":"evt-8","eventType":"%s","aggregateVersion":1,
+                 "payload":{"locationId":"not-a-uuid","name":"x","active":true}}
+                """.formatted(LocationUpdatedV1.EVENT_TYPE));
+        verify(extLocationReplicaRepository, never()).save(any());
+        verify(locationHierarchyService, never()).recomputeAncestors(any());
+        verify(processedEventRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("rethrows a lost-connection database error but swallows a malformed payload")
+    void lostConnectionRethrownMalformedSwallowed() {
+        when(extLocationReplicaRepository.findById(any()))
+                .thenThrow(new DataAccessResourceFailureException("connection reset"));
+        assertThatThrownBy(() -> listener.onLocationEvent(locationUpdated("evt-7", 5, true)))
+                .isInstanceOf(DataAccessResourceFailureException.class);
         verify(processedEventRepository, never()).save(any());
 
         Mockito.reset(extLocationReplicaRepository);
