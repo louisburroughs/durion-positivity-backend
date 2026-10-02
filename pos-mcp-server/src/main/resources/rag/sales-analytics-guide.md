@@ -37,15 +37,18 @@ report returns comes from the platform's own code and API specifications.
 Every one of these takes a single window (`startDate`, `endDate`, inclusive ISO dates) and returns one aggregate for
 it. Resolve the window first with `resolveDateWindow`, or `resolveNamedPeriod` when the question names the period
 outright, and pass the dates through unchanged. `resolveNamedPeriod` takes `YYYY`, `YYYY-MM` or `YYYY-Qn` only
-("2025", "2026-07", "2026-Q3"): a quarter named without a year ("Q3") needs a year first (see Period comparisons and
-trends).
+("2025", "2026-07", "2026-Q3"): a quarter named without a year ("Q3") needs a year first (see Period comparisons).
 
-## Revenue and sales
+## Revenue and sales: definitions
 
-In everyday usage "sales" and "revenue" are the same thing: revenue from a business's main activity is reported as
-sales or sales revenue, and it does not include the sales tax the business collects for the government [1]. Net
-sales are gross sales less customer discounts, returns and allowances [1]. Revenue is recognised as the business
-delivers the goods or services it promised, under a five-step model in IFRS 15 [7].
+In everyday usage "sales" and "revenue" are the same thing: revenue from a business's main activities "may also be
+referred to as sales or as turnover" [2]. Net sales are total revenue less sales returns, allowances and discounts
+[3]. Under IFRS 15 revenue is recognised as the promised goods or services are transferred to the customer, at the
+consideration the business expects to be entitled to (paragraph 2), and that amount excludes "amounts collected on
+behalf of third parties (for example, some sales taxes)" (paragraph 47) [1]. These are general definitions; they do
+not mean the platform implements the standard.
+
+## Revenue: the platform's three figures
 
 The platform has three revenue figures and they are not interchangeable:
 
@@ -68,14 +71,21 @@ When an answer quotes a revenue figure, name the basis in one phrase ("posted re
 totals including tax"). Do not add the three together or compare one with another as if they measured the same
 thing. A quotation or estimate amount is never revenue, and a DRAFT invoice has not been billed.
 
-## Margin and profit
+## Margin, markup and profit: definitions
 
-Gross profit is net sales less the cost of goods sold, an amount; gross margin is that difference divided by
-revenue, a percentage [2][4]. Cost of goods sold is "the carrying value of goods sold during a particular period"
-[4]. Net profit margin is "net profit divided by revenue" [3]: it comes after every expense, not only the cost of
-what was sold.
+Gross profit is net sales less the cost of goods sold, an amount; gross margin expresses it "as a percentage of net
+sales" [4]. Cost of goods sold is the cost of creating what was sold; in a service business it is "the labor, payroll
+taxes, and benefits of those people who generate billable hours" [5], so a shop's gross margin needs both the parts
+cost and the technicians' labor cost. Net margin also takes off "all other expenses not related to the cost of goods
+sold" [4].
 
-What the platform computes:
+Margin and markup are often confused. Margin is measured on the selling price, markup on the cost: a part bought for
+$70 and sold for $100 has a $30 margin, which is 30% of the price, and a $30 markup, which is 42.9% of the cost [6].
+When a user quotes a percentage, ask or state which one is meant. The catalog's price-override guardrail
+(`minMarginPercent`) computes (override price - cost) / override price x 100: a margin on the selling price, never a
+markup.
+
+## Margin and profit: what the platform computes
 
 - **Net income** on the income statement: `totalRevenue` minus `totalExpenses`. Each statement line is the posted
   balance of the GL accounts mapped to it, combined by the mapping's operation (`SUM`, `SUBTRACT` or `NEGATE`).
@@ -85,7 +95,8 @@ What the platform computes:
   tenant's statement-line mapping is set up, and the shipped seed maps only account 4000 Service Revenue. If
   `totalRevenue` is zero while a revenue line in `lineItems` carries an amount, or a revenue line is negative,
   report the line as it is, say the statement totals are not configured for it, and do not present `netIncome` as
-  profit.
+  profit. The seeded revenue line's code and sign are tracked as a defect in
+  louisburroughs/durion-positivity-backend#2394.
 - **Gross margin is not computed.** The income statement has no gross-profit or cost-of-goods-sold field, and no
   platform flow posts the cost of parts sold when an invoice is finalized: the only automated posting to 5000 Cost of
   Goods Sold is the inventory cost revaluation. Parts cost lives in pos-inventory, and a customer-margin report is a
@@ -95,15 +106,17 @@ What the platform computes:
   or line type, so "the profit on tire sales in March" cannot be answered. Say so; posted revenue for the window is
   the closest figure.
 - **Price-override margin is a different thing.** The catalog's location guardrail (`minMarginPercent`) checks one
-  override price against an item cost before it is approved. It is a pricing control, not a business margin, and
-  must not be quoted as one.
+  override price against an item cost before it is approved. It is a pricing control on one price, not the business's
+  margin, and must not be quoted as one.
 
-## Period comparisons and trends
+## Period comparisons
 
-A period comparison measures the same figure in two periods: this quarter against the last one, or against the
-same quarter a year earlier. Comparing with the same period a year earlier is the usual way to keep seasonal
-swings out of the comparison when the data is not seasonally adjusted [5]; a tire shop's winter-tire season makes
-that matter.
+A period comparison measures the same figure in two periods and reports the dollar change and the percentage
+change, the dollar change divided by the earlier (base) period's amount [7]. A sequential comparison (this quarter
+against the last one) shows recent movement but carries the seasonal swing between the two; a year-over-year
+comparison (against the same quarter a year earlier) is the usual way to keep seasonality out when the data is not
+seasonally adjusted [8]. A tire shop's winter-tire season makes the difference matter: say which kind of comparison
+the answer is.
 
 - Make one call per period with the same tool, so both figures share a basis. "How did Q3 compare to Q2?" is two
   income statements, one per quarter, each resolved with `resolveNamedPeriod` as `YYYY-Qn`.
@@ -117,7 +130,11 @@ that matter.
   figure. When the earlier figure is zero the percentage is undefined: report the absolute change and say that a
   percentage change is not meaningful against a zero base. When the earlier figure is negative (a net loss), give
   the absolute change and describe the direction in words rather than quoting a percentage, whose sign would
-  mislead.
+  mislead. When the earlier figure is small, a small dollar change becomes a large percentage (from $200 to $1,000
+  is +400%): always give the dollar amounts beside the percentage.
+
+## Trends
+
 - No report buckets by month or week: a `groupBy` parameter is planned and does not exist. A trend ("revenue by
   month for six months", "sales trend for the past 12 weeks") therefore needs one call per bucket. The collections
   analytics endpoint states that looping it across more than three periods exceeds its call budget; for longer
@@ -129,8 +146,8 @@ that matter.
 
 ## Vendor spend
 
-Spend analysis is the work of collecting, cleaning, classifying and analysing what a business pays out, to lower
-procurement cost and keep control of it [6]. On this platform the one spend report is per vendor and per window:
+Spend analysis is "the process of collection, classifying and analysing expenditure data", used for spend
+visibility, compliance and control [9]. On this platform the one spend report is per vendor and per window:
 
 - `paidAmount`: the gross amount of A/P payments to the vendor whose payment date falls in the window and whose
   gateway status shows the cash moved (`GATEWAY_SUCCEEDED` or a later GL-posting status). This is cash paid.
@@ -187,7 +204,9 @@ Platform sources:
   (`revenueByCustomer`), `internal/service/InvoiceAnalyticsServiceImpl.java` (revenue statuses, UTC window) and
   `internal/service/InvoiceFinalizationServiceImpl.java` (invoice total = subtotal + adjustments + tax)
 - `pos-invoice/src/main/resources/permissions.yaml`
-- `pos-catalog/openapi.yaml` (location guardrail policy, `minMarginPercent`)
+- `pos-catalog/openapi.yaml` (location guardrail policy, `minMarginPercent`) and
+  `pos-catalog/src/main/java/com/positivity/catalog/internal/service/LocationPriceOverrideServiceImpl.java`
+  (`calculateMarginPercent`)
 - `pos-mcp-server/src/main/java/com/positivity/mcp/internal/orchestration/tools/ReportingFacadeTool.java`,
   `AccountingFacadeTool.java`, `InvoiceFacadeTool.java`, `BusinessGlossary.java`, `DateWindowFacadeTool.java`
   (`resolveNamedPeriod` accepts `YYYY`, `YYYY-MM`, `YYYY-Qn`)
@@ -198,10 +217,19 @@ Platform sources:
 
 External sources (accessed 2026-10-02):
 
-1. "Revenue", Wikipedia, Wikimedia Foundation. <https://en.wikipedia.org/wiki/Revenue>
-2. "Gross margin", Wikipedia, Wikimedia Foundation. <https://en.wikipedia.org/wiki/Gross_margin>
-3. "Profit margin", Wikipedia, Wikimedia Foundation. <https://en.wikipedia.org/wiki/Profit_margin>
-4. "Cost of goods sold", Wikipedia, Wikimedia Foundation. <https://en.wikipedia.org/wiki/Cost_of_goods_sold>
-5. "Seasonal adjustment", Wikipedia, Wikimedia Foundation. <https://en.wikipedia.org/wiki/Seasonal_adjustment>
-6. "Spend analysis", Wikipedia, Wikimedia Foundation. <https://en.wikipedia.org/wiki/Spend_analysis>
-7. "IFRS 15", Wikipedia, Wikimedia Foundation. <https://en.wikipedia.org/wiki/IFRS_15>
+1. IFRS 15 "Revenue from Contracts with Customers", paragraphs 2 and 47, IFRS Foundation (International Accounting
+   Standards Board).
+   <https://www.ifrs.org/content/dam/ifrs/publications/html-standards/english/2024/issued/ifrs15.html>
+2. "Revenue", Wikipedia, Wikimedia Foundation. <https://en.wikipedia.org/wiki/Revenue>
+3. Steven Bragg, "Net sales definition", AccountingTools. <https://www.accountingtools.com/articles/net-sales>
+4. Steven Bragg, "Gross margin definition", AccountingTools. <https://www.accountingtools.com/articles/gross-margin>
+5. Steven Bragg, "Cost of goods sold definition", AccountingTools.
+   <https://www.accountingtools.com/articles/cost-of-goods-sold>
+6. Steven Bragg, "The difference between margin and markup", AccountingTools.
+   <https://www.accountingtools.com/articles/what-is-the-difference-between-margin-and-markup.html>
+7. Mitchell Franklin, Patty Graybeal and Dixon Cooper, "A Financial Statement Analysis", Principles of
+   Accounting, Volume 1: Financial Accounting, OpenStax (Rice University).
+   <https://openstax.org/books/principles-financial-accounting/pages/a-financial-statement-analysis>
+8. "Seasonal adjustment", Wikipedia, Wikimedia Foundation. <https://en.wikipedia.org/wiki/Seasonal_adjustment>
+9. "Spend Analysis - What is Spend Analysis", Chartered Institute of Procurement & Supply (CIPS).
+   <https://www.cips.org/intelligence-hub/finance/spend-analysis>
