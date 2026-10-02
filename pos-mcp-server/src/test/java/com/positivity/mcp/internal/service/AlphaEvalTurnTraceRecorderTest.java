@@ -362,6 +362,87 @@ class AlphaEvalTurnTraceRecorderTest {
     }
 
     @Test
+    @DisplayName("ADR-0069 §9: the trace carries the retrieved documents in rank order and the scope's identities, "
+            + "so the rag gate can be replayed offline")
+    void identitiesAreTracedForTheOfflineGate() {
+        AlphaEvalTurnTraceRecorder shadow =
+                scopeRecorder(mode(ScopeGraphProperties.Mode.SHADOW), new SimpleMeterRegistry());
+
+        shadow.begin(USER, "is WO-20391 billed?");
+        shadow.recordScope(scope());
+        shadow.recordScopeConsumers(List.of("WorkorderFacadeTool"), false);
+        shadow.recordRetrievedDocuments(List.of(
+                new ScopeTrace.RetrievedDocument("billing.invoices", "billing"),
+                new ScopeTrace.RetrievedDocument("workorder.public", "workorder"),
+                new ScopeTrace.RetrievedDocument("glossary.identifiers", "master")));
+        // A second retrieval repeats a document: it keeps its first rank and its first rag_scope.
+        shadow.recordRetrievedDocuments(List.of(
+                new ScopeTrace.RetrievedDocument("workorder.public", "other"),
+                new ScopeTrace.RetrievedDocument("workorder.status-lifecycle", "workorder")));
+        shadow.complete("yes");
+
+        ScopeTrace traced = savedTrace().scope();
+        assertThat(traced.retrievedDocuments())
+                .containsExactly(
+                        new ScopeTrace.RetrievedDocument("billing.invoices", "billing"),
+                        new ScopeTrace.RetrievedDocument("workorder.public", "workorder"),
+                        new ScopeTrace.RetrievedDocument("glossary.identifiers", "master"),
+                        new ScopeTrace.RetrievedDocument("workorder.status-lifecycle", "workorder"));
+        assertThat(traced.retrievedDocs()).isEqualTo(4);
+        assertThat(traced.retrievedDocsInScope()).isEqualTo(2);
+        assertThat(traced.scopeDocumentIds()).containsExactly("workorder.status-lifecycle", "workorder.public");
+        assertThat(traced.scopeDocumentIdsTruncated()).isFalse();
+        assertThat(traced.scopeToolNames()).containsExactly("WorkorderFacadeTool", "workorder_getworkorder");
+        assertThat(traced.scopeToolNamesTruncated()).isFalse();
+        assertThat(traced.addedToolNames()).containsExactly("WorkorderFacadeTool");
+        assertThat(traced.addedTools()).isEqualTo(1);
+        // Identities only: no message text anywhere in the scope.
+        assertThat(traced.toString()).doesNotContain("WO-20391", "billed");
+    }
+
+    @Test
+    @DisplayName("ADR-0069 §9: the scope identity lists are cut at the cap and say so")
+    void identityListsAreCappedWithATruncationFlag() {
+        List<String> manyDocuments = java.util.stream.IntStream.range(0, ScopeTrace.IDENTITY_LIST_CAP + 6)
+                .mapToObj(i -> "workorder.doc-" + i)
+                .toList();
+        List<ScopeSet.ScopeTool> manyTools = java.util.stream.IntStream.range(0, ScopeTrace.IDENTITY_LIST_CAP + 1)
+                .mapToObj(i -> new ScopeSet.ScopeTool(
+                        "workorder_op" + i, NodeAttributes.ToolSource.DISCOVERED, 1, Access.READS))
+                .toList();
+        ScopeSet wide = new ScopeSet(
+                List.of(new ScopeSet.Seed("workorder", MatchKind.IDENTIFIER)),
+                List.of(),
+                List.of("workorder"),
+                manyTools,
+                manyDocuments,
+                List.of(),
+                List.of(),
+                List.of(),
+                ScopeSet.Confidence.HIGH,
+                "c878c7206d2ed660",
+                Instant.parse("2026-09-30T12:00:00Z"));
+
+        recorder.begin(USER, "the work order");
+        recorder.recordScope(wide);
+        recorder.complete("ok");
+
+        ScopeTrace traced = savedTrace().scope();
+        assertThat(traced.documentCount()).isEqualTo(ScopeTrace.IDENTITY_LIST_CAP + 6);
+        assertThat(traced.scopeDocumentIds())
+                .hasSize(ScopeTrace.IDENTITY_LIST_CAP)
+                .startsWith("workorder.doc-0")
+                .endsWith("workorder.doc-" + (ScopeTrace.IDENTITY_LIST_CAP - 1));
+        assertThat(traced.scopeDocumentIdsTruncated()).isTrue();
+        assertThat(traced.toolCount()).isEqualTo(ScopeTrace.IDENTITY_LIST_CAP + 1);
+        assertThat(traced.scopeToolNames()).hasSize(ScopeTrace.IDENTITY_LIST_CAP);
+        assertThat(traced.scopeToolNamesTruncated()).isTrue();
+        // No retrieval observed: the ordered list is null like the counts, not empty.
+        assertThat(traced.retrievedDocuments()).isNull();
+        assertThat(traced.addedToolNames()).isEmpty();
+    }
+
+    @Test
     @DisplayName("ADR-0069: with no retrieval observed the retrieved-document shares stay null, not zero")
     void noRetrievalObservedLeavesDocumentSharesNull() {
         recorder.begin(USER, "the work order");

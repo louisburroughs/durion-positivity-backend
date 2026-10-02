@@ -224,6 +224,54 @@ evidence are recorded in the ADR's changelog.
 **Recording.** The alpha eval turn trace gains a nullable `scope` (`mode`, `enforced`, `graphHash`, `graphBuiltAt`,
 `confidence`, `seeds[{entity, matchKind}]`, entity/tool/document/screen counts, `addedTools`, `ragFilterApplied`, and at
 completion `calledToolsInScope/calledTools` and `retrievedDocsInScope/retrievedDocs`). Older payloads read `scope: null`.
+The counts alone cannot say whether the filter would have kept the *right* document, so the scope also records
+identities, all of them platform definitions (ADR-0069 §8: document ids, scope names, tool names; never message text):
+
+| Field                        | Content                                                                                                                                                                                              |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `retrievedDocuments`         | The final top-K handed to the model, in rank order, one `{documentId, ragScope}` per distinct document (chunks of one document collapse to the first, so one retrieval yields at most K). Null when retrieval was not observed. |
+| `scopeDocumentIds`           | The scope's `document_id`s in scope order, at most 64; `scopeDocumentIdsTruncated` says when the list was cut.                                                                                   |
+| `scopeToolNames`             | The `mcp_tool.name` of every scope tool, facade and discovered, at most 64; `scopeToolNamesTruncated` likewise.                                                                                   |
+| `addedToolNames`             | The names behind `addedTools`.                                                                                                                                                                       |
+
+All four are null in a payload written before they existed (`EvalTurnTraceJsonCompatibilityTest`). `ScopeRetrievalObserver`
+records `retrievedDocuments` after the top-K cut and returns the retriever's list untouched (same instance, same order).
+
+**Scope-graph gate report (ADR-0069 §9, offline).** `scripts/scope_graph_gate_report.py` computes the `rag` promotion gate
+from shadow traces alone, without an `enforce` run: it joins each trace to a RAG fixture by `userMessage` (exact, then
+trim + collapse whitespace + casefold, like `tagging_shadow_report.py`; a query shared by a positive and a
+visibility-negative fixture is settled by the trace's `role`), scores the recorded top-K as **today** (hit@k, MRR,
+recall@k, forbidden-document hits, `k` from the fixture, default 5) and again over the documents the §6 rule would have
+kept as **simulated enforce**: on `confidence: HIGH` keep a document whose `documentId` is in `scopeDocumentIds` or whose
+`ragScope` is `master`, on `LOW`/`NONE` keep everything (order preserved, nothing added). The verdict is **PASS** when,
+overall and within each fixture set (`rag-lexical`, `rag-retrieval`), the simulated hit@5, MRR and recall@5 are each at
+least today's and the forbidden hits did not increase; otherwise **FAIL** with the deltas and the regression list (the
+fixtures whose expected document the filter dropped; ids under `--verbose`). Two more sections ride along: a shadow-only
+tools table (share of the model's calls that were inside the scope, per confidence; the `tools` consumer is additive and
+needs its own gate) and a documentation-coverage table (per seed entity: turns seeded, turns whose scope had no document,
+mean scope documents, and with `--lexicon`/`--preload` the static number of RAG documents annotated with the entity, so
+"entities with no document" comes out of every run; `--verbose` adds the `NONE`-confidence messages, the vocabulary the
+lexicon missed). The exit code is 0 on PASS.
+
+```bash
+# 1. Run the rag-lexical and rag-retrieval fixture queries through the alpha chat in mcp.scope-graph.mode: shadow,
+#    as the actor each fixture names, in batches of fewer than 200 turns; export each batch
+#    (GET /v1/eval/turn-traces returns the caller's own traces, newest first, at most 200: see the tagging-gate
+#    README, "Run the gate in batches").
+# 2. Score the exports:
+python3 scripts/scope_graph_gate_report.py --file traces-scope-*.json \
+  --fixture pos-mcp-server/src/test/resources/eval/rag-lexical/*.json \
+            pos-mcp-server/src/test/resources/eval/rag-retrieval/*.json \
+  --lexicon pos-mcp-server/src/main/resources/scope-graph/entities.yaml \
+  --preload pos-mcp-server/src/main/resources/application.yml \
+  --verbose            # --json for the machine-readable report
+```
+
+The simulation replays the rule over the recorded top-K only, while the real hook filters the fused candidate pool
+*before* the cut, so it can drop a document but never promote one the cut removed: it is pessimistic on recall. A PASS
+is a PASS; a FAIL names the documents to look at. A sample whose `scopeDocumentIdsTruncated` is true is counted and
+flagged, and traces written before the identity lists existed are skipped. Unit tests:
+`python3 -m unittest scripts.test_scope_graph_gate_report` (in `pr-checks.yml`).
 
 **Telemetry.** `nlti.request.telemetry` gained eight additive, nullable fields in `schemaVersion` 2 (`scopeMode`,
 `scopeGraphHash`, `scopeConfidence`, `scopeEntityCount`, `scopeToolCount`, `scopeDocCount`, `scopeAddedToolCount`,

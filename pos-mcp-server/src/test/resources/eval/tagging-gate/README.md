@@ -213,6 +213,16 @@ python3 scripts/tagging_shadow_report.py --file traces.json \
   --expected pos-mcp-server/src/test/resources/eval/tagging-gate/es.json --verbose
 ```
 
+## Scope-graph gate (ADR-0069 section 9)
+
+The `rag` consumer of the scope graph is promoted on a different report over the same trace exports:
+`scripts/scope_graph_gate_report.py` joins shadow traces to the RAG fixtures (`eval/rag-lexical/`,
+`eval/rag-retrieval/`) and compares today's top-K with the top-K the section 6 filter would have kept
+(hit@5, MRR, recall@5, forbidden hits), plus a documentation-coverage table. The batching and export
+mechanics below apply unchanged (run the fixture queries as the actor each fixture names, in
+`mcp.scope-graph.mode: shadow`); the procedure and the trace fields it reads are in the module README,
+"Scope-graph gate report".
+
 ## Bake-off procedure (ADR-0068 section 6, spec 2.9)
 
 Chooses the tagging model before any tag is promoted. Run it on the host that will serve the model

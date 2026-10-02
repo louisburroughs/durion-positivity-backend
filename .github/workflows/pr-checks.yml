@@ -159,6 +159,14 @@ jobs:
         run: |
           python3 -m unittest scripts.test_tagging_shadow_report
 
+      - name: Scope-graph gate report unit tests (test_scope_graph_gate_report.py)
+        # ADR-0069 §9: the rag consumer is promoted on this report's verdict, computed offline from
+        # shadow traces (hit@5, MRR, recall@5, forbidden hits, today vs the simulated §6 filter), so a
+        # wrong rank metric or filter rule would promote a regression. Stdlib only, no build, no
+        # network, no database.
+        run: |
+          python3 -m unittest scripts.test_scope_graph_gate_report
+
       - name: Tagging gate fixture tests (test_tagging_gate_fixtures.py)
         # ADR-0068 §6 / spec §2.9: the gate fixtures are the ground truth the tagging model is
         # promoted on. This pins their schema, that every utterance carries every tag with an
