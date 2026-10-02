@@ -225,9 +225,9 @@ code enforces them:
   omitted) keeps the order sent; `OLDEST_FIRST` orders the lines by due date ascending, falling
   back to the finalization time, then by invoice id. Oldest-first is therefore **not** automatic:
   it applies only when the request asks for `OLDEST_FIRST`, and it orders the invoices the caller
-  listed rather than choosing invoices for the customer. Oldest-first (FIFO) is a common
-  cash-application convention when a customer sends no remittance instruction (see Sources [5]);
-  on this platform someone must still choose it.
+  listed rather than choosing invoices for the customer. General accounting software also treats
+  oldest-first as a chosen method rather than a rule, for example Business Central's per-customer
+  "Apply to Oldest" application method beside manual application (see Sources [4]).
 - **Journal entry.** An application posts Dr Undeposited Funds, Cr Accounts Receivable.
 - **Listing.** `GET /v1/accounting/payment-applications` (`accounting:analytics:view`).
 
@@ -270,12 +270,19 @@ How a chargeback is worked, and who reconciles processor settlements (`pos-accou
 settlement facts; the default settlement feed binding is a placeholder), is not defined for staff
 in code: ask before describing either.
 
-## Deposit credits
+## Customer deposits in accounting terms
 
-A deposit is money taken before the work or sale is billed. In accounting terms it is not yet
-revenue: the business owes the customer the goods or service, so the amount is a liability (a
-contract liability, often called unearned revenue or customer deposits) until it is earned (see
-Sources [3], [4]).
+A deposit is money taken before the work or sale is billed. It is not yet revenue: the business
+still owes the customer the goods or service, so the amount sits in a liability account (customer
+deposits, unearned or deferred revenue) and moves to revenue as the work is done (see Sources [2]).
+IFRS 15 calls this a contract liability, "an entity's obligation to transfer goods or services to a
+customer for which the entity has received consideration", and lets a business present it under
+another name such as customer deposits (see Sources [3], paragraphs 106 and 109). Money the
+business expects to hand back is a refund liability instead (paragraph 55). These are general
+definitions; how this platform records deposits is in the next section, and the code does not
+claim to follow IFRS 15.
+
+## Deposit credits
 
 - **Taking a deposit.** A sales order checked out with a positive `depositAmount` produces a
   zero-tax **deposit-take invoice** through `POST /v1/invoices/from-order`, and registers a
@@ -332,7 +339,7 @@ email endpoints record an outcome only; they do not deliver an invoice either.
 ## Past-due invoices and aged receivables
 
 - **Past due** means an open invoice balance whose due date has passed. Days past due are counted
-  from the due date to the as-of date, the usual definition (see Sources [1], [2]); an invoice
+  from the due date to the as-of date, the usual definition (see Sources [1]); an invoice
   without a due date ages from its invoice date.
 - **Aged receivables.** `GET /v1/accounting/reports/financial/aged-receivables?asOfDate=`
   (`reporting:view:financial-statements`) lists, per customer id, open balances of `FINALIZED` and
@@ -414,19 +421,17 @@ Platform sources in `durion` (repository-relative):
   BILL-DEC-008, BILL-DEC-011, BILL-DEC-012)
 - `domains/accounting/.business-rules/AGENT_GUIDE.md` (apply payment, AD-010)
 
-External sources (general accounting knowledge only; paraphrased, not quoted):
+External sources (general accounting knowledge only; quoted briefly or paraphrased):
 
-1. "Accounts Receivable Aging Defined". Oracle NetSuite.
-   <https://www.netsuite.com/portal/resource/articles/accounting/accounts-receivable-aging.shtml>.
-   Accessed 2026-10-02.
-2. "What is the meaning of aging?". AccountingCoach.
+1. "What is the meaning of aging?". Harold Averkamp, AccountingCoach.
    <https://www.accountingcoach.com/blog/what-is-the-meaning-of-aging>. Accessed 2026-10-02.
-3. "Would you please explain unearned income?". AccountingCoach.
+2. "Would you please explain unearned income?". Harold Averkamp, AccountingCoach.
    <https://www.accountingcoach.com/blog/unearned-deferred-revenue>. Accessed 2026-10-02.
-4. "IFRS 15 Revenue from Contracts with Customers", Appendix A (contract liability). IFRS
-   Foundation.
+3. "IFRS 15 Revenue from Contracts with Customers", paragraphs 55, 106 and 109 and Appendix A.
+   IFRS Foundation.
    <https://www.ifrs.org/content/dam/ifrs/publications/html-standards/english/2025/issued/ifrs15.html>.
    Accessed 2026-10-02.
-5. "The Cash Application Checklist: How to Stop Unapplied Payments from Wrecking Your AR".
-   Beancount.io. <https://beancount.io/blog/2026/04/24/cash-application-checklist-ar-process-guide>.
+4. "Reconcile customer payments with the cash receipt journal or from customer ledger entries".
+   Microsoft Learn (Dynamics 365 Business Central).
+   <https://learn.microsoft.com/en-us/dynamics365/business-central/receivables-how-apply-sales-transactions-manually>.
    Accessed 2026-10-02.
