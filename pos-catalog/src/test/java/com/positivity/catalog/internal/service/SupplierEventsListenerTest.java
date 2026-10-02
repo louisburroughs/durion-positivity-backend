@@ -103,6 +103,19 @@ class SupplierEventsListenerTest {
     }
 
     @Test
+    void routesAnMkcatRepublishCompletionToTheEnrichmentHandlerRatherThanRecordingItAsIgnored() {
+        String json = event("e-8", "supplier.catalog.republish.completed");
+
+        listener.onSupplierEvent(json);
+
+        // #2356: recorded as ignored, the one event that states how many designs the owner holds
+        // would be dropped, and a gap would stay as invisible as the losses that caused it.
+        verify(enrichmentHandler).handle(envelopeOf(json), "e-8");
+        verifyNoInteractions(priceCatalogHandler);
+        verify(processedEventRepository, never()).save(any());
+    }
+
+    @Test
     void recordsAnUnrelatedTypeOnceAsSupplierOwnedAndHandsItToNoHandler() {
         listener.onSupplierEvent(event("e-4", "supplier.order.confirmed"));
 

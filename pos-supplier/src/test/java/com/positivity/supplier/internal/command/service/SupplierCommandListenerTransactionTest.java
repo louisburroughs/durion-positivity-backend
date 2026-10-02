@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 
 import com.positivity.domainevents.supplier.SupplierOrderRequestedV1;
 import com.positivity.supplier.internal.entity.SupplierTransmissionIntentEntity;
+import com.positivity.supplier.internal.mktcat.service.MktCatRepublisher;
 import com.positivity.supplier.internal.order.service.TransmissionIntentWriter;
 import com.positivity.supplier.internal.pricecatalog.service.PriceCatalogRepublisher;
 import com.positivity.supplier.internal.repository.ProcessedEventRepository;
@@ -79,6 +80,9 @@ class SupplierCommandListenerTransactionTest {
     @Autowired
     private PriceCatalogRepublisher republisher;
 
+    @Autowired
+    private MktCatRepublisher mktCatRepublisher;
+
     private SupplierCommandListener listener;
     private String eventId;
 
@@ -93,6 +97,7 @@ class SupplierCommandListenerTransactionTest {
                 processedEventRepository,
                 intentWriter,
                 republisher,
+                mktCatRepublisher,
                 transactionManager);
     }
 
