@@ -593,8 +593,8 @@ entities:
     domain: accounting
     terms:
       en: [bank reconciliation, bank statement, bank import, bank account, bank transaction]
-      fr: [rapprochement bancaire, relevé bancaire, compte bancaire]
-      es: [conciliación bancaria, extracto bancario, cuenta bancaria]
+      fr: [rapprochement bancaire, relevé bancaire, compte bancaire, transaction bancaire]
+      es: [conciliación bancaria, extracto bancario, cuenta bancaria, movimiento bancario, transacción bancaria]
     relates_to:
       - {entity: journal-entry, label: adjusts_via}
     schemas:
@@ -606,7 +606,7 @@ entities:
   - key: vendor-bill
     domain: accounting
     terms:
-      en: [vendor bill, supplier invoice, accounts payable, ap payment]
+      en: [vendor bill, supplier invoice, accounts payable, ap payment, we owe]
       fr: [facture fournisseur, comptes fournisseurs, paiement fournisseur]
       es: [factura de proveedor, cuentas por pagar, pago a proveedor]
     relates_to:
@@ -623,7 +623,7 @@ entities:
     terms:
       en: [credit memo, customer credit, store credit]
       fr: [note de crédit, crédit client, crédit en magasin]
-      es: [nota de crédito, crédito de cliente, crédito en tienda]
+      es: [nota de crédito, crédito de cliente, crédito del cliente, crédito en tienda]
     relates_to:
       - {entity: customer, label: belongs_to}
       - {entity: invoice, label: applied_to}

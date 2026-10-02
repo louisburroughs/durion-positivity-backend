@@ -94,6 +94,22 @@ A pick list identifies inventory items that need to be pulled from stock to fulf
 
 A goods receipt records received inventory. It is used when goods arrive from a supplier or purchase order and should update stock state audibly and consistently with accounting.
 
+## Vendor bill number and credit memo reference
+
+A **vendor bill number** (`pos-accounting`, accounts payable) depends on how the bill arrived. A bill created from a goods receipt gets `BILL_<first 8 characters of the vendor UUID, upper case>_<yyyyMMdd>_<7-digit sequence>` (e.g. `BILL_A1B2C3D4_20260211_0001234`); when a vendor invoice matches it as the single candidate and passes the line checks, the vendor's own invoice reference replaces that number. A bill recorded from a supplier's electronic invoice carries the vendor's invoice number from the start. Bills are addressed by UUID `vendorBillId` in the API.
+
+A **credit memo reference** (`pos-accounting`, accounts receivable) is `CM-<yyyyMM>-<sequence>`, the month taken from the memo's creation time in UTC and the sequence counted per month without padding (e.g. `CM-202610-7`). It is a display value; the API addresses the memo by UUID `creditMemoId`.
+
+_Verified: `pos-accounting` `VendorBillServiceImpl.generateBillNumber()` (`"BILL_%s_%s_%07d"`) and `handleVendorInvoiceReceivedEvent` (`setBillNumber(invoiceReference)`); `SupplierInvoiceEventsListener` (`setBillNumber(vendorInvoiceNumber)`); `CreditMemoServiceImpl.assignCreditMemoReference()` (`CM-` + `%04d%02d` + `-` + sequence)._
+
 ## Idempotency key
 
 An idempotency key prevents duplicate creation for repeated submissions. The existing shop guide states appointment creation supports an `Idempotency-Key` header so submitting the same key twice returns the original result rather than creating a duplicate.
+
+## Sources
+
+Platform sources for the vendor bill number and credit memo reference section (repository-relative):
+
+- `pos-accounting/src/main/java/com/positivity/accounting/internal/service/VendorBillServiceImpl.java`
+- `pos-accounting/src/main/java/com/positivity/accounting/internal/service/SupplierInvoiceEventsListener.java`
+- `pos-accounting/src/main/java/com/positivity/accounting/internal/service/CreditMemoServiceImpl.java`
