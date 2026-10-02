@@ -140,8 +140,8 @@ gateway port.
 
 | Operation | Endpoint | Permission |
 | --- | --- | --- |
-| Take card tender | `POST /v1/invoices/{invoiceId}/payments` | unregistered authority (note after this table) |
-| Capture an authorized hold | `POST /v1/invoices/{invoiceId}/payments/{paymentId}/capture` | unregistered authority (note after this table) |
+| Take card tender | `POST /v1/invoices/{invoiceId}/payments` | `invoice:payment:process` (conditional codes after this table) |
+| Capture an authorized hold | `POST /v1/invoices/{invoiceId}/payments/{paymentId}/capture` | `invoice:payment:capture` |
 | List an invoice's payments | `GET /v1/invoices/{invoiceId}/payments` | `invoice:invoice:view` |
 | One payment's detail | `GET /v1/invoices/{invoiceId}/payments/{paymentId}` | `invoice:invoice:view` |
 | Void an authorized hold | `POST /v1/invoices/{invoiceId}/payments/{paymentId}/void` | `invoice:payment:void` |
@@ -149,11 +149,21 @@ gateway port.
 | Refunds of an invoice | `GET /v1/invoices/{invoiceId}/refunds` | `invoice:invoice:view` |
 | Manual refund, no captured payment | `POST /v1/invoices/{invoiceId}/refunds`, `POST /v1/refunds` | `invoice:refund:issue_manual` |
 
-Payment initiation and capture check the authority names `PROCESS_PAYMENT`,
-`OVERRIDE_PAYMENT_LIMIT` (amount above 500.00), `SELECT_PAYMENT_FLOW` (`AUTH_ONLY`) and
-`MANUAL_CAPTURE` inside the service. None of them is in the `pos-invoice` registered permission set
-(`permissions.yaml`), so no role can be granted them through role administration. Report a 403 on
-payment initiation or capture as a configuration gap rather than naming a permission to request.
+Payment initiation always needs `invoice:payment:process`. Two more codes are checked inside the
+service, and only when the request calls for them: `invoice:payment:limit_override` when the amount
+is above 500.00 (exactly 500.00 does not need it), and `invoice:payment:flow_select` when the
+request asks for the `AUTH_ONLY` flow; an `AUTH_ONLY` hold above 500.00 needs both. Capturing a hold
+needs `invoice:payment:capture`; `invoice:payment:process` is not a substitute. All four are
+registered `pos-invoice` permissions and are granted through role administration, and each applies
+at the invoice's location: a caller whose grant is location-scoped is denied on an invoice outside
+that reach.
+
+On a 403 from payment initiation, name the code the request was missing rather than assuming
+`invoice:payment:process`: for an amount above 500.00 it may be `invoice:payment:limit_override`,
+and for `AUTH_ONLY` it may be `invoice:payment:flow_select`. In the role baseline
+`invoice:payment:process` is granted alongside `invoice:payment:void` and `invoice:payment:refund`,
+and the other three alongside `invoice:payment:override`; role grants are tenant data, so do not
+state that a particular role holds a code without checking it.
 
 ## Card payment flows, idempotency and declines (pos-invoice)
 

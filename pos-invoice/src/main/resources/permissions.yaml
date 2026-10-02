@@ -71,3 +71,40 @@ permissions:
       - SHOP_MANAGER
       - MANAGER
       - ACCOUNT_MANAGER
+  - name: "invoice:payment:process"
+    description: "Take card tender against an invoice: initiate a payment through the gateway, up to 500.00 and in the default SALE_CAPTURE flow (#2393, BILL-DEC-008)"
+    grantTo:
+      - ADMIN
+      - GENERAL_MANAGER
+      - LOCATION_MANAGER
+      - SHOP_MANAGER
+      - MANAGER
+      - ACCOUNT_MANAGER
+      - SERVICE_ADVISOR
+  - name: "invoice:payment:limit_override"
+    description: "Initiate an invoice payment above the 500.00 threshold; checked in the service when the amount exceeds it (#2393, BILL-DEC-010)"
+    grantTo:
+      - ADMIN
+      - GENERAL_MANAGER
+      - LOCATION_MANAGER
+      - SHOP_MANAGER
+      - MANAGER
+      - ACCOUNT_MANAGER
+  - name: "invoice:payment:flow_select"
+    description: "Choose the AUTH_ONLY flow (an authorization hold) when initiating an invoice payment; checked in the service when the request asks for it (#2393, BILL-DEC-008)"
+    grantTo:
+      - ADMIN
+      - GENERAL_MANAGER
+      - LOCATION_MANAGER
+      - SHOP_MANAGER
+      - MANAGER
+      - ACCOUNT_MANAGER
+  - name: "invoice:payment:capture"
+    description: "Capture all or part of a previously authorized invoice payment hold (#2393, BILL-DEC-008)"
+    grantTo:
+      - ADMIN
+      - GENERAL_MANAGER
+      - LOCATION_MANAGER
+      - SHOP_MANAGER
+      - MANAGER
+      - ACCOUNT_MANAGER

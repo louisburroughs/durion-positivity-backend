@@ -38,7 +38,9 @@ import org.springframework.web.bind.annotation.RestController;
  * REST controller for payment initiation and capture operations.
  *
  * <p>
- * Permission enforcement is delegated to the service layer.
+ * Each operation names its unconditional permission in {@code @PreAuthorize}, so the OpenAPI
+ * contract and the SDKs carry the real requirement (#2393); the service repeats it and adds the
+ * checks that depend on the request body or the invoice's location.
  * This controller handles HTTP mapping and request/response shapes (ADR-0017).
  *
  * Story #9.
@@ -65,6 +67,7 @@ public class PaymentController {
      * @return created payment intent (HTTP 201)
      */
     @PostMapping("/{invoiceId}/payments")
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.PAYMENT_PROCESS + "')")
     @ResponseStatus(HttpStatus.CREATED)
     @EmitEvent(id = "INVOICE_PAYMENT_INITIATE", apiVersion = "1")
     @Operation(operationId = "initiatePayment", summary = "Initiate Card Payment on Invoice", description = """
@@ -72,16 +75,18 @@ public class PaymentController {
                     intent that is CAPTURED immediately (SALE_CAPTURE) or left AUTHORIZED as a hold (AUTH_ONLY).
                     Use this tool to take card tender; do not use capturePayment, which settles an existing \
                     AUTH_ONLY hold rather than starting a new payment.
-                    Preconditions: the invoice must exist; the caller needs the PROCESS_PAYMENT authority, plus \
-                    OVERRIDE_PAYMENT_LIMIT when the amount exceeds 500.00 and SELECT_PAYMENT_FLOW to choose \
-                    AUTH_ONLY.
+                    Preconditions: the invoice must exist; the caller needs the invoice:payment:process authority \
+                    (scoped to the invoice's location, ADR-0061), and must also hold \
+                    invoice:payment:limit_override when the amount exceeds 500.00 and invoice:payment:flow_select \
+                    to choose AUTH_ONLY, each for that location.
                     Required inputs: paymentFlow (SALE_CAPTURE or AUTH_ONLY), amount (positive), idempotencyKey and \
                     paymentToken (tokenised card reference, never a PAN); a replayed idempotencyKey with an \
                     identical payload returns the existing intent instead of charging twice.
                     Emits an INVOICE_PAYMENT_INITIATE event and records the gateway result on the intent.
-                    Returns 201 with the intent, 404 when the invoice does not exist, 409 when the idempotencyKey \
-                    was already used with a different payload, 422 when the gateway declines, and 403 when a \
-                    required payment authority is missing.
+                    Returns 201 with the intent, 403 when invoice:payment:process or a conditional authority the \
+                    request needs is missing or the invoice's location is outside the caller's reach, 404 when the \
+                    invoice does not exist, 409 when the idempotencyKey was already used with a different payload, \
+                    and 422 when the gateway declines.
                     """)
     @ApiResponse(responseCode = "201", description = "Payment intent created")
     @ApiResponse(
@@ -90,7 +95,8 @@ public class PaymentController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
-            description = "Insufficient permissions",
+            description =
+                    "FORBIDDEN when the caller lacks the required authority; LOCATION_SCOPE_DENIED when the invoice's location is outside the caller's reach (ADR-0061)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
@@ -130,6 +136,7 @@ public class PaymentController {
      * @return updated payment intent (HTTP 200)
      */
     @PostMapping("/{invoiceId}/payments/{paymentId}/capture")
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.PAYMENT_CAPTURE + "')")
     @EmitEvent(id = "INVOICE_PAYMENT_CAPTURE", apiVersion = "1")
     @Operation(operationId = "capturePayment", summary = "Capture Authorized Payment Hold", description = """
                     Captures all or part of a previously authorized AUTH_ONLY payment hold at the gateway; when the \
@@ -137,20 +144,21 @@ public class PaymentController {
                     Use this tool to settle an existing AUTHORIZED intent; do not use initiatePayment, which starts \
                     a new payment, and use voidPayment instead to release the hold without taking funds.
                     Preconditions: the payment intent must belong to the invoice and be in AUTHORIZED status; the \
-                    caller needs the MANUAL_CAPTURE authority.
+                    caller needs the invoice:payment:capture authority (scoped to the invoice's location, ADR-0061).
                     Required inputs: amount (positive, up to the authorized amount) and captureIdempotencyKey, which \
                     is forwarded to the gateway so a retried capture settles at most once.
                     Emits an INVOICE_PAYMENT_CAPTURE event; the intent moves to CAPTURED on success or \
                     CAPTURE_FAILED on decline, and an ambiguous gateway response is resolved by a status inquiry \
                     before failing.
-                    Returns 200 with the captured intent, 404 when the intent does not exist under the invoice, 409 \
-                    when the intent is not AUTHORIZED, 422 when the gateway declines the capture, and 403 when the \
-                    MANUAL_CAPTURE authority is missing.
+                    Returns 200 with the captured intent, 403 when invoice:payment:capture is missing or the \
+                    invoice's location is outside the caller's reach, 404 when the intent does not exist under the \
+                    invoice, 409 when the intent is not AUTHORIZED, and 422 when the gateway declines the capture.
                     """)
     @ApiResponse(responseCode = "200", description = "Payment captured")
     @ApiResponse(
             responseCode = "403",
-            description = "Insufficient permissions",
+            description =
+                    "FORBIDDEN when the caller lacks the required authority; LOCATION_SCOPE_DENIED when the invoice's location is outside the caller's reach (ADR-0061)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",

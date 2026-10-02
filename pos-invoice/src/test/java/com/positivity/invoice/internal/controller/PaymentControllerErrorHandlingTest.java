@@ -2,6 +2,7 @@ package com.positivity.invoice.internal.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -10,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.invoice.ControllerSliceConfig;
+import com.positivity.invoice.internal.dto.InitiatePaymentResponse;
 import com.positivity.invoice.internal.dto.PaymentIntentResponse;
 import com.positivity.invoice.internal.enums.PaymentFlow;
 import com.positivity.invoice.internal.enums.PaymentIntentStatus;
@@ -66,8 +68,13 @@ class PaymentControllerErrorHandlingTest {
     @MockitoBean
     private PaymentService paymentService;
 
+    private static final String CAPTURE_BODY = """
+            {"amount":89.99,"captureIdempotencyKey":"capture-001"}
+            """;
+
+    /** A caller who may take card tender: the two error-path tests below drive initiatePayment. */
     private MockHttpServletRequestBuilder withAuth(MockHttpServletRequestBuilder request) {
-        return request.header("X-User", "test-user").header("X-Authorities", "*");
+        return withAuthorities(request, InvoicePermissions.PAYMENT_PROCESS);
     }
 
     private MockHttpServletRequestBuilder withAuthorities(MockHttpServletRequestBuilder request, String authorities) {
@@ -158,6 +165,99 @@ class PaymentControllerErrorHandlingTest {
                         get("/v1/invoices/{invoiceId}/payments/{paymentId}", INVOICE_ID, paymentId),
                         InvoicePermissions.VIEW))
                 .andExpect(status().isOk());
+    }
+
+    // -------------------------------------------------------------------------
+    // #2393: initiatePayment requires invoice:payment:process, capturePayment requires
+    // invoice:payment:capture. Both were isAuthenticated() only, with raw-string checks in the
+    // service that no role could satisfy.
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("initiatePayment: 403 without invoice:payment:process, and the service is never reached")
+    void initiatePayment_missingPermission_returns403() throws Exception {
+        mockMvc.perform(withAuthorities(
+                        post("/v1/invoices/{invoiceId}/payments", INVOICE_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(VALID_BODY),
+                        "invoice:manage," + InvoicePermissions.PAYMENT_CAPTURE))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(paymentService);
+    }
+
+    @Test
+    @DisplayName("initiatePayment: the retired PROCESS_PAYMENT raw string no longer opens the endpoint")
+    void initiatePayment_legacyRawAuthority_returns403() throws Exception {
+        mockMvc.perform(withAuthorities(
+                        post("/v1/invoices/{invoiceId}/payments", INVOICE_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(VALID_BODY),
+                        "PROCESS_PAYMENT"))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(paymentService);
+    }
+
+    @Test
+    @DisplayName("initiatePayment: 201 with invoice:payment:process")
+    void initiatePayment_withPermission_returns201() throws Exception {
+        when(paymentService.initiatePayment(any(), any())).thenReturn(sampleInitiatePaymentResponse());
+
+        mockMvc.perform(withAuthorities(
+                        post("/v1/invoices/{invoiceId}/payments", INVOICE_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(VALID_BODY),
+                        InvoicePermissions.PAYMENT_PROCESS))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("CAPTURED"));
+    }
+
+    @Test
+    @DisplayName("capturePayment: 403 without invoice:payment:capture, and the service is never reached")
+    void capturePayment_missingPermission_returns403() throws Exception {
+        mockMvc.perform(withAuthorities(
+                        post("/v1/invoices/{invoiceId}/payments/{paymentId}/capture", INVOICE_ID, UUID.randomUUID())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(CAPTURE_BODY),
+                        "invoice:manage," + InvoicePermissions.PAYMENT_PROCESS))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(paymentService);
+    }
+
+    @Test
+    @DisplayName("capturePayment: the retired MANUAL_CAPTURE raw string no longer opens the endpoint")
+    void capturePayment_legacyRawAuthority_returns403() throws Exception {
+        mockMvc.perform(withAuthorities(
+                        post("/v1/invoices/{invoiceId}/payments/{paymentId}/capture", INVOICE_ID, UUID.randomUUID())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(CAPTURE_BODY),
+                        "MANUAL_CAPTURE"))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(paymentService);
+    }
+
+    @Test
+    @DisplayName("capturePayment: 200 with invoice:payment:capture")
+    void capturePayment_withPermission_returns200() throws Exception {
+        when(paymentService.capturePayment(any(), any(), any(), any())).thenReturn(sampleInitiatePaymentResponse());
+
+        mockMvc.perform(withAuthorities(
+                        post("/v1/invoices/{invoiceId}/payments/{paymentId}/capture", INVOICE_ID, UUID.randomUUID())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(CAPTURE_BODY),
+                        InvoicePermissions.PAYMENT_CAPTURE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CAPTURED"));
+    }
+
+    private InitiatePaymentResponse sampleInitiatePaymentResponse() {
+        InitiatePaymentResponse response = new InitiatePaymentResponse();
+        response.setPaymentIntentId(UUID.randomUUID());
+        response.setStatus(PaymentIntentStatus.CAPTURED);
+        return response;
     }
 
     private PaymentIntentResponse samplePaymentIntentResponse() {

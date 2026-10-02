@@ -3,7 +3,7 @@ package com.positivity.gateway.config;
 public final class GatewayPermissionCatalog {
     private GatewayPermissionCatalog() {}
 
-    public static final int CATALOG_VERSION = 94;
+    public static final int CATALOG_VERSION = 96;
 
     protected static final String[] AUTHORITY_BY_BIT = {
         "PERM_accounting:je:view",
@@ -720,7 +720,18 @@ public final class GatewayPermissionCatalog {
         "PERM_appointments:reschedule:approve", // 542
 
         // ── New batch (bits 543–543) ──────────────────────────────────────────
-        "PERM_accounting:reconciliation:approve" // 543
+        "PERM_accounting:reconciliation:approve", // 543
+
+        // ── New batch (bits 544–545) ──────────────────────────────────────────
+        "PERM_invoice:payment:capture", // 544
+        "PERM_invoice:payment:process", // 545
+
+        // ── New batch (bits 546–547): #2393 conditional permissions, hand-assigned because
+        // scripts/generate-permissions.sh --sync only discovers permissions named in a
+        // @PreAuthorize annotation, and these two are enforced only via an in-body
+        // SecurityContextHelper.hasAuthority check ──────────────────────────────
+        "PERM_invoice:payment:flow_select", // 546
+        "PERM_invoice:payment:limit_override" // 547
     };
 
     public static String authorityForBit(int bitIndex) {

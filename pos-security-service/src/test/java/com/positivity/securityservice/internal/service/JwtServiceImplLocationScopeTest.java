@@ -282,7 +282,7 @@ class JwtServiceImplLocationScopeTest {
     }
 
     @Test
-    @DisplayName("CATALOG_VERSION is not bumped by the scope claims: pinned at 94, and perm_ver still equals it")
+    @DisplayName("CATALOG_VERSION is not bumped by the scope claims: pinned at 96, and perm_ver still equals it")
     void catalogVersion_unchanged() {
         grants(grant("TECHNICIAN", LocationScope.LOCATION, LocationHierarchy.OTHER, JE_VIEW));
         nodes(NODE_A);
@@ -298,11 +298,13 @@ class JwtServiceImplLocationScopeTest {
         // BILL-DEC-008 invoice:payment:{refund,void}, invoice:receipt:generate and
         // invoice:refund:issue_manual at bits 536-539 (90 → 91), and #2226 BILL-DEC-010
         // invoice:payment:override and invoice:receipt:reprint_override at bits 540-541 (91 → 92),
-        // #2270 DECISION-SHOPMGMT-004 appointments:reschedule:approve at bit 542 (92 → 93), and
-        // #2301 accounting:reconciliation:approve at bit 543 (93 → 94).
+        // #2270 DECISION-SHOPMGMT-004 appointments:reschedule:approve at bit 542 (92 → 93),
+        // #2301 accounting:reconciliation:approve at bit 543 (93 → 94), #2393 BILL-DEC-008
+        // invoice:payment:{capture,process} at bits 544-545 (94 → 95), and #2393 BILL-DEC-008 /
+        // BILL-DEC-010 invoice:payment:{flow_select,limit_override} at bits 546-547 (95 → 96).
         // What this test guards is that the location-scope claims are not what moved it: they ride
         // the same catalog version.
-        assertThat(PermissionCode.CATALOG_VERSION).isEqualTo(94);
+        assertThat(PermissionCode.CATALOG_VERSION).isEqualTo(96);
         Claims claims = claims(token);
         assertThat(claims.get(JwtService.PERM_VER, Integer.class)).isEqualTo(PermissionCode.CATALOG_VERSION);
         // Both scope bitsets decode under that same version: same codec, same bit indexes.
