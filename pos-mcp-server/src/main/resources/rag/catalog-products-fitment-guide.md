@@ -80,15 +80,15 @@ unmatched code is a 404 rather than a near match, and a code still duplicated in
 ## Product lifecycle, status and substitutes
 
 `lifecycleState` is `ACTIVE`, `INACTIVE` or `DISCONTINUED` (`ACTIVE` when never set). Discontinuation is one-way: a
-`DISCONTINUED` product can never be reactivated, moving a product into it needs `product:lifecycle:override_discontinued`
-and a reason, and a replacement is recorded instead. Lifecycle changes need `catalog:product:edit` or
-`product:lifecycle:update`. Separately, `status` is the operational flag `ACTIVE` or `INACTIVE`, and `trackingLevel` says
-how inventory tracks the product: `NONE`, `LOT` or `SERIAL`.
+`DISCONTINUED` product can never be reactivated, moving a product into it needs
+`product:lifecycle:override_discontinued` and a reason, and a replacement is recorded instead. Lifecycle changes need
+`catalog:product:edit` or `product:lifecycle:update`. Separately, `status` is the operational flag `ACTIVE` or
+`INACTIVE`, and `trackingLevel` says how inventory tracks the product: `NONE`, `LOT` or `SERIAL`.
 
 Two different "what else can I sell" answers exist:
 
-- **Replacements** supersede a product, normally a discontinued one. `listProductReplacements` returns the option rows in
-  priority order; `getPartSubstitutes` returns the full product records of those replacements.
+- **Replacements** supersede a product, normally a discontinued one. `listProductReplacements` returns the option rows
+  in priority order; `getPartSubstitutes` returns the full product records of those replacements.
 - **Substitution groups** (`catalog:substitution_group:view`) are sets of interchangeable products; a product belongs to
   at most one group.
 
@@ -149,6 +149,7 @@ count. Matching rules, from the service code:
 - The result is product ids only. To answer "rotors and brake pads for a 2019 Civic", filter by the vehicle, then read
   or search the catalog for those products (for example with the subcategory filter) to get names, SKUs and
   lifecycle, and ask inventory for stock.
+- An empty attribute map returns no products rather than every product.
 - An empty result means no hint matched. It does not prove the part does not fit; fitment data may simply not have
   been recorded for that product.
 
@@ -159,15 +160,15 @@ hints is an empty list. Creating, changing and deleting hints need `vehicle-fitm
 
 **Choosing the vehicle.** The manufacturer, make, model and vehicle-type lists (`listManufacturers`,
 `listMakesByManufacturer`, `listModelsByMake`, `listVehicleTypesByMake`, all `vehicle-fitment:catalog:view`) are a
-local cache of the NHTSA vPIC vehicle registry, refreshed from the public service when the cache is empty or stale
-(see Sources [4]). They help a user pick a valid make and model; they hold reference data shared by every tenant, not
-a customer's vehicle. A customer's own vehicle record (VIN, plate, year, make, model) lives in `pos-vehicle-inventory`
-and is covered by the customer and vehicle guide.
+local copy of vehicle reference data from NHTSA's public vPIC service (see Sources [4]), cached in
+`pos-vehicle-fitment` and filled from that service on demand. They help a user pick a valid make and model; they hold
+reference data shared by every tenant, not a customer's vehicle. A customer's own vehicle record (VIN, plate, year,
+make, model) lives in `pos-vehicle-inventory` and is covered by the customer and vehicle guide.
 
 **Bulk-loaded part fitment rows.** `bulkIngestVehicleFitments` (`POST /v1/fitments/bulk-ingest`, permission
 `vehicle-fitment:hint:create`) loads part-to-vehicle rows keyed by a numeric part number id, with manufacturer, make,
 model, vehicle type, year or year range, engine type and submodel. No published endpoint reads these rows, and the
-product filter above does not use them: fitment questions are answered from applicability hints only.
+product-by-vehicle filter does not use them: fitment questions are answered from applicability hints only.
 
 **Labor times are not fitment.** Vehicle-specific book times for a service (`catalog:labor_standard:view`) are keyed by
 year, make, model, submodel and engine too, but they say how long a job takes on a vehicle, not which parts fit it.
@@ -178,7 +179,7 @@ year, make, model, submodel and engine too, but they say how long a job takes on
 | --- | --- |
 | "Look up product BRK-9920." | Exact SKU lookup with the `sku` search filter; if nothing matches, say so and ask whether the code is a UPC/EAN or a manufacturer part number. |
 | "Which brake pads fit a 2018 Silverado?" | Filter products by make, model and year, then narrow to the `Brake Pads & Shoes` subcategory in the catalog. Report an empty result as "no fitment recorded", not "does not fit". |
-| "Show me rotors and brake pads for a 2019 Civic." | Same as above for two subcategories; stock and price are separate reads. |
+| "Show me rotors and brake pads for a 2019 Civic." | Filter products by make, model and year, then narrow to the `Brake Rotors & Drums` and `Brake Pads & Shoes` subcategories; stock and price are separate reads. |
 | "Do we carry wiper blades?" | Catalog search by text or the `Wiper Blades` subcategory. |
 | "How many are in stock?" | Inventory availability, not the catalog. |
 | "What does it cost?" | The customer price comes from `pos-price`; MSRP and price books are reference only. |
@@ -232,6 +233,9 @@ External sources:
 2. "Universal Product Code", Wikipedia (Wikimedia Foundation), <https://en.wikipedia.org/wiki/Universal_Product_Code>,
    accessed 2026-10-02.
 3. "Data Standards" (ACES and PIES), Auto Care Association, <https://www.autocare.org/data-standards>, accessed
-   2026-10-02.
+   2026-10-02. Not opened: the network proxy blocked the page, so the title and the ACES and PIES description rest on
+   search-result summaries only.
 4. "vPIC API", National Highway Traffic Safety Administration (U.S. Department of Transportation),
-   <https://vpic.nhtsa.dot.gov/api/>, accessed 2026-10-02.
+   <https://vpic.nhtsa.dot.gov/api/>, accessed 2026-10-02. Not opened: the network proxy blocked the page, so the
+   title and the description of vPIC rest on search-result summaries only; the base URL the module calls is in
+   `VehicleFitmentServiceImpl.java`.
