@@ -305,6 +305,12 @@ mcp:
           source-path: "classpath:rag/hr-functions-guide.md"
           rag-scope: "hr"
           entities: [employee]
+        - id: "people.employees"
+          source-path: "classpath:rag/employees-guide.md"
+          rag-scope: "hr"
+          entities: [employee]
+          # #2385: employee records, job roles vs application roles, technician staffing, time off (not modeled).
+          required-permissions: ["people:employee:view"]
         - id: "shop.management"
           source-path: "classpath:rag/shop-management-rag.md"
           rag-scope: "shopmanager"
@@ -313,11 +319,23 @@ mcp:
           source-path: "classpath:rag/shop-management-guidelines.md"
           rag-scope: "shopmanager"
           entities: [appointment, estimate, workorder, invoice, payment]
+        - id: "shop.locations"
+          source-path: "classpath:rag/locations-guide.md"
+          rag-scope: "shopmanager"
+          entities: [location]
+          # #2385: stores, hours, bays, mobile units, technicians at a location, location-scoped permissions.
+          required-permissions: ["location:bay:read", "shop:schedule:view", "shop:technician:view"]
         - id: "security.guide"
           source-path: "classpath:rag/security-service-guide.md"
           rag-scope: "master"
           entities: [user, role]
           required-permissions: ["security:permission:view", "security:role:view"]
+        - id: "admin.users-roles"
+          source-path: "classpath:rag/users-and-roles-guide.md"
+          rag-scope: "admin"
+          entities: [user, role]
+          # #2385: accounts vs employees, roles and grants (HIGH risk, ADR-0068), location scope, sign-in policy.
+          required-permissions: ["security:user:view", "security:role:view"]
         # Gate 5 documents. `required-permissions` is bound by StaticDocEntry (G5.2) and enforced by
         # the permission-aware RAG filter (G5.1). Permission codes verified against the service
         # permissions.yaml files and guarded by RagRequiredPermissionSeedTest (#1525).
@@ -412,6 +430,12 @@ mcp:
           rag-scope: "customer"
           entities: [customer]
           required-permissions: ["crm:party:view"]
+        - id: "marketing.campaigns"
+          source-path: "classpath:rag/marketing-campaigns-guide.md"
+          rag-scope: "marketing"
+          entities: [campaign]
+          # #2385: pos-marketing had no document; campaigns, segment audiences, templates, sends and stats.
+          required-permissions: ["marketing:campaign:view", "marketing:template:view", "marketing:stats:view"]
         - id: "reporting.metrics"
           source-path: "classpath:rag/reporting-metrics.md"
           rag-scope: "reporting"

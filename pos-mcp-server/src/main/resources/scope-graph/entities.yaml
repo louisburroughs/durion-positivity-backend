@@ -13,8 +13,9 @@
 #   domain_scopes   tool-catalog domain -> rag_scope, ONLY for the domains the two vocabularies spell
 #                   differently. The key is an mcp_tool.domain value: a facade domain, or for a
 #                   discovered operation the gateway routing prefix. The value is a rag-scope used by
-#                   a mcp.rag.preload.docs entry. A tool domain with no matching rag-scope
-#                   (vehicle-inventory, people-contact, supplier, marketing, location, catalog,
+#                   a mcp.rag.preload.docs entry. A tool domain spelled like its rag-scope
+#                   (marketing) needs no line. A tool domain with no matching rag-scope
+#                   (vehicle-inventory, people-contact, supplier, location, catalog,
 #                   vehicle-fitment) stays unmapped.
 #   domains         rag_scope -> one sentence, in the user's vocabulary, describing the area of the
 #                   business the scope covers (ADR-0068: the criteria of the `domain` Choice question;
@@ -66,6 +67,7 @@ domains:
   events: "Platform events published by the pos-event modules: event types, event history and notifications."
   hr: "Employees as staff: employment, pay rates, time off, HR functions."
   inventory: "Stock on hand, availability, parts, reorder points, receiving and ASNs, transfers, adjustments, counts, suppliers and purchase orders to suppliers."
+  marketing: "Marketing campaigns to customers: campaigns and their audiences (customer segments), email and SMS message templates, campaign sends and results."
   order: "Customer sales orders and carts, returns and refunds (not purchase orders to suppliers)."
   pricing: "Prices, price lists, promotions, discounts, overrides, restrictions."
   reporting: "Operational reports and KPIs: work in progress, cycle time, throughput, technician utilization and billed hours, rework, parts metrics, dashboards. Money figures (revenue, margin, profit) are accounting."

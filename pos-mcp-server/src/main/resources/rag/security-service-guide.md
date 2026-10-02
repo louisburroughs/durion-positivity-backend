@@ -214,7 +214,7 @@ Role assignments link a user to a role. Assignments can have an effective date r
 
 ### Assigning a role to a user
 
-A role is assigned to a user with an optional effective date range and optional location scope.
+A role is assigned to a user with an optional effective date range. An assignment carries no location: how far a role reaches across locations is a property of the role itself (`ALL` or `LOCATION` scope, ADR-0061), resolved against the user's staffing assignments when a token is issued. See the users and roles guide (`admin.users-roles`).
 
 **Required role(s):** Admin, Manager, General Manager
 
@@ -238,7 +238,7 @@ Returns the full list of permissions the user currently holds across all their a
 
 ### Checking whether a user has a specific permission
 
-An administrator or system component can check whether a named user holds a specific permission, optionally scoped to a location.
+An administrator or system component can check whether a named user holds a specific permission (see Authorization Decisions below). Location-sensitive checks are made by the service that owns the data, from the location-scope claims in the user's token.
 
 **Required role(s):** Admin, Manager, General Manager
 
@@ -317,3 +317,14 @@ The table below shows which platform roles grant which security-service capabili
 | Create audit events | ✓ | |
 | Export audit data | ✓ | |
 | Evaluate authorization decisions | ✓ | |
+
+---
+
+## Sources
+
+Platform sources (role-assignment and location-scope corrections of 2026-10-02, #2385):
+
+- `pos-security-service/src/main/java/com/positivity/securityservice/internal/controller/RoleController.java`
+  (`createRoleAssignment`: location reach is not set on an assignment)
+- `pos-security-service/README.md` (Role location scope; Role grants vs. role assignments)
+- `durion/docs/adr/0061-location-scope-authorization-ownership.adr.md`
