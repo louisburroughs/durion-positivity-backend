@@ -227,7 +227,7 @@ class OffboardingAssignmentEnderTest {
     }
 
     @Test
-    @DisplayName("the sweep leaves a just-changed status to the after-commit handler and a pending retry to the queue")
+    @DisplayName("the sweep leaves a just-changed status alone and a pending retry to the queue")
     void sweepUsesTheSettleCutoffAndTheAttemptCap() {
         givenSweepFinds();
 

@@ -26,12 +26,20 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Drains {@code employee_offboarding_retry_queue} (#2121). {@link OffboardingEventListener} queues a row
- * when applying the assignment policy fails; this worker re-applies the policy through the same
- * {@link OffboardingAssignmentEnder} until it succeeds, then deletes the row. It also finishes
- * offboarding: it ends the assignments of DISABLED or TERMINATED employees that are past their
- * {@code effectiveTo} (a GRACE_PERIOD that ran out) or still open-ended (an IMMEDIATE the
- * after-commit handler never got to because the process died), publishing each.
+ * Drains {@code employee_offboarding_retry_queue} (#2121). {@code disableEmployee} writes a row with
+ * the requested policy in the transaction that disables the employee (#2360), and
+ * {@link OffboardingEventListener} deletes it once it has applied the policy after commit. A row
+ * that is still there when it comes due is one the handler did not finish (it failed, or the
+ * process died before it ran); this worker applies the row's policy and end date through the same
+ * {@link OffboardingAssignmentEnder} until it succeeds, then deletes the row. A new row is due
+ * {@value #BASE_DELAY_SECONDS} seconds after the disable, so the worker leaves it to the handler
+ * until then.
+ *
+ * <p>It also finishes offboarding: it ends the assignments of DISABLED or TERMINATED employees that
+ * are past their {@code effectiveTo} (a GRACE_PERIOD that ran out) or still open-ended with no row
+ * pending. A disable always has a row, so the open-ended case is left with the offboardings that
+ * never had one (a termination applied through {@code updateEmployee}) and those whose row used up
+ * its attempts. Each ended assignment is published.
  *
  * <p>Per tenant (ADR-0062 §3): the queue table is under row-level security, so the sweep runs
  * inside {@link TenantIterator#forEachActiveTenant}. Each row is worked in its own
@@ -62,13 +70,23 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Slf4j
 public class EmployeeOffboardingRetryWorker {
 
-    /** Delay before the first retry, and the base of the exponential backoff. */
+    /**
+     * Delay between a disable and the first retry of its row, which is the head start the
+     * after-commit handler gets, and the base of the exponential backoff.
+     */
     static final long BASE_DELAY_SECONDS = 300;
+
+    /**
+     * {@code failure_reason} of a row nothing has failed on yet: {@code disableEmployee} writes the
+     * row before anything is attempted, and the column is not nullable. A row still carrying it
+     * when the worker reaches it is one the after-commit handler did not finish.
+     */
+    static final String NOT_YET_APPLIED = "not yet applied by the after-commit handler";
 
     static final long MAX_DELAY_SECONDS = 86_400;
 
-    /** {@code failure_reason} is a varchar(255) column. */
-    private static final int FAILURE_REASON_MAX_LENGTH = 255;
+    /** {@code failure_reason} and {@code disable_reason} are varchar(255) columns. */
+    private static final int REASON_MAX_LENGTH = 255;
 
     /**
      * Gauge: retry rows at {@code max-attempts} across all tenants, waiting for an operator, as of
@@ -178,9 +196,14 @@ public class EmployeeOffboardingRetryWorker {
         }
     }
 
-    /** Re-read the row (another instance may have finished it) and apply its policy. */
+    /**
+     * Claim the row and apply its policy. The row lock makes another instance, or the after-commit
+     * handler, wait here; once it is granted the row is re-checked, since whoever held it has either
+     * deleted it or pushed its next attempt back.
+     */
     private void process(UUID retryId) {
-        EmployeeOffboardingRetry row = retryRepository.findById(retryId).orElse(null);
+        EmployeeOffboardingRetry row =
+                retryRepository.findByIdForUpdate(retryId).orElse(null);
         if (row == null || !isDue(row)) {
             return;
         }
@@ -206,7 +229,8 @@ public class EmployeeOffboardingRetryWorker {
     }
 
     private void recordFailure(UUID retryId, RuntimeException failure) {
-        EmployeeOffboardingRetry row = retryRepository.findById(retryId).orElse(null);
+        EmployeeOffboardingRetry row =
+                retryRepository.findByIdForUpdate(retryId).orElse(null);
         if (row == null) {
             return;
         }
@@ -236,6 +260,15 @@ public class EmployeeOffboardingRetryWorker {
         if (message == null || message.isBlank()) {
             return "unknown";
         }
-        return message.length() > FAILURE_REASON_MAX_LENGTH ? message.substring(0, FAILURE_REASON_MAX_LENGTH) : message;
+        return message.length() > REASON_MAX_LENGTH ? message.substring(0, REASON_MAX_LENGTH) : message;
+    }
+
+    /**
+     * The request's free-text {@code disableReason}, cut to its column. The request does not bound
+     * it, and the row is written in the disable's own transaction, where an over-long value would
+     * fail the disable itself.
+     */
+    static @Nullable String disableReason(@Nullable String reason) {
+        return reason != null && reason.length() > REASON_MAX_LENGTH ? reason.substring(0, REASON_MAX_LENGTH) : reason;
     }
 }

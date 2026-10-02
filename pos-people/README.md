@@ -183,25 +183,42 @@ Disabling an employee ends their staffing assignments per `assignmentPolicy`: `I
 active assignment now; `GRACE_PERIOD` (which requires `assignmentEndDate`, today or later) caps their
 `effectiveTo` at that date and leaves them `ACTIVE`.
 
-**Why it runs after commit.** `disableEmployee` only saves the status change and publishes an
-`EmployeeOffboardedEvent`; `OffboardingEventListener` (`@TransactionalEventListener(AFTER_COMMIT)`) applies
-the policy in its own `REQUIRES_NEW` transaction once the disable is durable. A Spring Data call that
-throws inside the disable's transaction would mark it rollback-only, and the retry row written in that same
-transaction would roll back with it, on exactly the failure the queue exists for. Run after commit, a
-failure is caught and the row goes into `employee_offboarding_retry_queue` through a second independent
-transaction. `EmployeeOffboardingRetryWorker` re-applies the policy for due rows and deletes them on
-success; a failing row backs off five minutes x 2^attempts (capped at a day). At the attempt limit the
-worker logs at error and leaves the row for an operator. A crash between the commit and the handler leaves
-no row, so the same sweep also ends `ACTIVE` assignments of `DISABLED`/`TERMINATED` employees that are
+**The policy is durable with the disable (#2360).** `disableEmployee` saves the status change and, in the
+same transaction, inserts an `employee_offboarding_retry_queue` row carrying the policy, the
+`assignmentEndDate` and the actor (attempts 0, first due five minutes later), then publishes an
+`EmployeeOffboardedEvent` naming that row. The row commits or rolls back with the disable, so a `200`
+always has the request's policy on record: there is no window in which the disable is committed and the
+policy is known only to the running process.
+
+**Why the policy is applied after commit.** A Spring Data call that throws inside the disable's transaction
+would mark it rollback-only, and applying the policy must not be able to undo the disable.
+`OffboardingEventListener` (`@TransactionalEventListener(AFTER_COMMIT)`) therefore applies the policy and
+deletes the queue row in one `REQUIRES_NEW` transaction once the disable is durable. If that transaction
+does not commit (the policy could not be applied, or the process died before or during the handler) the
+row is simply still there, and nothing has to be written on the failure path. A handler failure is logged
+and not counted as an attempt.
+
+**The worker.** `EmployeeOffboardingRetryWorker` applies the policy of every due row, with the row's own
+policy and end date, and deletes it on success; a failing row backs off five minutes x 2^attempts (capped
+at a day). A row is first due five minutes after its disable, which leaves a fresh row to the after-commit
+handler. Whoever applies a queue row, the handler or a worker on any instance, first reads it with a row
+lock (`findByIdForUpdate`), so should two ever reach the same row the second waits for the first, then
+finds the row deleted or pushed back and does nothing. So a `GRACE_PERIOD` disable whose
+handler never ran is dated to the requested end date by the worker, about five minutes late, rather than
+ended. At the attempt limit the worker logs at error and leaves the row for an operator.
+
+**The sweep.** The same pass also ends `ACTIVE` assignments of `DISABLED`/`TERMINATED` employees that are
 past their `effectiveTo` (a grace period that ran out) or open-ended, and publishes
-`people.staffing-assignment.updated` for each. The open-ended case only applies once the status change is
-five minutes old and no retry row is pending, so it cannot beat the handler or the queue; if the process
-died before a GRACE_PERIOD was dated, those assignments end at that point rather than at the requested
-date. A row that has used up its attempts no longer counts as pending, so the same sweep takes over the
-assignments of an employee whose retry gave up. The sweep reads the candidate ids in one query and ends
-each assignment in a `REQUIRES_NEW` transaction of its own, so one assignment that cannot be ended does not
-roll back the others. It runs per tenant. There is no scheduler lock: with several instances a row may be
-worked twice, which is safe because applying a policy is idempotent.
+`people.staffing-assignment.updated` for each. The open-ended case ends the assignment today whatever was
+asked for, so it only applies once the status change is five minutes old and no retry row is pending. A
+disable always has a row until its policy is applied, which leaves the open-ended case with two things:
+an offboarding that never had a row (a termination applied through `updateEmployee`, #2361) and a row that
+has used up its attempts, which no longer counts as pending; that last case is the one where a
+`GRACE_PERIOD` can still end early, and the gauge below is its alert. The sweep reads the candidate ids in
+one query and ends each assignment in a `REQUIRES_NEW` transaction of its own, so one assignment that
+cannot be ended does not roll back the others. It runs per tenant. There is no scheduler lock: with several
+instances a queue row is serialized by its row lock, and an open-ended assignment may be swept twice, which
+is safe when the passes follow one another because ending an already ended assignment changes nothing.
 
 | Property                                    | Env override                               | Default | Description                                   |
 | ------------------------------------------- | ------------------------------------------ | ------- | --------------------------------------------- |

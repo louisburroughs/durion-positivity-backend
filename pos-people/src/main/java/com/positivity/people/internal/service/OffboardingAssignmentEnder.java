@@ -27,8 +27,7 @@ import org.springframework.stereotype.Component;
  * <p>It goes to the repository and the event publisher directly rather than through {@code
  * StaffingAssignmentService#end}: that method enforces the caller's location reach, and an
  * administrator who may disable an employee need not hold {@code EMPLOYEE_EDIT} at every site the
- * employee is staffed at; it is also {@code @Transactional}, so a failure inside it would mark the
- * disable's own transaction rollback-only and stop the queue-a-retry fallback from committing.
+ * employee is staffed at.
  *
  * <p>No method here opens a transaction: each joins the caller's. {@link PeopleEventPublisher}
  * writes the outbox row in that same transaction (ADR-0044 §4), so an assignment change and its
@@ -47,8 +46,9 @@ public class OffboardingAssignmentEnder {
     static final Set<EmployeeStatus> OFFBOARDED_STATUSES = Set.of(EmployeeStatus.DISABLED, EmployeeStatus.TERMINATED);
 
     /**
-     * How long after an employee's status change the open-ended sweep leaves their assignments to
-     * the after-commit handler and the retry queue; matches the retry queue's first delay.
+     * How long after an employee's status change the open-ended sweep leaves their assignments
+     * alone; matches the retry queue's first delay. A disable is already kept from the sweep by its
+     * queue row, so this only delays the offboardings that have none.
      */
     static final long SETTLE_SECONDS = 300;
 
@@ -118,10 +118,11 @@ public class OffboardingAssignmentEnder {
      * assignments of DISABLED or TERMINATED employees that are past their {@code effectiveTo} (a
      * GRACE_PERIOD that has run out; nothing flips the status when the date passes, and
      * status-keyed consumers such as pos-shop-manager's mechanic projection would keep treating the
-     * person as staffed), or open-ended ones that survived because the process died between the
-     * disable's commit and its after-commit handler, or whose retry row gave up. The caller ends
-     * each through {@link #endLingeringAssignment(UUID)} in a transaction of its own, so one bad row
-     * cannot roll back the rest.
+     * person as staffed), or open-ended ones no queue row will get to: those of an employee
+     * terminated through {@code updateEmployee}, which queues nothing, or whose retry row gave up.
+     * A disable's own assignments are not among them while its row is pending (#2360). The caller
+     * ends each through {@link #endLingeringAssignment(UUID)} in a transaction of its own, so one
+     * bad row cannot roll back the rest.
      *
      * @param maxAttempts the retry worker's attempt cap; a retry row at or past it no longer counts
      *     as pending
