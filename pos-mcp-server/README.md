@@ -134,14 +134,18 @@ posting, so a confirmed call can put a journal entry on the ledger that only a r
 | Status | read as the caller (`getAccountingEvent`) before the preview: FAILED for retry, SUSPENDED for reprocess, else `NEEDS_CLARIFICATION` with `meta.preconditionFailed` and no plan; read again at confirm, where a changed status cancels the plan (409 `WRITE_PLAN_STALE`) | read before every call; any other status answers an `Error:` result and nothing runs |
 | No blind retry | RECEIVED or PROCESSING (an earlier attempt may still be running) refuses, and points at the event and its reprocessing history | same |
 | One event | the plan's arguments name exactly one `pathParams.eventId` and run verbatim | the first call that names an event spends the turn; a second, on any event, is refused |
-| Preview | event id, type, source, amount (or payload fields), mapping version (reprocess), that a journal entry will post, and that there is no undo | the model previews the same, from the description |
+| Preview | event id, type, source, amount (or payload fields), the rules it posts under, that a journal entry will post, and that there is no undo. A reprocess with `mappingVersionToUse` posts under that version; otherwise (a retry, or a reprocess without one) the posting follows the rules active when it runs, so the guard dry-runs them (`resolveTestMapping`, the production evaluator with no version) and names the matched rule version, or the default GL mappings, and the lines; a dry run matching nothing refuses | the model previews the same, from the description, with the same dry run |
+| Pinning | a fingerprint of the preview is stored with the plan; at confirm, anything the preview showed that changed (status, amount, the rules) cancels the plan as stale | n/a: the chat path keeps no plan |
+| Credential | arguments carrying their own `Authorization` header are refused, so the checks and the write run as the same caller | same |
 
-On the chat path a guarded write is offered together with `getAccountingEvent` and `getEventReprocessingHistory`
-(through the same permission gate), so the model can read the event for its preview and poll an unknown outcome.
+On the chat path a guarded write is offered together with `getAccountingEvent`, `getEventReprocessingHistory` and
+`resolveTestMapping` (through the same permission gate), so the model can read the event, dry-run the rules for its
+preview and poll an unknown outcome.
 The guard fails closed: an event it cannot read (missing, not permitted, unreachable), a malformed `eventId` or an
 answer without a status refuses, and without the guard wired the chat path does not offer the two tools at all.
 The preview's read needs the caller's token, so `POST /v1/nlt/requests` relays its `Authorization` header to the
-write gate. Holders of retry or reprocess also need `accounting:events:view` for the status read.
+write gate. Holders of retry or reprocess also need `accounting:events:view` for the status read and
+`accounting:posting_rules:view` for the rules dry run (ADMIN and CONTROLLER hold both).
 
 ### Static RAG preload (`alpha` profile)
 

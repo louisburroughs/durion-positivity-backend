@@ -152,7 +152,7 @@
         "stale_data_forces_repreview": true
       },
       "tags": ["accounting-event-guard", "stale-data"],
-      "notes": "#2374: a posting to accounting, so HIGH whatever the classifier says. AccountingEventWriteGuard reads the event as the caller before the preview and requires FAILED; the preview names the event id, type, source and amount, says a journal entry will post and that there is no undo (the correction is a reversing entry). The status is re-read before execution: an event that left FAILED cancels the plan as stale data."
+      "notes": "#2374: a posting to accounting, so HIGH whatever the classifier says. AccountingEventWriteGuard reads the event as the caller before the preview and requires FAILED; the preview names the event id, type, source and amount, the rules a retry posts under (dry-run, unpinned), says a journal entry will post and that there is no undo (the correction is a reversing entry). The event is re-inspected before execution: an event that left FAILED, or rules that changed, cancel the plan as stale data. Arguments carrying their own Authorization header are refused."
     },
     {
       "fixture_id": "reprocess-suspended-accounting-event-guarded",
@@ -171,7 +171,7 @@
         "stale_data_forces_repreview": true
       },
       "tags": ["accounting-event-guard", "stale-data"],
-      "notes": "#2374: the event must be SUSPENDED when previewed and again when confirmed. The preview also names the mapping version: mappingVersionToUse when given, else the active version."
+      "notes": "#2374: the event must be SUSPENDED when previewed and again when confirmed. With mappingVersionToUse the posting is pinned to that version; without it the guard dry-runs the rules (resolveTestMapping) and the preview names the matched rule version, or the default GL mappings, and the lines. The preview's fingerprint is pinned with the plan, so a rule change before confirmation cancels it as stale."
     },
     {
       "fixture_id": "retry-processed-accounting-event-refused",

@@ -35,6 +35,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
@@ -59,9 +60,10 @@ import org.springframework.stereotype.Service;
  *
  * <p>#2374: a plan for pos-accounting's event retry or reprocess also passes {@link
  * AccountingEventWriteGuard}: it is HIGH risk, the event's status is read as the caller before the
- * preview (a wrong status answers {@code NEEDS_CLARIFICATION} with {@code preconditionFailed}) and
- * again before execution (a changed status cancels the plan as stale data), and the preview says
- * what will post and that there is no undo.
+ * preview (a wrong status answers {@code NEEDS_CLARIFICATION} with {@code preconditionFailed}), the
+ * preview says what will post, under which rules, and that there is no undo, and its fingerprint is
+ * pinned with the plan. Before execution the event is inspected again: a changed status, or anything
+ * the preview showed that no longer holds, cancels the plan as stale data.
  *
  * <p><strong>Transactionality:</strong> deliberately not wrapped in a single transaction — the
  * status transitions around the remote tool call must survive an execution failure (each
@@ -223,6 +225,7 @@ public class NltiWritePlanService {
         // #2374: the guarded tool's precondition, read as the caller before anything is previewed or
         // reused: a pending plan for the same event is no use once its status has moved on.
         String guardPreview = null;
+        String guardFingerprint = null;
         if (AccountingEventWriteGuard.guards(targetTool)) {
             AccountingEventWriteGuard.Inspection inspection = writeGuard.inspect(targetTool, args, authHeader);
             if (!inspection.permitted()) {
@@ -235,9 +238,19 @@ public class NltiWritePlanService {
                         Map.of(META_PRECONDITION_FAILED, inspection.message()));
             }
             guardPreview = inspection.message();
+            guardFingerprint = inspection.fingerprint();
         }
 
         String argsJson = toJson(args);
+        Map<String, String> entityVersions =
+                new LinkedHashMap<>(stringMapFromContext(dto.clientContext(), CONTEXT_ENTITY_VERSIONS));
+        if (guardFingerprint != null) {
+            // #2374: pins everything the guarded preview showed (status, amount, the rules it posts
+            // under); confirm compares it before executing. Set after the client's versions so a
+            // client cannot overwrite it.
+            entityVersions.put(AccountingEventWriteGuard.PIN_KEY, guardFingerprint);
+        }
+        String entityVersionsJson = entityVersions.isEmpty() ? null : toJson(entityVersions);
         // Single-pending rule (G6.5): an identical pending plan is reused; any materially
         // different pending plan on the session is cancelled and replaced.
         List<NltiWritePlan> pending =
@@ -245,6 +258,9 @@ public class NltiWritePlanService {
         for (NltiWritePlan existing : pending) {
             if (existing.getTargetTool().equals(targetTool)
                     && existing.getArgsJson().equals(argsJson)
+                    // #2374: a guarded plan is reused only while its preview still holds.
+                    && (guardFingerprint == null
+                            || Objects.equals(existing.getSourceEntityVersionsJson(), entityVersionsJson))
                     && !WritePlanPolicy.isExpired(existing.getExpiresAt(), OffsetDateTime.now(clock))) {
                 return pendingResponse(request, existing);
             }
@@ -272,8 +288,7 @@ public class NltiWritePlanService {
         plan.setArgsJson(argsJson);
         plan.setArgProvenanceJson(toJson(provenance));
         plan.setRiskLevel(riskLevel);
-        Map<String, String> entityVersions = stringMapFromContext(dto.clientContext(), CONTEXT_ENTITY_VERSIONS);
-        plan.setSourceEntityVersionsJson(entityVersions.isEmpty() ? null : toJson(entityVersions));
+        plan.setSourceEntityVersionsJson(entityVersionsJson);
         plan.setSummaryText(buildSummary(targetTool, args, provenance, riskLevel, guardPreview));
         plan.setStatus(NltiRequestStatus.PENDING_CONFIRMATION);
         plan.setExpiresAt(now.plusMinutes(ttlMinutes));
@@ -351,25 +366,39 @@ public class NltiWritePlanService {
         // time — a grant revoked after plan time must block execution.
         requireToolPermission(plan.getTargetTool(), callerPermissionCodes);
 
-        // #2374: a guarded tool's status is re-read as the caller just before execution. A status that
-        // moved on since the preview (another retry, a timed-out attempt that did land) is stale data:
-        // the plan is cancelled rather than run into a second posting.
+        // #2374: a guarded tool is re-inspected as the caller just before execution. A status that moved
+        // on since the preview (another retry, a timed-out attempt that did land) refuses; anything else
+        // the preview showed that changed, the rules an unpinned posting follows included, no longer
+        // matches the pinned fingerprint. Either is stale data: the plan is cancelled rather than run.
         if (AccountingEventWriteGuard.guards(plan.getTargetTool())) {
             AccountingEventWriteGuard.Inspection inspection =
                     writeGuard.inspect(plan.getTargetTool(), fromJson(plan.getArgsJson(), MAP_OF_OBJECT), authHeader);
-            if (!inspection.permitted()) {
+            String pinned = plan.getSourceEntityVersionsJson() == null
+                    ? null
+                    : fromJson(plan.getSourceEntityVersionsJson(), MAP_OF_STRING)
+                            .get(AccountingEventWriteGuard.PIN_KEY);
+            String stale = !inspection.permitted()
+                    ? inspection.message()
+                    : !Objects.equals(pinned, inspection.fingerprint())
+                            ? "what the preview showed has changed. Now: " + inspection.message()
+                            : null;
+            if (stale != null) {
                 transition(plan, request, NltiRequestStatus.CANCELLED);
                 appendPlanAudit(plan, request, NltiAuditEventType.CONFIRMATION, "outcome=stale-data");
                 recordConfirmationOutcome(
                         plan, request.getCorrelationId(), OUTCOME_STALE_DATA, elapsedMs(startedAtNanos));
-                throw new WritePlanStaleException("Write plan cancelled before execution: " + inspection.message());
+                throw new WritePlanStaleException("Write plan cancelled before execution: " + stale);
             }
         }
 
         // G6.7: stale-data protection for risk >= MEDIUM when versions were captured at plan time.
         if (plan.getRiskLevel() != NltiRiskLevel.LOW && plan.getSourceEntityVersionsJson() != null) {
-            Map<String, String> captured = fromJson(plan.getSourceEntityVersionsJson(), MAP_OF_STRING);
-            Map<String, String> current = versionProbe.currentVersions(plan.getTargetTool(), captured);
+            Map<String, String> captured =
+                    new LinkedHashMap<>(fromJson(plan.getSourceEntityVersionsJson(), MAP_OF_STRING));
+            // #2374: the guard's pin was checked above; the generic probe only sees entity versions.
+            captured.remove(AccountingEventWriteGuard.PIN_KEY);
+            Map<String, String> current =
+                    captured.isEmpty() ? captured : versionProbe.currentVersions(plan.getTargetTool(), captured);
             if (!captured.equals(current)) {
                 transition(plan, request, NltiRequestStatus.CANCELLED);
                 appendPlanAudit(plan, request, NltiAuditEventType.CONFIRMATION, "outcome=stale-data");

@@ -112,7 +112,12 @@ class OpenApiToolProviderGuardedWriteTest {
                         AUTH))
                 .thenReturn("{\"eventId\":\"" + eventId + "\",\"eventType\":\"INVOICE_FINALIZED\","
                         + "\"sourceSystem\":\"POS\",\"status\":\"" + status
-                        + "\",\"payload\":{\"totalAmount\":150.00}}");
+                        + "\",\"transactionDate\":\"2026-08-13T10:15:00\",\"payload\":{\"totalAmount\":150.00}}");
+        // The rules dry run an unpinned posting needs before it may run.
+        when(readExecutor.execute(eq(AccountingEventWriteGuard.RESOLVE_TEST_TOOL), anyString(), eq(AUTH)))
+                .thenReturn("{\"matched\":true,\"matchedRule\":null,\"resolvedLines\":["
+                        + "{\"accountCode\":\"1100\",\"debitAmount\":150.00},"
+                        + "{\"accountCode\":\"4000\",\"creditAmount\":150.00}]}");
     }
 
     private static String args(String eventId) {
@@ -142,8 +147,8 @@ class OpenApiToolProviderGuardedWriteTest {
     }
 
     @Test
-    @DisplayName("a guarded write outside the ranked cut's reads brings them along, through the permission gate")
-    void guardedWriteBringsItsReads() {
+    @DisplayName("a guarded write brings its companion tools along, through the permission gate")
+    void guardedWriteBringsItsCompanions() {
         wireGuard();
         DiscoveredOperation history = new DiscoveredOperation(
                 AccountingEventWriteGuard.HISTORY_READ_TOOL,
@@ -153,11 +158,19 @@ class OpenApiToolProviderGuardedWriteTest {
                 "http://gateway.test",
                 null,
                 List.of("accounting:events:view"));
+        DiscoveredOperation dryRun = new DiscoveredOperation(
+                AccountingEventWriteGuard.RESOLVE_TEST_TOOL,
+                "Resolves a hypothetical accounting event against the published posting rules.",
+                "POST",
+                "/accounting/v1/accounting/mappings/resolve-test",
+                "http://gateway.test",
+                null,
+                List.of("accounting:posting_rules:view"));
         when(repository.findDiscoveredCandidatesForPermissions(any(), anyInt(), any(), anyString()))
                 .thenReturn(List.of(RETRY));
         when(repository.findDiscoveredByNamesForPermissions(
-                        eq(AccountingEventWriteGuard.READ_TOOLS), any(), anyString()))
-                .thenReturn(List.of(EVENT_READ, history));
+                        eq(AccountingEventWriteGuard.COMPANION_TOOLS), any(), anyString()))
+                .thenReturn(List.of(EVENT_READ, history, dryRun));
 
         List<ToolCallback> callbacks = provider.resolveToolCallbacks("retry the failed invoice event");
 
@@ -166,7 +179,8 @@ class OpenApiToolProviderGuardedWriteTest {
                 .containsExactly(
                         AccountingEventWriteGuard.RETRY_TOOL,
                         AccountingEventWriteGuard.EVENT_READ_TOOL,
-                        AccountingEventWriteGuard.HISTORY_READ_TOOL);
+                        AccountingEventWriteGuard.HISTORY_READ_TOOL,
+                        AccountingEventWriteGuard.RESOLVE_TEST_TOOL);
     }
 
     @Test
@@ -198,7 +212,7 @@ class OpenApiToolProviderGuardedWriteTest {
         assertThat(named(callbacks, AccountingEventWriteGuard.REPROCESS_TOOL)
                         .getToolDefinition()
                         .description())
-                .contains("SUSPENDED", "mapping version");
+                .contains("SUSPENDED", "mappingVersionToUse when given");
         assertThat(named(callbacks, AccountingEventWriteGuard.EVENT_READ_TOOL)
                         .getToolDefinition()
                         .description())
@@ -247,8 +261,23 @@ class OpenApiToolProviderGuardedWriteTest {
                 .startsWith("Error: one confirmation covers one accounting event")
                 .contains(AccountingEventWriteGuard.RETRY_TOOL + " for event " + EVENT_A);
         assertThat(other).startsWith("Error: one confirmation covers one accounting event");
-        verify(readExecutor, times(1)).execute(anyString(), anyString(), any());
+        verify(readExecutor, times(1)).execute(eq(AccountingEventWriteGuard.EVENT_READ_TOOL), anyString(), any());
         verify(readExecutor, never()).execute(any(), eq(args(EVENT_B)), any());
+    }
+
+    @Test
+    @DisplayName("a call carrying its own Authorization header is refused and never reaches the write")
+    void ownAuthorizationRefused() {
+        wireGuard();
+        eventReads(EVENT_A, "FAILED");
+        ToolCallback retry = named(provider.resolveToolCallbacks("retry it"), AccountingEventWriteGuard.RETRY_TOOL);
+
+        String result = retry.call("{\"pathParams\":{\"eventId\":\"" + EVENT_A + "\"},"
+                + "\"headers\":{\"Authorization\":\"Bearer someone-else\"}}");
+
+        assertThat(result).startsWith("Error: ").contains("own Authorization header");
+        verifyNoInteractions(proxyFactory);
+        verify(readExecutor, never()).execute(anyString(), anyString(), any());
     }
 
     @Test

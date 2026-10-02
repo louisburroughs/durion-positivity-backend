@@ -273,13 +273,14 @@ public class OpenApiToolProvider {
         }
 
         AccountingEventWriteGuard guard = writeGuard;
-        List<String> guardReads = guard == null ? List.of() : guardReadsMissingFrom(ops);
-        if (!guardReads.isEmpty()) {
-            // #2374: a guarded write is offered with the reads its preview and its "never retry
-            // blindly" rule depend on; the gate decides, so a caller who may not read events gets none.
+        List<String> companions = guard == null ? List.of() : guardCompanionsMissingFrom(ops);
+        if (!companions.isEmpty()) {
+            // #2374: a guarded write is offered with the tools its preview and its "never retry
+            // blindly" rule depend on (the event read, its history, the rules dry run); the gate
+            // decides, so a caller who may not use them gets none.
             ops = new ArrayList<>(ops);
             ops.addAll(repository.findDiscoveredByNamesForPermissions(
-                    guardReads, caller.permissionCodes(), WorkflowState.DEFAULT.name()));
+                    companions, caller.permissionCodes(), WorkflowState.DEFAULT.name()));
         }
 
         List<ToolCallback> tools = new ArrayList<>();
@@ -340,16 +341,16 @@ public class OpenApiToolProvider {
     }
 
     /**
-     * #2374: the guard's reads (the event, its reprocessing history) not already among {@code ops},
-     * when some op is a guarded write; empty otherwise.
+     * #2374: the guard's companion tools (the event read, its reprocessing history, the rules dry
+     * run) not already among {@code ops}, when some op is a guarded write; empty otherwise.
      */
-    private static @NonNull List<String> guardReadsMissingFrom(@NonNull List<DiscoveredOperation> ops) {
+    private static @NonNull List<String> guardCompanionsMissingFrom(@NonNull List<DiscoveredOperation> ops) {
         if (ops.stream().noneMatch(op -> AccountingEventWriteGuard.guards(op.name()))) {
             return List.of();
         }
         Set<String> present = new HashSet<>();
         ops.forEach(op -> present.add(op.name()));
-        return AccountingEventWriteGuard.READ_TOOLS.stream()
+        return AccountingEventWriteGuard.COMPANION_TOOLS.stream()
                 .filter(name -> !present.contains(name))
                 .toList();
     }
