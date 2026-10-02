@@ -749,12 +749,15 @@ not replicated as `taxPending` and never blocks the estimate; the part-quantity 
 Every `@KafkaListener` in the module shares one error handler (`KafkaErrorHandlingConfig`,
 ADR-0044 §4, #2178): a failure a listener lets propagate is retried with exponential backoff (1 s
 doubling to a 30 s cap, five attempts) and then published to `{topic}.dlq` rather than logged and
-dropped. The command and fact listeners rethrow `TransientDataAccessException` (a lock timeout or
-deadlock) and swallow what they classify as permanent (a malformed payload, an unsupported
-command), so only a failure redelivery can fix reaches the handler. A dropped connection surfaces
-as `DataAccessResourceFailureException`, which Spring classes as non-transient, so it is still
-swallowed by those listeners; widening the rethrow is a platform-wide decision under ADR-0044, not
-a module one.
+dropped. The command and fact listeners rethrow the ADR-0044 §4 retryable set (#2355) and swallow
+what they classify as permanent (a malformed payload, an unsupported command), so only a failure
+redelivery can fix reaches the handler. The set is defined once, in `pos-tenancy-common`'s
+`RetryableConsumerFailures`: `TransientDataAccessException` (a lock timeout or deadlock),
+`RecoverableDataAccessException`, `DataAccessResourceFailureException` (a dropped or refused
+connection, which Spring classes as non-transient) and `TransactionException` (the handler's
+transaction could not be opened or committed), anywhere in the failure's cause chain. Each catch
+asks the classifier before it logs or records anything, so a retryable failure never leaves a
+`processed_events` mark behind.
 
 The five reconciliation-manifest listeners (`CustomerManifestListener`, `LocationManifestListener`,
 `InventoryManifestListener`, `InvoiceManifestListener`, `PeopleManifestListener`) need no rethrow
