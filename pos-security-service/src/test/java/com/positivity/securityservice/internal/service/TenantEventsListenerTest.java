@@ -26,6 +26,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -217,5 +218,19 @@ class TenantEventsListenerTest {
         doThrow(new QueryTimeoutException("slow")).when(extTenants).findById(any());
         assertThatThrownBy(() -> listener.onEvent(event("e5", "tenant.updated", 2, "ACTIVE")))
                 .isInstanceOf(QueryTimeoutException.class);
+    }
+
+    @Test
+    void garbageIsDroppedAndLostConnectionFailuresPropagate() {
+        listener.onEvent("not json");
+        listener.onEvent("{\"eventType\":\"tenant.updated\"}");
+        verify(processed, never()).save(any());
+
+        when(processed.existsById("e5")).thenReturn(false);
+        doThrow(new DataAccessResourceFailureException("connection reset"))
+                .when(extTenants)
+                .findById(any());
+        assertThatThrownBy(() -> listener.onEvent(event("e5", "tenant.updated", 2, "ACTIVE")))
+                .isInstanceOf(DataAccessResourceFailureException.class);
     }
 }

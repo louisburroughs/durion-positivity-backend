@@ -5,6 +5,7 @@ import com.positivity.securityservice.internal.entity.ExtStaffingAssignmentRepli
 import com.positivity.securityservice.internal.entity.ProcessedEvent;
 import com.positivity.securityservice.internal.repository.ExtStaffingAssignmentReplicaRepository;
 import com.positivity.securityservice.internal.repository.ProcessedEventRepository;
+import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
@@ -14,7 +15,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -125,9 +125,6 @@ public class PeopleEventsListener {
                 }
                 processedEventRepository.save(processedMark(eventId));
             });
-        } catch (TransientDataAccessException e) {
-            // Retry with backoff / DLQ via the container error handler (ADR-0044 §4).
-            throw e;
         } catch (DatabindException e) {
             if (payloadRejectedCounter != null) {
                 payloadRejectedCounter.increment();
@@ -135,6 +132,10 @@ public class PeopleEventsListener {
             log.error("Rejected malformed people event payload eventId={}: {}", eventId, e.getMessage(), e);
             recordFailed(eventId);
         } catch (Exception e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // Retry with backoff / DLQ via the container error handler (ADR-0044 §4).
+                throw e;
+            }
             log.warn("Skipping malformed people event eventId={}", eventId, e);
             recordFailed(eventId);
         }
