@@ -28,6 +28,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
@@ -252,6 +253,21 @@ class InventoryEventsListenerTest {
 
         verify(processedEvents, never()).save(any());
     }
+
+    @Test
+    @DisplayName(
+            "Posting failures propagate unwrapped for container retry / DLQ; nothing marked processed (lost connection, #2355)")
+    void postingFailurePropagatesWhenTheConnectionIsLost() {
+        when(processedEvents.existsById("e-8")).thenReturn(false);
+        doThrow(new DataAccessResourceFailureException("connection reset"))
+                .when(postingService)
+                .postShrinkage(any());
+
+        assertThatExceptionOfType(DataAccessResourceFailureException.class)
+                .isThrownBy(() -> listener.onInventoryEvent(costedScrap("e-8")));
+
+        verify(processedEvents, never()).save(any());
+    }
     // ===== inventory.adjustment.posted (#2191) =====
 
     private static final UUID ADJUSTMENT_ID = UUID.fromString("00000000-0000-0000-0000-0000000000a1");
@@ -378,6 +394,21 @@ class InventoryEventsListenerTest {
         verifyNoInteractions(ingestionRecorder);
     }
 
+    @Test
+    @DisplayName("Adjustment posting failures propagate unwrapped; nothing marked or recorded (lost connection, #2355)")
+    void adjustmentPostingFailurePropagatesWhenTheConnectionIsLost() {
+        when(processedEvents.existsById("a-5")).thenReturn(false);
+        doThrow(new DataAccessResourceFailureException("connection reset"))
+                .when(adjustmentPostingService)
+                .postAdjustment(any());
+
+        assertThatExceptionOfType(DataAccessResourceFailureException.class)
+                .isThrownBy(() -> listener.onInventoryEvent(adjustment("a-5", "-1", "1.00", "AVERAGE")));
+
+        verify(processedEvents, never()).save(any());
+        verifyNoInteractions(ingestionRecorder);
+    }
+
     // ===== inventory.product-value.changed (#2193) =====
 
     private static final UUID REVALUATION_ID = UUID.fromString("00000000-0000-0000-0000-0000000000b1");
@@ -478,6 +509,22 @@ class InventoryEventsListenerTest {
                 .postRevaluation(any());
 
         assertThatExceptionOfType(QueryTimeoutException.class)
+                .isThrownBy(() -> listener.onInventoryEvent(revaluation("r-4", "5.00", "3.00", "4")));
+
+        verify(processedEvents, never()).save(any());
+        verifyNoInteractions(ingestionRecorder);
+    }
+
+    @Test
+    @DisplayName(
+            "Revaluation posting failures propagate unwrapped; nothing marked or recorded (lost connection, #2355)")
+    void revaluationPostingFailurePropagatesWhenTheConnectionIsLost() {
+        when(processedEvents.existsById("r-4")).thenReturn(false);
+        doThrow(new DataAccessResourceFailureException("connection reset"))
+                .when(revaluationPostingService)
+                .postRevaluation(any());
+
+        assertThatExceptionOfType(DataAccessResourceFailureException.class)
                 .isThrownBy(() -> listener.onInventoryEvent(revaluation("r-4", "5.00", "3.00", "4")));
 
         verify(processedEvents, never()).save(any());

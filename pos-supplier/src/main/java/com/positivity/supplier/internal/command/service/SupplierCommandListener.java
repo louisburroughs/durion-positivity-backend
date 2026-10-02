@@ -8,13 +8,13 @@ import com.positivity.supplier.internal.mktcat.service.MktCatRepublisher;
 import com.positivity.supplier.internal.order.service.TransmissionIntentWriter;
 import com.positivity.supplier.internal.pricecatalog.service.PriceCatalogRepublisher;
 import com.positivity.supplier.internal.repository.ProcessedEventRepository;
+import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import java.time.Clock;
 import java.time.Instant;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -150,7 +150,7 @@ public class SupplierCommandListener {
                 }
                 recordProcessed(eventId, ownerOf(eventType, envelope));
             });
-        } catch (TransientDataAccessException | DataIntegrityViolationException e) {
+        } catch (DataIntegrityViolationException e) {
             // Rethrown so the container retries. A constraint violation here is the active-intent
             // unique index doing its job under a race between two instances; the retry finds the
             // winner's row and treats the command as the repeat it is.
@@ -166,6 +166,10 @@ public class SupplierCommandListener {
             log.error("Supplier command eventId={} hit inconsistent state in this module: {}", eventId, e.toString());
             throw e;
         } catch (Exception e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // The container retries with backoff, then publishes to {topic}.dlq (ADR-0044 §4).
+                throw e;
+            }
             log.warn("Skipping malformed supplier command eventId={}", eventId, e);
             handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId, ownerOf(eventType, envelope)));
         }

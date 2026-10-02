@@ -31,6 +31,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
@@ -454,6 +455,19 @@ class SupplierStockHintEventsListenerTest {
         when(hints.save(any())).thenThrow(new QueryTimeoutException("statement timeout"));
 
         assertThatExceptionOfType(QueryTimeoutException.class)
+                .isThrownBy(() -> listener.onSupplierEvent(
+                        chunkEvent("evt-15", 1, 1, 1, line("4012345678901", "V-1", "B-1", "1"))));
+
+        // Not recorded as processed: the retry has to be able to apply it.
+        verify(processedEvents, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("lost-connection database errors are rethrown for container retry")
+    void lostConnection_errors_are_rethrown() {
+        when(hints.save(any())).thenThrow(new DataAccessResourceFailureException("connection reset"));
+
+        assertThatExceptionOfType(DataAccessResourceFailureException.class)
                 .isThrownBy(() -> listener.onSupplierEvent(
                         chunkEvent("evt-15", 1, 1, 1, line("4012345678901", "V-1", "B-1", "1"))));
 

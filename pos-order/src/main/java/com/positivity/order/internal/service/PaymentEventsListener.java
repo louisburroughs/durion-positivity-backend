@@ -11,6 +11,7 @@ import com.positivity.order.internal.entity.SalesOrderStatus;
 import com.positivity.order.internal.repository.OrderPaymentRecordRepository;
 import com.positivity.order.internal.repository.ProcessedEventRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
+import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -22,7 +23,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -138,9 +138,11 @@ public class PaymentEventsListener {
                         .processedAt(Instant.now(clock))
                         .build());
             });
-        } catch (TransientDataAccessException e) {
-            throw e;
         } catch (Exception e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // The container retries with backoff, then publishes to {topic}.dlq (ADR-0044 §4).
+                throw e;
+            }
             log.warn("Skipping malformed payment event eventId={}", eventId, e);
         }
     }

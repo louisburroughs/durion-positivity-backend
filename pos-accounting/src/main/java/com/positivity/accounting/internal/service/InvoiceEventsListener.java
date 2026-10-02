@@ -9,6 +9,7 @@ import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.invoice.InvoiceUpdatedV1;
 import com.positivity.domainevents.invoice.TaxBreakdownLine;
+import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.Serial;
@@ -22,7 +23,6 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -177,9 +177,6 @@ public class InvoiceEventsListener {
             });
         } catch (RevenuePostingFailure e) {
             throw e.getCause();
-        } catch (TransientDataAccessException e) {
-            // Retry with backoff / DLQ via the container error handler (ADR-0044 §4).
-            throw e;
         } catch (DataIntegrityViolationException e) {
             // A well-formed payload the database still refused as a constraint/integrity
             // violation (e.g. a NOT NULL or unique-key rejection) on either invoice replica table
@@ -187,10 +184,10 @@ public class InvoiceEventsListener {
             // (replaceTaxBreakdown's deleteByInvoiceId/saveAll) — distinct from a malformed
             // payload: the replica row for a real fact could not be persisted, so it must be
             // observable (counter + ERROR log) rather than fall into the generic WARN path below
-            // and be swallowed (#1651). Other non-transient DataAccessExceptions (e.g. a
+            // and be swallowed (#1651). Other permanent DataAccessExceptions (e.g. a
             // programming error like InvalidDataAccessApiUsageException) are not constraint
             // rejections and keep the pre-existing generic path below, unchanged. Rethrown, same
-            // as TransientDataAccessException above, so the container error handler retries/DLQs
+            // as the RetryableConsumerFailures set below, so the container error handler retries/DLQs
             // it (ADR-0044 §4) instead of marking the event processed over a row the replica
             // never actually got.
             if (replicaPersistFailedCounter != null) {
@@ -211,6 +208,10 @@ public class InvoiceEventsListener {
             log.error("Rejected malformed invoice event payload eventId={}: {}", eventId, e.getMessage(), e);
             handlerTransaction.executeWithoutResult(_ -> markProcessed(eventId));
         } catch (Exception e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // Retry with backoff / DLQ via the container error handler (ADR-0044 §4).
+                throw e;
+            }
             log.warn("Skipping malformed invoice event eventId={}", eventId, e);
             handlerTransaction.executeWithoutResult(_ -> markProcessed(eventId));
         }

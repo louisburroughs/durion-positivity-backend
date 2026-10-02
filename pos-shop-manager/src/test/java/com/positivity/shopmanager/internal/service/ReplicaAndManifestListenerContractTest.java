@@ -62,6 +62,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -179,6 +180,12 @@ class ReplicaAndManifestListenerContractTest {
     static final List<String> REPLICAS =
             List.of("customer", "vehicle", "people", "people-contact", "workorder", "location");
 
+    /**
+     * What a replica's {@code failHard} makes the repository throw. A lock timeout by default; the
+     * lost-connection tests swap in the failure Spring classes as non-transient (#2355).
+     */
+    private RuntimeException hardFailure = new QueryTimeoutException("lock wait");
+
     private record Replica(
             String owner,
             String eventType,
@@ -202,9 +209,7 @@ class ReplicaAndManifestListenerContractTest {
                                 customerRepository,
                                 org.mockito.Mockito.mock(ObjectProvider.class),
                                 org.mockito.Mockito.mock(PlatformTransactionManager.class))::onCustomerEvent,
-                        () -> doThrow(new QueryTimeoutException("lock wait"))
-                                .when(customerRepository)
-                                .findById(any()));
+                        () -> doThrow(hardFailure).when(customerRepository).findById(any()));
             case "vehicle" ->
                 new Replica(
                         VehicleEventsListener.OWNER,
@@ -220,9 +225,7 @@ class ReplicaAndManifestListenerContractTest {
                                 vehicleRepository,
                                 org.mockito.Mockito.mock(ObjectProvider.class),
                                 org.mockito.Mockito.mock(PlatformTransactionManager.class))::onVehicleEvent,
-                        () -> doThrow(new QueryTimeoutException("lock wait"))
-                                .when(vehicleRepository)
-                                .findById(any()));
+                        () -> doThrow(hardFailure).when(vehicleRepository).findById(any()));
             case "people" ->
                 new Replica(
                         PeopleEventsListener.OWNER,
@@ -241,9 +244,7 @@ class ReplicaAndManifestListenerContractTest {
                                 credentialReplicaRepository,
                                 org.mockito.Mockito.mock(ObjectProvider.class),
                                 org.mockito.Mockito.mock(PlatformTransactionManager.class))::onPeopleEvent,
-                        () -> doThrow(new QueryTimeoutException("lock wait"))
-                                .when(assignmentRepository)
-                                .findById(any()));
+                        () -> doThrow(hardFailure).when(assignmentRepository).findById(any()));
             case "people-contact" ->
                 new Replica(
                         PeopleContactEventsListener.OWNER,
@@ -259,9 +260,7 @@ class ReplicaAndManifestListenerContractTest {
                                 personRepository,
                                 org.mockito.Mockito.mock(ObjectProvider.class),
                                 org.mockito.Mockito.mock(PlatformTransactionManager.class))::onPeopleContactEvent,
-                        () -> doThrow(new QueryTimeoutException("lock wait"))
-                                .when(personRepository)
-                                .findById(any()));
+                        () -> doThrow(hardFailure).when(personRepository).findById(any()));
             case "workorder" ->
                 new Replica(
                         WorkorderEventsListener.OWNER,
@@ -280,9 +279,7 @@ class ReplicaAndManifestListenerContractTest {
                                 applicationEventPublisher,
                                 org.mockito.Mockito.mock(ObjectProvider.class),
                                 org.mockito.Mockito.mock(PlatformTransactionManager.class))::onWorkorderEvent,
-                        () -> doThrow(new QueryTimeoutException("lock wait"))
-                                .when(workorderRepository)
-                                .findById(any()));
+                        () -> doThrow(hardFailure).when(workorderRepository).findById(any()));
             case "location" ->
                 new Replica(
                         LocationEventsListener.OWNER,
@@ -303,9 +300,7 @@ class ReplicaAndManifestListenerContractTest {
                                 locationHierarchyService,
                                 org.mockito.Mockito.mock(ObjectProvider.class),
                                 org.mockito.Mockito.mock(PlatformTransactionManager.class))::onLocationEvent,
-                        () -> doThrow(new QueryTimeoutException("lock wait"))
-                                .when(bayRepository)
-                                .findById(any()));
+                        () -> doThrow(hardFailure).when(bayRepository).findById(any()));
             default -> throw new IllegalArgumentException("Unknown replica owner in test fixture: " + owner);
         };
     }
@@ -375,6 +370,20 @@ class ReplicaAndManifestListenerContractTest {
 
             assertThatThrownBy(() -> replica.dispatch().accept(envelope(replica, "evt-1", ID.toString())))
                     .isInstanceOf(QueryTimeoutException.class);
+
+            verify(processedEventRepository, never()).save(any());
+        }
+
+        @ParameterizedTest
+        @FieldSource("com.positivity.shopmanager.internal.service.ReplicaAndManifestListenerContractTest#REPLICAS")
+        @DisplayName("rethrows a lost-connection database error so the container retries")
+        void lostConnectionErrorRethrown(String owner) {
+            Replica replica = replica(owner);
+            hardFailure = new DataAccessResourceFailureException("connection reset");
+            replica.failHard().run();
+
+            assertThatThrownBy(() -> replica.dispatch().accept(envelope(replica, "evt-1", ID.toString())))
+                    .isInstanceOf(DataAccessResourceFailureException.class);
 
             verify(processedEventRepository, never()).save(any());
         }

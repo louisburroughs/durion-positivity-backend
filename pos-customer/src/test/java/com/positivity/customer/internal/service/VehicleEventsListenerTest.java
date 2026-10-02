@@ -28,6 +28,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
@@ -359,6 +360,17 @@ class VehicleEventsListenerTest {
         when(replica.findById(VEHICLE_ID)).thenThrow(new QueryTimeoutException("db timeout"));
 
         assertThatExceptionOfType(QueryTimeoutException.class)
+                .isThrownBy(() -> listener.onVehicleEvent(event("e-t", 5, ACCOUNT_ID, true)));
+        verify(processedEvents, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Rethrows lost-connection DB errors for container retry/DLQ (ADR-0044 §4)")
+    void rethrowsLostConnectionErrors() {
+        when(processedEvents.existsById("e-t")).thenReturn(false);
+        when(replica.findById(VEHICLE_ID)).thenThrow(new DataAccessResourceFailureException("connection reset"));
+
+        assertThatExceptionOfType(DataAccessResourceFailureException.class)
                 .isThrownBy(() -> listener.onVehicleEvent(event("e-t", 5, ACCOUNT_ID, true)));
         verify(processedEvents, never()).save(any());
     }

@@ -6,13 +6,13 @@ import com.positivity.supplier.internal.entity.ExtProductCodeReplica;
 import com.positivity.supplier.internal.entity.ProcessedEvent;
 import com.positivity.supplier.internal.repository.ExtProductCodeReplicaRepository;
 import com.positivity.supplier.internal.repository.ProcessedEventRepository;
+import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -103,12 +103,13 @@ public class CatalogProductEventsListener {
                 }
                 recordProcessed(eventId, OWNER);
             });
-        } catch (TransientDataAccessException e) {
-            // Rethrown so the container retries: recording this event as processed would drop a
-            // product's codes from the replica permanently, and PRICAT lines would quarantine as
-            // unmatched for a reason that has nothing to do with the vendor.
-            throw e;
         } catch (Exception e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // Rethrown so the container retries: recording this event as processed would drop a
+                // product's codes from the replica permanently, and PRICAT lines would quarantine as
+                // unmatched for a reason that has nothing to do with the vendor.
+                throw e;
+            }
             log.warn("Skipping malformed catalog event eventId={}", eventId, e);
             handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId, OWNER));
         }

@@ -1,6 +1,7 @@
 package com.positivity.warranty.internal.service;
 
 import com.positivity.domainevents.vehicle.VehicleUpdatedV1;
+import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import com.positivity.warranty.internal.entity.ExtVehicleReplica;
 import com.positivity.warranty.internal.entity.ProcessedEvent;
 import com.positivity.warranty.internal.repository.ExtVehicleReplicaRepository;
@@ -13,7 +14,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -114,8 +114,6 @@ public class VehicleEventsListener {
                 }
                 markProcessed(eventId);
             });
-        } catch (TransientDataAccessException e) {
-            throw e;
         } catch (DatabindException e) {
             if (payloadRejectedCounter != null) {
                 payloadRejectedCounter.increment();
@@ -123,6 +121,10 @@ public class VehicleEventsListener {
             log.error("Rejected malformed vehicle event payload eventId={}: {}", eventId, e.getMessage(), e);
             handlerTransaction.executeWithoutResult(_ -> markProcessed(eventId));
         } catch (Exception e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // The container retries with backoff, then publishes to {topic}.dlq (ADR-0044 §4).
+                throw e;
+            }
             log.warn("Skipping malformed vehicle event eventId={}", eventId, e);
             handlerTransaction.executeWithoutResult(_ -> markProcessed(eventId));
         }

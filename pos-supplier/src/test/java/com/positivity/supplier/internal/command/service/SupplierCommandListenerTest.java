@@ -30,6 +30,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
@@ -188,6 +189,17 @@ class SupplierCommandListenerTest {
         // stay, and the request that would have healed it is gone.
         assertThatThrownBy(() -> listener.onSupplierCommand(republishCommand("e-9")))
                 .isInstanceOf(QueryTimeoutException.class);
+        verify(processedEventRepository, never()).save(any());
+    }
+
+    @Test
+    void rethrowsLostConnectionDatabaseTroubleSoTheContainerRetries() {
+        when(republisher.republish(any())).thenThrow(new DataAccessResourceFailureException("connection reset"));
+
+        // Recording this as processed would lose the recovery permanently: the consumer's gap would
+        // stay, and the request that would have healed it is gone.
+        assertThatThrownBy(() -> listener.onSupplierCommand(republishCommand("e-9")))
+                .isInstanceOf(DataAccessResourceFailureException.class);
         verify(processedEventRepository, never()).save(any());
     }
 

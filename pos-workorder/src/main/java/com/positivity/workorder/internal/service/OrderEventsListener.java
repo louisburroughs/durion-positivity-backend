@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.service;
 
 import com.positivity.domainevents.order.OrderCompletedV1;
+import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import com.positivity.workorder.internal.entity.ProcessedEvent;
 import com.positivity.workorder.internal.repository.ProcessedEventRepository;
 import io.micrometer.core.instrument.Counter;
@@ -11,7 +12,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -114,8 +114,6 @@ public class OrderEventsListener {
                 }
                 processedEventRepository.save(processedMark(eventId));
             });
-        } catch (TransientDataAccessException e) {
-            throw e;
         } catch (DatabindException e) {
             if (payloadRejectedCounter != null) {
                 payloadRejectedCounter.increment();
@@ -123,6 +121,10 @@ public class OrderEventsListener {
             log.error("Rejected malformed order event payload eventId={}: {}", eventId, e.getMessage(), e);
             recordFailure(eventId);
         } catch (Exception e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // The container retries with backoff, then publishes to {topic}.dlq (ADR-0044 §4).
+                throw e;
+            }
             log.warn("Skipping malformed order event eventId={}", eventId, e);
             recordFailure(eventId);
         }

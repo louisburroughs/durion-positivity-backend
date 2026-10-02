@@ -41,8 +41,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.QueryTimeoutException;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.UnexpectedRollbackException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -428,6 +432,52 @@ class SupplierPriceCatalogEventHandlerTest {
             assertThatThrownBy(() -> handle(chunkEvent("e-1", 1, 1, 1))).isInstanceOf(QueryTimeoutException.class);
 
             verify(processedEventRepository, never()).save(any());
+        }
+
+        @Test
+        void rethrowsLostConnectionDatabaseErrorsSoTheContainerRetries() {
+            when(priceEntryRepository.save(any(SupplierPriceEntryEntity.class)))
+                    .thenThrow(new DataAccessResourceFailureException("connection reset"));
+
+            assertThatThrownBy(() -> handle(chunkEvent("e-1", 1, 1, 1)))
+                    .isInstanceOf(DataAccessResourceFailureException.class);
+
+            verify(processedEventRepository, never()).save(any());
+        }
+
+        @Test
+        void rethrowsATransactionThatCouldNotOpenBeforeAnyProcessedMark() {
+            // CannotCreateTransactionException is not a DataAccessException at all (#2355).
+            when(priceEntryRepository.save(any(SupplierPriceEntryEntity.class)))
+                    .thenThrow(new CannotCreateTransactionException("could not open JPA EntityManager"));
+
+            assertThatThrownBy(() -> handle(chunkEvent("e-1", 1, 1, 1)))
+                    .isInstanceOf(CannotCreateTransactionException.class);
+
+            verify(processedEventRepository, never()).save(any());
+        }
+
+        @Test
+        void aRollbackOnlyTransactionIsPermanentAndRecordedAsProcessed() {
+            // UnexpectedRollbackException is a TransactionException outside the ADR-0044 §4 set:
+            // the same handler reaches the same rollback-only state on redelivery, so the record
+            // is marked, as it was before #2355, rather than retried into the DLQ.
+            when(priceEntryRepository.save(any(SupplierPriceEntryEntity.class)))
+                    .thenThrow(new UnexpectedRollbackException("transaction marked rollback-only"));
+
+            handle(chunkEvent("e-1", 1, 1, 1));
+
+            verify(processedEventRepository).save(any());
+        }
+
+        @Test
+        void aPermanentDatabaseRejectionIsStillRecordedAsProcessed() {
+            when(priceEntryRepository.save(any(SupplierPriceEntryEntity.class)))
+                    .thenThrow(new DataIntegrityViolationException("value too long"));
+
+            handle(chunkEvent("e-1", 1, 1, 1));
+
+            verify(processedEventRepository).save(any());
         }
     }
 }

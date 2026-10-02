@@ -5,6 +5,7 @@ import com.positivity.inventory.internal.dto.consumption.ConsumeItemsRequest;
 import com.positivity.inventory.internal.dto.picklist.GeneratePickListRequest;
 import com.positivity.inventory.internal.entity.ProcessedEvent;
 import com.positivity.inventory.internal.repository.ProcessedEventRepository;
+import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
@@ -20,7 +21,6 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -180,11 +180,12 @@ public class InventoryCommandListener {
                 return;
             }
             log.debug("Ignoring unsupported commandType={} message={}", commandType, message);
-        } catch (TransientDataAccessException e) {
-            // Let the container error handler retry with backoff and route to {topic}.dlq
-            // (ADR-0044 §4) — replay is idempotent, so redelivery is harmless.
-            throw e;
         } catch (Exception e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // Let the container error handler retry with backoff and route to {topic}.dlq
+                // (ADR-0044 §4) — replay is idempotent, so redelivery is harmless.
+                throw e;
+            }
             // Malformed/unsupported commands are permanent failures: retrying cannot fix them,
             // so log and drop instead of poisoning the partition.
             log.error("Failed to process Kafka command message: {}", message, e);
@@ -248,9 +249,11 @@ public class InventoryCommandListener {
         }
         try {
             commandTransaction.executeWithoutResult(_ -> handler.accept(root.path("payload")));
-        } catch (TransientDataAccessException e) {
-            throw e;
         } catch (Exception e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // The container retries with backoff, then publishes to {topic}.dlq (ADR-0044 §4).
+                throw e;
+            }
             // Permanent business failure (mismatch, not-picked, unknown id): record the command
             // as processed so redelivery does not retry it; no fact is emitted, the consumer's
             // pending state surfaces via its timeout/attention path (#901).

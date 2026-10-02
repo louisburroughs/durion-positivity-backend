@@ -31,8 +31,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionSystemException;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -214,6 +216,32 @@ class SupplierInvoiceEventsListenerTest {
 
         // The supplier side has already published this invoice and will not publish it again;
         // marking it processed would lose a vendor debt permanently.
+        verify(processedEventRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("lost-connection database trouble is retried, not swallowed")
+    void lostConnectionFailureIsRethrown() {
+        when(vendorBillRepository.save(any())).thenThrow(new DataAccessResourceFailureException("connection reset"));
+
+        assertThatThrownBy(() -> listener.onSupplierEvent(event(EVENT_8, "INV-8", "INVOICE", "288.00")))
+                .isInstanceOf(DataAccessResourceFailureException.class);
+
+        // The supplier side has already published this invoice and will not publish it again;
+        // marking it processed would lose a vendor debt permanently.
+        verify(processedEventRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("a transaction that cannot commit is retried, not marked processed (#2355)")
+    void transactionFailureIsRethrownBeforeTheMark() {
+        // Not a DataAccessException, so the catch above the mark does not see it: before #2355 it
+        // fell into the "malformed" path and the event was recorded as processed.
+        when(vendorBillRepository.save(any())).thenThrow(new TransactionSystemException("could not commit"));
+
+        assertThatThrownBy(() -> listener.onSupplierEvent(event(EVENT_8, "INV-8", "INVOICE", "288.00")))
+                .isInstanceOf(TransactionSystemException.class);
+
         verify(processedEventRepository, never()).save(any());
     }
 

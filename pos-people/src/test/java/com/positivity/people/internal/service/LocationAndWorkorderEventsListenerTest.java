@@ -34,6 +34,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
@@ -257,6 +258,24 @@ class LocationAndWorkorderEventsListenerTest {
 
             assertThatThrownBy(() -> locationListener.onLocationEvent(locationUpdated("evt-1", 4, true)))
                     .isInstanceOf(QueryTimeoutException.class);
+            verify(processedEventRepository, never()).save(any());
+
+            locationListener.onLocationEvent("""
+                    {"eventId":"evt-5","eventType":"%s","aggregateVersion":1,
+                     "payload":{"locationId":"not-a-uuid"}}""".formatted(LocationUpdatedV1.EVENT_TYPE));
+
+            // A poison message must not wedge the partition, and it still counts toward the window.
+            verify(processedEventRepository).save(any());
+        }
+
+        @Test
+        @DisplayName("rethrows a lost-connection database error but swallows a malformed payload")
+        void lostConnectionVersusMalformed() {
+            when(extLocationReplicaRepository.findById(LOCATION_ID))
+                    .thenThrow(new DataAccessResourceFailureException("connection reset"));
+
+            assertThatThrownBy(() -> locationListener.onLocationEvent(locationUpdated("evt-1", 4, true)))
+                    .isInstanceOf(DataAccessResourceFailureException.class);
             verify(processedEventRepository, never()).save(any());
 
             locationListener.onLocationEvent("""

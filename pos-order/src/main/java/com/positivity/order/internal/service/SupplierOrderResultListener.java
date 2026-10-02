@@ -14,6 +14,7 @@ import com.positivity.order.internal.enums.TransmissionState;
 import com.positivity.order.internal.repository.ProcessedEventRepository;
 import com.positivity.order.internal.repository.PurchaseOrderRepository;
 import com.positivity.order.internal.repository.PurchaseOrderTransmissionEventRepository;
+import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Comparator;
@@ -23,7 +24,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -136,12 +136,13 @@ public class SupplierOrderResultListener {
                 }
                 markProcessed(eventId);
             });
-        } catch (TransientDataAccessException e) {
-            // Rethrown so the container retries. Recording this as processed would leave the buyer
-            // looking at an order that says it is still waiting for an answer the vendor has
-            // already given, with nothing left to correct it.
-            throw e;
         } catch (Exception e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // Rethrown so the container retries. Recording this as processed would leave the buyer
+                // looking at an order that says it is still waiting for an answer the vendor has
+                // already given, with nothing left to correct it.
+                throw e;
+            }
             log.warn("Skipping malformed supplier event eventId={}", eventId, e);
             handlerTransaction.executeWithoutResult(_ -> markProcessed(eventId));
         }

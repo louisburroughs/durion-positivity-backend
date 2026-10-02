@@ -28,6 +28,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.dao.QueryTimeoutException;
@@ -345,6 +346,18 @@ class InvoiceEventsListenerTest {
     }
 
     @Test
+    @DisplayName("Propagates lost-connection DB errors so the container retries")
+    void propagatesLostConnectionErrors() {
+        when(processedEvents.existsById("e-3")).thenReturn(false);
+        when(replica.findById(INVOICE_ID)).thenThrow(new DataAccessResourceFailureException("connection reset"));
+
+        assertThatExceptionOfType(DataAccessResourceFailureException.class)
+                .isThrownBy(() -> listener.onInvoiceEvent(event("e-3", 1)));
+
+        verify(processedEvents, never()).save(any());
+    }
+
+    @Test
     @DisplayName(
             "Materializes an invoice with no originating workorder (#1651) into the replica with a null workorderId")
     void materializesNullWorkorderId() {
@@ -573,6 +586,21 @@ class InvoiceEventsListenerTest {
                 .reverseRevenue(any(), any());
 
         assertThatExceptionOfType(QueryTimeoutException.class)
+                .isThrownBy(() -> listener.onInvoiceEvent(eventWithStatus("e-post-transient", 2, "DRAFT")));
+
+        verify(processedEvents, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("a lost-connection DB error from GL posting propagates for container retry")
+    void postingLostConnectionErrorPropagates() {
+        when(processedEvents.existsById("e-post-transient")).thenReturn(false);
+        when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
+        org.mockito.Mockito.doThrow(new DataAccessResourceFailureException("connection reset"))
+                .when(revenuePosting)
+                .reverseRevenue(any(), any());
+
+        assertThatExceptionOfType(DataAccessResourceFailureException.class)
                 .isThrownBy(() -> listener.onInvoiceEvent(eventWithStatus("e-post-transient", 2, "DRAFT")));
 
         verify(processedEvents, never()).save(any());

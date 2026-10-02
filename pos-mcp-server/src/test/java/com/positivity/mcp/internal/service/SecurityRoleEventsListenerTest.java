@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.mcp.internal.entity.SystemPrompt;
@@ -11,6 +12,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.transaction.CannotCreateTransactionException;
 
 /**
  * Issue #1613, D4: the event tier, which covers what the pull tiers cannot — a persona edited on a
@@ -115,5 +119,72 @@ class SecurityRoleEventsListenerTest {
         assertThat(holder.get().isIneligible("ROLE_CUSTOMER")).isTrue();
         assertThat(holder.get().rankedAuthorities()).isEmpty();
         Mockito.verify(repository, Mockito.never()).save(Mockito.any(SystemPrompt.class));
+    }
+
+    @Test
+    @DisplayName("a persona transaction that cannot open propagates so the container retries (#2355)")
+    void transactionFailureWhileApplyingPropagates() {
+        // Not a DataAccessException at all: the writer's REQUIRES_NEW proxy could not open its
+        // transaction, so the failure never came from the repository.
+        RolePersonaRefresher refresher = Mockito.mock(RolePersonaRefresher.class);
+        Mockito.doThrow(new CannotCreateTransactionException("could not open JPA EntityManager"))
+                .when(refresher)
+                .applyPersonaOrThrow(Mockito.any());
+        SecurityRoleEventsListener failing = new SecurityRoleEventsListener(new ObjectMapper(), refresher);
+
+        assertThatThrownBy(() -> failing.onSecurityEvent(PERSONA_EVENT))
+                .isInstanceOf(CannotCreateTransactionException.class);
+    }
+
+    @Test
+    @DisplayName("a permanent failure while applying the persona is still logged and dropped")
+    void permanentFailureWhileApplyingIsStillSwallowed() {
+        RolePersonaRefresher refresher = Mockito.mock(RolePersonaRefresher.class);
+        Mockito.doThrow(new DataIntegrityViolationException("duplicate key"))
+                .when(refresher)
+                .applyPersonaOrThrow(Mockito.any());
+        SecurityRoleEventsListener failing = new SecurityRoleEventsListener(new ObjectMapper(), refresher);
+
+        assertThatCode(() -> failing.onSecurityEvent(PERSONA_EVENT)).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("a lost connection on the row lookup inside the writer propagates so the container retries (#2355)")
+    void lostConnectionOnLookupInsideTheWriterPropagates() {
+        Mockito.when(repository.findByName(Mockito.anyString()))
+                .thenThrow(new DataAccessResourceFailureException("connection reset"));
+
+        assertThatThrownBy(() -> listener.onSecurityEvent(PERSONA_EVENT))
+                .isInstanceOf(DataAccessResourceFailureException.class);
+    }
+
+    @Test
+    @DisplayName("a lost connection on the row write inside the writer propagates so the container retries (#2355)")
+    void lostConnectionOnWriteInsideTheWriterPropagates() {
+        Mockito.when(repository.saveAndFlush(Mockito.any(SystemPrompt.class)))
+                .thenThrow(new DataAccessResourceFailureException("connection reset"));
+
+        assertThatThrownBy(() -> listener.onSecurityEvent(PERSONA_EVENT))
+                .isInstanceOf(DataAccessResourceFailureException.class);
+    }
+
+    @Test
+    @DisplayName("a lost connection while removing an ineligible role's row propagates too (#2355)")
+    void lostConnectionOnRemoveInsideTheWriterPropagates() {
+        Mockito.when(repository.findByName(Mockito.anyString()))
+                .thenThrow(new DataAccessResourceFailureException("connection reset"));
+
+        assertThatThrownBy(() -> listener.onSecurityEvent(
+                        PERSONA_EVENT.replace("\"mcpPersonaEligible\":true", "\"mcpPersonaEligible\":false")))
+                .isInstanceOf(DataAccessResourceFailureException.class);
+    }
+
+    @Test
+    @DisplayName("a permanent database rejection inside the writer is still logged and the event dropped")
+    void permanentRejectionInsideTheWriterIsStillDropped() {
+        Mockito.when(repository.saveAndFlush(Mockito.any(SystemPrompt.class)))
+                .thenThrow(new DataIntegrityViolationException("duplicate key"));
+
+        assertThatCode(() -> listener.onSecurityEvent(PERSONA_EVENT)).doesNotThrowAnyException();
     }
 }

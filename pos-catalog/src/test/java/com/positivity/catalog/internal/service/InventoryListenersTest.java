@@ -41,6 +41,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -274,6 +275,22 @@ class InventoryListenersTest {
 
             assertThatThrownBy(() -> listener.onInventoryEvent(availability("evt-1", 1, 8)))
                     .isInstanceOf(QueryTimeoutException.class);
+            verify(processedEventRepository, never()).save(any());
+
+            listener.onInventoryEvent("""
+                    {"eventId":"evt-2","eventType":"%s","payload":{"productId":"not-a-uuid"}}""".formatted(LeadTimeUpdatedV1.EVENT_TYPE));
+            verify(processedEventRepository).save(any());
+        }
+
+        @Test
+        @DisplayName("rethrows a lost-connection database error but swallows and records a malformed payload")
+        void lostConnectionVersusMalformed() {
+            doThrow(new DataAccessResourceFailureException("connection reset"))
+                    .when(availabilityRepository)
+                    .findById(any());
+
+            assertThatThrownBy(() -> listener.onInventoryEvent(availability("evt-1", 1, 8)))
+                    .isInstanceOf(DataAccessResourceFailureException.class);
             verify(processedEventRepository, never()).save(any());
 
             listener.onInventoryEvent("""

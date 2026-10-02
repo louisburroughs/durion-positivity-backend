@@ -1,6 +1,7 @@
 package com.positivity.mcp.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.mcp.internal.domain.RolePersona;
 import com.positivity.mcp.internal.entity.SystemPrompt;
@@ -13,6 +14,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.DataIntegrityViolationException;
 
 /**
  * Issue #1613, D4: the persona refresh mechanism, and specifically that every tier is fail-soft.
@@ -149,6 +152,86 @@ class RolePersonaRefresherTest {
         assertThat(refresher.refreshAll()).isTrue();
 
         assertThat(savedNames()).containsExactly("ROLE_TECHNICIAN");
+    }
+
+    @Test
+    @DisplayName("the request path stays fail-soft: an on-miss fetch survives a lost connection on the row lookup")
+    void onMissFetchSurvivesALostConnectionOnLookup() {
+        Mockito.when(repository.findByName("ROLE_ADMIN"))
+                .thenThrow(new DataAccessResourceFailureException("connection reset"));
+        source.one = Optional.of(TestSnapshots.eligible("ADMIN", 20));
+
+        assertThat(refresher.refreshRole("ROLE_ADMIN")).isTrue();
+
+        // The request is still served from the snapshot it just merged.
+        assertThat(holder.get().rankedAuthorities()).containsExactly("ROLE_ADMIN");
+    }
+
+    @Test
+    @DisplayName("the request path stays fail-soft: an on-miss fetch survives a lost connection on the row write")
+    void onMissFetchSurvivesALostConnectionOnWrite() {
+        Mockito.when(repository.saveAndFlush(Mockito.any(SystemPrompt.class)))
+                .thenThrow(new DataAccessResourceFailureException("connection reset"));
+        source.one = Optional.of(TestSnapshots.eligible("ADMIN", 20));
+
+        assertThat(refresher.refreshRole("ROLE_ADMIN")).isTrue();
+    }
+
+    @Test
+    @DisplayName("the request path stays fail-soft: an on-miss fetch survives a permanent rejection of the row")
+    void onMissFetchSurvivesAPermanentRejection() {
+        Mockito.when(repository.saveAndFlush(Mockito.any(SystemPrompt.class)))
+                .thenThrow(new DataIntegrityViolationException("duplicate key"));
+        source.one = Optional.of(TestSnapshots.eligible("ADMIN", 20));
+
+        assertThat(refresher.refreshRole("ROLE_ADMIN")).isTrue();
+    }
+
+    @Test
+    @DisplayName("the request path stays fail-soft: removing an ineligible role's row survives a lost connection")
+    void onMissRemovalSurvivesALostConnection() {
+        Mockito.when(repository.findByName("ROLE_CUSTOMER"))
+                .thenThrow(new DataAccessResourceFailureException("connection reset"));
+        source.one = Optional.of(new RolePersona("CUSTOMER", null, null, null, null, null, false));
+
+        assertThat(refresher.refreshRole("ROLE_CUSTOMER")).isTrue();
+    }
+
+    @Test
+    @DisplayName("a full sync survives a lost connection on one row and still writes the others")
+    void fullSyncSurvivesALostConnection() {
+        Mockito.when(repository.findByName("ROLE_ADMIN"))
+                .thenThrow(new DataAccessResourceFailureException("connection reset"));
+        source.all = Optional.of(new RolePersonaSource.RolePersonaSnapshotData(
+                Instant.EPOCH, List.of(TestSnapshots.eligible("ADMIN", 20), TestSnapshots.eligible("TECHNICIAN", 80))));
+
+        assertThat(refresher.refreshAll()).isTrue();
+
+        assertThat(savedNames()).containsExactly("ROLE_TECHNICIAN");
+    }
+
+    @Test
+    @DisplayName("the event path lets a failed row write out, retryable or not, for the listener to classify (#2355)")
+    void eventPathPropagatesWriteFailures() {
+        Mockito.when(repository.saveAndFlush(Mockito.any(SystemPrompt.class)))
+                .thenThrow(new DataAccessResourceFailureException("connection reset"))
+                .thenThrow(new DataIntegrityViolationException("duplicate key"));
+
+        assertThatThrownBy(() -> refresher.applyPersonaOrThrow(TestSnapshots.eligible("ADMIN", 20)))
+                .isInstanceOf(DataAccessResourceFailureException.class);
+        assertThatThrownBy(() -> refresher.applyPersonaOrThrow(TestSnapshots.eligible("ADMIN", 20)))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    @DisplayName("the event path lets a failed row removal out for the listener to classify (#2355)")
+    void eventPathPropagatesRemovalFailures() {
+        Mockito.when(repository.findByName("ROLE_CUSTOMER"))
+                .thenThrow(new DataAccessResourceFailureException("connection reset"));
+
+        assertThatThrownBy(() ->
+                        refresher.applyPersonaOrThrow(new RolePersona("CUSTOMER", null, null, null, null, null, false)))
+                .isInstanceOf(DataAccessResourceFailureException.class);
     }
 
     /** saveAndFlush, not save: SystemPromptWriter flushes inside its try so it can catch. */

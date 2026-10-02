@@ -20,6 +20,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
@@ -114,6 +115,19 @@ class CatalogEventsListenerTest {
         when(productUoms.findAggregateVersions(PRODUCT_ID)).thenThrow(new QueryTimeoutException("db busy"));
 
         assertThatExceptionOfType(QueryTimeoutException.class)
+                .isThrownBy(() -> listener.onCatalogEvent(productEvent("e4", 1L, """
+                        [{"uomCode":"LB","uomType":"BASE","factorToBase":1,"precisionScale":2}]""")));
+
+        verify(processedEvents, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("rethrows a lost-connection database error so the container can retry")
+    void rethrowsLostConnectionErrors() {
+        when(productUoms.findAggregateVersions(PRODUCT_ID))
+                .thenThrow(new DataAccessResourceFailureException("connection reset"));
+
+        assertThatExceptionOfType(DataAccessResourceFailureException.class)
                 .isThrownBy(() -> listener.onCatalogEvent(productEvent("e4", 1L, """
                         [{"uomCode":"LB","uomType":"BASE","factorToBase":1,"precisionScale":2}]""")));
 

@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.service;
 
 import com.positivity.domainevents.vehicle.VehicleUpdatedV1;
+import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import com.positivity.workorder.internal.entity.ExtVehicleReplica;
 import com.positivity.workorder.internal.entity.ProcessedEvent;
 import com.positivity.workorder.internal.repository.ExtVehicleReplicaRepository;
@@ -10,7 +11,6 @@ import java.time.Instant;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -108,11 +108,12 @@ public class VehicleEventsListener {
                 }
                 processedEventRepository.save(processedMark(eventId));
             });
-        } catch (TransientDataAccessException e) {
-            // Rethrown so the container retries: recording this processed would leave a fleet
-            // authorization request unable to name a vehicle for a reason unrelated to the vehicle.
-            throw e;
         } catch (Exception e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // Rethrown so the container retries: recording this processed would leave a fleet
+                // authorization request unable to name a vehicle for a reason unrelated to the vehicle.
+                throw e;
+            }
             log.warn("Skipping malformed vehicle event eventId={}", eventId, e);
             recordFailure(eventId);
         }

@@ -76,6 +76,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -441,6 +442,23 @@ class ReplicaAndManifestListenerContractTest {
             assertThatThrownBy(() -> peopleListener.onPeopleContactEvent(
                             envelope("evt-1", PersonUpdatedV1.EVENT_TYPE, personPayload())))
                     .isInstanceOf(QueryTimeoutException.class);
+            verify(processedEventRepository, never()).save(any());
+
+            peopleListener.onPeopleContactEvent(
+                    envelope("evt-2", PersonUpdatedV1.EVENT_TYPE, "{\"personId\":\"not-a-uuid\"}"));
+            verify(processedEventRepository).save(any());
+        }
+
+        @Test
+        @DisplayName("rethrows a lost-connection database error but swallows and records a malformed payload")
+        void lostConnectionVersusMalformed() {
+            doThrow(new DataAccessResourceFailureException("connection reset"))
+                    .when(personRepository)
+                    .findById(any());
+
+            assertThatThrownBy(() -> peopleListener.onPeopleContactEvent(
+                            envelope("evt-1", PersonUpdatedV1.EVENT_TYPE, personPayload())))
+                    .isInstanceOf(DataAccessResourceFailureException.class);
             verify(processedEventRepository, never()).save(any());
 
             peopleListener.onPeopleContactEvent(
