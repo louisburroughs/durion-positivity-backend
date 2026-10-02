@@ -371,7 +371,7 @@ class JoinTest(unittest.TestCase):
         self.assertEqual(result["fixturesWithoutTrace"], 1)
         self.assertEqual(result["fixturesExempt"], {})
 
-    def _tool_pair(self, shadow_tags, enforce_tags):
+    def _tool_pair(self, shadow_tags, enforce_tags, **kwargs):
         # A tags dict of None: the turn carries no tagging record (AlphaEvalTurnTraceRecorder writes null).
         fixture = _fixture("f", "q", ["d"])
         shadow = _trace(1, "q", _scope("HIGH", [_doc("d")], ["d"]))
@@ -382,7 +382,7 @@ class JoinTest(unittest.TestCase):
         for trace, tags in ((shadow, shadow_tags), (enforce, enforce_tags)):
             trace["tags"] = None if tags is None else {
                 "tags": [{"name": n, "actingValue": v} for n, v in tags.items()]}
-        return report.build_report([shadow], [fixture], enforce_traces=[enforce], verbose=True)
+        return report.build_report([shadow], [fixture], enforce_traces=[enforce], verbose=True, **kwargs)
 
     def test_a_tag_that_acted_in_neither_turn_is_no_drift(self):
         # A null actingValue (no answer acted) and an entry no tagger answered both mean consumers read
@@ -405,12 +405,63 @@ class JoinTest(unittest.TestCase):
         self.assertEqual(result["tagDriftToolChanges"], 0)
 
     def test_tool_change_under_drifted_tags_is_listed_not_counted(self):
-        result = self._tool_pair({"workflow_state": "IDLE"}, {"workflow_state": "RECEIVING_ASN"})
+        # One pair of one: let the cap allow every pair, the cap has its own tests.
+        result = self._tool_pair({"workflow_state": "IDLE"}, {"workflow_state": "RECEIVING_ASN"}, max_tag_drift=1.0)
         self.assertEqual(result["gate"]["verdict"], "PASS")
         self.assertEqual(result["toolSelectionChanges"], 0)
         self.assertEqual(result["tagDriftToolChanges"], 1)
         self.assertEqual(result["toolChangeList"][0]["tagDrift"], ["workflow_state"])
         self.assertIn("tagDrift=['workflow_state']", report.render_text(result))
+
+    def _drift_run(self, pairs, drifted, **kwargs):
+        fixtures, shadow, enforce = [], [], []
+        for n in range(pairs):
+            fixtures.append(_fixture(f"f{n}", f"q{n}", ["d"]))
+            turn = _trace(n + 1, f"q{n}", _scope("HIGH", [_doc("d")], ["d"]))
+            turn["tags"] = {"tags": [{"name": "workflow_state", "actingValue": "IDLE"}]}
+            other = _enforce(turn, [_doc("d")])
+            if n < drifted:
+                turn["selectedTools"] = ["A", "B"]
+                other["selectedTools"] = ["A"]
+                other["tags"] = {"tags": [{"name": "workflow_state", "actingValue": "RECEIVING_ASN"}]}
+            shadow.append(turn)
+            enforce.append(other)
+        return report.build_report(shadow, fixtures, enforce_traces=enforce, **kwargs)
+
+    def test_tag_drift_up_to_the_cap_is_excused(self):
+        result = self._drift_run(10, 1)
+        self.assertEqual(result["tagDriftToolChanges"], 1)
+        self.assertEqual(result["gate"]["verdict"], "PASS")
+
+    def test_tag_drift_over_the_cap_is_incomplete(self):
+        result = self._drift_run(10, 2)
+        self.assertEqual(result["gate"]["verdict"], "INCOMPLETE")
+        self.assertIn("drifted tags in 2 of 10 pair(s), over the 10% cap", result["gate"]["reasons"][0])
+        self.assertEqual(self._drift_run(10, 2, max_tag_drift=0.2)["gate"]["verdict"], "PASS")
+
+    def test_an_all_proxied_pass_says_the_forbidden_criterion_was_not_exercised(self):
+        proxy = "ROLE_SYSTEM_ADMINISTRATOR"
+        fixture = _fixture("f", "q", ["d"], forbidden=["secret"], role="ROLE_TECHNICIAN")
+        turn = _trace(1, "q", _scope("LOW", [_doc("d")], []), role=proxy)
+        result = report.build_report([turn], [fixture], enforce_traces=[_enforce(turn, [_doc("d")])],
+                                     actor_proxy=proxy)
+        self.assertEqual(result["gate"]["verdict"], "PASS")
+        self.assertEqual((result["forbiddenListsScored"], result["forbiddenListsIgnored"]), (0, 1))
+        self.assertFalse(result["forbiddenCriterionExercised"])
+        self.assertIn("forbidden-document criterion not exercised", result["gate"]["reasons"][0])
+        self.assertIn("the forbidden-document criterion was not exercised", report.render_text(result))
+
+    def test_one_own_actor_forbidden_list_exercises_the_criterion(self):
+        proxy = "ROLE_SYSTEM_ADMINISTRATOR"
+        proxied = _fixture("p", "q", ["d"], forbidden=["secret"], role="ROLE_TECHNICIAN")
+        own = _fixture("o", "r", ["d"], forbidden=["secret"], role=proxy)
+        turns = [_trace(1, "q", _scope("LOW", [_doc("d")], []), role=proxy),
+                 _trace(2, "r", _scope("LOW", [_doc("d")], []), role=proxy)]
+        result = report.build_report(turns, [proxied, own], enforce_traces=[_enforce(t, [_doc("d")]) for t in turns],
+                                     actor_proxy=proxy)
+        self.assertEqual((result["forbiddenListsScored"], result["forbiddenListsIgnored"]), (1, 1))
+        self.assertTrue(result["forbiddenCriterionExercised"])
+        self.assertEqual(result["gate"]["reasons"], [])
 
     def test_fixture_without_actor_role_joins_no_turn(self):
         # Fail closed: a fixture that names no actor cannot say which turn is evidence for it.

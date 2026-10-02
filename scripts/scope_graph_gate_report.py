@@ -42,7 +42,9 @@ The gate verdict, exit code 0 only on PASS:
                   question took the simple-chat path (no scope, no RAG: the rag consumer never acts on
                   it, `simpleChat`) and, under --actor-proxy, one of another named actor that expects
                   no document (`proxyUntestable`); a fixture any run joined is testable, so every run
-                  must cover it;
+                  must cover it. Also INCOMPLETE: more than --max-tag-drift (default 10%) of the pairs
+                  changed tools under drifted tags (`tagDrift`, below), too few left for the tool
+                  criterion: rerun with stable tags;
   NONDETERMINISTIC the baseline run resolved some fixture differently from the shadow run (top-K order,
                   confidence, selected or offered tools, or the role it was asked as): pin the tagging
                   mode and change nothing between the runs, then rerun;
@@ -116,7 +118,9 @@ candidate that names an actor and expects at least one document (a fixture expec
 visibility check, `proxyNoExpected`; one naming no actor stays unjoined, `actorMismatch`). Its
 forbidden list is ignored: the proxy sees what the fixture's actor may not, so a forbidden hit says
 nothing. Proxy evidence measures whether the filter drops expected documents, not per-role
-visibility; the report says how many samples rest on it.
+visibility; the report says how many samples rest on it and how many forbidden lists it scored and
+ignored. A PASS in which no forbidden list was scored says so in its reasons
+(`forbiddenCriterionExercised` false): section 9's forbidden criterion then went untested.
 
 Stdlib only, like scripts/tagging_shadow_report.py.
 """
@@ -135,6 +139,7 @@ ENFORCE = "ENFORCE"
 RAG = "RAG"
 EPSILON = 1e-9
 METRICS = ("hitAtK", "mrr", "recallAtK")
+DEFAULT_MAX_TAG_DRIFT = 0.10
 EXEMPT_REASONS = {
     "simpleChat": "the turn took the no-RAG simple-chat path",
     "proxyUntestable": "another actor's visibility check, which the actor proxy cannot make",
@@ -465,9 +470,11 @@ def _tag_drift(trace, other):
 
 
 def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=None, preload_docs=None,
-                 enforce_traces=None, baseline_traces=None, actor_proxy=None):
+                 enforce_traces=None, baseline_traces=None, actor_proxy=None,
+                 max_tag_drift=DEFAULT_MAX_TAG_DRIFT):
     """Aggregate the shadow traces, the enforce traces (None: no enforce run given), the baseline
-    traces (a second shadow run for the A/A check; None: not given) and the fixtures. actor_proxy: see
+    traces (a second shadow run for the A/A check; None: not given) and the fixtures. max_tag_drift: the
+    largest share of pairs whose tool change tagDrift may excuse. actor_proxy: see
     the module docstring."""
     skipped, enforce_skipped, baseline_skipped = Counter(), Counter(), Counter()
     shadow = _usable(traces, SHADOW, skipped)
@@ -487,6 +494,7 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
         scope = trace["scope"]
         expected, forbidden, fixture_k = _expected(fixture, k)
         proxied = _proxied(trace, fixture, actor_proxy)
+        forbidden_ignored = proxied and bool(forbidden)
         if proxied:
             forbidden = []
         retrieved = scope.get("retrievedDocuments") or []
@@ -506,6 +514,9 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
             "fixtureId": fixture.get("fixture_id"),
             "set": fixture["_set"],
             "proxied": proxied,
+            # Whether the fixture's forbidden list was scored, or dropped because the proxy asked.
+            "forbiddenScored": bool(forbidden),
+            "forbiddenIgnored": forbidden_ignored,
             "confidence": str(scope.get("confidence") or "UNKNOWN").upper(),
             "enforceConfidence": None if enforce_trace is None
             else str(enforce_trace["scope"].get("confidence") or "UNKNOWN").upper(),
@@ -575,6 +586,11 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
     role_mismatches = sum(1 for s in samples if s["roleMismatch"])
     tool_changes = sum(1 for s in samples if s["toolsChanged"] and not s["tagDrift"])
     tag_drift_tool_changes = sum(1 for s in samples if s["toolsChanged"] and s["tagDrift"])
+    pairs = sum(1 for s in samples if s["enforceTurnId"] is not None)
+    # The tool criterion excuses a drifted pair; past the cap too little of it is left to compare.
+    too_much_drift = enforce_traces is not None and tag_drift_tool_changes > max_tag_drift * pairs
+    forbidden_scored = sum(1 for s in samples if s["forbiddenScored"])
+    forbidden_ignored = sum(1 for s in samples if s["forbiddenIgnored"])
     nondeterministic = sum(1 for s in samples if s["baselineDiff"])
     reasons = []
     if not samples or not overall["scored"]:
@@ -587,7 +603,7 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
         gate_verdict = "MIXED_GRAPH"
         reasons.append("graphHash " + ", ".join(f"{h}={n}" for h, n in sorted(graph_hashes.items())))
     elif (without_trace or (enforce_traces is not None and without_enforce)
-          or (baseline_traces is not None and without_baseline)):
+          or (baseline_traces is not None and without_baseline) or too_much_drift):
         gate_verdict = "INCOMPLETE"
         if without_trace:
             reasons.append(f"{len(without_trace)} fixture(s) without a shadow trace")
@@ -595,6 +611,10 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
             reasons.append(f"{len(without_enforce)} fixture(s) without an enforce trace")
         if baseline_traces is not None and without_baseline:
             reasons.append(f"{len(without_baseline)} fixture(s) without a baseline trace")
+        if too_much_drift:
+            reasons.append(f"tool selection changed under drifted tags in {tag_drift_tool_changes} of {pairs} pair(s), "
+                           f"over the {max_tag_drift:.0%} cap: too little of the tool criterion is left to compare "
+                           "(rerun with stable tags)")
     elif nondeterministic:
         gate_verdict = "NONDETERMINISTIC"
         reasons.append(f"{nondeterministic} fixture(s) resolved differently in the two shadow runs: a per-fixture "
@@ -616,6 +636,9 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
             reasons.append(f"tool selection changed in {tool_changes} pair(s)")
     else:
         gate_verdict = "PASS"
+    if gate_verdict == "PASS" and forbidden_ignored and not forbidden_scored:
+        reasons.append(f"forbidden-document criterion not exercised: {forbidden_ignored} forbidden list(s) ignored on "
+                       "proxied samples, none scored")
 
     report = {
         "k": k,
@@ -629,6 +652,7 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
         "nondeterministicFixtures": None if baseline_traces is None else nondeterministic,
         "toolSelectionChanges": None if enforce_traces is None else tool_changes,
         "tagDriftToolChanges": None if enforce_traces is None else tag_drift_tool_changes,
+        "maxTagDrift": max_tag_drift,
         "graphHashes": dict(sorted(graph_hashes.items())),
         "enforcedConsumers": dict(sorted(Counter(
             ",".join(sorted(str(c).upper() for c in t["scope"].get("enforced") or [])) for t in enforce).items())),
@@ -637,6 +661,10 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
         "fixturesJoined": len(joined),
         "actorProxy": actor_proxy,
         "proxiedSamples": sum(1 for s in samples if s["proxied"]),
+        "forbiddenListsScored": forbidden_scored,
+        "forbiddenListsIgnored": forbidden_ignored,
+        # False when no sample's forbidden list was scored: section 9's forbidden criterion went untested.
+        "forbiddenCriterionExercised": forbidden_scored > 0,
         "fixturesWithoutTrace": len(without_trace),
         "fixturesExempt": {reason: len(ids) for reason, ids in sorted(exempt_ids.items())},
         "fixturesEnforceJoined": len(enforce_joined),
@@ -906,6 +934,11 @@ def render_text(report):
     if report["actorProxy"] is not None:
         out.append(f"Actor proxy {report['actorProxy']}: {report['proxiedSamples']} sample(s) joined through it "
                    "(forbidden lists ignored; per-role visibility not tested)")
+    if report["forbiddenListsIgnored"]:
+        out.append(f"WARNING: {report['forbiddenListsIgnored']} forbidden list(s) ignored on proxied samples, "
+                   f"{report['forbiddenListsScored']} scored"
+                   + ("" if report["forbiddenCriterionExercised"]
+                      else ": the forbidden-document criterion was not exercised"))
     if report["fixturesExempt"]:
         out.append("Fixtures needing no trace: " + ", ".join(f"{why}={n} ({EXEMPT_REASONS[why]})"
                                                               for why, n in report["fixturesExempt"].items()))
@@ -965,7 +998,8 @@ def render_text(report):
     if report["enforceTraces"] is not None:
         out.append(f"Fixtures the enforce run regressed: {report['regressedFixtures']} (expected document lost in "
                    f"{report['losses']}){verbose_hint}; tool selection changed in {report['toolSelectionChanges']} pair(s)"
-                   f" (plus {report['tagDriftToolChanges']} under drifted tags, not counted)")
+                   f" (plus {report['tagDriftToolChanges']} under drifted tags, not counted; cap "
+                   f"{report['maxTagDrift']:.0%} of pairs)")
     for entry in report.get("lossList", []):
         out.append(f"    regressed {entry['fixtureId']} turn={entry['turnId']} enforceTurn={entry['enforceTurnId']} "
                    f"confidence={entry['confidence']} lost={entry['lost']} mrr={entry['mrr'][0]}->{entry['mrr'][1]} "
@@ -1070,6 +1104,9 @@ def main(argv=None):
     parser.add_argument("--actor-proxy", metavar="ROLE",
                         help="trace role (e.g. ROLE_SYSTEM_ADMINISTRATOR) whose turns stand in for fixtures of any "
                              "actor that expect a document; their forbidden lists are ignored")
+    parser.add_argument("--max-tag-drift", type=float, default=DEFAULT_MAX_TAG_DRIFT, metavar="FRACTION",
+                        help="largest share of pairs whose tool change tagDrift may excuse; above it the verdict is "
+                             f"INCOMPLETE (default {DEFAULT_MAX_TAG_DRIFT})")
     parser.add_argument("--verbose", action="store_true",
                         help="list the regressed fixtures, tool-selection changes, nondeterministic turns, dropped "
                              "expected documents, forbidden hits, unmatched fixtures, actor-mismatched turns and the "
@@ -1096,7 +1133,7 @@ def main(argv=None):
             preload_docs = read_preload_docs(handle.read())
 
     report = build_report(traces, fixtures, args.k, args.verbose, lexicon_entities, preload_docs, enforce_traces,
-                          baseline_traces, args.actor_proxy)
+                          baseline_traces, args.actor_proxy, args.max_tag_drift)
     print(json.dumps(report, indent=2) if args.json else render_text(report))
     return 0 if report["gate"]["verdict"] == "PASS" else 1
 
