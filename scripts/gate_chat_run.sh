@@ -37,7 +37,9 @@ Options:
 
 Password: environment variable GATE_PASSWORD (never an argument, never logged).
 
-Output (in --out-dir): traces-<label>-<fixture basename>-<batch>.json, run.log, manifest.json.
+Output (in --out-dir): traces-<label>-<fixture basename>-f<n>-<batch>.json (n: the fixture's
+position on the command line, from 1, so two fixtures sharing a basename never overwrite each
+other), run.log, manifest.json.
 Exit status is non-zero if any export hit the 200 cap (that export is deleted; rerun that batch
 range with a smaller --batch-size) or any turn failed.
 
@@ -89,6 +91,7 @@ done
 
 [ ${#FIXTURES[@]} -gt 0 ] || die "at least one --fixture is required (see --help)"
 [[ "$BATCH_SIZE" =~ ^[0-9]+$ ]] || die "--batch-size must be an integer"
+BATCH_SIZE=$((10#$BATCH_SIZE))   # base 10: a leading zero (08) must not read as octal
 { [ "$BATCH_SIZE" -ge 1 ] && [ "$BATCH_SIZE" -lt "$TRACE_CAP" ]; } \
   || die "--batch-size must be 1..$((TRACE_CAP - 1)): the trace export is capped at $TRACE_CAP"
 [[ "$SLEEP" =~ ^[0-9]+([.][0-9]+)?$ ]] || die "--sleep must be a number of seconds"
@@ -126,6 +129,9 @@ for i in "${!FIXTURES[@]}"; do
   done
 done
 
+# traces-<label>-<fixture basename>-f<fixture position>-<batch>.json
+export_name() { echo "traces-${LABEL}-$(basename "${FIXTURES[$1]}" .json)-f$(($1 + 1))-$2.json"; }
+
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 [ -n "$OUT_DIR" ] || OUT_DIR="./gate-runs/${LABEL}-${STAMP}"
 
@@ -133,7 +139,8 @@ if [ "$DRY_RUN" = 1 ]; then
   echo "label=$LABEL out_dir=$OUT_DIR batch_size=$BATCH_SIZE sleep=$SLEEP"
   for p in "${PLAN[@]}"; do
     read -r i b s e <<< "$p"
-    echo "PLAN fixture=${FIXTURES[$i]} batch=$b start=$s end=$e count=$((e - s)) total=${COUNTS[$i]}"
+    echo "PLAN fixture=${FIXTURES[$i]} batch=$b start=$s end=$e count=$((e - s)) total=${COUNTS[$i]}" \
+      "file=$(export_name "$i" "$b")"
   done
   exit 0
 fi
@@ -148,7 +155,8 @@ log() { echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $*" | tee -a "$LOG" >&2; }
 
 TOK=""
 mint() {
-  TOK=$(jq -n --arg u "$GATE_USER" --arg p "$GATE_PASSWORD" '{username: $u, password: $p}' |
+  # The password is read by jq from its environment and reaches curl on stdin: never in any argv.
+  TOK=$(jq -n --arg u "$GATE_USER" '{username: $u, password: env.GATE_PASSWORD}' |
     curl -sS --fail -X POST "$LOGIN_URL" -H "Content-Type: application/json" \
       -H "X-API-Version: 1" --data @- | jq -er .accessToken) || die "login failed for $GATE_USER"
 }
@@ -168,16 +176,18 @@ trap 'write_manifest || true; rm -rf "$TMP"' EXIT
 for p in "${PLAN[@]}"; do
   read -r i b s e <<< "$p"
   f="${FIXTURES[$i]}"; base=$(basename "$f" .json)
-  out="$OUT_DIR/traces-${LABEL}-${base}-${b}.json"
+  out="$OUT_DIR/$(export_name "$i" "$b")"
   mint
   since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   bstart=$since; failures=0
   log "batch $base/$b turns $s..$((e - 1)) since=$since"
   while IFS= read -r row; do
     id=$(jq -r .id <<< "$row")
+    # On a transport failure curl already writes 000 and exits non-zero; keep its one value.
     code=$(jq -c '{message: .message}' <<< "$row" |
       curl -sS -o /dev/null -w '%{http_code}' -X POST "$CHAT_URL" -H "Authorization: Bearer $TOK" \
-        -H "X-API-Version: 1" -H "Content-Type: application/json" --data @- || echo 000)
+        -H "X-API-Version: 1" -H "Content-Type: application/json" --data @-) || true
+    code=${code:-000}
     if [ "$code" != "200" ]; then
       failures=$((failures + 1)); log "turn failed: HTTP $code id=$id fixture=$base batch=$b"
     fi

@@ -159,10 +159,12 @@ jobs:
         run: |
           python3 -m unittest scripts.test_tagging_shadow_report
 
-      - name: Gate chat runner plan tests (test_gate_chat_run.py)
+      - name: Gate chat runner tests (test_gate_chat_run.py)
         # scripts/gate_chat_run.sh drives the tagging-gate / RAG bake-off. Pins the batch
         # boundaries for both fixture shapes and that a batch size at the 200-trace export cap is
-        # rejected. Exercises --dry-run only: no network, no credentials (jq ships on the runner).
+        # rejected (--dry-run), and the run itself against a fake curl on PATH: token per batch and
+        # export, failed turns logged, a capped export deleted while the run goes on, the manifest,
+        # and the password never in an argv. No network, no credentials (jq ships on the runner).
         run: |
           python3 -m unittest scripts.test_gate_chat_run
 

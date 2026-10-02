@@ -301,8 +301,10 @@ scripts/gate_chat_run.sh --label tev1 --fixture "$GATE/en.json" --fixture "$GATE
 fixture it sends the turns in batches (`--batch-size`, default 150, rejected at 200 or more),
 as fresh conversations with `X-API-Version: 1`; mints a token before every batch and every
 export (tokens live 1 h); records `since` just before the first turn; and writes
-`traces-<label>-<fixture>-<batch>.json`, `run.log` (failed turns by HTTP code and fixture id) and
-`manifest.json` (batch plan, failures and trace counts) to `./gate-runs/<label>-<UTC timestamp>/`.
+`traces-<label>-<fixture>-f<n>-<batch>.json` (`n`: the fixture's position on the command line,
+so two fixtures sharing a basename never overwrite each other), `run.log` (failed turns by HTTP
+code and fixture id) and `manifest.json` (batch plan, failures and trace counts) to
+`./gate-runs/<label>-<UTC timestamp>/`.
 An export of exactly 200 traces means turns were cut off: the script deletes it, exits non-zero and
 names the batch; rerun with a smaller `--batch-size`. The same script runs the RAG fixtures
 (`eval/rag-lexical/*.json`, `eval/rag-retrieval/*.json`, message at `.fixtures[].query`).
