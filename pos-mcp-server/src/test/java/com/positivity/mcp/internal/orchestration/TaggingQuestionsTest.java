@@ -251,8 +251,9 @@ class TaggingQuestionsTest {
 
     /**
      * PR #2367 review: the default model ({@code tev1:0.8b}) reads about 2,000 tokens, which the 45-question
-     * set (about 4.6k tokens) overflows. The defaults, as {@code application.yml} binds them with no
-     * environment override and as the record defaults them, must ask the fixed set only.
+     * set (a ~22 KB request body, as the test above prints it) overflows. The defaults, as {@code
+     * application.yml} binds them with no environment override and as the record defaults them, must ask the
+     * fixed set only.
      */
     @Test
     @DisplayName("the request built from the default properties asks the fixed questions only, no entity Nouls")

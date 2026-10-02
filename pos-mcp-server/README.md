@@ -175,9 +175,9 @@ of the graph is derived from the tool catalog, `mcp.rag.preload.docs`, the modul
 `ScopeGraphRealConfigValidationTest` builds the real inputs under the default and `alpha` profiles and fails on any strict
 finding; it reads the `openapi.yaml` files of the sibling modules, so run it from a full reactor checkout.
 
-Reporting vocabulary (#2384): revenue, sales, gross margin, profit, spend and quarter labels (en, fr, es) denote
-`sales-report` (domain `accounting`, since the `domains:` sentences put money figures there), which the
-`accounting.sales-analytics` document explains. A `BusinessGlossary` phrase containing one of those terms ("what did we
+Reporting vocabulary (#2384): revenue, sales, gross margin, profit, spend and quarter comparisons ("compare to Q2",
+"vs Q2"; a bare quarter label is a period, not a figure) in en, fr and es denote `sales-report` (domain `accounting`,
+since the `domains:` sentences put money figures there), which the `accounting.sales-analytics` document explains. A `BusinessGlossary` phrase containing one of those terms ("what did we
 spend with", "vendor spend", "top customers by revenue") denotes it too, so such a phrase seeds it as `GLOSSARY_TERM`
 (`LOW`). `SalesReportEntityTest` pins the seeds and the document coverage.
 

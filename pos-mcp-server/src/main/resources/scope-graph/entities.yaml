@@ -598,15 +598,28 @@ entities:
   # trends are operational), "top customers" (it would shadow the customer seed; the glossary
   # aliases "top customers by revenue" / "by value" link both), and "vendor spend" (the glossary
   # alias already denotes supplier and this entity; a lexicon copy would shadow supplier).
-  # q1-q4 / t1-t4 name a quarter, the subject of a bare comparison ("How did Q3 compare to Q2?").
+  # A quarter label alone (Q3, T3) is not a term: "work orders completed in Q3" is operational. Only a
+  # comparison of quarters names the business's results, so the quarter terms are comparison phrases
+  # ("compare to q2", "vs q2", "se compare-t-il au t2", "frente al t2"); a phrase is matched as a
+  # whole, on word boundaries, so "How did Q3 compare to Q2?" matches "compare to q2".
   # Known widenings, accepted because a seed adds scope: "spend time", fr "sont revenus" (came
-  # back), es "ingreso" as an entry or admission, "point de vente", and T4 as the Canadian slip.
+  # back), es "ingreso" as an entry or admission, and "point de vente".
   - key: sales-report
     domain: accounting
     terms:
-      en: [sales, revenue, sales report, revenue report, gross margin, profit margin, gross profit, net profit, net income, profit, spend, spent, year over year, quarter over quarter, q1, q2, q3, q4]
-      fr: [vente, chiffre d'affaires, revenu, rapport des ventes, marge brute, marge bénéficiaire, bénéfice brut, bénéfice net, bénéfice, profit, dépense, d'une année à l'autre, t1, t2, t3, t4]
-      es: [venta, ingreso, informe de ventas, margen bruto, margen de utilidad, utilidad bruta, utilidad neta, utilidad, ganancia, gasto, gastamos, interanual, t1, t2, t3, t4]
+      en: [sales, revenue, sales report, revenue report, gross margin, profit margin, gross profit,
+           net profit, net income, profit, spend, spent, year over year, quarter over quarter, compare q1,
+           compare q2, compare q3, compare q4, compare to q1, compare to q2, compare to q3, compare to q4,
+           compared to q1, compared to q2, compared to q3, compared to q4, vs q1, vs q2, vs q3, vs q4]
+      fr: [vente, chiffre d'affaires, revenu, rapport des ventes, marge brute, marge bénéficiaire,
+           bénéfice brut, bénéfice net, bénéfice, profit, dépense, d'une année à l'autre,
+           se compare-t-il au t1, se compare-t-il au t2, se compare-t-il au t3, se compare-t-il au t4,
+           comparé au t1, comparé au t2, comparé au t3, comparé au t4, par rapport au t1, par rapport au t2,
+           par rapport au t3, par rapport au t4, vs t1, vs t2, vs t3, vs t4]
+      es: [venta, ingreso, informe de ventas, margen bruto, margen de utilidad, utilidad bruta, utilidad neta,
+           utilidad, ganancia, gasto, gastamos, interanual, frente al t1, frente al t2, frente al t3,
+           frente al t4, comparado con el t1, comparado con el t2, comparado con el t3, comparado con el t4,
+           vs t1, vs t2, vs t3, vs t4]
     relates_to:
       - {entity: financial-report, label: derived_from}
       - {entity: invoice, label: derived_from}

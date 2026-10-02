@@ -36,7 +36,9 @@ report returns comes from the platform's own code and API specifications.
 
 Every one of these takes a single window (`startDate`, `endDate`, inclusive ISO dates) and returns one aggregate for
 it. Resolve the window first with `resolveDateWindow`, or `resolveNamedPeriod` when the question names the period
-outright ("in 2025", "Q3"), and pass the dates through unchanged.
+outright, and pass the dates through unchanged. `resolveNamedPeriod` takes `YYYY`, `YYYY-MM` or `YYYY-Qn` only
+("2025", "2026-07", "2026-Q3"): a quarter named without a year ("Q3") needs a year first (see Period comparisons and
+trends).
 
 ## Revenue and sales
 
@@ -104,8 +106,18 @@ swings out of the comparison when the data is not seasonally adjusted [5]; a tir
 that matter.
 
 - Make one call per period with the same tool, so both figures share a basis. "How did Q3 compare to Q2?" is two
-  income statements, one per quarter from `resolveNamedPeriod`; report both figures, the difference and the change
-  as a percentage of the earlier one.
+  income statements, one per quarter, each resolved with `resolveNamedPeriod` as `YYYY-Qn`.
+- A quarter named without a year: take the most recent occurrence of the later-named quarter that has already
+  ended, and the earlier-named quarter immediately before it. On 2026-10-02, "Q3 compared to Q2" is `2026-Q3` against
+  `2026-Q2`; on 2026-08-15 it is `2025-Q3` against `2025-Q2`, because 2026-Q3 has not ended. Name both quarters with
+  their years in the answer so the user can correct the choice. When the quarters named are not consecutive and the
+  intended years are not clear ("Q4 versus Q1"), ask which years are meant instead of choosing. Never pass a bare
+  `Q3` to `resolveNamedPeriod`, and never invent a year without stating it.
+- Report both figures, the absolute difference (later minus earlier) and the change as a percentage of the earlier
+  figure. When the earlier figure is zero the percentage is undefined: report the absolute change and say that a
+  percentage change is not meaningful against a zero base. When the earlier figure is negative (a net loss), give
+  the absolute change and describe the direction in words rather than quoting a percentage, whose sign would
+  mislead.
 - No report buckets by month or week: a `groupBy` parameter is planned and does not exist. A trend ("revenue by
   month for six months", "sales trend for the past 12 weeks") therefore needs one call per bucket. The collections
   analytics endpoint states that looping it across more than three periods exceeds its call budget; for longer
@@ -148,7 +160,7 @@ names no metric; ask which one is meant.
 | --- | --- |
 | "What's our gross margin?" | Not computed (no cost of goods sold on sales). Offer revenue and net income for a period, noting that net income depends on the statement-line mapping. |
 | "Show sales trend for the past 12 weeks" | No weekly buckets. Offer the 12-week total, or up to three shorter periods. |
-| "How did Q3 compare to Q2?" | Two income statements, one per quarter; revenue, net income, the difference and the percentage change. |
+| "How did Q3 compare to Q2?" | Choose the years (latest ended Q3 and the Q2 before it) and state them; two income statements via `resolveNamedPeriod` `YYYY-Qn`; revenue, net income, the difference, and the percentage change unless the earlier figure is zero or negative. |
 | "What did we spend with Michelin in 2025?" | `getVendorSpend` for 2025; the vendor's `paidAmount` (cash paid) and bills issued; mention the top-20 cap and the glossary difference. |
 | "Show revenue by month" | One income statement per month, up to three months; beyond that, the total for the window. |
 | "What was the profit on tire sales between March 1 and March 31?" | Profit by product is not computed; offer posted revenue and net income for March. |
@@ -177,7 +189,8 @@ Platform sources:
 - `pos-invoice/src/main/resources/permissions.yaml`
 - `pos-catalog/openapi.yaml` (location guardrail policy, `minMarginPercent`)
 - `pos-mcp-server/src/main/java/com/positivity/mcp/internal/orchestration/tools/ReportingFacadeTool.java`,
-  `AccountingFacadeTool.java`, `InvoiceFacadeTool.java`, `BusinessGlossary.java`
+  `AccountingFacadeTool.java`, `InvoiceFacadeTool.java`, `BusinessGlossary.java`, `DateWindowFacadeTool.java`
+  (`resolveNamedPeriod` accepts `YYYY`, `YYYY-MM`, `YYYY-Qn`)
 - `durion/domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md` (invoice revenue recognition entry and
   reversal)
 - `durion/domains/general/mcp-server/analytics-capability-plan.md` (decision D2 on customer margin, decision D8 on

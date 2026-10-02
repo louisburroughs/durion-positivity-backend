@@ -42,7 +42,7 @@ class SalesReportEntityTest {
         lexiconMatcher = TermMatcher.of(EntityLexiconLoader.loadDefault());
     }
 
-    /** The six bake-off turns of #2384 that resolved no entity, with the gate's fr-CA and es translations. */
+    /** The six bake-off turns of #2384 that resolved no entity, their gate fr-CA and es translations, and other quarter comparisons. */
     static Stream<String> analyticsMessages() {
         return Stream.of(
                 // en-0100, en-0097, en-0094, en-0093, en-0091, en-0102
@@ -65,7 +65,12 @@ class SalesReportEntityTest {
                 "¿Cómo le fue al T3 frente al T2?",
                 "¿Cuánto gastamos con Michelin en 2025?",
                 "Muestra el ingreso por mes de los últimos seis meses",
-                "¿Cuál fue la utilidad por venta de llantas entre el 1 y el 31 de marzo?");
+                "¿Cuál fue la utilidad por venta de llantas entre el 1 y el 31 de marzo?",
+                // Other comparison wordings of quarters.
+                "Q4 vs Q3, please",
+                "Compare Q3 and Q2",
+                "Le T4 par rapport au T3",
+                "El T4 comparado con el T3");
     }
 
     /** Messages that share a word with the analytics vocabulary but are about something else. */
@@ -82,6 +87,11 @@ class SalesReportEntityTest {
                 "The override is below the minimum margin for this store",
                 "Le prix dérogatoire est sous la marge minimale",
                 "El precio queda por debajo del margen mínimo",
+                // A quarter named without a comparison is a period, not a money figure (#2391 review).
+                "How many work orders were completed in Q3?",
+                "Combien de bons de travail ont été terminés au T3?",
+                "¿Cuántas órdenes de trabajo se completaron en el T3?",
+                "Which appointments are booked for Q4?",
                 // Plain operational and purchasing questions.
                 "How many brake pads are on hand?",
                 "Create a purchase order for Michelin tires",
@@ -171,6 +181,9 @@ class SalesReportEntityTest {
         Set<String> terms =
                 entity.terms().values().stream().flatMap(List::stream).collect(Collectors.toSet());
         assertThat(terms).doesNotContain("margin", "marge", "margen", "trend", "top customer", "vendor spend");
+        // A bare quarter label is a period; only comparison phrases name the business's results.
+        assertThat(terms).doesNotContain("q1", "q2", "q3", "q4", "t1", "t2", "t3", "t4");
+        assertThat(terms).contains("compare to q2", "vs q2", "se compare-t-il au t2", "frente al t2");
     }
 
     @ParameterizedTest(name = "profile {0}")
