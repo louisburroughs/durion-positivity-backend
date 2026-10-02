@@ -44,21 +44,24 @@ The gate verdict, exit code 0 only on PASS:
                   no document (`proxyUntestable`); a fixture any run joined is testable, so every run
                   must cover it;
   NONDETERMINISTIC the baseline run resolved some fixture differently from the shadow run (top-K order,
-                  confidence, selected or offered tools): pin the tagging mode and change nothing
-                  between the runs, then rerun;
+                  confidence, selected or offered tools, or the role it was asked as): pin the tagging
+                  mode and change nothing between the runs, then rerun;
   NO_ENFORCE_RUN  complete shadow evidence but no --enforce-file: the simulated preview is printed,
                   nothing is decided;
-  INVALID_PAIR    a pair's enforce turn resolved another scope confidence than its shadow turn: the
-                  two runs did not ask the same question of the graph;
+  INVALID_PAIR    a pair's enforce turn resolved another scope confidence than its shadow turn, or was
+                  asked as another role (under --actor-proxy, one run's turn of the fixture's own actor
+                  against the other's proxy turn): the two runs did not ask the same question of the
+                  graph;
   FAIL            any paired fixture regressed (an expected document of today's top-k missing from the
                   enforce top-k, or its MRR fell), changed its tool selection while asked under the same
                   acting tags (a pair whose acting tag values differ is `tagDrift`: listed, not counted,
                   since the tagger, not the rag consumer, changed the selection; its retrieval still
-                  counts), or surfaced a forbidden document it did not surface
-                  today; or a mean hit@k, MRR or recall@k fell, or the forbidden total grew, overall,
-                  within a fixture set (rag-lexical, rag-retrieval) or within a confidence bucket; or a
-                  pair was given different tools (section 9's tool criterion: under RAG-only
-                  enforcement every turn must be given today's tools);
+                  counts; a turn without a tagging record shows no drift), or surfaced a forbidden
+                  document it did not surface today; or a mean hit@k, MRR or recall@k fell, or the
+                  forbidden total grew, overall, within a fixture set (rag-lexical, rag-retrieval) or
+                  within a confidence bucket; or a pair under the same acting tags was given different
+                  tools (section 9's tool criterion: under RAG-only enforcement every turn must be given
+                  today's tools);
   PASS            otherwise. Per fixture is stricter than section 9's means: one fixture's loss can no
                   longer hide behind another's gain.
 Traces are filtered before the join: a `--file` trace not in SHADOW, or an `--enforce-file` trace not
@@ -88,7 +91,7 @@ not affected: the hook reads the whole scope.
 Section 9's "tool selection hit rate at least equal": the RAG fixtures name no expected tools, so a hit
 rate cannot be scored on them. The report checks the stronger property instead: each pair was given
 the same tools (selected names and offered names, order-free); identical selection has an identical
-hit rate against any ground truth.
+hit rate against any ground truth. A pair whose acting tags drifted is listed instead (`tagDrift`).
 
 Input:
   --file PATH          JSON array or NDJSON of EvalTurnTrace objects from the shadow run ('-' reads
@@ -235,6 +238,7 @@ def join_traces(traces, fixtures, actor_proxy=None):
             exact[query].append(index)
             normalised[normalise_text(query)].append(index)
     joined, skipped, mismatches = {}, Counter(), []
+    via_proxy = set()  # the joined fixtures whose turn is a proxy's
     for trace in traces:
         message = trace.get("userMessage")
         if not isinstance(message, str):
@@ -246,7 +250,8 @@ def join_traces(traces, fixtures, actor_proxy=None):
             continue
         role = trace.get("role")
         by_role = [i for i in candidates if _actor_role(fixtures[i]) == role]
-        if not by_role and actor_proxy is not None and role == actor_proxy:
+        proxy = not by_role and actor_proxy is not None and role == actor_proxy
+        if proxy:
             named = [i for i in candidates if _actor_role(fixtures[i]) is not None]
             by_role = [i for i in named if _expected(fixtures[i], DEFAULT_K)[0]]
             if named and not by_role:
@@ -262,10 +267,18 @@ def join_traces(traces, fixtures, actor_proxy=None):
             current = joined.get(index)
             if current is not None:
                 duplicate = True
-                # A rerun's turn replaces an older attempt's (ISO-8601 UTC sorts as text).
-                if str(trace.get("startedAt") or "") <= str(current.get("startedAt") or ""):
+                # The fixture's own actor wins over the proxy whatever the order; between two turns of
+                # one kind, a rerun's turn replaces an older attempt's (ISO-8601 UTC sorts as text).
+                if proxy != (index in via_proxy):
+                    if proxy:
+                        continue
+                elif str(trace.get("startedAt") or "") <= str(current.get("startedAt") or ""):
                     continue
             joined[index] = trace
+            if proxy:
+                via_proxy.add(index)
+            else:
+                via_proxy.discard(index)
         if duplicate:
             skipped["duplicateTurn"] += 1
     return joined, skipped, mismatches
@@ -411,7 +424,8 @@ def _tool_selection(trace):
 
 
 def _differences(trace, other):
-    """What a second turn of the same question resolved differently: retrieval, tools, confidence."""
+    """What a second turn of the same question resolved differently: retrieval, tools, confidence, or
+    the role it was asked as (one run's own-actor turn, the other's proxy turn)."""
     out = []
     ids = [d.get("documentId") for d in trace["scope"].get("retrievedDocuments") or []]
     other_ids = [d.get("documentId") for d in other["scope"].get("retrievedDocuments") or []]
@@ -425,19 +439,28 @@ def _differences(trace, other):
         out.append("offeredTools")
     if str(trace["scope"].get("confidence")).upper() != str(other["scope"].get("confidence")).upper():
         out.append("confidence")
+    if trace.get("role") != other.get("role"):
+        out.append("role")
     return out
 
 
 def _acting_tags(trace):
-    """Tag name -> acting value of a turn's tagging record (ADR-0068), {} when it carries none."""
-    record = trace.get("tags") if isinstance(trace.get("tags"), dict) else {}
+    """Tag name -> acting value of a turn's tagging record (ADR-0068), None when it carries none. A tag
+    whose answer did not act (actingValue null) is left out, as is one no tagger answered: consumers
+    read neither."""
+    record = trace.get("tags")
+    if not isinstance(record, dict):
+        return None
     return {str(t.get("name")): str(t.get("actingValue")) for t in record.get("tags") or []
-            if isinstance(t, dict) and t.get("name") is not None}
+            if isinstance(t, dict) and t.get("name") is not None and t.get("actingValue") is not None}
 
 
 def _tag_drift(trace, other):
-    """The tag names whose acting value differs between two turns of one question."""
+    """The tag names whose acting value differs between two turns of one question; none when either
+    turn carries no tagging record (drift that cannot be shown never excuses a tool change)."""
     mine, theirs = _acting_tags(trace), _acting_tags(other)
+    if mine is None or theirs is None:
+        return []
     return sorted(name for name in set(mine) | set(theirs) if mine.get(name) != theirs.get(name))
 
 
@@ -486,6 +509,8 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
             "confidence": str(scope.get("confidence") or "UNKNOWN").upper(),
             "enforceConfidence": None if enforce_trace is None
             else str(enforce_trace["scope"].get("confidence") or "UNKNOWN").upper(),
+            # Only the actor proxy can pair an own-actor turn with a proxy turn.
+            "roleMismatch": enforce_trace is not None and enforce_trace.get("role") != trace.get("role"),
             "scopeTruncated": bool(scope.get("scopeDocumentIdsTruncated")),
             "retrievedCount": len(retrieved),
             "keptCount": len(kept),
@@ -547,6 +572,7 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
                        if block["gate"] and block["gate"]["verdict"] == "FAIL"]
     confidence_mismatches = sum(1 for s in samples
                                 if s["enforceConfidence"] is not None and s["enforceConfidence"] != s["confidence"])
+    role_mismatches = sum(1 for s in samples if s["roleMismatch"])
     tool_changes = sum(1 for s in samples if s["toolsChanged"] and not s["tagDrift"])
     tag_drift_tool_changes = sum(1 for s in samples if s["toolsChanged"] and s["tagDrift"])
     nondeterministic = sum(1 for s in samples if s["baselineDiff"])
@@ -576,10 +602,14 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
     elif enforce_traces is None:
         gate_verdict = "NO_ENFORCE_RUN"
         reasons.append("no --enforce-file: the simulated preview decides nothing")
-    elif confidence_mismatches:
+    elif confidence_mismatches or role_mismatches:
         gate_verdict = "INVALID_PAIR"
-        reasons.append(f"{confidence_mismatches} pair(s) resolved a different scope confidence in the enforce run: "
-                       "not a like-for-like comparison")
+        if confidence_mismatches:
+            reasons.append(f"{confidence_mismatches} pair(s) resolved a different scope confidence in the enforce "
+                           "run: not a like-for-like comparison")
+        if role_mismatches:
+            reasons.append(f"{role_mismatches} pair(s) were asked as another role in the enforce run (own actor "
+                           "against the actor proxy): not a like-for-like comparison")
     elif overall["gate"]["verdict"] == "FAIL" or failing_sets or failing_buckets or tool_changes:
         gate_verdict = "FAIL"
         if tool_changes:
@@ -613,6 +643,7 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
         "fixturesWithoutEnforceTrace": None if enforce_traces is None else len(without_enforce),
         "scopeTruncatedSamples": sum(1 for s in samples if s["scopeTruncated"]),
         "confidenceMismatches": confidence_mismatches,
+        "roleMismatches": role_mismatches,
         "overall": overall,
         "bySet": sets,
         "byConfidence": confidences,
@@ -903,6 +934,9 @@ def render_text(report):
     if report["confidenceMismatches"]:
         out.append(f"WARNING: {report['confidenceMismatches']} pair(s) resolved a different scope confidence in the "
                    "enforce run (same graph, different tags?): not a like-for-like comparison")
+    if report["roleMismatches"]:
+        out.append(f"WARNING: {report['roleMismatches']} pair(s) were asked as another role in the enforce run "
+                   "(own actor against the actor proxy): not a like-for-like comparison")
     out.append("")
     out += render_block("overall", report["overall"], k)
     for name, block in report["bySet"].items():

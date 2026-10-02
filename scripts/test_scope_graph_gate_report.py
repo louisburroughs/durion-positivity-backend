@@ -244,6 +244,52 @@ class JoinTest(unittest.TestCase):
         joined, _, _ = report.join_traces([trace], [own, other], actor_proxy="ROLE_SYSTEM_ADMINISTRATOR")
         self.assertEqual(_ids(joined, [own, other]), {"own": _uuid(1)})
 
+    def test_own_actor_turn_wins_over_a_proxy_turn_in_either_order(self):
+        # "A role match still wins" holds per fixture, not per turn: a later proxy turn does not replace
+        # the fixture's own actor's turn, and an own-actor turn replaces an earlier or later proxy turn.
+        proxy = "ROLE_SYSTEM_ADMINISTRATOR"
+        fixture = _fixture("f", "q", ["d"], role="ROLE_TECHNICIAN")
+        own = _trace(1, "q", _scope("LOW", [], []), role="ROLE_TECHNICIAN")
+        later_proxy = _trace(2, "q", _scope("LOW", [], []), role=proxy)
+        later_proxy["startedAt"] = "2026-10-02T11:00:00Z"
+        newer_proxy = _trace(3, "q", _scope("LOW", [], []), role=proxy)
+        newer_proxy["startedAt"] = "2026-10-02T11:30:00Z"
+        for turns in ([own, later_proxy], [newer_proxy, own], [newer_proxy, own, later_proxy]):
+            joined, skipped, _ = report.join_traces(turns, [fixture], actor_proxy=proxy)
+            self.assertEqual(_ids(joined, [fixture]), {"f": _uuid(1)})
+            self.assertEqual(dict(skipped), {"duplicateTurn": len(turns) - 1})
+
+    def test_a_proxy_turn_cannot_hide_an_own_actor_enforce_leak(self):
+        proxy = "ROLE_SYSTEM_ADMINISTRATOR"
+        fixture = _fixture("f", "q", ["d"], forbidden=["secret"], role="ROLE_TECHNICIAN")
+        own = _trace(1, "q", _scope("LOW", [_doc("d")], []), role="ROLE_TECHNICIAN")
+        later_proxy = _trace(2, "q", _scope("LOW", [_doc("d")], []), role=proxy)
+        later_proxy["startedAt"] = "2026-10-02T11:00:00Z"
+        leak = _enforce(own, [_doc("d"), _doc("secret", "admin")])
+        result = report.build_report([own, later_proxy], [fixture], enforce_traces=[leak], actor_proxy=proxy)
+        self.assertEqual(result["proxiedSamples"], 0)
+        self.assertEqual(result["gate"]["verdict"], "FAIL")
+
+    def test_own_actor_shadow_against_a_proxy_enforce_turn_is_an_invalid_pair(self):
+        proxy = "ROLE_SYSTEM_ADMINISTRATOR"
+        fixture = _fixture("f", "q", ["d"], role="ROLE_TECHNICIAN")
+        own = _trace(1, "q", _scope("LOW", [_doc("d")], []), role="ROLE_TECHNICIAN")
+        proxied = _trace(2, "q", _scope("LOW", [_doc("d")], []), role=proxy)
+        result = report.build_report([own], [fixture], enforce_traces=[_enforce(proxied, [_doc("d")])],
+                                     actor_proxy=proxy)
+        self.assertEqual(result["roleMismatches"], 1)
+        self.assertEqual(result["gate"]["verdict"], "INVALID_PAIR")
+        self.assertIn("1 pair(s) were asked as another role", report.render_text(result))
+
+    def test_own_actor_shadow_against_a_proxy_baseline_turn_is_nondeterministic(self):
+        proxy = "ROLE_SYSTEM_ADMINISTRATOR"
+        fixture = _fixture("f", "q", ["d"], role="ROLE_TECHNICIAN")
+        own = _trace(1, "q", _scope("LOW", [_doc("d")], []), role="ROLE_TECHNICIAN")
+        proxied = _trace(2, "q", _scope("LOW", [_doc("d")], []), role=proxy)
+        result = report.build_report([own], [fixture], baseline_traces=[proxied], actor_proxy=proxy, verbose=True)
+        self.assertEqual(result["nondeterministicList"][0]["differs"], ["role"])
+        self.assertEqual(result["gate"]["verdict"], "NONDETERMINISTIC")
+
     def test_actor_proxy_ignores_the_forbidden_list(self):
         fixture = _fixture("f", "q", ["d"], forbidden=["secret"], role="ROLE_TECHNICIAN")
         trace = _trace(1, "q", _scope("LOW", [_doc("d", "order"), _doc("secret", "admin")], []),
@@ -312,6 +358,13 @@ class JoinTest(unittest.TestCase):
         self.assertEqual(result["fixturesWithoutEnforceTrace"], 1)
         self.assertEqual(result["gate"]["verdict"], "INCOMPLETE")
 
+    def test_a_scopeless_turn_that_is_not_simple_chat_exempts_nothing(self):
+        fixture = _fixture("f", "how do orders work", ["order.guide"])
+        broken = _trace(1, "how do orders work", None)
+        result = report.build_report([broken], [fixture])
+        self.assertEqual(result["fixturesExempt"], {})
+        self.assertEqual(result["fixturesWithoutTrace"], 1)
+
     def test_without_proxy_a_visibility_fixture_still_needs_its_trace(self):
         negative = _fixture("neg", "who can approve", [], forbidden=["admin.governance"], role="ROLE_TECHNICIAN")
         result = report.build_report([], [negative])
@@ -319,15 +372,31 @@ class JoinTest(unittest.TestCase):
         self.assertEqual(result["fixturesExempt"], {})
 
     def _tool_pair(self, shadow_tags, enforce_tags):
+        # A tags dict of None: the turn carries no tagging record (AlphaEvalTurnTraceRecorder writes null).
         fixture = _fixture("f", "q", ["d"])
         shadow = _trace(1, "q", _scope("HIGH", [_doc("d")], ["d"]))
         enforce = _trace(2, "q", _scope("HIGH", [_doc("d")], ["d"]))
         enforce["scope"]["mode"] = "ENFORCE"
         enforce["scope"]["enforced"] = ["RAG"]
         shadow["selectedTools"], enforce["selectedTools"] = ["A", "B"], ["A"]
-        shadow["tags"] = {"tags": [{"name": n, "actingValue": v} for n, v in shadow_tags.items()]}
-        enforce["tags"] = {"tags": [{"name": n, "actingValue": v} for n, v in enforce_tags.items()]}
+        for trace, tags in ((shadow, shadow_tags), (enforce, enforce_tags)):
+            trace["tags"] = None if tags is None else {
+                "tags": [{"name": n, "actingValue": v} for n, v in tags.items()]}
         return report.build_report([shadow], [fixture], enforce_traces=[enforce], verbose=True)
+
+    def test_a_tag_that_acted_in_neither_turn_is_no_drift(self):
+        # A null actingValue (no answer acted) and an entry no tagger answered both mean consumers read
+        # nothing: the tool change counts.
+        result = self._tool_pair({"workflow_state": "IDLE", "entity_work-order": None}, {"workflow_state": "IDLE"})
+        self.assertEqual(result["toolChangeList"][0]["tagDrift"], [])
+        self.assertEqual(result["toolSelectionChanges"], 1)
+        self.assertEqual(result["gate"]["verdict"], "FAIL")
+
+    def test_a_turn_without_a_tagging_record_shows_no_drift(self):
+        result = self._tool_pair({"workflow_state": "IDLE"}, None)
+        self.assertEqual(result["toolChangeList"][0]["tagDrift"], [])
+        self.assertEqual(result["toolSelectionChanges"], 1)
+        self.assertEqual(result["gate"]["verdict"], "FAIL")
 
     def test_tool_change_under_the_same_tags_fails(self):
         result = self._tool_pair({"workflow_state": "IDLE"}, {"workflow_state": "IDLE"})
