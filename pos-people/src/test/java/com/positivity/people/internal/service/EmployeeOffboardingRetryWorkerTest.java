@@ -115,7 +115,7 @@ class EmployeeOffboardingRetryWorkerTest {
         when(retryRepository.findByNextAttemptAtLessThanEqualAndAttemptsLessThanOrderByNextAttemptAtAsc(
                         NOW, MAX_ATTEMPTS))
                 .thenReturn(List.of(row));
-        when(retryRepository.findById(row.getId())).thenReturn(Optional.of(row));
+        when(retryRepository.findByIdForUpdate(row.getId())).thenReturn(Optional.of(row));
         return row;
     }
 
@@ -158,8 +158,8 @@ class EmployeeOffboardingRetryWorkerTest {
         when(retryRepository.findByNextAttemptAtLessThanEqualAndAttemptsLessThanOrderByNextAttemptAtAsc(
                         NOW, MAX_ATTEMPTS))
                 .thenReturn(List.of(failing, healthy));
-        when(retryRepository.findById(failing.getId())).thenReturn(Optional.of(failing));
-        when(retryRepository.findById(healthy.getId())).thenReturn(Optional.of(healthy));
+        when(retryRepository.findByIdForUpdate(failing.getId())).thenReturn(Optional.of(failing));
+        when(retryRepository.findByIdForUpdate(healthy.getId())).thenReturn(Optional.of(healthy));
         doThrow(new IllegalStateException("boom")).when(assignmentEnder).apply(any(), any(), any(), eq("hr.admin"));
 
         worker.sweepTenant();
@@ -237,7 +237,7 @@ class EmployeeOffboardingRetryWorkerTest {
     @DisplayName("rows are looked up as of now, so a not-yet-due row is never worked")
     void notYetDueRowsAreNotSelected() {
         EmployeeOffboardingRetry notDue = row(0, NOW.plusSeconds(60));
-        when(retryRepository.findById(notDue.getId())).thenReturn(Optional.of(notDue));
+        when(retryRepository.findByIdForUpdate(notDue.getId())).thenReturn(Optional.of(notDue));
         when(retryRepository.findByNextAttemptAtLessThanEqualAndAttemptsLessThanOrderByNextAttemptAtAsc(
                         any(), anyInt()))
                 .thenReturn(List.of());
@@ -257,7 +257,7 @@ class EmployeeOffboardingRetryWorkerTest {
                         NOW, MAX_ATTEMPTS))
                 .thenReturn(List.of(stale));
         EmployeeOffboardingRetry rescheduled = row(1, NOW.plusSeconds(600));
-        when(retryRepository.findById(stale.getId())).thenReturn(Optional.of(rescheduled));
+        when(retryRepository.findByIdForUpdate(stale.getId())).thenReturn(Optional.of(rescheduled));
 
         worker.sweepTenant();
 

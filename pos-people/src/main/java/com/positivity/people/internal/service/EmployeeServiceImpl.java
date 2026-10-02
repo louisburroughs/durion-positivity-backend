@@ -17,6 +17,7 @@ import com.positivity.people.internal.dto.PagedResponse;
 import com.positivity.people.internal.dto.UpdateEmployeeRequest;
 import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.EmployeeLocationAssignment;
+import com.positivity.people.internal.entity.EmployeeOffboardingRetry;
 import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.entity.JobRole;
 import com.positivity.people.internal.enums.AssignmentTerminationPolicy;
@@ -30,6 +31,7 @@ import com.positivity.people.internal.exception.RequestValidationException;
 import com.positivity.people.internal.exception.ResourceStateConflictException;
 import com.positivity.people.internal.exception.SemanticValidationException;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
+import com.positivity.people.internal.repository.EmployeeOffboardingRetryRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.repository.JobRoleRepository;
@@ -104,6 +106,8 @@ public class EmployeeServiceImpl implements EmployeeService {
     // ── Offboarding (#2121) ──
 
     private final ApplicationEventPublisher applicationEventPublisher;
+
+    private final EmployeeOffboardingRetryRepository employeeOffboardingRetryRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -208,6 +212,7 @@ public class EmployeeServiceImpl implements EmployeeService {
                 request.getPreferredName(),
                 request.getContactInfo());
 
+        boolean existingEmployee = employee != null;
         if (employee == null) {
             employee = Employee.builder().personId(employeeId).build();
         }
@@ -224,6 +229,20 @@ public class EmployeeServiceImpl implements EmployeeService {
         }
         Employee savedEmployee = employeeRepository.save(employee);
         peopleEventPublisher.publishEmployeeUpdated(savedEmployee);
+
+        // A status that moves into TERMINATED or DISABLED here is an offboarding as much as
+        // disableEmployee is (#2361), and this request carries no policy, so it is an IMMEDIATE
+        // one: every active assignment ends now, dated ones included. Only the move into an
+        // offboarded status counts. An employee who already was offboarded had their assignments
+        // dealt with by that offboarding (a GRACE_PERIOD disable's are deliberately still ACTIVE),
+        // and an employment row this update has just created has no assignments to end.
+        if (existingEmployee && !isOffboarded(previousStatus) && isOffboarded(request.getStatus())) {
+            queueOffboarding(
+                    employeeId,
+                    AssignmentTerminationPolicy.IMMEDIATE,
+                    null,
+                    "Status set to " + request.getStatus() + " through updateEmployee");
+        }
 
         return profileFromRequestIdentity(
                 employeeId,
@@ -262,16 +281,13 @@ public class EmployeeServiceImpl implements EmployeeService {
         Employee savedEmployee = employeeRepository.save(employee);
         peopleEventPublisher.publishEmployeeUpdated(savedEmployee);
 
-        // Ending the assignments happens after this transaction commits (OffboardingEventListener):
-        // a failure there must neither undo the disable nor take the retry-queue write with it.
-        applicationEventPublisher.publishEvent(new EmployeeOffboardedEvent(
+        queueOffboarding(
                 employeeId,
                 request.getAssignmentPolicy() != null
                         ? request.getAssignmentPolicy()
                         : AssignmentTerminationPolicy.IMMEDIATE,
                 request.getAssignmentEndDate(),
-                request.getDisableReason(),
-                SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR)));
+                request.getDisableReason());
 
         ExtPersonReplica person =
                 extPersonReplicaRepository.findById(employeeId).orElse(null);
@@ -813,6 +829,40 @@ public class EmployeeServiceImpl implements EmployeeService {
         return extPersonReplicaRepository.findByLastNameIgnoreCase(lastName).stream()
                 .filter(person -> firstName.equalsIgnoreCase(person.getFirstName()))
                 .anyMatch(person -> employeeId == null || !person.getPersonId().equals(employeeId));
+    }
+
+    private static boolean isOffboarded(@Nullable EmployeeStatus status) {
+        return status != null && OffboardingAssignmentEnder.OFFBOARDED_STATUSES.contains(status);
+    }
+
+    /**
+     * Makes an offboarding's assignment policy durable with the status change that caused it
+     * (#2360, the ADR-0044 §4 outbox shape) and tells the after-commit listener about it. Called
+     * inside the transaction that saves the status: the row commits or rolls back with it, so a
+     * committed offboarding always has its policy and end date on record, whatever happens to the
+     * handler. Ending the assignments happens after this transaction commits
+     * ({@link OffboardingEventListener}), where a failure cannot undo the status change; the
+     * handler deletes the row when it succeeds, and the retry worker applies it otherwise. The row
+     * is not due before the worker's first delay, so the worker leaves a fresh row to the handler.
+     *
+     * @param reason free text for the row's {@code disable_reason}, cut to its column
+     */
+    private void queueOffboarding(
+            @NonNull UUID employeeId,
+            @NonNull AssignmentTerminationPolicy policy,
+            @Nullable LocalDate assignmentEndDate,
+            @Nullable String reason) {
+        EmployeeOffboardingRetry retry = new EmployeeOffboardingRetry();
+        retry.setEmployeeId(employeeId);
+        retry.setAssignmentPolicy(policy);
+        retry.setAssignmentEndDate(assignmentEndDate);
+        retry.setDisableReason(EmployeeOffboardingRetryWorker.disableReason(reason));
+        retry.setActorId(SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR));
+        retry.setFailureReason(EmployeeOffboardingRetryWorker.NOT_YET_APPLIED);
+        retry.setAttempts(0);
+        retry.setNextAttemptAt(Instant.now(clock).plusSeconds(EmployeeOffboardingRetryWorker.BASE_DELAY_SECONDS));
+        EmployeeOffboardingRetry queued = employeeOffboardingRetryRepository.save(retry);
+        applicationEventPublisher.publishEvent(new EmployeeOffboardedEvent(employeeId, queued.getId()));
     }
 
     /** Employment attributes on the Employee record. */

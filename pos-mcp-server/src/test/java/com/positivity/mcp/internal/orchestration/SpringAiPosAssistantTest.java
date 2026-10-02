@@ -340,7 +340,7 @@ class SpringAiPosAssistantTest {
         when(openApiToolProvider.resolveToolCallbacks(any())).thenReturn(List.of());
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("resolved answer"));
         when(ragRetriever.retrieve("PO number format"))
-                .thenReturn(List.of(new Document("PO numbers are owned by pos-inventory")));
+                .thenReturn(List.of(new Document("PO numbers are owned by pos-order")));
         when(chatMemory.get("user-1::ROLE_TECH")).thenReturn(List.of());
 
         SpringAiPosAssistant assistant = new SpringAiPosAssistant(
@@ -366,7 +366,7 @@ class SpringAiPosAssistantTest {
                 .contains("Ground your answer in the numbered snippets")
                 .containsIgnoringCase("do not state")
                 .containsIgnoringCase("say what you don't know instead of inventing")
-                .contains("PO numbers are owned by pos-inventory")
+                .contains("PO numbers are owned by pos-order")
                 // The instruction must guard more than identifier/format facts — a fabricated
                 // workflow
                 // (the core-charge case) slipped through the original identifier-only wording.

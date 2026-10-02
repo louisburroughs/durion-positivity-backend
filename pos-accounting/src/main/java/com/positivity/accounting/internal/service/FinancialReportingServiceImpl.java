@@ -31,6 +31,7 @@ import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.internal.entity.StatementLineMapping;
 import com.positivity.accounting.internal.entity.VendorBill;
+import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.accounting.internal.enums.OperationType;
 import com.positivity.accounting.internal.enums.StatementType;
@@ -200,8 +201,8 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
 
         // Aggregate balances by statement line
         Map<String, BigDecimal> lineItems = new LinkedHashMap<>();
-        Map<String, BigDecimal> revenueLines = new HashMap<>();
-        Map<String, BigDecimal> expenseLines = new HashMap<>();
+        BigDecimal totalRevenue = BigDecimal.ZERO;
+        BigDecimal totalExpenses = BigDecimal.ZERO;
 
         // Precompute balances per distinct account to avoid N+1 queries
         Map<UUID, BigDecimal> accountBalancesById = mappings.stream()
@@ -211,30 +212,35 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
                         glAccountId -> glAccountId,
                         glAccountId -> journalEntryRepository.sumPostedBalanceForAccount(
                                 glAccountId, startDateTime, endDateTime)));
+        Map<UUID, AccountType> accountTypesById = accountTypesById(mappings);
 
         for (StatementLineMapping mapping : mappings) {
-            BigDecimal accountBalance = accountBalancesById.get(mapping.getGlAccountId());
+            BigDecimal contribution = statementContribution(
+                    accountBalancesById.get(mapping.getGlAccountId()),
+                    accountTypesById.get(mapping.getGlAccountId()),
+                    mapping.getOperation());
+            lineItems.merge(mapping.getStatementLineCode(), contribution, BigDecimal::add);
+        }
 
-            // Apply operation type (SUM, SUBTRACT, NEGATE) to accumulate into statement
-            // line
-            String lineCode = mapping.getStatementLineCode();
-            lineItems.compute(lineCode, (key, existingTotal) -> {
-                BigDecimal base = existingTotal != null ? existingTotal : BigDecimal.ZERO;
-                return applyOperation(base, accountBalance, mapping.getOperation());
-            });
-
-            // Track revenue vs expense lines for totals
-            BigDecimal currentTotal = lineItems.get(lineCode);
-            if (isRevenueLine(lineCode)) {
-                revenueLines.put(lineCode, currentTotal);
-            } else if (isExpenseLine(lineCode)) {
-                expenseLines.put(lineCode, currentTotal);
+        // Totals follow the account's type, never the line code (issue #2394): each mapped
+        // account counts once, on its own normal side, whatever line it sits on and whatever
+        // operation presents it there. A line that mixes revenue and expense accounts therefore
+        // still splits correctly between the two totals.
+        for (Map.Entry<UUID, BigDecimal> account : accountBalancesById.entrySet()) {
+            AccountType accountType = accountTypesById.get(account.getKey());
+            if (accountType == AccountType.REVENUE) {
+                totalRevenue = totalRevenue.add(account.getValue().negate());
+            } else if (accountType == AccountType.EXPENSE) {
+                totalExpenses = totalExpenses.add(account.getValue());
+            } else {
+                log.warn(
+                        "Income statement maps account {} of type {}; it is shown on its line but counted"
+                                + " in neither total",
+                        account.getKey(),
+                        accountType);
             }
         }
 
-        // Calculate totals
-        BigDecimal totalRevenue = revenueLines.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalExpenses = expenseLines.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal netIncome = totalRevenue.subtract(totalExpenses);
 
         log.info(
@@ -281,9 +287,9 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
 
         // Aggregate balances by statement line
         Map<String, BigDecimal> lineItems = new LinkedHashMap<>();
-        Map<String, BigDecimal> assetLines = new HashMap<>();
-        Map<String, BigDecimal> liabilityLines = new HashMap<>();
-        Map<String, BigDecimal> equityLines = new HashMap<>();
+        BigDecimal totalAssets = BigDecimal.ZERO;
+        BigDecimal totalLiabilities = BigDecimal.ZERO;
+        BigDecimal totalEquity = BigDecimal.ZERO;
 
         // Precompute balances per distinct account to avoid N+1 queries
         Map<UUID, BigDecimal> accountBalancesById = mappings.stream()
@@ -292,31 +298,37 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
                 .collect(Collectors.toMap(
                         glAccountId -> glAccountId,
                         glAccountId -> journalEntryRepository.sumPostedBalanceAsOf(glAccountId, asOfDateTime)));
+        Map<UUID, AccountType> accountTypesById = accountTypesById(mappings);
 
         for (StatementLineMapping mapping : mappings) {
-            BigDecimal accountBalance = accountBalancesById.get(mapping.getGlAccountId());
-
-            // Apply operation type (SUM, SUBTRACT, NEGATE) to accumulate into statement
-            // line
-            String lineCode = mapping.getStatementLineCode();
-            lineItems.merge(
-                    lineCode, accountBalance, (total, amount) -> applyOperation(total, amount, mapping.getOperation()));
-
-            // Track asset/liability/equity lines for totals
-            BigDecimal currentTotal = lineItems.get(lineCode);
-            if (isAssetLine(lineCode)) {
-                assetLines.put(lineCode, currentTotal);
-            } else if (isLiabilityLine(lineCode)) {
-                liabilityLines.put(lineCode, currentTotal);
-            } else if (isEquityLine(lineCode)) {
-                equityLines.put(lineCode, currentTotal);
-            }
+            BigDecimal contribution = statementContribution(
+                    accountBalancesById.get(mapping.getGlAccountId()),
+                    accountTypesById.get(mapping.getGlAccountId()),
+                    mapping.getOperation());
+            lineItems.merge(mapping.getStatementLineCode(), contribution, BigDecimal::add);
         }
 
-        // Calculate totals
-        BigDecimal totalAssets = assetLines.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalLiabilities = liabilityLines.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalEquity = equityLines.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+        // Totals follow the account's type, never the line code (issue #2394): each mapped
+        // account counts once, on the side of the equation it belongs to, whatever operation
+        // presents it on its line. Revenue and expense accounts mapped onto the balance sheet are
+        // earnings not yet closed to equity, so they count toward equity as credits minus debits.
+        for (Map.Entry<UUID, BigDecimal> account : accountBalancesById.entrySet()) {
+            AccountType accountType = accountTypesById.get(account.getKey());
+            if (accountType == null) {
+                log.warn(
+                        "Balance sheet maps account {} whose type is unknown; it is shown on its line but"
+                                + " counted in no total",
+                        account.getKey());
+                continue;
+            }
+            switch (accountType) {
+                case ASSET -> totalAssets = totalAssets.add(account.getValue());
+                case LIABILITY ->
+                    totalLiabilities = totalLiabilities.add(account.getValue().negate());
+                case EQUITY, REVENUE, EXPENSE ->
+                    totalEquity = totalEquity.add(account.getValue().negate());
+            }
+        }
 
         // Validate balance sheet equation: Assets = Liabilities + Equity (within
         // tolerance)
@@ -478,13 +490,17 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
             return List.of();
         }
 
+        Map<UUID, AccountType> accountTypesById = accountTypesById(mappings);
+
         // Calculate balance for each account
         return mappings.stream()
                 .map(mapping -> {
                     BigDecimal accountBalance = journalEntryRepository.sumPostedBalanceForAccount(
                             mapping.getGlAccountId(), startDateTime, endDateTime);
-                    // Apply operation to transform the balance for display (starting from zero)
-                    BigDecimal displayBalance = applyOperation(BigDecimal.ZERO, accountBalance, mapping.getOperation());
+                    // The amount this account contributes to the line, so the drill-down rows add
+                    // up to the statement line they expand.
+                    BigDecimal displayBalance = statementContribution(
+                            accountBalance, accountTypesById.get(mapping.getGlAccountId()), mapping.getOperation());
 
                     return AccountDrilldownResponse.builder()
                             .accountId(mapping.getGlAccountId().toString())
@@ -1481,95 +1497,59 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
     // ========== Private Helper Methods ==========
 
     /**
-     * Apply operation type to combine an amount with a running total.
-     *
-     * @param total         the current running total for the statement line
-     * @param amount        the account balance to apply
-     * @param operationType the operation to perform (SUM, SUBTRACT, or NEGATE)
-     * @return the new total after applying the operation
+     * Types of the GL accounts behind a set of statement-line mappings, loaded in one query. An
+     * account the lookup does not return is simply absent from the map.
      */
-    private BigDecimal applyOperation(BigDecimal total, BigDecimal amount, OperationType operationType) {
-        if (total == null) {
-            total = BigDecimal.ZERO;
-        }
-        if (amount == null) {
-            amount = BigDecimal.ZERO;
-        }
+    private @NonNull Map<UUID, AccountType> accountTypesById(@NonNull List<StatementLineMapping> mappings) {
+        Set<UUID> accountIds =
+                mappings.stream().map(StatementLineMapping::getGlAccountId).collect(Collectors.toSet());
+        return glAccountRepository.findAllById(accountIds).stream()
+                .collect(Collectors.toMap(GLAccount::getGlAccountId, GLAccount::getAccountType));
+    }
 
-        return switch (operationType) {
-            // SUM: add the amount to the total
-            case SUM -> total.add(amount);
-            // SUBTRACT: subtract the amount from the total
-            case SUBTRACT -> total.subtract(amount);
-            // NEGATE: flip the sign of the amount before adding (e.g., for credit-normal
-            // accounts)
-            case NEGATE -> total.add(amount.negate());
+    /**
+     * The signed amount one mapped account contributes to its statement line (issue #2394).
+     *
+     * <p>The ledger balance arrives as debits minus credits. It is first put on the account's
+     * normal side, so a reader sees the sign they expect: assets and expenses as debits minus
+     * credits, liabilities, equity and revenue as credits minus debits. The mapping's operation
+     * then applies to that amount:
+     *
+     * <ul>
+     *   <li>{@code SUM} adds it to the line;
+     *   <li>{@code SUBTRACT} takes it off the line;
+     *   <li>{@code NEGATE} keeps the meaning it had before signs followed the account type:
+     *       credits minus debits whatever the type. It was how a mapping presented a
+     *       credit-normal account as a positive amount, so on such an account it now equals
+     *       {@code SUM} rather than flipping the sign a second time; on a debit-normal account
+     *       it still reverses the balance.
+     * </ul>
+     *
+     * <p>An account of unknown type is treated as debit-normal, which is the balance as stored.
+     *
+     * @param debitsMinusCredits the account's ledger balance for the window, debits minus credits
+     * @param accountType        the account's type, or null when it could not be loaded
+     * @param operation          the mapping's operation
+     * @return the amount to add to the statement line
+     */
+    static @NonNull BigDecimal statementContribution(
+            @Nullable BigDecimal debitsMinusCredits,
+            @Nullable AccountType accountType,
+            @NonNull OperationType operation) {
+        BigDecimal balance = debitsMinusCredits != null ? debitsMinusCredits : BigDecimal.ZERO;
+        BigDecimal normalSide = isCreditNormal(accountType) ? balance.negate() : balance;
+
+        return switch (operation) {
+            case SUM -> normalSide;
+            case SUBTRACT -> normalSide.negate();
+            case NEGATE -> balance.negate();
         };
     }
 
-    /**
-     * Check if statement line code represents revenue (income statement).
-     * Supports both legacy codes (e.g. REVENUE_*) and Javadoc-style codes (e.g.
-     * PL_REVENUE_*).
-     */
-    private boolean isRevenueLine(String lineCode) {
-        if (lineCode == null) {
-            return false;
-        }
-        return lineCode.startsWith("REVENUE_") || lineCode.startsWith("PL_REVENUE_") || lineCode.contains("INCOME");
-    }
-
-    /**
-     * Check if statement line code represents expense (income statement).
-     * Supports both legacy codes (e.g. EXPENSE_*) and Javadoc-style codes (e.g.
-     * PL_EXPENSE_* / PL_EXPENSES_*).
-     */
-    private boolean isExpenseLine(String lineCode) {
-        if (lineCode == null) {
-            return false;
-        }
-        return lineCode.startsWith("EXPENSE_")
-                || lineCode.startsWith("PL_EXPENSE_")
-                || lineCode.startsWith("PL_EXPENSES_")
-                || lineCode.contains("COST");
-    }
-
-    /**
-     * Check if statement line code represents asset (balance sheet).
-     * Supports both legacy codes (e.g. ASSET_*) and Javadoc-style codes (e.g.
-     * BS_ASSETS_*).
-     */
-    private boolean isAssetLine(String lineCode) {
-        if (lineCode == null) {
-            return false;
-        }
-        return lineCode.startsWith("ASSET_") || lineCode.startsWith("BS_ASSETS_");
-    }
-
-    /**
-     * Check if statement line code represents liability (balance sheet).
-     * Supports legacy codes (e.g. LIABILITY_*) and likely BS prefixes (e.g.
-     * BS_LIAB_*, BS_LIABILITY_*, BS_LIABILITIES_*).
-     */
-    private boolean isLiabilityLine(String lineCode) {
-        if (lineCode == null) {
-            return false;
-        }
-        return lineCode.startsWith("LIABILITY_")
-                || lineCode.startsWith("BS_LIAB_")
-                || lineCode.startsWith("BS_LIABILITY_")
-                || lineCode.startsWith("BS_LIABILITIES_");
-    }
-
-    /**
-     * Check if statement line code represents equity (balance sheet).
-     * Supports both legacy codes (e.g. EQUITY_*) and Javadoc-style codes (e.g.
-     * BS_EQUITY_*).
-     */
-    private boolean isEquityLine(String lineCode) {
-        if (lineCode == null) {
-            return false;
-        }
-        return lineCode.startsWith("EQUITY_") || lineCode.startsWith("BS_EQUITY_");
+    /** Liabilities, equity and revenue carry a credit balance; assets and expenses a debit one. */
+    private static boolean isCreditNormal(@Nullable AccountType accountType) {
+        return accountType == AccountType.LIABILITY
+                || accountType == AccountType.EQUITY
+                || accountType == AccountType.REVENUE;
     }
 }

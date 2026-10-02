@@ -5,6 +5,7 @@ import com.positivity.catalog.internal.enums.TreadDesignMatchState;
 import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,6 +15,12 @@ import org.springframework.data.repository.query.Param;
 public interface TreadDesignRepository extends JpaRepository<TreadDesignEntity, UUID> {
 
     Optional<TreadDesignEntity> findByVendorProfileIdAndVendorVariantId(UUID vendorProfileId, String vendorVariantId);
+
+    /**
+     * How many designs this module holds for one vendor profile — the figure compared against the
+     * count the owner states when it closes an MKCAT re-publication (#2356).
+     */
+    long countByVendorProfileId(@NonNull UUID vendorProfileId);
 
     /**
      * The review worklist (#1645): designs in any of {@code states}, optionally narrowed to one

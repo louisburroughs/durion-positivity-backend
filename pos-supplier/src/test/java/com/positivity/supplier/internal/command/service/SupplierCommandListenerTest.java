@@ -10,8 +10,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.positivity.domainevents.supplier.SupplierCatalogRepublishRequestedV1;
 import com.positivity.domainevents.supplier.SupplierPriceCatalogRepublishRequestedV1;
 import com.positivity.supplier.internal.entity.ProcessedEvent;
+import com.positivity.supplier.internal.mktcat.service.MktCatRepublisher;
 import com.positivity.supplier.internal.order.service.TransmissionIntentWriter;
 import com.positivity.supplier.internal.pricecatalog.service.PriceCatalogRepublisher;
 import com.positivity.supplier.internal.repository.ProcessedEventRepository;
@@ -51,6 +53,9 @@ class SupplierCommandListenerTest {
     @Mock
     private PriceCatalogRepublisher republisher;
 
+    @Mock
+    private MktCatRepublisher mktCatRepublisher;
+
     private SupplierCommandListener listener;
 
     @BeforeEach
@@ -61,6 +66,7 @@ class SupplierCommandListenerTest {
                 processedEventRepository,
                 intentWriter,
                 republisher,
+                mktCatRepublisher,
                 mock(PlatformTransactionManager.class));
     }
 
@@ -72,6 +78,15 @@ class SupplierCommandListenerTest {
                  "payload":{"importManifestId":"%s","vendorProfileId":"%s","chunksApplied":1,
                    "expectedChunks":2,"requestedBy":"pos-catalog","reason":"applied 1 of 2 chunks"}}
                 """.formatted(eventId, IMPORT_ID, IMPORT_ID, PROFILE_ID);
+    }
+
+    private static String catalogRepublishCommand(String eventId) {
+        return """
+                {"eventId":"%s","eventType":"supplier.catalog.republish.requested","schemaVersion":1,
+                 "aggregateId":"%s","aggregateVersion":0,"occurredAtUtc":"2026-08-14T11:59:00Z",
+                 "sourceService":"pos-catalog",
+                 "payload":{"vendorProfileId":"%s","requestedBy":"operator","reason":"#2356 recovery"}}
+                """.formatted(eventId, PROFILE_ID, PROFILE_ID);
     }
 
     private static String orderCommand(String eventId) {
@@ -208,6 +223,69 @@ class SupplierCommandListenerTest {
                 """);
 
         verifyNoInteractions(republisher);
+        verify(processedEventRepository, never()).save(any());
+    }
+
+    @Test
+    void servesAnMkcatRepublishRequestThroughTheSameConsumer() {
+        // #2356. A third command type is a branch here, not a second consumer group: a second group
+        // would record this id in processed_events before the group that handles it got there.
+        listener.onSupplierCommand(catalogRepublishCommand("e-12"));
+
+        ArgumentCaptor<SupplierCatalogRepublishRequestedV1> captor =
+                ArgumentCaptor.forClass(SupplierCatalogRepublishRequestedV1.class);
+        verify(mktCatRepublisher).republish(captor.capture());
+        assertThat(captor.getValue().vendorProfileId()).isEqualTo(PROFILE_ID);
+        assertThat(captor.getValue().requestedBy()).isEqualTo("operator");
+        // Not the PRICAT path: that one re-emits an import's chunks, and would refuse this request
+        // for naming no import.
+        verifyNoInteractions(republisher, intentWriter);
+        assertThat(recorded().getEventId()).isEqualTo("e-12");
+        assertThat(recorded().getOwner()).isEqualTo(SupplierCommandListener.CATALOG_OWNER);
+    }
+
+    @Test
+    void skipsARedeliveredMkcatRepublishRequestSoOneCommandReEmitsOnce() {
+        when(processedEventRepository.existsById("e-13")).thenReturn(true);
+
+        listener.onSupplierCommand(catalogRepublishCommand("e-13"));
+
+        verifyNoInteractions(mktCatRepublisher);
+        verify(processedEventRepository, never()).save(any());
+    }
+
+    @Test
+    void recordsAnMkcatRepublishRequestThatNamesNoVendorProfileAsMalformed() {
+        String malformed = """
+                {"eventId":"e-14","eventType":"supplier.catalog.republish.requested","schemaVersion":1,
+                 "aggregateId":"%s","aggregateVersion":0,"sourceService":"pos-catalog",
+                 "payload":{"requestedBy":"operator"}}
+                """.formatted(PROFILE_ID);
+
+        listener.onSupplierCommand(malformed);
+
+        // Without a profile there is nothing to scope the re-emit to. Dispatching it would report
+        // "nothing staged" for a request that never said what to look for.
+        verifyNoInteractions(mktCatRepublisher);
+        assertThat(recorded().getEventId()).isEqualTo("e-14");
+    }
+
+    @Test
+    void doesNotPassOffAnUnreadableStagedVariantAsAMalformedMkcatRequest() {
+        when(mktCatRepublisher.republish(any()))
+                .thenThrow(new IllegalStateException("staged variant has unreadable texts_json"));
+
+        assertThatThrownBy(() -> listener.onSupplierCommand(catalogRepublishCommand("e-15")))
+                .isInstanceOf(IllegalStateException.class);
+        verify(processedEventRepository, never()).save(any());
+    }
+
+    @Test
+    void rethrowsTransientDatabaseTroubleDuringAnMkcatRepublishSoTheContainerRetries() {
+        when(mktCatRepublisher.republish(any())).thenThrow(new QueryTimeoutException("statement timeout"));
+
+        assertThatThrownBy(() -> listener.onSupplierCommand(catalogRepublishCommand("e-16")))
+                .isInstanceOf(QueryTimeoutException.class);
         verify(processedEventRepository, never()).save(any());
     }
 }

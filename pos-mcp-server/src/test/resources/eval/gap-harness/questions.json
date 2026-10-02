@@ -37,7 +37,7 @@
       "rag_scope": "master",
       "expected_doc_ids": ["glossary.identifiers"],
       "expected_facts": [
-        "Purchase orders are owned by pos-inventory (not pos-order).",
+        "Purchase orders are owned by pos-order; pos-inventory owns receiving goods against them.",
         "A PO number is an 8-character, zero-padded, uppercase base-36 code from a Postgres sequence (e.g. 0000000A); there is no PO-/year prefix."
       ],
       "topic": "PO number format and ownership",
@@ -94,7 +94,7 @@
       "expected_doc_ids": ["order.guide"],
       "expected_facts": [
         "Sales-order statuses (pos-order SalesOrderStatus) include DRAFT, QUOTED, COMPLETED, VOIDED, CANCEL_REQUESTED, and CANCELLED; read access is gated by order:order:view.",
-        "Purchase orders are NOT in pos-order — they are owned by pos-inventory (inventory:purchase_order:{create,view,approve,receive}) with PurchaseOrderStatus DRAFT, APPROVED, PARTIALLY_RECEIVED, FULLY_RECEIVED, CLOSED, CANCELLED."
+        "Purchase orders are in pos-order (order:purchase_order:{view,create,approve,transmit,availability_view}) with PurchaseOrderStatus DRAFT, APPROVED, PARTIALLY_RECEIVED, FULLY_RECEIVED, CLOSED, CANCELLED; receiving goods against them is in pos-inventory."
       ],
       "topic": "order lookup",
       "tags": ["scope-coverage", "positive"],

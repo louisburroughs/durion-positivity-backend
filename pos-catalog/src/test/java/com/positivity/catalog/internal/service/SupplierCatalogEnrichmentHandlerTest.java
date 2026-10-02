@@ -26,6 +26,9 @@ import com.positivity.catalog.internal.repository.TreadDesignImageRepository;
 import com.positivity.catalog.internal.repository.TreadDesignMatchCandidateRepository;
 import com.positivity.catalog.internal.repository.TreadDesignRepository;
 import com.positivity.catalog.internal.repository.TreadDesignTextRepository;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -46,6 +49,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.JsonNode;
@@ -92,6 +96,8 @@ class SupplierCatalogEnrichmentHandlerTest {
     @Mock
     private ProductRepository productRepository;
 
+    private final MeterRegistry meterRegistry = new SimpleMeterRegistry();
+
     private SupplierCatalogEnrichmentHandler handler;
 
     @BeforeEach
@@ -121,6 +127,9 @@ class SupplierCatalogEnrichmentHandlerTest {
     }
 
     private SupplierCatalogEnrichmentHandler handlerWith(CatalogEnrichmentProperties properties) {
+        @SuppressWarnings("unchecked")
+        ObjectProvider<MeterRegistry> meterRegistryProvider = mock(ObjectProvider.class);
+        when(meterRegistryProvider.getIfAvailable()).thenReturn(meterRegistry);
         return new SupplierCatalogEnrichmentHandler(
                 CLOCK,
                 new ObjectMapper(),
@@ -132,6 +141,7 @@ class SupplierCatalogEnrichmentHandlerTest {
                 supplierPriceEntryRepository,
                 productRepository,
                 new TreadDesignMatcher(properties, new BrandNormalizer(properties)),
+                meterRegistryProvider,
                 mock(PlatformTransactionManager.class));
     }
 
@@ -727,6 +737,144 @@ class SupplierCatalogEnrichmentHandlerTest {
                 assertThat(survivingLowIds).isEqualTo(expectedSurvivingLowIds);
                 verify(productRepository, never()).save(any());
             }
+        }
+    }
+
+    @Nested
+    @DisplayName("the owner's re-emit-all (#2356)")
+    class ReEmitAll {
+
+        private static final Instant DECIDED_AT = Instant.parse("2026-08-20T10:00:00Z");
+
+        private TreadDesignEntity held(TreadDesignMatchState state) {
+            return TreadDesignEntity.builder()
+                    .id(DESIGN_ID)
+                    .vendorProfileId(VENDOR_PROFILE_ID)
+                    .vendorVariantId("VAR-1")
+                    .contentHash("hash-1")
+                    .matchState(state)
+                    .matchStateAt(DECIDED_AT)
+                    .build();
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.EnumSource(TreadDesignMatchState.class)
+        @DisplayName("a design already held with the same content is left exactly as it is, whatever its state")
+        void anUnchangedDesignIsUntouchedWhateverItsReviewState(TreadDesignMatchState state) {
+            TreadDesignEntity design = held(state);
+            when(treadDesignRepository.findByVendorProfileIdAndVendorVariantId(VENDOR_PROFILE_ID, "VAR-1"))
+                    .thenReturn(Optional.of(design));
+            // A product the matcher would attach at AUTO tier if it were allowed to run: the test
+            // must fail on a re-match, not pass because there was nothing to match.
+            when(supplierPriceEntryRepository.findDistinctProductIdsByVendorProfileId(VENDOR_PROFILE_ID))
+                    .thenReturn(List.of(PRODUCT_ID));
+            when(productRepository.findAllById(List.of(PRODUCT_ID))).thenReturn(List.of(michelinProduct(PRODUCT_ID)));
+
+            // The re-emit: the content this module already holds, under an event id it has never seen.
+            handle(enrichmentEvent("re-emit-" + state, "VAR-1", "hash-1", false));
+
+            // No review decision reset and no worklist entry re-opened or re-aged...
+            assertThat(design.getMatchState()).isEqualTo(state);
+            assertThat(design.getMatchStateAt()).isEqualTo(DECIDED_AT);
+            verify(treadDesignRepository, never()).save(any());
+            // ...no candidate rows replaced or duplicated...
+            verify(treadDesignMatchCandidateRepository, never()).deleteByTreadDesignId(any());
+            verify(treadDesignMatchCandidateRepository, never()).save(any());
+            // ...no product attached, detached or re-pointed...
+            verify(productRepository, never()).save(any());
+            // ...and the texts and images are not rewritten.
+            verify(treadDesignTextRepository, never()).deleteByTreadDesignId(any());
+            verify(treadDesignTextRepository, never()).save(any());
+            verify(treadDesignImageRepository, never()).deleteByTreadDesignId(any());
+            verify(treadDesignImageRepository, never()).save(any());
+            // The delivery itself is still recorded, so its redelivery stops at the event-id guard.
+            verify(processedEventRepository).save(any(ProcessedEvent.class));
+        }
+
+        @Test
+        @DisplayName("a design that was lost is applied when the re-emit delivers it")
+        void aDesignThatWasNeverAppliedIsRecovered() {
+            // setUp: nothing held for this vendor variant — the #2177 loss.
+            handle(enrichmentEvent("re-emit-lost", "VAR-1", "hash-1", false));
+
+            ArgumentCaptor<TreadDesignEntity> captor = ArgumentCaptor.forClass(TreadDesignEntity.class);
+            verify(treadDesignRepository, org.mockito.Mockito.atLeastOnce()).save(captor.capture());
+            assertThat(captor.getValue().getVendorVariantId()).isEqualTo("VAR-1");
+            assertThat(captor.getValue().getContentHash()).isEqualTo("hash-1");
+        }
+
+        private static String republishCompleted(String eventId, int variantCount) {
+            return """
+                    {"eventId":"%s","eventType":"supplier.catalog.republish.completed","schemaVersion":1,
+                     "aggregateId":"%s","aggregateVersion":0,"occurredAtUtc":"2026-10-02T10:00:00Z",
+                     "sourceService":"pos-supplier",
+                     "payload":{"vendorProfileId":"%s","supplierRef":"michelin-eu","variantCount":%d,
+                       "requestedBy":"operator","completedAt":"2026-10-02T10:00:00Z"}}
+                    """.formatted(eventId, VENDOR_PROFILE_ID, VENDOR_PROFILE_ID, variantCount);
+        }
+
+        private Double gap() {
+            Gauge gauge = meterRegistry
+                    .find(SupplierCatalogEnrichmentHandler.DESIGN_GAP_METRIC)
+                    .tag("vendorProfileId", VENDOR_PROFILE_ID.toString())
+                    .gauge();
+            return gauge == null ? null : gauge.value();
+        }
+
+        @Test
+        @DisplayName("holding fewer designs than the owner re-emitted is reported as a gap")
+        void reportsTheDesignsItIsMissing() {
+            when(treadDesignRepository.countByVendorProfileId(VENDOR_PROFILE_ID))
+                    .thenReturn(7L);
+
+            handle(republishCompleted("done-1", 10));
+
+            assertThat(gap()).isEqualTo(3.0);
+            // A report, not an apply: nothing about any design moves.
+            verify(treadDesignRepository, never()).save(any());
+            verify(productRepository, never()).save(any());
+            ArgumentCaptor<ProcessedEvent> processed = ArgumentCaptor.forClass(ProcessedEvent.class);
+            verify(processedEventRepository).save(processed.capture());
+            assertThat(processed.getValue().getEventId()).isEqualTo("done-1");
+        }
+
+        @Test
+        @DisplayName("holding every re-emitted design reports no gap, and clears an earlier one")
+        void aLaterCompleteRePublicationClearsTheGap() {
+            when(treadDesignRepository.countByVendorProfileId(VENDOR_PROFILE_ID))
+                    .thenReturn(7L, 10L);
+
+            handle(republishCompleted("done-2", 10));
+            assertThat(gap()).isEqualTo(3.0);
+
+            // The gauge holds the last comparison, so the re-publication that follows the recovery
+            // is what brings it back to zero.
+            handle(republishCompleted("done-3", 10));
+            assertThat(gap()).isZero();
+        }
+
+        @Test
+        @DisplayName("designs held beyond what the owner re-emitted are not a gap")
+        void holdingMoreThanTheOwnerReEmittedIsNotAGap() {
+            when(treadDesignRepository.countByVendorProfileId(VENDOR_PROFILE_ID))
+                    .thenReturn(12L);
+
+            handle(republishCompleted("done-4", 10));
+
+            assertThat(gap()).isZero();
+        }
+
+        @Test
+        @DisplayName("a transient failure while counting is rethrown and the completion stays unrecorded")
+        void rethrowsATransientFailureWhileComparing() {
+            when(treadDesignRepository.countByVendorProfileId(VENDOR_PROFILE_ID))
+                    .thenThrow(new QueryTimeoutException("db busy"));
+
+            assertThatThrownBy(() -> handle(republishCompleted("done-5", 10)))
+                    .isInstanceOf(QueryTimeoutException.class);
+
+            verify(processedEventRepository, never()).save(any());
+            assertThat(gap()).isNull();
         }
     }
 

@@ -600,13 +600,15 @@ paths:
     put:
       description: 'Updates an existing employee profile by person id, replacing employment attributes locally and forwarding identity attributes to pos-people-contact as an upsert command.
 
-        Use this tool when correcting or changing an existing employee''s details; do not use createEmployee, which registers a new person, and do not use disableEmployee, which is the offboarding transition.
+        Use this tool when correcting or changing an existing employee''s details; do not use createEmployee, which registers a new person, and do not use disableEmployee, which is the offboarding transition that takes an assignment policy.
 
         Preconditions: an employee row or identity-replica row must exist for the supplied employeeId, which is the person id at this API surface.
 
         Required inputs: employeeId (UUID) path parameter plus the full profile (firstName, lastName, employeeNumber, status, hireDate); this is a full replacement, not a patch, and duplicatePolicy defaults to STRICT.
 
         Emits a PEOPLE_EMPLOYEE_UPDATE event and publishes a people.employee.updated fact; a status change also stamps statusEffectiveAt.
+
+        Moving the status of an employee who is not yet offboarded into TERMINATED or DISABLED also ends every ACTIVE staffing assignment today, as disableEmployee does with assignmentPolicy IMMEDIATE, and publishes one people.staffing-assignment.updated fact per ended assignment.
 
         Returns 404 when no employee or person exists for the id, 409 when another employee already uses the employee number, email, or phone under STRICT policy, and 422 when terminationDate is before hireDate.
 
@@ -679,7 +681,7 @@ paths:
     post:
       description: 'Disables an ACTIVE employee, setting status DISABLED with a fresh statusEffectiveAt, and applies the requested staffing-assignment offboarding policy.
 
-        Use this tool for offboarding; do not use updateEmployee to force the status field, which skips offboarding, and do not use endStaffingAssignment, which ends a single assignment only.
+        Use this tool for offboarding; do not use updateEmployee to force the status field, which takes no assignment policy and ends every assignment today, and do not use endStaffingAssignment, which ends a single assignment only.
 
         Preconditions: the employee must exist and be ACTIVE; ON_LEAVE, SUSPENDED, DISABLED and TERMINATED employees are rejected.
 

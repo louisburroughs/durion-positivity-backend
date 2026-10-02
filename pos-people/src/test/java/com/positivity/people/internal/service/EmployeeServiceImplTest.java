@@ -3,6 +3,7 @@ package com.positivity.people.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -24,6 +25,7 @@ import com.positivity.people.internal.dto.PagedResponse;
 import com.positivity.people.internal.dto.UpdateEmployeeRequest;
 import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.EmployeeLocationAssignment;
+import com.positivity.people.internal.entity.EmployeeOffboardingRetry;
 import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.entity.JobRole;
 import com.positivity.people.internal.enums.AllowedAction;
@@ -39,6 +41,7 @@ import com.positivity.people.internal.exception.RequestValidationException;
 import com.positivity.people.internal.exception.ResourceStateConflictException;
 import com.positivity.people.internal.exception.SemanticValidationException;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
+import com.positivity.people.internal.repository.EmployeeOffboardingRetryRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.repository.JobRoleRepository;
@@ -63,8 +66,10 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -100,6 +105,10 @@ class EmployeeServiceImplTest {
     @Mock
     private ApplicationEventPublisher applicationEventPublisher;
 
+    /** Records the queue row {@code disableEmployee} writes with the disable (#2360). */
+    @Mock
+    private EmployeeOffboardingRetryRepository employeeOffboardingRetryRepository;
+
     @Mock
     private JobRoleRepository jobRoleRepository;
 
@@ -127,6 +136,7 @@ class EmployeeServiceImplTest {
     private EmployeeServiceImpl service;
 
     private static final UUID JOB_ROLE_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4b01");
+    private static final UUID RETRY_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4c01");
 
     @BeforeEach
     void setUp() {
@@ -141,8 +151,16 @@ class EmployeeServiceImplTest {
                 employeeLocationAssignmentRepository,
                 locationReferenceService,
                 employeeActionPolicy,
-                applicationEventPublisher);
+                applicationEventPublisher,
+                employeeOffboardingRetryRepository);
         when(employeeRepository.save(any(Employee.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        // The id generator runs on persist; stand in for it so the event can name the row.
+        when(employeeOffboardingRetryRepository.save(any(EmployeeOffboardingRetry.class)))
+                .thenAnswer(invocation -> {
+                    EmployeeOffboardingRetry row = invocation.getArgument(0);
+                    row.setId(RETRY_ID);
+                    return row;
+                });
     }
 
     private static JobRole jobRole() {
@@ -662,6 +680,103 @@ class EmployeeServiceImplTest {
             assertThatThrownBy(() -> service.updateEmployee(PERSON_ID, request)).isInstanceOf(NotFoundException.class);
             verify(employeeRepository, never()).save(any());
         }
+
+        // ── Offboarding through a status change (#2361) ──
+
+        @ParameterizedTest(name = "{0} -> {1}")
+        @CsvSource({
+            "ACTIVE, TERMINATED",
+            "ACTIVE, DISABLED",
+            "ON_LEAVE, TERMINATED",
+            "ON_LEAVE, DISABLED",
+            "SUSPENDED, TERMINATED",
+            "SUSPENDED, DISABLED"
+        })
+        void aStatusMovedIntoAnOffboardedOneQueuesAnImmediateOffboardingWithTheUpdate(
+                EmployeeStatus from, EmployeeStatus to) {
+            when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(employee(from)));
+            UpdateEmployeeRequest request = updateRequest();
+            request.setStatus(to);
+
+            service.updateEmployee(PERSON_ID, request);
+
+            ArgumentCaptor<Employee> saved = ArgumentCaptor.forClass(Employee.class);
+            verify(employeeRepository).save(saved.capture());
+            assertThat(saved.getValue().getStatus()).isEqualTo(to);
+            assertThat(saved.getValue().getStatusEffectiveAt()).isEqualTo(NOW);
+            ArgumentCaptor<EmployeeOffboardingRetry> queued = ArgumentCaptor.forClass(EmployeeOffboardingRetry.class);
+            verify(employeeOffboardingRetryRepository).save(queued.capture());
+            EmployeeOffboardingRetry row = queued.getValue();
+            assertThat(row.getEmployeeId()).isEqualTo(PERSON_ID);
+            // The request carries no policy: every assignment ends now.
+            assertThat(row.getAssignmentPolicy()).isEqualTo(AssignmentTerminationPolicy.IMMEDIATE);
+            assertThat(row.getAssignmentEndDate()).isNull();
+            assertThat(row.getDisableReason()).isEqualTo("Status set to " + to + " through updateEmployee");
+            assertThat(row.getActorId()).isEqualTo("system");
+            assertThat(row.getFailureReason()).isEqualTo(EmployeeOffboardingRetryWorker.NOT_YET_APPLIED);
+            assertThat(row.getAttempts()).isZero();
+            assertThat(row.getNextAttemptAt())
+                    .isEqualTo(NOW.plusSeconds(EmployeeOffboardingRetryWorker.BASE_DELAY_SECONDS));
+            // The same shape as disableEmployee: status, then the row, then the event naming it.
+            InOrder order = inOrder(employeeRepository, employeeOffboardingRetryRepository, applicationEventPublisher);
+            order.verify(employeeRepository).save(any(Employee.class));
+            order.verify(employeeOffboardingRetryRepository).save(row);
+            order.verify(applicationEventPublisher).publishEvent(new EmployeeOffboardedEvent(PERSON_ID, RETRY_ID));
+            // The assignments are the listener's job, after commit; the service touches none.
+            verifyNoInteractions(employeeLocationAssignmentRepository);
+        }
+
+        @Test
+        void anEmployeeWhoseStatusWasNeverSetCountsAsNotYetOffboarded() {
+            when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(employee(null)));
+            UpdateEmployeeRequest request = updateRequest();
+            request.setStatus(EmployeeStatus.TERMINATED);
+
+            service.updateEmployee(PERSON_ID, request);
+
+            verify(employeeOffboardingRetryRepository).save(any(EmployeeOffboardingRetry.class));
+            verify(applicationEventPublisher).publishEvent(new EmployeeOffboardedEvent(PERSON_ID, RETRY_ID));
+        }
+
+        @ParameterizedTest(name = "{0} -> {1}")
+        @CsvSource({
+            // Unchanged, or between statuses that are not offboarded.
+            "ACTIVE, ACTIVE",
+            "ACTIVE, ON_LEAVE",
+            "ON_LEAVE, SUSPENDED",
+            // Already offboarded: that offboarding dealt with the assignments (a GRACE_PERIOD
+            // disable's are deliberately still ACTIVE).
+            "TERMINATED, TERMINATED",
+            "DISABLED, DISABLED",
+            "DISABLED, TERMINATED",
+            "TERMINATED, DISABLED",
+            // Back out of an offboarded status.
+            "TERMINATED, ACTIVE",
+            "DISABLED, ON_LEAVE"
+        })
+        void anyOtherStatusChangeQueuesNoOffboarding(EmployeeStatus from, EmployeeStatus to) {
+            when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(employee(from)));
+            UpdateEmployeeRequest request = updateRequest();
+            request.setStatus(to);
+
+            service.updateEmployee(PERSON_ID, request);
+
+            verify(employeeRepository).save(any(Employee.class));
+            verifyNoInteractions(applicationEventPublisher, employeeOffboardingRetryRepository);
+        }
+
+        @Test
+        void anEmploymentRowCreatedAlreadyTerminatedHasNoAssignmentsToOffboard() {
+            when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.empty());
+            when(extPersonReplicaRepository.existsById(PERSON_ID)).thenReturn(true);
+            UpdateEmployeeRequest request = updateRequest();
+            request.setStatus(EmployeeStatus.TERMINATED);
+
+            service.updateEmployee(PERSON_ID, request);
+
+            verify(employeeRepository).save(any(Employee.class));
+            verifyNoInteractions(applicationEventPublisher, employeeOffboardingRetryRepository);
+        }
     }
 
     @Nested
@@ -676,10 +791,11 @@ class EmployeeServiceImplTest {
             return request;
         }
 
-        private EmployeeOffboardedEvent publishedEvent() {
-            ArgumentCaptor<EmployeeOffboardedEvent> event = ArgumentCaptor.forClass(EmployeeOffboardedEvent.class);
-            verify(applicationEventPublisher).publishEvent(event.capture());
-            return event.getValue();
+        /** The row written in the disable's own transaction (#2360). */
+        private EmployeeOffboardingRetry queuedRow() {
+            ArgumentCaptor<EmployeeOffboardingRetry> row = ArgumentCaptor.forClass(EmployeeOffboardingRetry.class);
+            verify(employeeOffboardingRetryRepository).save(row.capture());
+            return row.getValue();
         }
 
         @Test
@@ -700,34 +816,56 @@ class EmployeeServiceImplTest {
         }
 
         @Test
-        void handsTheImmediatePolicyToTheAfterCommitListener() {
+        void queuesTheImmediatePolicyWithTheDisableAndPointsTheAfterCommitListenerAtIt() {
             when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(employee(EmployeeStatus.ACTIVE)));
             when(extPersonReplicaRepository.findById(PERSON_ID)).thenReturn(Optional.empty());
 
             service.disableEmployee(PERSON_ID, disableRequest(AssignmentTerminationPolicy.IMMEDIATE));
 
-            EmployeeOffboardedEvent event = publishedEvent();
-            assertThat(event.personId()).isEqualTo(PERSON_ID);
-            assertThat(event.policy()).isEqualTo(AssignmentTerminationPolicy.IMMEDIATE);
-            assertThat(event.disableReason()).isEqualTo("Voluntary resignation");
-            assertThat(event.actorId()).isEqualTo("system");
+            EmployeeOffboardingRetry row = queuedRow();
+            assertThat(row.getEmployeeId()).isEqualTo(PERSON_ID);
+            assertThat(row.getAssignmentPolicy()).isEqualTo(AssignmentTerminationPolicy.IMMEDIATE);
+            assertThat(row.getDisableReason()).isEqualTo("Voluntary resignation");
+            assertThat(row.getActorId()).isEqualTo("system");
+            assertThat(row.getFailureReason()).isEqualTo(EmployeeOffboardingRetryWorker.NOT_YET_APPLIED);
+            // Nothing has been attempted, and the worker leaves the row to the after-commit
+            // listener until its first delay has passed.
+            assertThat(row.getAttempts()).isZero();
+            assertThat(row.getNextAttemptAt())
+                    .isEqualTo(NOW.plusSeconds(EmployeeOffboardingRetryWorker.BASE_DELAY_SECONDS));
+            // The row is written before the listener is told about it, and the event names it.
+            InOrder order = inOrder(employeeRepository, employeeOffboardingRetryRepository, applicationEventPublisher);
+            order.verify(employeeRepository).save(any(Employee.class));
+            order.verify(employeeOffboardingRetryRepository).save(row);
+            order.verify(applicationEventPublisher).publishEvent(new EmployeeOffboardedEvent(PERSON_ID, RETRY_ID));
             // The assignments are the listener's job, after commit; the service touches none.
             verifyNoInteractions(employeeLocationAssignmentRepository);
         }
 
         @Test
-        void aNullPolicyIsHandedOverAsImmediate() {
+        void aDisableReasonLongerThanItsQueueColumnIsCutRatherThanFailingTheDisable() {
+            when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(employee(EmployeeStatus.ACTIVE)));
+            DisableEmployeeRequestDto request = disableRequest(AssignmentTerminationPolicy.IMMEDIATE);
+            request.setDisableReason("r".repeat(300));
+
+            service.disableEmployee(PERSON_ID, request);
+
+            assertThat(queuedRow().getDisableReason()).isEqualTo("r".repeat(255));
+        }
+
+        @Test
+        void aNullPolicyIsQueuedAsImmediate() {
             when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(employee(EmployeeStatus.ACTIVE)));
             DisableEmployeeRequestDto request = new DisableEmployeeRequestDto();
             request.setAssignmentPolicy(null);
 
             service.disableEmployee(PERSON_ID, request);
 
-            assertThat(publishedEvent().policy()).isEqualTo(AssignmentTerminationPolicy.IMMEDIATE);
+            assertThat(queuedRow().getAssignmentPolicy()).isEqualTo(AssignmentTerminationPolicy.IMMEDIATE);
         }
 
         @Test
-        void handsTheGracePeriodPolicyAndItsEndDateToTheAfterCommitListener() {
+        void queuesTheGracePeriodPolicyAndItsEndDateWithTheDisable() {
             when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(employee(EmployeeStatus.ACTIVE)));
             when(extPersonReplicaRepository.findById(PERSON_ID)).thenReturn(Optional.empty());
 
@@ -735,9 +873,10 @@ class EmployeeServiceImplTest {
                     service.disableEmployee(PERSON_ID, disableRequest(AssignmentTerminationPolicy.GRACE_PERIOD));
 
             assertThat(profile.getStatus()).isEqualTo(EmployeeStatus.DISABLED);
-            EmployeeOffboardedEvent event = publishedEvent();
-            assertThat(event.policy()).isEqualTo(AssignmentTerminationPolicy.GRACE_PERIOD);
-            assertThat(event.assignmentEndDate()).isEqualTo(LocalDate.of(2026, 3, 31));
+            EmployeeOffboardingRetry row = queuedRow();
+            assertThat(row.getAssignmentPolicy()).isEqualTo(AssignmentTerminationPolicy.GRACE_PERIOD);
+            assertThat(row.getAssignmentEndDate()).isEqualTo(LocalDate.of(2026, 3, 31));
+            verify(applicationEventPublisher).publishEvent(new EmployeeOffboardedEvent(PERSON_ID, RETRY_ID));
         }
 
         @Test
@@ -748,7 +887,7 @@ class EmployeeServiceImplTest {
 
             service.disableEmployee(PERSON_ID, request);
 
-            assertThat(publishedEvent().assignmentEndDate()).isEqualTo(LocalDate.of(2026, 3, 1));
+            assertThat(queuedRow().getAssignmentEndDate()).isEqualTo(LocalDate.of(2026, 3, 1));
         }
 
         @Test
@@ -762,7 +901,7 @@ class EmployeeServiceImplTest {
                     .hasMessageContaining("assignmentEndDate");
 
             verify(employeeRepository, never()).save(any());
-            verifyNoInteractions(peopleEventPublisher, applicationEventPublisher);
+            verifyNoInteractions(peopleEventPublisher, applicationEventPublisher, employeeOffboardingRetryRepository);
         }
 
         @Test
@@ -776,7 +915,7 @@ class EmployeeServiceImplTest {
                     .hasMessageContaining("before today");
 
             verify(employeeRepository, never()).save(any());
-            verifyNoInteractions(peopleEventPublisher, applicationEventPublisher);
+            verifyNoInteractions(peopleEventPublisher, applicationEventPublisher, employeeOffboardingRetryRepository);
         }
 
         @Test

@@ -38,20 +38,32 @@ The gate verdict, exit code 0 only on PASS:
                   single deployable snapshot;
   INCOMPLETE      a loaded fixture has no joined shadow trace, or (with --enforce-file /
                   --baseline-file) no joined enforce / baseline trace: the evidence does not cover the
-                  fixture set;
+                  fixture set. Exempt, and listed instead, while no run joined it: a fixture whose
+                  question took the simple-chat path (no scope, no RAG: the rag consumer never acts on
+                  it, `simpleChat`) and, under --actor-proxy, one of another named actor that expects
+                  no document (`proxyUntestable`); a fixture any run joined is testable, so every run
+                  must cover it. Also INCOMPLETE: more than --max-tag-drift (default 10%) of the pairs
+                  changed tools under drifted tags (`tagDrift`, below), too few left for the tool
+                  criterion: rerun with stable tags;
   NONDETERMINISTIC the baseline run resolved some fixture differently from the shadow run (top-K order,
-                  confidence, selected or offered tools): pin the tagging mode and change nothing
-                  between the runs, then rerun;
+                  confidence, selected or offered tools, or the role it was asked as): pin the tagging
+                  mode and change nothing between the runs, then rerun;
   NO_ENFORCE_RUN  complete shadow evidence but no --enforce-file: the simulated preview is printed,
                   nothing is decided;
-  INVALID_PAIR    a pair's enforce turn resolved another scope confidence than its shadow turn: the
-                  two runs did not ask the same question of the graph;
+  INVALID_PAIR    a pair's enforce turn resolved another scope confidence than its shadow turn, or was
+                  asked as another role (under --actor-proxy, one run's turn of the fixture's own actor
+                  against the other's proxy turn): the two runs did not ask the same question of the
+                  graph;
   FAIL            any paired fixture regressed (an expected document of today's top-k missing from the
-                  enforce top-k, or its MRR fell) or surfaced a forbidden document it did not surface
-                  today; or a mean hit@k, MRR or recall@k fell, or the forbidden total grew, overall,
-                  within a fixture set (rag-lexical, rag-retrieval) or within a confidence bucket; or a
-                  pair was given different tools (section 9's tool criterion: under RAG-only
-                  enforcement every turn must be given today's tools);
+                  enforce top-k, or its MRR fell), changed its tool selection while asked under the same
+                  acting tags (a pair whose acting tag values differ is `tagDrift`: listed, not counted,
+                  since the tagger, not the rag consumer, changed the selection; its retrieval still
+                  counts; a turn without a tagging record shows no drift), or surfaced a forbidden
+                  document it did not surface today; or a mean hit@k, MRR or recall@k fell, or the
+                  forbidden total grew, overall, within a fixture set (rag-lexical, rag-retrieval) or
+                  within a confidence bucket; or a pair under the same acting tags was given different
+                  tools (section 9's tool criterion: under RAG-only enforcement every turn must be given
+                  today's tools);
   PASS            otherwise. Per fixture is stricter than section 9's means: one fixture's loss can no
                   longer hide behind another's gain.
 Traces are filtered before the join: a `--file` trace not in SHADOW, or an `--enforce-file` trace not
@@ -81,7 +93,7 @@ not affected: the hook reads the whole scope.
 Section 9's "tool selection hit rate at least equal": the RAG fixtures name no expected tools, so a hit
 rate cannot be scored on them. The report checks the stronger property instead: each pair was given
 the same tools (selected names and offered names, order-free); identical selection has an identical
-hit rate against any ground truth.
+hit rate against any ground truth. A pair whose acting tags drifted is listed instead (`tagDrift`).
 
 Input:
   --file PATH          JSON array or NDJSON of EvalTurnTrace objects from the shadow run ('-' reads
@@ -101,6 +113,15 @@ The trace is scored against every candidate left (two fixtures may ask one quest
 with different expectations). A fixture joined by more than one turn of a run keeps the latest by
 `startedAt` (`duplicateTurn`), so a rerun's turn replaces an older attempt's.
 
+Actor proxy (--actor-proxy ROLE): where no candidate's role matches, a turn asked as ROLE joins every
+candidate that names an actor and expects at least one document (a fixture expecting none is a pure
+visibility check, `proxyNoExpected`; one naming no actor stays unjoined, `actorMismatch`). Its
+forbidden list is ignored: the proxy sees what the fixture's actor may not, so a forbidden hit says
+nothing. Proxy evidence measures whether the filter drops expected documents, not per-role
+visibility; the report says how many samples rest on it and how many forbidden lists it scored and
+ignored. A PASS in which no forbidden list was scored says so in its reasons
+(`forbiddenCriterionExercised` false): section 9's forbidden criterion then went untested.
+
 Stdlib only, like scripts/tagging_shadow_report.py.
 """
 
@@ -118,6 +139,11 @@ ENFORCE = "ENFORCE"
 RAG = "RAG"
 EPSILON = 1e-9
 METRICS = ("hitAtK", "mrr", "recallAtK")
+DEFAULT_MAX_TAG_DRIFT = 0.10
+EXEMPT_REASONS = {
+    "simpleChat": "the turn took the no-RAG simple-chat path",
+    "proxyUntestable": "another actor's visibility check, which the actor proxy cannot make",
+}
 
 
 def parse_traces(text):
@@ -200,13 +226,15 @@ def score(documents, expected, forbidden, k):
     return {"hitAtK": hit, "mrr": mrr, "recallAtK": recall, "forbiddenHits": forbidden_hits}
 
 
-def join_traces(traces, fixtures):
+def join_traces(traces, fixtures, actor_proxy=None):
     """Pair fixtures with the turns that asked them.
 
     Returns (joined, skipped, mismatches): joined maps a fixture's index in `fixtures` to its latest
     trace (by startedAt); skipped is a Counter of noUserMessage, noFixture, actorMismatch (the query
     matched, no candidate's actor role did; a fixture without one matches no turn) and duplicateTurn
-    (a turn for an already joined fixture); mismatches lists the actor-mismatched turns.
+    (a turn for an already joined fixture); mismatches lists the actor-mismatched turns. With
+    actor_proxy, a turn asked as that role joins the candidates that name an actor and expect a document
+    (see the module docstring); one whose named candidates expect none counts as proxyNoExpected.
     """
     exact, normalised = defaultdict(list), defaultdict(list)
     for index, fixture in enumerate(fixtures):
@@ -215,6 +243,7 @@ def join_traces(traces, fixtures):
             exact[query].append(index)
             normalised[normalise_text(query)].append(index)
     joined, skipped, mismatches = {}, Counter(), []
+    via_proxy = set()  # the joined fixtures whose turn is a proxy's
     for trace in traces:
         message = trace.get("userMessage")
         if not isinstance(message, str):
@@ -226,6 +255,13 @@ def join_traces(traces, fixtures):
             continue
         role = trace.get("role")
         by_role = [i for i in candidates if _actor_role(fixtures[i]) == role]
+        proxy = not by_role and actor_proxy is not None and role == actor_proxy
+        if proxy:
+            named = [i for i in candidates if _actor_role(fixtures[i]) is not None]
+            by_role = [i for i in named if _expected(fixtures[i], DEFAULT_K)[0]]
+            if named and not by_role:
+                skipped["proxyNoExpected"] += 1
+                continue
         if not by_role:
             skipped["actorMismatch"] += 1
             mismatches.append({"turnId": trace.get("turnId"), "role": role,
@@ -236,13 +272,48 @@ def join_traces(traces, fixtures):
             current = joined.get(index)
             if current is not None:
                 duplicate = True
-                # A rerun's turn replaces an older attempt's (ISO-8601 UTC sorts as text).
-                if str(trace.get("startedAt") or "") <= str(current.get("startedAt") or ""):
+                # The fixture's own actor wins over the proxy whatever the order; between two turns of
+                # one kind, a rerun's turn replaces an older attempt's (ISO-8601 UTC sorts as text).
+                if proxy != (index in via_proxy):
+                    if proxy:
+                        continue
+                elif str(trace.get("startedAt") or "") <= str(current.get("startedAt") or ""):
                     continue
             joined[index] = trace
+            if proxy:
+                via_proxy.add(index)
+            else:
+                via_proxy.discard(index)
         if duplicate:
             skipped["duplicateTurn"] += 1
     return joined, skipped, mismatches
+
+
+def _exempt_fixtures(fixtures, traces, actor_proxy, joined_runs):
+    """Fixture index -> why it needs no trace: `simpleChat` (some turn asking its question took the
+    simple-chat path, which resolves no scope and retrieves nothing, so the rag consumer cannot act
+    on it) or `proxyUntestable` (under the actor proxy, a fixture of another, named actor expecting
+    no document: a pure visibility check the proxy cannot make). A fixture any run joined (one of
+    `joined_runs`) is testable, so it is exempt from none: every run must then cover it."""
+    simple = {normalise_text(t.get("userMessage")) for t in traces
+              if isinstance(t, dict) and t.get("simpleChat") is True and not isinstance(t.get("scope"), dict)
+              and isinstance(t.get("userMessage"), str)}
+    exempt = {}
+    for index, fixture in enumerate(fixtures):
+        if any(index in joined for joined in joined_runs):
+            continue
+        query = fixture.get("query")
+        if isinstance(query, str) and normalise_text(query) in simple:
+            exempt[index] = "simpleChat"
+        elif (actor_proxy is not None and _actor_role(fixture) not in (None, actor_proxy)
+              and not _expected(fixture, DEFAULT_K)[0]):
+            exempt[index] = "proxyUntestable"
+    return exempt
+
+
+def _proxied(trace, fixture, actor_proxy):
+    """Whether a joined pair rests on the actor proxy rather than on the fixture's own actor."""
+    return actor_proxy is not None and trace.get("role") == actor_proxy and _actor_role(fixture) != actor_proxy
 
 
 def _actor_role(fixture):
@@ -358,7 +429,8 @@ def _tool_selection(trace):
 
 
 def _differences(trace, other):
-    """What a second turn of the same question resolved differently: retrieval, tools, confidence."""
+    """What a second turn of the same question resolved differently: retrieval, tools, confidence, or
+    the role it was asked as (one run's own-actor turn, the other's proxy turn)."""
     out = []
     ids = [d.get("documentId") for d in trace["scope"].get("retrievedDocuments") or []]
     other_ids = [d.get("documentId") for d in other["scope"].get("retrievedDocuments") or []]
@@ -372,23 +444,48 @@ def _differences(trace, other):
         out.append("offeredTools")
     if str(trace["scope"].get("confidence")).upper() != str(other["scope"].get("confidence")).upper():
         out.append("confidence")
+    if trace.get("role") != other.get("role"):
+        out.append("role")
     return out
 
 
+def _acting_tags(trace):
+    """Tag name -> acting value of a turn's tagging record (ADR-0068), None when it carries none. A tag
+    whose answer did not act (actingValue null) is left out, as is one no tagger answered: consumers
+    read neither."""
+    record = trace.get("tags")
+    if not isinstance(record, dict):
+        return None
+    return {str(t.get("name")): str(t.get("actingValue")) for t in record.get("tags") or []
+            if isinstance(t, dict) and t.get("name") is not None and t.get("actingValue") is not None}
+
+
+def _tag_drift(trace, other):
+    """The tag names whose acting value differs between two turns of one question; none when either
+    turn carries no tagging record (drift that cannot be shown never excuses a tool change)."""
+    mine, theirs = _acting_tags(trace), _acting_tags(other)
+    if mine is None or theirs is None:
+        return []
+    return sorted(name for name in set(mine) | set(theirs) if mine.get(name) != theirs.get(name))
+
+
 def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=None, preload_docs=None,
-                 enforce_traces=None, baseline_traces=None):
+                 enforce_traces=None, baseline_traces=None, actor_proxy=None,
+                 max_tag_drift=DEFAULT_MAX_TAG_DRIFT):
     """Aggregate the shadow traces, the enforce traces (None: no enforce run given), the baseline
-    traces (a second shadow run for the A/A check; None: not given) and the fixtures."""
+    traces (a second shadow run for the A/A check; None: not given) and the fixtures. max_tag_drift: the
+    largest share of pairs whose tool change tagDrift may excuse. actor_proxy: see
+    the module docstring."""
     skipped, enforce_skipped, baseline_skipped = Counter(), Counter(), Counter()
     shadow = _usable(traces, SHADOW, skipped)
     enforce = _usable(enforce_traces or [], ENFORCE, enforce_skipped)
     baseline = _usable(baseline_traces or [], SHADOW, baseline_skipped)
 
-    joined, join_skipped, mismatches = join_traces(shadow, fixtures)
+    joined, join_skipped, mismatches = join_traces(shadow, fixtures, actor_proxy)
     skipped.update(join_skipped)
-    enforce_joined, enforce_join_skipped, enforce_mismatches = join_traces(enforce, fixtures)
+    enforce_joined, enforce_join_skipped, enforce_mismatches = join_traces(enforce, fixtures, actor_proxy)
     enforce_skipped.update(enforce_join_skipped)
-    baseline_joined, baseline_join_skipped, baseline_mismatches = join_traces(baseline, fixtures)
+    baseline_joined, baseline_join_skipped, baseline_mismatches = join_traces(baseline, fixtures, actor_proxy)
     baseline_skipped.update(baseline_join_skipped)
 
     samples = []
@@ -396,6 +493,10 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
         trace, fixture = joined[index], fixtures[index]
         scope = trace["scope"]
         expected, forbidden, fixture_k = _expected(fixture, k)
+        proxied = _proxied(trace, fixture, actor_proxy)
+        forbidden_ignored = proxied and bool(forbidden)
+        if proxied:
+            forbidden = []
         retrieved = scope.get("retrievedDocuments") or []
         kept = simulate_enforce(scope)
         enforce_trace = enforce_joined.get(index)
@@ -412,9 +513,15 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
             "enforceTurnId": enforce_trace.get("turnId") if enforce_trace else None,
             "fixtureId": fixture.get("fixture_id"),
             "set": fixture["_set"],
+            "proxied": proxied,
+            # Whether the fixture's forbidden list was scored, or dropped because the proxy asked.
+            "forbiddenScored": bool(forbidden),
+            "forbiddenIgnored": forbidden_ignored,
             "confidence": str(scope.get("confidence") or "UNKNOWN").upper(),
             "enforceConfidence": None if enforce_trace is None
             else str(enforce_trace["scope"].get("confidence") or "UNKNOWN").upper(),
+            # Only the actor proxy can pair an own-actor turn with a proxy turn.
+            "roleMismatch": enforce_trace is not None and enforce_trace.get("role") != trace.get("role"),
             "scopeTruncated": bool(scope.get("scopeDocumentIdsTruncated")),
             "retrievedCount": len(retrieved),
             "keptCount": len(kept),
@@ -434,6 +541,8 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
             # Under RAG-only enforcement the tool selection must be today's (section 9's tool criterion).
             "toolsChanged": [] if enforce_trace is None else [
                 d for d in _differences(trace, enforce_trace) if d in ("selectedTools", "offeredTools")],
+            # The acting tag values the two turns disagree on: the tagger drifted between the runs.
+            "tagDrift": [] if enforce_trace is None else _tag_drift(trace, enforce_trace),
             # The A/A check: what a second shadow turn of the same question resolved differently.
             "baselineDiff": None if baseline_trace is None else _differences(trace, baseline_trace),
             "retrievedIds": [d.get("documentId") for d in retrieved],
@@ -452,9 +561,16 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
     confidences = {name: aggregate(group) for name, group in sorted(by_confidence.items())}
 
     fixture_ids = [f.get("fixture_id") for f in fixtures]
-    without_trace = [fixture_ids[i] for i in range(len(fixtures)) if i not in joined]
-    without_enforce = [fixture_ids[i] for i in range(len(fixtures)) if i not in enforce_joined]
-    without_baseline = [fixture_ids[i] for i in range(len(fixtures)) if i not in baseline_joined]
+    exempt = _exempt_fixtures(fixtures, list(traces) + list(enforce_traces or []) + list(baseline_traces or []),
+                              actor_proxy, (joined, enforce_joined, baseline_joined))
+    without_trace = [fixture_ids[i] for i in range(len(fixtures)) if i not in joined and i not in exempt]
+    without_enforce = [fixture_ids[i] for i in range(len(fixtures))
+                       if i not in enforce_joined and i not in exempt]
+    without_baseline = [fixture_ids[i] for i in range(len(fixtures))
+                        if i not in baseline_joined and i not in exempt]
+    exempt_ids = defaultdict(list)
+    for index in sorted(exempt):
+        exempt_ids[exempt[index]].append(fixture_ids[index])
     # The joined turns only: a stray turn that scores nothing does not split the evidence.
     scored_traces = {id(t): t for t in list(joined.values()) + list(enforce_joined.values())
                      + list(baseline_joined.values())}.values()
@@ -467,7 +583,14 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
                        if block["gate"] and block["gate"]["verdict"] == "FAIL"]
     confidence_mismatches = sum(1 for s in samples
                                 if s["enforceConfidence"] is not None and s["enforceConfidence"] != s["confidence"])
-    tool_changes = sum(1 for s in samples if s["toolsChanged"])
+    role_mismatches = sum(1 for s in samples if s["roleMismatch"])
+    tool_changes = sum(1 for s in samples if s["toolsChanged"] and not s["tagDrift"])
+    tag_drift_tool_changes = sum(1 for s in samples if s["toolsChanged"] and s["tagDrift"])
+    pairs = sum(1 for s in samples if s["enforceTurnId"] is not None)
+    # The tool criterion excuses a drifted pair; past the cap too little of it is left to compare.
+    too_much_drift = enforce_traces is not None and tag_drift_tool_changes > max_tag_drift * pairs
+    forbidden_scored = sum(1 for s in samples if s["forbiddenScored"])
+    forbidden_ignored = sum(1 for s in samples if s["forbiddenIgnored"])
     nondeterministic = sum(1 for s in samples if s["baselineDiff"])
     reasons = []
     if not samples or not overall["scored"]:
@@ -480,7 +603,7 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
         gate_verdict = "MIXED_GRAPH"
         reasons.append("graphHash " + ", ".join(f"{h}={n}" for h, n in sorted(graph_hashes.items())))
     elif (without_trace or (enforce_traces is not None and without_enforce)
-          or (baseline_traces is not None and without_baseline)):
+          or (baseline_traces is not None and without_baseline) or too_much_drift):
         gate_verdict = "INCOMPLETE"
         if without_trace:
             reasons.append(f"{len(without_trace)} fixture(s) without a shadow trace")
@@ -488,6 +611,10 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
             reasons.append(f"{len(without_enforce)} fixture(s) without an enforce trace")
         if baseline_traces is not None and without_baseline:
             reasons.append(f"{len(without_baseline)} fixture(s) without a baseline trace")
+        if too_much_drift:
+            reasons.append(f"tool selection changed under drifted tags in {tag_drift_tool_changes} of {pairs} pair(s), "
+                           f"over the {max_tag_drift:.0%} cap: too little of the tool criterion is left to compare "
+                           "(rerun with stable tags)")
     elif nondeterministic:
         gate_verdict = "NONDETERMINISTIC"
         reasons.append(f"{nondeterministic} fixture(s) resolved differently in the two shadow runs: a per-fixture "
@@ -495,16 +622,23 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
     elif enforce_traces is None:
         gate_verdict = "NO_ENFORCE_RUN"
         reasons.append("no --enforce-file: the simulated preview decides nothing")
-    elif confidence_mismatches:
+    elif confidence_mismatches or role_mismatches:
         gate_verdict = "INVALID_PAIR"
-        reasons.append(f"{confidence_mismatches} pair(s) resolved a different scope confidence in the enforce run: "
-                       "not a like-for-like comparison")
+        if confidence_mismatches:
+            reasons.append(f"{confidence_mismatches} pair(s) resolved a different scope confidence in the enforce "
+                           "run: not a like-for-like comparison")
+        if role_mismatches:
+            reasons.append(f"{role_mismatches} pair(s) were asked as another role in the enforce run (own actor "
+                           "against the actor proxy): not a like-for-like comparison")
     elif overall["gate"]["verdict"] == "FAIL" or failing_sets or failing_buckets or tool_changes:
         gate_verdict = "FAIL"
         if tool_changes:
             reasons.append(f"tool selection changed in {tool_changes} pair(s)")
     else:
         gate_verdict = "PASS"
+    if gate_verdict == "PASS" and forbidden_ignored and not forbidden_scored:
+        reasons.append(f"forbidden-document criterion not exercised: {forbidden_ignored} forbidden list(s) ignored on "
+                       "proxied samples, none scored")
 
     report = {
         "k": k,
@@ -517,17 +651,27 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
         "fixturesWithoutBaselineTrace": None if baseline_traces is None else len(without_baseline),
         "nondeterministicFixtures": None if baseline_traces is None else nondeterministic,
         "toolSelectionChanges": None if enforce_traces is None else tool_changes,
+        "tagDriftToolChanges": None if enforce_traces is None else tag_drift_tool_changes,
+        "maxTagDrift": max_tag_drift,
         "graphHashes": dict(sorted(graph_hashes.items())),
         "enforcedConsumers": dict(sorted(Counter(
             ",".join(sorted(str(c).upper() for c in t["scope"].get("enforced") or [])) for t in enforce).items())),
         "samples": len(samples),
         "fixtures": len(fixtures),
         "fixturesJoined": len(joined),
+        "actorProxy": actor_proxy,
+        "proxiedSamples": sum(1 for s in samples if s["proxied"]),
+        "forbiddenListsScored": forbidden_scored,
+        "forbiddenListsIgnored": forbidden_ignored,
+        # False when no sample's forbidden list was scored: section 9's forbidden criterion went untested.
+        "forbiddenCriterionExercised": forbidden_scored > 0,
         "fixturesWithoutTrace": len(without_trace),
+        "fixturesExempt": {reason: len(ids) for reason, ids in sorted(exempt_ids.items())},
         "fixturesEnforceJoined": len(enforce_joined),
         "fixturesWithoutEnforceTrace": None if enforce_traces is None else len(without_enforce),
         "scopeTruncatedSamples": sum(1 for s in samples if s["scopeTruncated"]),
         "confidenceMismatches": confidence_mismatches,
+        "roleMismatches": role_mismatches,
         "overall": overall,
         "bySet": sets,
         "byConfidence": confidences,
@@ -557,7 +701,7 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
         ]
         report["toolChangeList"] = [
             {"fixtureId": s["fixtureId"], "turnId": s["turnId"], "enforceTurnId": s["enforceTurnId"],
-             "changed": s["toolsChanged"]}
+             "changed": s["toolsChanged"], "tagDrift": s["tagDrift"]}
             for s in samples if s["toolsChanged"]
         ]
         if baseline_traces is not None:
@@ -581,6 +725,7 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
             or (s["enforce"] is not None and s["enforce"]["forbiddenHits"])
         ]
         report["fixturesWithoutTraceIds"] = without_trace
+        report["fixturesExemptIds"] = dict(sorted(exempt_ids.items()))
         if enforce_traces is not None:
             report["fixturesWithoutEnforceTraceIds"] = without_enforce
         report["actorMismatches"] = mismatches + enforce_mismatches + baseline_mismatches
@@ -786,6 +931,17 @@ def render_text(report):
     out = [f"Scope-graph rag gate (ADR-0069 section 9), k={k}",
            f"Shadow traces: {report['traces']}; joined samples: {report['samples']}; fixtures: {report['fixtures']} "
            f"(joined {report['fixturesJoined']}, without a trace {report['fixturesWithoutTrace']})"]
+    if report["actorProxy"] is not None:
+        out.append(f"Actor proxy {report['actorProxy']}: {report['proxiedSamples']} sample(s) joined through it "
+                   "(forbidden lists ignored; per-role visibility not tested)")
+    if report["forbiddenListsIgnored"]:
+        out.append(f"WARNING: {report['forbiddenListsIgnored']} forbidden list(s) ignored on proxied samples, "
+                   f"{report['forbiddenListsScored']} scored"
+                   + ("" if report["forbiddenCriterionExercised"]
+                      else ": the forbidden-document criterion was not exercised"))
+    if report["fixturesExempt"]:
+        out.append("Fixtures needing no trace: " + ", ".join(f"{why}={n} ({EXEMPT_REASONS[why]})"
+                                                              for why, n in report["fixturesExempt"].items()))
     if report["enforceTraces"] is None:
         out.append("Enforce traces: none given (--enforce-file)")
     else:
@@ -811,6 +967,9 @@ def render_text(report):
     if report["confidenceMismatches"]:
         out.append(f"WARNING: {report['confidenceMismatches']} pair(s) resolved a different scope confidence in the "
                    "enforce run (same graph, different tags?): not a like-for-like comparison")
+    if report["roleMismatches"]:
+        out.append(f"WARNING: {report['roleMismatches']} pair(s) were asked as another role in the enforce run "
+                   "(own actor against the actor proxy): not a like-for-like comparison")
     out.append("")
     out += render_block("overall", report["overall"], k)
     for name, block in report["bySet"].items():
@@ -838,14 +997,16 @@ def render_text(report):
     verbose_hint = "" if "regressionList" in report else " (--verbose lists them)"
     if report["enforceTraces"] is not None:
         out.append(f"Fixtures the enforce run regressed: {report['regressedFixtures']} (expected document lost in "
-                   f"{report['losses']}){verbose_hint}; tool selection changed in {report['toolSelectionChanges']} pair(s)")
+                   f"{report['losses']}){verbose_hint}; tool selection changed in {report['toolSelectionChanges']} pair(s)"
+                   f" (plus {report['tagDriftToolChanges']} under drifted tags, not counted; cap "
+                   f"{report['maxTagDrift']:.0%} of pairs)")
     for entry in report.get("lossList", []):
         out.append(f"    regressed {entry['fixtureId']} turn={entry['turnId']} enforceTurn={entry['enforceTurnId']} "
                    f"confidence={entry['confidence']} lost={entry['lost']} mrr={entry['mrr'][0]}->{entry['mrr'][1]} "
                    f"today={entry['today']} enforce={entry['enforce']}")
     for entry in report.get("toolChangeList", []):
         out.append(f"    tools changed {entry['fixtureId']} turn={entry['turnId']} enforceTurn={entry['enforceTurnId']} "
-                   f"changed={entry['changed']}")
+                   f"changed={entry['changed']}" + (f" tagDrift={entry['tagDrift']}" if entry["tagDrift"] else ""))
     for entry in report.get("nondeterministicList", []):
         out.append(f"    nondeterministic {entry['fixtureId']} turn={entry['turnId']} differs={entry['differs']}")
     out.append(f"Expected document dropped by the simulated filter in {report['regressions']} sample(s){verbose_hint}")
@@ -857,6 +1018,8 @@ def render_text(report):
                    f"simulated={entry['simulated']} enforce={entry['enforce']} new={entry['new']}")
     if report.get("fixturesWithoutTraceIds"):
         out.append("    no shadow trace for: " + ", ".join(str(f) for f in report["fixturesWithoutTraceIds"]))
+    for why, ids in (report.get("fixturesExemptIds") or {}).items():
+        out.append(f"    exempt ({why}): " + ", ".join(str(f) for f in ids))
     if report.get("fixturesWithoutEnforceTraceIds"):
         out.append("    no enforce trace for: " + ", ".join(str(f) for f in report["fixturesWithoutEnforceTraceIds"]))
     if report.get("fixturesWithoutBaselineTraceIds"):
@@ -938,6 +1101,12 @@ def main(argv=None):
     parser.add_argument("--preload", metavar="PATH",
                         help="application.yml whose mcp.rag.preload.docs[].entities give the static document count "
                              "per entity")
+    parser.add_argument("--actor-proxy", metavar="ROLE",
+                        help="trace role (e.g. ROLE_SYSTEM_ADMINISTRATOR) whose turns stand in for fixtures of any "
+                             "actor that expect a document; their forbidden lists are ignored")
+    parser.add_argument("--max-tag-drift", type=float, default=DEFAULT_MAX_TAG_DRIFT, metavar="FRACTION",
+                        help="largest share of pairs whose tool change tagDrift may excuse; above it the verdict is "
+                             f"INCOMPLETE (default {DEFAULT_MAX_TAG_DRIFT})")
     parser.add_argument("--verbose", action="store_true",
                         help="list the regressed fixtures, tool-selection changes, nondeterministic turns, dropped "
                              "expected documents, forbidden hits, unmatched fixtures, actor-mismatched turns and the "
@@ -964,7 +1133,7 @@ def main(argv=None):
             preload_docs = read_preload_docs(handle.read())
 
     report = build_report(traces, fixtures, args.k, args.verbose, lexicon_entities, preload_docs, enforce_traces,
-                          baseline_traces)
+                          baseline_traces, args.actor_proxy, args.max_tag_drift)
     print(json.dumps(report, indent=2) if args.json else render_text(report))
     return 0 if report["gate"]["verdict"] == "PASS" else 1
 

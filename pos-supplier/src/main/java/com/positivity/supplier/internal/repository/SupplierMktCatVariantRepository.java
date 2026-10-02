@@ -6,6 +6,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Limit;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -42,4 +43,16 @@ public interface SupplierMktCatVariantRepository extends JpaRepository<SupplierM
     @NonNull
     List<SupplierMktCatVariantEntity> findByVendorProfileIdAndHasUnresolvedImagesOrderByLastSeenAtDesc(
             @NonNull UUID vendorProfileId, boolean hasUnresolvedImages, @NonNull Limit limit);
+
+    /**
+     * One vendor's staged variants a page at a time, in a stable order, for a re-publication
+     * (#2356).
+     *
+     * <p>Ordered by the row's own id rather than by a timestamp: the re-emit walks every page inside
+     * one transaction, and an order that could shift between two pages would skip a variant — the
+     * one outcome a recovery must not have.
+     */
+    @NonNull
+    List<SupplierMktCatVariantEntity> findByVendorProfileIdOrderBySupplierMktCatVariantIdAsc(
+            @NonNull UUID vendorProfileId, @NonNull Pageable pageable);
 }

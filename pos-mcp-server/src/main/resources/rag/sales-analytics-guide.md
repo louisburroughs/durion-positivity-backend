@@ -88,15 +88,13 @@ markup.
 ## Margin and profit: what the platform computes
 
 - **Net income** on the income statement: `totalRevenue` minus `totalExpenses`. Each statement line is the posted
-  balance of the GL accounts mapped to it, combined by the mapping's operation (`SUM`, `SUBTRACT` or `NEGATE`).
-  `totalRevenue` adds the lines whose code the service classes as revenue (codes beginning `REVENUE_` or
-  `PL_REVENUE_`, or containing `INCOME`); `totalExpenses` adds those it classes as expense (codes beginning
-  `EXPENSE_`, `PL_EXPENSE_` or `PL_EXPENSES_`, or containing `COST`). The figures therefore depend on how the
-  tenant's statement-line mapping is set up, and the shipped seed maps only account 4000 Service Revenue. If
-  `totalRevenue` is zero while a revenue line in `lineItems` carries an amount, or a revenue line is negative,
-  report the line as it is, say the statement totals are not configured for it, and do not present `netIncome` as
-  profit. The seeded revenue line's code and sign are tracked as a defect in
-  louisburroughs/durion-positivity-backend#2394.
+  balance of the GL accounts mapped to it, each on its normal side (revenue as credits less debits, so posted
+  revenue is a positive amount; expenses as debits less credits) and combined by the mapping's operation (`SUM`,
+  `SUBTRACT` or `NEGATE`). `totalRevenue` adds every mapped account of type REVENUE and `totalExpenses` every
+  mapped account of type EXPENSE, whatever the statement line is called. Only mapped accounts count, so the figures
+  depend on how the tenant's statement-line mapping is set up, and the shipped seed maps only account 4000 Service
+  Revenue: until expense accounts are mapped, `totalExpenses` is zero and `netIncome` equals revenue. When
+  `totalExpenses` is zero, present the figure as revenue with no expenses mapped to the statement, not as profit.
 - **Gross margin is not computed.** The income statement has no gross-profit or cost-of-goods-sold field, and no
   platform flow posts the cost of parts sold when an invoice is finalized: the only automated posting to 5000 Cost of
   Goods Sold is the inventory cost revaluation. Parts cost lives in pos-inventory, and a customer-margin report is a

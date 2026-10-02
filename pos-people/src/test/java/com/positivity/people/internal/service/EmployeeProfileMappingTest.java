@@ -12,6 +12,7 @@ import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
+import com.positivity.people.internal.repository.EmployeeOffboardingRetryRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.repository.JobRoleRepository;
@@ -75,6 +76,9 @@ class EmployeeProfileMappingTest {
     @Mock
     private ApplicationEventPublisher applicationEventPublisher;
 
+    @Mock
+    private EmployeeOffboardingRetryRepository employeeOffboardingRetryRepository;
+
     private EmployeeServiceImpl service() {
         return new EmployeeServiceImpl(
                 TEST_CLOCK,
@@ -87,7 +91,8 @@ class EmployeeProfileMappingTest {
                 employeeLocationAssignmentRepository,
                 locationReferenceService,
                 employeeActionPolicy,
-                applicationEventPublisher);
+                applicationEventPublisher,
+                employeeOffboardingRetryRepository);
     }
 
     private ExtPersonReplica person() {

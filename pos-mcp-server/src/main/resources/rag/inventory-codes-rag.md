@@ -9,10 +9,11 @@ required_permissions:
 
 RAG id: inventory.codes
 RAG scope: inventory
-Required permissions: inventory:purchase_order:view
+Required permissions: order:purchase_order:view
 Audience: internal staff.
 
 Token catalog for inventory-domain lexical retrieval. This document is intentionally dense.
+Purchase orders are owned by pos-order; their tokens are listed under "Purchase Order Tokens (pos-order)".
 
 ## Enum Tokens
 
@@ -87,9 +88,6 @@ MovementType:
 
 ## Wave 3 Permission Tokens
 
-- inventory:purchase_order:create
-- inventory:purchase_order:view
-- inventory:purchase_order:approve
 - inventory:purchase_order:receive
 - inventory:receiving:create
 - inventory:receiving:view
@@ -109,12 +107,6 @@ MovementType:
 
 ## Wave 3 Event Tokens
 
-- INVENTORY_PURCHASE_ORDER_CREATE
-- INVENTORY_PURCHASE_ORDER_GET
-- INVENTORY_PURCHASE_ORDER_LIST
-- INVENTORY_PURCHASE_ORDER_APPROVE
-- INVENTORY_PURCHASE_ORDER_REVISE
-- INVENTORY_PURCHASE_ORDER_CANCEL
 - INVENTORY_PURCHASE_ORDER_RECEIVE
 - INVENTORY_RECEIVING_SESSION_CREATE
 - INVENTORY_RECEIVING_SESSION_GET
@@ -130,6 +122,34 @@ MovementType:
 - INVENTORY_ADJUSTMENT_REQUEST_CREATE
 - INVENTORY_ADJUSTMENT_REQUEST_APPROVE
 
+## Purchase Order Tokens (pos-order)
+
+Purchase orders are owned by pos-order. Base path: /v1/orders/purchase-orders
+
+Permission tokens:
+
+- order:purchase_order:view
+- order:purchase_order:create
+- order:purchase_order:approve
+- order:purchase_order:transmit
+- order:purchase_order:availability_view
+
+Event tokens:
+
+- ORDER_PURCHASE_ORDER_CREATE
+- ORDER_PURCHASE_ORDER_GET
+- ORDER_PURCHASE_ORDER_LIST
+- ORDER_PURCHASE_ORDER_SUMMARY
+- ORDER_PURCHASE_ORDER_APPROVE
+- ORDER_PURCHASE_ORDER_REVISE
+- ORDER_PURCHASE_ORDER_CANCEL
+- ORDER_PURCHASE_ORDER_TRANSMIT
+- ORDER_PURCHASE_ORDER_AVAILABILITY
+- ORDER_PURCHASE_ORDER_TRANSMISSION_EVENTS
+
+In pos-inventory, inventory:purchase_order:receive is still declared in permissions.yaml (marked deprecated) and
+INVENTORY_PURCHASE_ORDER_RECEIVE is still registered in EventTypes; no pos-inventory controller uses either.
+
 ## Split Source-of-Truth Note
 
 - Runtime permission registration uses permissions.yaml via PermissionInitializer.
@@ -140,3 +160,4 @@ MovementType:
 - _Verified: pos-inventory enums listed in internal/enums._
 - _Verified: pos-inventory Wave 3 permission tokens from permissions.yaml and controller PreAuthorize checks._
 - _Verified: pos-inventory Wave 3 event ids from controller EmitEvent and EventTypes registrations._
+- _Verified: pos-order purchase-order permission tokens from permissions.yaml and PurchaseOrderController PreAuthorize checks, and event ids from its EmitEvent annotations and EventTypes registrations._
