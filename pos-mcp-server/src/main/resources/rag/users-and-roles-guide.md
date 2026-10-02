@@ -31,8 +31,10 @@ request as high risk (ADR-0068), confirms the exact account, role and scope befo
 
 A user account "allows a user to authenticate to a system and potentially to receive authorization to access
 resources" (see Sources [1]). It is not an HR record: a customer who registers online has an account and no employee record, and a technician who never signs
-in has an employee record and no account. One account is linked to one person, and a person may have only one active
-account at a time. Employee records are covered by the employee guide (`people.employees`).
+in has an employee record and no account. A username is linked to at most one person, but a person may have more
+than one linked account: the link store enforces only that each username is unique, and looking up a person's links
+returns a list. Only self-registration refuses a person who already has an active account. Employee records are
+covered by the employee guide (`people.employees`).
 
 ---
 
@@ -45,15 +47,21 @@ To create a user account for a member of staff (say, Ana):
    username already in use is refused (409). Each role becomes an open-ended role assignment.
 2. **Link it to Ana's person record** so her activity is attributed to her. Either request the link on the account
    (`security:user:edit`; it lands asynchronously, answer 202) or write the user–person link in `pos-people-contact`
-   (`people-contact:userLink:write`). A user cannot be linked to two people (409).
+   (`people-contact:userLink:write`). A username already linked to a different person is refused (409); linking a
+second username to the same person is allowed, so check Ana's existing links first if she should have only one.
 3. **If Ana works at a location**, make sure she has an `ACTIVE` employee record and a staffing assignment there
    (`people:employee:edit`). A location-scoped role reaches only the locations she is assigned to; without an
    assignment it reaches none.
 
 Other ways an account comes to exist:
 
-- **Self-registration** creates a customer account with the `SELF_SERVICE_CUSTOMER` role only, after checking that no
-  account or matching person already exists; ambiguous matches open a review case for an administrator.
+- **Self-registration** creates a customer account with the `SELF_SERVICE_CUSTOMER` role only. It is refused when an
+  active account already holds the requested (or email-derived) username (`USER_ALREADY_EXISTS`), or when the matched
+  person already has an active linked account (`PERSON_ALREADY_HAS_ACTIVE_USER`). An inactive account in either place
+  opens an account-recovery review case (`ACCOUNT_RECOVERY_REQUIRED`), and CRM signals that need a human look open an
+  identity review case (`CRM_PERSON_CONFLICT`); both answers carry the case id. A matching person with no active account
+  is reused; otherwise a new person is created. The link lands asynchronously (`linkStatus: PENDING`) and no token is
+  issued, so the customer signs in separately.
 - **Bulk loading** creates accounts that share a starter password; each holder exchanges it for their own password
   before their first sign-in.
 - **A new business's first administrator** is created by tenant provisioning on the `ADMIN` role, awaiting activation;
@@ -67,8 +75,12 @@ Other ways an account comes to exist:
   unknown or inactive business answers exactly like a wrong password.
 - **Tokens.** A successful sign-in returns an access token (one hour by default) and a refresh token (seven days by
   default). Both lifetimes are deployment settings.
-- **Lockout.** By default, five failed attempts within ten minutes lock the account; each further lockout doubles the
-  wait, up to thirty minutes. An administrator can unlock it at once.
+- **Lockout.** Each wrong password on an existing account adds one to a failure counter, which only a successful
+  sign-in, an unlock or the end of a lock resets (unknown usernames are not counted). When the counter reaches five
+  (default) and the previous failure was less than ten minutes earlier, the account locks for the ten-minute window
+  times the backoff multiplier (2), capped at thirty minutes: twenty minutes with the defaults. While it is locked,
+  sign-in answers `ACCOUNT_LOCKED` without checking the password. The lock lifts on its own: the first attempt after it
+  expires clears it and resets the counter. An administrator can unlock it sooner.
 - **Refusals.** `INVALID_CREDENTIALS`, `ACCOUNT_LOCKED`, `ACCOUNT_DISABLED`, `ACCOUNT_EXPIRED` and
   `CREDENTIALS_EXPIRED` (401) name the reason; valid credentials on an account with no role at all get 403
   `USER_HAS_NO_ROLES`.
@@ -192,6 +204,10 @@ Platform sources:
   `PermissionController.java`
 - `pos-security-service/src/main/java/com/positivity/securityservice/internal/enums/LocationScope.java`;
   `pos-security-service/src/main/resources/application.yml` (lockout and token lifetimes)
+- `pos-security-service/src/main/java/com/positivity/securityservice/internal/service/LockoutServiceImpl.java`,
+  `AuthenticationServiceImpl.java`, `SelfRegistrationServiceImpl.java`; `internal/config/LockoutPolicy.java`
+- `pos-people-contact/src/main/java/com/positivity/peoplecontact/internal/entity/UserPersonLink.java` (unique
+  username only); `pos-people-contact/src/test/java/com/positivity/peoplecontact/internal/service/UserPersonLinkServiceTest.java`
 - `pos-security-service/src/main/resources/permissions.yaml`;
   `pos-security-service/src/main/resources/db/migration/R__seed_role_permissions.sql`,
   `R__seed_tenant_template.sql` (the role template)

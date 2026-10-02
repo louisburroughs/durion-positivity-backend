@@ -169,7 +169,7 @@ mcp:
           rag-scope: "shopmanager"
           entities: [location]
           # #2385: stores, hours, bays, mobile units, technicians at a location, location-scoped permissions.
-          required-permissions: ["location:bay:read", "shop:schedule:view", "shop:technician:view"]
+          required-permissions: ["location:read", "location:bay:read", "shop:schedule:view", "shop:technician:view"]
         - id: "security.guide"
           source-path: "classpath:rag/security-service-guide.md"
           rag-scope: "master"

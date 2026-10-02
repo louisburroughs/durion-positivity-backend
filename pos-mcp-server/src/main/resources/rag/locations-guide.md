@@ -4,7 +4,7 @@
 
 RAG id: `shop.locations`  
 RAG scope: `shopmanager`  
-Required permissions: `location:bay:read`, `shop:schedule:view`, `shop:technician:view`  
+Required permissions: `location:read`, `location:bay:read`, `shop:schedule:view`, `shop:technician:view`  
 Audience: store managers, service advisors, dispatchers and administrators.  
 This document is reference context only and grants no access; access is enforced by permission codes at request time.
 

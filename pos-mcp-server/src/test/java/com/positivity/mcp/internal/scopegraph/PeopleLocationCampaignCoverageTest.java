@@ -40,7 +40,7 @@ class PeopleLocationCampaignCoverageTest {
                     "shop.locations",
                     "locations-guide.md",
                     "shopmanager",
-                    List.of("location:bay:read", "shop:schedule:view", "shop:technician:view"),
+                    List.of("location:read", "location:bay:read", "shop:schedule:view", "shop:technician:view"),
                     List.of("location")),
             new Expected(
                     "people.employees",
@@ -72,6 +72,23 @@ class PeopleLocationCampaignCoverageTest {
 
     private static Set<String> seededEntities(String message) {
         return LEXICON_MATCHER.match(message).stream().map(Seed::entity).collect(Collectors.toSet());
+    }
+
+    @ParameterizedTest(name = "profile {0}")
+    @ValueSource(strings = {"default", "alpha"})
+    @DisplayName("a caller holding only location:read, the store-record and hours read, sees the locations guide")
+    void locationReadAloneSeesTheLocationsGuide(String profile) {
+        StaticDocEntry doc = ScopeGraphRealConfigValidationTest.ragDocs(profile).stream()
+                .filter(entry -> entry.id().equals("shop.locations"))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(ScopeCallerFilter.ragDocumentVisible(
+                        doc.requiredPermissions(), Set.of("location:read", "AUTHENTICATED")))
+                .isTrue();
+        assertThat(ScopeCallerFilter.ragDocumentVisible(
+                        doc.requiredPermissions(), Set.of("crm:party:view", "AUTHENTICATED")))
+                .isFalse();
     }
 
     @ParameterizedTest(name = "profile {0}")
