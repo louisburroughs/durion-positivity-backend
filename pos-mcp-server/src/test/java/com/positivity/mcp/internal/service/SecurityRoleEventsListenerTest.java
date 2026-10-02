@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.CannotCreateTransactionException;
 
@@ -123,12 +124,12 @@ class SecurityRoleEventsListenerTest {
     @Test
     @DisplayName("a persona transaction that cannot open propagates so the container retries (#2355)")
     void transactionFailureWhileApplyingPropagates() {
-        // SystemPromptWriter is fail-soft about the row itself, so what reaches the listener from
-        // the database is the REQUIRES_NEW proxy failing to open or commit its transaction.
+        // Not a DataAccessException at all: the writer's REQUIRES_NEW proxy could not open its
+        // transaction, so the failure never came from the repository.
         RolePersonaRefresher refresher = Mockito.mock(RolePersonaRefresher.class);
         Mockito.doThrow(new CannotCreateTransactionException("could not open JPA EntityManager"))
                 .when(refresher)
-                .applyPersona(Mockito.any());
+                .applyPersonaOrThrow(Mockito.any());
         SecurityRoleEventsListener failing = new SecurityRoleEventsListener(new ObjectMapper(), refresher);
 
         assertThatThrownBy(() -> failing.onSecurityEvent(PERSONA_EVENT))
@@ -141,9 +142,49 @@ class SecurityRoleEventsListenerTest {
         RolePersonaRefresher refresher = Mockito.mock(RolePersonaRefresher.class);
         Mockito.doThrow(new DataIntegrityViolationException("duplicate key"))
                 .when(refresher)
-                .applyPersona(Mockito.any());
+                .applyPersonaOrThrow(Mockito.any());
         SecurityRoleEventsListener failing = new SecurityRoleEventsListener(new ObjectMapper(), refresher);
 
         assertThatCode(() -> failing.onSecurityEvent(PERSONA_EVENT)).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("a lost connection on the row lookup inside the writer propagates so the container retries (#2355)")
+    void lostConnectionOnLookupInsideTheWriterPropagates() {
+        Mockito.when(repository.findByName(Mockito.anyString()))
+                .thenThrow(new DataAccessResourceFailureException("connection reset"));
+
+        assertThatThrownBy(() -> listener.onSecurityEvent(PERSONA_EVENT))
+                .isInstanceOf(DataAccessResourceFailureException.class);
+    }
+
+    @Test
+    @DisplayName("a lost connection on the row write inside the writer propagates so the container retries (#2355)")
+    void lostConnectionOnWriteInsideTheWriterPropagates() {
+        Mockito.when(repository.saveAndFlush(Mockito.any(SystemPrompt.class)))
+                .thenThrow(new DataAccessResourceFailureException("connection reset"));
+
+        assertThatThrownBy(() -> listener.onSecurityEvent(PERSONA_EVENT))
+                .isInstanceOf(DataAccessResourceFailureException.class);
+    }
+
+    @Test
+    @DisplayName("a lost connection while removing an ineligible role's row propagates too (#2355)")
+    void lostConnectionOnRemoveInsideTheWriterPropagates() {
+        Mockito.when(repository.findByName(Mockito.anyString()))
+                .thenThrow(new DataAccessResourceFailureException("connection reset"));
+
+        assertThatThrownBy(() -> listener.onSecurityEvent(
+                        PERSONA_EVENT.replace("\"mcpPersonaEligible\":true", "\"mcpPersonaEligible\":false")))
+                .isInstanceOf(DataAccessResourceFailureException.class);
+    }
+
+    @Test
+    @DisplayName("a permanent database rejection inside the writer is still logged and the event dropped")
+    void permanentRejectionInsideTheWriterIsStillDropped() {
+        Mockito.when(repository.saveAndFlush(Mockito.any(SystemPrompt.class)))
+                .thenThrow(new DataIntegrityViolationException("duplicate key"));
+
+        assertThatCode(() -> listener.onSecurityEvent(PERSONA_EVENT)).doesNotThrowAnyException();
     }
 }

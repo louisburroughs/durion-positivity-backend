@@ -66,19 +66,19 @@ public class SecurityRoleEventsListener {
         try {
             RolePersonaChangedV1 payload =
                     objectMapper.treeToValue(envelope.path("payload"), RolePersonaChangedV1.class);
-            personaRefresher.applyPersona(toPersona(payload));
+            personaRefresher.applyPersonaOrThrow(toPersona(payload));
             LOGGER.info(
                     "MCP role persona applied from event role={} eligible={}",
                     payload.name(),
                     payload.mcpPersonaEligible());
         } catch (Exception exception) {
             if (exception instanceof RuntimeException failure && RetryableConsumerFailures.isRetryable(failure)) {
-                // Applying a persona opens a REQUIRES_NEW transaction for the system-prompt row.
-                // One that cannot open or commit is not a malformed event: the container retries
-                // with backoff, then publishes to {topic}.dlq (ADR-0044 §4, #2355). The write is
-                // idempotent, so redelivery is safe. SystemPromptWriter stays fail-soft about the
-                // row itself, as its request-path callers need. The only checked exception here
-                // is Jackson 2's parse failure, which is permanent.
+                // The event path writes the system-prompt row through the writer's strict variants,
+                // so a lost connection or a transaction that could not open or commit arrives here
+                // as itself. That is not a malformed event: the container retries with backoff,
+                // then publishes to {topic}.dlq (ADR-0044 §4, #2355). The write is idempotent, so
+                // redelivery is safe. The only checked exception here is Jackson 2's parse
+                // failure, which is permanent.
                 throw failure;
             }
             LOGGER.warn("Skipping malformed role persona event: {}", exception.getMessage(), exception);

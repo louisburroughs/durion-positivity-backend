@@ -5,6 +5,8 @@ import com.positivity.mcp.internal.domain.RolePersona;
 import com.positivity.mcp.internal.domain.RolePersonaRenderer;
 import com.positivity.mcp.internal.domain.RolePersonaSnapshot;
 import java.util.Optional;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,9 +30,10 @@ import org.springframework.stereotype.Component;
  *       rows are why a sync outage is survivable: the last good personas keep serving.
  * </ul>
  *
- * <p>Fail-soft throughout. A failed fetch leaves the previous snapshot and the persisted rows
- * untouched; the gauges on {@link RolePersonaSnapshotHolder} are what make that visible rather than
- * silent.
+ * <p>Fail-soft throughout, with one exception. A failed fetch leaves the previous snapshot and the
+ * persisted rows untouched; the gauges on {@link RolePersonaSnapshotHolder} are what make that
+ * visible rather than silent. The exception is {@link #applyPersonaOrThrow}, the Kafka listener's
+ * entry point, where a row that could not be written has to reach the container to be retried.
  */
 @Component
 public class RolePersonaRefresher {
@@ -101,12 +104,35 @@ public class RolePersonaRefresher {
     /**
      * Merges one role's persona into the held snapshot and persists its row.
      *
-     * <p>Shared by the on-miss fetch and the event listener. An event carries the role's current
-     * state rather than a delta, so it can be applied without re-reading upstream — and applying the
-     * same event twice is the same as applying it once, which is what makes retries and redeliveries
-     * safe without a processed-event table.
+     * <p>The on-miss fetch's entry point; the event listener applies the same merge through
+     * {@link #applyPersonaOrThrow}. An event carries the role's current state rather than a delta,
+     * so it can be applied without re-reading upstream — and applying the same event twice is the
+     * same as applying it once, which is what makes retries and redeliveries safe without a
+     * processed-event table.
      */
     public void applyPersona(@NonNull RolePersona persona) {
+        apply(persona, systemPromptWriter::upsert, systemPromptWriter::remove);
+    }
+
+    /**
+     * {@link #applyPersona} for the Kafka listener: a failure to write or remove the row propagates
+     * instead of being logged inside the writer.
+     *
+     * <p>The on-miss fetch is request-path work and stays fail-soft: the request is served from the
+     * snapshot it just merged, and the next miss repairs the row. An event has no next miss. If the
+     * listener returned normally over a lost connection, the offset would commit and the row would
+     * stay stale, so this path lets the failure out and the listener classifies it (ADR-0044 §4,
+     * #2355). The snapshot merge happens first either way; merging the same persona again on
+     * redelivery changes nothing.
+     */
+    public void applyPersonaOrThrow(@NonNull RolePersona persona) {
+        apply(persona, systemPromptWriter::upsertOrThrow, systemPromptWriter::removeOrThrow);
+    }
+
+    private void apply(
+            @NonNull RolePersona persona,
+            @NonNull BiConsumer<String, String> upsertRow,
+            @NonNull Consumer<String> removeRow) {
         String authority = RoleAuthorities.toAuthority(persona.name());
         if (SystemPromptDefaults.ROLE_USER_PROMPT_NAME.equals(authority)) {
             // A role literally named USER normalizes to ROLE_USER, the key of the built-in fallback
@@ -120,12 +146,12 @@ public class RolePersonaRefresher {
         }
         snapshotHolder.merge(persona);
         if (persona.mcpPersonaEligible()) {
-            systemPromptWriter.upsert(authority, RolePersonaRenderer.render(persona));
+            upsertRow.accept(authority, RolePersonaRenderer.render(persona));
         } else {
             // A role can go eligible -> ineligible through PUT /v1/roles/{id}. Leaving the row behind
             // would keep serving the persona it is no longer supposed to have, and no later sync
             // would ever remove it.
-            systemPromptWriter.remove(authority);
+            removeRow.accept(authority);
         }
     }
 
