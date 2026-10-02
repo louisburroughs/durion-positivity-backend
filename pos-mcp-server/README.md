@@ -188,7 +188,7 @@ finding; it reads the `openapi.yaml` files of the sibling modules, so run it fro
 1. Put the file under `src/main/resources/rag/` with a header that matches the entry (or none).
 2. Add the entry to **both** `application.yml` and `application-alpha.yml`: `id`, `source-path`, `rag-scope`, `required-permissions`, `entities`.
 3. Use entity keys from `entities.yaml`, or `[none]` only for a platform-wide document; list what the document substantively explains, not everything it mentions.
-4. A new `rag-scope` spelled differently from a tool domain needs a `domain_scopes` line in `entities.yaml`.
+4. A new `rag-scope` spelled differently from a tool domain needs a `domain_scopes` line in `entities.yaml`. So does a tool domain whose documents live in an existing scope instead of a new one. Example: the `pos-invoice` guide (`accounting.invoicing-payments`) is in the `accounting` scope, so `invoice: accounting` lets an acting `domain` of `accounting` also seed the `invoice` Domain node, with no new `domain` option.
 5. Run the module tests: the parity, header-agreement and real-config tests cover the rest.
 
 ### Per-turn resolution and shadow recording

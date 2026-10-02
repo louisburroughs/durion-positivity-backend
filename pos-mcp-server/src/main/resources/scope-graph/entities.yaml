@@ -58,6 +58,8 @@ domain_scopes:
   price: pricing
   people: hr
   security-service: security
+  # #2382: pos-invoice's documents (accounting.invoicing-payments) live in the accounting scope.
+  invoice: accounting
 
 domains:
   accounting: "General ledger, journal entries, chart of accounts, financial statements, revenue, margin and profit figures, customer invoices and payments, credit memos, receivables and payables, vendor bills, bank reconciliation."

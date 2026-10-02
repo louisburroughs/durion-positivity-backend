@@ -273,6 +273,15 @@ mcp:
           # direct JE endpoints; reporting:view:financial-statements covers facade callers, whose JE
           # surface was reshaped to the general-ledger report (#1519 Wave 4, V37).
           required-permissions: ["accounting:je:view", "reporting:view:financial-statements"]
+        - id: "accounting.invoicing-payments"
+          source-path: "classpath:rag/invoicing-payments-guide.md"
+          rag-scope: "accounting"
+          entities: [invoice, payment]
+          # #2382: the invoice and payment entities' own document. rag-scope accounting, whose
+          # domains: description in entities.yaml already names customer invoices, payments and
+          # receivables, so the ADR-0068 domain options stay unchanged. invoice:invoice:view is the
+          # pos-invoice read audience; accounting:payment:apply covers staff who apply payments.
+          required-permissions: ["invoice:invoice:view", "accounting:payment:apply"]
         - id: "inventory.inv-cntrl"
           source-path: "classpath:rag/inv-cntrl-rag.md"
           rag-scope: "inventory"
