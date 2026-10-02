@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.positivity.mcp.internal.classification.SimpleChatRuleDefaults;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class SimpleChatClassifierTest {
 
@@ -90,5 +92,30 @@ class SimpleChatClassifierTest {
         assertThat(classifier.isSimpleChat("rank customers by revenue")).isFalse();
         assertThat(classifier.isSimpleChat("outstanding balance for Harbor Tool"))
                 .isFalse();
+    }
+
+    // #2371 review: these questions are vetoed off the admin fast path, which only helps if they reach
+    // tool selection at all. Before the bank / supplier / vendor / ledger keywords they were simple
+    // chat (no question mark, no business keyword) and took the no-tool T0 path.
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "who has access to the bank account",
+                "who has access to the receivables ledger",
+                "who has access to the supplier account",
+                "who can see the vendor account",
+                "qui a accès au compte bancaire",
+                "qui a accès au compte de la banque",
+                "qui a accès au compte du fournisseur",
+                "quién tiene acceso a la cuenta bancaria",
+                "quién tiene acceso al banco",
+                "quién tiene acceso a la cuenta del proveedor",
+                "quién tiene acceso a las cuentas por cobrar",
+                "quién puede ver las cuentas por pagar",
+                "qui a accès aux comptes recevables"
+            })
+    @DisplayName("bank, supplier, vendor and ledger vocabulary keeps a short question on the agent path")
+    void isSimpleChat_withAccountHolderVocabulary_returnsFalse(String message) {
+        assertThat(classifier.isSimpleChat(message)).isFalse();
     }
 }

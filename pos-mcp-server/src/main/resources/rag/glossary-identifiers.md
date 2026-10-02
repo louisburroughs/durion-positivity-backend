@@ -94,6 +94,50 @@ A pick list identifies inventory items that need to be pulled from stock to fulf
 
 A goods receipt records received inventory. It is used when goods arrive from a supplier or purchase order and should update stock state audibly and consistently with accounting.
 
+## Vendor bill number and credit memo reference
+
+A **vendor bill number** (`pos-accounting`, accounts payable) depends on how the bill arrived. A bill created from a goods receipt gets `BILL_<first 8 characters of the vendor UUID, upper case>_<yyyyMMdd, the day the bill is recorded>_<7-digit sequence>` (e.g. `BILL_A1B2C3D4_20260211_0001234`); when a vendor invoice matches it as the single candidate and passes the line checks, the vendor's own invoice reference replaces that number. A bill recorded from a supplier's electronic invoice carries the vendor's invoice number from the start. Bills are addressed by UUID `vendorBillId` in the API.
+
+A **credit memo reference** (`pos-accounting`, accounts receivable) is `CM-<yyyyMM>-<sequence>`, the month taken from the memo's creation time in UTC and the sequence counted per month without padding (e.g. `CM-202610-7`). It is a display value; the API addresses the memo by UUID `creditMemoId`.
+
+_Verified: `pos-accounting` `VendorBillServiceImpl.generateBillNumber()` (`"BILL_%s_%s_%07d"`) and `handleVendorInvoiceReceivedEvent` (`setBillNumber(invoiceReference)`); `SupplierInvoiceEventsListener` (`setBillNumber(vendorInvoiceNumber)`); `CreditMemoServiceImpl.assignCreditMemoReference()` (`CM-` + `%04d%02d` + `-` + sequence)._
+
 ## Idempotency key
 
 An idempotency key prevents duplicate creation for repeated submissions. The existing shop guide states appointment creation supports an `Idempotency-Key` header so submitting the same key twice returns the original result rather than creating a duplicate.
+
+## Sources
+
+Each entry's `_Verified:` line names the code its format was checked against. The files behind those lines and the
+shop guide the entries quote, by entry (repository-relative):
+
+- Workorder number: `pos-workorder/src/main/java/com/positivity/workorder/internal/entity/Workorder.java`,
+  `pos-workorder/src/main/java/com/positivity/workorder/internal/entity/Estimate.java`,
+  `pos-workorder/src/main/java/com/positivity/workorder/internal/service/WorkorderServiceImpl.java`,
+  `pos-workorder/src/main/java/com/positivity/workorder/internal/service/EstimateServiceImpl.java`
+- SKU: `pos-catalog/src/main/java/com/positivity/catalog/internal/entity/ProductEntity.java`,
+  `pos-catalog/src/main/java/com/positivity/catalog/internal/dto/ProductCreateRequestDto.java`,
+  `pos-catalog/src/main/java/com/positivity/catalog/internal/service/ProductMasterDataServiceImpl.java`
+- VIN: `pos-vehicle-inventory/src/main/java/com/positivity/vehicle/internal/util/VinUtils.java`,
+  `pos-vehicle-inventory/src/main/java/com/positivity/vehicle/internal/entity/VehicleRecord.java`
+- Invoice number: `pos-invoice/src/main/java/com/positivity/invoice/internal/service/InvoiceServiceImpl.java`,
+  `pos-invoice/src/main/java/com/positivity/invoice/internal/controller/InvoiceController.java`
+- PO and goods-receipt numbers: `pos-order/src/main/java/com/positivity/order/internal/service/PurchaseOrderServiceImpl.java`
+  (`generatePoNumber()`),
+  `pos-inventory/src/main/java/com/positivity/inventory/internal/receiving/service/AsnServiceImpl.java`
+- Account code: `pos-accounting/src/main/java/com/positivity/accounting/internal/dto/GLAccountCreateRequest.java`,
+  `pos-accounting/src/main/java/com/positivity/accounting/internal/entity/GLAccount.java`,
+  `pos-accounting/src/main/java/com/positivity/accounting/internal/entity/JournalEntry.java`,
+  `pos-customer/src/main/java/com/positivity/customer/internal/entity/AbstractParty.java`
+- Claim code: `pos-warranty/src/main/java/com/positivity/warranty/internal/service/ClaimCodeServiceImpl.java`,
+  `pos-warranty/src/main/java/com/positivity/warranty/internal/entity/ClaimCodeSequence.java`,
+  `pos-warranty/src/main/java/com/positivity/warranty/internal/entity/WarrantyClaim.java`,
+  `pos-warranty/src/main/java/com/positivity/warranty/internal/repository/WarrantyClaimRepository.java`,
+  `pos-warranty/src/main/java/com/positivity/warranty/internal/service/SettlementReconciliationServiceImpl.java`,
+  `pos-warranty/src/main/java/com/positivity/warranty/internal/controller/SettlementController.java`
+- Vendor bill number and credit memo reference:
+  `pos-accounting/src/main/java/com/positivity/accounting/internal/service/VendorBillServiceImpl.java`,
+  `pos-accounting/src/main/java/com/positivity/accounting/internal/service/SupplierInvoiceEventsListener.java`,
+  `pos-accounting/src/main/java/com/positivity/accounting/internal/service/CreditMemoServiceImpl.java`
+- Estimate, change request, mobile unit and idempotency key ("the existing shop guide"):
+  `pos-mcp-server/src/main/resources/rag/shop-management-rag.md`
