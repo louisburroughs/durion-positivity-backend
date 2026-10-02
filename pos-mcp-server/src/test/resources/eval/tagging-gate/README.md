@@ -154,7 +154,7 @@ domain agent, 2026-09-30; keep future edits consistent with these rules.
   operations: appointments, bays, day-to-day technician scheduling and availability, shop settings.";
   `events` = "Platform events published by the pos-event modules: event types, event history and
   notifications."; `admin` = "Administration of the platform: users, roles, permissions, access, and
-  the audit log." Mapping: vehicle and campaign → `customer`; invoice, payment, credit memo, vendor
+  the audit log." Mapping: vehicle → `customer`; campaign → `marketing` (the scope #2385 added; `*-0225` to `0227` were relabelled from `customer` and three campaign utterances per language were added so the option meets its minimum); invoice, payment, credit memo, vendor
   bill, vendor spend and balances → `accounting` (receivables and payables; there is no invoice scope);
   purchase order, ASN, supplier → `inventory`; location, bays, appointments, store hours and address,
   and any staff scheduling or availability question (who is on shift, when a shift starts or ends, a
