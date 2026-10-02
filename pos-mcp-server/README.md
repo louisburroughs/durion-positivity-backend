@@ -188,7 +188,7 @@ finding; it reads the `openapi.yaml` files of the sibling modules, so run it fro
 1. Put the file under `src/main/resources/rag/` with a header that matches the entry (or none).
 2. Add the entry to **both** `application.yml` and `application-alpha.yml`: `id`, `source-path`, `rag-scope`, `required-permissions`, `entities`.
 3. Use entity keys from `entities.yaml`, or `[none]` only for a platform-wide document; list what the document substantively explains, not everything it mentions.
-4. A new `rag-scope` spelled differently from a tool domain needs a `domain_scopes` line in `entities.yaml`.
+4. A new `rag-scope` spelled differently from a tool domain needs a `domain_scopes` line in `entities.yaml`. So does a tool domain whose documents live in an existing scope instead of a new one. Example: the `pos-invoice` guide (`accounting.invoicing-payments`) is in the `accounting` scope, so `invoice: accounting` lets an acting `domain` of `accounting` also seed the `invoice` Domain node, with no new `domain` option.
 5. Run the module tests: the parity, header-agreement and real-config tests cover the rest.
 
 ### Per-turn resolution and shadow recording
@@ -224,6 +224,107 @@ evidence are recorded in the ADR's changelog.
 **Recording.** The alpha eval turn trace gains a nullable `scope` (`mode`, `enforced`, `graphHash`, `graphBuiltAt`,
 `confidence`, `seeds[{entity, matchKind}]`, entity/tool/document/screen counts, `addedTools`, `ragFilterApplied`, and at
 completion `calledToolsInScope/calledTools` and `retrievedDocsInScope/retrievedDocs`). Older payloads read `scope: null`.
+The counts alone cannot say whether the filter would have kept the *right* document, so the scope also records
+identities, all of them platform definitions (ADR-0069 §8: document ids, scope names, tool names; never message text):
+
+| Field                        | Content                                                                                                                                                                                              |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `retrievedDocuments`         | The final top-K handed to the model, in rank order, one `{documentId, ragScope}` per distinct document (chunks of one document collapse to the first, so one retrieval yields at most K). Null when retrieval was not observed. |
+| `scopeDocumentIds`           | The scope's `document_id`s in scope order, at most 64; `scopeDocumentIdsTruncated` says when the list was cut.                                                                                   |
+| `scopeToolNames`             | The `mcp_tool.name` of every scope tool, facade and discovered, at most 64; `scopeToolNamesTruncated` likewise.                                                                                   |
+| `addedToolNames`             | The names behind `addedTools`.                                                                                                                                                                       |
+
+All four are null in a payload written before they existed (`EvalTurnTraceJsonCompatibilityTest`). `ScopeRetrievalObserver`
+records `retrievedDocuments` after the top-K cut and returns the retriever's list untouched (same instance, same order).
+
+**Scope-graph gate report (ADR-0069 §9, offline).** `scripts/scope_graph_gate_report.py` computes the `rag` promotion gate
+the way §9 states it: a recorded run with the `rag` consumer in `enforce`, against the same run in `shadow`, on one graph
+snapshot. It reads the runs' trace exports — `--file` the shadow run, `--enforce-file` the enforce run, and
+`--baseline-file` a second shadow run for the A/A check — joins each trace to a RAG fixture by `userMessage` (exact,
+then trim + collapse whitespace + casefold, like `tagging_shadow_report.py`) and by `role` against the fixture's
+`actor.role` (a turn asked as another actor, or for a fixture that names none, is not joined: it is no evidence for the
+fixture's visibility; one turn scores every fixture that asks its question as its actor; of several turns for one
+fixture the latest `startedAt` wins, so a rerun replaces an older attempt), and scores each side's recorded top-K:
+hit@k, MRR, recall@k and forbidden-document hits, `k` from the fixture, default 5. Before the join a `--file` or
+`--baseline-file` trace must be `SHADOW` and an `--enforce-file` trace `ENFORCE` with `enforced` exactly `[RAG]` (with
+`tools`, `card` or `lookups` also enforced, more than the filter would differ); others are skipped and counted
+(`wrongMode`).
+
+The gate compares **per fixture**, which is stricter than §9's means: across the 75 fixtures that expect a document one
+fixture moves a mean by 1.3 %, so a mean lets one fixture's loss hide behind another's gain. This holds because
+retrieval is deterministic once the question tags are (fixed query paraphrases, deterministic fusion and rerank, no LLM
+call before the cut), which the A/A check proves for each gate run.
+
+| Verdict            | When                                                                                                       |
+| ------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `NO_DATA`          | No trace joined a fixture, no joined fixture expects a document (no rank metric to compare), or today's hit@5 is 0 (an empty or broken RAG store would compare 0 with 0). |
+| `MIXED_GRAPH`      | The joined traces carry more than one `graphHash`: the evidence is for no single deployable snapshot.      |
+| `INCOMPLETE`       | A loaded fixture has no joined shadow trace, or no joined enforce or baseline trace when that run is given. |
+| `NONDETERMINISTIC` | The baseline run resolved a fixture differently from the shadow run (top-K order, scope confidence, selected or offered tools): a per-fixture comparison would measure noise. Pin the tagging mode, change nothing between the runs, rerun. |
+| `NO_ENFORCE_RUN`   | Complete shadow evidence but no `--enforce-file`.                                                          |
+| `INVALID_PAIR`     | A pair's enforce turn resolved another scope confidence than its shadow turn: the runs did not ask the graph the same question. |
+| `FAIL`             | Any paired fixture regressed (an expected document of today's top-5 missing from the enforce top-5, or its MRR fell) or surfaced a forbidden document it did not surface today; or a mean hit@5, MRR or recall@5 fell, or the forbidden total grew, overall, in a fixture set (`rag-lexical`, `rag-retrieval`) or in a confidence bucket; or any pair was given different tools. |
+| `PASS`             | Otherwise. The exit code is 0 on `PASS` only.                                                              |
+
+§9's "tool selection hit rate at least equal": the RAG fixtures name no expected tools, so a hit rate cannot be scored on
+them. The gate checks the stronger property instead — every pair was given the same tools (`selectedTools` and the
+`offeredTools` names, order-free); identical selection has an identical hit rate against any ground truth.
+
+The report also prints a **simulated** preview from the shadow run alone: the §6 rule replayed over the shadow top-K (on
+`confidence: HIGH` keep a document whose `documentId` is in `scopeDocumentIds` or whose `ragScope` is `master`, on
+`LOW`/`NONE` keep everything; order preserved, nothing added). It is not evidence: under `enforce` the retrievers span
+every scope, so an in-scope document of another domain, never in the shadow pool, can enter the fusion and outrank a hit,
+and the hook filters the pool before the cut, so a candidate below rank K can move up; the replay sees neither. An
+expected document it drops is out of scope and not `master`, so the real filter drops it too: use it to decide whether
+an enforce run is worth making. Lists (ids under `--verbose`): the regressed fixtures (lost documents, MRR before and
+after), tool-selection changes, nondeterministic fixtures, the documents the simulation dropped, forbidden hits,
+fixtures without a trace on any side and actor-mismatched turns. Two more sections ride along: a shadow-only tools table
+(share of the model's calls that were inside the scope, per confidence; the `tools` consumer is additive and needs its
+own gate) and a documentation-coverage table (per seed entity: turns seeded, turns whose scope had no document, mean
+scope documents, and with `--lexicon`/`--preload` the static number of RAG documents annotated with the entity, so
+"entities with no document" comes out of every run; `--verbose` adds the `NONE`-confidence messages, the vocabulary the
+lexicon missed).
+
+Run conditions — what makes the runs differ by the `rag` filter alone:
+
+- **Question tags fixed.** `MCP_TAGGING_MODE` `off` or `shadow` (the heuristic tagger acts) in every run, never
+  `enforce`: model-tagger answers vary between runs, and the tags feed the reranker and the scope seeds.
+- **One deploy, nothing re-ingested.** Same image, catalog, `entities.yaml`, RAG sources and embedding model in every run;
+  `graphHash` covers the graph's document ids, not their content or embeddings.
+- **Actors.** Per fixture role, a gate user holding exactly the fixture's `permission_codes` (a trace records the role
+  only, so a user with more codes tests the wrong visibility).
+- **Same day.** Turn traces expire after 24 h on alpha (`MCP_EVAL_TURN_TRACE_RETENTION`): run all three and the report
+  within a day.
+
+```bash
+# 1. Shadow run (MCP_SCOPE_GRAPH_MODE=shadow, MCP_TAGGING_MODE off or shadow): every rag-lexical and rag-retrieval
+#    fixture query as the actor its fixture names — one scripts/gate_chat_run.sh run per actor role, logged in as that
+#    role's gate user, over the fixture files that have queries for it (the runner rejects a file with none).
+ROLE=ROLE_SERVICE_ADVISOR; F=".fixtures[] | select(.actor.role == \"$ROLE\")"; args=()
+for f in pos-mcp-server/src/test/resources/eval/rag-{lexical,retrieval}/*.json; do
+  jq -e "[$F] | length > 0" "$f" > /dev/null && args+=(--fixture "$f")
+done
+scripts/gate_chat_run.sh --label "scope-shadow-$ROLE" --user <that user> \
+  --messages-jq "$F | .query" --ids-jq "$F | .fixture_id" "${args[@]}"
+# 2. Baseline: restart, still in shadow, and repeat every role with --label "scope-baseline-$ROLE" (the A/A run also
+#    covers the restart the enforce run needs).
+# 3. Enforce: restart with MCP_SCOPE_GRAPH_MODE=enforce, MCP_SCOPE_GRAPH_ENFORCE=rag (rag only), tagging mode unchanged,
+#    and repeat every role with --label "scope-enforce-$ROLE".
+# 4. Score:
+python3 scripts/scope_graph_gate_report.py \
+  --file gate-runs/scope-shadow-*/traces-*.json \
+  --baseline-file gate-runs/scope-baseline-*/traces-*.json \
+  --enforce-file gate-runs/scope-enforce-*/traces-*.json \
+  --fixture pos-mcp-server/src/test/resources/eval/rag-lexical/*.json \
+            pos-mcp-server/src/test/resources/eval/rag-retrieval/*.json \
+  --lexicon pos-mcp-server/src/main/resources/scope-graph/entities.yaml \
+  --preload pos-mcp-server/src/main/resources/application.yml \
+  --verbose            # --json for the machine-readable report
+```
+
+A shadow sample whose `scopeDocumentIdsTruncated` is true is counted and flagged (its simulation may drop an in-scope
+document; the enforce run reads the whole scope), and traces written before the identity lists existed are skipped. Unit
+tests: `python3 -m unittest scripts.test_scope_graph_gate_report` (in `pr-checks.yml`).
 
 **Telemetry.** `nlti.request.telemetry` gained eight additive, nullable fields in `schemaVersion` 2 (`scopeMode`,
 `scopeGraphHash`, `scopeConfidence`, `scopeEntityCount`, `scopeToolCount`, `scopeDocCount`, `scopeAddedToolCount`,
@@ -348,7 +449,7 @@ for a `:veto` entry, the heuristic said `true` (acting value = heuristic AND mod
 | Simple chat (`SimpleChatFastPath`) | `simple_chat` decides. An enforced `follows_previous_turn` answered `true` forces `false` whatever `simple_chat` says (the T0 path has no history). Promote `simple_chat` as `simple_chat:veto` first: a false positive loses the turn to the history-less path, a false negative costs one LLM turn. |
 | Workflow state, session-less callers (`ToolSelectionEngine`) | Precedence (ADR-0068 §3.3): persisted `NltiSession` state (never overridden) → model `workflow_state` at or above threshold (a non-`IDLE` answer also at or above `non-idle`) → the lexicon lookup where the scope graph's `lookups` consumer is enforced **and** the acting `intent` is `ACTION` (the `workflow_state` of an entity the message names or, failing that, of an entity an acting `entity_<key>` tag seeds: "buy 40 tires" tagged `purchase-order` is `CREATING_PO`) → the phrase match. `IDLE` is a value: a model `IDLE` at or above threshold overrides a phrase-matched `CREATING_PO`. `PROCESSING_RETURN` has no heuristic source and is model-only. The lookup runs in `TaggingService` after the merge, because the acting intent is known only then. |
 | Tag-added facade tools (`ToolSelectionEngine`) | `implies_date_window`, `needs_web_search`, `about_inventory`, `about_orders` add their facade, each only if it is in the caller's gated set; the glossary tool is always offered. Where `lookups` is enforced and the turn has an entity seed, the inventory / order pair is replaced by the lexicon facades of its seed entities (see Scope graph). Tag-added tools and scope-added tools are unioned on top of the ranked cut; only scope-added ones count against `added-tool-slots` (§3.2). |
-| Admin fast path (`ToolRegistryService.resolveCandidateSelection(context, topK, tags)`) | Fires only when an admin keyword or phrase matched without a veto term **and** the acting `admin_account_question` is `true`. A model `false` at or above threshold vetoes it; a model `true` never fires it alone (§3.4). |
+| Admin fast path (`ToolRegistryService.resolveCandidateSelection(context, topK, tags)`) | Fires only when an admin keyword or phrase matched without a veto term **and** the acting `admin_account_question` is `true`. A model `false` at or above threshold vetoes it; a model `true` never fires it alone (§3.4). The veto terms are business-domain vocabulary the admin tool cannot answer: receivables, payables, invoices, ledger, revenue, aging, financial statements, GL accounts, workorders and, since #2371, any account that is not a platform user's (customer, party, supplier, vendor, bank, ledger account, account balance, and the fr/es `client`, `cliente`, `fournisseur`, `proveedor`, `banque`, `bancaire`, `banco`, `bancaria`, `bancario`, and the fr/es ledger, receivables and payables phrases `grand livre`, `recevable`, `comptes à recevoir`, `comptes à payer`, `libro mayor`, `por cobrar`, `por pagar`). They match as substrings on purpose (a spurious veto only sends the question to semantic ranking), so "the customer's account state" and "third-party users" no longer take the fast path. A veto acts only on a turn that reaches tool selection, so `bank`, `ledger`, `supplier` and `vendor` (fr `banque`, `bancaire`, `fournisseur`; es `banco`, `bancaria`, `bancario`, `proveedor`) are also simple-chat business keywords (`SimpleChatRuleDefaults`): "who has access to the bank account" goes to the agent path, not the no-tool T0 path. Full list and rationale: `FAST_PATH_VETO_TERMS`. |
 | Compound split (`RerankedContentRetriever`, reads the tags from `RequestScopedUserContext`) | An enforced `false` skips the #1180 split; an enforced `true` uses the **widened** splitter: a boundary at a conjunction (`and`, `plus`, `but`, `et`, `y`, `mais`, `pero`) or after `?` / `;` splits without the English starter-word check, so fr and es questions split too (a fragment still needs three tokens). A heuristic answer or `none()` keeps today's splitter. |
 | Router (`NltiRouter.classify(message, tags)`) | Maps the acting `intent`, `risk`, `complexity`, `domain` to a `RouterClassification` and lets `TierSelector` pick the tier; the chat-model call is gone (§7). A field whose tag is unlisted or below threshold takes `safeDefault()`'s value (`UNKNOWN`, `HIGH`, `MULTI_DOMAIN`, `master`), so a low-confidence `risk` is `HIGH` and risk never downgrades (§3.5). The `routerChatModel` bean and `mcp.model.router` stay defined until the router tags are promoted. |
 | Scope graph seeds (`ScopeResolver.resolve(message, codes, state, tagSeeds)`) | Every acting `entity_<key>` that is `true` seeds its entity with match kind `TAG` (confidence `LOW`); an acting `domain` other than `master` seeds the `Domain` node(s) whose RAG scope it is (the inverse of `domain_scopes`) and, as their one hop, that scope's permitted documents; a Domain is never expanded to tools. |

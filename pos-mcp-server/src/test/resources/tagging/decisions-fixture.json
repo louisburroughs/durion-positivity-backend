@@ -1,6 +1,6 @@
 {
   "schema_version" : 1,
-  "captured_from" : "pre-ADR-0068 heuristics (SimpleChatClassifier, ToolSelectionEngine, ToolRegistryService, RerankedContentRetriever.splitSubQueries) at main 53305a2bd, 2026-09-30",
+  "captured_from" : "pre-ADR-0068 heuristics (SimpleChatClassifier, ToolSelectionEngine, ToolRegistryService, RerankedContentRetriever.splitSubQueries) at main 53305a2bd, 2026-09-30; a case with a note was added later, and its note says why and whether the decision departs from the capture",
   "cases" : [ {
     "id" : "greeting-en-1",
     "message" : "hello",
@@ -640,7 +640,7 @@
   }, {
     "id" : "admin-veto-1",
     "message" : "who has access to the receivables ledger",
-    "simpleChat" : true,
+    "simpleChat" : false,
     "followsPreviousTurn" : false,
     "workflowState" : "IDLE",
     "impliesDateWindow" : true,
@@ -648,7 +648,8 @@
     "aboutInventory" : false,
     "aboutOrders" : false,
     "adminFastPath" : false,
-    "compoundQuestion" : false
+    "compoundQuestion" : false,
+    "note" : "#2371 review: simpleChat departs from the capture (true then). 'ledger' is now a simple-chat business keyword, so this question reaches tool selection instead of the no-tool T0 path."
   }, {
     "id" : "admin-1",
     "message" : "list all users",
@@ -757,6 +758,110 @@
     "aboutOrders" : false,
     "adminFastPath" : true,
     "compoundQuestion" : false
+  }, {
+    "id" : "admin-veto-4",
+    "message" : "show the customer's account state",
+    "simpleChat" : false,
+    "followsPreviousTurn" : false,
+    "workflowState" : "IDLE",
+    "impliesDateWindow" : false,
+    "needsWebSearch" : false,
+    "aboutInventory" : false,
+    "aboutOrders" : false,
+    "adminFastPath" : false,
+    "compoundQuestion" : false,
+    "note" : "#2371: added after the capture. The pre-ADR-0068 heuristic took the admin fast path here ('account state' phrase, no veto term); 'customer' is now a veto term, a deliberate change."
+  }, {
+    "id" : "admin-veto-5",
+    "message" : "who has access to the bank account",
+    "simpleChat" : false,
+    "followsPreviousTurn" : false,
+    "workflowState" : "IDLE",
+    "impliesDateWindow" : false,
+    "needsWebSearch" : false,
+    "aboutInventory" : false,
+    "aboutOrders" : false,
+    "adminFastPath" : false,
+    "compoundQuestion" : false,
+    "note" : "#2371: added after the capture. The pre-ADR-0068 heuristic took the admin fast path here ('who has access' phrase, no veto term); 'bank' is now a veto term, a deliberate change. 'bank' is also a simple-chat business keyword, so the question reaches tool selection (and the ranked tools) instead of the no-tool T0 path."
+  }, {
+    "id" : "admin-veto-6",
+    "message" : "which users can see the vendor account balance",
+    "simpleChat" : false,
+    "followsPreviousTurn" : false,
+    "workflowState" : "IDLE",
+    "impliesDateWindow" : false,
+    "needsWebSearch" : false,
+    "aboutInventory" : false,
+    "aboutOrders" : false,
+    "adminFastPath" : false,
+    "compoundQuestion" : false,
+    "note" : "#2371: added after the capture. The pre-ADR-0068 heuristic took the admin fast path here ('users' keyword, no veto term); 'vendor' and 'account balance' are now veto terms, a deliberate change."
+  }, {
+    "id" : "admin-veto-7-fr",
+    "message" : "Quelle permission faut-il pour le compte bancaire du fournisseur?",
+    "simpleChat" : false,
+    "followsPreviousTurn" : false,
+    "workflowState" : "IDLE",
+    "impliesDateWindow" : false,
+    "needsWebSearch" : false,
+    "aboutInventory" : false,
+    "aboutOrders" : false,
+    "adminFastPath" : false,
+    "compoundQuestion" : false,
+    "note" : "#2371: added after the capture. The pre-ADR-0068 heuristic took the admin fast path here ('permission' keyword, no veto term); 'bancaire' and 'fournisseur' are now veto terms, a deliberate change."
+  }, {
+    "id" : "admin-veto-8-es",
+    "message" : "¿El cliente tiene access a su cuenta bancaria?",
+    "simpleChat" : false,
+    "followsPreviousTurn" : false,
+    "workflowState" : "IDLE",
+    "impliesDateWindow" : false,
+    "needsWebSearch" : false,
+    "aboutInventory" : false,
+    "aboutOrders" : false,
+    "adminFastPath" : false,
+    "compoundQuestion" : false,
+    "note" : "#2371: added after the capture. The pre-ADR-0068 heuristic took the admin fast path here ('access' keyword, no veto term); 'cliente' and 'bancaria' are now veto terms, a deliberate change."
+  }, {
+    "id" : "admin-veto-9-fr",
+    "message" : "Quelle permission faut-il pour voir le grand livre?",
+    "simpleChat" : false,
+    "followsPreviousTurn" : false,
+    "workflowState" : "IDLE",
+    "impliesDateWindow" : false,
+    "needsWebSearch" : false,
+    "aboutInventory" : false,
+    "aboutOrders" : false,
+    "adminFastPath" : false,
+    "compoundQuestion" : false,
+    "note" : "#2371 second pass: added after the capture. The pre-ADR-0068 heuristic took the admin fast path here ('permission' keyword, no veto term); 'grand livre' (ledger) is now a veto term, a deliberate change."
+  }, {
+    "id" : "admin-veto-10-es",
+    "message" : "¿Quién tiene access a las cuentas por cobrar?",
+    "simpleChat" : false,
+    "followsPreviousTurn" : false,
+    "workflowState" : "IDLE",
+    "impliesDateWindow" : false,
+    "needsWebSearch" : false,
+    "aboutInventory" : false,
+    "aboutOrders" : false,
+    "adminFastPath" : false,
+    "compoundQuestion" : false,
+    "note" : "#2371 second pass: added after the capture. The pre-ADR-0068 heuristic took the admin fast path here ('access' keyword, no veto term); 'por cobrar' (accounts receivable) is now a veto term, a deliberate change."
+  }, {
+    "id" : "admin-7",
+    "message" : "show the account state for user jdoe",
+    "simpleChat" : false,
+    "followsPreviousTurn" : false,
+    "workflowState" : "IDLE",
+    "impliesDateWindow" : false,
+    "needsWebSearch" : false,
+    "aboutInventory" : false,
+    "aboutOrders" : false,
+    "adminFastPath" : true,
+    "compoundQuestion" : false,
+    "note" : "#2371: added after the capture, unchanged decision. A platform user's account state still takes the admin fast path: the #2371 veto terms leave it alone."
   }, {
     "id" : "compound-1",
     "message" : "what does an invoice number look like and what permission is needed to read an invoice",

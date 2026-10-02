@@ -17,8 +17,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -172,15 +173,29 @@ public class AlphaEvalTurnTraceRecorder {
     }
 
     /**
-     * ADR-0069 §9: the {@code document_id}s of the final top-K a retrieval handed to the model.
-     * A turn may retrieve more than once; the documents accumulate, each counted once.
+     * ADR-0069 §9: the {@code document_id}s of the final top-K a retrieval handed to the model, with
+     * no {@code rag_scope} known. A turn may retrieve more than once; the documents accumulate, each
+     * counted once.
      */
     public void recordRetrievedDocuments(@NonNull Collection<String> documentIds) {
+        recordRetrievedDocuments(documentIds.stream()
+                .map(documentId -> new ScopeTrace.RetrievedDocument(documentId, null))
+                .toList());
+    }
+
+    /**
+     * ADR-0069 §9: the final top-K a retrieval handed to the model, in rank order, one entry per
+     * distinct document. A turn may retrieve more than once; the documents accumulate in the order
+     * they were first handed over, each counted once.
+     */
+    public void recordRetrievedDocuments(@NonNull List<ScopeTrace.RetrievedDocument> documents) {
         current(builder -> {
             if (builder.retrievedDocuments == null) {
-                builder.retrievedDocuments = new LinkedHashSet<>();
+                builder.retrievedDocuments = new LinkedHashMap<>();
             }
-            builder.retrievedDocuments.addAll(documentIds);
+            for (ScopeTrace.RetrievedDocument document : documents) {
+                builder.retrievedDocuments.putIfAbsent(document.documentId(), document);
+            }
         });
     }
 
@@ -345,8 +360,8 @@ public class AlphaEvalTurnTraceRecorder {
         private QuestionTags tags;
         private List<String> scopeAddedTools = List.of();
         private boolean scopeRagFilterApplied;
-        /** Null until a retrieval was observed for the turn. */
-        private Set<String> retrievedDocuments;
+        /** Null until a retrieval was observed for the turn; keyed by document id, in rank order. */
+        private Map<String, ScopeTrace.RetrievedDocument> retrievedDocuments;
 
         private final String buildId;
 
@@ -450,9 +465,13 @@ public class AlphaEvalTurnTraceRecorder {
             Integer retrieved = retrievedDocuments == null ? null : retrievedDocuments.size();
             Integer retrievedInScope = retrievedDocuments == null
                     ? null
-                    : (int) retrievedDocuments.stream()
+                    : (int) retrievedDocuments.keySet().stream()
                             .filter(scope.documentIds()::contains)
                             .count();
+            List<String> scopeToolNames = scope.tools().stream()
+                    .map(ScopeSet.ScopeTool::name)
+                    .distinct()
+                    .toList();
             return new ScopeTrace(
                     scopeGraphProperties.mode().name(),
                     scopeGraphProperties.mode() == ScopeGraphProperties.Mode.ENFORCE
@@ -476,7 +495,20 @@ public class AlphaEvalTurnTraceRecorder {
                     calledInScope,
                     toolCalls.size(),
                     retrievedInScope,
-                    retrieved);
+                    retrieved,
+                    retrievedDocuments == null ? null : List.copyOf(retrievedDocuments.values()),
+                    capped(scope.documentIds()),
+                    scope.documentIds().size() > ScopeTrace.IDENTITY_LIST_CAP,
+                    capped(scopeToolNames),
+                    scopeToolNames.size() > ScopeTrace.IDENTITY_LIST_CAP,
+                    scopeAddedTools);
+        }
+
+        /** The first {@link ScopeTrace#IDENTITY_LIST_CAP} entries; the caller records whether any were cut. */
+        private static List<String> capped(List<String> values) {
+            return values.size() <= ScopeTrace.IDENTITY_LIST_CAP
+                    ? values
+                    : List.copyOf(values.subList(0, ScopeTrace.IDENTITY_LIST_CAP));
         }
     }
 }

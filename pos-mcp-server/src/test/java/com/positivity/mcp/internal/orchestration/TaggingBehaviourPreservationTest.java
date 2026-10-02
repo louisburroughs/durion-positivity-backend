@@ -1,6 +1,7 @@
 package com.positivity.mcp.internal.orchestration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -23,6 +24,11 @@ import org.junit.jupiter.params.provider.MethodSource;
  * decisions the pre-ADR-0068 heuristics took on ~75 en/fr/es messages (captured from the unrefactored
  * code at main 53305a2bd, before any heuristic moved behind the {@code QuestionTagger} seam). Every
  * decision surface the session managers drive must keep taking exactly those decisions.
+ *
+ * <p>A case added after the capture carries a {@code note} naming its issue and saying whether its
+ * decision departs from the capture: #2371 widened the admin fast path's veto list on purpose
+ * (customer, supplier, vendor, bank and ledger-account vocabulary), and its cases record the decisions
+ * that changed beside one that did not.
  */
 class TaggingBehaviourPreservationTest {
 
@@ -37,7 +43,8 @@ class TaggingBehaviourPreservationTest {
             boolean aboutInventory,
             boolean aboutOrders,
             boolean adminFastPath,
-            boolean compoundQuestion) {}
+            boolean compoundQuestion,
+            String note) {}
 
     private static List<Fixture> fixtures;
     private static TaggingDecisionSurfaces surfaces;
@@ -63,7 +70,8 @@ class TaggingBehaviourPreservationTest {
                         node.path("aboutInventory").asBoolean(),
                         node.path("aboutOrders").asBoolean(),
                         node.path("adminFastPath").asBoolean(),
-                        node.path("compoundQuestion").asBoolean()));
+                        node.path("compoundQuestion").asBoolean(),
+                        node.path("note").asText("")));
             }
             fixtures = List.copyOf(loaded);
         }
@@ -90,9 +98,37 @@ class TaggingBehaviourPreservationTest {
         assertThat(fixtures).anyMatch(Fixture::aboutOrders);
         assertThat(fixtures).anyMatch(Fixture::adminFastPath);
         assertThat(fixtures).anyMatch(f -> f.id().startsWith("admin-veto") && !f.adminFastPath());
+        assertThat(fixtures).anyMatch(f -> f.id().startsWith("admin-veto") && f.id().endsWith("-fr"));
+        assertThat(fixtures).anyMatch(f -> f.id().startsWith("admin-veto") && f.id().endsWith("-es"));
         assertThat(fixtures).anyMatch(Fixture::compoundQuestion);
         assertThat(fixtures).anyMatch(f -> f.id().startsWith("fr-") || f.id().endsWith("-fr"));
         assertThat(fixtures).anyMatch(f -> f.id().startsWith("es-") || f.id().endsWith("-es"));
+    }
+
+    @Test
+    @DisplayName("#2371: the cases added for the widened veto list carry a note and keep their decisions")
+    void vetoListCasesAreNoted() {
+        List<Fixture> noted = fixtures.stream().filter(f -> !f.note().isEmpty()).toList();
+        assertThat(noted).allSatisfy(f -> assertThat(f.note()).startsWith("#"));
+        assertThat(noted)
+                .filteredOn(f -> f.note().startsWith("#2371"))
+                .extracting(Fixture::id, Fixture::adminFastPath)
+                .containsExactlyInAnyOrder(
+                        tuple("admin-veto-1", false),
+                        tuple("admin-veto-4", false),
+                        tuple("admin-veto-5", false),
+                        tuple("admin-veto-6", false),
+                        tuple("admin-veto-7-fr", false),
+                        tuple("admin-veto-8-es", false),
+                        tuple("admin-veto-9-fr", false),
+                        tuple("admin-veto-10-es", false),
+                        tuple("admin-7", true));
+        // #2371 review: a vetoed question must also reach tool selection, so these two are no longer
+        // simple chat ('ledger' and 'bank' are business keywords).
+        assertThat(fixtures)
+                .filteredOn(f -> f.id().equals("admin-veto-1") || f.id().equals("admin-veto-5"))
+                .extracting(Fixture::simpleChat)
+                .containsExactly(false, false);
     }
 
     @ParameterizedTest(name = "{0}")

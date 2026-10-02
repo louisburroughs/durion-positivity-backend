@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.service;
 import com.positivity.mcp.internal.config.CurrentUserContext;
 import com.positivity.mcp.internal.domain.EvalTurnTrace.ToolDefinitionTrace;
 import com.positivity.mcp.internal.domain.QuestionTags;
+import com.positivity.mcp.internal.domain.ScopeTrace;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
 import com.positivity.mcp.internal.scopegraph.ScopeSet;
 import java.util.Collection;
@@ -126,6 +127,14 @@ public class ToolInvocationRecorder {
     /** ADR-0069 §9: the {@code document_id}s of the final top-K one retrieval handed to the model. */
     public void recordRetrievedDocuments(@NonNull Collection<String> documentIds) {
         recordTrace(recorder -> recorder.recordRetrievedDocuments(documentIds), "record retrieved documents");
+    }
+
+    /**
+     * ADR-0069 §9: the final top-K one retrieval handed to the model, in rank order, one entry per
+     * distinct document with its {@code rag_scope}.
+     */
+    public void recordRetrievedDocuments(@NonNull List<ScopeTrace.RetrievedDocument> documents) {
+        recordTrace(recorder -> recorder.recordRetrievedDocuments(documents), "record retrieved documents");
     }
 
     public void recordAnswerSource(@NonNull String answerSource) {

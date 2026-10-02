@@ -67,6 +67,62 @@ public class ToolRegistryService {
      * answer. Any hit vetoes the fast path outright, so a query that mixes an admin keyword with
      * domain vocabulary ("who has access to the receivables ledger") still reaches semantic
      * ranking rather than being collapsed to the admin tool alone.
+     *
+     * <p>#2371 added the vocabulary of accounts the admin tool does not hold: a customer's or
+     * party's (CRM), a supplier's or vendor's, a bank account, a ledger account, an account balance,
+     * and the fr/es words for customer, supplier, bank, ledger, receivables and payables (the last
+     * three were added on a second pass of #2371). The {@code AdminFacadeTool} answers about
+     * platform users, roles, permissions and the audit log only, so "show the customer's account
+     * state" must reach semantic ranking even though {@code account state} is an admin phrase.
+     *
+     * <p>The fr/es terms follow the accounting and banking usage of each language. French: {@code
+     * client} and {@code fournisseur} carry receivables and payables, since the French terms for trade
+     * accounts receivable are "clients", "créances clients" and "comptes clients" [1], and for trade
+     * accounts payable "fournisseurs", "dettes fournisseurs" and "comptes fournisseurs" [2]. The same
+     * entries call the calques "comptes recevables", "comptes à recevoir", "comptes payables" and
+     * "comptes à payer" "fautifs et à éviter" [1, 2], but they are what people type, so {@code
+     * recevable}, {@code comptes à recevoir} and {@code comptes à payer} are listed ({@code payable}
+     * already covers "payables"). A ledger is "grand livre", also written "grand-livre", plural "grands
+     * livres" or "grands-livres" [3]. A bank account is "compte bancaire", "compte en banque" or
+     * "compte de banque" [4]. Spanish: {@code cliente} [5] and {@code proveedor} [6]; "cuentas por
+     * cobrar", "cuentas por pagar" and "libro mayor" for receivables, payables and ledger [9, 10, 11],
+     * listed as {@code por cobrar} and {@code por pagar} so the singular "cuenta por cobrar" and "saldo
+     * por pagar" veto too; a bank account is "cuenta bancaria", where "bancario, bancaria" is the
+     * adjective of "banco" [7, 8]. Neither French nor Spanish adjective contains its noun, so {@code
+     * bancaire}, {@code bancaria} and {@code bancario} are listed beside {@code banque} and {@code
+     * banco}. The French and Spanish words for customer and supplier ("comptes clients", "dettes
+     * fournisseurs", "proveedores") need no entry of their own: {@code client}, {@code fournisseur} and
+     * {@code proveedor} occur inside them.
+     *
+     * <p>Terms match as plain substrings ({@link #matchedVetoTerms}), deliberately. A veto that fires
+     * too often costs little: the question goes to semantic ranking, where the admin tool still
+     * competes. A fast path that fires wrongly costs the whole turn, since every other tool is
+     * withheld. So the substring hits are accepted: {@code party} vetoes "third-party", {@code bank}
+     * vetoes "banking", {@code client} vetoes "clients", "clientele" and an "API client", {@code
+     * proveedor} vetoes "proveedores". What a term must never do is occur inside an admin keyword or
+     * phrase, which would veto every admin question; none does, and {@code ToolRegistryServiceTest}
+     * pins that. {@code parties} is listed because, unlike "customers" or "vendors", it does not
+     * contain its singular.
+     *
+     * <p>Sources (accessed 2026-10-02). Grand dictionnaire terminologique (GDT), Office québécois de
+     * la langue française: [1] "clients" (entry © Institut Canadien des Comptables Agréés, 2006),
+     * https://vitrinelinguistique.oqlf.gouv.qc.ca/fiche-gdt/fiche/505444/clients; [2] "fournisseurs"
+     * (entry © Institut Canadien des Comptables Agréés, 2006),
+     * https://vitrinelinguistique.oqlf.gouv.qc.ca/fiche-gdt/fiche/505443/fournisseurs; [3] "grand
+     * livre", https://vitrinelinguistique.oqlf.gouv.qc.ca/fiche-gdt/fiche/8378815/grand-livre; [4]
+     * "compte bancaire", https://vitrinelinguistique.oqlf.gouv.qc.ca/fiche-gdt/fiche/8381273/compte-bancaire.
+     * Real Academia Española: [5] "cliente", Diccionario panhispánico del español jurídico,
+     * https://dpej.rae.es/lema/cliente; Diccionario de la lengua española, [6] "proveedor, proveedora",
+     * https://dle.rae.es/proveedor, [7] "banco", https://dle.rae.es/banco, [8] "bancario, bancaria",
+     * https://dle.rae.es/bancario. The RAE pages refuse automated clients and were not opened; [5] to
+     * [8] rest on search-result summaries of them. Microsoft Learn, Dynamics 365 Finance, Spanish
+     * edition (a vendor's localisation, cited as evidence of usage, not as a norm): [9] "Página
+     * principal de clientes",
+     * https://learn.microsoft.com/es-es/dynamics365/finance/accounts-receivable/accounts-receivable;
+     * [10] "Página principal de Proveedores",
+     * https://learn.microsoft.com/es-es/dynamics365/finance/accounts-payable/accounts-payable; [11]
+     * "Visión general de la contabilidad general",
+     * https://learn.microsoft.com/es-es/dynamics365/finance/general-ledger/general-ledger.
      */
     private static final Set<String> FAST_PATH_VETO_TERMS = Set.of(
             "receivable",
@@ -87,6 +143,38 @@ public class ToolRegistryService {
             "income statement",
             "chart of accounts",
             "gl account",
+            "ledger account",
+            "account balance",
+            "accounts receivable",
+            "accounts payable",
+            "bank",
+            "bank account",
+            "customer",
+            "customers",
+            "party",
+            "parties",
+            "supplier",
+            "vendor",
+            "client",
+            "cliente",
+            "fournisseur",
+            "proveedor",
+            "banque",
+            "bancaire",
+            "banco",
+            "bancaria",
+            "bancario",
+            "recevable",
+            "comptes à recevoir",
+            "comptes à payer",
+            "grand livre",
+            "grand-livre",
+            "grands livres",
+            "grands-livres",
+            "por cobrar",
+            "por pagar",
+            "libro mayor",
+            "libros mayores",
             "workorder",
             "work order");
 
