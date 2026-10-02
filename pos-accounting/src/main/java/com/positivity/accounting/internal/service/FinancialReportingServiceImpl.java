@@ -1500,7 +1500,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
      * Types of the GL accounts behind a set of statement-line mappings, loaded in one query. An
      * account the lookup does not return is simply absent from the map.
      */
-    private Map<UUID, AccountType> accountTypesById(List<StatementLineMapping> mappings) {
+    private @NonNull Map<UUID, AccountType> accountTypesById(@NonNull List<StatementLineMapping> mappings) {
         Set<UUID> accountIds =
                 mappings.stream().map(StatementLineMapping::getGlAccountId).collect(Collectors.toSet());
         return glAccountRepository.findAllById(accountIds).stream()
@@ -1532,8 +1532,10 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
      * @param operation          the mapping's operation
      * @return the amount to add to the statement line
      */
-    static BigDecimal statementContribution(
-            @Nullable BigDecimal debitsMinusCredits, @Nullable AccountType accountType, OperationType operation) {
+    static @NonNull BigDecimal statementContribution(
+            @Nullable BigDecimal debitsMinusCredits,
+            @Nullable AccountType accountType,
+            @NonNull OperationType operation) {
         BigDecimal balance = debitsMinusCredits != null ? debitsMinusCredits : BigDecimal.ZERO;
         BigDecimal normalSide = isCreditNormal(accountType) ? balance.negate() : balance;
 
