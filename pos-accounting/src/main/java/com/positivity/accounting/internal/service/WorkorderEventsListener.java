@@ -7,6 +7,7 @@ import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.domainevents.workorder.WorkorderServiceCompletedV1;
 import com.positivity.domainevents.workorder.WorkorderUpdatedV1;
 import com.positivity.tenancy.TenantIterator;
+import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -17,7 +18,6 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -145,10 +145,11 @@ public class WorkorderEventsListener {
                 resolveRegenerationRequests(eventType, envelope);
                 markProcessed(eventId);
             });
-        } catch (TransientDataAccessException e) {
-            // Retry with backoff / DLQ via the container error handler (ADR-0044 §4).
-            throw e;
         } catch (Exception e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // Retry with backoff / DLQ via the container error handler (ADR-0044 §4).
+                throw e;
+            }
             log.warn("Skipping malformed workorder event eventId={}", eventId, e);
             handlerTransaction.executeWithoutResult(_ -> markProcessed(eventId));
         }
