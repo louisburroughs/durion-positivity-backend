@@ -44,6 +44,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * CAP-328: rosters project credentials (with a status judged on the roster's reference date) and
@@ -135,8 +137,8 @@ class MechanicRosterQueryServiceTest {
 
         assertThat(result.getTotalElements()).isEqualTo(1);
         assertThat(result.getContent()).singleElement().satisfies(entry -> {
-            assertThat(entry.getMechanicId()).isEqualTo(MECHANIC_ID);
-            assertThat(entry.getPersonId()).isEqualTo(PERSON_ID);
+            assertThat(entry.getMechanicRecordId()).isEqualTo(MECHANIC_ID);
+            assertThat(entry.getMechanicPersonId()).isEqualTo(PERSON_ID);
             assertThat(entry.getFirstName()).isEqualTo("Ada");
             assertThat(entry.getStatus()).isEqualTo(MechanicStatus.ACTIVE);
             assertThat(entry.getCredentials()).singleElement().satisfies(credential -> {
@@ -178,13 +180,60 @@ class MechanicRosterQueryServiceTest {
 
         assertThat(result.getContent()).singleElement().satisfies(entry -> {
             assertThat(entry.getLocationId()).isEqualTo(LOCATION_ID);
-            assertThat(entry.getMechanicId()).isEqualTo(MECHANIC_ID);
-            assertThat(entry.getPersonId()).isEqualTo(PERSON_ID);
+            assertThat(entry.getMechanicRecordId()).isEqualTo(MECHANIC_ID);
+            assertThat(entry.getMechanicPersonId()).isEqualTo(PERSON_ID);
             // Expires on the facility's today: held through the day, so ACTIVE.
             assertThat(entry.getCredentials())
                     .extracting(TechnicianCredentialResponse::getStatus)
                     .containsExactly(CredentialStatus.ACTIVE);
         });
+    }
+
+    @Test
+    @DisplayName("#2363: a mechanic roster row names the person id mechanicPersonId and the surrogate mechanicRecordId")
+    void listMechanicsRowsCarryThePersonIdAndTheRecordIdUnderTheirOwnNames() {
+        Pageable pageable = PageRequest.of(0, 20);
+        when(mechanicRepository.findRoster(MechanicStatus.ACTIVE, null, LocalDate.parse("2026-09-16"), pageable))
+                .thenReturn(new PageImpl<>(List.of(ada()), pageable, 1));
+        when(credentialRepository.findByPersonIdInOrderByIssuedOnDesc(List.of(PERSON_ID)))
+                .thenReturn(List.of());
+
+        Page<MechanicRosterEntryResponse> result = service.listMechanics(null, null, pageable);
+
+        assertRowIdentifiesTheMechanicByPersonId(result.getContent().get(0));
+    }
+
+    @Test
+    @DisplayName("#2363: a location roster row names the person id mechanicPersonId and the surrogate mechanicRecordId")
+    void listLocationTechniciansRowsCarryThePersonIdAndTheRecordIdUnderTheirOwnNames() {
+        Pageable pageable = PageRequest.of(0, 20);
+        when(shopRepository.findById(LOCATION_ID))
+                .thenReturn(Optional.of(
+                        Shop.builder().id(LOCATION_ID).timezone("UTC").build()));
+        when(locationReplicaRepository.findById(LOCATION_ID)).thenReturn(Optional.empty());
+        when(mechanicRepository.findRosterByLocation(
+                        LOCATION_ID, MechanicStatus.ACTIVE, null, LocalDate.parse("2026-09-16"), pageable))
+                .thenReturn(new PageImpl<>(List.of(ada()), pageable, 1));
+        when(credentialRepository.findByPersonIdInOrderByIssuedOnDesc(List.of(PERSON_ID)))
+                .thenReturn(List.of());
+
+        Page<LocationTechnicianRosterEntryResponse> result =
+                service.listLocationTechnicians(LOCATION_ID, null, null, null, pageable);
+
+        assertRowIdentifiesTheMechanicByPersonId(result.getContent().get(0));
+    }
+
+    /**
+     * The serialized row, as a caller reads it: {@code mechanicPersonId} is the People person id
+     * createAssignment takes, {@code mechanicRecordId} is this module's surrogate, and neither the
+     * ambiguous {@code mechanicId} nor a second {@code personId} spelling is published (#2363).
+     */
+    private static void assertRowIdentifiesTheMechanicByPersonId(Object row) {
+        JsonNode json = JsonMapper.builder().build().valueToTree(row);
+        assertThat(json.path("mechanicPersonId").asString(null)).isEqualTo(PERSON_ID.toString());
+        assertThat(json.path("mechanicRecordId").asString(null)).isEqualTo(MECHANIC_ID.toString());
+        assertThat(json.has("mechanicId")).isFalse();
+        assertThat(json.has("personId")).isFalse();
     }
 
     @Test
@@ -350,7 +399,7 @@ class MechanicRosterQueryServiceTest {
             assertThat(entry.getShiftStart()).isNull();
             assertThat(entry.getShiftEnd()).isNull();
             assertThat(entry.getShiftMinutes()).isNull();
-            assertThat(entry.getPersonId()).isEqualTo(PERSON_ID);
+            assertThat(entry.getMechanicPersonId()).isEqualTo(PERSON_ID);
         });
     }
 

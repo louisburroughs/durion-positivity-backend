@@ -30,11 +30,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 @ExtendWith(MockitoExtension.class)
 class MechanicAvailabilityServiceTest {
 
     private static final String PERSON_ID = "01960011-0000-7000-8000-000000000701";
+    private static final UUID MECHANIC_RECORD_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
     // Window: 10:00–14:00 on 2026-06-15
     private static final Instant WINDOW_START = Instant.parse("2026-06-15T10:00:00Z");
@@ -89,7 +92,32 @@ class MechanicAvailabilityServiceTest {
 
         assertThat(result.getOverallStatus()).isEqualTo(AvailabilityStatus.AVAILABLE);
         assertThat(result.getConflicts()).isEmpty();
-        assertThat(result.getPersonId()).isEqualTo(PERSON_ID);
+        assertThat(result.getMechanicPersonId()).isEqualTo(UUID.fromString(PERSON_ID));
+    }
+
+    /**
+     * #2363: the result names the People person id {@code mechanicPersonId} (the value
+     * createAssignment takes) and this module's surrogate {@code mechanicRecordId}; the ambiguous
+     * {@code mechanicId} and the second {@code personId} spelling are gone from the serialized form.
+     */
+    @Test
+    void resultCarriesThePersonIdAndTheRecordIdUnderTheirOwnNames() {
+        Mechanic mechanic = buildMechanic();
+        when(mechanicRepository.findByPersonId(UUID.fromString(PERSON_ID))).thenReturn(Optional.of(mechanic));
+        when(staffingScheduleService.getScheduleBlocks(eq(PERSON_ID), any(), any()))
+                .thenReturn(List.of());
+        when(appointmentRepository.findByResourceIdAndResourceTypeAndStartAtLessThanAndEndAtGreaterThan(
+                        anyString(), anyString(), any(), any()))
+                .thenReturn(List.of());
+        when(travelBlockRepository.findOverlapping(anyString(), any(), any())).thenReturn(List.of());
+
+        MechanicAvailabilityResult result = service.queryAvailability(PERSON_ID, WINDOW_START, WINDOW_END);
+
+        JsonNode json = JsonMapper.builder().build().valueToTree(result);
+        assertThat(json.path("mechanicPersonId").asString(null)).isEqualTo(PERSON_ID);
+        assertThat(json.path("mechanicRecordId").asString(null)).isEqualTo(MECHANIC_RECORD_ID.toString());
+        assertThat(json.has("mechanicId")).isFalse();
+        assertThat(json.has("personId")).isFalse();
     }
 
     // -------------------------------------------------------------------------
@@ -274,7 +302,7 @@ class MechanicAvailabilityServiceTest {
 
     private Mechanic buildMechanic() {
         return Mechanic.builder()
-                .mechanicId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .mechanicId(MECHANIC_RECORD_ID)
                 .personId(UUID.fromString(PERSON_ID))
                 .firstName("Test")
                 .lastName("Mechanic")

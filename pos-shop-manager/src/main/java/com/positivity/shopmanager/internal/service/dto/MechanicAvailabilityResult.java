@@ -16,16 +16,18 @@ import lombok.Value;
 @Schema(description = "Result of evaluating a mechanic's availability over a time window")
 public class MechanicAvailabilityResult {
     @Schema(
-            description = "Mechanic identifier",
+            description = "The mechanic's People-domain person id (ADR-0015 §7 I7) - the value createAssignment "
+                    + "takes as mechanicPersonId. Use this to identify the mechanic across services.",
             example = "01960003-0000-7000-8000-000000000010",
             requiredMode = REQUIRED)
-    UUID mechanicId;
+    UUID mechanicPersonId;
 
     @Schema(
-            description = "Person identifier of the mechanic",
-            example = "01960003-0000-7000-8000-000000000020",
+            description = "Internal shop-manager mechanic record id (a local surrogate key). Not a person id and "
+                    + "not a stable cross-service identifier; do not send it to other services.",
+            example = "01960003-0000-7000-8000-000000000011",
             requiredMode = REQUIRED)
-    String personId;
+    UUID mechanicRecordId;
 
     @Schema(
             description = "Overall availability status for the requested window",

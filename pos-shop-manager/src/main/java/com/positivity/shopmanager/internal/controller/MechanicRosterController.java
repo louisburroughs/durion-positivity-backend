@@ -44,6 +44,9 @@ public class MechanicRosterController {
                     size and sort parameters, which default to a stable lastName, firstName, personId ordering.
                     Emits a SHOPMGR_MECHANIC_ROSTER_LIST audit event; no state changes occur, and rows trail the \
                     People/HR authority by the event-propagation delay.
+                    Each row identifies the mechanic by mechanicPersonId, the People-domain person id that \
+                    createAssignment takes (its sort key is still personId); mechanicRecordId is an internal \
+                    shop-manager record id and not a cross-service identifier.
                     Returns 403 when the caller lacks shop:technician:view, and an empty page rather than an error \
                     when no mechanic matches the filters.
                     """)

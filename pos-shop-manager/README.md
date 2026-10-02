@@ -78,6 +78,16 @@ last name, first name, and person ID before pagination, so it accepts `page` and
 `size` but ignores `sort`. The mechanic roster honours `sort` and defaults to that
 same ordering.
 
+Each roster row identifies the mechanic by `mechanicPersonId`, the People-domain
+person id (ADR-0015 §7 I7) and the value `POST /v1/appointments/{id}/assignments`
+takes as `mechanicPersonId`, so a row's id can be posted as it is. `mechanicRecordId`
+is this module's own surrogate key for the mechanic row: not a person id, not a
+cross-service identifier. Both are always present. Neither roster publishes
+`mechanicId` or `personId` any more (#2363; the assignment response made the same
+change in #2123); the mechanic roster's sort key for the person id is still
+`personId`, the entity property. The internal `MechanicAvailabilityResult` uses
+the same two names.
+
 Competence is read from the `ext_person_credential` replica of the People domain's
 credential aggregate (CAP-328) and never stored here. Each entry carries
 `credentials`: every credential the person holds, with `skillCode`, the issuer's own

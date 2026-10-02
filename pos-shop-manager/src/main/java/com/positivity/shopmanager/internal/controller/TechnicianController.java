@@ -50,8 +50,9 @@ public class TechnicianController {
             description = """
                     Returns the technicians whose ACTIVE technician staffing assignment at one shop location is \
                     effective on a date, the same assignments a booking on that date counts, enriched with mechanic \
-                    identity and skills from the eventually consistent HR read model, plus a PLACEHOLDER shift \
-                    window per technician.
+                    identity (mechanicPersonId, the People-domain person id that createAssignment takes; \
+                    mechanicRecordId is an internal record id) and skills from the eventually consistent HR read \
+                    model, plus a PLACEHOLDER shift window per technician.
                     PLACEHOLDER: shiftStart, shiftEnd, shiftMinutes, shiftSource and shiftStatus are derived from \
                     the shop location's operating hours for the requested date, not from the person's own roster, \
                     so every technician at the location carries the same window and staggered shifts, part-time \
