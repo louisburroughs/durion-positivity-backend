@@ -1,11 +1,13 @@
 package com.positivity.supplier.internal.mktcat.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 import com.positivity.domainevents.supplier.SupplierCatalogEnrichmentImage;
 import com.positivity.domainevents.supplier.SupplierCatalogEnrichmentText;
 import com.positivity.domainevents.supplier.SupplierCatalogRepublishCompletedV1;
+import com.positivity.domainevents.supplier.SupplierCatalogRepublishRequestedV1;
 import com.positivity.domainevents.supplier.SupplierCatalogUpdatedV1;
 import com.positivity.supplier.PostgresSliceTestBase;
 import com.positivity.supplier.internal.command.service.SupplierCommandListener;
@@ -20,6 +22,7 @@ import com.positivity.supplier.internal.repository.ProcessedEventRepository;
 import com.positivity.supplier.internal.repository.SupplierMktCatVariantRepository;
 import com.positivity.supplier.internal.repository.SupplierOutboxEventRepository;
 import com.positivity.supplier.internal.service.SupplierOutboxEventWriter;
+import jakarta.persistence.EntityManager;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.time.Clock;
@@ -29,6 +32,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import javax.sql.DataSource;
+import org.hibernate.Session;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -37,9 +41,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
@@ -60,6 +67,9 @@ import tools.jackson.databind.json.JsonMapper;
  * <p>{@code Propagation.NOT_SUPPORTED} for the reason {@link MktCatVariantStagerTransactionTest}
  * gives: the stager, the listener and the republisher each own their transaction, and a test wrapped
  * in its own would hide whether any of them committed.
+ *
+ * <p>The page size is 1 throughout, so every run that re-emits more than one variant crosses a page
+ * boundary — and with it the flush and clear of the persistence context that boundary performs.
  */
 @Import({
     JpaConfig.class,
@@ -68,6 +78,7 @@ import tools.jackson.databind.json.JsonMapper;
     SupplierOutboxEventWriter.class,
     MktCatRepublishCommandTest.SupportConfig.class
 })
+@TestPropertySource(properties = "pos.supplier.mktcat.republish-page-size=1")
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 @DisplayName("MKCAT re-publication command — an unchanged variant is published again under a new id (#2356)")
 class MktCatRepublishCommandTest extends PostgresSliceTestBase {
@@ -85,7 +96,13 @@ class MktCatRepublishCommandTest extends PostgresSliceTestBase {
         }
     }
 
-    private static final Instant NOW = Instant.parse("2026-10-02T10:00:00Z");
+    /**
+     * Finer than the {@code timestamp(6)} the staged row keeps, as a production clock is. With a
+     * whole-second instant the round trip through the database is lossless by accident, and the
+     * comparison of the original payload with the re-emitted one below would prove nothing.
+     */
+    private static final Instant NOW = Instant.parse("2026-10-02T10:00:00.123456789Z");
+
     private static final SupplierRef SUPPLIER = new SupplierRef("ediwheel-net");
 
     @Autowired
@@ -111,6 +128,9 @@ class MktCatRepublishCommandTest extends PostgresSliceTestBase {
 
     @Autowired
     private DataSource dataSource;
+
+    @Autowired
+    private EntityManager entityManager;
 
     /** Fresh per test, so rows other slices left in the shared container cannot be mistaken for ours. */
     private UUID profileId;
@@ -250,6 +270,71 @@ class MktCatRepublishCommandTest extends PostgresSliceTestBase {
         // treats an unchanged contentHash as a no-op.
         assertThat(eventsOfType(SupplierCatalogUpdatedV1.EVENT_TYPE)).hasSize(3);
         assertThat(eventsOfType(SupplierCatalogRepublishCompletedV1.EVENT_TYPE)).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("a multi-page run keeps one page in the persistence context, not the whole catalogue")
+    void aMultiPageRunDoesNotAccumulateEveryPageInThePersistenceContext() {
+        stager.stageAndPublish(profileId, SUPPLIER, variant("V1"), texts(), images(), "hash-1");
+        stager.stageAndPublish(profileId, SUPPLIER, variant("V2"), texts(), images(), "hash-2");
+        stager.stageAndPublish(profileId, SUPPLIER, variant("V3"), texts(), images(), "hash-3");
+
+        // The republisher joins this transaction the way it joins the listener's, so the persistence
+        // context it worked in can still be inspected once it has returned.
+        Integer managedAfterTheRun = new TransactionTemplate(transactionManager).execute(_ -> {
+            republisher.republish(new SupplierCatalogRepublishRequestedV1(profileId, "operator", "#2356"));
+            return entityManager.unwrap(Session.class).getStatistics().getEntityCount();
+        });
+
+        // Three pages of one variant each. Left to accumulate, the context would hold all three
+        // staged rows, their three outbox rows and the completion: seven entities, growing with the
+        // catalogue. Cleared per page it holds only what was queued after the last clear — the
+        // completion event.
+        assertThat(managedAfterTheRun).isEqualTo(1);
+        // And clearing lost nothing and skipped nothing: every variant was re-emitted exactly once.
+        assertThat(eventsOfType(SupplierCatalogUpdatedV1.EVENT_TYPE))
+                .extracting(
+                        event -> event.path("payload").path("vendorVariantId").stringValue())
+                .containsExactlyInAnyOrder("V1", "V2", "V3", "V1", "V2", "V3");
+        assertThat(single(eventsOfType(SupplierCatalogRepublishCompletedV1.EVENT_TYPE))
+                        .path("payload")
+                        .path("variantCount")
+                        .intValue())
+                .isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("an unreadable staged row on a later page rolls back the pages already flushed, and the mark")
+    void anUnreadableLaterRowRollsBackEverythingTheRunFlushed() throws Exception {
+        stager.stageAndPublish(profileId, SUPPLIER, variant("V1"), texts(), images(), "hash-1");
+        stager.stageAndPublish(profileId, SUPPLIER, variant("V2"), texts(), images(), "hash-2");
+        // The second row in the republisher's own order. With a page size of 1 the first row's
+        // outbox insert has been flushed to the database by the time this one is read.
+        UUID secondRow = variantRepository
+                .findByVendorProfileIdOrderBySupplierMktCatVariantIdAsc(profileId, PageRequest.of(1, 1))
+                .getFirst()
+                .getSupplierMktCatVariantId();
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement corrupt = connection.prepareStatement(
+                        "UPDATE supplier_mktcat_variant SET texts_json = ? WHERE supplier_mktcat_variant_id = ?")) {
+            corrupt.setString(1, "{not json");
+            corrupt.setObject(2, secondRow);
+            assertThat(corrupt.executeUpdate()).isEqualTo(1);
+        }
+        String commandId = newCommandId();
+
+        // Rethrown to the container, not recorded: the command is valid and this module's staged data
+        // is what is broken, so the record is retried and dead-lettered rather than marked handled.
+        assertThatThrownBy(() -> listener.onSupplierCommand(republishCommand(commandId)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("texts_json");
+
+        // All or nothing. Only the two original publications remain: the first variant's re-emit was
+        // flushed and then rolled back, no completion claims a count, and the command is unmarked so
+        // its redelivery is not skipped as a repeat.
+        assertThat(eventsOfType(SupplierCatalogUpdatedV1.EVENT_TYPE)).hasSize(2);
+        assertThat(eventsOfType(SupplierCatalogRepublishCompletedV1.EVENT_TYPE)).isEmpty();
+        assertThat(processedEventRepository.existsById(commandId)).isFalse();
     }
 
     private void cleanUpProfile(UUID otherProfile) {

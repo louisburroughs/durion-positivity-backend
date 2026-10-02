@@ -7,6 +7,7 @@ import com.positivity.domainevents.supplier.SupplierCatalogRepublishRequestedV1;
 import com.positivity.supplier.internal.entity.SupplierMktCatVariantEntity;
 import com.positivity.supplier.internal.repository.SupplierMktCatVariantRepository;
 import com.positivity.supplier.internal.service.SupplierOutboxEventWriter;
+import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -64,14 +65,20 @@ public class MktCatRepublisher {
     private final SupplierOutboxEventWriter outboxWriter;
     private final ObjectMapper objectMapper;
     private final Clock clock;
+    private final EntityManager entityManager;
 
-    /** How many staged variants are read per page while re-emitting. */
+    /** How many staged variants are read, queued and flushed per page while re-emitting. */
     @Value("${pos.supplier.mktcat.republish-page-size:200}")
     private int pageSize;
 
     /**
      * Re-emits the vendor profile's staged variants, followed by a completion event carrying their
      * count.
+     *
+     * <p>One transaction, joined from the caller, so the re-emitted events and the command's
+     * {@code processed_events} mark commit or roll back together. The persistence context is flushed
+     * and <strong>cleared</strong> after every page: a caller must not rely on an entity it loaded
+     * earlier in the same transaction still being managed after this returns.
      *
      * @return the number of variant events queued; {@code 0} when nothing is staged for the profile,
      *         which is logged
@@ -83,9 +90,13 @@ public class MktCatRepublisher {
         int emitted = 0;
         String supplierRef = null;
 
-        // Read and queued a page at a time: a manufacturer's catalogue can run to thousands of designs,
-        // each with its marketing copy, and holding all of them to re-emit a recovery would make the
-        // recovery itself the outage.
+        // A manufacturer's catalogue can run to thousands of designs, each with its marketing copy, and
+        // every one becomes two managed entities here: the staged row that was read and the outbox row
+        // that was queued. Paging alone would not bound that — one transaction is one persistence
+        // context, and it would hold them all until commit. So each page's outbox rows are flushed to
+        // the database and the context is cleared before the next page is read, which keeps the heap
+        // at one page of variants and events. The transaction is not split: the flushed rows are still
+        // uncommitted, and a failure on a later page rolls every one of them back.
         List<SupplierMktCatVariantEntity> page;
         int pageNumber = 0;
         do {
@@ -98,6 +109,11 @@ public class MktCatRepublisher {
                 supplierRef = row.getSupplierRef();
                 emitted++;
             }
+            // Offset paging survives the clear: nothing here changes a staged row, and the order is
+            // the rows' own ids, so page n+1 starts where page n ended whether or not page n is
+            // still in memory.
+            entityManager.flush();
+            entityManager.clear();
         } while (page.size() == pageSize);
 
         if (supplierRef == null) {
@@ -131,7 +147,8 @@ public class MktCatRepublisher {
      * When the enrichment being re-delivered was fetched: the instant the row was last published,
      * not this one. A re-emit re-delivers a fact, it does not restate when the fact happened.
      */
-    private static Instant enrichedAt(SupplierMktCatVariantEntity row, Instant fallback) {
+    @NonNull
+    private static Instant enrichedAt(@NonNull SupplierMktCatVariantEntity row, @NonNull Instant fallback) {
         return row.getLastPublishedAt() == null ? fallback : row.getLastPublishedAt();
     }
 
@@ -142,7 +159,8 @@ public class MktCatRepublisher {
      * original one rather than a fresh reading of the vendor's catalogue — which is why no vendor
      * call is made here, and why the hash the consumer compares still describes the content.
      */
-    private List<SupplierCatalogEnrichmentText> texts(SupplierMktCatVariantEntity row) {
+    @NonNull
+    private List<SupplierCatalogEnrichmentText> texts(@NonNull SupplierMktCatVariantEntity row) {
         try {
             return objectMapper.readValue(row.getTextsJson(), TEXTS);
         } catch (JacksonException e) {
@@ -150,7 +168,8 @@ public class MktCatRepublisher {
         }
     }
 
-    private List<SupplierCatalogEnrichmentImage> images(SupplierMktCatVariantEntity row) {
+    @NonNull
+    private List<SupplierCatalogEnrichmentImage> images(@NonNull SupplierMktCatVariantEntity row) {
         try {
             return objectMapper.readValue(row.getImagesJson(), IMAGES);
         } catch (JacksonException e) {
@@ -164,7 +183,9 @@ public class MktCatRepublisher {
      * that and the whole re-publication rolls back: skipping the row would re-emit a catalogue that
      * looks whole to the consumer while a design stayed missing.
      */
-    private static IllegalStateException unreadable(SupplierMktCatVariantEntity row, String column, Exception cause) {
+    @NonNull
+    private static IllegalStateException unreadable(
+            @NonNull SupplierMktCatVariantEntity row, @NonNull String column, @NonNull Exception cause) {
         return new IllegalStateException(
                 "Staged MKCAT variant " + row.getSupplierMktCatVariantId() + " has unreadable " + column, cause);
     }

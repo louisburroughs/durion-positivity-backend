@@ -283,7 +283,7 @@ public class SupplierCatalogEnrichmentHandler {
      * reported here can close by itself. The gauge holds the value until the profile's next
      * re-publication restates it; a gap that survives a second one is real.
      */
-    private void reportRepublishGap(JsonNode envelope) {
+    private void reportRepublishGap(@NonNull JsonNode envelope) {
         SupplierCatalogRepublishCompletedV1 payload =
                 objectMapper.treeToValue(envelope.path("payload"), SupplierCatalogRepublishCompletedV1.class);
 
@@ -312,7 +312,7 @@ public class SupplierCatalogEnrichmentHandler {
     }
 
     /** Sets the vendor profile's gap gauge, registering it the first time the profile is seen. */
-    private void recordGap(UUID vendorProfileId, long missing) {
+    private void recordGap(@NonNull UUID vendorProfileId, long missing) {
         designGaps
                 .computeIfAbsent(vendorProfileId, id -> {
                     AtomicLong value = new AtomicLong();

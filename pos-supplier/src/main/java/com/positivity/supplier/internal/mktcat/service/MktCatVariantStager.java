@@ -10,6 +10,7 @@ import com.positivity.supplier.internal.repository.SupplierMktCatVariantReposito
 import com.positivity.supplier.internal.service.SupplierOutboxEventWriter;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -56,7 +57,11 @@ public class MktCatVariantStager {
             @NonNull List<SupplierCatalogEnrichmentText> texts,
             @NonNull List<SupplierCatalogEnrichmentImage> images,
             @NonNull String contentHash) {
-        Instant now = Instant.now(clock);
+        // Cut to the precision the staged row keeps (timestamp(6)). The event below states this
+        // instant and a re-publication later reads it back from the row (MktCatRepublisher, #2356); a
+        // clock that resolves finer than a microsecond would otherwise publish one instant and store
+        // another, and the re-emitted enrichment would not be the one that was published.
+        Instant now = Instant.now(clock).truncatedTo(ChronoUnit.MICROS);
         Optional<SupplierMktCatVariantEntity> existing =
                 variantRepository.findByVendorProfileIdAndVendorVariantId(vendorProfileId, variant.vendorVariantId());
 

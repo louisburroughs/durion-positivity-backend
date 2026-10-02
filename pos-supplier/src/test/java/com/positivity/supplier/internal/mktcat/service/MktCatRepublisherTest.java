@@ -5,7 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -18,6 +20,7 @@ import com.positivity.domainevents.supplier.SupplierCatalogUpdatedV1;
 import com.positivity.supplier.internal.entity.SupplierMktCatVariantEntity;
 import com.positivity.supplier.internal.repository.SupplierMktCatVariantRepository;
 import com.positivity.supplier.internal.service.SupplierOutboxEventWriter;
+import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -28,6 +31,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -53,11 +57,15 @@ class MktCatRepublisherTest {
     @Mock
     private SupplierOutboxEventWriter outboxWriter;
 
+    @Mock
+    private EntityManager entityManager;
+
     private MktCatRepublisher republisher;
 
     @BeforeEach
     void setUp() {
-        republisher = new MktCatRepublisher(variantRepository, outboxWriter, MAPPER, Clock.fixed(NOW, ZoneOffset.UTC));
+        republisher = new MktCatRepublisher(
+                variantRepository, outboxWriter, MAPPER, Clock.fixed(NOW, ZoneOffset.UTC), entityManager);
         ReflectionTestUtils.setField(republisher, "pageSize", 2);
     }
 
@@ -180,6 +188,33 @@ class MktCatRepublisherTest {
         assertThat(completion.variantCount()).isEqualTo(3);
         assertThat(completion.requestedBy()).isEqualTo("operator");
         assertThat(completion.completedAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    @DisplayName("each page is flushed and cleared before the next is read, so the unit of work stays one page deep")
+    void flushesAndClearsThePersistenceContextBetweenPages() {
+        stage(List.of(staged(1), staged(2)), List.of(staged(3)));
+
+        republisher.republish(request());
+
+        // The order is the point. Flushing before the page's events are queued would write nothing;
+        // clearing without flushing would drop the queued outbox rows; and reading the next page
+        // first would have both pages managed at once. What this cannot show is that the heap stays
+        // bounded on a real persistence context — MktCatRepublishCommandTest does that.
+        InOrder order = inOrder(variantRepository, outboxWriter, entityManager);
+        order.verify(variantRepository)
+                .findByVendorProfileIdOrderBySupplierMktCatVariantIdAsc(PROFILE_ID, PageRequest.of(0, 2));
+        order.verify(outboxWriter, times(2)).publish(any(), any());
+        order.verify(entityManager).flush();
+        order.verify(entityManager).clear();
+        order.verify(variantRepository)
+                .findByVendorProfileIdOrderBySupplierMktCatVariantIdAsc(PROFILE_ID, PageRequest.of(1, 2));
+        order.verify(outboxWriter).publish(any(), any());
+        order.verify(entityManager).flush();
+        order.verify(entityManager).clear();
+        // The completion event, queued after the last clear and flushed by the commit.
+        order.verify(outboxWriter).publish(any(), any());
+        order.verifyNoMoreInteractions();
     }
 
     @Test

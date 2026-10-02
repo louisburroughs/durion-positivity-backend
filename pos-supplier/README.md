@@ -323,8 +323,18 @@ re-publication above, and it exists because nothing else can bring a lost enrich
 `MktCatRepublisher` answers the command by reading `supplier_mktcat_variant` for the profile a page
 at a time (`pos.supplier.mktcat.republish-page-size`, default 200) and queueing each row through the
 outbox as a `supplier.catalog.updated` event with a **new `eventId`**, the row's own id as the record
-key, and the content exactly as staged — stored `contentHash`, stored texts and images, no vendor
-call. The run ends with one `supplier.catalog.republish.completed` event
+key, and the payload the original publication carried — stored `contentHash`, stored texts and
+images, and `occurredAt` read back from `last_published_at`, with no vendor call. The payload is the
+same to the field because `MktCatVariantStager` cuts the fetch instant to microseconds, the precision
+the `timestamp(6)` column keeps, before it both stores and publishes it; only the envelope differs
+(`eventId`, `occurredAtUtc`).
+
+The whole run is **one transaction**, shared with the command's `processed_events` mark, so it is all
+or nothing: a failure on any page rolls back every event queued before it and leaves the command
+unmarked. Paging bounds the heap, not the unit of work — after each page the outbox rows are flushed
+and the persistence context is cleared, so memory holds one page of variants and events rather than
+the catalogue, while the flushed rows stay uncommitted until the end. A very large catalogue is
+therefore still one long transaction on the command-listener thread. The run ends with one `supplier.catalog.republish.completed` event
 (`SupplierCatalogRepublishCompletedV1`: `vendorProfileId`, `supplierRef`, `variantCount`,
 `requestedBy`, `completedAt`), keyed on the vendor profile, which is what lets the consumer compare
 its own count against this module's.

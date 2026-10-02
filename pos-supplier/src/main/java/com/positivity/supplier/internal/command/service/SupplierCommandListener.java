@@ -197,7 +197,7 @@ public class SupplierCommandListener {
         republisher.republish(request);
     }
 
-    private void applyCatalogRepublishRequested(JsonNode envelope) {
+    private void applyCatalogRepublishRequested(@NonNull JsonNode envelope) {
         SupplierCatalogRepublishRequestedV1 request =
                 objectMapper.treeToValue(envelope.path("payload"), SupplierCatalogRepublishRequestedV1.class);
         mktCatRepublisher.republish(request);

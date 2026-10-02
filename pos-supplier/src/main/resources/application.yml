@@ -237,9 +237,11 @@ pos:
       # just a catalogue that stops changing. Both modes go through one importer that publishes on
       # content change, so running both costs reads and emits nothing extra.
       poll-interval-ms: ${SUPPLIER_MKTCAT_POLL_INTERVAL_MS:900000}
-      # Re-publication on request (ADR-0044 §4, #2356): how many staged variants are read per page
-      # while every variant of a vendor profile is re-emitted. Bounds memory, not the re-emit — the
-      # whole profile is always re-published, because nobody knows which enrichments were lost.
+      # Re-publication on request (ADR-0044 §4, #2356): how many staged variants are read, queued
+      # and flushed per page while every variant of a vendor profile is re-emitted. The persistence
+      # context is cleared after each page, so this bounds the heap; it does not bound the re-emit or
+      # split its transaction — the whole profile is always re-published, in one unit of work,
+      # because nobody knows which enrichments were lost.
       republish-page-size: ${SUPPLIER_MKTCAT_REPUBLISH_PAGE_SIZE:200}
       # Artwork is fetched directly rather than through the supplier base client: an image URI is an
       # arbitrary asset URL published inside a document, and sending vendor credentials to it would

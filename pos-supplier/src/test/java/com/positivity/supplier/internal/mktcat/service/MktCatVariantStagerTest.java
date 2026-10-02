@@ -6,6 +6,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.supplier.SupplierCatalogEnrichmentImage;
 import com.positivity.domainevents.supplier.SupplierCatalogEnrichmentText;
 import com.positivity.domainevents.supplier.SupplierCatalogUpdatedV1;
@@ -17,6 +18,7 @@ import com.positivity.supplier.internal.service.SupplierOutboxEventWriter;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -24,6 +26,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -157,6 +160,35 @@ class MktCatVariantStagerTest {
                 NOW);
         assertThat(payload.hasUnresolvedImages()).isTrue();
         assertThat(payload.texts()).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("the published instant is the stored instant, even from a clock finer than the column")
+    void publishesTheInstantItStoresNotAFinerOne() {
+        // last_published_at is timestamp(6). A re-publication reads the instant back from the row
+        // (#2356), so an event stating nanoseconds the row cannot keep would be re-emitted as a
+        // different enrichment from the one that was published.
+        Instant finerThanTheColumn = Instant.parse("2026-08-16T10:00:00.123456789Z");
+        Instant asStored = finerThanTheColumn.truncatedTo(ChronoUnit.MICROS);
+        MktCatVariantStager nanosecondStager = new MktCatVariantStager(
+                variantRepository,
+                outboxEventWriter,
+                JsonMapper.builder().build(),
+                Clock.fixed(finerThanTheColumn, ZoneOffset.UTC));
+        when(variantRepository.findByVendorProfileIdAndVendorVariantId(any(), any()))
+                .thenReturn(Optional.empty());
+        ArgumentCaptor<SupplierMktCatVariantEntity> row = ArgumentCaptor.forClass(SupplierMktCatVariantEntity.class);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<DomainEventEnvelope<?>> event = ArgumentCaptor.forClass(DomainEventEnvelope.class);
+
+        nanosecondStager.stageAndPublish(PROFILE_ID, SUPPLIER, variant(), texts(), List.of(), "hash-1");
+
+        verify(variantRepository).save(row.capture());
+        verify(outboxEventWriter).publish(any(), event.capture());
+        assertThat(row.getValue().getLastPublishedAt()).isEqualTo(asStored);
+        assertThat(((SupplierCatalogUpdatedV1) event.getValue().payload()).occurredAt())
+                .isEqualTo(asStored);
+        assertThat(event.getValue().occurredAtUtc()).isEqualTo(asStored);
     }
 
     private static MarketingVariant variant() {
