@@ -180,11 +180,11 @@ mcp:
       # Sent as keep_alive so the local model stays resident between turns beside the embedding
       # model. Empty omits the Ollama-only field (set it empty for the hosted provider).
       keep-alive: ${MCP_TAGGING_KEEP_ALIVE:30m}
-    # Per-tag confidence threshold (mcp.tagging.thresholds.<tag>); 0.75 for every tag until shadow
-    # data sets per-tag values (section 1, section 6). Example: thresholds.simple_chat: 0.8
-    # Per-tag confidence thresholds (ADR-0068 section 1; values from the section 6 bake-off, recorded
-    # in the ADR Changelog). A listed tag acts only when the model's confidence meets its threshold;
-    # below it the heuristic answers. Bracketed keys keep the dot in the map key.
+    # Per-tag confidence thresholds (ADR-0068 section 1). A listed tag acts only when the model's
+    # confidence meets its threshold; below it the heuristic answers. The shipped fallback is the
+    # pre-bake-off 0.75 for every tag; the calibrated per-model values (section 6 bake-off, recorded in
+    # the ADR Changelog) come only from the MCP_TAGGING_THRESHOLD_* environment overrides (see
+    # .env.example). Bracketed keys keep the dot in the map key.
     thresholds:
       simple_chat: ${MCP_TAGGING_THRESHOLD_SIMPLE_CHAT:0.75}
       follows_previous_turn: ${MCP_TAGGING_THRESHOLD_FOLLOWS_PREVIOUS_TURN:0.75}

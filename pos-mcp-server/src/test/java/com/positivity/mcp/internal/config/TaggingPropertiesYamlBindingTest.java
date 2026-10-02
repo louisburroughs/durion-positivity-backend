@@ -59,6 +59,10 @@ class TaggingPropertiesYamlBindingTest {
 
     private static TaggingProperties bind(Map<String, Object> environmentOverrides) {
         StandardEnvironment environment = new StandardEnvironment();
+        // The tests pin what the repo ships plus the given overrides: an exported MCP_TAGGING_* on the
+        // developer's or CI's machine must not take part, so the ambient sources are removed.
+        environment.getPropertySources().remove(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME);
+        environment.getPropertySources().remove(StandardEnvironment.SYSTEM_PROPERTIES_PROPERTY_SOURCE_NAME);
         try {
             for (PropertySource<?> source : new YamlPropertySourceLoader()
                     .load("tagging-application.yml", new ClassPathResource("application.yml"))) {
