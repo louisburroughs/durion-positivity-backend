@@ -37,6 +37,8 @@ Inventory metrics from the existing inventory RAG include inventory turnover, DI
 ## Financial reporting metrics
 Accounting RAG defines revenue, expenses, receivables, payables, journal entries, and posted-entry immutability. Financial reports must use accounting-period boundaries and posted or finalized states as verified by source. Do not treat estimate amount as revenue or unfinalized invoice as posted accounting impact unless the source confirms it.
 
+Money figures (sales and revenue, margin and profit, vendor spend, and period comparisons of them) are accounting, not operational reporting: their definitions, the basis of each platform report and what the platform does not compute are in the sales analytics guide (`accounting.sales-analytics`). In short: posted income-statement revenue is net of sales tax and dated at invoice finalization, revenue by customer sums tax-inclusive invoice totals by creation date, gross margin and profit by product are not computed, no report buckets a window by month or week, and vendor spend is cash paid per vendor in a window.
+
 ## Common reporting questions
 | Question | Required interpretation |
 |---|---|
@@ -44,3 +46,13 @@ Accounting RAG defines revenue, expenses, receivables, payables, journal entries
 | "How many jobs did we finish this week?" | Date range, completion event, location(s), excluded reopened/cancelled items. |
 | "Why is cycle time high?" | Compare blocked states: waiting for parts, approval delay, scheduling conflict, labor gap, quality check. |
 | "Which location is behind?" | Requires comparable scope and all-location visibility. |
+
+## Sources
+Platform sources for the financial reporting section:
+
+- `pos-accounting/openapi.yaml` (`generateIncomeStatement`, `getVendorSpend`, `getCollectionsAnalytics`)
+- `pos-accounting/src/main/java/com/positivity/accounting/internal/service/FinancialReportingServiceImpl.java`
+- `pos-invoice/openapi.yaml` (`getRevenueByCustomer`)
+- `pos-mcp-server/src/main/resources/rag/sales-analytics-guide.md`
+- `durion/domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md` (invoice revenue recognition)
+- `pos-accounting` and `pos-workorder` `permissions.yaml` (the permission codes in the header)

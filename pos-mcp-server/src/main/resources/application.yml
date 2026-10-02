@@ -273,6 +273,15 @@ mcp:
           # direct JE endpoints; reporting:view:financial-statements covers facade callers, whose JE
           # surface was reshaped to the general-ledger report (#1519 Wave 4, V37).
           required-permissions: ["accounting:je:view", "reporting:view:financial-statements"]
+        # #2384: money analytics (revenue bases, margin and profit, period comparisons, vendor spend).
+        # Scope accounting: the domains: sentences put revenue, margin and profit in accounting. Visible to a
+        # caller holding any one of the three permissions that gate the reports it explains.
+        - id: "accounting.sales-analytics"
+          source-path: "classpath:rag/sales-analytics-guide.md"
+          rag-scope: "accounting"
+          entities: [sales-report, financial-report, customer, supplier]
+          required-permissions:
+            ["reporting:view:financial-statements", "accounting:analytics:view", "invoice:analytics:view"]
         - id: "inventory.inv-cntrl"
           source-path: "classpath:rag/inv-cntrl-rag.md"
           rag-scope: "inventory"

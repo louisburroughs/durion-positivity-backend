@@ -171,7 +171,8 @@ public class ScopeGraphRealConfigValidationTest {
         assertThat(catalog.toolPrerequisites()).isNotEmpty();
     }
 
-    private static ScopeGraphBuildResult build(String profile) {
+    /** Package-private: the #2384 analytics-entity test resolves messages against this same graph. */
+    static ScopeGraphBuildResult build(String profile) {
         Specs moduleSpecs = specs();
         return BUILDER.build(new ScopeGraphSources(
                 EntityLexiconLoader.loadDefault(),

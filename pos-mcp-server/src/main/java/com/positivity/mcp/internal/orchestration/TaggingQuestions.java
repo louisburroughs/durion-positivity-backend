@@ -34,7 +34,7 @@ import org.springframework.stereotype.Component;
 /**
  * ADR-0068 §1 / spec §2.3: the closed question set of one tagging request, built from one list of tag
  * definitions in code. Twelve fixed tags, then the {@code domain} Choice, then one {@code entity_<key>}
- * Noul per lexicon entity (44 questions for today's lexicon; 13 without them, the default). The entity
+ * Noul per lexicon entity (45 questions for today's lexicon; 13 without them, the default). The entity
  * Nouls are asked only when {@code mcp.scope-graph.mode} is not {@code off} (they seed the ADR-0069
  * scope, their only consumer) <em>and</em> {@code mcp.tagging.entity-questions} is true (the model's
  * context must hold the wide request).

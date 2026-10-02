@@ -589,6 +589,39 @@ entities:
       - {tool: ReportingFacadeTool, access: reads}
       - {tool: AccountingFacadeTool, access: reads}
 
+  # #2384: the period money analytics (sales and revenue, margin and profit, vendor spend, period
+  # comparisons), apart from the statements themselves (financial-report). Domain accounting, not
+  # reporting: the domains: sentences put money figures in accounting and leave reporting to the
+  # operational KPIs, and every figure behind it is served by pos-accounting or pos-invoice.
+  # Deliberately absent: bare "margin" / "marge" / "margen" (the catalog's price-override
+  # guardrail margin, minMarginPercent, is a pricing concept), bare "trend" (WIP and cycle-time
+  # trends are operational), "top customers" (it would shadow the customer seed; the glossary
+  # aliases "top customers by revenue" / "by value" link both), and "vendor spend" (the glossary
+  # alias already denotes supplier and this entity; a lexicon copy would shadow supplier).
+  # q1-q4 / t1-t4 name a quarter, the subject of a bare comparison ("How did Q3 compare to Q2?").
+  # Known widenings, accepted because a seed adds scope: "spend time", fr "sont revenus" (came
+  # back), es "ingreso" as an entry or admission, "point de vente", and T4 as the Canadian slip.
+  - key: sales-report
+    domain: accounting
+    terms:
+      en: [sales, revenue, sales report, revenue report, gross margin, profit margin, gross profit, net profit, net income, profit, spend, spent, year over year, quarter over quarter, q1, q2, q3, q4]
+      fr: [vente, chiffre d'affaires, revenu, rapport des ventes, marge brute, marge bénéficiaire, bénéfice brut, bénéfice net, bénéfice, profit, dépense, d'une année à l'autre, t1, t2, t3, t4]
+      es: [venta, ingreso, informe de ventas, margen bruto, margen de utilidad, utilidad bruta, utilidad neta, utilidad, ganancia, gasto, gastamos, interanual, t1, t2, t3, t4]
+    relates_to:
+      - {entity: financial-report, label: derived_from}
+      - {entity: invoice, label: derived_from}
+      - {entity: customer, label: ranks}
+      - {entity: supplier, label: ranks}
+    schemas:
+      - 'accounting:IncomeStatementReport'
+      - 'accounting:VendorSpendReport'
+      - 'accounting:CollectionsAnalyticsReport'
+      - 'invoice:RevenueByCustomerReport'
+    facade_tools:
+      - {tool: ReportingFacadeTool, access: reads}
+      - {tool: AccountingFacadeTool, access: reads}
+      - {tool: InvoiceFacadeTool, access: reads}
+
   - key: bank-reconciliation
     domain: accounting
     terms:
