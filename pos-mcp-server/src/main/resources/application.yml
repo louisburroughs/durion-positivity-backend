@@ -180,9 +180,27 @@ mcp:
       # Sent as keep_alive so the local model stays resident between turns beside the embedding
       # model. Empty omits the Ollama-only field (set it empty for the hosted provider).
       keep-alive: ${MCP_TAGGING_KEEP_ALIVE:30m}
-    # Per-tag confidence threshold (mcp.tagging.thresholds.<tag>); 0.75 for every tag until shadow
-    # data sets per-tag values (section 1, section 6). Example: thresholds.simple_chat: 0.8
-    thresholds: {}
+    # Per-tag confidence thresholds (ADR-0068 section 1). A listed tag acts only when the model's
+    # confidence meets its threshold; below it the heuristic answers. The shipped fallback is the
+    # pre-bake-off 0.75 for every tag; the calibrated per-model values (section 6 bake-off, recorded in
+    # the ADR Changelog) come only from the MCP_TAGGING_THRESHOLD_* environment overrides (see
+    # .env.example). Bracketed keys keep the dot in the map key.
+    thresholds:
+      simple_chat: ${MCP_TAGGING_THRESHOLD_SIMPLE_CHAT:0.75}
+      follows_previous_turn: ${MCP_TAGGING_THRESHOLD_FOLLOWS_PREVIOUS_TURN:0.75}
+      needs_web_search: ${MCP_TAGGING_THRESHOLD_NEEDS_WEB_SEARCH:0.75}
+      about_inventory: ${MCP_TAGGING_THRESHOLD_ABOUT_INVENTORY:0.75}
+      about_orders: ${MCP_TAGGING_THRESHOLD_ABOUT_ORDERS:0.75}
+      implies_date_window: ${MCP_TAGGING_THRESHOLD_IMPLIES_DATE_WINDOW:0.75}
+      admin_account_question: ${MCP_TAGGING_THRESHOLD_ADMIN_ACCOUNT_QUESTION:0.75}
+      compound_question: ${MCP_TAGGING_THRESHOLD_COMPOUND_QUESTION:0.75}
+      workflow_state: ${MCP_TAGGING_THRESHOLD_WORKFLOW_STATE:0.75}
+      "[workflow_state.non-idle]": ${MCP_TAGGING_THRESHOLD_WORKFLOW_STATE_NON_IDLE:0.75}
+      intent: ${MCP_TAGGING_THRESHOLD_INTENT:0.75}
+      complexity: ${MCP_TAGGING_THRESHOLD_COMPLEXITY:0.75}
+      risk: ${MCP_TAGGING_THRESHOLD_RISK:0.75}
+      domain: ${MCP_TAGGING_THRESHOLD_DOMAIN:0.75}
+      entity: ${MCP_TAGGING_THRESHOLD_ENTITY:0.75}
     # The message is cut at this many characters before it becomes the request state (tev1 reads
     # about 2,000 tokens); a cut message is still tagged and the cut is counted.
     max-state-chars: ${MCP_TAGGING_MAX_STATE_CHARS:4000}
