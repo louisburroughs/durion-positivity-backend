@@ -101,7 +101,7 @@ public class SettlementEventsListener {
     private final ExtInvoicePaymentReversalRepository extInvoicePaymentReversalRepository;
     private final ExtInvoiceDepositCreditApplicationRepository extInvoiceDepositCreditApplicationRepository;
     private final LedgerCurrency ledgerCurrency;
-    private final InventoryFactIngestionRecorder ingestionRecorder;
+    private final KafkaFactIngestionRecorder ingestionRecorder;
     private final Counter payloadRejectedCounter;
     private final Counter paymentSettledUnmappableCounter;
 
@@ -117,7 +117,7 @@ public class SettlementEventsListener {
             ExtInvoicePaymentReversalRepository extInvoicePaymentReversalRepository,
             ExtInvoiceDepositCreditApplicationRepository extInvoiceDepositCreditApplicationRepository,
             LedgerCurrency ledgerCurrency,
-            InventoryFactIngestionRecorder ingestionRecorder,
+            KafkaFactIngestionRecorder ingestionRecorder,
             ObjectProvider<MeterRegistry> meterRegistry,
             PlatformTransactionManager transactionManager) {
         this.clock = clock;

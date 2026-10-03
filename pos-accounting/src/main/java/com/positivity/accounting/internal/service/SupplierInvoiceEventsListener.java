@@ -10,9 +10,12 @@ import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.accounting.internal.repository.VendorRepository;
 import com.positivity.domainevents.supplier.SupplierInvoiceReceivedV1;
 import com.positivity.tenancy.kafka.RetryableConsumerFailures;
+import java.io.Serial;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
@@ -71,7 +74,17 @@ import tools.jackson.databind.ObjectMapper;
  * The bill and its processed mark commit together in a {@code REQUIRES_NEW} transaction of their
  * own, so an unreadable invoice that fails inside a repository call rolls back only that work and
  * is recorded in a separate transaction; every database failure still propagates for retry,
- * unrecorded, as above.
+ * unrecorded, as above. So does any failure writing the fact's {@code accounting_event} row (#2433),
+ * database or not ({@link IngestionRecordFailure}): marking it processed would lose the bill along
+ * with the record, since both roll back together.
+ *
+ * <h2>Ingestion record (#2433)</h2>
+ *
+ * Every consumed {@code supplier.invoice.received} fact writes one {@code accounting_event} row
+ * through {@link KafkaFactIngestionRecorder} in the same transaction, keyed on the vendor bill id
+ * (source system {@value #SOURCE_SYSTEM}). Nothing posts on ingest (judgment 2), so a new bill, or a
+ * re-issue flagged for review, is {@code PROCESSED / NEW} with no journal entry; a re-issue identical
+ * to the bill already held is {@code PROCESSED / DUPLICATE_IGNORED}.
  */
 @Slf4j
 @Component
@@ -81,6 +94,15 @@ public class SupplierInvoiceEventsListener {
     /** Producing domain, per the repo-wide {@code processed_events} convention. */
     static final String OWNER = "supplier";
 
+    /** Producing module, stamped as {@code sourceSystem} on this listener's ingestion records. */
+    public static final String SOURCE_SYSTEM = "pos-supplier";
+
+    /**
+     * Event type codes this listener records an {@code accounting_event} row for, one per consumed
+     * fact (#2433).
+     */
+    public static final List<String> RECORDED_EVENT_TYPES = List.of(SupplierInvoiceReceivedV1.EVENT_TYPE);
+
     private static final String ORIGIN_EVENT_TYPE = "SUPPLIER_INVOICE_RECEIVED";
 
     private final Clock clock;
@@ -89,6 +111,7 @@ public class SupplierInvoiceEventsListener {
     private final VendorBillRepository vendorBillRepository;
     private final VendorRepository vendorRepository;
     private final LedgerCurrency ledgerCurrency;
+    private final KafkaFactIngestionRecorder ingestionRecorder;
 
     /** The handler plus its processed mark, or a failure's mark alone, per transaction; see the class doc. */
     private final TransactionTemplate handlerTransaction;
@@ -100,6 +123,7 @@ public class SupplierInvoiceEventsListener {
             VendorBillRepository vendorBillRepository,
             VendorRepository vendorRepository,
             LedgerCurrency ledgerCurrency,
+            KafkaFactIngestionRecorder ingestionRecorder,
             PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
@@ -107,6 +131,7 @@ public class SupplierInvoiceEventsListener {
         this.vendorBillRepository = vendorBillRepository;
         this.vendorRepository = vendorRepository;
         this.ledgerCurrency = ledgerCurrency;
+        this.ingestionRecorder = ingestionRecorder;
         this.handlerTransaction = new TransactionTemplate(transactionManager);
         this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -141,6 +166,8 @@ public class SupplierInvoiceEventsListener {
                 }
                 markProcessed(eventId);
             });
+        } catch (IngestionRecordFailure e) {
+            throw e.getCause();
         } catch (DataAccessException e) {
             // Every database failure is rethrown, not only the transient ones. A column-length
             // violation or a concurrent vendor insert is not a malformed message, and marking it
@@ -178,7 +205,12 @@ public class SupplierInvoiceEventsListener {
 
         Optional<VendorBill> existing = vendorBillRepository.findByVendorIdAndBillNumber(vendorId, billNumber);
         if (existing.isPresent()) {
-            flagReissue(existing.get(), fact, billNumber);
+            boolean flagged = flagReissue(existing.get(), fact, billNumber);
+            record(
+                    eventId,
+                    existing.get(),
+                    fact,
+                    flagged ? FactPostingOutcome.nothingToPost() : new FactPostingOutcome.AlreadyPosted(null, null));
             return;
         }
 
@@ -217,7 +249,9 @@ public class SupplierInvoiceEventsListener {
         bill.setCreatedBy(OWNER);
         bill.setModifiedBy(OWNER);
 
+        // A new bill (no id yet) is persisted, not merged, so the id is assigned on this instance.
         vendorBillRepository.save(bill);
+        record(eventId, bill, fact, FactPostingOutcome.nothingToPost());
         log.info(
                 "Created vendor bill from supplier invoice {} ({} {}) for vendor {}",
                 billNumber,
@@ -226,21 +260,63 @@ public class SupplierInvoiceEventsListener {
                 fact.supplierRef());
     }
 
+    private void record(String eventId, VendorBill bill, SupplierInvoiceReceivedV1 fact, FactPostingOutcome outcome) {
+        // Argument evaluation stays outside the wrap: a payload fault there is malformed, not a
+        // recorder failure.
+        LocalDateTime businessTime = fact.invoiceDate().atStartOfDay();
+        try {
+            ingestionRecorder.record(
+                    SOURCE_SYSTEM,
+                    SupplierInvoiceReceivedV1.EVENT_TYPE,
+                    eventId,
+                    bill.getVendorBillId(),
+                    businessTime,
+                    fact,
+                    outcome);
+        } catch (RuntimeException e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                throw e;
+            }
+            throw new IngestionRecordFailure(e);
+        }
+    }
+
+    /**
+     * Carries an ingestion-record failure out of the handler transaction past the malformed-payload
+     * catch, so {@link #onSupplierEvent} rethrows the original exception unmarked.
+     */
+    private static final class IngestionRecordFailure extends RuntimeException {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        IngestionRecordFailure(@NonNull RuntimeException cause) {
+            super(cause);
+        }
+
+        @Override
+        public synchronized @NonNull RuntimeException getCause() {
+            return (RuntimeException) super.getCause();
+        }
+    }
+
     /**
      * A second invoice under a number we already hold. Not overwritten: the first version is what
      * somebody may already have approved or paid against, and replacing it would erase the
      * disagreement rather than raise it. A different amount or a different currency is flagged for
      * review; a bill held for its currency stays held, so a re-issue never releases it into a queue
      * where it could be approved at par (#2309).
+     *
+     * @return whether the bill was flagged; {@code false} for a re-issue identical to the bill held
      */
-    private void flagReissue(VendorBill bill, SupplierInvoiceReceivedV1 fact, String billNumber) {
+    private boolean flagReissue(VendorBill bill, SupplierInvoiceReceivedV1 fact, String billNumber) {
         BigDecimal incoming = signedTotal(fact);
         boolean amountChanged = bill.getTotalAmount() != null && incoming.compareTo(bill.getTotalAmount()) != 0;
         boolean currencyChanged =
                 !effectiveCurrency(bill.getCurrency()).equalsIgnoreCase(effectiveCurrency(fact.currency()));
         if (!amountChanged && !currencyChanged) {
             log.debug("Vendor invoice {} already held; nothing to do", billNumber);
-            return;
+            return false;
         }
         String change = "Re-issued under the same number at " + incoming + " " + fact.currency() + " against a bill of "
                 + bill.getTotalAmount() + " " + effectiveCurrency(bill.getCurrency());
@@ -258,6 +334,7 @@ public class SupplierInvoiceEventsListener {
                 fact.currency(),
                 bill.getTotalAmount(),
                 effectiveCurrency(bill.getCurrency()));
+        return true;
     }
 
     /** An absent currency is the ledger currency (ADR-0067 E-3). */

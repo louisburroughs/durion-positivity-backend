@@ -93,9 +93,12 @@ public class InvoiceRevenuePostingService {
      * facts without a {@code finalizedAt}, and cycles already posted or reversed.
      *
      * @param payload the consumed {@code invoice.invoice.updated} fact (status FINALIZED/POSTED)
+     * @return what the fact did, for the listener's ingestion record (#2433): the posted entry,
+     *     {@code AlreadyPosted} for a cycle already posted, {@code NothingToPost} for a zero total,
+     *     {@code Skipped} for a fact without {@code finalizedAt} or a deposit-take invoice
      */
     @Transactional
-    public void postRevenue(@NonNull InvoiceUpdatedV1 payload) {
+    public @NonNull FactPostingOutcome postRevenue(@NonNull InvoiceUpdatedV1 payload) {
         UUID invoiceId = payload.invoiceId();
         Instant finalizedAt = payload.finalizedAt();
         if (finalizedAt == null) {
@@ -103,7 +106,8 @@ public class InvoiceRevenuePostingService {
                     "Invoice fact status={} carries no finalizedAt, nothing to post | invoiceId={}",
                     payload.status(),
                     invoiceId);
-            return;
+            return FactPostingOutcome.notPostable(
+                    "Invoice fact status " + payload.status() + " carries no finalizedAt; no revenue entry posted");
         }
         if (payload.depositSourceType() != null) {
             log.info(
@@ -111,25 +115,27 @@ public class InvoiceRevenuePostingService {
                             + " | invoiceId={} depositSourceType={}",
                     invoiceId,
                     payload.depositSourceType());
-            return;
+            return FactPostingOutcome.notPostable(
+                    "Deposit-take invoice (depositSourceType " + payload.depositSourceType()
+                            + ") funds a contract liability, not revenue; no revenue entry posted");
         }
         BigDecimal total = payload.total();
         if (total == null || total.signum() == 0) {
             log.info("Zero-total invoice, nothing to post | invoiceId={}", invoiceId);
-            return;
+            return FactPostingOutcome.nothingToPost();
         }
-        if (invoiceGlPostingRepository
-                .findByInvoiceIdAndReversalJournalEntryIdIsNull(invoiceId)
-                .isPresent()) {
+        Optional<InvoiceGlPosting> openPosting =
+                invoiceGlPostingRepository.findByInvoiceIdAndReversalJournalEntryIdIsNull(invoiceId);
+        if (openPosting.isPresent()) {
             log.info("Invoice revenue already posted (open posting), skipping | invoiceId={}", invoiceId);
-            return;
+            return new FactPostingOutcome.AlreadyPosted(openPosting.get().getJournalEntryId(), null);
         }
         if (invoiceGlPostingRepository.existsByInvoiceIdAndFinalizedAt(invoiceId, finalizedAt)) {
             log.info(
                     "Invoice revenue cycle already posted and reversed, skipping replay | invoiceId={} finalizedAt={}",
                     invoiceId,
                     finalizedAt);
-            return;
+            return new FactPostingOutcome.AlreadyPosted(null, toSourceEventId(invoiceId, finalizedAt));
         }
 
         BigDecimal tax = payload.tax() == null ? BigDecimal.ZERO : payload.tax();
@@ -171,6 +177,7 @@ public class InvoiceRevenuePostingService {
                 revenue,
                 tax,
                 journalEntryId);
+        return FactPostingOutcome.posted(journalEntryId);
     }
 
     /**
@@ -179,9 +186,10 @@ public class InvoiceRevenuePostingService {
      *
      * @param payload the consumed {@code invoice.invoice.updated} fact (status DRAFT/CANCELLED)
      * @param occurredAt the fact's business time — the reversal entry's transaction date
+     * @return the posted reversal entry, or {@code NothingToPost} without an open posting (#2433)
      */
     @Transactional
-    public void reverseRevenue(@NonNull InvoiceUpdatedV1 payload, @NonNull Instant occurredAt) {
+    public @NonNull FactPostingOutcome reverseRevenue(@NonNull InvoiceUpdatedV1 payload, @NonNull Instant occurredAt) {
         UUID invoiceId = payload.invoiceId();
         Optional<InvoiceGlPosting> open =
                 invoiceGlPostingRepository.findByInvoiceIdAndReversalJournalEntryIdIsNull(invoiceId);
@@ -190,7 +198,7 @@ public class InvoiceRevenuePostingService {
                     "Invoice fact status={} has no open revenue posting, nothing to reverse | invoiceId={}",
                     payload.status(),
                     invoiceId);
-            return;
+            return FactPostingOutcome.nothingToPost();
         }
         InvoiceGlPosting posting = open.get();
 
@@ -236,6 +244,7 @@ public class InvoiceRevenuePostingService {
                 tax,
                 reversalJournalEntryId,
                 posting.getJournalEntryId());
+        return FactPostingOutcome.posted(reversalJournalEntryId);
     }
 
     private @NonNull Accounts resolveAccounts(@NonNull LocalDateTime transactionDate) {

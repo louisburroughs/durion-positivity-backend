@@ -90,7 +90,7 @@ class InventoryShrinkageGLPostingIT {
     private InventoryRevaluationPostingService revaluationPostingService;
 
     @Autowired
-    private InventoryFactIngestionRecorder ingestionRecorder;
+    private KafkaFactIngestionRecorder ingestionRecorder;
 
     @Autowired
     private AccountingEventRepository accountingEventRepository;

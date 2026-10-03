@@ -542,7 +542,40 @@ ignored without recording its eventId.
   `processingStatuses` (every `AccountingEventStatus` constant with its meaning, derived from the enum, plus
   the two lifecycles above), and `idempotencyOutcomes` (`restSubmission` — content-hash dedup, 24h window,
   409 `DUPLICATE_EVENT` on a replay — and `factConsumption` — every `IdempotencyOutcome` constant,
-  `NEW`/`DUPLICATE_IGNORED`, derived from that enum).
+  `NEW`/`DUPLICATE_IGNORED`, derived from that enum, plus its two dedup layers: `envelopeDeduplication`
+  (a redelivered envelope, same `eventId`, is short-circuited by `processed_events` and writes no row) and
+  `postingDeduplication` (per listener, the business key a re-emitted fact is matched on: the deterministic
+  `sourceEventId` for inventory / invoice / order journal entries, vendor + bill number for supplier
+  invoices, the reimbursement id for warranty — which never records `DUPLICATE_IGNORED` — and the currency
+  hold for `payment.payment.settled`).
+
+## Kafka Fact Ingestion Records — the event list (issue #2433)
+
+`GET /v1/accounting/events` (backed by `accounting_event`) is the audit view of every posting Kafka fact
+accounting consumed. Each posting listener writes exactly one row per consumed fact through
+`KafkaFactIngestionRecorder` (generalised from the inventory recorder of #2191), in the same handler
+transaction as the posting and the `processed_events` mark:
+
+| Listener | `eventType` | `sourceSystem` | `domainKeyId` | Row |
+|---|---|---|---|---|
+| `InventoryEventsListener` | `inventory.scrap.posted`, `inventory.adjustment.posted`, `inventory.product-value.changed` | `pos-inventory` | scrap / adjustment / revaluation id | see Inventory Posting Facts above |
+| `InvoiceEventsListener` | `invoice.invoice.updated` | `pos-invoice` | invoice id | `PROCESSED / NEW` + `journalEntryId` when revenue (or its reversal) posts; `PROCESSED / DUPLICATE_IGNORED` + the earlier entry when the cycle was already posted (the `POSTED` fact after every `FINALIZED` one); `PROCESSED / NEW`, no entry, for a zero total or a revert with nothing open; `SKIPPED / NOT_POSTABLE` for a stale fact, a deposit-take invoice, no `finalizedAt`, or a status that neither recognizes nor reverses (`ERROR`) |
+| `OrderEventsListener` | `order.session.closed` | `pos-order` | session id | `PROCESSED / NEW` + entry; `PROCESSED / NEW`, no entry, for a zero variance; `PROCESSED / DUPLICATE_IGNORED` when the session key was already posted; a foreign-currency hold is the `SUSPENDED / CURRENCY_NOT_SUPPORTED` row (Ledger currency above) |
+| `SupplierInvoiceEventsListener` | `supplier.invoice.received` | `pos-supplier` | vendor bill id | `PROCESSED / NEW`, no entry (nothing posts on ingest); `PROCESSED / DUPLICATE_IGNORED` for a re-fetch identical to the bill held |
+| `WarrantyEventsListener` | `warranty.reimbursement.submitted`, `warranty.reimbursement.resolved` | `pos-warranty` | reimbursement id | `PROCESSED / NEW`, no entry; `SKIPPED / NOT_POSTABLE` for a stale fact |
+
+- `domainKeyId` is not unique: every fact about the same document (an invoice finalized, posted, then
+  cancelled) writes its own row under the same key. `eventReference` (`AE-YYYYMM-n`) is the unique one.
+- A redelivery of the same envelope is short-circuited by `processed_events` and writes no row. A
+  recording failure is a posting failure: it propagates unmarked for container retry / DLQ.
+- Malformed payloads, other event types on these topics, and the replica-only listeners (customer,
+  location, invoice manifest, settlement config, work order) write no row. `SettlementEventsListener`
+  writes one only for a foreign-currency `payment.payment.settled` hold.
+- Each listener exposes its codes as `RECORDED_EVENT_TYPES` for the event-type registry (#2436).
+- **No backfill.** Rows start with the deploy of #2433. Facts consumed before it (on alpha, 2026-10-03: 2009
+  posted invoice-revenue journal entries, plus every register over/short, vendor bill and warranty
+  expectation) have no `accounting_event` row and will not get one; their journal entries, `invoice_gl_posting`,
+  `vendor_bill` and `warranty_reimbursement_expectation` rows remain the record of them.
 
 ## Dependencies
 

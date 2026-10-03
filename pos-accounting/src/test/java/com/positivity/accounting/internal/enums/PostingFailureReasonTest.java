@@ -26,7 +26,8 @@ class PostingFailureReasonTest {
                 .containsExactlyInAnyOrder(
                         PostingFailureReason.UNCOSTED_FACT,
                         PostingFailureReason.MISSING_AMOUNT,
-                        PostingFailureReason.ZERO_AMOUNT);
+                        PostingFailureReason.ZERO_AMOUNT,
+                        PostingFailureReason.NOT_POSTABLE);
     }
 
     @Test

@@ -3,9 +3,11 @@ package com.positivity.accounting.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.config.LedgerCurrency;
@@ -71,6 +73,9 @@ class SupplierInvoiceEventsListenerTest {
     @Mock
     private VendorRepository vendorRepository;
 
+    @Mock
+    private KafkaFactIngestionRecorder ingestionRecorder;
+
     private SupplierInvoiceEventsListener listener;
 
     @BeforeEach
@@ -82,6 +87,7 @@ class SupplierInvoiceEventsListenerTest {
                 vendorBillRepository,
                 vendorRepository,
                 new LedgerCurrency("USD"),
+                ingestionRecorder,
                 mock(PlatformTransactionManager.class));
         when(processedEventRepository.existsById(any())).thenReturn(false);
         when(vendorBillRepository.findByVendorIdAndBillNumber(any(), any())).thenReturn(Optional.empty());
@@ -119,6 +125,23 @@ class SupplierInvoiceEventsListenerTest {
         // perfectly good invoice; filing it as an exception would fill the exception queue with
         // normal paperwork until the queue meant nothing.
         assertThat(captured().getStatus()).isEqualTo(VendorBillStatus.PENDING_RECEIPT_MATCH);
+    }
+
+    @Test
+    @DisplayName("#2433: a new bill is recorded as one PROCESSED, nothing-to-post ingestion row under pos-supplier")
+    void newBillIsRecordedNothingToPost() {
+        listener.onSupplierEvent(event(EVENT_1, "INV-1", "INVOICE", "288.00"));
+
+        verify(ingestionRecorder)
+                .record(
+                        eq("pos-supplier"),
+                        eq("supplier.invoice.received"),
+                        eq(EVENT_1),
+                        any(),
+                        eq(java.time.LocalDateTime.of(2026, 8, 14, 0, 0)),
+                        any(),
+                        eq(new FactPostingOutcome.NothingToPost()));
+        assertThat(SupplierInvoiceEventsListener.RECORDED_EVENT_TYPES).containsExactly("supplier.invoice.received");
     }
 
     @Test
@@ -178,6 +201,16 @@ class SupplierInvoiceEventsListenerTest {
         // A re-fetch carries a new event id, so the event guard would not catch it. This is the
         // guard that stops the business being billed twice.
         verify(vendorBillRepository, never()).save(any());
+        // #2433: the identity guard is a duplicate key, recorded DUPLICATE_IGNORED with no entry.
+        verify(ingestionRecorder)
+                .record(
+                        eq("pos-supplier"),
+                        eq("supplier.invoice.received"),
+                        eq(EVENT_6),
+                        any(),
+                        any(),
+                        any(),
+                        eq(new FactPostingOutcome.AlreadyPosted(null, null)));
     }
 
     @Test
@@ -193,6 +226,9 @@ class SupplierInvoiceEventsListenerTest {
         // Overwriting would erase a change somebody may already have approved against.
         assertThat(existing.getStatus()).isEqualTo(VendorBillStatus.MATCH_EXCEPTION);
         assertThat(existing.getTotalAmount()).isEqualByComparingTo("288.00");
+        // #2433: flagging acted on the bill, so the fact is recorded as new, with nothing posted.
+        verify(ingestionRecorder)
+                .record(any(), any(), eq(EVENT_7), any(), any(), any(), eq(new FactPostingOutcome.NothingToPost()));
     }
 
     @Test
@@ -204,6 +240,7 @@ class SupplierInvoiceEventsListenerTest {
 
         verify(vendorBillRepository, never()).save(any());
         verify(processedEventRepository, never()).save(any());
+        verifyNoInteractions(ingestionRecorder);
     }
 
     @Test
@@ -276,6 +313,35 @@ class SupplierInvoiceEventsListenerTest {
         // A column-length violation is not a malformed message. Acknowledging it would lose a
         // vendor debt permanently: the supplier side has already published this invoice and will
         // not publish it again.
+        verify(processedEventRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("#2439: a recorder failure is retried, not marked processed over the rolled-back bill")
+    void recorderFailureIsRethrownUnmarked() {
+        // Neither a DataAccessException nor retryable: before #2439 the generic catch filed it as a
+        // malformed message and marked the event processed, losing the bill and its record.
+        org.mockito.Mockito.doThrow(new IllegalStateException("recorder broke"))
+                .when(ingestionRecorder)
+                .record(any(), any(), any(), any(), any(), any(), any());
+
+        assertThatThrownBy(() -> listener.onSupplierEvent(event(EVENT_9, "INV-9", "INVOICE", "288.00")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("recorder broke");
+
+        verify(processedEventRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("#2439: a recorder integrity violation is retried, not marked processed")
+    void recorderIntegrityViolationIsRethrownUnmarked() {
+        org.mockito.Mockito.doThrow(new org.springframework.dao.DataIntegrityViolationException("duplicate key"))
+                .when(ingestionRecorder)
+                .record(any(), any(), any(), any(), any(), any(), any());
+
+        assertThatThrownBy(() -> listener.onSupplierEvent(event(EVENT_9, "INV-9", "INVOICE", "288.00")))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+
         verify(processedEventRepository, never()).save(any());
     }
 
