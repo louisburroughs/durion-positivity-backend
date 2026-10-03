@@ -32,6 +32,8 @@ Location hierarchy and physical space management service for the Durion Positivi
 - `GET /v1/locations/roster` — current location roster
 - `GET /v1/locations/{id}/coverage-rules` — service area coverage rules
 - `GET /v1/bays/{bayId}` — retrieve a bay
+- `GET /v1/bay-types` — every bay type with its default specialty services from the tenant's
+  `bay_specialty_operation` map; codes not active in the catalog replica are omitted and logged (#2247)
 - `POST /v1/locations/{locationId}/bays` — add a bay to a location
 - `PATCH /v1/locations/{locationId}/bays/{bayId}` — update a bay, including status transitions among
   `ACTIVE` / `OUT_OF_SERVICE` / `RETIRED` (DECISION-LOCATION-026, #2264)

@@ -32,7 +32,48 @@ tags:
   name: Storage Location Bulk Ingest API
 - description: Operations related to locations and their relationships
   name: Location API
+- description: Bay type classifications and their default specialty services
+  name: Bay Type API
 paths:
+  /v1/bay-types:
+    get:
+      description: 'Lists every bay type, in a fixed order, with whether it accepts general work and the specialty services a bay of that type is given by default: on createBay without serviceCapabilityCodes, and on patchBay when bayType changes without serviceCapabilityCodes in the same patch.
+
+        Use this tool to pre-fill a new bay''s specialty services or to preview which specialties a bay type change will add or remove; use listBays or getBay instead to see the codes a particular bay holds now.
+
+        Preconditions: none beyond the location:bay:read authority; the defaults are the caller''s tenant''s specialty map, not any one location''s.
+
+        Required inputs: none; there are no parameters, no paging and no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with one entry per bay type; a type with no defaults, or a tenant whose map was never provisioned, carries empty defaultServiceCapabilityCodes and defaultServices. Codes are sorted ascending and each defaultServices entry carries the catalog service name. A default naming a code that is not an active catalog service is left out here and logged as a seed defect; createBay without serviceCapabilityCodes still refuses with 422 while the map names such a code, so send an explicit list in that case.
+
+        '
+      operationId: listBayTypes
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/BayTypeResponse'
+                type: array
+          description: Bay types listed
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks location:bay:read
+      security:
+      - bearerAuth:
+        - location:bay:read
+      summary: List Bay Types with Default Specialty Services
+      tags:
+      - Bay Type API
+      x-required-permissions:
+      - location:bay:read
   /v1/locations:
     get:
       description: 'Lists every location in the system as a flat, unpaginated collection with address, status, type details and the stored scheduling facts (timezone, operatingHours, holidayClosures), plus a query-time repair-capability projection: hasRepairCapability, activeBayCount and activeMobileUnitCount.
@@ -3252,6 +3293,55 @@ components:
       - id
       - locationId
       - name
+      type: object
+    BayTypeDefaultService:
+      description: A default specialty service of a bay type
+      properties:
+        name:
+          description: Catalog service name as replicated from pos-catalog; null when the catalog service carries no name
+          example: 4-Wheel Alignment
+          type: string
+        operationCode:
+          description: Catalog operation code (UPPER-DASH, ADR-0059)
+          example: WHEEL-ALIGNMENT-4-WHEEL
+          type: string
+      required:
+      - operationCode
+      type: object
+    BayTypeResponse:
+      description: A bay type with the specialty services a new bay of this type is defaulted to
+      properties:
+        acceptsGeneralWork:
+          description: Whether a bay of this type is eligible for general (non-specialty) work by default; false only for WASH_DETAIL
+          example: true
+          type: boolean
+        bayType:
+          description: Bay type classification
+          enum:
+          - GENERAL_SERVICE
+          - ALIGNMENT
+          - TIRE_SERVICE
+          - HEAVY_DUTY
+          - INSPECTION
+          - WASH_DETAIL
+          example: ALIGNMENT
+          type: string
+        defaultServiceCapabilityCodes:
+          description: Catalog operation codes a bay of this type is given when it is created, or its type is changed, without explicit serviceCapabilityCodes; sorted ascending, empty when the type has no default specialties
+          items:
+            example: WHEEL-ALIGNMENT-4-WHEEL
+            type: string
+          type: array
+        defaultServices:
+          description: The same defaults as defaultServiceCapabilityCodes, in the same order, each with its catalog service name
+          items:
+            $ref: '#/components/schemas/BayTypeDefaultService'
+          type: array
+      required:
+      - acceptsGeneralWork
+      - bayType
+      - defaultServiceCapabilityCodes
+      - defaultServices
       type: object
     BulkIngestRequestBayBulkIngestRecord:
       description: 'Generic bulk ingest request: a batch of records for a job scoped to a location'
