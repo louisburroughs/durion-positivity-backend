@@ -37,6 +37,15 @@ SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', 
 -- wildcards, so they answer the vehicles the mock's 20-vehicle matrix does not cover rather
 -- than competing for the ones it does.
 --
+-- The DURION_STANDARD / DURION row with operation_category NULL is the category-agnostic
+-- fallback: it gives Durion's own standard a precedence for every operation category that has
+-- no category-scoped row (everything except TIRE_SERVICE today). Without it,
+-- LaborTimeResolutionServiceImpl.precedenceFor falls back to NO_POLICY_PRECEDENCE (1000) for
+-- DURION_STANDARD outside tyre work. It moved here from the retired
+-- R__seed_reference_catalog_6_labor_guide.sql (#1970) and keeps that file's id expression
+-- (no trailing colon, unlike the other NULL-category id below) so a database that already
+-- holds the row no-ops on ON CONFLICT instead of colliding on the primary key.
+--
 -- Ids are md5-derived from the natural key so reruns are deterministic; ON CONFLICT keeps the
 -- repeatable migration idempotent when its checksum changes.
 SET TIME ZONE 'UTC';
@@ -45,5 +54,6 @@ INSERT INTO labor_time_source_policy (id, time_type, source_code, operation_cate
 VALUES
     (md5('ltsp:MANUFACTURER_INSTALL:MICHELIN:TIRE_SERVICE')::uuid, 'MANUFACTURER_INSTALL', 'MICHELIN', 'TIRE_SERVICE',  10, true, NOW(), NOW()),
     (md5('ltsp:MANUFACTURER_INSTALL:MICHELIN:')::uuid,             'MANUFACTURER_INSTALL', 'MICHELIN', NULL,           300, true, NOW(), NOW()),
-    (md5('ltsp:DURION_STANDARD:DURION:TIRE_SERVICE')::uuid,        'DURION_STANDARD',      'DURION',   'TIRE_SERVICE',  50, true, NOW(), NOW())
+    (md5('ltsp:DURION_STANDARD:DURION:TIRE_SERVICE')::uuid,        'DURION_STANDARD',      'DURION',   'TIRE_SERVICE',  50, true, NOW(), NOW()),
+    (md5('ltsp:DURION_STANDARD:DURION')::uuid,                     'DURION_STANDARD',      'DURION',   NULL,           100, true, NOW(), NOW())
 ON CONFLICT (tenant_id, time_type, source_code, operation_category) DO NOTHING;

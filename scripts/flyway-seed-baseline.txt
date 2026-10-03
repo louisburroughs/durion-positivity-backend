@@ -18,7 +18,6 @@
 pos-accounting/R__seed_reference_accounting.sql tier1
 pos-catalog/R__seed_reference_catalog.sql tier2
 pos-catalog/R__seed_reference_catalog_5_uom.sql tier2
-pos-catalog/R__seed_reference_catalog_6_labor_guide.sql tier2
 pos-catalog/R__seed_reference_catalog_7_labor_time_source_policy.sql tier1
 pos-inventory/R__seed_reference_inventory.sql tier1
 pos-invoice/R__seed_reference_invoice.sql tier1

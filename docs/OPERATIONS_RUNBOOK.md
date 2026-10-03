@@ -1736,11 +1736,12 @@ vendor latency. Full design: `pos-catalog/docs/service-time-sourcing-plan.md`.
   platform does not model). Add the xref row (or decide the code is not wanted), then re-run
   the import — mapping is deliberate curation, never automatic.
 - **Source precedence** is data: `labor_time_source_policy` rows order sources per time type
-  (lower `precedence` wins). Two seeds insert into that table — the tier 1
-  `R__seed_reference_catalog_7_labor_time_source_policy.sql` is the authoritative policy source;
-  `R__seed_reference_catalog_6_labor_guide.sql` is a tier 2 file pending conversion that still
-  carries one overlapping `DURION_STANDARD/DURION` row. Edit rows rather than code to re-rank
-  sources, and prefer file 7.
+  (lower `precedence` wins). The only seed that inserts into that table is the tier 1
+  `R__seed_reference_catalog_7_labor_time_source_policy.sql`, including the category-agnostic
+  `DURION_STANDARD/DURION` fallback row (#1970). Edit rows rather than code to re-rank sources.
+- **No seeded xref**: since #1970 no `service_operation_xref` rows are seeded (the former
+  `MOCKGUIDE` / `MOCKGUIDE_LIVE` rows retired), so a fresh database's first import lands every
+  operation in the unmapped queue until xref authoring ships (#2457).
 - **Degradation**: if the resolve edge is down, pos-workorder prefills from its
   `ext_catalog_service` replica's `default_labor_hours` (fed by `catalog.service.updated`
   schema v2) and, failing that, the service writer types the hours — estimating never blocks
