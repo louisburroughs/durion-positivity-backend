@@ -77,6 +77,36 @@ class EventIngestionControllerTest extends BaseIntegrationTest {
     }
 
     @Nested
+    @DisplayName("GET /v1/accounting/events/statuses")
+    class GetEventStatuses {
+
+        @Test
+        @DisplayName("should hit the statuses handler, not /{eventId}, and list every constant")
+        void getEventStatuses_returns200() throws Exception {
+            mockMvc.perform(get(BASE_URL + "/statuses")
+                            .header("X-Authorities", VIEW_AUTHORITY)
+                            .header("X-User", TEST_USER))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.statuses.length()").value(AccountingEventStatus.values().length))
+                    .andExpect(jsonPath("$.statuses[?(@.code=='FAILED')].actionable")
+                            .value(true))
+                    .andExpect(jsonPath("$.statuses[?(@.code=='PROCESSED')].terminal")
+                            .value(true))
+                    .andExpect(jsonPath("$.idempotencyOutcomes.length()")
+                            .value(com.positivity.accounting.internal.enums.IdempotencyOutcome.values().length));
+        }
+
+        @Test
+        @DisplayName("should return 403 when caller lacks accounting:events:view authority")
+        void getEventStatuses_returns403_whenUnauthorized() throws Exception {
+            mockMvc.perform(get(BASE_URL + "/statuses")
+                            .header("X-Authorities", "accounting:read")
+                            .header("X-User", TEST_USER))
+                    .andExpect(status().isForbidden());
+        }
+    }
+
+    @Nested
     @DisplayName("GET /v1/accounting/events/types")
     class ListAccountingEventTypes {
 

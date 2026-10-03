@@ -3805,6 +3805,43 @@ paths:
       - Accounting Events
       x-required-permissions:
       - accounting:events:view
+  /v1/accounting/events/statuses:
+    get:
+      description: 'Returns every accounting event status (code, label, meaning, whether it is terminal, whether retry/reprocess applies) and every idempotency outcome, generated from the enums so the set cannot drift.
+
+        Use this tool to populate the status and idempotency-outcome filters of listAccountingEvents; the code is the value that filter accepts.
+
+        Preconditions: none.
+
+        Required inputs: none; there are no parameters and no request body.
+
+        Emits an ACCOUNTING_EVENT_STATUS_LIST audit event; no state changes.
+
+        Returns 200 with the catalog.
+
+        '
+      operationId: listAccountingEventStatuses
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventStatusCatalogResponse'
+          description: Statuses returned
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden
+      security:
+      - bearerAuth:
+        - accounting:events:view
+      summary: List Accounting Event Statuses
+      tags:
+      - Accounting Events
+      x-required-permissions:
+      - accounting:events:view
   /v1/accounting/events/types:
     get:
       description: 'Lists every accounting event type the deployed code records, each with its code, display name, source domain, ingestion path (KAFKA or API) and whether a fact of that type can produce a journal entry. KAFKA types are recorded by the module''s topic listeners; API types are the ones the module''s own code submits through submitEvent (INVOICE_PAYMENT, VENDOR_BILL_GL_POSTING, AP_PAYMENT_GL_POSTING).
@@ -15297,6 +15334,23 @@ components:
       - occurredAt
       - severity
       type: object
+    EventStatusCatalogResponse:
+      description: Every accounting event status and idempotency outcome, for rendering list filters
+      properties:
+        idempotencyOutcomes:
+          description: One entry per IdempotencyOutcome constant
+          items:
+            $ref: '#/components/schemas/IdempotencyOutcomeEntry'
+          type: array
+        statuses:
+          description: One entry per AccountingEventStatus constant
+          items:
+            $ref: '#/components/schemas/StatusEntry'
+          type: array
+      required:
+      - idempotencyOutcomes
+      - statuses
+      type: object
     Evidence:
       description: Evidence
       properties:
@@ -16283,6 +16337,28 @@ components:
       required:
       - description
       - outcome
+      type: object
+    IdempotencyOutcomeEntry:
+      description: One idempotency outcome, recorded on an accounting event whether it was consumed from Kafka or submitted through the API (e.g. INVOICE_PAYMENT)
+      properties:
+        code:
+          description: Enum name, as accepted by the event list idempotency filter
+          enum:
+          - NEW
+          - DUPLICATE_IGNORED
+          example: DUPLICATE_IGNORED
+          type: string
+        description:
+          description: Meaning of the outcome
+          type: string
+        displayName:
+          description: Human-readable label
+          example: Duplicate ignored
+          type: string
+      required:
+      - code
+      - description
+      - displayName
       type: object
     IdempotencyOutcomesContract:
       description: The two idempotency mechanisms used by the accounting event ingestion pipeline
@@ -19413,6 +19489,40 @@ components:
           type: string
         statementRef:
           type: string
+      type: object
+    StatusEntry:
+      description: One accounting event status
+      properties:
+        actionable:
+          description: True when retry/reprocess applies (FAILED, SUSPENDED)
+          type: boolean
+        code:
+          description: Enum name, as accepted by the event list status filter
+          enum:
+          - RECEIVED
+          - PROCESSING
+          - PROCESSED
+          - FAILED
+          - SUSPENDED
+          - SKIPPED
+          example: FAILED
+          type: string
+        description:
+          description: Meaning of the status
+          type: string
+        displayName:
+          description: Human-readable label
+          example: Failed
+          type: string
+        terminal:
+          description: True when the event can no longer change state
+          type: boolean
+      required:
+      - actionable
+      - code
+      - description
+      - displayName
+      - terminal
       type: object
     SuggestedAlternative:
       description: A suggested alternative accompanying a 409 conflict

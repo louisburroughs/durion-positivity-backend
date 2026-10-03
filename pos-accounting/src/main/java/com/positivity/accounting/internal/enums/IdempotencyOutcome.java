@@ -44,4 +44,12 @@ public enum IdempotencyOutcome {
                         + "the earlier entry. A redelivered envelope (same eventId) writes no row at all.";
         };
     }
+
+    /** Short label for list filters, exhaustive by construction. */
+    public String displayName() {
+        return switch (this) {
+            case NEW -> "New";
+            case DUPLICATE_IGNORED -> "Duplicate ignored";
+        };
+    }
 }

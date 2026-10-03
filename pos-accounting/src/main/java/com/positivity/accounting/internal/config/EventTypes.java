@@ -132,6 +132,8 @@ public final class EventTypes {
                 // InvoiceRevenueReconciliationController - 1 event (ACCOUNTING_INVOICE_REVENUE_RECONCILE)
                 EventTypeRegistration.search("ACCOUNTING_EVENT_LIST", "List accounting events with filters")
                         .build(),
+                EventTypeRegistration.fastRead("ACCOUNTING_EVENT_STATUS_LIST", "List accounting event statuses")
+                        .build(),
                 EventTypeRegistration.fastRead(
                                 "ACCOUNTING_EVENT_TYPE_LIST", "List the accounting event types the module records")
                         .build(),
