@@ -274,6 +274,9 @@ public class SupplierInvoiceEventsListener {
                     fact,
                     outcome);
         } catch (RuntimeException e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                throw e;
+            }
             throw new IngestionRecordFailure(e);
         }
     }
