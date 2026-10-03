@@ -11,6 +11,7 @@ import com.positivity.supplier.internal.enums.PriceCatalogImportStatus;
 import com.positivity.supplier.internal.repository.PriceCatalogEntryRepository;
 import com.positivity.supplier.internal.repository.PriceCatalogImportRepository;
 import com.positivity.supplier.internal.service.SupplierOutboxEventWriter;
+import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -60,6 +61,7 @@ public class PriceCatalogRepublisher {
     private final PriceCatalogEntryRepository entryRepository;
     private final SupplierOutboxEventWriter outboxWriter;
     private final Clock clock;
+    private final EntityManager entityManager;
 
     /** How many times one import may be re-emitted before the owner refuses and says so. */
     @Value("${pos.supplier.pricat.republish-max-attempts:3}")
@@ -71,6 +73,11 @@ public class PriceCatalogRepublisher {
 
     /**
      * Re-emits the named import's chunk and completion events.
+     *
+     * <p>One transaction, joined from the caller, so the re-emitted events, the attempt counter and
+     * the command's {@code processed_events} mark commit or roll back together. The persistence
+     * context is flushed and <strong>cleared</strong> after every chunk: a caller must not rely on
+     * an entity it loaded earlier in the same transaction still being managed after this returns.
      *
      * @return the number of chunk events queued; {@code 0} when the request could not be served,
      *         which is always logged with the reason
@@ -141,10 +148,13 @@ public class PriceCatalogRepublisher {
             return 0;
         }
 
-        int chunks = emit(manifest, now);
+        // Recorded before the chunks are queued, while the manifest is still managed: emit() clears
+        // the persistence context after every chunk, which would detach it and leave a later change
+        // unwritten. The first flush writes it; a failure on any chunk rolls it back with the events.
         manifest.setRepublishCount(manifest.getRepublishCount() + 1);
         manifest.setLastRepublishedAt(now);
         importRepository.save(manifest);
+        int chunks = emit(manifest, now);
 
         log.warn(
                 "Re-published PRICAT import {} for {}: {} chunk events re-emitted after {} of {} chunks applied"
@@ -166,6 +176,13 @@ public class PriceCatalogRepublisher {
      * <p>Read and queued one chunk at a time: a country-wide catalogue is tens of thousands of
      * lines, and holding all of them to re-emit a recovery would make the recovery itself the
      * outage.
+     *
+     * <p>Reading one chunk at a time bounds each query, not the heap: one transaction is one
+     * persistence context, and it would hold every staged line read and every outbox row queued
+     * until commit. So each chunk's outbox row is flushed and the context cleared before the next
+     * chunk is read. The transaction is not split: the flushed rows stay uncommitted, and a failure
+     * on a later chunk rolls every one of them back. The manifest is detached by the first clear and
+     * is only read afterwards; its fields are plain columns, so nothing lazy is touched.
      */
     private int emit(PriceCatalogImportEntity manifest, Instant occurredAt) {
         String topic = DomainTopics.events("supplier");
@@ -192,6 +209,8 @@ public class PriceCatalogRepublisher {
                     topic,
                     PriceCatalogEventFactory.envelope(
                             manifest, SupplierPriceCatalogUpdatedV1.EVENT_TYPE, sequence, occurredAt, payload));
+            entityManager.flush();
+            entityManager.clear();
         }
 
         // The completion carries the import's own completedAt, not this instant: a re-emit
