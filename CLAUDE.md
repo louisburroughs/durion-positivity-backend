@@ -94,7 +94,8 @@ pos-api-gateway  (JWT validation, path rewrite /{domain}/vN/.., permission bitse
      ├── pos-security-service (JWT issuer, RBAC source of truth; consumes tenant.events.v1 from WS2b on)
      ├── pos-tenant (ADR-0062 §7: tenant registry + owning account; platform-tenant callers only, /tenant/v1/**)
      ├── domain services (pos-order, pos-customer, pos-inventory, pos-accounting, pos-catalog, ...)
-     └── pos-event-receiver (event ingestion hub, shared-secret auth, not public)
+     ├── pos-event-receiver (event ingestion hub, shared-secret auth, not public)
+     └── pos-platform-sender (FI-2 email/SMS via AWS SES + End User Messaging; called by pos-marketing, shared-secret auth, not public)
 ```
 
 - **Multitenancy (ADR-0062, accepted 2026-09-09; schema in place, runtime landing module by module).** Every persisting
@@ -104,7 +105,7 @@ pos-api-gateway  (JWT validation, path rewrite /{domain}/vN/.., permission bitse
   add-a-table checklist: `../durion/docs/architecture/deployment/TENANCY_SCHEMA.md`. The runtime is `pos-tenancy-common` (WS1: `TenantContext`,
   `TenantContextFilter`, `TenantRecordInterceptor`, `TenantAwareDataSource`, `TenantScopedEntity`, `@TenantGlobal`,
   `@PlatformScoped`, `TenantIterator`), adopted module by module (`pos-location`, `pos-tenant`,
-  `pos-security-service`, `pos-inventory`, `pos-accounting`, `pos-workorder`, `pos-catalog`, `pos-shop-manager`, `pos-order`, `pos-customer`, `pos-supplier`, `pos-warranty`, `pos-people`, `pos-invoice`, `pos-marketing`, `pos-vehicle-inventory`, `pos-price`, `pos-vehicle-fitment`, `pos-people-contact`, `pos-tax`, `pos-image`, `pos-vehicle-reference-nhtsa`, `pos-vehicle-reference-carapi`, `pos-mcp-server`, `pos-event-receiver`, `pos-bulk-loader` (WS8: a target tenant per job) so far; every persisting module is adopted) and enforced by `pos-archunit`'s `TenancyArchitectureTest` for the modules in
+  `pos-security-service`, `pos-inventory`, `pos-accounting`, `pos-workorder`, `pos-catalog`, `pos-shop-manager`, `pos-order`, `pos-customer`, `pos-supplier`, `pos-warranty`, `pos-people`, `pos-invoice`, `pos-marketing`, `pos-vehicle-inventory`, `pos-price`, `pos-vehicle-fitment`, `pos-people-contact`, `pos-tax`, `pos-image`, `pos-vehicle-reference-nhtsa`, `pos-vehicle-reference-carapi`, `pos-mcp-server`, `pos-event-receiver`, `pos-bulk-loader` (WS8: a target tenant per job), `pos-platform-sender` (built adopted, 2026-10-03) so far; every persisting module is adopted) and enforced by `pos-archunit`'s `TenancyArchitectureTest` for the modules in
   `ADOPTED_MODULES`. `pos-tenant` (WS2a) owns the
   registry and publishes `tenant.events.v1`; its rows all belong to the platform tenant
   (`PlatformTenant.ID`), the one place application code binds a tenant itself. `pos-security-service` (WS2b)

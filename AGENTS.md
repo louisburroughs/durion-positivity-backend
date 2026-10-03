@@ -44,7 +44,7 @@
   any tenant the caller is not already bound to, so a bound caller may name only its own tenant, the platform
   operator included, and an unnamed target falls back to the transitional default tenant and nothing else.
   No new `organizationId` fields.
-  **In a module that depends on `pos-tenancy-common`** (`pos-location`, `pos-tenant`, `pos-security-service`, `pos-inventory`, `pos-accounting`, `pos-workorder`, `pos-catalog`, `pos-shop-manager`, `pos-order`, `pos-customer`, `pos-supplier`, `pos-warranty`, `pos-people`, `pos-invoice`, `pos-marketing`, `pos-vehicle-inventory`, `pos-price`, `pos-vehicle-fitment`, `pos-people-contact`, `pos-tax`, `pos-image`, `pos-vehicle-reference-nhtsa`, `pos-vehicle-reference-carapi`, `pos-mcp-server`, `pos-event-receiver` and `pos-bulk-loader` so far; each WS3 wave adds
+  **In a module that depends on `pos-tenancy-common`** (`pos-location`, `pos-tenant`, `pos-security-service`, `pos-inventory`, `pos-accounting`, `pos-workorder`, `pos-catalog`, `pos-shop-manager`, `pos-order`, `pos-customer`, `pos-supplier`, `pos-warranty`, `pos-people`, `pos-invoice`, `pos-marketing`, `pos-vehicle-inventory`, `pos-price`, `pos-vehicle-fitment`, `pos-people-contact`, `pos-tax`, `pos-image`, `pos-vehicle-reference-nhtsa`, `pos-vehicle-reference-carapi`, `pos-mcp-server`, `pos-event-receiver`, `pos-bulk-loader` and `pos-platform-sender` so far; each WS3 wave adds
   its module to `TenancyArchitectureTest.ADOPTED_MODULES`): a new entity extends `TenantScopedEntity` or carries `@TenantGlobal`;
   a new `@Scheduled` job is wrapped in `TenantIterator.forEachActiveTenant` or annotated `@PlatformScoped`; native
   SQL and `JdbcTemplate` on scoped data carry `@TenantAudited`; a Kafka producer stamps the record with

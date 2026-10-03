@@ -1,0 +1,126 @@
+spring:
+  application:
+    name: platform-sender
+  kafka:
+    bootstrap-servers:
+      - ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:}
+    username: ${SPRING_DATASOURCE_USERNAME:}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:org.postgresql.Driver}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+  task:
+    scheduling:
+      pool:
+        # The outcome-queue long poll holds its thread for up to 20 s; a second thread keeps the
+        # outbox drain on its 1 s cadence meanwhile.
+        size: 2
+
+server:
+  port: 0
+  tomcat:
+    max-http-header-size: 65536
+
+management:
+  server:
+    port: 0
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:}
+    fetch-registry: true
+    register-with-eureka: true
+  instance:
+    prefer-ip-address: true
+
+logging:
+  level:
+    root: INFO
+    org:
+      springframework: INFO
+    com:
+      positivity:
+        platformsender: INFO
+
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+  default-produces-media-type: application/json
+
+pos:
+  tenancy:
+    # ADR-0062: binds the alpha default tenant on every unbound path until every caller sends X-Tenant-Id
+    default-tenant-id: ${POS_TENANCY_DEFAULT_TENANT_ID:01900000-0000-7000-8000-000000000001}
+  platform-sender:
+    # Shared secret callers send as X-Pos-Sender-Secret (FI-2 §1). Blank refuses every send.
+    api-secret: ${POS_PLATFORM_SENDER_API_SECRET:}
+    # 'log' accepts and logs each message without contacting anyone (local and Compose default);
+    # 'aws' delivers email through Amazon SES and SMS through AWS End User Messaging.
+    transport: ${POS_PLATFORM_SENDER_TRANSPORT:log}
+    aws:
+      region: ${POS_PLATFORM_SENDER_AWS_REGION:us-east-1}
+    email:
+      # Verified SES identity, e.g. "Durion <no-reply@durionpos.org>".
+      from-address: ${POS_PLATFORM_SENDER_EMAIL_FROM:}
+      # SES configuration set whose event destination feeds the outcomes queue.
+      configuration-set: ${POS_PLATFORM_SENDER_EMAIL_CONFIGURATION_SET:}
+    sms:
+      # Phone number, pool or sender id (ARN or id) to send from; blank lets AWS choose.
+      origination-identity: ${POS_PLATFORM_SENDER_SMS_ORIGINATION_IDENTITY:}
+      # End User Messaging configuration set whose event destination feeds the outcomes queue.
+      configuration-set: ${POS_PLATFORM_SENDER_SMS_CONFIGURATION_SET:}
+      # TRANSACTIONAL or PROMOTIONAL; campaign traffic is promotional.
+      message-type: ${POS_PLATFORM_SENDER_SMS_MESSAGE_TYPE:PROMOTIONAL}
+      # Country calling code prepended to a stored number without one (10 digits, NANP).
+      default-country-code: ${POS_PLATFORM_SENDER_SMS_DEFAULT_COUNTRY_CODE:1}
+    outcomes:
+      # SQS long-poll of the SES and SMS event destinations (via SNS). Needs kafka.enabled.
+      enabled: ${POS_PLATFORM_SENDER_OUTCOMES_ENABLED:false}
+      queue-url: ${POS_PLATFORM_SENDER_OUTCOMES_QUEUE_URL:}
+      wait-time-seconds: ${POS_PLATFORM_SENDER_OUTCOMES_WAIT_TIME_SECONDS:20}
+      max-messages: ${POS_PLATFORM_SENDER_OUTCOMES_MAX_MESSAGES:10}
+      poll-delay-ms: ${POS_PLATFORM_SENDER_OUTCOMES_POLL_DELAY_MS:1000}
+    kafka:
+      # Replica consumers plus the outbox drain to sender.outcomes.v1. Off until the broker is
+      # provisioned; flip POS_PLATFORM_SENDER_KAFKA_ENABLED per environment.
+      enabled: ${POS_PLATFORM_SENDER_KAFKA_ENABLED:false}
+      # This module's own fact topic (FI-2 §2).
+      outcomes-topic: ${POS_PLATFORM_SENDER_OUTCOMES_TOPIC:sender.outcomes.v1}
+      # CRM person parties -> pos-people-contact person (ADR-0044 R3 replica).
+      customer-events-topic: ${POS_PLATFORM_SENDER_CUSTOMER_EVENTS_TOPIC:customer.events.v1}
+      customer-events-consumer-group: ${POS_PLATFORM_SENDER_CUSTOMER_EVENTS_CONSUMER_GROUP:pos-platform-sender-customer-events}
+      customer-manifest-topic: ${POS_PLATFORM_SENDER_CUSTOMER_MANIFEST_TOPIC:customer.manifest.v1}
+      customer-manifest-consumer-group: ${POS_PLATFORM_SENDER_CUSTOMER_MANIFEST_CONSUMER_GROUP:pos-platform-sender-customer-manifests}
+      customer-commands-topic: ${POS_PLATFORM_SENDER_CUSTOMER_COMMANDS_TOPIC:customer.commands.v1}
+      # Person email and mobile phone (ADR-0044 R3 replica).
+      people-contact-events-topic: ${POS_PLATFORM_SENDER_PEOPLE_CONTACT_EVENTS_TOPIC:people-contact.events.v1}
+      people-contact-events-consumer-group: ${POS_PLATFORM_SENDER_PEOPLE_CONTACT_EVENTS_CONSUMER_GROUP:pos-platform-sender-people-contact-events}
+      people-contact-manifest-topic: ${POS_PLATFORM_SENDER_PEOPLE_CONTACT_MANIFEST_TOPIC:people-contact.manifest.v1}
+      people-contact-manifest-consumer-group: ${POS_PLATFORM_SENDER_PEOPLE_CONTACT_MANIFEST_CONSUMER_GROUP:pos-platform-sender-people-contact-manifests}
+      people-contact-commands-topic: ${POS_PLATFORM_SENDER_PEOPLE_CONTACT_COMMANDS_TOPIC:people-contact.commands.v1}
+  security:
+    base-url: ${POS_SECURITY_BASE_URL:http://pos-security-service:8080}

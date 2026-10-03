@@ -167,6 +167,14 @@ services:
     # compose already defaults this flag on, so the campaign/redemption publisher and
     # the customer.events.v1 suppression replica are live as committed.
 
+  pos-platform-sender:
+    image: ${ECR_REGISTRY}/durion/pos-platform-sender:${BACKEND_TAG}
+    restart: unless-stopped
+    logging: *logging
+    # Transport, AWS settings and the send secret come from the base compose's
+    # POS_PLATFORM_SENDER_* interpolation of the on-box .env; until an operator sets
+    # POS_PLATFORM_SENDER_TRANSPORT=aws it runs the 'log' transport and contacts nobody.
+
   pos-mcp-server:
     image: ${ECR_REGISTRY}/durion/pos-mcp-server:${BACKEND_TAG}
     restart: unless-stopped

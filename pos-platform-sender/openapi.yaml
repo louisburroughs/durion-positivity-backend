@@ -1,0 +1,280 @@
+openapi: 3.1.0
+info:
+  contact:
+    email: platform@durionpos.org
+    name: Durion Support Services
+  description: 'FI-2 shared platform sender: delivers rendered email through Amazon SES and SMS through AWS End User Messaging. Service-to-service only: pos-marketing''s PlatformSenderClient is its one caller (ADR-0044 amendment 2026-10-03), and the API Gateway has no route here.'
+  title: Positivity Platform Sender API
+  version: v1
+servers:
+- description: Direct container address (Compose and alpha)
+  url: http://pos-platform-sender:8080
+security:
+- senderSecret: []
+tags:
+- description: Email and SMS delivery for campaign sends (FI-2)
+  name: Platform sender
+paths:
+  /platform-sender/v1/messages:
+    post:
+      description: 'Resolves the recipient''s email address or mobile number from the sender''s replicas of pos-customer and pos-people-contact, hands the rendered message to Amazon SES or AWS End User Messaging, and returns the provider message id that later sender.outcomes.v1 facts carry.
+
+        Use this tool once per campaign send, keyed by messageId; do not use it to retry under a new key, replay the same messageId instead, which answers 200 with the original ids and never delivers twice.
+
+        Preconditions: the caller holds the shared secret, its tenant is bound, and the recipient party is in the sender''s replicas.
+
+        Required inputs: messageId, channel, recipientPartyId, campaignCode and body; subject is required for EMAIL, and contactId names the person party whose address is used when it differs from the recipient.
+
+        Emits a PLATFORM_SENDER_MESSAGE_SEND event; the provider''s delivery, bounce, complaint, open and click reports follow on sender.outcomes.v1.
+
+        Returns 202 with the provider message id, 422 when no address resolves or the provider refuses the message for good, and 503 when nothing was delivered (retry the same messageId) or when the provider gave no answer (PROVIDER_NO_RESPONSE), in which case every replay answers 503 SEND_IN_FLIGHT.
+
+        '
+      operationId: sendPlatformMessage
+      parameters:
+      - description: The caller's bound tenant. Without it the sender binds its transitional default tenant, or answers 401 TENANT_REQUIRED when none is configured
+        in: header
+        name: X-Tenant-Id
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Campaign email:
+                description: Campaign email
+                value:
+                  body: <p>Book your spring tyre check.</p>
+                  campaignCode: SPRING24
+                  channel: EMAIL
+                  messageId: 01990000-0000-7000-8000-000000000001
+                  recipientPartyId: 01990000-0000-7000-8000-0000000000a1
+                  subject: Time for a tyre check
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+        description: One rendered message for one recipient, keyed by the caller's messageId.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendMessageResponse'
+          description: Idempotent replay of an accepted messageId
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendMessageResponse'
+          description: Accepted for delivery
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Malformed request (VALIDATION_FAILED)
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Missing or wrong X-Pos-Sender-Secret, or no tenant to bind (TENANT_REQUIRED)
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'Permanent refusal: no resolvable address, or the provider refused the message'
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'Transient: nothing was delivered, or the provider gave no answer (PROVIDER_NO_RESPONSE, after which replays answer SEND_IN_FLIGHT); retry the same messageId'
+      summary: Deliver one rendered message
+      tags:
+      - Platform sender
+      x-required-permissions:
+      - AUTHENTICATED
+components:
+  schemas:
+    ApiError:
+      description: Standard error response envelope returned by all Durion backend APIs
+      properties:
+        code:
+          description: Machine-readable error code
+          example: ORDER_NOT_FOUND
+          type: string
+        conflicts:
+          description: Itemized conflicts behind a 409 whose cause is a set of named conflicts, such as SCHEDULING_CONFLICT (ADR-0017 §3). Present only on such a 409; absent otherwise
+          items:
+            $ref: '#/components/schemas/Conflict'
+          type: array
+        correlationId:
+          description: Unique correlation ID for distributed request tracing
+          example: 550e8400-e29b-41d4-a716-446655440000
+          type: string
+        fieldErrors:
+          description: 'Field-level validation errors. Optional and module-dependent: a module populates it for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED where doing so is safe, and omits it otherwise — some modules deliberately withhold it because the binding result names internal property names and the response is provokable by any caller. Never present for non-validation errors. Treat it as absent unless the endpoint''s own documentation says otherwise'
+          items:
+            $ref: '#/components/schemas/FieldError'
+          type: array
+        message:
+          description: Human-readable error message
+          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
+          type: string
+        nextAction:
+          description: Recommended next step for the caller, when applicable
+          example: Retry the request with a valid quantity
+          type: string
+        referenceId:
+          description: Workflow or review-case reference identifier, when applicable
+          example: REVIEW-2026-000123
+          type: string
+        status:
+          description: HTTP status code
+          example: 404
+          format: int32
+          type: integer
+        suggestedAlternatives:
+          description: Alternatives the caller may retry with, accompanying conflicts when the service can compute them. Optional even when conflicts is present
+          items:
+            $ref: '#/components/schemas/SuggestedAlternative'
+          type: array
+        supportAction:
+          description: Support or admin investigation guidance, when applicable
+          example: Contact support with the correlation ID for assistance
+          type: string
+        timestamp:
+          description: ISO 8601 UTC timestamp of the error
+          example: '2026-03-17T14:30:00.000Z'
+          type: string
+      required:
+      - code
+      - correlationId
+      - message
+      - status
+      - timestamp
+      type: object
+    Conflict:
+      description: A single named conflict behind a 409 response
+      properties:
+        affectedResource:
+          description: Resource affected by the conflict
+          example: 'Mechanic: John Doe'
+          type: string
+        code:
+          description: Machine-readable conflict code
+          example: MECHANIC_UNAVAILABLE
+          type: string
+        message:
+          description: User-safe description of the conflict
+          example: The selected mechanic is already booked
+          type: string
+        overridable:
+          description: Whether the conflict can be overridden (HARD=false, SOFT=true)
+          example: true
+          type: boolean
+        severity:
+          description: Conflict severity (HARD or SOFT)
+          example: SOFT
+          type: string
+      required:
+      - code
+      - message
+      - overridable
+      - severity
+      type: object
+    FieldError:
+      description: Validation error for a specific request field
+      properties:
+        field:
+          description: Field name
+          example: quantity
+          type: string
+        message:
+          description: Validation failure message
+          example: must be greater than 0
+          type: string
+      required:
+      - field
+      - message
+      type: object
+    SendMessageRequest:
+      description: One rendered message to deliver to a CRM party (FI-2 send request)
+      properties:
+        body:
+          description: Fully rendered body; HTML when it starts with '<'
+          minLength: 1
+          type: string
+        campaignCode:
+          description: Stable campaign code, carried as provider metadata
+          maxLength: 100
+          minLength: 0
+          type: string
+        channel:
+          description: Delivery channel
+          enum:
+          - EMAIL
+          - SMS
+          type: string
+        contactId:
+          description: pos-customer person party whose address is used, when it differs from the recipient
+          format: uuid
+          type: string
+        messageId:
+          description: Caller's idempotency key; a replay never delivers twice
+          format: uuid
+          type: string
+        recipientPartyId:
+          description: pos-customer party to contact
+          format: uuid
+          type: string
+        subject:
+          description: Email subject; required for EMAIL, ignored for SMS
+          maxLength: 998
+          minLength: 0
+          type: string
+      required:
+      - body
+      - campaignCode
+      - channel
+      - messageId
+      - recipientPartyId
+      type: object
+    SendMessageResponse:
+      description: 'Accepted send: the provider message id outcomes will carry'
+      properties:
+        addressHash:
+          description: SHA-256 of the normalized address, lowercase hex
+          type: string
+        providerMessageId:
+          description: Provider message id; correlates sender.outcomes.v1 events
+          type: string
+      type: object
+    SuggestedAlternative:
+      description: A suggested alternative accompanying a 409 conflict
+      properties:
+        endDateTime:
+          description: Suggested end time (ISO-8601 with offset)
+          example: '2026-06-18T10:00:00-05:00'
+          type: string
+        reason:
+          description: Reason this alternative is suggested
+          example: Mechanic available
+          type: string
+        startDateTime:
+          description: Suggested start time (ISO-8601 with offset)
+          example: '2026-06-18T09:00:00-05:00'
+          type: string
+      required:
+      - endDateTime
+      - startDateTime
+      type: object
+  securitySchemes:
+    senderSecret:
+      description: Shared secret, pos.platform-sender.api-secret
+      in: header
+      name: X-Pos-Sender-Secret
+      type: apiKey

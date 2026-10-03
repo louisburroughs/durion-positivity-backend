@@ -153,7 +153,14 @@ class DomainWallsTest {
             // charged.
             Map.of(
                     "CatalogLaborTimeClientImpl.java", Set.of("pos-catalog"),
-                    "PriceLaborRateClientImpl.java", Set.of("pos-price")));
+                    "PriceLaborRateClientImpl.java", Set.of("pos-price")),
+            // pos-marketing → pos-platform-sender, from PlatformSenderClient only: the FI-2 send
+            // (ADR-0044 amendment 2026-10-03). The send worker needs the sender's accepted-or-refused
+            // answer per recipient to drive its retry ladder, and the provider credentials and
+            // delivery state behind that answer cannot move into a replica. The sender stays a domain
+            // module: any other caller argues its own amendment.
+            "pos-marketing",
+            Map.of("PlatformSenderClient.java", Set.of("pos-platform-sender")));
 
     /**
      * Startup-infra classes exempt per ADR-0044 R2 (registration calls, best-effort
@@ -179,9 +186,10 @@ class DomainWallsTest {
     void fileScopedGrantsAreExhaustiveAndOneFileEach() {
         assertThat(SCOPED_FILE_EXCEPTIONS)
                 .as("the file-scoped grant census: supplier stock (2 callers, ADR-0044 amendment"
-                        + " 2026-08-10), catalog labor time (1 caller, ADR-0044 amendment 2026-09-02)"
-                        + " and price labor rate (1 caller, ADR-0044 amendment 2026-09-07)")
-                .containsOnlyKeys("pos-catalog", "pos-order", "pos-workorder");
+                        + " 2026-08-10), catalog labor time (1 caller, ADR-0044 amendment 2026-09-02),"
+                        + " price labor rate (1 caller, ADR-0044 amendment 2026-09-07) and the platform"
+                        + " sender (1 caller, ADR-0044 amendment 2026-10-03)")
+                .containsOnlyKeys("pos-catalog", "pos-order", "pos-workorder", "pos-marketing");
 
         // Supplier stock: pos-catalog and pos-order, one named class, one target each.
         for (String supplierCaller : List.of("pos-catalog", "pos-order")) {
@@ -206,6 +214,16 @@ class DomainWallsTest {
                 .as("pos-workorder grants the labor-rate file exactly one target")
                 .containsExactly("pos-price");
 
+        // The platform sender: pos-marketing, one named class, one target. The sender is not a
+        // utility, so no whitelist entry may stand in for this grant either.
+        assertThat(SCOPED_FILE_EXCEPTIONS.get("pos-marketing"))
+                .as("pos-marketing grants the sender edge to exactly one file")
+                .containsOnlyKeys("PlatformSenderClient.java");
+        assertThat(SCOPED_FILE_EXCEPTIONS.get("pos-marketing").get("PlatformSenderClient.java"))
+                .as("pos-marketing grants that file exactly one target")
+                .containsExactly("pos-platform-sender");
+        assertThat(UTILITY_MODULES).doesNotContain("pos-platform-sender");
+
         // A module-level grant would defeat the point: SCOPED_MODULE_EXCEPTIONS must not quietly
         // acquire any file-granted target for these modules.
         assertThat(SCOPED_MODULE_EXCEPTIONS.getOrDefault("pos-catalog", Set.of()))
@@ -213,6 +231,8 @@ class DomainWallsTest {
         assertThat(SCOPED_MODULE_EXCEPTIONS.getOrDefault("pos-order", Set.of())).doesNotContain("pos-supplier");
         assertThat(SCOPED_MODULE_EXCEPTIONS.getOrDefault("pos-workorder", Set.of()))
                 .doesNotContain("pos-catalog", "pos-price");
+        assertThat(SCOPED_MODULE_EXCEPTIONS.getOrDefault("pos-marketing", Set.of()))
+                .doesNotContain("pos-platform-sender");
     }
 
     /**

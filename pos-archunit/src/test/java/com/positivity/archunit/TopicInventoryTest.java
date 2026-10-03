@@ -184,21 +184,12 @@ class TopicInventoryTest {
      * existence is asserted below — a stale entry (contract test deleted or renamed) fails the
      * build rather than silently keeping a topic exempted forever.
      *
-     * <p>{@code sender.outcomes.v1}: {@code pos-marketing} consumes delivery/bounce/complaint
-     * outcomes from the shared platform sender, a system outside this repo (see
-     * durion/domains/positivity/PLATFORM_SENDER_CONTRACT.md). There is and never will be an
-     * in-repo producer for it.
-     * This topic does match {@link #TOPIC_PATTERN} and is reached by the scanner as a
-     * consumer-only occurrence in {@code DeliveryOutcomeListener} — this entry is what keeps
-     * {@link #everyInternalTopicHasAProducerAndAConsumer} from failing on it, not the naming
-     * pattern. (Removing this entry reproduces that failure — see the finding notes on the PR that
-     * widened {@link #TOPIC_PATTERN} for the exact failure output this entry guards against.)
+     * <p>Empty since 2026-10-03: {@code sender.outcomes.v1}, the one entry it held, gained its
+     * in-repo producer when pos-platform-sender was built (FI-2,
+     * durion/domains/positivity/PLATFORM_SENDER_CONTRACT.md). Kept as the documented mechanism for
+     * the next topic whose other side genuinely lives outside this repo.
      */
-    private static final Map<String, ExternalTopic> EXTERNAL_TOPIC_ALLOWLIST = Map.of(
-            "sender.outcomes.v1",
-            new ExternalTopic(
-                    "shared platform sender (external; see durion/domains/positivity/PLATFORM_SENDER_CONTRACT.md)",
-                    "pos-marketing/src/test/java/com/positivity/marketing/internal/service/PlatformSenderContractTest.java"));
+    private static final Map<String, ExternalTopic> EXTERNAL_TOPIC_ALLOWLIST = Map.of();
 
     private record ExternalTopic(String owner, String contractTestClass) {}
 

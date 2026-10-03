@@ -71,6 +71,10 @@ modules:
     mode: STRICT
     annotationDepth: STRICT
     errorSchema: STRICT
+  pos-platform-sender:
+    mode: STRICT
+    annotationDepth: STRICT
+    errorSchema: STRICT
   pos-vehicle-fitment:
     mode: STRICT
     annotationDepth: STRICT

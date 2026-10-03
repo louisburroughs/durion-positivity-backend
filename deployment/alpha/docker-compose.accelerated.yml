@@ -104,6 +104,8 @@ services:
 
   pos-marketing:
     environment: *accelerated-env
+  pos-platform-sender:
+    environment: *accelerated-env
 
   pos-mcp-server:
     environment: *accelerated-env

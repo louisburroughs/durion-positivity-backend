@@ -127,6 +127,11 @@
         </dependency>
         <dependency>
             <groupId>com.positivity</groupId>
+            <artifactId>pos-platform-sender</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.positivity</groupId>
             <artifactId>pos-people</artifactId>
             <version>${project.version}</version>
         </dependency>

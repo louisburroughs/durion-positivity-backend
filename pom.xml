@@ -54,6 +54,17 @@
 				<scope>import</scope>
 			</dependency>
 
+			<!-- AWS SDK for Java v2 — pos-platform-sender's SES, End User Messaging SMS and SQS
+			     clients. Only that module depends on any AWS artifact; the BOM keeps the
+			     service clients and their shared core on one version. -->
+			<dependency>
+				<groupId>software.amazon.awssdk</groupId>
+				<artifactId>bom</artifactId>
+				<version>${aws-sdk.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+
 			<!-- Internal Positivity artifacts -->
 			<dependency>
 				<groupId>com.positivity</groupId>
@@ -294,6 +305,7 @@
 		<module>pos-documents</module>
 		<module>pos-warranty</module>
 		<module>pos-marketing</module>
+		<module>pos-platform-sender</module>
 		<module>pos-document-helper</module>
 		<module>pos-bulk-ingest-lib</module>
 		<module>pos-bulk-loader</module>
@@ -372,6 +384,7 @@
 		<resilience4j.version>2.4.0</resilience4j.version>
 		<vavr.version>0.10.4</vavr.version>
 		<spring-ai.version>2.0.1</spring-ai.version>
+		<aws-sdk.version>2.55.11</aws-sdk.version>
 		<!-- Build Plugins -->
 		<maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
 		<jacoco-maven-plugin.version>0.8.14</jacoco-maven-plugin.version>
