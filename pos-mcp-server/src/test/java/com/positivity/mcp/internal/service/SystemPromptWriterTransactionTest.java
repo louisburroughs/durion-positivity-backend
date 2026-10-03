@@ -51,7 +51,7 @@ class SystemPromptWriterTransactionTest {
         transactionManager = mock(PlatformTransactionManager.class);
         when(transactionManager.getTransaction(any())).thenAnswer(_ -> new SimpleTransactionStatus());
 
-        ProxyFactory factory = new ProxyFactory(new SystemPromptWriter(repository));
+        ProxyFactory factory = new ProxyFactory(new SystemPromptWriter(repository, transactionManager));
         factory.setProxyTargetClass(true);
         factory.addAdvice(new TransactionInterceptor(
                 (TransactionManager) transactionManager, new AnnotationTransactionAttributeSource()));
@@ -109,13 +109,29 @@ class SystemPromptWriterTransactionTest {
     }
 
     @Test
-    @DisplayName("the request-path upsert and remove still swallow a lost connection")
-    void failSoftVariantsStillSwallow() {
+    @DisplayName("the request-path upsert and remove roll their own transaction back, then swallow a lost connection")
+    void failSoftVariantsRollBackThenSwallow() {
         when(repository.findByName(any())).thenThrow(new DataAccessResourceFailureException("connection reset"));
 
         assertThatCode(() -> writer.upsert("ROLE_ADMIN", "persona")).doesNotThrowAnyException();
         assertThatCode(() -> writer.remove("ROLE_ADMIN")).doesNotThrowAnyException();
 
-        verify(transactionManager, never()).rollback(any());
+        // #2421: the catch is outside the transaction, so the doomed transaction is rolled back,
+        // never committed (a commit of a rollback-only transaction is what used to escape).
+        verify(transactionManager, org.mockito.Mockito.times(2)).rollback(any());
+        verify(transactionManager, never()).commit(any());
+    }
+
+    @Test
+    @DisplayName("the fail-soft variants run in a transaction of their own too")
+    void failSoftVariantsRequireANewTransaction() {
+        writer.upsert("ROLE_ADMIN", "persona");
+        writer.remove("ROLE_ADMIN");
+
+        ArgumentCaptor<TransactionDefinition> definitions = ArgumentCaptor.forClass(TransactionDefinition.class);
+        verify(transactionManager, org.mockito.Mockito.times(2)).getTransaction(definitions.capture());
+        assertThat(definitions.getAllValues())
+                .extracting(TransactionDefinition::getPropagationBehavior)
+                .containsOnly(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 }
