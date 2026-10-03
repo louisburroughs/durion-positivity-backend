@@ -2,6 +2,7 @@ package com.positivity.marketing.internal.client;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.headerDoesNotExist;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
@@ -10,6 +11,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import com.positivity.marketing.internal.enums.CampaignChannel;
 import com.positivity.marketing.internal.service.MessageChannelPort;
+import com.positivity.tenancy.TenantContext;
 import java.io.IOException;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,6 +32,7 @@ class PlatformSenderClientTest {
 
     private static final UUID SEND_ID = UUID.fromString("01960005-0000-7000-8000-000000000070");
     private static final UUID PARTY = UUID.fromString("01960005-0000-7000-8000-000000000071");
+    private static final UUID TENANT = UUID.fromString("01900000-0000-7000-8000-000000000002");
 
     private MockRestServiceServer server;
     private PlatformSenderClient client;
@@ -52,17 +55,33 @@ class PlatformSenderClientTest {
         server.expect(requestTo("http://sender/platform-sender/v1/messages"))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(header("X-Pos-Sender-Secret", "secret-1"))
+                .andExpect(header("X-Tenant-Id", TENANT.toString()))
                 .andExpect(jsonPath("$.messageId").value(SEND_ID.toString()))
                 .andExpect(jsonPath("$.campaignCode").value("SPRING-2026"))
                 .andRespond(withStatus(HttpStatus.ACCEPTED)
                         .contentType(MediaType.APPLICATION_JSON)
                         .body("{\"providerMessageId\":\"prov-1\",\"addressHash\":\"hash-1\"}"));
 
-        MessageChannelPort.SendOutcome outcome = client.send(message());
+        // The send worker calls the port bound to one tenant (TenantIterator); the sender must
+        // resolve and tag under that same tenant.
+        MessageChannelPort.SendOutcome outcome = TenantContext.callAs(TENANT, () -> client.send(message()));
 
         assertThat(outcome.accepted()).isTrue();
         assertThat(outcome.providerMessageId()).isEqualTo("prov-1");
         assertThat(outcome.addressHash()).isEqualTo("hash-1");
+    }
+
+    @Test
+    @DisplayName("with no tenant bound, no tenant header is invented")
+    void noTenantBoundSendsNoHeader() {
+        server.expect(requestTo("http://sender/platform-sender/v1/messages"))
+                .andExpect(headerDoesNotExist("X-Tenant-Id"))
+                .andRespond(withStatus(HttpStatus.ACCEPTED)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"providerMessageId\":\"prov-1\"}"));
+
+        assertThat(client.send(message()).accepted()).isTrue();
+        server.verify();
     }
 
     @Test

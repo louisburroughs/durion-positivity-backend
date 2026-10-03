@@ -68,7 +68,7 @@ RETENTION_DEFAULT = 604_800_000  # 7d — events and commands
 # deliberately out of scope (#1579 non-goals).
 NON_CONFORMING_NOTE = {
     "payment.settlement-config.v1": "compacted config feed, not {domain}.{kind}.v1",
-    "sender.outcomes.v1": "externally owned feed, consumed only",
+    "sender.outcomes.v1": "FI-2 provider-outcome feed (pos-platform-sender), not {domain}.{kind}.v1",
 }
 
 # A @KafkaListener annotation spans several lines, so match across them.

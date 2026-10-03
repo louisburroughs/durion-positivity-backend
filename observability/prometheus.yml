@@ -184,6 +184,17 @@ scrape_configs:
           service: 'pos-marketing'
           application: 'pos-marketing'
 
+  - job_name: 'pos-platform-sender'
+    metrics_path: '/actuator/prometheus'
+    basic_auth:
+      username: 'prometheus_scraper'
+      password: 'durion-local-prom-scrape-password'
+    static_configs:
+      - targets: ['pos-platform-sender:8080']
+        labels:
+          service: 'pos-platform-sender'
+          application: 'pos-platform-sender'
+
   - job_name: 'pos-mcp-server'
     metrics_path: '/actuator/prometheus'
     basic_auth:

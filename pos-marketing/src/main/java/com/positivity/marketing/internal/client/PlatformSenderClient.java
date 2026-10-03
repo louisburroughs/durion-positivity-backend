@@ -1,6 +1,8 @@
 package com.positivity.marketing.internal.client;
 
 import com.positivity.marketing.internal.service.MessageChannelPort;
+import com.positivity.tenancy.TenantContext;
+import com.positivity.tenancy.TenantHeaders;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -22,6 +24,15 @@ import org.springframework.web.client.RestClientResponseException;
  * and reports whether it was accepted. Outcomes come back asynchronously on
  * {@code sender.outcomes.v1} and are applied by
  * {@link com.positivity.marketing.internal.service.DeliveryOutcomeListener}.
+ *
+ * <p>The sender is pos-platform-sender, an ADR-0044 utility module (amendment 2026-10-03). It is
+ * reached on a fixed base URL rather than through discovery, as a row of the non-gateway exception
+ * register ({@code durion/docs/architecture/INTERNAL_TRANSPORT_AND_SERVICE_DISCOVERY.md} §2): the
+ * FI-2 contract is a shared-secret endpoint with no gateway route.
+ *
+ * <p>The send worker runs bound to one tenant at a time; that tenant travels as
+ * {@code X-Tenant-Id}, so the sender resolves the recipient and tags the provider message under
+ * the same tenant (FI-2 §1). There is no gateway on this hop to inject it.
  *
  * <p>{@code campaignSendId} travels as the {@code messageId} idempotency key, so the send
  * worker retrying a transient failure can never produce a duplicate email: the sender answers
@@ -60,13 +71,10 @@ public class PlatformSenderClient implements MessageChannelPort {
                 message.subject(),
                 message.body());
         try {
-            SendMessageResponse response = restClient
-                    .post()
-                    .uri("/platform-sender/v1/messages")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(request)
-                    .retrieve()
-                    .body(SendMessageResponse.class);
+            RestClient.RequestBodySpec post =
+                    restClient.post().uri("/platform-sender/v1/messages").contentType(MediaType.APPLICATION_JSON);
+            TenantContext.current().ifPresent(tenant -> post.header(TenantHeaders.HTTP_TENANT_ID, tenant.toString()));
+            SendMessageResponse response = post.body(request).retrieve().body(SendMessageResponse.class);
             if (response == null || response.providerMessageId() == null) {
                 // An accepting sender that returns no correlation id leaves every later
                 // outcome unmatchable — treat it as a contract violation worth retrying.

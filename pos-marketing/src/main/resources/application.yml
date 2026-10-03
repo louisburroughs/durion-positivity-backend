@@ -94,8 +94,9 @@ pos:
       # (Story #1137) and bounce/complaint suppression feedback (Story #1150, spec §4.3).
       customer-commands-topic: ${POS_MARKETING_CUSTOMER_COMMANDS_TOPIC:customer.commands.v1}
     sender:
-      # Shared platform sender endpoint + shared secret; only read when transport=platform-sender.
-      base-url: ${POS_MARKETING_SENDER_BASE_URL:http://localhost:8085}
+      # Shared platform sender (pos-platform-sender) endpoint + shared secret; only read when
+      # transport=platform-sender. The default is its Compose/alpha container address.
+      base-url: ${POS_MARKETING_SENDER_BASE_URL:http://pos-platform-sender:8080}
       api-secret: ${POS_MARKETING_SENDER_API_SECRET:}
     preview:
       # How many per-channel decisions an audience preview returns alongside the counts

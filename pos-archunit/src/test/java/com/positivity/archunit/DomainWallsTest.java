@@ -63,6 +63,8 @@ class DomainWallsTest {
             "pos-tax",
             "pos-event-receiver",
             "pos-price",
+            // ADR-0044 amendment 2026-10-03: the shared platform sender (FI-2)
+            "pos-platform-sender",
             // non-deployed libraries reachable via pos-* tokens in code
             "pos-events",
             "pos-shared-dtos",

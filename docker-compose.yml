@@ -331,7 +331,7 @@ services:
         #
         # Names that do not follow ADR-0044 section 3:
         #   payment.settlement-config.v1 — compacted config feed, not {domain}.{kind}.v1
-        #   sender.outcomes.v1 — externally owned feed, consumed only
+        #   sender.outcomes.v1 — FI-2 provider-outcome feed (pos-platform-sender), not {domain}.{kind}.v1
         TOPICS="
         accounting.events.v1             604800000
         accounting.events.v1.dlq         2592000000
@@ -1796,10 +1796,63 @@ services:
       # customer.events.v1 for the suppression replica and redemption attribution.
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
       POS_MARKETING_KAFKA_ENABLED: ${POS_MARKETING_KAFKA_ENABLED:-true}
+      # Delivery (FI-2): 'stub' logs sends; 'platform-sender' hands them to pos-platform-sender,
+      # which needs POS_PLATFORM_SENDER_API_SECRET set (it refuses every send without one).
+      POS_MARKETING_SEND_TRANSPORT: ${POS_MARKETING_SEND_TRANSPORT:-stub}
+      POS_MARKETING_SENDER_BASE_URL: http://pos-platform-sender:8080
+      POS_MARKETING_SENDER_API_SECRET: ${POS_PLATFORM_SENDER_API_SECRET:-}
     depends_on:
       eureka-server:
         condition: service_healthy
       pos-security-service:
+        condition: service_healthy
+    logging: *logging
+    networks:
+      - pos-network
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 300s
+
+  pos-platform-sender:
+    build:
+      context: ./pos-platform-sender
+      dockerfile: Dockerfile
+    # No external ports exposed - internal service only (pos-marketing calls it directly; no gateway route)
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_platform_sender_db
+      # ADR-0062: the pool is the non-owner pos_app role; Flyway alone uses the owner credential.
+      SPRING_DATASOURCE_USERNAME: pos_app
+      SPRING_DATASOURCE_PASSWORD: ${POS_APP_PASSWORD:-${POSTGRES_PASSWORD}}
+      SPRING_FLYWAY_USER: ${POSTGRES_USER}
+      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      <<: [ *pos-events-client-env ]
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
+      SERVER_PORT: 8080
+      MANAGEMENT_SERVER_PORT: 8080
+      # FI-2 send API secret (X-Pos-Sender-Secret); no default, unset refuses every send.
+      POS_PLATFORM_SENDER_API_SECRET: ${POS_PLATFORM_SENDER_API_SECRET:-}
+      # 'log' contacts nobody; 'aws' sends through SES / End User Messaging (AWS default credential
+      # chain: the instance profile on alpha). Settings: pos-platform-sender/README.md.
+      POS_PLATFORM_SENDER_TRANSPORT: ${POS_PLATFORM_SENDER_TRANSPORT:-log}
+      POS_PLATFORM_SENDER_AWS_REGION: ${POS_PLATFORM_SENDER_AWS_REGION:-us-east-1}
+      POS_PLATFORM_SENDER_EMAIL_FROM: ${POS_PLATFORM_SENDER_EMAIL_FROM:-}
+      POS_PLATFORM_SENDER_EMAIL_CONFIGURATION_SET: ${POS_PLATFORM_SENDER_EMAIL_CONFIGURATION_SET:-}
+      POS_PLATFORM_SENDER_SMS_ORIGINATION_IDENTITY: ${POS_PLATFORM_SENDER_SMS_ORIGINATION_IDENTITY:-}
+      POS_PLATFORM_SENDER_SMS_CONFIGURATION_SET: ${POS_PLATFORM_SENDER_SMS_CONFIGURATION_SET:-}
+      POS_PLATFORM_SENDER_OUTCOMES_ENABLED: ${POS_PLATFORM_SENDER_OUTCOMES_ENABLED:-false}
+      POS_PLATFORM_SENDER_OUTCOMES_QUEUE_URL: ${POS_PLATFORM_SENDER_OUTCOMES_QUEUE_URL:-}
+      # Domain events (ADR-0044): consumes customer.events.v1 and people-contact.events.v1 for the
+      # address replicas, publishes sender.outcomes.v1.
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      POS_PLATFORM_SENDER_KAFKA_ENABLED: ${POS_PLATFORM_SENDER_KAFKA_ENABLED:-true}
+    depends_on:
+      eureka-server:
         condition: service_healthy
     logging: *logging
     networks:

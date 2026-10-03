@@ -869,6 +869,7 @@ DOMAIN_SERVICES=(
   pos-order
   pos-people
   pos-people-contact
+  pos-platform-sender
   pos-price
   pos-shop-manager
   pos-supplier

@@ -138,6 +138,7 @@ path), it does not fall back.
 | `POS_EVENTS_API_SECRET` | `pos-event-receiver` and every emitting module | `X-Events-Api-Secret` on event and event-type registration |
 | `POS_SECURITY_API_SECRET` | `pos-security-service` and every registering module | `X-Permissions-Api-Secret` on `/v1/permissions/register` |
 | `POS_TENANT_REGISTRY_API_SECRET` | `pos-tenant`, and any module with `pos.tenancy.registry.mode=REMOTE` (as `pos.tenancy.registry.secret`) | `X-Tenant-Registry-Secret` on `GET /internal/v1/tenants` (ADR-0062 plan WS4-2) |
+| `POS_PLATFORM_SENDER_API_SECRET` | `pos-platform-sender`, and `pos-marketing` (as `pos.marketing.sender.api-secret`) | `X-Pos-Sender-Secret` on `POST /platform-sender/v1/messages` (FI-2) |
 
 The root `docker-compose.yml` passes `POS_TENANT_REGISTRY_API_SECRET` through from the environment
 with no default (like the other service secrets): unset, `pos-tenant` refuses every registry call

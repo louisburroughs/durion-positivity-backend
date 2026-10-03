@@ -12,6 +12,7 @@ CREATE DATABASE pos_inventory_db;
 CREATE DATABASE pos_invoice_db;
 CREATE DATABASE pos_location_db;
 CREATE DATABASE pos_marketing_db;
+CREATE DATABASE pos_platform_sender_db;
 CREATE DATABASE pos_mcp;
 CREATE DATABASE pos_order_db;
 CREATE DATABASE pos_people_db;
