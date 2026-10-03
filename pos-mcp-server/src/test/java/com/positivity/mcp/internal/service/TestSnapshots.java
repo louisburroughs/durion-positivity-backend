@@ -10,6 +10,10 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 
 /** Role persona snapshot fixtures (#1613). */
 final class TestSnapshots {
@@ -40,7 +44,12 @@ final class TestSnapshots {
      */
     static RolePersonaRefresher unreachableRefresher(
             SystemPromptRepository repository, RolePersonaSnapshotHolder holder) {
-        return new RolePersonaRefresher(new UnreachableSource(), holder, new SystemPromptWriter(repository));
+        return new RolePersonaRefresher(new UnreachableSource(), holder, writer(repository));
+    }
+
+    /** A writer whose transactions are no-ops, for tests that stub the repository. */
+    static SystemPromptWriter writer(SystemPromptRepository repository) {
+        return new SystemPromptWriter(repository, new NoOpTransactionManager());
     }
 
     /** A resolver with no synced personas and no reachable upstream. */
@@ -52,6 +61,23 @@ final class TestSnapshots {
     static RolePromptResolverImpl resolver(
             SystemPromptRepository repository, MeterRegistry meterRegistry, RolePersonaSnapshotHolder holder) {
         return new RolePromptResolverImpl(repository, meterRegistry, holder, unreachableRefresher(repository, holder));
+    }
+
+    private static final class NoOpTransactionManager implements PlatformTransactionManager {
+        @Override
+        public TransactionStatus getTransaction(TransactionDefinition definition) {
+            return new SimpleTransactionStatus();
+        }
+
+        @Override
+        public void commit(TransactionStatus status) {
+            // Nothing to commit: the repository is a stub.
+        }
+
+        @Override
+        public void rollback(TransactionStatus status) {
+            // Nothing to roll back: the repository is a stub.
+        }
     }
 
     private static final class UnreachableSource implements RolePersonaSource {
