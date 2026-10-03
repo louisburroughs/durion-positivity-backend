@@ -1733,8 +1733,8 @@ vendor latency. Full design: `pos-catalog/docs/service-time-sourcing-plan.md`.
   count matched the vendor's manifest.
 - **Curate unmapped operations**: `GET /v1/catalog/labor-guide-imports/unmapped` lists vendor
   codes no `service_operation_xref` row maps (entries suffixed `#<TYPE>` carry a time class the
-  platform does not model). Add the xref row (or decide the code is not wanted), then re-run
-  the import — mapping is deliberate curation, never automatic.
+  platform does not model). Mapping is deliberate curation, never automatic, but there is no
+  API to add an xref row yet (#2457): until it ships the queue can be listed, not resolved.
 - **Source precedence** is data: `labor_time_source_policy` rows order sources per time type
   (lower `precedence` wins). The only seed that inserts into that table is the tier 1
   `R__seed_reference_catalog_7_labor_time_source_policy.sql`, including the category-agnostic
