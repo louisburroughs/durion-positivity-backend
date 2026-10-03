@@ -22,6 +22,7 @@ import com.positivity.vehiclefitment.internal.repository.VehicleVariableReposito
 import com.positivity.vehiclefitment.internal.repository.VehicleVariableValueRepository;
 import com.positivity.vehiclefitment.internal.service.dto.CreatePartFitmentRequest;
 import com.positivity.vehiclefitment.internal.service.dto.PartFitmentResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -264,9 +265,9 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
             manufacturerRepository.deleteAll();
             for (JsonNode node : results) {
                 Manufacturer m = new Manufacturer();
-                // Generate UUID from NHTSA ID for consistency
-                UUID nhtsaId = UUID.fromString(node.path("Mfr_ID").asString());
-                m.setId(java.util.UUID.nameUUIDFromBytes(("manufacturer-" + nhtsaId).getBytes()));
+                long nhtsaId = vpicId(node, "Mfr_ID");
+                m.setId(localId("manufacturer-", nhtsaId));
+                m.setNhtsaId(nhtsaId);
                 m.setName(node.path("Mfr_CommonName").asString(""));
                 m.setCacheTimestamp(LocalDateTime.now(clock));
                 manufacturerRepository.save(m);
@@ -292,7 +293,12 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
         if (!cached.isEmpty() && isCacheFresh(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
-        String url = NHTSA_API_BASE + "/GetMakeForManufacturer/" + manufacturerId + FORMAT_JSON;
+        Long vpicManufacturerId = manufacturer.getNhtsaId();
+        if (vpicManufacturerId == null) {
+            log.debug("Manufacturer {} has no vPIC id; serving its makes from cache", manufacturerId);
+            return cached;
+        }
+        String url = NHTSA_API_BASE + "/GetMakeForManufacturer/" + vpicManufacturerId + FORMAT_JSON;
         String response = restClient.get().uri(url).retrieve().body(String.class);
         try {
             JsonNode root = objectMapper.readTree(response);
@@ -300,9 +306,9 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
             makeRepository.deleteAll(cached);
             for (JsonNode node : results) {
                 Make make = new Make();
-                // Generate UUID from NHTSA ID for consistency
-                UUID nhtsaId = UUID.fromString(node.path("Make_ID").asString());
-                make.setId(java.util.UUID.nameUUIDFromBytes(("make-" + nhtsaId).getBytes()));
+                long nhtsaId = vpicId(node, "Make_ID");
+                make.setId(localId("make-", nhtsaId));
+                make.setNhtsaId(nhtsaId);
                 make.setName(node.path("Make_Name").asString(""));
                 make.setManufacturer(manufacturer);
                 make.setCacheTimestamp(LocalDateTime.now(clock));
@@ -329,7 +335,12 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
         if (!cached.isEmpty() && isCacheFresh(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
-        String url = NHTSA_API_BASE + "/GetModelsForMakeId/" + makeId + FORMAT_JSON;
+        Long vpicMakeId = make.getNhtsaId();
+        if (vpicMakeId == null) {
+            log.debug("Make {} has no vPIC id; serving its models from cache", makeId);
+            return cached;
+        }
+        String url = NHTSA_API_BASE + "/GetModelsForMakeId/" + vpicMakeId + FORMAT_JSON;
         String response = restClient.get().uri(url).retrieve().body(String.class);
         try {
             JsonNode root = objectMapper.readTree(response);
@@ -337,9 +348,9 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
             modelRepository.deleteAll(cached);
             for (JsonNode node : results) {
                 Model model = new Model();
-                // Generate UUID from NHTSA ID for consistency
-                UUID nhtsaId = UUID.fromString(node.path("Model_ID").asString());
-                model.setId(java.util.UUID.nameUUIDFromBytes(("model-" + nhtsaId).getBytes()));
+                long nhtsaId = vpicId(node, "Model_ID");
+                model.setId(localId("model-", nhtsaId));
+                model.setNhtsaId(nhtsaId);
                 model.setName(node.path("Model_Name").asString(""));
                 model.setMake(make);
                 model.setCacheTimestamp(LocalDateTime.now(clock));
@@ -366,7 +377,12 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
         if (!cached.isEmpty() && isCacheFresh(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
-        String url = NHTSA_API_BASE + "/GetVehicleTypesForMakeId/" + makeId + FORMAT_JSON;
+        Long vpicMakeId = make.getNhtsaId();
+        if (vpicMakeId == null) {
+            log.debug("Make {} has no vPIC id; serving its vehicle types from cache", makeId);
+            return cached;
+        }
+        String url = NHTSA_API_BASE + "/GetVehicleTypesForMakeId/" + vpicMakeId + FORMAT_JSON;
         String response = restClient.get().uri(url).retrieve().body(String.class);
         try {
             JsonNode root = objectMapper.readTree(response);
@@ -384,6 +400,27 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
             throw new VehicleFitmentException("Failed to parse vehicle types for make", e);
         }
         return vehicleTypeRepository.findByMakeId(makeId);
+    }
+
+    /**
+     * Reads one of vPIC's numeric ids ({@code Mfr_ID}, {@code Make_ID}, {@code Model_ID}). vPIC returns
+     * these as JSON integers; anything else is not a payload this service understands, so it fails the
+     * refresh rather than inventing an id (#2416).
+     */
+    private static long vpicId(JsonNode node, String field) {
+        JsonNode id = node.path(field);
+        if (!id.isIntegralNumber()) {
+            throw new IllegalStateException("vPIC " + field + " is not an integer: " + id);
+        }
+        return id.asLong();
+    }
+
+    /**
+     * The local id of a row cached from vPIC: a name-based UUID over vPIC's numeric id, so a refresh
+     * keys the same vPIC entity to the same row. Same derivation as {@code pos-vehicle-reference-nhtsa}.
+     */
+    private static UUID localId(String prefix, long nhtsaId) {
+        return UUID.nameUUIDFromBytes((prefix + nhtsaId).getBytes(StandardCharsets.UTF_8));
     }
 
     /**

@@ -30,6 +30,7 @@ import com.positivity.vehiclefitment.internal.repository.VehicleVariableReposito
 import com.positivity.vehiclefitment.internal.repository.VehicleVariableValueRepository;
 import com.positivity.vehiclefitment.internal.service.dto.CreatePartFitmentRequest;
 import com.positivity.vehiclefitment.internal.service.dto.PartFitmentResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -40,6 +41,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -58,6 +60,11 @@ class VehicleFitmentServiceTest {
     private static final UUID MAKE_ID = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
     private static final UUID VARIABLE_ID = UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc");
     private static final UUID MODEL_ID = UUID.fromString("dddddddd-dddd-dddd-dddd-dddddddddddd");
+    /** vPIC's own numeric ids (#2416): vPIC returns integers and resolves its paths by them. */
+    private static final long MFR_VPIC_ID = 955L;
+
+    private static final long MAKE_VPIC_ID = 441L;
+    private static final long MODEL_VPIC_ID = 1685L;
     /**
      * Must match {@code VehicleFitmentServiceImpl.NHTSA_API_BASE}. Spelled out here rather than
      * read from the service so a wrong base path there fails the suite instead of agreeing with it.
@@ -185,10 +192,9 @@ class VehicleFitmentServiceTest {
 
         when(manufacturerRepository.findAll()).thenReturn(List.of()).thenReturn(List.of(saved));
 
-        // Mfr_ID must be a valid UUID string (service calls UUID.fromString on it)
         when(responseSpec.body(String.class))
-                .thenReturn("{\"Results\":[{\"Mfr_ID\":\"" + MANUFACTURER_ID
-                        + "\",\"Mfr_CommonName\":\"Toyota Motor Corp\"}]}");
+                .thenReturn(
+                        "{\"Results\":[{\"Mfr_ID\":" + MFR_VPIC_ID + ",\"Mfr_CommonName\":\"Toyota Motor Corp\"}]}");
 
         List<ManufacturerResponse> result = service.getManufacturers();
 
@@ -221,6 +227,7 @@ class VehicleFitmentServiceTest {
     void getMakesByManufacturer_emptyCache_callsApiAndReturnsData() {
         Manufacturer manufacturer = new Manufacturer();
         manufacturer.setId(MANUFACTURER_ID);
+        manufacturer.setNhtsaId(MFR_VPIC_ID);
         manufacturer.setName("Toyota");
         manufacturer.setCacheTimestamp(LocalDateTime.now(TEST_CLOCK));
 
@@ -233,9 +240,8 @@ class VehicleFitmentServiceTest {
                 .thenReturn(List.of())
                 .thenReturn(List.of(savedMake));
 
-        // Make_ID must be a valid UUID string
         when(responseSpec.body(String.class))
-                .thenReturn("{\"Results\":[{\"Make_ID\":\"" + MAKE_ID + "\",\"Make_Name\":\"Toyota\"}]}");
+                .thenReturn("{\"Results\":[{\"Make_ID\":" + MAKE_VPIC_ID + ",\"Make_Name\":\"Toyota\"}]}");
 
         List<MakeResponse> result = service.getMakesByManufacturer(MANUFACTURER_ID);
 
@@ -247,6 +253,7 @@ class VehicleFitmentServiceTest {
     void getMakesByManufacturer_parseError_throwsVehicleFitmentException() {
         Manufacturer manufacturer = new Manufacturer();
         manufacturer.setId(MANUFACTURER_ID);
+        manufacturer.setNhtsaId(MFR_VPIC_ID);
         manufacturer.setName("Toyota");
         manufacturer.setCacheTimestamp(LocalDateTime.now(TEST_CLOCK));
 
@@ -274,10 +281,10 @@ class VehicleFitmentServiceTest {
     void getModelsByMake_emptyCache_callsApiAndReturnsData() {
         Make make = new Make();
         make.setId(MAKE_ID);
+        make.setNhtsaId(MAKE_VPIC_ID);
         make.setName("Toyota");
         make.setCacheTimestamp(LocalDateTime.now(TEST_CLOCK));
 
-        UUID modelId = UUID.fromString("dddddddd-dddd-dddd-dddd-dddddddddddd");
         Model savedModel = new Model();
         savedModel.setName("Camry");
         savedModel.setCacheTimestamp(LocalDateTime.now(TEST_CLOCK));
@@ -285,9 +292,8 @@ class VehicleFitmentServiceTest {
         when(makeRepository.findById(MAKE_ID)).thenReturn(Optional.of(make));
         when(modelRepository.findByMakeId(MAKE_ID)).thenReturn(List.of()).thenReturn(List.of(savedModel));
 
-        // Model_ID must be a valid UUID string
         when(responseSpec.body(String.class))
-                .thenReturn("{\"Results\":[{\"Model_ID\":\"" + modelId + "\",\"Model_Name\":\"Camry\"}]}");
+                .thenReturn("{\"Results\":[{\"Model_ID\":" + MODEL_VPIC_ID + ",\"Model_Name\":\"Camry\"}]}");
 
         List<ModelResponse> result = service.getModelsByMake(MAKE_ID);
 
@@ -299,6 +305,7 @@ class VehicleFitmentServiceTest {
     void getModelsByMake_parseError_throwsVehicleFitmentException() {
         Make make = new Make();
         make.setId(MAKE_ID);
+        make.setNhtsaId(MAKE_VPIC_ID);
         make.setName("Toyota");
         make.setCacheTimestamp(LocalDateTime.now(TEST_CLOCK));
 
@@ -326,6 +333,7 @@ class VehicleFitmentServiceTest {
     void getVehicleTypesForMake_emptyCache_callsApiAndReturnsData() {
         Make make = new Make();
         make.setId(MAKE_ID);
+        make.setNhtsaId(MAKE_VPIC_ID);
         make.setName("Toyota");
         make.setCacheTimestamp(LocalDateTime.now(TEST_CLOCK));
 
@@ -349,6 +357,7 @@ class VehicleFitmentServiceTest {
     void getVehicleTypesForMake_parseError_throwsVehicleFitmentException() {
         Make make = new Make();
         make.setId(MAKE_ID);
+        make.setNhtsaId(MAKE_VPIC_ID);
         make.setName("Toyota");
         make.setCacheTimestamp(LocalDateTime.now(TEST_CLOCK));
 
@@ -430,9 +439,8 @@ class VehicleFitmentServiceTest {
     @Test
     void getManufacturers_staleCache_refetchesFromVpicOnce() {
         when(manufacturerRepository.findAll()).thenReturn(List.of(manufacturer(dayOld())));
-        // Mfr_ID must be a valid UUID string (service calls UUID.fromString on it)
         when(responseSpec.body(String.class))
-                .thenReturn("{\"Results\":[{\"Mfr_ID\":\"" + MANUFACTURER_ID + "\",\"Mfr_CommonName\":\"Toyota\"}]}");
+                .thenReturn("{\"Results\":[{\"Mfr_ID\":" + MFR_VPIC_ID + ",\"Mfr_CommonName\":\"Toyota\"}]}");
 
         service.getManufacturers();
 
@@ -456,13 +464,12 @@ class VehicleFitmentServiceTest {
     void getMakesByManufacturer_staleCache_refetchesFromVpicOnce() {
         when(manufacturerRepository.findById(MANUFACTURER_ID)).thenReturn(Optional.of(manufacturer(hourOld())));
         when(makeRepository.findByManufacturerId(MANUFACTURER_ID)).thenReturn(List.of(make(dayOld())));
-        // Make_ID must be a valid UUID string
         when(responseSpec.body(String.class))
-                .thenReturn("{\"Results\":[{\"Make_ID\":\"" + MAKE_ID + "\",\"Make_Name\":\"Toyota\"}]}");
+                .thenReturn("{\"Results\":[{\"Make_ID\":" + MAKE_VPIC_ID + ",\"Make_Name\":\"Toyota\"}]}");
 
         service.getMakesByManufacturer(MANUFACTURER_ID);
 
-        verifySingleVpicCall(VPIC_BASE + "/GetMakeForManufacturer/" + MANUFACTURER_ID + "?format=json");
+        verifySingleVpicCall(VPIC_BASE + "/GetMakeForManufacturer/" + MFR_VPIC_ID + "?format=json");
     }
 
     @Test
@@ -482,13 +489,12 @@ class VehicleFitmentServiceTest {
     void getModelsByMake_staleCache_refetchesFromVpicOnce() {
         when(makeRepository.findById(MAKE_ID)).thenReturn(Optional.of(make(hourOld())));
         when(modelRepository.findByMakeId(MAKE_ID)).thenReturn(List.of(model(dayOld())));
-        // Model_ID must be a valid UUID string
         when(responseSpec.body(String.class))
-                .thenReturn("{\"Results\":[{\"Model_ID\":\"" + MODEL_ID + "\",\"Model_Name\":\"Camry\"}]}");
+                .thenReturn("{\"Results\":[{\"Model_ID\":" + MODEL_VPIC_ID + ",\"Model_Name\":\"Camry\"}]}");
 
         service.getModelsByMake(MAKE_ID);
 
-        verifySingleVpicCall(VPIC_BASE + "/GetModelsForMakeId/" + MAKE_ID + "?format=json");
+        verifySingleVpicCall(VPIC_BASE + "/GetModelsForMakeId/" + MAKE_VPIC_ID + "?format=json");
     }
 
     @Test
@@ -513,7 +519,150 @@ class VehicleFitmentServiceTest {
 
         service.getVehicleTypesForMake(MAKE_ID);
 
-        verifySingleVpicCall(VPIC_BASE + "/GetVehicleTypesForMakeId/" + MAKE_ID + "?format=json");
+        verifySingleVpicCall(VPIC_BASE + "/GetVehicleTypesForMakeId/" + MAKE_VPIC_ID + "?format=json");
+    }
+
+    // ─── vPIC numeric ids (#2416) ──────────────────────────────────────────────
+    //
+    // vPIC identifies manufacturers, makes and models by integers (Mfr_ID 955, not a UUID)
+    // and resolves its dependent paths by those integers. The service used to parse them
+    // with UUID.fromString, which throws on every real payload, and to put the local UUID
+    // into the dependent URLs, which vPIC cannot resolve. The payloads below are shaped
+    // like vPIC's own responses, integer ids included.
+
+    @Test
+    void getManufacturers_integerMfrId_keepsVpicIdAndDerivesLocalId() {
+        when(manufacturerRepository.findAll()).thenReturn(List.of());
+        when(responseSpec.body(String.class))
+                .thenReturn("{\"Count\":1,\"Message\":\"Response returned successfully\",\"SearchCriteria\":null,"
+                        + "\"Results\":[{\"Country\":\"UNITED STATES (USA)\",\"Mfr_CommonName\":\"Tesla\","
+                        + "\"Mfr_ID\":955,\"Mfr_Name\":\"TESLA, INC.\",\"VehicleTypes\":[]}]}");
+
+        service.getManufacturers();
+
+        ArgumentCaptor<Manufacturer> saved = ArgumentCaptor.forClass(Manufacturer.class);
+        verify(manufacturerRepository).save(saved.capture());
+        assertThat(saved.getValue().getNhtsaId()).isEqualTo(955L);
+        assertThat(saved.getValue().getId())
+                .isEqualTo(UUID.nameUUIDFromBytes("manufacturer-955".getBytes(StandardCharsets.UTF_8)));
+        assertThat(saved.getValue().getName()).isEqualTo("Tesla");
+    }
+
+    @Test
+    void getMakesByManufacturer_requestsByVpicIdAndKeepsIntegerMakeId() {
+        when(manufacturerRepository.findById(MANUFACTURER_ID)).thenReturn(Optional.of(manufacturer(hourOld())));
+        when(makeRepository.findByManufacturerId(MANUFACTURER_ID)).thenReturn(List.of());
+        when(responseSpec.body(String.class))
+                .thenReturn("{\"Count\":1,\"Message\":\"Results returned successfully\",\"SearchCriteria\":"
+                        + "\"Manufacturer:955\",\"Results\":[{\"Make_ID\":441,\"Make_Name\":\"TESLA\","
+                        + "\"Mfr_Name\":\"TESLA, INC.\"}]}");
+
+        service.getMakesByManufacturer(MANUFACTURER_ID);
+
+        verifySingleVpicCall(VPIC_BASE + "/GetMakeForManufacturer/955?format=json");
+        ArgumentCaptor<Make> saved = ArgumentCaptor.forClass(Make.class);
+        verify(makeRepository).save(saved.capture());
+        assertThat(saved.getValue().getNhtsaId()).isEqualTo(441L);
+        assertThat(saved.getValue().getId())
+                .isEqualTo(UUID.nameUUIDFromBytes("make-441".getBytes(StandardCharsets.UTF_8)));
+        assertThat(saved.getValue().getName()).isEqualTo("TESLA");
+    }
+
+    @Test
+    void getModelsByMake_requestsByVpicIdAndKeepsIntegerModelId() {
+        when(makeRepository.findById(MAKE_ID)).thenReturn(Optional.of(make(hourOld())));
+        when(modelRepository.findByMakeId(MAKE_ID)).thenReturn(List.of());
+        when(responseSpec.body(String.class))
+                .thenReturn("{\"Count\":1,\"Message\":\"Response returned successfully\",\"SearchCriteria\":"
+                        + "\"Make ID:441\",\"Results\":[{\"Make_ID\":441,\"Make_Name\":\"TESLA\","
+                        + "\"Model_ID\":1685,\"Model_Name\":\"Model S\"}]}");
+
+        service.getModelsByMake(MAKE_ID);
+
+        verifySingleVpicCall(VPIC_BASE + "/GetModelsForMakeId/441?format=json");
+        ArgumentCaptor<Model> saved = ArgumentCaptor.forClass(Model.class);
+        verify(modelRepository).save(saved.capture());
+        assertThat(saved.getValue().getNhtsaId()).isEqualTo(1685L);
+        assertThat(saved.getValue().getId())
+                .isEqualTo(UUID.nameUUIDFromBytes("model-1685".getBytes(StandardCharsets.UTF_8)));
+        assertThat(saved.getValue().getName()).isEqualTo("Model S");
+    }
+
+    @Test
+    void getVehicleTypesForMake_requestsByVpicId() {
+        when(makeRepository.findById(MAKE_ID)).thenReturn(Optional.of(make(hourOld())));
+        when(vehicleTypeRepository.findByMakeId(MAKE_ID)).thenReturn(List.of());
+        when(responseSpec.body(String.class))
+                .thenReturn(
+                        "{\"Count\":1,\"Message\":\"Response returned successfully\",\"SearchCriteria\":"
+                                + "\"Make ID: 441\",\"Results\":[{\"VehicleTypeId\":2,\"VehicleTypeName\":\"Passenger Car\"}]}");
+
+        service.getVehicleTypesForMake(MAKE_ID);
+
+        verifySingleVpicCall(VPIC_BASE + "/GetVehicleTypesForMakeId/441?format=json");
+        ArgumentCaptor<VehicleType> saved = ArgumentCaptor.forClass(VehicleType.class);
+        verify(vehicleTypeRepository).save(saved.capture());
+        assertThat(saved.getValue().getVehicleTypeId()).isEqualTo("2");
+    }
+
+    @Test
+    void getManufacturers_nonIntegerMfrId_throwsAndSavesNothing() {
+        when(manufacturerRepository.findAll()).thenReturn(List.of());
+        when(responseSpec.body(String.class))
+                .thenReturn("{\"Results\":[{\"Mfr_ID\":\"" + MANUFACTURER_ID + "\",\"Mfr_CommonName\":\"Tesla\"}]}");
+
+        assertThatThrownBy(() -> service.getManufacturers())
+                .isInstanceOf(VehicleFitmentException.class)
+                .hasMessageContaining("Failed to parse manufacturers");
+        verify(manufacturerRepository, never()).save(any(Manufacturer.class));
+    }
+
+    @Test
+    void getMakesByManufacturer_manufacturerWithoutVpicId_servesCacheWithoutCallingVpic() {
+        Manufacturer local = manufacturer(hourOld());
+        local.setNhtsaId(null);
+        when(manufacturerRepository.findById(MANUFACTURER_ID)).thenReturn(Optional.of(local));
+        when(makeRepository.findByManufacturerId(MANUFACTURER_ID)).thenReturn(List.of(make(dayOld())));
+
+        assertThat(service.getMakesByManufacturer(MANUFACTURER_ID))
+                .singleElement()
+                .extracting(MakeResponse::getName)
+                .isEqualTo("Toyota");
+
+        verify(restClient, never()).get();
+        verify(makeRepository, never()).deleteAll(any());
+    }
+
+    @Test
+    void getModelsByMake_makeWithoutVpicId_servesCacheWithoutCallingVpic() {
+        Make local = make(hourOld());
+        local.setNhtsaId(null);
+        when(makeRepository.findById(MAKE_ID)).thenReturn(Optional.of(local));
+        when(modelRepository.findByMakeId(MAKE_ID)).thenReturn(List.of(model(dayOld())));
+
+        assertThat(service.getModelsByMake(MAKE_ID))
+                .singleElement()
+                .extracting(ModelResponse::getName)
+                .isEqualTo("Camry");
+
+        verify(restClient, never()).get();
+        verify(modelRepository, never()).deleteAll(any());
+    }
+
+    @Test
+    void getVehicleTypesForMake_makeWithoutVpicId_servesCacheWithoutCallingVpic() {
+        Make local = make(hourOld());
+        local.setNhtsaId(null);
+        when(makeRepository.findById(MAKE_ID)).thenReturn(Optional.of(local));
+        when(vehicleTypeRepository.findByMakeId(MAKE_ID)).thenReturn(List.of(vehicleType(dayOld())));
+
+        assertThat(service.getVehicleTypesForMake(MAKE_ID))
+                .singleElement()
+                .extracting(VehicleTypeResponse::getVehicleTypeName)
+                .isEqualTo("Passenger Car");
+
+        verify(restClient, never()).get();
+        verify(vehicleTypeRepository, never()).deleteAll(any());
     }
 
     /** Cached an hour before {@link #TEST_CLOCK}: inside the 24-hour window. */
@@ -550,6 +699,7 @@ class VehicleFitmentServiceTest {
     private static Manufacturer manufacturer(LocalDateTime cachedAt) {
         Manufacturer manufacturer = new Manufacturer();
         manufacturer.setId(MANUFACTURER_ID);
+        manufacturer.setNhtsaId(MFR_VPIC_ID);
         manufacturer.setName("Toyota");
         manufacturer.setCacheTimestamp(cachedAt);
         return manufacturer;
@@ -558,6 +708,7 @@ class VehicleFitmentServiceTest {
     private static Make make(LocalDateTime cachedAt) {
         Make make = new Make();
         make.setId(MAKE_ID);
+        make.setNhtsaId(MAKE_VPIC_ID);
         make.setName("Toyota");
         make.setCacheTimestamp(cachedAt);
         return make;
@@ -566,6 +717,7 @@ class VehicleFitmentServiceTest {
     private static Model model(LocalDateTime cachedAt) {
         Model model = new Model();
         model.setId(MODEL_ID);
+        model.setNhtsaId(MODEL_VPIC_ID);
         model.setName("Camry");
         model.setCacheTimestamp(cachedAt);
         return model;
