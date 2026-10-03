@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.config.AccountingEventTypeRegistry;
 import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.ExtInvoiceTax;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
@@ -95,7 +96,8 @@ public class InvoiceEventsListener {
      * Event type codes this listener records an {@code accounting_event} row for, one per consumed
      * fact (#2433).
      */
-    public static final List<String> RECORDED_EVENT_TYPES = List.of(InvoiceUpdatedV1.EVENT_TYPE);
+    public static final List<String> RECORDED_EVENT_TYPES =
+            AccountingEventTypeRegistry.kafkaCodes(AccountingEventTypeRegistry.DOMAIN_INVOICE);
 
     private final Clock clock;
     private final ObjectMapper objectMapper;

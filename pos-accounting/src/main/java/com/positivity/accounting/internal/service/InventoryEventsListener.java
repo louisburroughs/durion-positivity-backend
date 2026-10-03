@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.config.AccountingEventTypeRegistry;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.domainevents.inventory.InventoryAdjustedV1;
@@ -86,7 +87,7 @@ public class InventoryEventsListener {
      * fact (issues #2191, #2433).
      */
     public static final List<String> RECORDED_EVENT_TYPES =
-            List.of(ScrapPostedV1.EVENT_TYPE, InventoryAdjustedV1.EVENT_TYPE, ProductValueChangedV1.EVENT_TYPE);
+            AccountingEventTypeRegistry.kafkaCodes(AccountingEventTypeRegistry.DOMAIN_INVENTORY);
 
     static final String POSTED_METRIC = "accounting.inventory.fact.posted";
     static final String SKIPPED_METRIC = "accounting.inventory.fact.skipped";

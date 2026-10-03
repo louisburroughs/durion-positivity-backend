@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.config.AccountingEventTypeRegistry;
 import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.entity.AccountingEvent;
@@ -52,7 +53,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class InvoicePaymentEventProcessor {
 
-    public static final String EVENT_TYPE = "INVOICE_PAYMENT";
+    public static final String EVENT_TYPE = AccountingEventTypeRegistry.INVOICE_PAYMENT;
 
     /** The invoice is not in the replica yet; replica lag makes this retryable. */
     static final String INVOICE_NOT_FOUND = "INVOICE_NOT_FOUND";

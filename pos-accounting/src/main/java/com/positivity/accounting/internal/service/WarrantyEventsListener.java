@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.config.AccountingEventTypeRegistry;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
 import com.positivity.accounting.internal.entity.WarrantyReimbursementExpectation;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
@@ -80,7 +81,7 @@ public class WarrantyEventsListener {
      * fact (#2433).
      */
     public static final List<String> RECORDED_EVENT_TYPES =
-            List.of(WarrantyReimbursementSubmittedV1.EVENT_TYPE, WarrantyReimbursementResolvedV1.EVENT_TYPE);
+            AccountingEventTypeRegistry.kafkaCodes(AccountingEventTypeRegistry.DOMAIN_WARRANTY);
 
     private final Clock clock;
     private final ObjectMapper objectMapper;

@@ -2,14 +2,17 @@ package com.positivity.accounting.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.audit.repository.AuditTrailEntryRepository;
+import com.positivity.accounting.internal.config.AccountingEventTypeRegistry;
 import com.positivity.accounting.internal.dto.AccountingEventFilter;
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
+import com.positivity.accounting.internal.dto.AccountingEventTypeResponse;
 import com.positivity.accounting.internal.dto.EventEnvelopeContract;
 import com.positivity.accounting.internal.dto.FactConsumptionIdempotency;
 import com.positivity.accounting.internal.dto.FactPostingKeyDescriptor;
@@ -315,6 +318,24 @@ class EventIngestionServiceTest {
     }
 
     // ========== Issue #2207: additive EventEnvelopeContract sections ==========
+
+    @Test
+    @DisplayName("listEventTypes should publish the registry, including the code-submitted API GL posting types")
+    void listEventTypes_publishesRegistryWithApiGlPostingTypes() {
+        List<AccountingEventTypeResponse> types = service.listEventTypes();
+
+        assertThat(types).hasSize(AccountingEventTypeRegistry.entries().size());
+        assertThat(types)
+                .filteredOn(t -> t.ingestion() == AccountingEventTypeRegistry.Ingestion.API)
+                .extracting(
+                        AccountingEventTypeResponse::code,
+                        AccountingEventTypeResponse::sourceDomain,
+                        AccountingEventTypeResponse::postsToGl)
+                .containsExactlyInAnyOrder(
+                        tuple("INVOICE_PAYMENT", "payment", false),
+                        tuple("VENDOR_BILL_GL_POSTING", "accounting", true),
+                        tuple("AP_PAYMENT_GL_POSTING", "accounting", true));
+    }
 
     @Test
     @DisplayName("getEventContract should publish every AccountingEventStatus constant, derived from the enum")

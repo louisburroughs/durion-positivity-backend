@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.config.AccountingEventTypeRegistry;
 import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.entity.ExtInvoiceDepositCreditApplication;
 import com.positivity.accounting.internal.entity.ExtInvoicePaymentReversal;
@@ -89,6 +90,13 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 @ConditionalOnProperty(prefix = "pos.accounting.kafka", name = "enabled", havingValue = "true")
 public class SettlementEventsListener {
+
+    /**
+     * Event type codes this listener records an {@code accounting_event} row for: only a settled
+     * payment held for its currency (#2433, #2436).
+     */
+    public static final java.util.List<String> RECORDED_EVENT_TYPES =
+            AccountingEventTypeRegistry.kafkaCodes(AccountingEventTypeRegistry.DOMAIN_PAYMENT);
 
     /** The only producer of {@code payment.payment.settled} (pos-invoice PaymentEventPublisher). */
     static final String PAYMENT_SETTLED_SOURCE_SYSTEM = "pos-invoice";

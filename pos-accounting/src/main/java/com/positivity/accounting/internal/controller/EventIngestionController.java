@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.controller;
 import com.positivity.accounting.internal.dto.AccountingEventFilter;
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
 import com.positivity.accounting.internal.dto.AccountingEventSubmitRequest;
+import com.positivity.accounting.internal.dto.AccountingEventTypeResponse;
 import com.positivity.accounting.internal.dto.EventEnvelopeContract;
 import com.positivity.accounting.internal.dto.EventProcessingLogEntry;
 import com.positivity.accounting.internal.dto.ReprocessEventRequest;
@@ -146,6 +147,43 @@ public class EventIngestionController {
 
         Page<AccountingEventResponse> page = eventIngestionService.listEvents(filter, pageable);
         return ResponseEntity.ok(page);
+    }
+
+    @GetMapping("/types")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:events:view"})
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.EVENTS_VIEW + "')")
+    @Operation(
+            operationId = "listAccountingEventTypes",
+            summary = "List Accounting Event Types",
+            description = """
+                    Lists every accounting event type the deployed code records, each with its code, display \
+                    name, source domain, ingestion path (KAFKA or API) and whether a fact of that type can \
+                    produce a journal entry. KAFKA types are recorded by the module's topic listeners; API \
+                    types are the ones the module's own code submits through submitEvent (INVOICE_PAYMENT, \
+                    VENDOR_BILL_GL_POSTING, AP_PAYMENT_GL_POSTING).
+                    submitEvent checks only that eventType is present and accepts any string, so a caller \
+                    can record a type this list does not hold; such an event is posted only when an active \
+                    posting rule set or default GL mapping resolves its type, and is otherwise suspended.
+                    Use this tool to discover the valid values of the eventType filter of \
+                    listAccountingEvents, including types with no traffic yet; do not use \
+                    listAccountingEvents itself, which lists ingested event instances, or getEventContract, \
+                    which describes the submit envelope.
+                    Preconditions: none beyond the caller holding accounting:events:view.
+                    Required inputs: none; there is no request body and no filter.
+                    Emits an ACCOUNTING_EVENT_TYPE_LIST audit event; no state changes.
+                    Returns 200 with the full registry; the list is fixed by the deployed code, never empty.
+                    """,
+            tags = {"Accounting Events"})
+    @ApiResponse(responseCode = "200", description = "Event types listed")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @EmitEvent(id = "ACCOUNTING_EVENT_TYPE_LIST", apiVersion = "1")
+    public ResponseEntity<List<AccountingEventTypeResponse>> listAccountingEventTypes() {
+        return ResponseEntity.ok(eventIngestionService.listEventTypes());
     }
 
     @GetMapping("/{eventId}")

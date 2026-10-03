@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.handler;
 
+import com.positivity.accounting.internal.config.AccountingEventTypeRegistry;
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
 import com.positivity.accounting.internal.dto.VendorBillGLPostingEvent;
 import com.positivity.accounting.internal.exception.GLPostingException;
@@ -108,7 +109,7 @@ public class VendorBillGLPostingEventHandler {
         // Event metadata
         payload.put("eventId", event.getEventId());
         payload.put("organizationId", event.getOrganizationId());
-        payload.put("eventType", "VENDOR_BILL_GL_POSTING");
+        payload.put("eventType", AccountingEventTypeRegistry.VENDOR_BILL_GL_POSTING);
         payload.put("sourceSystem", "POS");
         payload.put("transactionDate", event.getBillDate());
 

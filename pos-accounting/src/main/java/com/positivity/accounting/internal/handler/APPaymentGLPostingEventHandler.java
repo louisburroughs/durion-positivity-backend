@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.handler;
 
+import com.positivity.accounting.internal.config.AccountingEventTypeRegistry;
 import com.positivity.accounting.internal.dto.APPaymentGLPostingEvent;
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
 import com.positivity.accounting.internal.service.EventIngestionService;
@@ -113,7 +114,7 @@ public class APPaymentGLPostingEventHandler {
 
         // Event metadata
         payload.put("eventId", event.getEventId());
-        payload.put("eventType", "AP_PAYMENT_GL_POSTING");
+        payload.put("eventType", AccountingEventTypeRegistry.AP_PAYMENT_GL_POSTING);
         payload.put("sourceSystem", "POS");
         payload.put("transactionDate", event.getGatewayTimestamp());
         payload.put("organizationId", event.getOrganizationId());
