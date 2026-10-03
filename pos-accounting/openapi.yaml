@@ -5043,7 +5043,7 @@ paths:
 
         Preconditions: total debits must equal total credits across the lines, and every glAccountId must reference a GL account active on the transaction date.
 
-        Required inputs: transactionDate and at least one line with glAccountId (UUID) and a debitAmount or creditAmount; description (max 500), sourceEventId, sourceEventType and dimensions are optional.
+        Required inputs: transactionDate and at least one line with glAccountId (UUID) and a debitAmount or creditAmount; description (max 500), sourceEventId, sourceEventType and dimensions are optional. An entry created without a sourceEventType is stored with sourceEventType MANUAL, and one without a sourceEventId takes its own journalEntryId.
 
         Emits an ACCOUNTING_JOURNAL_ENTRY_CREATE event; GL balances are unchanged until posting.
 

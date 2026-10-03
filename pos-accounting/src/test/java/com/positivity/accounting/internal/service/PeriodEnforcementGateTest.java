@@ -157,6 +157,8 @@ class PeriodEnforcementGateTest extends PostgresCommittingTestBase {
 
     private JournalEntryResponse createDraft(LocalDateTime transactionDate) {
         JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
+                .sourceEventType("TEST")
+                .sourceEventId(UUID.randomUUID())
                 .transactionDate(transactionDate)
                 .description("B2 period gate test")
                 .lines(List.of(
