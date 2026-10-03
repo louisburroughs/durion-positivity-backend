@@ -26,9 +26,12 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -252,9 +255,20 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
                 .toList();
     }
 
+    /*
+     * Manufacturers, makes and models refresh from vPIC in place (#2416): each vPIC row updates the row keyed by
+     * the id derived from vPIC's own id, or inserts it if new. Nothing is deleted. These rows are referenced by
+     * foreign keys (make -> manufacturer, model -> make, part_fitment_entity -> all three), so the delete and
+     * reinsert this replaced failed on the first refresh after any child existed. A row vPIC no longer returns
+     * is kept, with its children and part fitments.
+     *
+     * Names are unique case-insensitively (per parent for makes and models). A vPIC row whose name already
+     * belongs to a different row, such as one created by a fitment request, is logged and skipped rather than
+     * aborting the whole refresh.
+     */
     private List<Manufacturer> fetchManufacturers() {
         List<Manufacturer> cached = manufacturerRepository.findAll();
-        if (!cached.isEmpty() && isCacheFresh(cached.getFirst().getCacheTimestamp())) {
+        if (isCacheFresh(lastRefreshed(cached, Manufacturer::getCacheTimestamp))) {
             return cached;
         }
         String url = NHTSA_API_BASE + "/getallmanufacturers?format=json";
@@ -262,13 +276,26 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
         try {
             JsonNode root = objectMapper.readTree(response);
             JsonNode results = root.get(RESULTS);
-            manufacturerRepository.deleteAll();
+            // Upsert by the derived id; never delete (see the note above fetchManufacturers).
             for (JsonNode node : results) {
-                Manufacturer m = new Manufacturer();
                 long nhtsaId = vpicId(node, "Mfr_ID");
-                m.setId(localId("manufacturer-", nhtsaId));
+                UUID id = localId("manufacturer-", nhtsaId);
+                // vPIC leaves Mfr_CommonName null or empty for many manufacturers; storing "" for each
+                // would collide on ux_manufacturer_name_lower, so fall back to the legal name.
+                String name = firstNonBlank(node, "Mfr_CommonName", "Mfr_Name");
+                if (name != null
+                        && nameTakenByAnotherRow(
+                                manufacturerRepository.findAllByNameIgnoreCase(name), id, Manufacturer::getId)) {
+                    log.warn(
+                            "Skipping vPIC manufacturer {}: name '{}' belongs to another manufacturer row",
+                            nhtsaId,
+                            name);
+                    continue;
+                }
+                Manufacturer m = manufacturerRepository.findById(id).orElseGet(Manufacturer::new);
+                m.setId(id);
                 m.setNhtsaId(nhtsaId);
-                m.setName(node.path("Mfr_CommonName").asString(""));
+                m.setName(name);
                 m.setCacheTimestamp(LocalDateTime.now(clock));
                 manufacturerRepository.save(m);
             }
@@ -290,7 +317,7 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
                 .findById(manufacturerId)
                 .orElseThrow(() -> new IllegalArgumentException("Manufacturer not found with ID: " + manufacturerId));
         List<Make> cached = makeRepository.findByManufacturerId(manufacturerId);
-        if (!cached.isEmpty() && isCacheFresh(cached.getFirst().getCacheTimestamp())) {
+        if (isCacheFresh(lastRefreshed(cached, Make::getCacheTimestamp))) {
             return cached;
         }
         Long vpicManufacturerId = manufacturer.getNhtsaId();
@@ -303,13 +330,27 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
         try {
             JsonNode root = objectMapper.readTree(response);
             JsonNode results = root.get(RESULTS);
-            makeRepository.deleteAll(cached);
+            // Upsert by the derived id; never delete (see the note above fetchManufacturers).
             for (JsonNode node : results) {
-                Make make = new Make();
                 long nhtsaId = vpicId(node, "Make_ID");
-                make.setId(localId("make-", nhtsaId));
+                UUID id = localId("make-", nhtsaId);
+                String name = firstNonBlank(node, "Make_Name");
+                if (name != null
+                        && makeRepository
+                                .findByManufacturerIdAndNameIgnoreCase(manufacturerId, name)
+                                .filter(other -> !id.equals(other.getId()))
+                                .isPresent()) {
+                    log.warn(
+                            "Skipping vPIC make {}: name '{}' belongs to another make of manufacturer {}",
+                            nhtsaId,
+                            name,
+                            manufacturerId);
+                    continue;
+                }
+                Make make = makeRepository.findById(id).orElseGet(Make::new);
+                make.setId(id);
                 make.setNhtsaId(nhtsaId);
-                make.setName(node.path("Make_Name").asString(""));
+                make.setName(name);
                 make.setManufacturer(manufacturer);
                 make.setCacheTimestamp(LocalDateTime.now(clock));
                 makeRepository.save(make);
@@ -332,7 +373,7 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
                 .findById(makeId)
                 .orElseThrow(() -> new IllegalArgumentException("Make not found with ID: " + makeId));
         List<Model> cached = modelRepository.findByMakeId(makeId);
-        if (!cached.isEmpty() && isCacheFresh(cached.getFirst().getCacheTimestamp())) {
+        if (isCacheFresh(lastRefreshed(cached, Model::getCacheTimestamp))) {
             return cached;
         }
         Long vpicMakeId = make.getNhtsaId();
@@ -345,13 +386,27 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
         try {
             JsonNode root = objectMapper.readTree(response);
             JsonNode results = root.get(RESULTS);
-            modelRepository.deleteAll(cached);
+            // Upsert by the derived id; never delete (see the note above fetchManufacturers).
             for (JsonNode node : results) {
-                Model model = new Model();
                 long nhtsaId = vpicId(node, "Model_ID");
-                model.setId(localId("model-", nhtsaId));
+                UUID id = localId("model-", nhtsaId);
+                String name = firstNonBlank(node, "Model_Name");
+                if (name != null
+                        && modelRepository
+                                .findByMakeIdAndNameIgnoreCase(makeId, name)
+                                .filter(other -> !id.equals(other.getId()))
+                                .isPresent()) {
+                    log.warn(
+                            "Skipping vPIC model {}: name '{}' belongs to another model of make {}",
+                            nhtsaId,
+                            name,
+                            makeId);
+                    continue;
+                }
+                Model model = modelRepository.findById(id).orElseGet(Model::new);
+                model.setId(id);
                 model.setNhtsaId(nhtsaId);
-                model.setName(node.path("Model_Name").asString(""));
+                model.setName(name);
                 model.setMake(make);
                 model.setCacheTimestamp(LocalDateTime.now(clock));
                 modelRepository.save(model);
@@ -413,6 +468,34 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
             throw new IllegalStateException("vPIC " + field + " is not an integer: " + id);
         }
         return id.asLong();
+    }
+
+    /** The first of {@code fields} holding non-blank text, trimmed; {@code null} when none does. */
+    private static String firstNonBlank(JsonNode node, String... fields) {
+        for (String field : fields) {
+            String value = node.path(field).asString("").trim();
+            if (!value.isEmpty()) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private static <T> boolean nameTakenByAnotherRow(List<T> sameName, UUID id, Function<T, UUID> idOf) {
+        return sameName.stream().map(idOf).anyMatch(other -> !id.equals(other));
+    }
+
+    /**
+     * When the cached rows were last refreshed from vPIC: the newest cache timestamp among them. Rows a refresh
+     * no longer touches (dropped by vPIC, or created locally with no timestamp) must not make a warm cache look
+     * stale, as they would if only the first row were consulted.
+     */
+    private static <T> LocalDateTime lastRefreshed(List<T> rows, Function<T, LocalDateTime> cacheTimestamp) {
+        return rows.stream()
+                .map(cacheTimestamp)
+                .filter(Objects::nonNull)
+                .max(Comparator.naturalOrder())
+                .orElse(null);
     }
 
     /**
