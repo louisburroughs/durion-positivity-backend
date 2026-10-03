@@ -75,4 +75,40 @@ public enum AccountingEventStatus {
                         + "and SUSPENDED (issue #2191).";
         };
     }
+
+    /**
+     * Short label for list filters. Exhaustive switch: a new constant fails to compile until labelled.
+     */
+    public String displayName() {
+        return switch (this) {
+            case RECEIVED -> "Received";
+            case PROCESSING -> "Processing";
+            case PROCESSED -> "Processed";
+            case FAILED -> "Failed";
+            case SUSPENDED -> "Suspended";
+            case SKIPPED -> "Skipped";
+        };
+    }
+
+    /**
+     * True when the event can no longer change state on its own and no operator action applies.
+     * FAILED and SUSPENDED are not terminal: retry/reprocess moves them on.
+     */
+    public boolean terminal() {
+        return switch (this) {
+            case PROCESSED, SKIPPED -> true;
+            case RECEIVED, PROCESSING, FAILED, SUSPENDED -> false;
+        };
+    }
+
+    /**
+     * True when retry/reprocess applies; the retry scheduler and {@code retryAccountingEvent} select
+     * only these (issue #2191).
+     */
+    public boolean actionable() {
+        return switch (this) {
+            case FAILED, SUSPENDED -> true;
+            case RECEIVED, PROCESSING, PROCESSED, SKIPPED -> false;
+        };
+    }
 }

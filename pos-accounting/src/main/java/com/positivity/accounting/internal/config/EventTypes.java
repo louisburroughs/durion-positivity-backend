@@ -131,6 +131,8 @@ public final class EventTypes {
                 // EventIngestionController - 4 events (updated for CAP:055)
                 EventTypeRegistration.search("ACCOUNTING_EVENT_LIST", "List accounting events with filters")
                         .build(),
+                EventTypeRegistration.fastRead("ACCOUNTING_EVENT_STATUS_LIST", "List accounting event statuses")
+                        .build(),
                 EventTypeRegistration.write("ACCOUNTING_EVENT_SUBMIT", "Submit a new accounting event for processing")
                         .build(),
                 EventTypeRegistration.write("ACCOUNTING_EVENT_RETRY", "Retry processing for a failed accounting event")

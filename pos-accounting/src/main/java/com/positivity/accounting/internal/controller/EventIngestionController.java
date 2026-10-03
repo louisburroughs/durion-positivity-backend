@@ -5,6 +5,7 @@ import com.positivity.accounting.internal.dto.AccountingEventResponse;
 import com.positivity.accounting.internal.dto.AccountingEventSubmitRequest;
 import com.positivity.accounting.internal.dto.EventEnvelopeContract;
 import com.positivity.accounting.internal.dto.EventProcessingLogEntry;
+import com.positivity.accounting.internal.dto.EventStatusCatalogResponse;
 import com.positivity.accounting.internal.dto.ReprocessEventRequest;
 import com.positivity.accounting.internal.dto.ReprocessingAttemptHistoryResponse;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
@@ -427,5 +428,35 @@ public class EventIngestionController {
     public ResponseEntity<EventEnvelopeContract> getEventContract() {
         EventEnvelopeContract contract = eventIngestionService.getEventContract();
         return ResponseEntity.ok(contract);
+    }
+
+    @GetMapping("/statuses")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:events:view"})
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.EVENTS_VIEW + "')")
+    @Operation(
+            operationId = "listAccountingEventStatuses",
+            summary = "List Accounting Event Statuses",
+            description = """
+                    Returns every accounting event status (code, label, meaning, whether it is terminal, \
+                    whether retry/reprocess applies) and every idempotency outcome, generated from the \
+                    enums so the set cannot drift.
+                    Use this tool to populate the status and idempotency-outcome filters of \
+                    listAccountingEvents; the code is the value that filter accepts.
+                    Preconditions: none.
+                    Required inputs: none; there are no parameters and no request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 200 with the catalog.
+                    """,
+            tags = {"Accounting Events"})
+    @ApiResponse(responseCode = "200", description = "Statuses returned")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @EmitEvent(id = "ACCOUNTING_EVENT_STATUS_LIST", apiVersion = "1")
+    public ResponseEntity<EventStatusCatalogResponse> listEventStatuses() {
+        return ResponseEntity.ok(EventStatusCatalogResponse.fromEnums());
     }
 }
