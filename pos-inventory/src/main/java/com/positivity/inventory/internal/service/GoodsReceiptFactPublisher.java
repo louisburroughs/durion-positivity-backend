@@ -13,6 +13,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
@@ -46,6 +47,22 @@ public class GoodsReceiptFactPublisher {
 
     /** Queues the receipt for publication, in the caller's transaction. */
     public void publish(@NonNull GoodsReceiptEntity receipt, @NonNull List<GoodsReceiptLineFact> lines) {
+        publish(
+                new ReceiptHeader(
+                        receipt.getReceiptId(),
+                        receipt.getReceiptNumber(),
+                        receipt.getPurchaseOrderId(),
+                        receipt.getLocationId(),
+                        receipt.getCreatedBy()),
+                lines);
+    }
+
+    /**
+     * Queues a receipt that has no goods-receipt document of its own for publication, in the
+     * caller's transaction — a receiving session's receive or cross-dock (#2417), which records
+     * what arrived on the session's lines rather than on a {@link GoodsReceiptEntity}.
+     */
+    public void publish(@NonNull ReceiptHeader receipt, @NonNull List<GoodsReceiptLineFact> lines) {
         OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
         if (writer == null) {
             return;
@@ -55,10 +72,10 @@ public class GoodsReceiptFactPublisher {
                 .mapToLong(GoodsReceiptLineFact::accruedAmountMinor)
                 .sum();
         GoodsReceiptRecordedV1 payload = new GoodsReceiptRecordedV1(
-                receipt.getReceiptId(),
-                receipt.getReceiptNumber(),
-                receipt.getPurchaseOrderId(),
-                receipt.getLocationId(),
+                receipt.receiptId(),
+                receipt.receiptNumber(),
+                receipt.purchaseOrderId(),
+                receipt.locationId(),
                 total,
                 Instant.now(clock),
                 lines.stream()
@@ -76,22 +93,38 @@ public class GoodsReceiptFactPublisher {
                         // order lands on the same partition and they are applied in the sequence
                         // they happened. Two receipts applied out of order would still reach the
                         // right totals, but the order would pass through a state it was never in.
-                        receipt.getPurchaseOrderId(),
+                        receipt.purchaseOrderId(),
                         0L,
                         Instant.now(clock),
                         SOURCE,
                         // tenantId: stamped by the outbox writer from the bound tenant (ADR-0062 §3)
                         null,
                         null,
-                        receipt.getCreatedBy(),
+                        receipt.recordedBy(),
                         payload));
 
         log.debug(
                 "Queued goodsreceipt.recorded for receipt={} order={} lines={}",
-                receipt.getReceiptId(),
-                receipt.getPurchaseOrderId(),
+                receipt.receiptId(),
+                receipt.purchaseOrderId(),
                 lines.size());
     }
+
+    /**
+     * The receipt-level facts {@code goodsreceipt.recorded} carries.
+     *
+     * @param receiptId       identity of this receipt; fresh per receive when there is no document
+     * @param receiptNumber   human-readable number, when the receipt has one
+     * @param purchaseOrderId the order received against
+     * @param locationId      where the goods were received
+     * @param recordedBy      who recorded it
+     */
+    public record ReceiptHeader(
+            java.util.@NonNull UUID receiptId,
+            @Nullable String receiptNumber,
+            java.util.@NonNull UUID purchaseOrderId,
+            java.util.@Nullable UUID locationId,
+            @Nullable String recordedBy) {}
 
     /** What the caller has to state per line; deliberately narrower than the receipt entity. */
     public record GoodsReceiptLineFact(

@@ -12,6 +12,7 @@ import com.positivity.inventory.internal.exception.UnsupportedSourceDocumentType
 import com.positivity.inventory.internal.repository.ExtPurchaseOrderLineRepository;
 import com.positivity.inventory.internal.repository.ExtPurchaseOrderRepository;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -213,6 +214,76 @@ public class SourceDocumentResolver {
                 .flatMap(order -> receiptCostCurrencyPolicy.awaitingCostReason(order.getCurrency()));
     }
 
+    /**
+     * The purchase order a session on this source document receives against (#2417): the order
+     * its {@code goodsreceipt.recorded} names. Empty for anything that is not a purchase order
+     * identifier — such a session has no order whose outstanding quantities it could settle.
+     */
+    public Optional<UUID> receivingPurchaseOrderId(
+            @Nullable SourceDocumentType sourceDocumentType, @Nullable String sourceDocumentId) {
+        if (sourceDocumentType != SourceDocumentType.PO || sourceDocumentId == null) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(UUID.fromString(sourceDocumentId.trim()));
+        } catch (IllegalArgumentException ex) {
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Which purchase-order line a received base quantity settles, and what it is worth in minor
+     * units of the order's currency (#2417) — the two things {@code goodsreceipt.recorded} needs
+     * per line for pos-order to reduce the line's open quantity and the order's open balance.
+     *
+     * <p>The line is found exactly as {@link #resolveReceiptUnitCost} finds it: the linked line,
+     * else the order's only line for the product. Unlike the ledger's cost, the value is not held
+     * back for an order outside the functional currency: it is deducted from that order's own
+     * balance, which is kept in the order's currency. An unpriced line, or one projected without a
+     * conversion factor, is attributed but unvalued: pos-order reduces its open quantity and leaves
+     * the balance. With no line at all the receipt line is unattributed and unvalued, and pos-order
+     * changes nothing for it.
+     */
+    @NonNull
+    public ReceiptLineValue valueReceiptLine(
+            @NonNull UUID purchaseOrderId,
+            @Nullable UUID sourceLineId,
+            @Nullable String productId,
+            @NonNull BigDecimal baseQuantity) {
+        Optional<ExtPurchaseOrderLineReplica> orderLine = (sourceLineId != null
+                        ? purchaseOrderLineRepository.findById(sourceLineId)
+                        : Optional.<ExtPurchaseOrderLineReplica>empty())
+                .or(() -> soleLineForProduct(purchaseOrderId, productId));
+        if (orderLine.isEmpty()) {
+            return new ReceiptLineValue(null, 0L);
+        }
+        ExtPurchaseOrderLineReplica line = orderLine.get();
+        return new ReceiptLineValue(line.getLineId(), accruedMinor(line, baseQuantity));
+    }
+
+    /** {@code baseQuantity} priced at the line's price per base unit, half-even to whole minor units. */
+    private static long accruedMinor(@NonNull ExtPurchaseOrderLineReplica line, @NonNull BigDecimal baseQuantity) {
+        Long unitCostMinor = line.getUnitCostMinor();
+        if (unitCostMinor == null) {
+            return 0L;
+        }
+        BigDecimal factor = line.getConversionFactor();
+        if (factor == null || factor.signum() <= 0) {
+            // A null factor marks a line projected before pos-order published what its price is
+            // per, so no per-base-unit price can be derived — the same reason
+            // resolveReceiptUnitCost declines to cost it. Guessing one would deduct the wrong value.
+            log.warn(
+                    "Purchase order line {} has no usable conversion factor ({}); its receipt is reported unvalued",
+                    line.getLineId(),
+                    factor);
+            return 0L;
+        }
+        return baseQuantity
+                .multiply(BigDecimal.valueOf(unitCostMinor))
+                .divide(factor, 0, RoundingMode.HALF_EVEN)
+                .longValueExact();
+    }
+
     private Optional<ExtPurchaseOrderLineReplica> soleLineForProduct(UUID poId, @Nullable String productId) {
         if (productId == null) {
             return Optional.empty();
@@ -277,6 +348,14 @@ public class SourceDocumentResolver {
             lines = lines == null ? List.of() : List.copyOf(lines);
         }
     }
+
+    /**
+     * What one received line settles on its purchase order (#2417).
+     *
+     * @param poLineId           the order line received against; null when none could be attributed
+     * @param accruedAmountMinor the received quantity's value in minor units of the order's currency
+     */
+    public record ReceiptLineValue(@Nullable UUID poLineId, long accruedAmountMinor) {}
 
     /**
      * One receivable line of a source document.

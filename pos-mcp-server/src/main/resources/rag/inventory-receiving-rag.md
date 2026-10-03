@@ -59,6 +59,12 @@ For each receiving line, implementation compares received quantity with expected
 Receipt posting writes GOODS_RECEIPT ledger entries. Session completion is derived from line
 states and sets COMPLETED only when all lines are terminal receiving states.
 
+A session is opened against a purchase order: its sourceDocumentId is the order id, and each line
+is built from one of the order's open lines. Each receive and each cross-dock also publishes a
+goodsreceipt.recorded fact for what it received, and pos-order applies it to that purchase order:
+it reduces the order lines' open quantities and the order's open balance, and moves the order to
+PARTIALLY_RECEIVED or FULLY_RECEIVED.
+
 ## Cross-Dock Behavior
 
 Cross-dock to workorder enforces:

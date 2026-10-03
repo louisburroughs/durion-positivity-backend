@@ -139,11 +139,14 @@ Receiving is implemented in pos-inventory.
   reached that copy yet, the answer is 503 `PURCHASE_ORDER_REPLICATION_PENDING` with a `Retry-After` header, which
   means "not yet", not "no". A receipt whose value exceeds the order's open balance also needs
   `inventory:goods_receipt:override`.
-- This endpoint is what publishes `goodsreceipt.recorded`, so it is what moves the order to `PARTIALLY_RECEIVED` or
+- This endpoint publishes `goodsreceipt.recorded`, which is what moves the order to `PARTIALLY_RECEIVED` or
   `FULLY_RECEIVED` in pos-order.
 - **Receiving session.** `POST /v1/inventory/receiving/sessions` (`inventory:receiving:create`) starts a line-by-line
-  receiving session. The receiving document (`inventory.receiving`) describes it. The receiving-session service does
-  not publish `goodsreceipt.recorded`.
+  receiving session against a purchase order: its `sourceDocumentId` is the order id, and each session line is built
+  from one of the order's open lines. The receiving document (`inventory.receiving`) describes it. Each receive into
+  staging and each cross-dock to a work order publishes `goodsreceipt.recorded` for what it received, so goods
+  received through a session advance the order's open quantities, open balance and status exactly as a goods receipt
+  does.
 - **Advance shipping notice.** `POST /v1/inventory/asns` (`inventory:asn:create`) is refused unless every purchase
   order it names is `APPROVED`.
 - **Purchase suggestions.** `POST /v1/inventory/purchase-suggestions/convert` turns accepted replenishment suggestions
@@ -163,9 +166,9 @@ Receiving is implemented in pos-inventory.
   `FULLY_RECEIVED` from the lines' open quantities._
 - _Verified: pos-order `PurchaseOrderTransmissionService` guards, `PurchaseOrderNotTransmittableException` codes,
   `PurchaseOrderExceptionHandler` statuses and `TransmissionState`._
-- _Verified: pos-inventory `AsnController` and `AsnServiceImpl` (goods receipt and ASN guards, the only caller of
-  `GoodsReceiptFactPublisher`), `ReceivingController`, `PurchaseSuggestionController`, `permissions.yaml` and
-  `EventTypes`._
+- _Verified: pos-inventory `AsnController` and `AsnServiceImpl` (goods receipt and ASN guards),
+  `ReceivingServiceImpl` (receive into staging and cross-dock publish through `GoodsReceiptFactPublisher`, #2417),
+  `ReceivingController`, `PurchaseSuggestionController`, `permissions.yaml` and `EventTypes`._
 
 ## Sources
 
