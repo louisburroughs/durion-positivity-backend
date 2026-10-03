@@ -63,6 +63,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.BeforeEach;
@@ -78,6 +79,7 @@ import org.mockito.quality.Strictness;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
+import org.springframework.kafka.KafkaException;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -897,6 +899,12 @@ class ReplicaAndManifestListenerContractTest {
     @DisplayName("manifest listeners")
     class Manifests {
 
+        /** A replay request the broker acknowledges; a test that wants a failure re-stubs it. */
+        @BeforeEach
+        void brokerAcknowledgesReplayRequests() {
+            when(kafkaTemplate.send(any(ProducerRecord.class))).thenReturn(CompletableFuture.completedFuture(null));
+        }
+
         private String manifestMessage(long eventCount, String checksum) {
             return """
                     {"eventId":"evt-1","eventType":"x.reconciliation.manifest",
@@ -934,7 +942,7 @@ class ReplicaAndManifestListenerContractTest {
         }
 
         @Test
-        @DisplayName("location manifest: drops an unparseable manifest, survives a failed replay publish")
+        @DisplayName("location manifest: drops an unparseable manifest, propagates a failed replay publish")
         void locationManifestRobustness() {
             LocationManifestListener listener = new LocationManifestListener(
                     processedEventRepository, kafkaTemplate, objectMapper, meterRegistryProvider);
@@ -947,7 +955,9 @@ class ReplicaAndManifestListenerContractTest {
                     .thenReturn(List.of());
             when(kafkaTemplate.send(any(ProducerRecord.class))).thenThrow(new IllegalStateException("broker down"));
 
-            listener.onManifest(manifestMessage(3, "owner-checksum"));
+            assertThatThrownBy(() -> listener.onManifest(manifestMessage(3, "owner-checksum")))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessage("broker down");
 
             assertThat(driftCount("location")).isEqualTo(1.0);
         }
@@ -1104,22 +1114,59 @@ class ReplicaAndManifestListenerContractTest {
         }
 
         @Test
-        @DisplayName("#2354 every manifest listener still swallows a permanent failure: an unparseable manifest"
-                + " and a failed replay publish")
-        void permanentFailuresStaySwallowed() {
-            when(processedEventRepository.findEventIdsInRange(anyString(), any(), anyString(), anyString()))
-                    .thenReturn(List.of());
-            when(kafkaTemplate.send(any(ProducerRecord.class))).thenThrow(new IllegalStateException("broker down"));
-
+        @DisplayName("#2354 every manifest listener still swallows an unparseable manifest")
+        void unparseableManifestStaysSwallowed() {
             manifestListeners().forEach((owner, onManifest) -> {
                 assertThatCode(() -> onManifest.accept("{not json"))
                         .as("%s: unparseable manifest", owner)
                         .doesNotThrowAnyException();
                 assertThat(driftCount(owner)).isZero();
+            });
+            verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
+        }
 
-                assertThatCode(() -> onManifest.accept(manifestMessage(3, "owner-checksum")))
-                        .as("%s: failed replay publish", owner)
-                        .doesNotThrowAnyException();
+        /**
+         * The owners publish consecutive, non-overlapping windows once each, so no later manifest
+         * re-detects a window whose replay request was lost. A send that fails at once must
+         * therefore leave {@code onManifest} for the container's error handler (retry with backoff,
+         * then {@code {topic}.dlq}); the redelivery re-runs the comparison and repeats the request.
+         */
+        @Test
+        @DisplayName("#2419 every manifest listener: a replay request that fails to send propagates so the"
+                + " container redelivers the manifest")
+        void failedReplaySendPropagates() {
+            when(processedEventRepository.findEventIdsInRange(anyString(), any(), anyString(), anyString()))
+                    .thenReturn(List.of());
+            when(kafkaTemplate.send(any(ProducerRecord.class))).thenThrow(new IllegalStateException("broker down"));
+
+            manifestListeners().forEach((owner, onManifest) -> {
+                assertThatThrownBy(() -> onManifest.accept(manifestMessage(3, "owner-checksum")))
+                        .as("%s: failed replay send", owner)
+                        .isInstanceOf(IllegalStateException.class)
+                        .hasMessage("broker down");
+                assertThat(driftCount(owner)).isEqualTo(1.0);
+            });
+        }
+
+        /**
+         * {@code KafkaTemplate.send} is asynchronous: a broker-side failure (delivery timeout, not
+         * leader, record too large) only completes the returned future exceptionally. The listener
+         * waits on it, so that failure reaches the container too instead of passing unseen.
+         */
+        @Test
+        @DisplayName("#2419 every manifest listener: a replay request the broker rejects propagates so the"
+                + " container redelivers the manifest")
+        void brokerRejectedReplayPropagates() {
+            when(processedEventRepository.findEventIdsInRange(anyString(), any(), anyString(), anyString()))
+                    .thenReturn(List.of());
+            when(kafkaTemplate.send(any(ProducerRecord.class)))
+                    .thenAnswer(invocation -> CompletableFuture.failedFuture(new KafkaException("not leader")));
+
+            manifestListeners().forEach((owner, onManifest) -> {
+                assertThatThrownBy(() -> onManifest.accept(manifestMessage(3, "owner-checksum")))
+                        .as("%s: broker-rejected replay", owner)
+                        .isInstanceOf(KafkaException.class)
+                        .hasRootCauseMessage("not leader");
                 assertThat(driftCount(owner)).isEqualTo(1.0);
             });
         }

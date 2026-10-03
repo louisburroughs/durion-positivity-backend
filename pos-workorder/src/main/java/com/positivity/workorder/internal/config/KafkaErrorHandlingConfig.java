@@ -24,7 +24,9 @@ import org.springframework.util.backoff.ExponentialBackOff;
  *
  * <p>Redelivery is safe for every listener here: the fact listeners guard on
  * {@code processed_events}, invoice generation is idempotent per workorder, replay and backfill
- * commands re-queue by window, and an assignment update is a last-write-wins projection.
+ * commands re-queue by window, an assignment update is a last-write-wins projection, and a
+ * reconciliation manifest re-runs a read-only comparison whose replay request is keyed by window
+ * (a failed replay request propagates for exactly this redelivery, #2419).
  *
  * <p>Spring Boot wires a single {@code CommonErrorHandler} bean into the auto-configured listener
  * container factory, so declaring the bean is sufficient.

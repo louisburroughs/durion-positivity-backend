@@ -764,12 +764,17 @@ asks the classifier before it logs or records anything, so a retryable failure n
 
 The five reconciliation-manifest listeners (`CustomerManifestListener`, `LocationManifestListener`,
 `InventoryManifestListener`, `InvoiceManifestListener`, `PeopleManifestListener`) need no rethrow
-(#2354). Their only data access is the `processed_events` ledger read, which sits outside both of
-their catch blocks, so any failure of it, transient or not, already reaches the handler. The two
-catches cover a manifest that does not parse and a replay request that could not be handed to
-Kafka; neither touches the database. A manifest writes nothing, so redelivering one only re-runs
-the comparison: a window that still mismatches counts `replica.drift` again and repeats the same
-replay request, and the replayed events are deduplicated by the `processed_events` primary key.
+(#2354). Their only data access is the `processed_events` ledger read, which sits outside their one
+catch block, so any failure of it, transient or not, already reaches the handler. That catch covers
+only a manifest that does not parse, which is dropped. A replay request is sent through
+`OutboxReplayRequests`, which waits up to 30s for the broker's acknowledgement (#2419): a request
+that cannot be handed to Kafka, that the broker rejects, or that is not acknowledged in time
+propagates to `KafkaErrorHandlingConfig`, which retries the manifest with backoff and then
+dead-letters it to `{topic}.dlq`. Swallowing it would lose the repair for good, because each owner
+publishes a window's manifest once and no later manifest covers that window again. A manifest
+writes nothing, so redelivering one only re-runs the comparison: a window that still mismatches
+counts `replica.drift` again and repeats the same replay request, keyed by window start, and the
+replayed events are deduplicated by the `processed_events` primary key.
 
 ## Multitenancy (ADR-0062, WS3 wave 3)
 
