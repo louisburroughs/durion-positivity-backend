@@ -21,6 +21,7 @@ import com.positivity.supplier.internal.enums.PriceCatalogMatchMethod;
 import com.positivity.supplier.internal.repository.PriceCatalogEntryRepository;
 import com.positivity.supplier.internal.repository.PriceCatalogImportRepository;
 import com.positivity.supplier.internal.service.SupplierOutboxEventWriter;
+import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
@@ -63,11 +64,15 @@ class PriceCatalogRepublisherTest {
     @Mock
     private SupplierOutboxEventWriter outboxWriter;
 
+    @Mock
+    private EntityManager entityManager;
+
     private PriceCatalogRepublisher republisher;
 
     @BeforeEach
     void setUp() {
-        republisher = new PriceCatalogRepublisher(importRepository, entryRepository, outboxWriter, CLOCK);
+        republisher =
+                new PriceCatalogRepublisher(importRepository, entryRepository, outboxWriter, CLOCK, entityManager);
         ReflectionTestUtils.setField(republisher, "maxAttempts", 3);
         ReflectionTestUtils.setField(republisher, "cooldown", Duration.ofMinutes(10));
         when(importRepository.save(any(PriceCatalogImportEntity.class))).thenAnswer(inv -> inv.getArgument(0));
