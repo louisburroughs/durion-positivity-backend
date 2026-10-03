@@ -21,6 +21,12 @@ public final class JournalEntrySourceTypes {
      */
     public static final String MANUAL = "MANUAL";
 
+    /**
+     * A reversal of a pre-#2434 entry whose category could not be recovered (the V3 backfill left
+     * its source type null).
+     */
+    public static final String LEGACY_REVERSAL = "LEGACY_REVERSAL";
+
     public static final String CREDIT_MEMO_REVERSAL = "CREDIT_MEMO_REVERSAL";
     public static final String CREDIT_MEMO_VOID = "CREDIT_MEMO_VOID";
     public static final String PAYMENT_APPLICATION = "PAYMENT_APPLICATION";

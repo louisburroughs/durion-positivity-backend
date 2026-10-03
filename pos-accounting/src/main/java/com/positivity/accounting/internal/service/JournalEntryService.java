@@ -39,7 +39,8 @@ public interface JournalEntryService {
      * @param request journal entry with lines to create
      * @return created entry in DRAFT status
      */
-    JournalEntryResponse createManualJournalEntry(JournalEntryCreateRequest request);
+    @NonNull
+    JournalEntryResponse createManualJournalEntry(@NonNull JournalEntryCreateRequest request);
 
     /**
      * Retrieves an existing journal entry by ID.
