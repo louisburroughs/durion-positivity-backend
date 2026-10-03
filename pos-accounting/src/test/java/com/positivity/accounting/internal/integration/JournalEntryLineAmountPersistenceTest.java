@@ -60,6 +60,8 @@ class JournalEntryLineAmountPersistenceTest extends PostgresIntegrationTestBase 
         glAccountRepository.save(creditAccount);
 
         JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
+                .sourceEventType("TEST")
+                .sourceEventId(UUID.randomUUID())
                 .transactionDate(LocalDateTime.of(2025, 1, 1, 10, 0))
                 .lines(List.of(
                         // creditAmount omitted (single-sided debit line)

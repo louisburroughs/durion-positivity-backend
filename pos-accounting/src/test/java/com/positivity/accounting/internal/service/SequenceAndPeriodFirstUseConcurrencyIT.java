@@ -121,6 +121,8 @@ class SequenceAndPeriodFirstUseConcurrencyIT {
         for (int i = 0; i < THREADS; i++) {
             drafts.add(journalEntryService
                     .createJournalEntry(JournalEntryCreateRequest.builder()
+                            .sourceEventType("TEST")
+                            .sourceEventId(UUID.randomUUID())
                             .transactionDate(txDate)
                             .description("first-use IT")
                             .lines(List.of(line(glAccountId, "42.0000", "0"), line(glAccountId, "0", "42.0000")))

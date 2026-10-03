@@ -232,7 +232,8 @@ public class JournalEntryController {
                     glAccountId must reference a GL account active on the transaction date.
                     Required inputs: transactionDate and at least one line with glAccountId (UUID) and a \
                     debitAmount or creditAmount; description (max 500), sourceEventId, sourceEventType and \
-                    dimensions are optional.
+                    dimensions are optional. An entry created without a sourceEventType is stored with \
+                    sourceEventType MANUAL, and one without a sourceEventId takes its own journalEntryId.
                     Emits an ACCOUNTING_JOURNAL_ENTRY_CREATE event; GL balances are unchanged until posting.
                     Returns 400 for a malformed request, 404 GL_ACCOUNT_NOT_FOUND when a line's glAccountId \
                     does not exist, and 422 UNBALANCED_ENTRY or GL_ACCOUNT_NOT_ACTIVE when the entry is \
@@ -276,7 +277,7 @@ public class JournalEntryController {
                     @RequestBody
                     JournalEntryCreateRequest request) {
         log.debug("Creating journal entry: {}", request.getDescription());
-        var created = journalEntryService.createJournalEntry(request);
+        var created = journalEntryService.createManualJournalEntry(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 

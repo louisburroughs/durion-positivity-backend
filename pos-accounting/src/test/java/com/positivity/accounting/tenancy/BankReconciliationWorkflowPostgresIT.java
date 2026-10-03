@@ -525,6 +525,7 @@ class BankReconciliationWorkflowPostgresIT extends PostgresTenancyTestBase {
         BigDecimal value = new BigDecimal(amount);
         return inTx(() -> {
             JournalEntryResponse created = journalEntries.createJournalEntry(JournalEntryCreateRequest.builder()
+                    .sourceEventType("TEST")
                     .transactionDate(day.atTime(12, 0))
                     .sourceEventId(UUIDv7Generator.generate())
                     .description("Workflow IT receipt")

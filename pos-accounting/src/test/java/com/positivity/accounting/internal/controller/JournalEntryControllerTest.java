@@ -94,7 +94,7 @@ class JournalEntryControllerTest extends BaseIntegrationTest {
         @Test
         @DisplayName("Should return null entryNumber for a newly created draft")
         void createdDraft_hasNullEntryNumber() throws Exception {
-            when(journalEntryService.createJournalEntry(any(JournalEntryCreateRequest.class)))
+            when(journalEntryService.createManualJournalEntry(any(JournalEntryCreateRequest.class)))
                     .thenReturn(draftEntry());
 
             mockMvc.perform(withAuth(post("/v1/accounting/journal-entries"))

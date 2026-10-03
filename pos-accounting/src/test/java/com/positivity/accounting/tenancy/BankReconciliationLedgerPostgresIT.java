@@ -176,6 +176,7 @@ class BankReconciliationLedgerPostgresIT extends PostgresTenancyTestBase {
 
     private static JournalEntryCreateRequest request(UUID cash, UUID counter, LocalDateTime at) {
         return JournalEntryCreateRequest.builder()
+                .sourceEventType("TEST")
                 .transactionDate(at)
                 .sourceEventId(UUIDv7Generator.generate())
                 .description("Ledger IT")

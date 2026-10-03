@@ -675,6 +675,7 @@ class BankReconciliationCloseReadinessPostgresIT extends PostgresTenancyTestBase
         return inTx(() -> {
             UUID created = journalEntries
                     .createJournalEntry(JournalEntryCreateRequest.builder()
+                            .sourceEventType("TEST")
                             .transactionDate(at)
                             .sourceEventId(UUIDv7Generator.generate())
                             .description("Readiness IT")

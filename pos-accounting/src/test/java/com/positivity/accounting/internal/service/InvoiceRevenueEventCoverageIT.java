@@ -184,6 +184,21 @@ class InvoiceRevenueEventCoverageIT extends BaseIntegrationTest {
                         org.assertj.core.groups.Tuple.tuple("NEW", revenueEntryId.toString()),
                         org.assertj.core.groups.Tuple.tuple("DUPLICATE_IGNORED", revenueEntryId.toString()),
                         org.assertj.core.groups.Tuple.tuple("NEW", reversalEntryId.toString()));
+
+        // #2434: both entries name their source, and the journal-entry API returns it.
+        assertSource(revenueEntryId, JournalEntrySourceTypes.INVOICE_REVENUE);
+        assertSource(reversalEntryId, JournalEntrySourceTypes.INVOICE_REVENUE_REVERSAL);
+    }
+
+    private void assertSource(UUID journalEntryId, String expectedType) throws Exception {
+        String body = mockMvc.perform(withAuth(get("/v1/accounting/journal-entries/" + journalEntryId)))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        JsonNode entry = objectMapper.readTree(body);
+        assertThat(entry.path("sourceEventType").stringValue(null)).isEqualTo(expectedType);
+        assertThat(entry.path("sourceEventId").stringValue(null)).isNotBlank();
     }
 
     @Test

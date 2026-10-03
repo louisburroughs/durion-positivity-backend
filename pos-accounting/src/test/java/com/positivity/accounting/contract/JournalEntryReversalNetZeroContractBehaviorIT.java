@@ -223,6 +223,7 @@ class JournalEntryReversalNetZeroContractBehaviorIT extends BaseContractIntegrat
                 .transactionDate(date)
                 .description("Reversal net-zero fixture")
                 .sourceEventType("TEST_2308")
+                .sourceEventId(UUID.randomUUID())
                 .lines(List.of(
                         line(cash, cashAmount, BigDecimal.ZERO, null),
                         line(revenue, BigDecimal.ZERO, cashAmount, null),

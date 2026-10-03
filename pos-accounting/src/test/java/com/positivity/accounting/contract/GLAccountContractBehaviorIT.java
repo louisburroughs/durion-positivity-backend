@@ -302,6 +302,8 @@ public class GLAccountContractBehaviorIT extends PostgresIntegrationTestBase {
                         .build();
 
         JournalEntryCreateRequest entry = JournalEntryCreateRequest.builder()
+                .sourceEventType("TEST")
+                .sourceEventId(UUID.randomUUID())
                 .transactionDate(LocalDateTime.now(TEST_CLOCK))
                 .description("Non-zero balance setup for deactivation test")
                 .lines(List.of(debitLine, creditLine))
