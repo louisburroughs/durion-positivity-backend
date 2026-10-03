@@ -334,6 +334,8 @@ class JournalEntryReversalLifecycleTest extends PostgresCommittingTestBase {
 
     private JournalEntryResponse createPosted(LocalDateTime transactionDate) {
         JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
+                .sourceEventType("TEST")
+                .sourceEventId(UUID.randomUUID())
                 .transactionDate(transactionDate)
                 .description("A3 reversal test")
                 .lines(List.of(

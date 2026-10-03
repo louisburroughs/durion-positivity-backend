@@ -122,6 +122,7 @@ class BankReconciliationContractBehaviorIT extends BaseContractIntegrationTest {
         BigDecimal value = new BigDecimal(amount);
         UUID entry = journalEntries
                 .createJournalEntry(JournalEntryCreateRequest.builder()
+                        .sourceEventType("TEST")
                         .transactionDate(day.atTime(12, 0))
                         .sourceEventId(UUIDv7Generator.generate())
                         .description("Contract IT")

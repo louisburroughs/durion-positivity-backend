@@ -210,6 +210,8 @@ class JournalEntryNumberingTest extends PostgresCommittingTestBase {
 
     private JournalEntryResponse createDraft(LocalDateTime transactionDate) {
         JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
+                .sourceEventType("TEST")
+                .sourceEventId(UUID.randomUUID())
                 .transactionDate(transactionDate)
                 .description("A2 numbering test")
                 .lines(java.util.List.of(

@@ -126,6 +126,7 @@ public class GLPostingServiceImpl implements GLPostingService {
                 .transactionDate(LocalDateTime.now(clock))
                 .description(description + (isPriorPeriod ? " [PRIOR PERIOD: " + originalPeriodId + "]" : ""))
                 .sourceEventId(creditMemoId)
+                .sourceEventType(JournalEntrySourceTypes.CREDIT_MEMO_REVERSAL)
                 .lines(lines)
                 .build();
 
@@ -175,6 +176,7 @@ public class GLPostingServiceImpl implements GLPostingService {
                 .transactionDate(LocalDateTime.now(clock))
                 .description(description)
                 .sourceEventId(creditMemoId)
+                .sourceEventType(JournalEntrySourceTypes.CREDIT_MEMO_VOID)
                 .lines(lines)
                 .build();
 
@@ -250,6 +252,7 @@ public class GLPostingServiceImpl implements GLPostingService {
                 .transactionDate(transactionDate)
                 .description(description)
                 .sourceEventId(paymentApplicationId)
+                .sourceEventType(JournalEntrySourceTypes.PAYMENT_APPLICATION)
                 .lines(lines)
                 .build();
 
@@ -294,6 +297,7 @@ public class GLPostingServiceImpl implements GLPostingService {
                 .transactionDate(transactionDate)
                 .description(description)
                 .sourceEventId(sourceEventId)
+                .sourceEventType(JournalEntrySourceTypes.CUSTOMER_CREDIT_ISSUANCE)
                 .lines(lines)
                 .build();
 
@@ -339,6 +343,7 @@ public class GLPostingServiceImpl implements GLPostingService {
                 .transactionDate(transactionDate)
                 .description(description)
                 .sourceEventId(sourceEventId)
+                .sourceEventType(JournalEntrySourceTypes.CUSTOMER_CREDIT_RELIEF)
                 .lines(lines)
                 .build();
 
@@ -381,6 +386,7 @@ public class GLPostingServiceImpl implements GLPostingService {
                 .transactionDate(transactionDate)
                 .description(description)
                 .sourceEventId(sourceEventId)
+                .sourceEventType(JournalEntrySourceTypes.INVENTORY_SHRINKAGE)
                 .lines(lines)
                 .build();
 
@@ -419,6 +425,7 @@ public class GLPostingServiceImpl implements GLPostingService {
                 .transactionDate(transactionDate)
                 .description(description)
                 .sourceEventId(sourceEventId)
+                .sourceEventType(JournalEntrySourceTypes.INVENTORY_ADJUSTMENT)
                 .lines(lines)
                 .build();
 
@@ -457,6 +464,7 @@ public class GLPostingServiceImpl implements GLPostingService {
                 .transactionDate(transactionDate)
                 .description(description)
                 .sourceEventId(sourceEventId)
+                .sourceEventType(JournalEntrySourceTypes.INVENTORY_REVALUATION)
                 .lines(lines)
                 .build();
 
@@ -500,6 +508,7 @@ public class GLPostingServiceImpl implements GLPostingService {
                 .transactionDate(command.transactionDate())
                 .description(command.description())
                 .sourceEventId(command.sourceEventId())
+                .sourceEventType(JournalEntrySourceTypes.SETTLEMENT)
                 .lines(lines)
                 .build();
 
@@ -521,6 +530,7 @@ public class GLPostingServiceImpl implements GLPostingService {
             @NonNull String description,
             @Nullable String overrideJustification) {
         return postTwoLineReclass(
+                JournalEntrySourceTypes.SETTLEMENT_WRITE_OFF,
                 sourceEventId,
                 suspenseAccountId,
                 adjustmentAccountId,
@@ -541,6 +551,7 @@ public class GLPostingServiceImpl implements GLPostingService {
             @NonNull String description,
             @Nullable String overrideJustification) {
         return postTwoLineReclass(
+                JournalEntrySourceTypes.SETTLEMENT_RECLASS,
                 sourceEventId,
                 suspenseAccountId,
                 undepositedFundsAccountId,
@@ -562,6 +573,7 @@ public class GLPostingServiceImpl implements GLPostingService {
             @NonNull String description,
             @Nullable String overrideJustification) {
         return postTwoLineReclass(
+                JournalEntrySourceTypes.REGISTER_OVER_SHORT,
                 sourceEventId,
                 debitAccountId,
                 creditAccountId,
@@ -602,7 +614,13 @@ public class GLPostingServiceImpl implements GLPostingService {
         // Credit: Sales Tax Payable (collected on behalf of the jurisdiction; zero leg omitted).
         addCredit(lines, taxPayableAccountId, taxAmount, "Sales Tax Payable - INV#" + invoiceId);
 
-        return createAndPost(sourceEventId, transactionDate, description, lines, "invoice revenue");
+        return createAndPost(
+                JournalEntrySourceTypes.INVOICE_REVENUE,
+                sourceEventId,
+                transactionDate,
+                description,
+                lines,
+                "invoice revenue");
     }
 
     @Override
@@ -635,11 +653,18 @@ public class GLPostingServiceImpl implements GLPostingService {
         // Credit: AR (the receivable no longer exists).
         addCredit(lines, arAccountId, totalAmount, "AR Reversal - INV#" + invoiceId);
 
-        return createAndPost(sourceEventId, transactionDate, description, lines, "invoice revenue reversal");
+        return createAndPost(
+                JournalEntrySourceTypes.INVOICE_REVENUE_REVERSAL,
+                sourceEventId,
+                transactionDate,
+                description,
+                lines,
+                "invoice revenue reversal");
     }
 
     /** Create and post an entry from prepared lines (period gate applies inside post, B2). */
     private UUID createAndPost(
+            @NonNull String sourceEventType,
             @NonNull UUID sourceEventId,
             @NonNull LocalDateTime transactionDate,
             @NonNull String description,
@@ -649,6 +674,7 @@ public class GLPostingServiceImpl implements GLPostingService {
                 .transactionDate(transactionDate)
                 .description(description)
                 .sourceEventId(sourceEventId)
+                .sourceEventType(sourceEventType)
                 .lines(lines)
                 .build();
 
@@ -665,6 +691,7 @@ public class GLPostingServiceImpl implements GLPostingService {
      * Adjustment) and manual-match reclass (Dr Suspense / Cr Undeposited Funds).
      */
     private UUID postTwoLineReclass(
+            @NonNull String sourceEventType,
             @NonNull UUID sourceEventId,
             @NonNull UUID debitAccountId,
             @NonNull UUID creditAccountId,
@@ -681,6 +708,7 @@ public class GLPostingServiceImpl implements GLPostingService {
                 .transactionDate(transactionDate)
                 .description(description)
                 .sourceEventId(sourceEventId)
+                .sourceEventType(sourceEventType)
                 .lines(lines)
                 .build();
 

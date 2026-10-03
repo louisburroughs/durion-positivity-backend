@@ -67,6 +67,7 @@ import org.springframework.data.domain.Pageable;
 @DisplayName("JournalEntryService Unit Tests")
 class JournalEntryServiceTest {
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+    private static final String TEST_SOURCE_TYPE = "TEST_SOURCE";
 
     @Spy
     Clock clock = TEST_CLOCK;
@@ -205,6 +206,62 @@ class JournalEntryServiceTest {
 
         // Assert
         assertThat(result.getJournalEntryId()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("createJournalEntry - rejects a request without a source type (#2434)")
+    void createJournalEntry_missingSourceType_throws() {
+        for (String blank : new String[] {null, "", "  "}) {
+            JournalEntryCreateRequest request = createBalancedRequest();
+            request.setSourceEventType(blank);
+
+            assertThatThrownBy(() -> service.createJournalEntry(request))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("sourceEventType");
+        }
+        verify(journalEntryRepository, never()).save(any(JournalEntry.class));
+    }
+
+    @Test
+    @DisplayName("createJournalEntry - rejects a request without a source event id (#2434)")
+    void createJournalEntry_missingSourceEventId_throws() {
+        JournalEntryCreateRequest request = createBalancedRequest();
+        request.setSourceEventId(null);
+
+        assertThatThrownBy(() -> service.createJournalEntry(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("sourceEventId");
+        verify(journalEntryRepository, never()).save(any(JournalEntry.class));
+    }
+
+    @Test
+    @DisplayName("createManualJournalEntry - stamps MANUAL and the entry's own id when no source is given (#2434)")
+    void createManualJournalEntry_defaultsSource() {
+        JournalEntryCreateRequest request = createBalancedRequest();
+        request.setSourceEventId(null);
+        request.setSourceEventType(null);
+        ArgumentCaptor<JournalEntry> saved = ArgumentCaptor.forClass(JournalEntry.class);
+        when(journalEntryRepository.save(saved.capture())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        JournalEntryResponse result = service.createManualJournalEntry(request);
+
+        assertThat(saved.getValue().getSourceEventType()).isEqualTo(JournalEntrySourceTypes.MANUAL);
+        assertThat(saved.getValue().getSourceEventId())
+                .isEqualTo(saved.getValue().getJournalEntryId());
+        assertThat(result.getSourceEventType()).isEqualTo(JournalEntrySourceTypes.MANUAL);
+        assertThat(result.getSourceEventId()).isEqualTo(result.getJournalEntryId());
+    }
+
+    @Test
+    @DisplayName("createManualJournalEntry - keeps a source the caller supplies (#2434)")
+    void createManualJournalEntry_keepsSuppliedSource() {
+        JournalEntryCreateRequest request = createBalancedRequest();
+        when(journalEntryRepository.save(any(JournalEntry.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        JournalEntryResponse result = service.createManualJournalEntry(request);
+
+        assertThat(result.getSourceEventType()).isEqualTo(TEST_SOURCE_TYPE);
+        assertThat(result.getSourceEventId()).isEqualTo(testSourceEventId);
     }
 
     @Test
@@ -555,6 +612,36 @@ class JournalEntryServiceTest {
     }
 
     @Test
+    @DisplayName("reverseJournalEntry - legacy original with null type and id gets LEGACY_REVERSAL and original id")
+    void reverseJournalEntry_legacyNullTypeAndId_usesLegacyReversalAndOriginalId() {
+        JournalEntry original = arrangePostedOriginalForReversal();
+        original.setSourceEventType(null);
+        original.setSourceEventId(null);
+        arrangeReversalPersistence();
+        when(accountingPeriodService.isPeriodOpen(any(LocalDate.class))).thenReturn(true);
+
+        JournalEntryResponse reversal = service.reverseJournalEntry(testJournalEntryId, "CORRECTION", null);
+
+        assertThat(reversal.getSourceEventType()).isEqualTo(JournalEntrySourceTypes.LEGACY_REVERSAL);
+        assertThat(reversal.getSourceEventId()).isEqualTo(testJournalEntryId);
+    }
+
+    @Test
+    @DisplayName("reverseJournalEntry - legacy original with null type but an id keeps that id")
+    void reverseJournalEntry_legacyNullTypeWithId_usesLegacyReversalAndKeepsId() {
+        JournalEntry original = arrangePostedOriginalForReversal();
+        original.setSourceEventType(null);
+        original.setSourceEventId(testSourceEventId);
+        arrangeReversalPersistence();
+        when(accountingPeriodService.isPeriodOpen(any(LocalDate.class))).thenReturn(true);
+
+        JournalEntryResponse reversal = service.reverseJournalEntry(testJournalEntryId, "CORRECTION", null);
+
+        assertThat(reversal.getSourceEventType()).isEqualTo(JournalEntrySourceTypes.LEGACY_REVERSAL);
+        assertThat(reversal.getSourceEventId()).isEqualTo(testSourceEventId);
+    }
+
+    @Test
     @DisplayName("reverseJournalEntry - creates numbered reversal, flips original, audits with actor")
     void reverseJournalEntry_posted_success() {
         // Arrange
@@ -572,6 +659,9 @@ class JournalEntryServiceTest {
         assertThat(reversal.getDescription()).contains("REVERSAL of");
         assertThat(reversal.getDescription()).contains("CORRECTION");
         assertThat(reversal.getReversalJournalEntryId()).isEqualTo(testJournalEntryId);
+        // The reversal carries the source of the entry it reverses (#2434).
+        assertThat(reversal.getSourceEventType()).isEqualTo(TEST_SOURCE_TYPE);
+        assertThat(reversal.getSourceEventId()).isEqualTo(testSourceEventId);
         assertThat(reversal.getTransactionDate())
                 .as("original's period is open, so its transaction date is kept")
                 .isEqualTo(testTransactionDate);
@@ -872,6 +962,7 @@ class JournalEntryServiceTest {
         entry.setTransactionDate(testTransactionDate);
         entry.setDescription("Test entry");
         entry.setSourceEventId(testSourceEventId);
+        entry.setSourceEventType(TEST_SOURCE_TYPE);
         entry.setLines(createBalancedLines());
         return entry;
     }
@@ -912,6 +1003,7 @@ class JournalEntryServiceTest {
                 .transactionDate(testTransactionDate)
                 .description("Test entry")
                 .sourceEventId(testSourceEventId)
+                .sourceEventType(TEST_SOURCE_TYPE)
                 .lines(createBalancedLineRequests())
                 .build();
     }

@@ -238,6 +238,7 @@ class AccountingPeriodBankRecContractBehaviorIT extends BaseContractIntegrationT
 
             BigDecimal amount = new BigDecimal("10.00");
             journalEntries.createJournalEntry(JournalEntryCreateRequest.builder()
+                    .sourceEventType("TEST")
                     .transactionDate(LocalDateTime.of(2017, 8, 5, 12, 0))
                     .sourceEventId(UUIDv7Generator.generate())
                     .description("Close contract draft")

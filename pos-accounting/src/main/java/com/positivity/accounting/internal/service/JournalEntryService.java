@@ -24,9 +24,23 @@ public interface JournalEntryService {
      * @param request journal entry with lines to create
      * @return created entry in DRAFT status
      * @throws IllegalArgumentException if entry is unbalanced or GL accounts
-     *                                  invalid
+     *                                  invalid, or the request carries no
+     *                                  {@code sourceEventType} or {@code sourceEventId}
+     *                                  (#2434: every entry names its source)
      */
     JournalEntryResponse createJournalEntry(JournalEntryCreateRequest request);
+
+    /**
+     * Creates a manual draft entry (the REST create path, #2434). A request without a
+     * {@code sourceEventType} is stamped {@code MANUAL}, and one without a {@code sourceEventId}
+     * takes the new entry's own id; a source the caller supplies is kept. Every other creation path
+     * goes through {@link #createJournalEntry}, which requires both.
+     *
+     * @param request journal entry with lines to create
+     * @return created entry in DRAFT status
+     */
+    @NonNull
+    JournalEntryResponse createManualJournalEntry(@NonNull JournalEntryCreateRequest request);
 
     /**
      * Retrieves an existing journal entry by ID.
