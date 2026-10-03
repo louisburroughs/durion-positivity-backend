@@ -32,6 +32,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -104,6 +105,29 @@ public class PaymentApplicationServiceImpl
             return receivablePaymentRepository
                     .findBySourceEventId(sourceEventId)
                     .orElseThrow(() -> new IllegalStateException("Payment not found after existence check"));
+        }
+
+        // The same payment reached accounting by another path first (an INVOICE_PAYMENT event, or an
+        // earlier fact with another event id, #2435): paymentId is the key, so reuse the recorded row
+        // when it agrees instead of failing on the primary key, and refuse one that does not.
+        Optional<ReceivablePayment> recorded = receivablePaymentRepository.findById(paymentId);
+        if (recorded.isPresent()) {
+            ReceivablePayment existing = recorded.get();
+            boolean agrees = existing.getTotalAmount() != null
+                    && existing.getTotalAmount().compareTo(totalAmount) == 0
+                    && customerId.equals(existing.getCustomerId())
+                    && currency.equalsIgnoreCase(String.valueOf(existing.getCurrency()));
+            if (!agrees) {
+                throw new IllegalStateException("Payment " + paymentId + " is already recorded (event "
+                        + existing.getSourceEventId() + ") with a different amount, currency or customer;"
+                        + " event " + sourceEventId + " conflicts with it");
+            }
+            log.info(
+                    "Payment {} already recorded by event {}; event {} reuses it",
+                    paymentId,
+                    existing.getSourceEventId(),
+                    sourceEventId);
+            return existing;
         }
 
         ReceivablePayment payment = new ReceivablePayment();

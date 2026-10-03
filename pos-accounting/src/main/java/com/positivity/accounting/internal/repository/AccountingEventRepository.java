@@ -4,9 +4,11 @@ import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.QueryHint;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -40,7 +42,8 @@ public interface AccountingEventRepository
      * each event is then claimed and processed in its own transaction.
      */
     @Query("select e.eventId from AccountingEvent e where e.status = :status order by e.receivedAt asc")
-    List<UUID> findIdsByStatusOldestFirst(AccountingEventStatus status, Pageable pageable);
+    @NonNull
+    List<UUID> findIdsByStatusOldestFirst(@NonNull AccountingEventStatus status, @NonNull Pageable pageable);
 
     /**
      * Claim one event for processing: a row lock taken with SKIP LOCKED (lock timeout -2), so a
@@ -49,5 +52,12 @@ public interface AccountingEventRepository
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "-2"))
-    Optional<AccountingEvent> findWithLockByEventIdAndStatus(UUID eventId, AccountingEventStatus status);
+    Optional<AccountingEvent> findWithLockByEventIdAndStatus(
+            @NonNull UUID eventId, @NonNull AccountingEventStatus status);
+
+    /**
+     * How many events have been in {@code status} since before {@code cutoff}: the stale-backlog
+     * gauge of the received-event drainer (#2435).
+     */
+    long countByStatusAndReceivedAtBefore(@NonNull AccountingEventStatus status, @NonNull Instant cutoff);
 }

@@ -117,12 +117,13 @@ class InvoicePaymentEventProcessorTest {
     }
 
     @Test
-    @DisplayName("a paymentId already recorded by another path is not recorded again")
-    void paymentRecordedElsewhere_duplicateIgnored() {
+    @DisplayName("a paymentId recorded and fully applied by another path adds nothing")
+    void paymentFullyRecordedElsewhere_duplicateIgnored() {
         AccountingEvent event = event(validPayload());
         stubEligibleInvoiceNoBalance();
-        when(receivablePaymentRepository.findById(PAYMENT_ID))
-                .thenReturn(Optional.of(recorded(new BigDecimal("100.00"), UUID.randomUUID())));
+        ReceivablePayment recorded = recorded(new BigDecimal("100.00"), UUID.randomUUID());
+        recorded.setUnappliedAmount(BigDecimal.ZERO);
+        when(receivablePaymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(recorded));
 
         processor.process(event);
 
@@ -130,6 +131,26 @@ class InvoicePaymentEventProcessorTest {
         verify(paymentApplicationService, never()).applyPaymentToInvoices(any(), any());
         assertThat(event.getStatus()).isEqualTo(AccountingEventStatus.PROCESSED);
         assertThat(event.getIdempotencyOutcome()).isEqualTo("DUPLICATE_IGNORED");
+    }
+
+    @Test
+    @DisplayName("a payment a settlement fact recorded but never applied is applied to the invoice")
+    void paymentRecordedButUnappliedElsewhere_appliesUnappliedBalance() {
+        AccountingEvent event = event(validPayload());
+        stubEligibleInvoice(new BigDecimal("150.00"));
+        ReceivablePayment recorded = recorded(new BigDecimal("100.00"), UUID.randomUUID());
+        recorded.setUnappliedAmount(new BigDecimal("60.00"));
+        when(receivablePaymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(recorded));
+
+        processor.process(event);
+
+        verify(paymentApplicationService, never()).handlePaymentCleared(any(), any(), any(), any(), any(), any());
+        ArgumentCaptor<PaymentApplicationRequest> request = ArgumentCaptor.forClass(PaymentApplicationRequest.class);
+        verify(paymentApplicationService).applyPaymentToInvoices(eq(PAYMENT_ID), request.capture());
+        assertThat(request.getValue().getApplications())
+                .singleElement()
+                .satisfies(app -> assertThat(app.getAmountToApply()).isEqualByComparingTo("60.00"));
+        assertThat(event.getIdempotencyOutcome()).isEqualTo("NEW");
     }
 
     @Test
@@ -245,6 +266,7 @@ class InvoicePaymentEventProcessorTest {
         payment.setTotalAmount(amount);
         payment.setUnappliedAmount(amount);
         payment.setSourceEventId(sourceEventId);
+        payment.setStatus(ReceivablePayment.ReceivablePaymentStatus.AVAILABLE);
         return payment;
     }
 

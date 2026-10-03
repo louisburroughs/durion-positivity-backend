@@ -78,6 +78,8 @@ pos:
       enabled: ${POS_ACCOUNTING_EVENT_DRAINER_ENABLED:true}
       poll-interval-ms: ${POS_ACCOUNTING_EVENT_DRAINER_POLL_INTERVAL_MS:30000}
       batch-size: ${POS_ACCOUNTING_EVENT_DRAINER_BATCH_SIZE:50}
+      # RECEIVED longer than this counts toward the accounting.events.received.stale gauge.
+      stale-after-ms: ${POS_ACCOUNTING_EVENT_DRAINER_STALE_AFTER_MS:600000}
     credit-memo:
       # Required: GL account for revenue reversals (typically 4000-4999 range)
       revenue-account-id: ${POS_ACCOUNTING_CREDIT_MEMO_REVENUE_ACCOUNT_ID}

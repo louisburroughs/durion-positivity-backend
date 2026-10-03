@@ -107,6 +107,9 @@ public class InvoicePaymentEventProcessor {
         }
         UUID customerId = invoiceCustomer(invoice, payment);
 
+        // What this event asks to apply: the whole payment when this event records it, or what is
+        // still unapplied when another path recorded it first.
+        BigDecimal toApply = payment.amountPaid();
         Optional<ReceivablePayment> existing = receivablePaymentRepository.findById(payment.paymentId());
         if (existing.isPresent()) {
             ReceivablePayment recorded = existing.get();
@@ -118,10 +121,17 @@ public class InvoicePaymentEventProcessor {
                                 + " currency or customer");
             }
             if (!event.getEventId().equals(recorded.getSourceEventId())) {
-                // Recorded by another path (a payment.events.v1 fact, or an earlier event): already
-                // in the subledger, so nothing more to do here.
-                markProcessed(event, payment, IdempotencyOutcome.DUPLICATE_IGNORED);
-                return;
+                // Recorded by another path first (a payment.events.v1 fact only records the payment;
+                // it applies nothing). Apply what is still unapplied; when nothing is, the payment is
+                // already fully in the subledger and this event adds nothing.
+                BigDecimal unapplied = recorded.getUnappliedAmount();
+                if (recorded.getStatus() != ReceivablePayment.ReceivablePaymentStatus.AVAILABLE
+                        || unapplied == null
+                        || unapplied.signum() <= 0) {
+                    markProcessed(event, payment, IdempotencyOutcome.DUPLICATE_IGNORED);
+                    return;
+                }
+                toApply = unapplied;
             }
         } else {
             paymentApplicationService.handlePaymentCleared(
@@ -141,8 +151,7 @@ public class InvoicePaymentEventProcessor {
                     payment.paymentId(),
                     new PaymentApplicationRequest(
                             requestId,
-                            List.of(new PaymentApplicationRequest.InvoiceApplication(
-                                    payment.invoiceId(), payment.amountPaid())),
+                            List.of(new PaymentApplicationRequest.InvoiceApplication(payment.invoiceId(), toApply)),
                             null));
         } else {
             paymentApplicationService.creditUnappliedPayment(payment.paymentId(), requestId);

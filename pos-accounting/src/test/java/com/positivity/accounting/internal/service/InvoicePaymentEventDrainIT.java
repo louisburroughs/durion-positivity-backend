@@ -88,6 +88,9 @@ class InvoicePaymentEventDrainIT extends PostgresCommittingTestBase {
     private ReceivablePaymentRepository receivablePaymentRepository;
 
     @Autowired
+    private PaymentApplicationService paymentApplicationService;
+
+    @Autowired
     private PaymentApplicationRepository paymentApplicationRepository;
 
     @Autowired
@@ -200,6 +203,39 @@ class InvoicePaymentEventDrainIT extends PostgresCommittingTestBase {
         assertThat(outboxRepository.findAll())
                 .extracting(EventOutbox::getAggregateType)
                 .containsExactlyInAnyOrder("PaymentApplication", "CustomerCreditIssuance", "CustomerCreditIssuance");
+    }
+
+    @Test
+    @DisplayName("a payment a settlement fact recorded first is applied, and a late settlement fact reuses it")
+    void settlementFirst_thenEvent_appliesOnce() {
+        UUID paymentId = nextUuid();
+        UUID settlementEventId = nextUuid();
+        paymentApplicationService.handlePaymentCleared(
+                paymentId,
+                customerId,
+                "USD",
+                new BigDecimal("100.00"),
+                Instant.parse("2026-09-15T10:00:00Z"),
+                settlementEventId);
+
+        UUID eventId = submit(payload(paymentId, "100.00"));
+        assertThat(drainer.drainBoundTenant()).isEqualTo(1);
+
+        assertThat(status(eventId)).isEqualTo(AccountingEventStatus.PROCESSED);
+        ReceivablePayment payment =
+                receivablePaymentRepository.findById(paymentId).orElseThrow();
+        assertThat(payment.getSourceEventId()).isEqualTo(settlementEventId);
+        assertThat(payment.getUnappliedAmount()).isEqualByComparingTo("0");
+        assertThat(paymentApplicationRepository.findAll())
+                .singleElement()
+                .satisfies(application ->
+                        assertThat(application.getAppliedAmount()).isEqualByComparingTo("100.00"));
+
+        // The other order: a settlement fact arriving after the event reuses the recorded payment.
+        ReceivablePayment reused = paymentApplicationService.handlePaymentCleared(
+                paymentId, customerId, "USD", new BigDecimal("100.00"), Instant.now(), nextUuid());
+        assertThat(reused.getPaymentId()).isEqualTo(paymentId);
+        assertThat(receivablePaymentRepository.count()).isEqualTo(1);
     }
 
     @Test

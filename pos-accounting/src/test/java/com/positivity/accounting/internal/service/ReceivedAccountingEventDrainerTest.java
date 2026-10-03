@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -17,6 +18,7 @@ import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.exception.AccountingEventRejectedException;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.tenancy.TenantIterator;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -32,6 +34,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.PlatformTransactionManager;
 
@@ -68,7 +71,8 @@ class ReceivedAccountingEventDrainerTest {
                 mock(PlatformTransactionManager.class),
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 meterRegistry,
-                25);
+                25,
+                600_000L);
     }
 
     @Test
@@ -136,6 +140,90 @@ class ReceivedAccountingEventDrainerTest {
         assertThat(fresh.getFailureReasonCode()).isEqualTo("INTERNAL_ERROR");
         assertThat(fresh.getErrorMessage()).contains("boom");
         assertThat(fresh.getProcessedAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    @DisplayName("a unique-key race leaves the event RECEIVED for the next poll, counting the attempt")
+    void integrityRace_retriedOnNextPoll() {
+        AccountingEvent event = received(InvoicePaymentEventProcessor.EVENT_TYPE);
+        stubBatchOf(event);
+        AccountingEvent fresh = received(InvoicePaymentEventProcessor.EVENT_TYPE);
+        when(eventRepository.findById(EVENT_ID)).thenReturn(Optional.of(fresh));
+        doThrow(new DataIntegrityViolationException("duplicate key receivable_payment_pkey"))
+                .when(invoicePaymentProcessor)
+                .process(event);
+
+        assertThat(drainer.drainBoundTenant()).isEqualTo(1);
+
+        assertThat(fresh.getStatus()).isEqualTo(AccountingEventStatus.RECEIVED);
+        assertThat(fresh.getAttemptCount()).isEqualTo(1);
+        assertThat(fresh.getFailureReasonCode()).isNull();
+        verify(eventRepository).save(fresh);
+    }
+
+    @Test
+    @DisplayName("a unique-key violation that keeps recurring is failed instead of retried forever")
+    void integrityRace_recurring_failed() {
+        AccountingEvent event = received(InvoicePaymentEventProcessor.EVENT_TYPE);
+        stubBatchOf(event);
+        AccountingEvent fresh = received(InvoicePaymentEventProcessor.EVENT_TYPE);
+        fresh.setAttemptCount(ReceivedAccountingEventDrainer.MAX_INTEGRITY_RETRIES - 1);
+        when(eventRepository.findById(EVENT_ID)).thenReturn(Optional.of(fresh));
+        doThrow(new DataIntegrityViolationException("duplicate key"))
+                .when(invoicePaymentProcessor)
+                .process(event);
+
+        drainer.drainBoundTenant();
+
+        assertThat(fresh.getStatus()).isEqualTo(AccountingEventStatus.FAILED);
+        assertThat(fresh.getFailureReasonCode()).isEqualTo("INTERNAL_ERROR");
+        assertThat(fresh.getProcessedAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    @DisplayName("each poll publishes the stale RECEIVED backlog and tags drained events by their final status")
+    @SuppressWarnings("unchecked")
+    void metrics_staleGaugeAndOutcomeTags() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        when(meterRegistry.getIfAvailable()).thenReturn(registry);
+        ReceivedAccountingEventDrainer metered = new ReceivedAccountingEventDrainer(
+                eventRepository,
+                invoicePaymentProcessor,
+                postingEngineOrchestrator,
+                tenantIterator,
+                mock(PlatformTransactionManager.class),
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                meterRegistry,
+                25,
+                600_000L);
+        AccountingEvent event = received("billing.invoicePosted");
+        stubBatchOf(event);
+        doAnswer(inv -> {
+                    AccountingEvent claimed = inv.getArgument(0);
+                    claimed.setStatus(AccountingEventStatus.SUSPENDED);
+                    return null;
+                })
+                .when(postingEngineOrchestrator)
+                .processEvent(any(), any(), anyString(), anyBoolean());
+        when(eventRepository.countByStatusAndReceivedAtBefore(
+                        AccountingEventStatus.RECEIVED, NOW.minusMillis(600_000L)))
+                .thenReturn(4L);
+        doAnswer(inv -> {
+                    ((Consumer<UUID>) inv.getArgument(0)).accept(UUID.randomUUID());
+                    return 1;
+                })
+                .when(tenantIterator)
+                .forEachActiveTenant(any());
+
+        metered.drain();
+
+        assertThat(registry.get("accounting.events.received.stale").gauge().value())
+                .isEqualTo(4.0);
+        assertThat(registry.get("accounting.events.drained")
+                        .tag("outcome", "suspended")
+                        .counter()
+                        .count())
+                .isEqualTo(1.0);
     }
 
     @Test

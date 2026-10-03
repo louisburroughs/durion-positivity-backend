@@ -7,18 +7,22 @@ import com.positivity.accounting.internal.exception.AccountingEventRejectedExcep
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.tenancy.TenantIterator;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -53,6 +57,12 @@ public class ReceivedAccountingEventDrainer {
 
     static final String SYSTEM_USER = "SYSTEM";
 
+    /**
+     * Polls an event may lose to a unique-key race (two instances recording the same payment) before
+     * it is failed instead of retried.
+     */
+    static final int MAX_INTEGRITY_RETRIES = 3;
+
     private final AccountingEventRepository eventRepository;
     private final InvoicePaymentEventProcessor invoicePaymentProcessor;
     private final PostingEngineOrchestrator postingEngineOrchestrator;
@@ -60,7 +70,9 @@ public class ReceivedAccountingEventDrainer {
     private final TransactionTemplate transaction;
     private final Clock clock;
     private final int batchSize;
+    private final Duration staleAfter;
     private final @Nullable MeterRegistry meterRegistry;
+    private final AtomicLong staleReceived = new AtomicLong();
 
     public ReceivedAccountingEventDrainer(
             AccountingEventRepository eventRepository,
@@ -70,7 +82,8 @@ public class ReceivedAccountingEventDrainer {
             PlatformTransactionManager transactionManager,
             Clock clock,
             ObjectProvider<MeterRegistry> meterRegistry,
-            @Value("${pos.accounting.event-drainer.batch-size:50}") int batchSize) {
+            @Value("${pos.accounting.event-drainer.batch-size:50}") int batchSize,
+            @Value("${pos.accounting.event-drainer.stale-after-ms:600000}") long staleAfterMs) {
         this.eventRepository = eventRepository;
         this.invoicePaymentProcessor = invoicePaymentProcessor;
         this.postingEngineOrchestrator = postingEngineOrchestrator;
@@ -78,7 +91,14 @@ public class ReceivedAccountingEventDrainer {
         this.transaction = new TransactionTemplate(transactionManager);
         this.clock = clock;
         this.batchSize = batchSize;
+        this.staleAfter = Duration.ofMillis(staleAfterMs);
         this.meterRegistry = meterRegistry.getIfAvailable();
+        if (this.meterRegistry != null) {
+            Gauge.builder("accounting.events.received.stale", staleReceived, AtomicLong::get)
+                    .description("Accounting events still RECEIVED longer than the drainer's stale-after"
+                            + " threshold, across all tenants, as of the last poll")
+                    .register(this.meterRegistry);
+        }
     }
 
     /** One poll: every active tenant, one tenant's failure not stopping the others. */
@@ -86,12 +106,23 @@ public class ReceivedAccountingEventDrainer {
             initialDelayString = "${pos.accounting.event-drainer.initial-delay-ms:60000}",
             fixedDelayString = "${pos.accounting.event-drainer.poll-interval-ms:30000}")
     public void drain() {
+        AtomicLong stale = new AtomicLong();
         tenantIterator.forEachActiveTenant(tenantId -> {
             int drained = drainBoundTenant();
             if (drained > 0) {
                 log.info("Received-event drainer: tenant={} drained={} event(s)", tenantId, drained);
             }
+            stale.addAndGet(countStaleForBoundTenant());
         });
+        staleReceived.set(stale.get());
+    }
+
+    /** {@code RECEIVED} events older than the stale-after threshold, for the bound tenant. */
+    long countStaleForBoundTenant() {
+        Instant cutoff = Instant.now(clock).minus(staleAfter);
+        Long count = transaction.execute(
+                status -> eventRepository.countByStatusAndReceivedAtBefore(AccountingEventStatus.RECEIVED, cutoff));
+        return count == null ? 0L : count;
     }
 
     /**
@@ -114,18 +145,15 @@ public class ReceivedAccountingEventDrainer {
 
     private boolean drainOne(@NonNull UUID eventId) {
         try {
-            Boolean claimed = transaction.execute(status -> eventRepository
+            AccountingEventStatus outcome = transaction.execute(status -> eventRepository
                     .findWithLockByEventIdAndStatus(eventId, AccountingEventStatus.RECEIVED)
-                    .map(event -> {
-                        dispatch(event);
-                        return Boolean.TRUE;
-                    })
-                    .orElse(Boolean.FALSE));
-            if (Boolean.TRUE.equals(claimed)) {
-                count("processed");
-                return true;
+                    .map(this::dispatch)
+                    .orElse(null));
+            if (outcome == null) {
+                return false;
             }
-            return false;
+            count(outcome);
+            return true;
         } catch (AccountingEventRejectedException rejected) {
             log.warn(
                     "Accounting event {} rejected: {} {} - {}",
@@ -134,7 +162,14 @@ public class ReceivedAccountingEventDrainer {
                     rejected.getReasonCode(),
                     rejected.getMessage());
             recordOutcome(eventId, rejected.getStatus(), rejected.getReasonCode(), rejected.getMessage());
-            count(rejected.getStatus().name().toLowerCase(Locale.ROOT));
+            count(rejected.getStatus());
+            return true;
+        } catch (DataIntegrityViolationException race) {
+            // Most likely another instance recorded the same payment between this event's read and its
+            // insert: leave the event RECEIVED so the next poll sees the committed row and takes the
+            // duplicate path. A violation that keeps recurring is failed rather than retried forever.
+            log.warn("Accounting event {} lost a unique-key race; retrying on the next poll", eventId, race);
+            recordIntegrityRetry(eventId, race);
             return true;
         } catch (RuntimeException e) {
             log.error("Accounting event {} failed while draining", eventId, e);
@@ -143,22 +178,47 @@ public class ReceivedAccountingEventDrainer {
                     AccountingEventStatus.FAILED,
                     PostingFailureReason.INTERNAL_ERROR.name(),
                     e.getClass().getSimpleName() + ": " + e.getMessage());
-            count("failed");
+            count(AccountingEventStatus.FAILED);
             return true;
         }
     }
 
-    private void dispatch(@NonNull AccountingEvent event) {
+    private void recordIntegrityRetry(@NonNull UUID eventId, @NonNull RuntimeException race) {
+        String detail = race.getClass().getSimpleName() + ": " + race.getMessage();
+        try {
+            transaction.executeWithoutResult(tx -> eventRepository
+                    .findById(eventId)
+                    .filter(event -> event.getStatus() == AccountingEventStatus.RECEIVED)
+                    .ifPresent(event -> {
+                        int attempt = nextAttempt(event);
+                        event.setAttemptCount(attempt);
+                        event.setErrorMessage(detail);
+                        if (attempt >= MAX_INTEGRITY_RETRIES) {
+                            event.setStatus(AccountingEventStatus.FAILED);
+                            event.setFailureReasonCode(PostingFailureReason.INTERNAL_ERROR.name());
+                            event.setFailureDetails(detail);
+                            event.setProcessedAt(Instant.now(clock));
+                        }
+                        eventRepository.save(event);
+                    }));
+        } catch (RuntimeException e) {
+            log.error("Could not record the retry for accounting event {}", eventId, e);
+        }
+    }
+
+    /** Process one claimed event; returns the status it ended in. */
+    private @NonNull AccountingEventStatus dispatch(@NonNull AccountingEvent event) {
         event.setAttemptCount(nextAttempt(event));
         if (InvoicePaymentEventProcessor.EVENT_TYPE.equals(event.getEventType())) {
             invoicePaymentProcessor.process(event);
             eventRepository.save(event);
-            return;
+            return event.getStatus();
         }
         // The posting engine records its own outcome (PROCESSED, SUSPENDED or FAILED) on the event.
         event.setStatus(AccountingEventStatus.PROCESSING);
         eventRepository.save(event);
         postingEngineOrchestrator.processEvent(event, null, SYSTEM_USER, true);
+        return event.getStatus();
     }
 
     private void recordOutcome(
@@ -192,11 +252,11 @@ public class ReceivedAccountingEventDrainer {
         return (event.getAttemptCount() == null ? 0 : event.getAttemptCount()) + 1;
     }
 
-    private void count(@NonNull String outcome) {
+    private void count(@NonNull AccountingEventStatus outcome) {
         if (meterRegistry != null) {
             Counter.builder("accounting.events.drained")
-                    .description("Received accounting events drained, by outcome")
-                    .tag("outcome", outcome)
+                    .description("Received accounting events drained, by the status they ended in")
+                    .tag("outcome", outcome.name().toLowerCase(Locale.ROOT))
                     .register(meterRegistry)
                     .increment();
         }

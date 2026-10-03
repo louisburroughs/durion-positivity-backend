@@ -245,6 +245,39 @@ class PaymentApplicationServiceTest {
         verify(receivablePaymentRepository, never()).save(any());
     }
 
+    @Test
+    @DisplayName("A payment already recorded under another event id is reused when it agrees (#2435)")
+    void testHandlePaymentCleared_samePaymentIdOtherEvent_reusesRecordedPayment() {
+        UUID otherEventId = UUID.fromString("00000000-0000-0000-0000-0000000e2435");
+        when(receivablePaymentRepository.existsBySourceEventId(otherEventId)).thenReturn(false);
+        when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+
+        ReceivablePayment result = service.handlePaymentCleared(
+                testPaymentId, testCustomerId, "usd", new BigDecimal("1000.0"), Instant.now(TEST_CLOCK), otherEventId);
+
+        assertThat(result).isSameAs(testPayment);
+        verify(receivablePaymentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("A payment already recorded with a different amount is refused, not overwritten (#2435)")
+    void testHandlePaymentCleared_samePaymentIdOtherAmount_refused() {
+        UUID otherEventId = UUID.fromString("00000000-0000-0000-0000-0000000e2436");
+        when(receivablePaymentRepository.existsBySourceEventId(otherEventId)).thenReturn(false);
+        when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+
+        assertThatThrownBy(() -> service.handlePaymentCleared(
+                        testPaymentId,
+                        testCustomerId,
+                        "USD",
+                        new BigDecimal("999.00"),
+                        Instant.now(TEST_CLOCK),
+                        otherEventId))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("different amount");
+        verify(receivablePaymentRepository, never()).save(any());
+    }
+
     // ========================================
     // applyPaymentToInvoices() Tests
     // ========================================
