@@ -3807,7 +3807,9 @@ paths:
       - accounting:events:view
   /v1/accounting/events/types:
     get:
-      description: 'Lists every accounting event type the module records, each with its code, display name, source domain, ingestion path (KAFKA or API) and whether a fact of that type can produce a journal entry.
+      description: 'Lists every accounting event type the deployed code records, each with its code, display name, source domain, ingestion path (KAFKA or API) and whether a fact of that type can produce a journal entry. KAFKA types are recorded by the module''s topic listeners; API types are the ones the module''s own code submits through submitEvent (INVOICE_PAYMENT, VENDOR_BILL_GL_POSTING, AP_PAYMENT_GL_POSTING).
+
+        submitEvent checks only that eventType is present and accepts any string, so a caller can record a type this list does not hold; such an event is posted only when an active posting rule set or default GL mapping resolves its type, and is otherwise suspended.
 
         Use this tool to discover the valid values of the eventType filter of listAccountingEvents, including types with no traffic yet; do not use listAccountingEvents itself, which lists ingested event instances, or getEventContract, which describes the submit envelope.
 
@@ -11446,6 +11448,7 @@ components:
           - supplier
           - warranty
           - payment
+          - accounting
           example: inventory
           type: string
       required:

@@ -128,7 +128,8 @@ public final class EventTypes {
                 EventTypeRegistration.write("ACCOUNTING_GL_ACCOUNT_UPDATE_LEGACY", "Update GL account via legacy path")
                         .build(),
 
-                // EventIngestionController - 4 events (updated for CAP:055)
+                // EventIngestionController - 5 events (updated for CAP:055, #2436), plus
+                // InvoiceRevenueReconciliationController - 1 event (ACCOUNTING_INVOICE_REVENUE_RECONCILE)
                 EventTypeRegistration.search("ACCOUNTING_EVENT_LIST", "List accounting events with filters")
                         .build(),
                 EventTypeRegistration.fastRead(

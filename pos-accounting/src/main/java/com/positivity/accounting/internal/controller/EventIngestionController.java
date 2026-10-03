@@ -1,6 +1,5 @@
 package com.positivity.accounting.internal.controller;
 
-import com.positivity.accounting.internal.config.AccountingEventTypeRegistry;
 import com.positivity.accounting.internal.dto.AccountingEventFilter;
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
 import com.positivity.accounting.internal.dto.AccountingEventSubmitRequest;
@@ -159,9 +158,14 @@ public class EventIngestionController {
             operationId = "listAccountingEventTypes",
             summary = "List Accounting Event Types",
             description = """
-                    Lists every accounting event type the module records, each with its code, display name, \
-                    source domain, ingestion path (KAFKA or API) and whether a fact of that type can produce \
-                    a journal entry.
+                    Lists every accounting event type the deployed code records, each with its code, display \
+                    name, source domain, ingestion path (KAFKA or API) and whether a fact of that type can \
+                    produce a journal entry. KAFKA types are recorded by the module's topic listeners; API \
+                    types are the ones the module's own code submits through submitEvent (INVOICE_PAYMENT, \
+                    VENDOR_BILL_GL_POSTING, AP_PAYMENT_GL_POSTING).
+                    submitEvent checks only that eventType is present and accepts any string, so a caller \
+                    can record a type this list does not hold; such an event is posted only when an active \
+                    posting rule set or default GL mapping resolves its type, and is otherwise suspended.
                     Use this tool to discover the valid values of the eventType filter of \
                     listAccountingEvents, including types with no traffic yet; do not use \
                     listAccountingEvents itself, which lists ingested event instances, or getEventContract, \
@@ -179,9 +183,7 @@ public class EventIngestionController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_EVENT_TYPE_LIST", apiVersion = "1")
     public ResponseEntity<List<AccountingEventTypeResponse>> listAccountingEventTypes() {
-        return ResponseEntity.ok(AccountingEventTypeRegistry.entries().stream()
-                .map(AccountingEventTypeResponse::from)
-                .toList());
+        return ResponseEntity.ok(eventIngestionService.listEventTypes());
     }
 
     @GetMapping("/{eventId}")

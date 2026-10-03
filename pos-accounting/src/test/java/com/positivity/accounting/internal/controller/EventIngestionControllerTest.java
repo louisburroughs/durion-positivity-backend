@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.accounting.BaseIntegrationTest;
 import com.positivity.accounting.internal.config.AccountingEventTypeRegistry;
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
+import com.positivity.accounting.internal.dto.AccountingEventTypeResponse;
 import com.positivity.accounting.internal.dto.ContractField;
 import com.positivity.accounting.internal.dto.EventEnvelopeContract;
 import com.positivity.accounting.internal.dto.EventProcessingLogEntry;
@@ -82,6 +83,11 @@ class EventIngestionControllerTest extends BaseIntegrationTest {
         @Test
         @DisplayName("should return 200 with the registry, not shadowed by /{eventId}")
         void listAccountingEventTypes_returns200() throws Exception {
+            when(eventIngestionService.listEventTypes())
+                    .thenReturn(AccountingEventTypeRegistry.entries().stream()
+                            .map(AccountingEventTypeResponse::from)
+                            .toList());
+
             mockMvc.perform(get(BASE_URL + "/types")
                             .header("X-Authorities", VIEW_AUTHORITY)
                             .header("X-User", TEST_USER))

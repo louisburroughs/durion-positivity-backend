@@ -20,7 +20,7 @@ public record AccountingEventTypeResponse(
         @Schema(
                 description = "Producing domain",
                 example = "inventory",
-                allowableValues = {"invoice", "order", "inventory", "supplier", "warranty", "payment"},
+                allowableValues = {"invoice", "order", "inventory", "supplier", "warranty", "payment", "accounting"},
                 requiredMode = REQUIRED)
         String sourceDomain,
 
