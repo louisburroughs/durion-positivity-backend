@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -37,6 +38,7 @@ class WarrantyEventsListenerTest {
     private final ProcessedEventRepository processedEvents = mock(ProcessedEventRepository.class);
     private final WarrantyReimbursementExpectationRepository expectations =
             mock(WarrantyReimbursementExpectationRepository.class);
+    private final KafkaFactIngestionRecorder ingestionRecorder = mock(KafkaFactIngestionRecorder.class);
 
     private WarrantyEventsListener listener;
 
@@ -47,6 +49,7 @@ class WarrantyEventsListenerTest {
                 new ObjectMapper(),
                 processedEvents,
                 expectations,
+                ingestionRecorder,
                 org.mockito.Mockito.mock(ObjectProvider.class),
                 mock(PlatformTransactionManager.class));
     }
@@ -105,6 +108,18 @@ class WarrantyEventsListenerTest {
         assertThat(saved.getValue().getVendorClaimReference()).isEqualTo("PRV-77");
         assertThat(saved.getValue().getAggregateVersion()).isEqualTo(3L);
         verify(processedEvents).save(any());
+        // #2433: one PROCESSED, nothing-to-post ingestion row, keyed on the reimbursement.
+        verify(ingestionRecorder)
+                .record(
+                        eq("pos-warranty"),
+                        eq("warranty.reimbursement.submitted"),
+                        eq("e-1"),
+                        eq(REIMBURSEMENT_ID),
+                        eq(java.time.LocalDateTime.of(2026, 7, 15, 9, 0)),
+                        any(),
+                        eq(new FactPostingOutcome.NothingToPost()));
+        assertThat(WarrantyEventsListener.RECORDED_EVENT_TYPES)
+                .containsExactly("warranty.reimbursement.submitted", "warranty.reimbursement.resolved");
     }
 
     @Test
@@ -127,6 +142,15 @@ class WarrantyEventsListenerTest {
         assertThat(saved.getValue().getSubmittedAt()).isEqualTo(Instant.parse("2026-07-15T09:00:00Z"));
         assertThat(saved.getValue().getAggregateVersion()).isEqualTo(5L);
         verify(processedEvents).save(any());
+        verify(ingestionRecorder)
+                .record(
+                        eq("pos-warranty"),
+                        eq("warranty.reimbursement.resolved"),
+                        eq("e-2"),
+                        eq(REIMBURSEMENT_ID),
+                        eq(java.time.LocalDateTime.of(2026, 7, 16, 10, 0)),
+                        any(),
+                        eq(new FactPostingOutcome.NothingToPost()));
     }
 
     @Test
@@ -172,6 +196,7 @@ class WarrantyEventsListenerTest {
 
         verify(expectations, never()).save(any());
         verify(processedEvents, never()).save(any());
+        org.mockito.Mockito.verifyNoInteractions(ingestionRecorder);
     }
 
     @Test
@@ -185,6 +210,22 @@ class WarrantyEventsListenerTest {
         verify(expectations, never()).save(any());
         // Still recorded as processed so redelivery does not reprocess it.
         verify(processedEvents).save(any());
+        // #2433: and as a terminal SKIPPED / NOT_POSTABLE ingestion row.
+        ArgumentCaptor<FactPostingOutcome> outcome = ArgumentCaptor.forClass(FactPostingOutcome.class);
+        verify(ingestionRecorder)
+                .record(
+                        eq("pos-warranty"),
+                        eq("warranty.reimbursement.resolved"),
+                        eq("e-old"),
+                        eq(REIMBURSEMENT_ID),
+                        any(),
+                        any(),
+                        outcome.capture());
+        assertThat(outcome.getValue())
+                .isInstanceOfSatisfying(
+                        FactPostingOutcome.Skipped.class,
+                        skipped -> assertThat(skipped.reason())
+                                .isEqualTo(com.positivity.accounting.internal.enums.PostingFailureReason.NOT_POSTABLE));
     }
 
     @Test

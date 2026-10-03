@@ -12,6 +12,9 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.ObjectProvider;
@@ -47,16 +50,34 @@ import tools.jackson.databind.ObjectMapper;
  * processed mark commit together in a {@code REQUIRES_NEW} transaction of their own, so a permanent
  * failure rolls back only that work and is recorded in a separate transaction; transient failures
  * still propagate for container retry, unrecorded.
+ *
+ * <p><b>Ingestion record (#2433).</b> Every consumed reimbursement fact ({@link
+ * #RECORDED_EVENT_TYPES}) writes one {@code accounting_event} row through {@link
+ * KafkaFactIngestionRecorder} in the same transaction, keyed on the reimbursement id (source system
+ * {@value #SOURCE_SYSTEM}): an expectation row posts no journal entry, so an applied fact is {@code
+ * PROCESSED / NEW} with no entry, and a stale one {@code SKIPPED / NOT_POSTABLE}. The topic's other
+ * facts write no row.
  */
 @Slf4j
 @Component
 @ConditionalOnProperty(prefix = "pos.accounting.kafka", name = "enabled", havingValue = "true")
 public class WarrantyEventsListener {
 
+    /** Producing module, stamped as {@code sourceSystem} on this listener's ingestion records. */
+    public static final String SOURCE_SYSTEM = "pos-warranty";
+
+    /**
+     * Event type codes this listener records an {@code accounting_event} row for, one per consumed
+     * fact (#2433).
+     */
+    public static final List<String> RECORDED_EVENT_TYPES =
+            List.of(WarrantyReimbursementSubmittedV1.EVENT_TYPE, WarrantyReimbursementResolvedV1.EVENT_TYPE);
+
     private final Clock clock;
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
     private final WarrantyReimbursementExpectationRepository expectationRepository;
+    private final KafkaFactIngestionRecorder ingestionRecorder;
     private final Counter payloadRejectedCounter;
 
     /** The handler plus its processed mark, or a failure's mark alone, per transaction; see the class doc. */
@@ -67,12 +88,14 @@ public class WarrantyEventsListener {
             ObjectMapper objectMapper,
             ProcessedEventRepository processedEventRepository,
             WarrantyReimbursementExpectationRepository expectationRepository,
+            KafkaFactIngestionRecorder ingestionRecorder,
             ObjectProvider<MeterRegistry> meterRegistry,
             PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.expectationRepository = expectationRepository;
+        this.ingestionRecorder = ingestionRecorder;
         this.handlerTransaction = new TransactionTemplate(transactionManager);
         this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         MeterRegistry registry = meterRegistry.getIfAvailable();
@@ -111,9 +134,9 @@ public class WarrantyEventsListener {
         try {
             handlerTransaction.executeWithoutResult(_ -> {
                 if (WarrantyReimbursementSubmittedV1.EVENT_TYPE.equals(eventType)) {
-                    applyReimbursementSubmitted(envelope);
+                    applyReimbursementSubmitted(envelope, eventId);
                 } else if (WarrantyReimbursementResolvedV1.EVENT_TYPE.equals(eventType)) {
-                    applyReimbursementResolved(envelope);
+                    applyReimbursementResolved(envelope, eventId);
                 } else {
                     // Ignored types are still recorded as processed below.
                     log.debug("Ignoring warranty event type={} eventId={}", eventType, eventId);
@@ -143,7 +166,7 @@ public class WarrantyEventsListener {
                 .build());
     }
 
-    private void applyReimbursementSubmitted(JsonNode envelope) {
+    private void applyReimbursementSubmitted(JsonNode envelope, String eventId) {
         WarrantyReimbursementSubmittedV1 payload =
                 objectMapper.treeToValue(envelope.path("payload"), WarrantyReimbursementSubmittedV1.class);
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
@@ -151,6 +174,13 @@ public class WarrantyEventsListener {
         WarrantyReimbursementExpectation existing =
                 expectationRepository.findById(payload.reimbursementId()).orElse(null);
         if (isStale(existing, aggregateVersion, payload.reimbursementId().toString())) {
+            record(
+                    WarrantyReimbursementSubmittedV1.EVENT_TYPE,
+                    eventId,
+                    payload.reimbursementId(),
+                    payload.submittedAt(),
+                    payload,
+                    stale(aggregateVersion));
             return;
         }
 
@@ -167,6 +197,13 @@ public class WarrantyEventsListener {
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());
+        record(
+                WarrantyReimbursementSubmittedV1.EVENT_TYPE,
+                eventId,
+                payload.reimbursementId(),
+                payload.submittedAt(),
+                payload,
+                FactPostingOutcome.nothingToPost());
         log.info(
                 "Recorded warranty reimbursement expectation reimbursementId={} claimCode={} version={}",
                 payload.reimbursementId(),
@@ -174,7 +211,7 @@ public class WarrantyEventsListener {
                 aggregateVersion);
     }
 
-    private void applyReimbursementResolved(JsonNode envelope) {
+    private void applyReimbursementResolved(JsonNode envelope, String eventId) {
         WarrantyReimbursementResolvedV1 payload =
                 objectMapper.treeToValue(envelope.path("payload"), WarrantyReimbursementResolvedV1.class);
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
@@ -182,6 +219,13 @@ public class WarrantyEventsListener {
         WarrantyReimbursementExpectation existing =
                 expectationRepository.findById(payload.reimbursementId()).orElse(null);
         if (isStale(existing, aggregateVersion, payload.reimbursementId().toString())) {
+            record(
+                    WarrantyReimbursementResolvedV1.EVENT_TYPE,
+                    eventId,
+                    payload.reimbursementId(),
+                    payload.resolvedAt(),
+                    payload,
+                    stale(aggregateVersion));
             return;
         }
 
@@ -203,11 +247,40 @@ public class WarrantyEventsListener {
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());
+        record(
+                WarrantyReimbursementResolvedV1.EVENT_TYPE,
+                eventId,
+                payload.reimbursementId(),
+                payload.resolvedAt(),
+                payload,
+                FactPostingOutcome.nothingToPost());
         log.info(
                 "Resolved warranty reimbursement expectation reimbursementId={} status={} version={}",
                 payload.reimbursementId(),
                 payload.status(),
                 aggregateVersion);
+    }
+
+    private void record(
+            String eventType,
+            String eventId,
+            UUID reimbursementId,
+            Instant businessTime,
+            Object fact,
+            FactPostingOutcome outcome) {
+        ingestionRecorder.record(
+                SOURCE_SYSTEM,
+                eventType,
+                eventId,
+                reimbursementId,
+                LocalDateTime.ofInstant(businessTime == null ? Instant.now(clock) : businessTime, clock.getZone()),
+                fact,
+                outcome);
+    }
+
+    private static FactPostingOutcome stale(long aggregateVersion) {
+        return FactPostingOutcome.notPostable("Stale warranty reimbursement fact (aggregateVersion " + aggregateVersion
+                + " below the expectation row's) not applied");
     }
 
     private boolean isStale(WarrantyReimbursementExpectation existing, long aggregateVersion, String reimbursementId) {

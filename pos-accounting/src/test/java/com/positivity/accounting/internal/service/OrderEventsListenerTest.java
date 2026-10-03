@@ -39,6 +39,7 @@ class OrderEventsListenerTest {
 
     private final ProcessedEventRepository processedEvents = mock(ProcessedEventRepository.class);
     private final RegisterOverShortPostingService postingService = mock(RegisterOverShortPostingService.class);
+    private final KafkaFactIngestionRecorder ingestionRecorder = mock(KafkaFactIngestionRecorder.class);
 
     private OrderEventsListener listener;
 
@@ -49,6 +50,7 @@ class OrderEventsListenerTest {
                 new ObjectMapper(),
                 processedEvents,
                 postingService,
+                ingestionRecorder,
                 org.mockito.Mockito.mock(ObjectProvider.class),
                 mock(PlatformTransactionManager.class));
     }
@@ -89,6 +91,40 @@ class OrderEventsListenerTest {
         verify(processedEvents).save(processed.capture());
         assertThat(processed.getValue().getEventId()).isEqualTo("e-1");
         assertThat(processed.getValue().getProcessedAt()).isEqualTo(Instant.now(TEST_CLOCK));
+    }
+
+    @Test
+    @DisplayName("#2433: the posted over/short is recorded as one ingestion row under pos-order, linked to its entry")
+    void postedOverShortIsRecorded() {
+        UUID journalEntryId = UUID.randomUUID();
+        FactPostingOutcome outcome = FactPostingOutcome.posted(journalEntryId);
+        when(processedEvents.existsById("e-10")).thenReturn(false);
+        when(postingService.postOverShort(any(), org.mockito.ArgumentMatchers.eq("e-10")))
+                .thenReturn(outcome);
+
+        listener.onOrderEvent(sessionClosed("e-10"));
+
+        verify(ingestionRecorder)
+                .record(
+                        org.mockito.ArgumentMatchers.eq("pos-order"),
+                        org.mockito.ArgumentMatchers.eq(RegisterSessionClosedV1.EVENT_TYPE),
+                        org.mockito.ArgumentMatchers.eq("e-10"),
+                        org.mockito.ArgumentMatchers.eq(SESSION_ID),
+                        org.mockito.ArgumentMatchers.eq(java.time.LocalDateTime.of(2026, 7, 23, 18, 30)),
+                        any(RegisterSessionClosedV1.class),
+                        org.mockito.ArgumentMatchers.same(outcome));
+        verify(processedEvents).save(any());
+        assertThat(OrderEventsListener.RECORDED_EVENT_TYPES).containsExactly("order.session.closed");
+    }
+
+    @Test
+    @DisplayName("#2433: a duplicate eventId writes no second ingestion row")
+    void duplicateEventIdRecordsNothing() {
+        when(processedEvents.existsById("e-11")).thenReturn(true);
+
+        listener.onOrderEvent(sessionClosed("e-11"));
+
+        verifyNoInteractions(ingestionRecorder);
     }
 
     @Test

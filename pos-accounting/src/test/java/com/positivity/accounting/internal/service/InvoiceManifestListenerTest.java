@@ -237,6 +237,7 @@ class InvoiceManifestListenerTest {
                 replica,
                 taxReplica,
                 org.mockito.Mockito.mock(InvoiceRevenuePostingService.class),
+                org.mockito.Mockito.mock(KafkaFactIngestionRecorder.class),
                 org.mockito.Mockito.mock(ObjectProvider.class),
                 mock(PlatformTransactionManager.class));
 

@@ -85,7 +85,7 @@ class SettlementEventsListenerDepositCreditAppliedTest {
                 extInvoicePaymentReversalRepository,
                 extInvoiceDepositCreditApplicationRepository,
                 new com.positivity.accounting.internal.config.LedgerCurrency("USD"),
-                org.mockito.Mockito.mock(InventoryFactIngestionRecorder.class),
+                org.mockito.Mockito.mock(KafkaFactIngestionRecorder.class),
                 provider,
                 org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class));
     }

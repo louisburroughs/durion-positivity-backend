@@ -25,6 +25,6 @@ public class IdempotencyOutcomesContract {
     @Schema(description = "Idempotency for POST /v1/accounting/events", requiredMode = REQUIRED)
     private RestSubmissionIdempotency restSubmission;
 
-    @Schema(description = "Idempotency for Kafka-consumed inventory posting facts", requiredMode = REQUIRED)
+    @Schema(description = "Idempotency for Kafka-consumed posting facts", requiredMode = REQUIRED)
     private FactConsumptionIdempotency factConsumption;
 }

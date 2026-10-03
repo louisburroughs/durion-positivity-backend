@@ -69,7 +69,7 @@ class InventoryEventsListenerTransactionTest {
     private InventoryShrinkagePostingService shrinkagePostingService;
 
     @Autowired
-    private InventoryFactIngestionRecorder ingestionRecorder;
+    private KafkaFactIngestionRecorder ingestionRecorder;
 
     @Autowired
     private FailingAdjustmentPostingService failingPostingService;

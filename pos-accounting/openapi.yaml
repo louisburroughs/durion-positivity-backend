@@ -15401,7 +15401,7 @@ components:
       - status
       type: object
     FactConsumptionIdempotency:
-      description: Idempotency mechanism for Kafka-consumed inventory posting facts
+      description: Idempotency mechanism for Kafka-consumed posting facts
       properties:
         mechanism:
           description: 'Dedup mechanism: a re-delivery is matched by its deterministic sourceEventId'

@@ -86,7 +86,15 @@ public enum PostingFailureReason {
      * reprocess path, which re-suspends it with this reason while its currency is still not the
      * ledger's.
      */
-    CURRENCY_NOT_SUPPORTED;
+    CURRENCY_NOT_SUPPORTED,
+
+    /**
+     * A Kafka-consumed fact its listener deliberately does not post (issue #2433): a stale fact the
+     * replica guard skipped, a deposit-take invoice (a contract liability, not revenue), an invoice
+     * fact with no {@code finalizedAt}, or a status that neither recognizes nor reverses revenue.
+     * Event is recorded SKIPPED — terminal, never retried.
+     */
+    NOT_POSTABLE;
 
     /**
      * Whether an event failing for this reason ends in the terminal {@code SKIPPED} status: the
@@ -94,7 +102,7 @@ public enum PostingFailureReason {
      * operator fixes and reprocesses ({@code SUSPENDED}).
      */
     public boolean isTerminalSkip() {
-        return this == UNCOSTED_FACT || this == MISSING_AMOUNT || this == ZERO_AMOUNT;
+        return this == UNCOSTED_FACT || this == MISSING_AMOUNT || this == ZERO_AMOUNT || this == NOT_POSTABLE;
     }
 
     /**

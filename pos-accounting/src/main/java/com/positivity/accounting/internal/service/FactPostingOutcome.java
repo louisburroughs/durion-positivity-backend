@@ -1,0 +1,51 @@
+package com.positivity.accounting.internal.service;
+
+import com.positivity.accounting.internal.enums.PostingFailureReason;
+import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+
+/**
+ * What a Kafka-consumed fact did to the ledger, as a posting path reports it back to its listener,
+ * which hands it to {@link KafkaFactIngestionRecorder#record} for the fact's one {@code
+ * accounting_event} row (issue #2433).
+ */
+public sealed interface FactPostingOutcome {
+
+    /** A journal entry was posted for this fact: {@code PROCESSED / NEW}, linked to the entry. */
+    record Posted(@NonNull UUID journalEntryId) implements FactPostingOutcome {}
+
+    /**
+     * The posting path's own idempotency key was already registered (a redelivery under a fresh
+     * Kafka event id, or a later fact for an already-posted document): {@code PROCESSED /
+     * DUPLICATE_IGNORED}. Linked to {@code journalEntryId} when the path knows it, else to the entry
+     * found by {@code sourceEventId}, else to none (a path that never posts a journal entry).
+     */
+    record AlreadyPosted(
+            @Nullable UUID journalEntryId, @Nullable UUID sourceEventId) implements FactPostingOutcome {}
+
+    /** A new fact that legitimately posts nothing (a zero amount, a record-only fact): {@code PROCESSED / NEW}. */
+    record NothingToPost() implements FactPostingOutcome {}
+
+    /** A fact deliberately not posted: terminal {@code SKIPPED} with a reason and a readable detail. */
+    record Skipped(
+            @NonNull PostingFailureReason reason, @NonNull String detail) implements FactPostingOutcome {}
+
+    /**
+     * The posting path already wrote the fact's record itself as a currency hold ({@link
+     * KafkaFactIngestionRecorder#recordCurrencyHeld}); the listener records nothing more.
+     */
+    record CurrencyHeld() implements FactPostingOutcome {}
+
+    static @NonNull FactPostingOutcome posted(@NonNull UUID journalEntryId) {
+        return new Posted(journalEntryId);
+    }
+
+    static @NonNull FactPostingOutcome nothingToPost() {
+        return new NothingToPost();
+    }
+
+    static @NonNull FactPostingOutcome notPostable(@NonNull String detail) {
+        return new Skipped(PostingFailureReason.NOT_POSTABLE, detail);
+    }
+}

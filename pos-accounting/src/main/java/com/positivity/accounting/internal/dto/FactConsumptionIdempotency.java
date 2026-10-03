@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 
 /**
  * The idempotency mechanism used by Kafka fact consumption ({@code
- * InventoryFactIngestionRecorder}, issue #2207): every consumed fact writes one row (terminal, except a
+ * KafkaFactIngestionRecorder}, issue #2207): every consumed fact writes one row (terminal, except a
  * SUSPENDED currency hold), and
  * a re-delivery is recognized by its deterministic {@code sourceEventId} rather than being
  * rejected.
@@ -20,7 +20,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "Idempotency mechanism for Kafka-consumed inventory posting facts")
+@Schema(description = "Idempotency mechanism for Kafka-consumed posting facts")
 public class FactConsumptionIdempotency {
 
     @Schema(

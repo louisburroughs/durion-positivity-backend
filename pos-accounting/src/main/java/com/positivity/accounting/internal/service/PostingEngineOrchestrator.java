@@ -210,7 +210,7 @@ public class PostingEngineOrchestrator {
     /**
      * Currency hold (ADR-0067 PC-9, issue #2334): an event held because its fact states an amount
      * in a currency other than the ledger's ({@code failureReasonCode = CURRENCY_NOT_SUPPORTED},
-     * written by {@link InventoryFactIngestionRecorder#recordCurrencyHeld}) stays SUSPENDED with
+     * written by {@link KafkaFactIngestionRecorder#recordCurrencyHeld}) stays SUSPENDED with
      * that reason while its {@code payload.currencyCode} is still not the ledger currency — a
      * reprocess records an audited FAILURE attempt and posts nothing, rather than booking the
      * amount at par. Once the ledger books that currency the event continues to normal evaluation.

@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
@@ -43,7 +44,7 @@ class RegisterOverShortPostingServiceTest {
     private final IdempotencyService idempotencyService = mock(IdempotencyService.class);
     private final GLMappingResolver glMappingResolver = mock(GLMappingResolver.class);
     private final GLPostingService glPostingService = mock(GLPostingService.class);
-    private final InventoryFactIngestionRecorder ingestionRecorder = mock(InventoryFactIngestionRecorder.class);
+    private final KafkaFactIngestionRecorder ingestionRecorder = mock(KafkaFactIngestionRecorder.class);
 
     private RegisterOverShortPostingService service;
 
@@ -98,8 +99,10 @@ class RegisterOverShortPostingServiceTest {
         when(glPostingService.postRegisterOverShort(any(), any(), any(), any(), any(), any(), anyString(), any()))
                 .thenReturn(postedEntry());
 
-        service.postOverShort(
-                fact(new BigDecimal("-10.00"), new BigDecimal("140.00"), new BigDecimal("150.00")), ENVELOPE_EVENT_ID);
+        assertThat(service.postOverShort(
+                        fact(new BigDecimal("-10.00"), new BigDecimal("140.00"), new BigDecimal("150.00")),
+                        ENVELOPE_EVENT_ID))
+                .isEqualTo(FactPostingOutcome.posted(JOURNAL_ENTRY_ID));
 
         verify(glPostingService)
                 .postRegisterOverShort(
@@ -145,8 +148,9 @@ class RegisterOverShortPostingServiceTest {
     @Test
     @DisplayName("Zero-variance close posts nothing")
     void zeroVariancePostsNothing() {
-        service.postOverShort(
-                fact(BigDecimal.ZERO, new BigDecimal("150.00"), new BigDecimal("150.00")), ENVELOPE_EVENT_ID);
+        assertThat(service.postOverShort(
+                        fact(BigDecimal.ZERO, new BigDecimal("150.00"), new BigDecimal("150.00")), ENVELOPE_EVENT_ID))
+                .isEqualTo(FactPostingOutcome.nothingToPost());
 
         verify(glPostingService, never())
                 .postRegisterOverShort(any(), any(), any(), any(), any(), any(), anyString(), any());
@@ -158,8 +162,11 @@ class RegisterOverShortPostingServiceTest {
     void replayedSessionIsNoOp() {
         when(idempotencyService.isKeyProcessed(KEY)).thenReturn(true);
 
-        service.postOverShort(
-                fact(new BigDecimal("-10.00"), new BigDecimal("140.00"), new BigDecimal("150.00")), ENVELOPE_EVENT_ID);
+        assertThat(service.postOverShort(
+                        fact(new BigDecimal("-10.00"), new BigDecimal("140.00"), new BigDecimal("150.00")),
+                        ENVELOPE_EVENT_ID))
+                .isEqualTo(new FactPostingOutcome.AlreadyPosted(
+                        null, RegisterOverShortPostingService.toSourceEventId(SESSION_ID)));
 
         verify(glPostingService, never())
                 .postRegisterOverShort(any(), any(), any(), any(), any(), any(), anyString(), any());
@@ -173,7 +180,7 @@ class RegisterOverShortPostingServiceTest {
         RegisterSessionClosedV1 eurFact =
                 fact(new BigDecimal("-10.00"), new BigDecimal("140.00"), new BigDecimal("150.00"), "EUR");
 
-        service.postOverShort(eurFact, ENVELOPE_EVENT_ID);
+        assertThat(service.postOverShort(eurFact, ENVELOPE_EVENT_ID)).isEqualTo(new FactPostingOutcome.CurrencyHeld());
 
         verify(glPostingService, never())
                 .postRegisterOverShort(any(), any(), any(), any(), any(), any(), anyString(), any());

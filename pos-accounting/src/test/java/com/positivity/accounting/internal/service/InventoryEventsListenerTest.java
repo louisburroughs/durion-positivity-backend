@@ -52,7 +52,7 @@ class InventoryEventsListenerTest {
             mock(InventoryAdjustmentPostingService.class);
     private final InventoryRevaluationPostingService revaluationPostingService =
             mock(InventoryRevaluationPostingService.class);
-    private final InventoryFactIngestionRecorder ingestionRecorder = mock(InventoryFactIngestionRecorder.class);
+    private final KafkaFactIngestionRecorder ingestionRecorder = mock(KafkaFactIngestionRecorder.class);
 
     private InventoryEventsListener listener;
 
@@ -319,6 +319,7 @@ class InventoryEventsListenerTest {
         assertThat(fact.getValue().costSource()).isEqualTo("AVERAGE");
         verify(ingestionRecorder)
                 .recordPosted(
+                        eq(InventoryEventsListener.SOURCE_SYSTEM),
                         eq(InventoryAdjustedV1.EVENT_TYPE),
                         eq("a-1"),
                         eq(ADJUSTMENT_ID),
@@ -339,7 +340,15 @@ class InventoryEventsListenerTest {
         listener.onInventoryEvent(adjustment("a-2", "3", "2.00", "STANDARD"));
 
         verify(ingestionRecorder)
-                .recordPosted(anyString(), eq("a-2"), eq(ADJUSTMENT_ID), any(), any(), isNull(), any());
+                .recordPosted(
+                        eq(InventoryEventsListener.SOURCE_SYSTEM),
+                        anyString(),
+                        eq("a-2"),
+                        eq(ADJUSTMENT_ID),
+                        any(),
+                        any(),
+                        isNull(),
+                        any());
         verify(processedEvents).save(any());
     }
 
@@ -353,7 +362,13 @@ class InventoryEventsListenerTest {
         verifyNoInteractions(adjustmentPostingService);
         verify(ingestionRecorder)
                 .recordUncostedSkip(
-                        eq(InventoryAdjustedV1.EVENT_TYPE), eq("a-3"), eq(ADJUSTMENT_ID), any(), any(), anyString());
+                        eq(InventoryEventsListener.SOURCE_SYSTEM),
+                        eq(InventoryAdjustedV1.EVENT_TYPE),
+                        eq("a-3"),
+                        eq(ADJUSTMENT_ID),
+                        any(),
+                        any(),
+                        anyString());
         verify(processedEvents).save(any());
     }
 
@@ -365,7 +380,14 @@ class InventoryEventsListenerTest {
         listener.onInventoryEvent(uncostedScrap("e-9"));
 
         verify(ingestionRecorder)
-                .recordUncostedSkip(eq(ScrapPostedV1.EVENT_TYPE), eq("e-9"), eq(SCRAP_ID), any(), any(), anyString());
+                .recordUncostedSkip(
+                        eq(InventoryEventsListener.SOURCE_SYSTEM),
+                        eq(ScrapPostedV1.EVENT_TYPE),
+                        eq("e-9"),
+                        eq(SCRAP_ID),
+                        any(),
+                        any(),
+                        anyString());
     }
 
     @Test
@@ -462,6 +484,7 @@ class InventoryEventsListenerTest {
         assertThat(fact.getValue().totalValueDelta()).isEqualByComparingTo("9.00");
         verify(ingestionRecorder)
                 .recordPosted(
+                        eq(InventoryEventsListener.SOURCE_SYSTEM),
                         eq(ProductValueChangedV1.EVENT_TYPE),
                         eq("r-1"),
                         eq(REVALUATION_ID),
@@ -482,7 +505,15 @@ class InventoryEventsListenerTest {
         listener.onInventoryEvent(revaluation("r-2", "5.00", "7.25", "4"));
 
         verify(ingestionRecorder)
-                .recordPosted(anyString(), eq("r-2"), eq(REVALUATION_ID), any(), any(), isNull(), any());
+                .recordPosted(
+                        eq(InventoryEventsListener.SOURCE_SYSTEM),
+                        anyString(),
+                        eq("r-2"),
+                        eq(REVALUATION_ID),
+                        any(),
+                        any(),
+                        isNull(),
+                        any());
         verify(processedEvents).save(any());
     }
 
@@ -494,9 +525,20 @@ class InventoryEventsListenerTest {
         listener.onInventoryEvent(revaluation("r-3", "5.00", "5.00", "4"));
 
         verify(revaluationPostingService, never()).postRevaluation(any());
-        verify(ingestionRecorder).recordNothingToPost(anyString(), eq("r-3"), eq(REVALUATION_ID), any(), any());
-        verify(ingestionRecorder, never()).recordPosted(any(), any(), any(), any(), any(), any(), any());
-        verify(ingestionRecorder, never()).recordUncostedSkip(any(), any(), any(), any(), any(), any());
+        verify(ingestionRecorder)
+                .recordNothingToPost(
+                        eq(InventoryEventsListener.SOURCE_SYSTEM),
+                        anyString(),
+                        eq("r-3"),
+                        eq(REVALUATION_ID),
+                        any(),
+                        any());
+        verify(ingestionRecorder, never())
+                .recordPosted(
+                        eq(InventoryEventsListener.SOURCE_SYSTEM), any(), any(), any(), any(), any(), any(), any());
+        verify(ingestionRecorder, never())
+                .recordUncostedSkip(
+                        eq(InventoryEventsListener.SOURCE_SYSTEM), any(), any(), any(), any(), any(), any());
         verify(processedEvents).save(any());
     }
 

@@ -74,7 +74,7 @@ class SettlementEventsListenerPaymentSettledTest {
     private ExtInvoiceDepositCreditApplicationRepository extInvoiceDepositCreditApplicationRepository;
 
     @Mock
-    private InventoryFactIngestionRecorder ingestionRecorder;
+    private KafkaFactIngestionRecorder ingestionRecorder;
 
     private String envelope(String eventId, PaymentSettledV1 payload) {
         return mapper.writeValueAsString(

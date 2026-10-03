@@ -1,8 +1,8 @@
 package com.positivity.accounting.internal.enums;
 
 /**
- * Idempotency outcome recorded for a Kafka-consumed inventory posting fact
- * ({@code InventoryFactIngestionRecorder}, issue #2191/#2186 D5). Distinct from the REST
+ * Idempotency outcome recorded for a Kafka-consumed posting fact
+ * ({@code KafkaFactIngestionRecorder}, issues #2191, #2186 D5, #2433). Distinct from the REST
  * {@code submitEvent} idempotency mechanism (content-hash dedup via {@code IdempotencyService},
  * 24h window, rejects a replay with HTTP 409 {@code DUPLICATE_EVENT} and persists nothing) — this
  * enum covers only the fact-consumption path, where every consumed fact writes one

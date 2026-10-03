@@ -45,6 +45,7 @@ class InvoiceEventsListenerTest {
     private final ExtInvoiceRepository replica = mock(ExtInvoiceRepository.class);
     private final ExtInvoiceTaxRepository taxReplica = mock(ExtInvoiceTaxRepository.class);
     private final InvoiceRevenuePostingService revenuePosting = mock(InvoiceRevenuePostingService.class);
+    private final KafkaFactIngestionRecorder ingestionRecorder = mock(KafkaFactIngestionRecorder.class);
 
     private InvoiceEventsListener listener;
 
@@ -57,6 +58,7 @@ class InvoiceEventsListenerTest {
                 replica,
                 taxReplica,
                 revenuePosting,
+                ingestionRecorder,
                 org.mockito.Mockito.mock(ObjectProvider.class),
                 mock(PlatformTransactionManager.class));
     }
@@ -395,6 +397,7 @@ class InvoiceEventsListenerTest {
                 replica,
                 taxReplica,
                 revenuePosting,
+                ingestionRecorder,
                 provider,
                 mock(PlatformTransactionManager.class));
 
@@ -429,6 +432,7 @@ class InvoiceEventsListenerTest {
                 replica,
                 taxReplica,
                 revenuePosting,
+                ingestionRecorder,
                 provider,
                 mock(PlatformTransactionManager.class));
 
@@ -460,6 +464,7 @@ class InvoiceEventsListenerTest {
                 replica,
                 taxReplica,
                 revenuePosting,
+                ingestionRecorder,
                 provider,
                 mock(PlatformTransactionManager.class));
 
@@ -618,6 +623,141 @@ class InvoiceEventsListenerTest {
 
         verify(revenuePosting, never()).postRevenue(any());
         verify(revenuePosting, never()).reverseRevenue(any(), any());
+        verify(processedEvents).save(any());
+    }
+
+    // ----- #2433: one accounting_event ingestion record per consumed invoice fact -----
+
+    @Test
+    @DisplayName(
+            "#2433: a posted revenue fact is recorded under pos-invoice with the posting outcome, dated finalizedAt")
+    void postedRevenueFactIsRecorded() {
+        UUID journalEntryId = UUID.randomUUID();
+        FactPostingOutcome outcome = FactPostingOutcome.posted(journalEntryId);
+        when(processedEvents.existsById("e-rec")).thenReturn(false);
+        when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
+        when(revenuePosting.postRevenue(any())).thenReturn(outcome);
+
+        listener.onInvoiceEvent(eventWithStatus("e-rec", 5, "FINALIZED"));
+
+        verify(ingestionRecorder)
+                .record(
+                        org.mockito.ArgumentMatchers.eq("pos-invoice"),
+                        org.mockito.ArgumentMatchers.eq("invoice.invoice.updated"),
+                        org.mockito.ArgumentMatchers.eq("e-rec"),
+                        org.mockito.ArgumentMatchers.eq(INVOICE_ID),
+                        org.mockito.ArgumentMatchers.eq(java.time.LocalDateTime.of(2026, 7, 8, 10, 0)),
+                        any(InvoiceUpdatedV1.class),
+                        org.mockito.ArgumentMatchers.same(outcome));
+        verify(processedEvents).save(any());
+        assertThat(InvoiceEventsListener.RECORDED_EVENT_TYPES).containsExactly("invoice.invoice.updated");
+    }
+
+    @Test
+    @DisplayName("#2433: a reversal is recorded dated at the fact's occurrence")
+    void reversalIsRecordedAtOccurrence() {
+        FactPostingOutcome outcome = FactPostingOutcome.posted(UUID.randomUUID());
+        when(processedEvents.existsById("e-rev")).thenReturn(false);
+        when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
+        when(revenuePosting.reverseRevenue(any(), any())).thenReturn(outcome);
+
+        listener.onInvoiceEvent(eventWithStatus("e-rev", 6, "CANCELLED"));
+
+        verify(ingestionRecorder)
+                .record(
+                        any(),
+                        any(),
+                        org.mockito.ArgumentMatchers.eq("e-rev"),
+                        org.mockito.ArgumentMatchers.eq(INVOICE_ID),
+                        org.mockito.ArgumentMatchers.eq(java.time.LocalDateTime.ofInstant(OCCURRED_AT, ZoneOffset.UTC)),
+                        any(),
+                        org.mockito.ArgumentMatchers.same(outcome));
+    }
+
+    @Test
+    @DisplayName("#2433: an ERROR fact is recorded SKIPPED / NOT_POSTABLE without reaching posting")
+    void errorStatusIsRecordedSkipped() {
+        when(processedEvents.existsById("e-err-rec")).thenReturn(false);
+        when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
+
+        listener.onInvoiceEvent(eventWithStatus("e-err-rec", 9, "ERROR"));
+
+        assertRecordedNotPostable("e-err-rec");
+    }
+
+    @Test
+    @DisplayName("#2433: a stale fact is recorded SKIPPED / NOT_POSTABLE")
+    void staleFactIsRecordedSkipped() {
+        when(processedEvents.existsById("e-stale-rec")).thenReturn(false);
+        when(replica.findById(INVOICE_ID))
+                .thenReturn(Optional.of(ExtInvoice.builder()
+                        .invoiceId(INVOICE_ID)
+                        .workorderId(WORKORDER_ID)
+                        .status("POSTED")
+                        .aggregateVersion(9L)
+                        .updatedAt(Instant.now(TEST_CLOCK))
+                        .build()));
+
+        listener.onInvoiceEvent(event("e-stale-rec", 5));
+
+        assertRecordedNotPostable("e-stale-rec");
+        verify(revenuePosting, never()).postRevenue(any());
+    }
+
+    @Test
+    @DisplayName("#2433: a duplicate eventId writes no second record")
+    void duplicateEventIdRecordsNothing() {
+        when(processedEvents.existsById("e-dup-rec")).thenReturn(true);
+
+        listener.onInvoiceEvent(event("e-dup-rec", 1));
+
+        org.mockito.Mockito.verifyNoInteractions(ingestionRecorder);
+    }
+
+    @Test
+    @DisplayName("#2433: other event types on the topic write no record")
+    void otherEventTypesRecordNothing() {
+        when(processedEvents.existsById("e-rules")).thenReturn(false);
+
+        listener.onInvoiceEvent("""
+                {"eventId":"e-rules","eventType":"invoice.billing-rules.updated","payload":{}}
+                """);
+
+        org.mockito.Mockito.verifyNoInteractions(ingestionRecorder);
+        verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName("#2433: a recording failure propagates like a posting failure and is NOT marked processed")
+    void recordingFailurePropagatesUnmarked() {
+        when(processedEvents.existsById("e-rec-fail")).thenReturn(false);
+        when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
+        org.mockito.Mockito.doThrow(new QueryTimeoutException("sequence lock timeout"))
+                .when(ingestionRecorder)
+                .record(any(), any(), any(), any(), any(), any(), any());
+
+        assertThatExceptionOfType(QueryTimeoutException.class)
+                .isThrownBy(() -> listener.onInvoiceEvent(event("e-rec-fail", 1)));
+
+        verify(processedEvents, never()).save(any());
+    }
+
+    private void assertRecordedNotPostable(String eventId) {
+        ArgumentCaptor<FactPostingOutcome> outcome = ArgumentCaptor.forClass(FactPostingOutcome.class);
+        verify(ingestionRecorder)
+                .record(
+                        org.mockito.ArgumentMatchers.eq("pos-invoice"),
+                        org.mockito.ArgumentMatchers.eq("invoice.invoice.updated"),
+                        org.mockito.ArgumentMatchers.eq(eventId),
+                        org.mockito.ArgumentMatchers.eq(INVOICE_ID),
+                        any(),
+                        any(),
+                        outcome.capture());
+        assertThat(outcome.getValue())
+                .isInstanceOfSatisfying(
+                        FactPostingOutcome.Skipped.class,
+                        skipped -> assertThat(skipped.reason())
+                                .isEqualTo(com.positivity.accounting.internal.enums.PostingFailureReason.NOT_POSTABLE));
         verify(processedEvents).save(any());
     }
 }

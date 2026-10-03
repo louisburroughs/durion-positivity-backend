@@ -99,7 +99,7 @@ class InventoryRevaluationGLPostingIT {
     private InventoryRevaluationPostingService revaluationPostingService;
 
     @Autowired
-    private InventoryFactIngestionRecorder ingestionRecorder;
+    private KafkaFactIngestionRecorder ingestionRecorder;
 
     @Autowired
     private GLMappingResolver glMappingResolver;
