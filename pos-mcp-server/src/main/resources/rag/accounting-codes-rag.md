@@ -10,7 +10,7 @@ required_permissions:
 
 RAG id: accounting.codes
 RAG scope: accounting
-Required permissions: accounting:je:view
+Required permissions: accounting:je:view, reporting:view:financial-statements
 Audience: internal staff.
 
 Token catalog for accounting-domain lexical retrieval.
