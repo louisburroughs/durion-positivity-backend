@@ -6,9 +6,14 @@ import com.positivity.catalog.internal.dto.CatalogItemResponseDto;
 import com.positivity.catalog.internal.dto.NonInventoryProductDto;
 import com.positivity.catalog.internal.dto.ProductDto;
 import com.positivity.catalog.internal.dto.ServiceDto;
+import com.positivity.catalog.internal.enums.OperationCategory;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 public interface CatalogService {
 
@@ -21,6 +26,19 @@ public interface CatalogService {
     List<ServiceDto> getServicesByName(String name);
 
     List<ServiceDto> searchServices(String q, int limit);
+
+    /**
+     * Lists the services a bay or mobile unit can claim as a capability (#2246): every service with
+     * an operation code, by name then id. Services without a code are omitted.
+     *
+     * @param category only this operation category, or null for every category
+     * @param q case-insensitive substring of the name or operation code, or null/blank for none
+     * @param pageable page number and size; any sort it carries is ignored
+     * @return one page of services
+     */
+    @NonNull
+    Page<ServiceDto> listClaimableServices(
+            @Nullable OperationCategory category, @Nullable String q, @NonNull Pageable pageable);
 
     Optional<NonInventoryProductDto> getNonInventoryProductById(UUID productId);
 

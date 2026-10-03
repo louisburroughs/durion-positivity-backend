@@ -30,6 +30,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -101,6 +105,17 @@ public class CatalogServiceImpl implements CatalogService {
                 .map(this::toServiceDto)
                 .limit(capped)
                 .toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @NonNull
+    public Page<ServiceDto> listClaimableServices(
+            @Nullable OperationCategory category, @Nullable String q, @NonNull Pageable pageable) {
+        Page<ServiceDto> page =
+                serviceRepository.findClaimable(category, q, pageable).map(this::toServiceDto);
+        withRequirements(page.getContent());
+        return page;
     }
 
     @Override
