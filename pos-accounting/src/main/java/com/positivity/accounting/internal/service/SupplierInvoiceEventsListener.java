@@ -10,9 +10,11 @@ import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.accounting.internal.repository.VendorRepository;
 import com.positivity.domainevents.supplier.SupplierInvoiceReceivedV1;
 import com.positivity.tenancy.kafka.RetryableConsumerFailures;
+import java.io.Serial;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -72,7 +74,9 @@ import tools.jackson.databind.ObjectMapper;
  * The bill and its processed mark commit together in a {@code REQUIRES_NEW} transaction of their
  * own, so an unreadable invoice that fails inside a repository call rolls back only that work and
  * is recorded in a separate transaction; every database failure still propagates for retry,
- * unrecorded, as above.
+ * unrecorded, as above. So does any failure writing the fact's {@code accounting_event} row (#2433),
+ * database or not ({@link IngestionRecordFailure}): marking it processed would lose the bill along
+ * with the record, since both roll back together.
  *
  * <h2>Ingestion record (#2433)</h2>
  *
@@ -162,6 +166,8 @@ public class SupplierInvoiceEventsListener {
                 }
                 markProcessed(eventId);
             });
+        } catch (IngestionRecordFailure e) {
+            throw e.getCause();
         } catch (DataAccessException e) {
             // Every database failure is rethrown, not only the transient ones. A column-length
             // violation or a concurrent vendor insert is not a malformed message, and marking it
@@ -255,14 +261,40 @@ public class SupplierInvoiceEventsListener {
     }
 
     private void record(String eventId, VendorBill bill, SupplierInvoiceReceivedV1 fact, FactPostingOutcome outcome) {
-        ingestionRecorder.record(
-                SOURCE_SYSTEM,
-                SupplierInvoiceReceivedV1.EVENT_TYPE,
-                eventId,
-                bill.getVendorBillId(),
-                fact.invoiceDate().atStartOfDay(),
-                fact,
-                outcome);
+        // Argument evaluation stays outside the wrap: a payload fault there is malformed, not a
+        // recorder failure.
+        LocalDateTime businessTime = fact.invoiceDate().atStartOfDay();
+        try {
+            ingestionRecorder.record(
+                    SOURCE_SYSTEM,
+                    SupplierInvoiceReceivedV1.EVENT_TYPE,
+                    eventId,
+                    bill.getVendorBillId(),
+                    businessTime,
+                    fact,
+                    outcome);
+        } catch (RuntimeException e) {
+            throw new IngestionRecordFailure(e);
+        }
+    }
+
+    /**
+     * Carries an ingestion-record failure out of the handler transaction past the malformed-payload
+     * catch, so {@link #onSupplierEvent} rethrows the original exception unmarked.
+     */
+    private static final class IngestionRecordFailure extends RuntimeException {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        IngestionRecordFailure(@NonNull RuntimeException cause) {
+            super(cause);
+        }
+
+        @Override
+        public synchronized @NonNull RuntimeException getCause() {
+            return (RuntimeException) super.getCause();
+        }
     }
 
     /**

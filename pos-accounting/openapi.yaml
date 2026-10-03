@@ -15401,10 +15401,14 @@ components:
       - status
       type: object
     FactConsumptionIdempotency:
-      description: Idempotency mechanism for Kafka-consumed posting facts
+      description: 'Idempotency for Kafka-consumed posting facts: envelope deduplication by eventId, then per-listener posting deduplication by business key'
       properties:
+        envelopeDeduplication:
+          description: 'Envelope deduplication: a redelivered envelope (same eventId) is short-circuited by processed_events before any work, and writes NO accounting_event row and no outcome'
+          example: PROCESSED_EVENTS_BY_EVENT_ID
+          type: string
         mechanism:
-          description: 'Dedup mechanism: a re-delivery is matched by its deterministic sourceEventId'
+          description: 'Posting-deduplication mechanism of the journal-entry-posting facts (pos-inventory, pos-invoice, pos-order): a re-emitted fact is matched by its deterministic sourceEventId. Sources that post no journal entry key differently; postingDeduplication lists every key'
           example: DETERMINISTIC_SOURCE_EVENT_ID
           type: string
         outcomes:
@@ -15412,9 +15416,52 @@ components:
           items:
             $ref: '#/components/schemas/IdempotencyOutcomeDescriptor'
           type: array
+        postingDeduplication:
+          description: 'Posting deduplication, per listener: the business key a re-emitted fact (new envelope eventId, same business fact) is matched on, and what its row then records'
+          items:
+            $ref: '#/components/schemas/FactPostingKeyDescriptor'
+          type: array
       required:
+      - envelopeDeduplication
       - mechanism
       - outcomes
+      - postingDeduplication
+      type: object
+    FactPostingKeyDescriptor:
+      description: How one consuming listener recognizes a re-emitted fact (new envelope eventId, same business fact)
+      properties:
+        duplicateOutcome:
+          description: Outcome recorded for a re-emitted fact matched on the key; absent when this source never records DUPLICATE_IGNORED
+          enum:
+          - NEW
+          - DUPLICATE_IGNORED
+          example: DUPLICATE_IGNORED
+          type: string
+        eventTypes:
+          description: Fact event types this key covers
+          items:
+            type: string
+          type: array
+        onDuplicate:
+          description: What a re-emitted fact matched on the key does
+          type: string
+        postingKey:
+          description: The business key a re-emitted fact is matched on
+          example: Deterministic sourceEventId derived from the scrapId / adjustmentKind + adjustmentId / revaluationId
+          type: string
+        postsJournalEntry:
+          description: Whether a fact under this key posts a journal entry
+          type: boolean
+        sourceSystem:
+          description: Producing module stamped as the rows' sourceSystem
+          example: pos-inventory
+          type: string
+      required:
+      - eventTypes
+      - onDuplicate
+      - postingKey
+      - postsJournalEntry
+      - sourceSystem
       type: object
     FieldError:
       description: Validation error for a specific request field
@@ -16142,7 +16189,7 @@ components:
       properties:
         description:
           description: Human-readable meaning of the outcome
-          example: First delivery of this fact; a new AccountingEvent row was written.
+          example: Not matched to an earlier fact on its posting key; a new AccountingEvent row was written.
           type: string
         outcome:
           description: The outcome constant

@@ -11,6 +11,8 @@ import com.positivity.accounting.internal.audit.repository.AuditTrailEntryReposi
 import com.positivity.accounting.internal.dto.AccountingEventFilter;
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
 import com.positivity.accounting.internal.dto.EventEnvelopeContract;
+import com.positivity.accounting.internal.dto.FactConsumptionIdempotency;
+import com.positivity.accounting.internal.dto.FactPostingKeyDescriptor;
 import com.positivity.accounting.internal.dto.IdempotencyOutcomeDescriptor;
 import com.positivity.accounting.internal.dto.ProcessingStatusDescriptor;
 import com.positivity.accounting.internal.dto.TraceabilityIdDescriptor;
@@ -344,6 +346,37 @@ class EventIngestionServiceTest {
         assertThat(contract.getIdempotencyOutcomes().getFactConsumption().getOutcomes())
                 .allSatisfy(
                         descriptor -> assertThat(descriptor.getDescription()).isNotBlank());
+
+        // #2439: the two fact-consumption dedup layers are published separately.
+        FactConsumptionIdempotency factConsumption =
+                contract.getIdempotencyOutcomes().getFactConsumption();
+        assertThat(factConsumption.getEnvelopeDeduplication()).isEqualTo("PROCESSED_EVENTS_BY_EVENT_ID");
+        assertThat(factConsumption.getPostingDeduplication())
+                .extracting(FactPostingKeyDescriptor::getSourceSystem)
+                .contains("pos-inventory", "pos-invoice", "pos-order", "pos-supplier", "pos-warranty");
+        assertThat(factConsumption.getPostingDeduplication()).allSatisfy(key -> {
+            assertThat(key.getEventTypes()).isNotEmpty();
+            assertThat(key.getPostingKey()).isNotBlank();
+            assertThat(key.getOnDuplicate()).isNotBlank();
+        });
+        assertThat(factConsumption.getPostingDeduplication())
+                .filteredOn(key -> key.getSourceSystem().equals("pos-supplier"))
+                .singleElement()
+                .satisfies(key -> {
+                    assertThat(key.isPostsJournalEntry()).isFalse();
+                    assertThat(key.getDuplicateOutcome()).isEqualTo(IdempotencyOutcome.DUPLICATE_IGNORED);
+                });
+        assertThat(factConsumption.getPostingDeduplication())
+                .filteredOn(key -> key.getSourceSystem().equals("pos-warranty"))
+                .singleElement()
+                .satisfies(key -> {
+                    assertThat(key.isPostsJournalEntry()).isFalse();
+                    assertThat(key.getDuplicateOutcome()).isNull();
+                });
+        assertThat(factConsumption.getPostingDeduplication())
+                .filteredOn(key -> key.getSourceSystem().equals("pos-inventory"))
+                .singleElement()
+                .satisfies(key -> assertThat(key.isPostsJournalEntry()).isTrue());
 
         assertThat(contract.getIdempotencyOutcomes().getRestSubmission().getOnDuplicateHttpStatus())
                 .isEqualTo(409);

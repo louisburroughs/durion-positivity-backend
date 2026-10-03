@@ -316,6 +316,35 @@ class SupplierInvoiceEventsListenerTest {
         verify(processedEventRepository, never()).save(any());
     }
 
+    @Test
+    @DisplayName("#2439: a recorder failure is retried, not marked processed over the rolled-back bill")
+    void recorderFailureIsRethrownUnmarked() {
+        // Neither a DataAccessException nor retryable: before #2439 the generic catch filed it as a
+        // malformed message and marked the event processed, losing the bill and its record.
+        org.mockito.Mockito.doThrow(new IllegalStateException("recorder broke"))
+                .when(ingestionRecorder)
+                .record(any(), any(), any(), any(), any(), any(), any());
+
+        assertThatThrownBy(() -> listener.onSupplierEvent(event(EVENT_9, "INV-9", "INVOICE", "288.00")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("recorder broke");
+
+        verify(processedEventRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("#2439: a recorder integrity violation is retried, not marked processed")
+    void recorderIntegrityViolationIsRethrownUnmarked() {
+        org.mockito.Mockito.doThrow(new org.springframework.dao.DataIntegrityViolationException("duplicate key"))
+                .when(ingestionRecorder)
+                .record(any(), any(), any(), any(), any(), any(), any());
+
+        assertThatThrownBy(() -> listener.onSupplierEvent(event(EVENT_9, "INV-9", "INVOICE", "288.00")))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+
+        verify(processedEventRepository, never()).save(any());
+    }
+
     @Nested
     @DisplayName("the invoice's currency (ADR-0067 DF-1, #2309)")
     class Currency {

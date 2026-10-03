@@ -542,7 +542,12 @@ ignored without recording its eventId.
   `processingStatuses` (every `AccountingEventStatus` constant with its meaning, derived from the enum, plus
   the two lifecycles above), and `idempotencyOutcomes` (`restSubmission` — content-hash dedup, 24h window,
   409 `DUPLICATE_EVENT` on a replay — and `factConsumption` — every `IdempotencyOutcome` constant,
-  `NEW`/`DUPLICATE_IGNORED`, derived from that enum).
+  `NEW`/`DUPLICATE_IGNORED`, derived from that enum, plus its two dedup layers: `envelopeDeduplication`
+  (a redelivered envelope, same `eventId`, is short-circuited by `processed_events` and writes no row) and
+  `postingDeduplication` (per listener, the business key a re-emitted fact is matched on: the deterministic
+  `sourceEventId` for inventory / invoice / order journal entries, vendor + bill number for supplier
+  invoices, the reimbursement id for warranty — which never records `DUPLICATE_IGNORED` — and the currency
+  hold for `payment.payment.settled`).
 
 ## Kafka Fact Ingestion Records — the event list (issue #2433)
 

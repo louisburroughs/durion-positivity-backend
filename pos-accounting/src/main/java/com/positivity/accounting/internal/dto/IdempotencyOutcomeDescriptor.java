@@ -27,7 +27,7 @@ public class IdempotencyOutcomeDescriptor {
 
     @Schema(
             description = "Human-readable meaning of the outcome",
-            example = "First delivery of this fact; a new AccountingEvent row was written.",
+            example = "Not matched to an earlier fact on its posting key; a new AccountingEvent row was written.",
             requiredMode = REQUIRED)
     private String description;
 }
