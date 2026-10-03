@@ -156,19 +156,22 @@ public class LocationManifestListener {
                 .increment();
     }
 
+    /**
+     * Sends the replay command and waits for the broker to take it. A failure propagates for
+     * container redelivery (#2419): the owner publishes each window's manifest once, so no later
+     * manifest would re-detect this window's drift.
+     */
     private void requestReplay(@NonNull ReconciliationManifestV1 manifest, @NonNull UUID tenantId) {
-        try {
-            String command = objectMapper.writeValueAsString(new ReplayCommand(
-                    REPLAY_COMMAND_TYPE,
-                    new ReplayCommand.Payload(
-                            manifest.windowStartUtc().toString(),
-                            manifest.windowEndUtc().toString())));
-            kafkaTemplate.send(TenantKafkaHeaders.record(
-                    locationCommandsTopic, manifest.windowStartUtc().toString(), command, tenantId));
-        } catch (Exception e) {
-            // Best effort: the drift metric already fired, and the next manifest re-detects.
-            log.warn("Failed to publish outbox replay request for window starting {}", manifest.windowStartUtc(), e);
-        }
+        String command = objectMapper.writeValueAsString(new ReplayCommand(
+                REPLAY_COMMAND_TYPE,
+                new ReplayCommand.Payload(
+                        manifest.windowStartUtc().toString(),
+                        manifest.windowEndUtc().toString())));
+        OutboxReplayRequests.send(
+                kafkaTemplate,
+                TenantKafkaHeaders.record(
+                        locationCommandsTopic, manifest.windowStartUtc().toString(), command, tenantId),
+                manifest.windowStartUtc());
     }
 
     /** Command envelope for the owner's {@code location.commands.v1} listener. */

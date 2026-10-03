@@ -17,6 +17,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -53,6 +54,7 @@ class InventoryManifestListenerTest {
         when(meterRegistryProvider.getIfAvailable()).thenReturn(meterRegistry);
         listener = new InventoryManifestListener(repository, kafkaTemplate, objectMapper, meterRegistryProvider);
         ReflectionTestUtils.setField(listener, "inventoryCommandsTopic", "inventory.commands.v1");
+        when(kafkaTemplate.send(any(ProducerRecord.class))).thenReturn(CompletableFuture.completedFuture(null));
     }
 
     /** UUIDv7-shaped id whose embedded timestamp is {@code at}. */
