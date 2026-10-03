@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.dto.AccountingEventFilter;
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
+import com.positivity.accounting.internal.dto.AccountingEventTypeResponse;
 import com.positivity.accounting.internal.dto.EventEnvelopeContract;
 import com.positivity.accounting.internal.dto.EventProcessingLogEntry;
 import com.positivity.accounting.internal.dto.ReprocessEventRequest;
@@ -121,6 +122,15 @@ public interface EventIngestionService {
      */
     @NonNull
     EventEnvelopeContract getEventContract();
+
+    /**
+     * Lists the accounting event types the deployed code records (#2436): every Kafka-ingested type
+     * and every type the module's own code submits through the API path, from {@link
+     * com.positivity.accounting.internal.config.AccountingEventTypeRegistry}. The submit path
+     * accepts any {@code eventType} string, so an external caller can record a type not listed here.
+     */
+    @NonNull
+    List<AccountingEventTypeResponse> listEventTypes();
 
     /**
      * Find all events from a specific source system.

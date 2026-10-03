@@ -1,8 +1,10 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.config.AccountingEventTypeRegistry;
 import com.positivity.accounting.internal.dto.AccountingEventFilter;
 import com.positivity.accounting.internal.dto.AccountingEventMapper;
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
+import com.positivity.accounting.internal.dto.AccountingEventTypeResponse;
 import com.positivity.accounting.internal.dto.ContractField;
 import com.positivity.accounting.internal.dto.DuplicateEventException;
 import com.positivity.accounting.internal.dto.EventEnvelopeContract;
@@ -498,6 +500,13 @@ public class EventIngestionServiceImpl implements EventIngestionService {
         }
 
         return accountingEventRepository.findAll(specs, pageable).map(AccountingEventMapper::toEventResponse);
+    }
+
+    @Override
+    public @NonNull List<AccountingEventTypeResponse> listEventTypes() {
+        return AccountingEventTypeRegistry.entries().stream()
+                .map(AccountingEventTypeResponse::from)
+                .toList();
     }
 
     @Override

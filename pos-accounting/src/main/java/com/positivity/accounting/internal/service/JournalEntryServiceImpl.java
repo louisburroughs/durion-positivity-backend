@@ -101,7 +101,7 @@ public class JournalEntryServiceImpl implements JournalEntryService {
      * supplies is kept.
      */
     @Override
-    public JournalEntryResponse createManualJournalEntry(JournalEntryCreateRequest request) {
+    public @NonNull JournalEntryResponse createManualJournalEntry(@NonNull JournalEntryCreateRequest request) {
         JournalEntry entry = JournalEntryMapper.toEntity(request);
         entry.setJournalEntryId(UUIDv7Generator.generate());
         if (entry.getSourceEventType() == null || entry.getSourceEventType().isBlank()) {
@@ -442,9 +442,16 @@ public class JournalEntryServiceImpl implements JournalEntryService {
         reversal.setJournalEntryId(UUIDv7Generator.generate());
         reversal.setTransactionDate(reversalTransactionDate);
         reversal.setDescription("REVERSAL of " + original.getJournalEntryId() + " - Reason: " + reversalReason);
-        reversal.setSourceEventId(original.getSourceEventId());
         // Same source as the entry it reverses, so the pair is traceable and filterable together (#2434).
-        reversal.setSourceEventType(original.getSourceEventType());
+        // A legacy original the V3 backfill left without a type or id still yields a complete source.
+        reversal.setSourceEventId(
+                original.getSourceEventId() != null ? original.getSourceEventId() : original.getJournalEntryId());
+        reversal.setSourceEventType(
+                original.getSourceEventType() == null
+                                || original.getSourceEventType().isBlank()
+                        ? JournalEntrySourceTypes.LEGACY_REVERSAL
+                        : original.getSourceEventType());
+        requireSource(reversal);
         reversal.setStatus(JournalEntryStatus.POSTED); // Reversals post immediately
         reversal.setPostedAt(now);
         reversal.setCreatedAt(now);

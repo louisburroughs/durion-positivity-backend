@@ -15,18 +15,37 @@ import org.jspecify.annotations.NonNull;
 
 /**
  * Code-first registry of the accounting event types this module records (#2436). The Kafka
- * listeners derive their {@code RECORDED_EVENT_TYPES} from it and the submit path references
- * {@link #INVOICE_PAYMENT}, so {@code GET /v1/accounting/events/types} lists types with no traffic
- * yet and cannot drift from what is actually recorded.
+ * listeners derive their {@code RECORDED_EVENT_TYPES} from it, and every type the module's own code
+ * submits through the API path ({@link #INVOICE_PAYMENT}, {@link #VENDOR_BILL_GL_POSTING}, {@link
+ * #AP_PAYMENT_GL_POSTING}) is declared here and referenced by its submitter, so {@code GET
+ * /v1/accounting/events/types} lists types with no traffic yet and cannot drift from what the code
+ * records.
  *
- * <p>The API submit path ({@code POST /v1/accounting/events}) accepts any event type a published
- * posting rule or default GL mapping resolves; only {@link #INVOICE_PAYMENT} has a dedicated
- * processor and is listed as an {@link Ingestion#API} type.
+ * <p>The API submit path ({@code POST /v1/accounting/events}) validates only that {@code eventType}
+ * is present: it persists any string as a {@code RECEIVED} event without checking it against this
+ * registry, a posting rule set or a default GL mapping. Resolution happens afterwards, when the
+ * received-event drainer processes the event: {@link #INVOICE_PAYMENT} goes to its AR subledger
+ * processor, and every other type goes through the posting engine, which posts it when an active
+ * posting rule set or default GL mapping resolves it and otherwise suspends it with a reason. An
+ * external client can therefore record a type this registry does not list; the registry lists the
+ * types the deployed code itself records, not every string a caller may submit.
  */
 public final class AccountingEventTypeRegistry {
 
     /** Event type of a payment applied to an invoice, submitted through the REST API. */
     public static final String INVOICE_PAYMENT = "INVOICE_PAYMENT";
+
+    /**
+     * Event type of an approved vendor bill, submitted in-process by {@code
+     * VendorBillGLPostingEventHandler} and posted by the posting engine (Dr Inventory/Expense, Cr AP).
+     */
+    public static final String VENDOR_BILL_GL_POSTING = "VENDOR_BILL_GL_POSTING";
+
+    /**
+     * Event type of an AP payment, submitted in-process by {@code APPaymentGLPostingEventHandler} and
+     * posted by the posting engine (Dr AP, Cr Cash/Bank).
+     */
+    public static final String AP_PAYMENT_GL_POSTING = "AP_PAYMENT_GL_POSTING";
 
     /** Source domains. */
     public static final String DOMAIN_INVOICE = "invoice";
@@ -36,6 +55,7 @@ public final class AccountingEventTypeRegistry {
     public static final String DOMAIN_SUPPLIER = "supplier";
     public static final String DOMAIN_WARRANTY = "warranty";
     public static final String DOMAIN_PAYMENT = "payment";
+    public static final String DOMAIN_ACCOUNTING = "accounting";
 
     /** How an event type reaches accounting. */
     public enum Ingestion {
@@ -101,7 +121,19 @@ public final class AccountingEventTypeRegistry {
                     DOMAIN_PAYMENT,
                     Ingestion.KAFKA,
                     false),
-            new Entry(INVOICE_PAYMENT, "Invoice payment (AR subledger)", DOMAIN_PAYMENT, Ingestion.API, false));
+            new Entry(INVOICE_PAYMENT, "Invoice payment (AR subledger)", DOMAIN_PAYMENT, Ingestion.API, false),
+            new Entry(
+                    VENDOR_BILL_GL_POSTING,
+                    "Vendor bill GL posting (accounts payable)",
+                    DOMAIN_ACCOUNTING,
+                    Ingestion.API,
+                    true),
+            new Entry(
+                    AP_PAYMENT_GL_POSTING,
+                    "AP payment GL posting (accounts payable)",
+                    DOMAIN_ACCOUNTING,
+                    Ingestion.API,
+                    true));
 
     private AccountingEventTypeRegistry() {}
 
