@@ -17,12 +17,12 @@
     <packaging>jar</packaging>
 
     <properties>
-        <!-- Coverage ratchet: measured 85.2% line / 74.5% branch by the gate's own
+        <!-- Coverage ratchet: measured 88.5% line / 79.3% branch by the gate's own
              command, `verify -DskipITs` (../durion/docs/architecture/TEST_COVERAGE_POLICY.md §6.1).
              Floors sit 3 points under. Re-derive them ONLY from a -DskipITs run — an
              IT-inclusive measurement describes coverage the gate cannot see. -->
-        <jacoco.line.min>0.82</jacoco.line.min>
-        <jacoco.branch.min>0.71</jacoco.branch.min>
+        <jacoco.line.min>0.85</jacoco.line.min>
+        <jacoco.branch.min>0.76</jacoco.branch.min>
 
         <java.version>25</java.version>
         <maven.compiler.source>25</maven.compiler.source>
