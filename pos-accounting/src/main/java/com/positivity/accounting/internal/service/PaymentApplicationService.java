@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 public interface PaymentApplicationService {
 
@@ -36,6 +37,20 @@ public interface PaymentApplicationService {
     @NonNull
     PaymentApplicationResponse applyPaymentToInvoices(
             @NonNull UUID paymentId, @NonNull PaymentApplicationRequest request);
+
+    /**
+     * Convert a payment's whole unapplied balance into a {@code CustomerCredit} (AD-003) when no
+     * invoice can take it, e.g. the invoice it was meant for is already paid in full (#2435). The
+     * credit-issuance GL posting (Dr Undeposited Funds / Cr Customer Credit Liability) is enqueued in
+     * the same transaction, keyed on {@code creditRequestId}; a replay with the same key changes
+     * nothing.
+     *
+     * @param paymentId an {@code AVAILABLE} receivable payment
+     * @param creditRequestId idempotency key for the credit leg
+     * @return the credit issued, or {@code null} when the payment had nothing left to credit
+     */
+    PaymentApplicationResponse.@Nullable CustomerCreditInfo creditUnappliedPayment(
+            @NonNull UUID paymentId, @NonNull String creditRequestId);
 
     void voidPayment(@NonNull UUID paymentId);
 

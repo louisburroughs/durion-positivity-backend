@@ -194,6 +194,23 @@ class EventIngestionServiceAdditionalTest {
     }
 
     @Test
+    @DisplayName(
+            "reprocessEvent returns an INVOICE_PAYMENT event to RECEIVED for the drainer, never the posting engine")
+    void reprocessEvent_invoicePayment_returnedToDrainer() {
+        AccountingEvent event = buildEvent(testEventId, AccountingEventStatus.SUSPENDED);
+        event.setEventType(InvoicePaymentEventProcessor.EVENT_TYPE);
+        event.setFailureReasonCode("INVOICE_NOT_FOUND");
+        when(accountingEventRepository.findById(testEventId)).thenReturn(Optional.of(event));
+        when(accountingEventRepository.save(any(AccountingEvent.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        AccountingEventResponse result = service.reprocessEvent(testEventId, buildReprocessRequest("ops-user", null));
+
+        assertThat(result.getStatus()).isEqualTo(AccountingEventStatus.RECEIVED);
+        assertThat(event.getResolvedByUserId()).isEqualTo("ops-user");
+        verify(postingEngineOrchestrator, never()).processEvent(any(), any(), any(), anyBoolean());
+    }
+
+    @Test
     @DisplayName("reprocessEvent should throw IllegalStateException when mappingVersionToUse is invalid UUID")
     void reprocessEvent_InvalidMappingVersionUUID() {
         AccountingEvent suspendedEvent = buildEvent(testEventId, AccountingEventStatus.SUSPENDED);

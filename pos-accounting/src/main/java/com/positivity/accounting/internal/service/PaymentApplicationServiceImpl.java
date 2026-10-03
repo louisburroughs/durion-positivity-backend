@@ -286,6 +286,39 @@ public class PaymentApplicationServiceImpl
                 .build();
     }
 
+    @Override
+    public PaymentApplicationResponse.@Nullable CustomerCreditInfo creditUnappliedPayment(
+            @NonNull UUID paymentId, @NonNull String creditRequestId) {
+        ReceivablePayment payment = receivablePaymentRepository
+                .findById(paymentId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, PAYMENT_NOT_FOUND + paymentId));
+        BigDecimal unapplied = payment.getUnappliedAmount();
+        if (unapplied == null || unapplied.compareTo(BigDecimal.ZERO) <= 0) {
+            // Already applied or credited in full: a replay changes nothing.
+            log.info("Payment {} has no unapplied balance to credit (request {})", paymentId, creditRequestId);
+            return null;
+        }
+        if (payment.getStatus() != ReceivablePaymentStatus.AVAILABLE) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Payment " + paymentId + " is not available (status: " + payment.getStatus() + ")");
+        }
+        validateSameCurrency(payment);
+
+        Instant timestamp = Instant.now(clock);
+        PaymentApplicationResponse.CustomerCreditInfo creditInfo = createCustomerCredit(payment, unapplied, timestamp);
+        // Same transaction as the CustomerCredit insert (transactional outbox, #975): the issuance
+        // leg posts Dr Undeposited Funds / Cr Customer Credit Liability for the whole amount.
+        enqueueCustomerCreditIssuanceGLPostingWorkItem(
+                paymentId, creditRequestId, payment, creditInfo.getCreditId(), unapplied, timestamp);
+
+        payment.applyAmount(unapplied);
+        payment.setUpdatedAt(timestamp);
+        payment.setModifiedBy(getCurrentUser());
+        receivablePaymentRepository.save(payment);
+        return creditInfo;
+    }
+
     /**
      * Void a receivable payment so it can no longer be applied.
      *
@@ -299,6 +332,7 @@ public class PaymentApplicationServiceImpl
      *
      * @param paymentId receivable payment ID
      */
+    @Override
     public void voidPayment(@NonNull UUID paymentId) {
         ReceivablePayment payment = receivablePaymentRepository
                 .findById(paymentId)

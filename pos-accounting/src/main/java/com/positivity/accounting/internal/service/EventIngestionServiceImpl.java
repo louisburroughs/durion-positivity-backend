@@ -315,6 +315,16 @@ public class EventIngestionServiceImpl implements EventIngestionService {
             throw new IllegalStateException(msg);
         }
 
+        // INVOICE_PAYMENT is recorded in the AR subledger, never posted by the engine (#2435): hand
+        // it back to the received-event drainer, which runs InvoicePaymentEventProcessor on its next
+        // poll, instead of evaluating posting rules that must not exist for it.
+        if (InvoicePaymentEventProcessor.EVENT_TYPE.equals(event.getEventType())) {
+            log.info("Event {} is {}: returned to RECEIVED for the drainer", eventId, event.getEventType());
+            event.setStatus(AccountingEventStatus.RECEIVED);
+            event.setResolvedByUserId(request.getTriggeredByUserId());
+            return AccountingEventMapper.toEventResponse(accountingEventRepository.save(event));
+        }
+
         // Increment attempt count
         Integer currentAttemptCount = event.getAttemptCount();
         int nextAttemptCount = (currentAttemptCount == null ? 0 : currentAttemptCount) + 1;

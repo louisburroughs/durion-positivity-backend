@@ -62,3 +62,5 @@ pos:
 # initializer at a loopback port that refuses instantly. Same arrangement as pos-mcp-server's test profile.
 pos.security.permission-registration.enabled: false
 pos.events.base-url: http://127.0.0.1:1
+# Tests drive accounting events explicitly; the scheduled received-event drainer (#2435) stays off.
+pos.accounting.event-drainer.enabled: false
