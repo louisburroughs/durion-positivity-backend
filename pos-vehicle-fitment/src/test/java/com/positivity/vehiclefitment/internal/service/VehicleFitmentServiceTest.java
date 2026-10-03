@@ -2,10 +2,12 @@ package com.positivity.vehiclefitment.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -38,6 +40,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -46,6 +49,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.client.RestClient;
 
 /**
@@ -98,6 +103,9 @@ class VehicleFitmentServiceTest {
     @Mock
     private VehicleVariableValueRepository vehicleVariableValueRepository;
 
+    @Mock
+    private TransactionTemplate transactionTemplate;
+
     @InjectMocks
     private VehicleFitmentServiceImpl service;
 
@@ -118,6 +126,13 @@ class VehicleFitmentServiceTest {
         lenient().when(restClient.get()).thenReturn(requestUriSpec);
         lenient().when(requestUriSpec.uri(anyString())).thenReturn(requestHeadersSpec);
         lenient().when(requestHeadersSpec.retrieve()).thenReturn(responseSpec);
+        lenient()
+                .doAnswer(invocation -> {
+                    invocation.<Consumer<TransactionStatus>>getArgument(0).accept(null);
+                    return null;
+                })
+                .when(transactionTemplate)
+                .executeWithoutResult(any());
     }
 
     // ─── getVehicleVariables ───────────────────────────────────────────────────
@@ -663,6 +678,309 @@ class VehicleFitmentServiceTest {
 
         verify(restClient, never()).get();
         verify(vehicleTypeRepository, never()).deleteAll(any());
+    }
+
+    // ─── in-place refresh (#2416) ──────────────────────────────────────────────
+    //
+    // Refreshes update the row keyed by vPIC's id or insert a new one; nothing is deleted, a
+    // name held by another row is skipped, and blank names never reach the unique index as "".
+    // VpicReferenceRefreshIT shows the same on Postgres; these pin each branch without Docker.
+
+    @Test
+    void getManufacturers_existingRow_isUpdatedInPlace() {
+        UUID id = derived("manufacturer-955");
+        Manufacturer existing = new Manufacturer();
+        existing.setId(id);
+        existing.setNhtsaId(955L);
+        existing.setName("Tesla");
+        existing.setCacheTimestamp(dayOld());
+        when(manufacturerRepository.findAll()).thenReturn(List.of(existing));
+        when(manufacturerRepository.findAllByNameIgnoreCase("Tesla Motors")).thenReturn(List.of(existing));
+        when(manufacturerRepository.findById(id)).thenReturn(Optional.of(existing));
+        when(responseSpec.body(String.class))
+                .thenReturn("{\"Results\":[{\"Mfr_ID\":955,\"Mfr_CommonName\":\"Tesla Motors\"}]}");
+
+        service.getManufacturers();
+
+        verify(manufacturerRepository).save(existing);
+        verify(manufacturerRepository, never()).deleteAll();
+        verify(manufacturerRepository, never()).deleteAll(any());
+        assertThat(existing.getName()).isEqualTo("Tesla Motors");
+        assertThat(existing.getCacheTimestamp()).isEqualTo(LocalDateTime.now(TEST_CLOCK));
+    }
+
+    @Test
+    void getManufacturers_blankCommonName_fallsBackToMfrNameThenNull() {
+        when(manufacturerRepository.findAll()).thenReturn(List.of());
+        when(responseSpec.body(String.class))
+                .thenReturn("{\"Results\":["
+                        + "{\"Mfr_ID\":1,\"Mfr_CommonName\":\" Tesla \",\"Mfr_Name\":\"TESLA, INC.\"},"
+                        + "{\"Mfr_ID\":2,\"Mfr_CommonName\":\"  \",\"Mfr_Name\":\"ACME COACH\"},"
+                        + "{\"Mfr_ID\":3,\"Mfr_CommonName\":null,\"Mfr_Name\":\"BETA TRAILERS\"},"
+                        + "{\"Mfr_ID\":4,\"Mfr_CommonName\":\"\",\"Mfr_Name\":null}]}");
+
+        service.getManufacturers();
+
+        ArgumentCaptor<Manufacturer> saved = ArgumentCaptor.forClass(Manufacturer.class);
+        verify(manufacturerRepository, times(4)).save(saved.capture());
+        assertThat(saved.getAllValues())
+                .extracting(Manufacturer::getName)
+                .containsExactly("Tesla", "ACME COACH", "BETA TRAILERS", null);
+        verify(manufacturerRepository, never()).findAllByNameIgnoreCase(null);
+    }
+
+    @Test
+    void getManufacturers_nameHeldByAnotherRow_skipsThatRowAndKeepsTheRest() {
+        Manufacturer local = new Manufacturer();
+        local.setId(UUID.randomUUID());
+        local.setName("tesla");
+        when(manufacturerRepository.findAll()).thenReturn(List.of());
+        when(manufacturerRepository.findAllByNameIgnoreCase("Tesla")).thenReturn(List.of(local));
+        when(responseSpec.body(String.class))
+                .thenReturn("{\"Results\":[{\"Mfr_ID\":955,\"Mfr_CommonName\":\"Tesla\"},"
+                        + "{\"Mfr_ID\":1000,\"Mfr_CommonName\":\"Rivian\"}]}");
+
+        service.getManufacturers();
+
+        ArgumentCaptor<Manufacturer> saved = ArgumentCaptor.forClass(Manufacturer.class);
+        verify(manufacturerRepository).save(saved.capture());
+        assertThat(saved.getValue().getName()).isEqualTo("Rivian");
+        assertThat(saved.getValue().getId()).isEqualTo(derived("manufacturer-1000"));
+    }
+
+    @Test
+    void getMakesByManufacturer_updatesExisting_insertsNew_skipsCollision_keepsBlankNameNull() {
+        Make existing = make(dayOld());
+        existing.setId(derived("make-441"));
+        Make other = make(dayOld());
+        other.setId(UUID.randomUUID());
+        when(manufacturerRepository.findById(MANUFACTURER_ID)).thenReturn(Optional.of(manufacturer(hourOld())));
+        when(makeRepository.findByManufacturerId(MANUFACTURER_ID)).thenReturn(List.of(existing));
+        when(makeRepository.findById(derived("make-441"))).thenReturn(Optional.of(existing));
+        when(makeRepository.findByManufacturerIdAndNameIgnoreCase(MANUFACTURER_ID, "TESLA"))
+                .thenReturn(Optional.of(existing));
+        when(makeRepository.findByManufacturerIdAndNameIgnoreCase(MANUFACTURER_ID, "TAKEN"))
+                .thenReturn(Optional.of(other));
+        when(responseSpec.body(String.class))
+                .thenReturn("{\"Results\":[{\"Make_ID\":441,\"Make_Name\":\"TESLA\"},"
+                        + "{\"Make_ID\":442,\"Make_Name\":\"TAKEN\"},"
+                        + "{\"Make_ID\":443,\"Make_Name\":\"NEW\"},"
+                        + "{\"Make_ID\":444,\"Make_Name\":\"\"}]}");
+
+        service.getMakesByManufacturer(MANUFACTURER_ID);
+
+        ArgumentCaptor<Make> saved = ArgumentCaptor.forClass(Make.class);
+        verify(makeRepository, times(3)).save(saved.capture());
+        assertThat(saved.getAllValues())
+                .extracting(Make::getId, Make::getName, Make::getNhtsaId)
+                .containsExactly(
+                        tuple(derived("make-441"), "TESLA", 441L),
+                        tuple(derived("make-443"), "NEW", 443L),
+                        tuple(derived("make-444"), null, 444L));
+        assertThat(saved.getAllValues().getFirst()).isSameAs(existing);
+        verify(makeRepository, never()).deleteAll(any());
+    }
+
+    @Test
+    void getModelsByMake_updatesExisting_insertsNew_skipsCollision_keepsBlankNameNull() {
+        Model existing = model(dayOld());
+        existing.setId(derived("model-1685"));
+        Model other = model(dayOld());
+        other.setId(UUID.randomUUID());
+        when(makeRepository.findById(MAKE_ID)).thenReturn(Optional.of(make(hourOld())));
+        when(modelRepository.findByMakeId(MAKE_ID)).thenReturn(List.of(existing));
+        when(modelRepository.findById(derived("model-1685"))).thenReturn(Optional.of(existing));
+        when(modelRepository.findByMakeIdAndNameIgnoreCase(MAKE_ID, "Model S")).thenReturn(Optional.of(existing));
+        when(modelRepository.findByMakeIdAndNameIgnoreCase(MAKE_ID, "Taken")).thenReturn(Optional.of(other));
+        when(responseSpec.body(String.class))
+                .thenReturn("{\"Results\":[{\"Model_ID\":1685,\"Model_Name\":\"Model S\"},"
+                        + "{\"Model_ID\":1686,\"Model_Name\":\"Taken\"},"
+                        + "{\"Model_ID\":1687,\"Model_Name\":\"Model 3\"},"
+                        + "{\"Model_ID\":1688,\"Model_Name\":null}]}");
+
+        service.getModelsByMake(MAKE_ID);
+
+        ArgumentCaptor<Model> saved = ArgumentCaptor.forClass(Model.class);
+        verify(modelRepository, times(3)).save(saved.capture());
+        assertThat(saved.getAllValues())
+                .extracting(Model::getId, Model::getName, Model::getNhtsaId)
+                .containsExactly(
+                        tuple(derived("model-1685"), "Model S", 1685L),
+                        tuple(derived("model-1687"), "Model 3", 1687L),
+                        tuple(derived("model-1688"), null, 1688L));
+        assertThat(saved.getAllValues().getFirst()).isSameAs(existing);
+        verify(modelRepository, never()).deleteAll(any());
+    }
+
+    @Test
+    void getVehicleTypesForMake_matchesLegacyRowByTypeId_insertsNew_skipsCollision_keepsBlankNameNull() {
+        VehicleType legacy = vehicleType(dayOld());
+        legacy.setId(UUID.randomUUID());
+        legacy.setVehicleTypeId("2");
+        VehicleType dropped = vehicleType(dayOld());
+        dropped.setId(UUID.randomUUID());
+        dropped.setVehicleTypeId("7");
+        dropped.setVehicleTypeName("MPV");
+        VehicleType holder = vehicleType(dayOld());
+        holder.setId(UUID.randomUUID());
+        when(makeRepository.findById(MAKE_ID)).thenReturn(Optional.of(make(hourOld())));
+        when(vehicleTypeRepository.findByMakeId(MAKE_ID)).thenReturn(List.of(dropped, legacy));
+        when(vehicleTypeRepository.findByMakeIdAndVehicleTypeNameIgnoreCase(MAKE_ID, "Passenger Car"))
+                .thenReturn(Optional.of(legacy));
+        when(vehicleTypeRepository.findByMakeIdAndVehicleTypeNameIgnoreCase(MAKE_ID, "Taken"))
+                .thenReturn(Optional.of(holder));
+        when(responseSpec.body(String.class))
+                .thenReturn("{\"Results\":[{\"VehicleTypeId\":2,\"VehicleTypeName\":\"Passenger Car\"},"
+                        + "{\"VehicleTypeId\":4,\"VehicleTypeName\":\"Taken\"},"
+                        + "{\"VehicleTypeId\":3,\"VehicleTypeName\":\"Truck\"},"
+                        + "{\"VehicleTypeId\":5,\"VehicleTypeName\":\" \"}]}");
+
+        service.getVehicleTypesForMake(MAKE_ID);
+
+        ArgumentCaptor<VehicleType> saved = ArgumentCaptor.forClass(VehicleType.class);
+        verify(vehicleTypeRepository, times(3)).save(saved.capture());
+        assertThat(saved.getAllValues())
+                .extracting(VehicleType::getId, VehicleType::getVehicleTypeId, VehicleType::getVehicleTypeName)
+                .containsExactly(
+                        tuple(legacy.getId(), "2", "Passenger Car"),
+                        tuple(derived("vehicle-type-" + MAKE_VPIC_ID + "-3"), "3", "Truck"),
+                        tuple(derived("vehicle-type-" + MAKE_VPIC_ID + "-5"), "5", null));
+        assertThat(saved.getAllValues().getFirst()).isSameAs(legacy);
+        assertThat(dropped.getVehicleTypeName()).isEqualTo("MPV");
+        verify(vehicleTypeRepository, never()).deleteAll(any());
+    }
+
+    @Test
+    void getMakesByManufacturer_nonIntegerMakeId_throws() {
+        when(manufacturerRepository.findById(MANUFACTURER_ID)).thenReturn(Optional.of(manufacturer(hourOld())));
+        when(makeRepository.findByManufacturerId(MANUFACTURER_ID)).thenReturn(List.of());
+        when(responseSpec.body(String.class))
+                .thenReturn("{\"Results\":[{\"Make_ID\":\"441\",\"Make_Name\":\"TESLA\"}]}");
+
+        assertThatThrownBy(() -> service.getMakesByManufacturer(MANUFACTURER_ID))
+                .isInstanceOf(VehicleFitmentException.class)
+                .hasMessageContaining("Failed to parse makes");
+        verify(makeRepository, never()).save(any(Make.class));
+    }
+
+    @Test
+    void getModelsByMake_nonIntegerModelId_throws() {
+        when(makeRepository.findById(MAKE_ID)).thenReturn(Optional.of(make(hourOld())));
+        when(modelRepository.findByMakeId(MAKE_ID)).thenReturn(List.of());
+        when(responseSpec.body(String.class))
+                .thenReturn("{\"Results\":[{\"Model_ID\":1.5,\"Model_Name\":\"Model S\"}]}");
+
+        assertThatThrownBy(() -> service.getModelsByMake(MAKE_ID))
+                .isInstanceOf(VehicleFitmentException.class)
+                .hasMessageContaining("Failed to parse models");
+        verify(modelRepository, never()).save(any(Model.class));
+    }
+
+    @Test
+    void getVehicleTypesForMake_missingVehicleTypeId_throws() {
+        when(makeRepository.findById(MAKE_ID)).thenReturn(Optional.of(make(hourOld())));
+        when(vehicleTypeRepository.findByMakeId(MAKE_ID)).thenReturn(List.of());
+        when(responseSpec.body(String.class)).thenReturn("{\"Results\":[{\"VehicleTypeName\":\"Passenger Car\"}]}");
+
+        assertThatThrownBy(() -> service.getVehicleTypesForMake(MAKE_ID))
+                .isInstanceOf(VehicleFitmentException.class)
+                .hasMessageContaining("Failed to parse vehicle types for make");
+        verify(vehicleTypeRepository, never()).save(any(VehicleType.class));
+    }
+
+    @Test
+    void getManufacturers_freshnessUsesNewestTimestamp_ignoringStaleAndNullRows() {
+        Manufacturer stale = manufacturer(dayOld());
+        Manufacturer local = manufacturer(null);
+        Manufacturer fresh = manufacturer(hourOld());
+        when(manufacturerRepository.findAll()).thenReturn(List.of(local, stale, fresh));
+
+        assertThat(service.getManufacturers()).hasSize(3);
+
+        verify(restClient, never()).get();
+    }
+
+    @Test
+    void getManufacturers_onlyNullTimestamps_refetchesFromVpic() {
+        when(manufacturerRepository.findAll()).thenReturn(List.of(manufacturer(null)));
+        when(responseSpec.body(String.class)).thenReturn("{\"Results\":[]}");
+
+        service.getManufacturers();
+
+        verifySingleVpicCall(VPIC_BASE + "/getallmanufacturers?format=json");
+    }
+
+    @Test
+    void getVehicleTypesForMake_freshnessUsesNewestTimestamp() {
+        when(makeRepository.findById(MAKE_ID)).thenReturn(Optional.of(make(hourOld())));
+        when(vehicleTypeRepository.findByMakeId(MAKE_ID))
+                .thenReturn(List.of(vehicleType(null), vehicleType(dayOld()), vehicleType(hourOld())));
+
+        assertThat(service.getVehicleTypesForMake(MAKE_ID)).hasSize(3);
+
+        verify(restClient, never()).get();
+    }
+
+    // A bad row anywhere in the payload fails the refresh before anything is written: no partial
+    // refresh that the newest-timestamp freshness check would then serve as current for a day.
+
+    @Test
+    void getManufacturers_validRowThenInvalidId_savesNothing() {
+        when(manufacturerRepository.findAll()).thenReturn(List.of());
+        when(responseSpec.body(String.class))
+                .thenReturn("{\"Results\":[{\"Mfr_ID\":955,\"Mfr_CommonName\":\"Tesla\"},"
+                        + "{\"Mfr_ID\":\"x\",\"Mfr_CommonName\":\"Rivian\"}]}");
+
+        assertThatThrownBy(() -> service.getManufacturers()).isInstanceOf(VehicleFitmentException.class);
+
+        verify(manufacturerRepository, never()).save(any(Manufacturer.class));
+        verify(transactionTemplate, never()).executeWithoutResult(any());
+    }
+
+    @Test
+    void getMakesByManufacturer_validRowThenInvalidId_savesNothing() {
+        when(manufacturerRepository.findById(MANUFACTURER_ID)).thenReturn(Optional.of(manufacturer(hourOld())));
+        when(makeRepository.findByManufacturerId(MANUFACTURER_ID)).thenReturn(List.of());
+        when(responseSpec.body(String.class))
+                .thenReturn("{\"Results\":[{\"Make_ID\":441,\"Make_Name\":\"TESLA\"}," + "{\"Make_Name\":\"NO ID\"}]}");
+
+        assertThatThrownBy(() -> service.getMakesByManufacturer(MANUFACTURER_ID))
+                .isInstanceOf(VehicleFitmentException.class);
+
+        verify(makeRepository, never()).save(any(Make.class));
+        verify(transactionTemplate, never()).executeWithoutResult(any());
+    }
+
+    @Test
+    void getModelsByMake_validRowThenInvalidId_savesNothing() {
+        when(makeRepository.findById(MAKE_ID)).thenReturn(Optional.of(make(hourOld())));
+        when(modelRepository.findByMakeId(MAKE_ID)).thenReturn(List.of());
+        when(responseSpec.body(String.class))
+                .thenReturn("{\"Results\":[{\"Model_ID\":1685,\"Model_Name\":\"Model S\"},"
+                        + "{\"Model_ID\":\"1686\",\"Model_Name\":\"Model 3\"}]}");
+
+        assertThatThrownBy(() -> service.getModelsByMake(MAKE_ID)).isInstanceOf(VehicleFitmentException.class);
+
+        verify(modelRepository, never()).save(any(Model.class));
+        verify(transactionTemplate, never()).executeWithoutResult(any());
+    }
+
+    @Test
+    void getVehicleTypesForMake_validRowThenInvalidId_savesNothing() {
+        when(makeRepository.findById(MAKE_ID)).thenReturn(Optional.of(make(hourOld())));
+        when(vehicleTypeRepository.findByMakeId(MAKE_ID)).thenReturn(List.of());
+        when(responseSpec.body(String.class))
+                .thenReturn("{\"Results\":[{\"VehicleTypeId\":2,\"VehicleTypeName\":\"Passenger Car\"},"
+                        + "{\"VehicleTypeId\":null,\"VehicleTypeName\":\"Truck\"}]}");
+
+        assertThatThrownBy(() -> service.getVehicleTypesForMake(MAKE_ID)).isInstanceOf(VehicleFitmentException.class);
+
+        verify(vehicleTypeRepository, never()).save(any(VehicleType.class));
+        verify(transactionTemplate, never()).executeWithoutResult(any());
+    }
+
+    private static UUID derived(String name) {
+        return UUID.nameUUIDFromBytes(name.getBytes(StandardCharsets.UTF_8));
     }
 
     /** Cached an hour before {@link #TEST_CLOCK}: inside the 24-hour window. */

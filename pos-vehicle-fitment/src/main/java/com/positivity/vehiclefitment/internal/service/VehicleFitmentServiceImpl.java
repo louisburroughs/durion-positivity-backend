@@ -26,6 +26,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
@@ -38,6 +39,7 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
@@ -66,6 +68,9 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
     private final RestClient restClient;
     private final VehicleVariableRepository vehicleVariableRepository;
     private final VehicleVariableValueRepository vehicleVariableValueRepository;
+    /** Writes a refresh in one transaction, opened only after the vPIC call has returned and parsed. */
+    private final TransactionTemplate transactionTemplate;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
@@ -273,35 +278,31 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
         }
         String url = NHTSA_API_BASE + "/getallmanufacturers?format=json";
         String response = restClient.get().uri(url).retrieve().body(String.class);
-        try {
-            JsonNode root = objectMapper.readTree(response);
-            JsonNode results = root.get(RESULTS);
-            // Upsert by the derived id; never delete (see the note above fetchManufacturers).
-            for (JsonNode node : results) {
-                long nhtsaId = vpicId(node, "Mfr_ID");
-                UUID id = localId("manufacturer-", nhtsaId);
-                // vPIC leaves Mfr_CommonName null or empty for many manufacturers; storing "" for each
-                // would collide on ux_manufacturer_name_lower, so fall back to the legal name.
-                String name = firstNonBlank(node, "Mfr_CommonName", "Mfr_Name");
+        // vPIC leaves Mfr_CommonName null or empty for many manufacturers; storing "" for each would collide
+        // on ux_manufacturer_name_lower, so fall back to the legal name.
+        List<VpicRow> rows = parseRows(response, "manufacturers", "Mfr_ID", "Mfr_CommonName", "Mfr_Name");
+        // Upsert by the derived id; never delete (see the note above fetchManufacturers).
+        transactionTemplate.executeWithoutResult(_ -> {
+            for (VpicRow row : rows) {
+                UUID id = localId("manufacturer-", row.vpicId());
+                String name = row.name();
                 if (name != null
                         && nameTakenByAnotherRow(
                                 manufacturerRepository.findAllByNameIgnoreCase(name), id, Manufacturer::getId)) {
                     log.warn(
                             "Skipping vPIC manufacturer {}: name '{}' belongs to another manufacturer row",
-                            nhtsaId,
+                            row.vpicId(),
                             name);
                     continue;
                 }
                 Manufacturer m = manufacturerRepository.findById(id).orElseGet(Manufacturer::new);
                 m.setId(id);
-                m.setNhtsaId(nhtsaId);
+                m.setNhtsaId(row.vpicId());
                 m.setName(name);
                 m.setCacheTimestamp(LocalDateTime.now(clock));
                 manufacturerRepository.save(m);
             }
-        } catch (Exception e) {
-            throw new VehicleFitmentException("Failed to parse manufacturers", e);
-        }
+        });
         return manufacturerRepository.findAll();
     }
 
@@ -327,14 +328,12 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
         }
         String url = NHTSA_API_BASE + "/GetMakeForManufacturer/" + vpicManufacturerId + FORMAT_JSON;
         String response = restClient.get().uri(url).retrieve().body(String.class);
-        try {
-            JsonNode root = objectMapper.readTree(response);
-            JsonNode results = root.get(RESULTS);
-            // Upsert by the derived id; never delete (see the note above fetchManufacturers).
-            for (JsonNode node : results) {
-                long nhtsaId = vpicId(node, "Make_ID");
-                UUID id = localId("make-", nhtsaId);
-                String name = firstNonBlank(node, "Make_Name");
+        List<VpicRow> rows = parseRows(response, "makes", "Make_ID", "Make_Name");
+        // Upsert by the derived id; never delete (see the note above fetchManufacturers).
+        transactionTemplate.executeWithoutResult(_ -> {
+            for (VpicRow row : rows) {
+                UUID id = localId("make-", row.vpicId());
+                String name = row.name();
                 if (name != null
                         && makeRepository
                                 .findByManufacturerIdAndNameIgnoreCase(manufacturerId, name)
@@ -342,22 +341,20 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
                                 .isPresent()) {
                     log.warn(
                             "Skipping vPIC make {}: name '{}' belongs to another make of manufacturer {}",
-                            nhtsaId,
+                            row.vpicId(),
                             name,
                             manufacturerId);
                     continue;
                 }
                 Make make = makeRepository.findById(id).orElseGet(Make::new);
                 make.setId(id);
-                make.setNhtsaId(nhtsaId);
+                make.setNhtsaId(row.vpicId());
                 make.setName(name);
                 make.setManufacturer(manufacturer);
                 make.setCacheTimestamp(LocalDateTime.now(clock));
                 makeRepository.save(make);
             }
-        } catch (Exception e) {
-            throw new VehicleFitmentException("Failed to parse makes", e);
-        }
+        });
         return makeRepository.findByManufacturerId(manufacturerId);
     }
 
@@ -383,14 +380,12 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
         }
         String url = NHTSA_API_BASE + "/GetModelsForMakeId/" + vpicMakeId + FORMAT_JSON;
         String response = restClient.get().uri(url).retrieve().body(String.class);
-        try {
-            JsonNode root = objectMapper.readTree(response);
-            JsonNode results = root.get(RESULTS);
-            // Upsert by the derived id; never delete (see the note above fetchManufacturers).
-            for (JsonNode node : results) {
-                long nhtsaId = vpicId(node, "Model_ID");
-                UUID id = localId("model-", nhtsaId);
-                String name = firstNonBlank(node, "Model_Name");
+        List<VpicRow> rows = parseRows(response, "models", "Model_ID", "Model_Name");
+        // Upsert by the derived id; never delete (see the note above fetchManufacturers).
+        transactionTemplate.executeWithoutResult(_ -> {
+            for (VpicRow row : rows) {
+                UUID id = localId("model-", row.vpicId());
+                String name = row.name();
                 if (name != null
                         && modelRepository
                                 .findByMakeIdAndNameIgnoreCase(makeId, name)
@@ -398,22 +393,20 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
                                 .isPresent()) {
                     log.warn(
                             "Skipping vPIC model {}: name '{}' belongs to another model of make {}",
-                            nhtsaId,
+                            row.vpicId(),
                             name,
                             makeId);
                     continue;
                 }
                 Model model = modelRepository.findById(id).orElseGet(Model::new);
                 model.setId(id);
-                model.setNhtsaId(nhtsaId);
+                model.setNhtsaId(row.vpicId());
                 model.setName(name);
                 model.setMake(make);
                 model.setCacheTimestamp(LocalDateTime.now(clock));
                 modelRepository.save(model);
             }
-        } catch (Exception e) {
-            throw new VehicleFitmentException("Failed to parse models", e);
-        }
+        });
         return modelRepository.findByMakeId(makeId);
     }
 
@@ -439,23 +432,22 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
         }
         String url = NHTSA_API_BASE + "/GetVehicleTypesForMakeId/" + vpicMakeId + FORMAT_JSON;
         String response = restClient.get().uri(url).retrieve().body(String.class);
-        try {
-            JsonNode root = objectMapper.readTree(response);
-            JsonNode results = root.get(RESULTS);
-            // Upsert, never delete (see the note above fetchManufacturers): part_fitment_entity references
-            // vehicle_type too. vPIC's VehicleTypeId is global (2 = Passenger Car) while a row here belongs to
-            // one make, so the key is (make, VehicleTypeId). An existing row with that key is updated whatever
-            // its id, which also adopts rows cached before ids were derived; a new one gets an id derived from
-            // both vPIC ids.
-            for (JsonNode node : results) {
-                String vehicleTypeId = Long.toString(vpicId(node, "VehicleTypeId"));
-                String name = firstNonBlank(node, "VehicleTypeName");
+        List<VpicRow> rows = parseRows(response, "vehicle types for make", "VehicleTypeId", "VehicleTypeName");
+        // Upsert, never delete (see the note above fetchManufacturers): part_fitment_entity references
+        // vehicle_type too. vPIC's VehicleTypeId is global (2 = Passenger Car) while a row here belongs to
+        // one make, so the key is (make, VehicleTypeId). An existing row with that key is updated whatever
+        // its id, which also adopts rows cached before ids were derived; a new one gets an id derived from
+        // both vPIC ids.
+        transactionTemplate.executeWithoutResult(_ -> {
+            for (VpicRow row : rows) {
+                String vehicleTypeId = Long.toString(row.vpicId());
+                String name = row.name();
                 VehicleType vt = cached.stream()
-                        .filter(row -> vehicleTypeId.equals(row.getVehicleTypeId()))
+                        .filter(existing -> vehicleTypeId.equals(existing.getVehicleTypeId()))
                         .findFirst()
                         .orElseGet(() -> {
                             VehicleType created = new VehicleType();
-                            created.setId(localId("vehicle-type-" + vpicMakeId + "-", Long.parseLong(vehicleTypeId)));
+                            created.setId(localId("vehicle-type-" + vpicMakeId + "-", row.vpicId()));
                             return created;
                         });
                 UUID id = vt.getId();
@@ -477,10 +469,29 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
                 vt.setCacheTimestamp(LocalDateTime.now(clock));
                 vehicleTypeRepository.save(vt);
             }
-        } catch (Exception e) {
-            throw new VehicleFitmentException("Failed to parse vehicle types for make", e);
-        }
+        });
         return vehicleTypeRepository.findByMakeId(makeId);
+    }
+
+    /** One vPIC result row, validated: its numeric id and its first non-blank name, if any. */
+    private record VpicRow(long vpicId, String name) {}
+
+    /**
+     * Parses and validates the whole vPIC payload before anything is written, so a bad row anywhere fails the
+     * refresh with nothing saved. Writing row by row as it parsed committed a partial refresh, which the
+     * newest-timestamp freshness check then served as current for a day.
+     */
+    private List<VpicRow> parseRows(String response, String what, String idField, String... nameFields) {
+        try {
+            JsonNode results = objectMapper.readTree(response).get(RESULTS);
+            List<VpicRow> rows = new ArrayList<>();
+            for (JsonNode node : results) {
+                rows.add(new VpicRow(vpicId(node, idField), firstNonBlank(node, nameFields)));
+            }
+            return rows;
+        } catch (Exception e) {
+            throw new VehicleFitmentException("Failed to parse " + what, e);
+        }
     }
 
     /**
