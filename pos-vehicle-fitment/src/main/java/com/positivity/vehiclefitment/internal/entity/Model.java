@@ -24,6 +24,14 @@ public class Model {
     @Column(columnDefinition = "UUID")
     private UUID id;
 
+    /**
+     * vPIC's own numeric id for this row (#2416) — the id vPIC's dependent lookups take in their path.
+     * {@code null} when the row did not come from vPIC (seeded, bulk-loaded, or created by a fitment
+     * request); such a row cannot be refreshed from vPIC.
+     */
+    @Column(name = "nhtsa_id")
+    private Long nhtsaId;
+
     private String name;
 
     @ManyToOne

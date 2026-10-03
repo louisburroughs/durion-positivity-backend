@@ -61,7 +61,7 @@ public abstract class PostgresTenancyTestBase {
     }
 
     /** The container superuser: owns every table, runs Flyway, and bypasses RLS like the alpha owner does. */
-    static DataSource ownerDataSource() {
+    protected static DataSource ownerDataSource() {
         PGSimpleDataSource dataSource = new PGSimpleDataSource();
         dataSource.setUrl(POSTGRES.getJdbcUrl());
         dataSource.setUser(POSTGRES.getUsername());
