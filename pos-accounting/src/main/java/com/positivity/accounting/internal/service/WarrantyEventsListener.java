@@ -291,6 +291,9 @@ public class WarrantyEventsListener {
             ingestionRecorder.record(
                     SOURCE_SYSTEM, eventType, eventId, reimbursementId, transactionDate, fact, outcome);
         } catch (RuntimeException e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                throw e;
+            }
             throw new IngestionRecordFailure(e);
         }
     }
