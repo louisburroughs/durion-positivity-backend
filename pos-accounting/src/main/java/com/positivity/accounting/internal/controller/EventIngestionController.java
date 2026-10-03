@@ -484,7 +484,7 @@ public class EventIngestionController {
                     listAccountingEvents; the code is the value that filter accepts.
                     Preconditions: none.
                     Required inputs: none; there are no parameters and no request body.
-                    No events are emitted and no state changes; this is a read-only projection.
+                    Emits an ACCOUNTING_EVENT_STATUS_LIST audit event; no state changes.
                     Returns 200 with the catalog.
                     """,
             tags = {"Accounting Events"})

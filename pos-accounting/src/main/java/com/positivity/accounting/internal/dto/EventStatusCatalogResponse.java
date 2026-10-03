@@ -54,7 +54,9 @@ public record EventStatusCatalogResponse(
             boolean actionable) {}
 
     /** One idempotency outcome. */
-    @Schema(description = "One idempotency outcome of a Kafka-consumed posting fact")
+    @Schema(
+            description =
+                    "One idempotency outcome, recorded on an accounting event whether it was consumed from Kafka or submitted through the API (e.g. INVOICE_PAYMENT)")
     public record IdempotencyOutcomeEntry(
             @Schema(
                     description = "Enum name, as accepted by the event list idempotency filter",
