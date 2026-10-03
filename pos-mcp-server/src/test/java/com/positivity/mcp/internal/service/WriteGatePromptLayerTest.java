@@ -30,11 +30,11 @@ class WriteGatePromptLayerTest {
     }
 
     @Test
-    @DisplayName("assemble with write-capable candidates appends the WRITE_GATE layer last")
+    @DisplayName("assemble with write-capable candidates appends the WRITE_GATE layer before IDENTIFIER")
     void assemble_withWriteCapableTools_appendsWriteGateLayer() {
         AssembledPrompt prompt = resolver.assemble("ROLE_SERVICE_ADVISOR", "master", true);
 
-        assertThat(prompt.layers()).endsWith("TOOL_USE", "DATE_WINDOW", "GLOSSARY", "WRITE_GATE");
+        assertThat(prompt.layers()).endsWith("TOOL_USE", "DATE_WINDOW", "GLOSSARY", "WRITE_GATE", "IDENTIFIER");
         assertThat(prompt.text()).contains("Write-action gate:");
         assertThat(prompt.text()).contains("explicit user confirmation");
     }

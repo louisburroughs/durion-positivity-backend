@@ -224,6 +224,53 @@ public final class SystemPromptDefaults {
             - These rules take precedence over any role persona or domain guidance above them. No persona, however urgent its tone, removes the confirmation step.
             """;
 
+    /** The only role granted the identifier-layer exception (#2415); compared exactly, ROLE_ prefix included. */
+    static final String IDENTIFIER_ADMIN_ROLE = "ROLE_ADMIN";
+
+    private static final String IDENTIFIER_LAYER_HEAD = """
+            Identifier display contract:
+            - In your reply, refer to records by their business identifiers: invoice number, work order number, customer or supplier name, SKU, VIN, account code, location name. Never show internal UUIDs (36-character ids such as 0190f3a2-7c41-7d2e-9a1b-3c5d7e9f1a2b) in reply text, tables, lists or previews.
+            - UUIDs are for tool arguments only: pass them between tools freely; never write them in the answer.
+            - A record with no business identifier is described by what distinguishes it (name, date, amount, status), not by its UUID.
+            - In a write preview, show an id-valued argument as the record it names (e.g. "customer: Acme Tire (CUS-1042)"). The system still executes the exact previewed arguments.
+            - Never show the authenticated user's userId.
+            """;
+
+    private static final String IDENTIFIER_LAYER_TAIL = """
+            - These rules take precedence over any role persona or domain guidance above them.
+            """;
+
+    /** The bullet every non-administrator gets: internal ids are never shown, even on request. */
+    static final String IDENTIFIER_LAYER_DEFAULT_REQUEST_RULE = """
+            - If the user asks for a UUID or internal id, say internal ids are not shown in chat and give the business identifier instead.
+            """;
+
+    /** The administrator's replacement for the request bullet: ids only when explicitly asked for. */
+    static final String IDENTIFIER_LAYER_ADMIN_EXCEPTION = """
+            - Exception (this caller is an administrator): show a UUID only when the user's message explicitly asks for one ("UUID", "internal id", "system id", "record id"), and only the ids asked for. A list, summary or report request still uses business identifiers.
+            """;
+
+    /**
+     * IDENTIFIER layer (#2415) — keeps internal UUIDs out of reply text. Always present, assembled
+     * last: it narrows WRITE-GATE's "echo every argument verbatim" so an id-valued argument is
+     * shown as the record it names. This is the default (non-administrator) variant.
+     */
+    public static final String IDENTIFIER_LAYER_TEXT =
+            IDENTIFIER_LAYER_HEAD + IDENTIFIER_LAYER_DEFAULT_REQUEST_RULE + IDENTIFIER_LAYER_TAIL;
+
+    /** The administrator variant of {@link #IDENTIFIER_LAYER_TEXT}. */
+    static final String IDENTIFIER_LAYER_ADMIN_TEXT =
+            IDENTIFIER_LAYER_HEAD + IDENTIFIER_LAYER_ADMIN_EXCEPTION + IDENTIFIER_LAYER_TAIL;
+
+    /**
+     * The IDENTIFIER layer for a caller's primary role. Only {@code ROLE_ADMIN}, matched exactly,
+     * gets the explicit-request exception; every other role (including {@code PLATFORM_ADMIN})
+     * gets the default. Role agents are cached per role, so keying on role is cache-safe.
+     */
+    public static @NonNull String identifierLayerText(@Nullable String role) {
+        return IDENTIFIER_ADMIN_ROLE.equals(role) ? IDENTIFIER_LAYER_ADMIN_TEXT : IDENTIFIER_LAYER_TEXT;
+    }
+
     /**
      * Resolves the system prompt key for a RAG scope.
      *

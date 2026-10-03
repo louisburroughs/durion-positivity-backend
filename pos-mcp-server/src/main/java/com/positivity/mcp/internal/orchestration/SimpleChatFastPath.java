@@ -66,12 +66,17 @@ class SimpleChatFastPath {
         return tags.simpleChat();
     }
 
-    /** The no-tool, no-RAG prompt answering a T0 message: master prompt + caller context. */
+    /**
+     * The no-tool, no-RAG prompt answering a T0 message: master prompt + caller context + the
+     * default IDENTIFIER layer (#2415), since the caller context carries the userId.
+     */
     @NonNull
     Prompt prompt(@NonNull CurrentUserContext currentUserContext, @NonNull String message) {
         String systemPrompt = rolePromptResolver.resolvePrompt(SystemPromptDefaults.MASTER_PROMPT_NAME)
                 + System.lineSeparator()
-                + sharedOrchestrationSupport.formatUserContext(currentUserContext);
+                + sharedOrchestrationSupport.formatUserContext(currentUserContext)
+                + System.lineSeparator()
+                + SystemPromptDefaults.IDENTIFIER_LAYER_TEXT;
         return new Prompt(new SystemMessage(systemPrompt), new UserMessage(message));
     }
 }
