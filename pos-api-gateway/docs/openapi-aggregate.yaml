@@ -101,6 +101,10 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1events
   /v1/accounting/events/contract:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1events~1contract
+  /v1/accounting/events/statuses:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1events~1statuses
+  /v1/accounting/events/types:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1events~1types
   /v1/accounting/events/{eventId}:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1events~1{eventId}
   /v1/accounting/events/{eventId}/processing-log:
