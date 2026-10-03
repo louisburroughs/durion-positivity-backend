@@ -247,6 +247,27 @@ it), or a session line opened before `receiving_line.source_line_id` existed who
 more than one order line. Receipts posted before #2203 stay uncosted (ADR-0048 §3: cost at posting
 time); such a SKU gains a cost from its next priced receipt or from a revaluation.
 
+### Both receipt paths advance the purchase order (#2417)
+
+pos-order moves a purchase order to `PARTIALLY_RECEIVED` / `FULLY_RECEIVED`, and reduces its open
+quantities and open balance, only from `goodsreceipt.recorded` on `inventory.events.v1`. Both
+receipt paths publish it, through `GoodsReceiptFactPublisher` and the outbox, in the receiving
+transaction:
+
+| Receipt path | Receipt identity | `locationId` | Line value |
+| --- | --- | --- | --- |
+| `POST /v1/inventory/goods-receipts` | the `goods_receipt` row and its number | the request's location | `unitCostMinor` × keyed quantity |
+| Receiving session: receive into staging, cross-dock | a fresh id per call, no receipt number | the staging location, or the cross-dock location | the order line's `unitCostMinor` per base unit × base quantity received |
+
+A session is opened against a purchase order (`sourceDocumentId` is the order id) and each of its
+lines keeps the order line it was built from (`receiving_line.source_line_id`), so no request
+field ties it to the order. Each receive or cross-dock call publishes one receipt with what that
+call posted to the ledger; a call that matched no session line publishes nothing. A line whose
+order line a revision replaced falls back to the order's only line for the SKU, as the receipt
+cost does; a line that still cannot be attributed is reported with no `poLineId`, and pos-order
+then deducts its value but not its quantity. The value is in the order's currency even when the
+ledger row is held awaiting cost (#2314), because it is deducted from the order's own balance.
+
 ### Work-order linkage on the ledger, returns, and cross-dock search (#2206, #2211)
 
 `inventory_ledger_entry` carries nullable `workorder_id`/`workorder_line_id` columns, stamped by

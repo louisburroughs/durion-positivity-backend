@@ -30,6 +30,7 @@ import com.positivity.inventory.internal.repository.InventoryLedgerEntryReposito
 import com.positivity.inventory.internal.repository.InventoryVarianceRepository;
 import com.positivity.inventory.internal.repository.ReceivingSessionRepository;
 import com.positivity.inventory.internal.service.DocumentQuantityConverter;
+import com.positivity.inventory.internal.service.GoodsReceiptFactPublisher;
 import com.positivity.inventory.internal.service.InventoryFactPublisher;
 import com.positivity.inventory.internal.service.InventoryLotCaptureService;
 import com.positivity.inventory.internal.service.LedgerPostingService;
@@ -39,6 +40,7 @@ import com.positivity.inventory.internal.service.SourceDocumentResolver;
 import com.positivity.inventory.internal.service.StagingLocationResolver;
 import com.positivity.inventory.internal.service.WorkorderValidationService;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
@@ -77,6 +79,7 @@ public class ReceivingServiceImpl implements ReceivingService {
     private final QuantityScaleGuard quantityScaleGuard;
     private final ExtWorkorderReplicaRepository extWorkorderReplicaRepository;
     private final ExtWorkorderPartReplicaRepository extWorkorderPartReplicaRepository;
+    private final GoodsReceiptFactPublisher goodsReceiptFactPublisher;
 
     /** Cap on {@link #searchCrossDockWorkorders} results (#2211): also the blank-query default page size. */
     private static final int WORKORDER_SEARCH_LIMIT = 50;
@@ -133,6 +136,7 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .collect(Collectors.toMap(ReceivingLine::getLineId, line -> line, (left, right) -> left));
 
         List<InventoryVariance> variances = new ArrayList<>();
+        List<ReceivingLine> receivedLines = new ArrayList<>();
         int linesProcessed = 0;
 
         // Once for the whole call, not once per line: every line of a session stages at the same
@@ -146,8 +150,18 @@ public class ReceivingServiceImpl implements ReceivingService {
                 continue;
             }
             receiveLine(session, line, lineReq, sessionId, stagingLocationId, actorUserId, variances);
+            receivedLines.add(line);
             linesProcessed++;
         }
+
+        // receiveLine leaves this call's received quantity on each line, which is what arrived now.
+        publishGoodsReceipt(
+                session,
+                stagingLocationId,
+                receivedLines.stream()
+                        .map(line -> new ReceivedQuantity(line, line.getReceivedQuantity()))
+                        .toList(),
+                actorUserId);
 
         session.setStatus(
                 allLinesSettled(session) ? ReceivingSessionStatus.COMPLETED : ReceivingSessionStatus.IN_PROGRESS);
@@ -219,6 +233,48 @@ public class ReceivingServiceImpl implements ReceivingService {
         if (cmp != 0) {
             variances.add(recordVariance(session, line, expectedQty, receivedQty, cmp, actorUserId));
         }
+    }
+
+    /** How much of one session line arrived in a single receive or cross-dock call. */
+    private record ReceivedQuantity(
+            @NonNull ReceivingLine line, @NonNull BigDecimal quantity) {}
+
+    /**
+     * Tells pos-order what arrived against the session's purchase order (#2417), through the
+     * same {@code goodsreceipt.recorded} fact and outbox the goods-receipt endpoint uses, in this
+     * receive's transaction. Without it a session-received order kept its open quantities, open
+     * balance and status as if nothing had come in.
+     *
+     * <p>Each call is its own receipt: the fact is a delta, so one receipt per call reports
+     * exactly what that call posted to the ledger. A session whose source document is not a
+     * purchase order has no order to advance and publishes nothing, as does a call that received
+     * nothing.
+     */
+    private void publishGoodsReceipt(
+            @NonNull ReceivingSession session,
+            @Nullable UUID locationId,
+            @NonNull List<ReceivedQuantity> received,
+            @NonNull String actorUserId) {
+        if (received.isEmpty()) {
+            return;
+        }
+        sourceDocumentResolver
+                .receivingPurchaseOrderId(session.getSourceDocumentType(), session.getSourceDocumentId())
+                .ifPresent(purchaseOrderId -> goodsReceiptFactPublisher.publish(
+                        new GoodsReceiptFactPublisher.ReceiptHeader(
+                                UUIDv7Generator.generate(), null, purchaseOrderId, locationId, actorUserId),
+                        received.stream()
+                                .map(receipt -> receiptLineFact(purchaseOrderId, receipt))
+                                .toList()));
+    }
+
+    private GoodsReceiptFactPublisher.@NonNull GoodsReceiptLineFact receiptLineFact(
+            @NonNull UUID purchaseOrderId, @NonNull ReceivedQuantity receipt) {
+        ReceivingLine line = receipt.line();
+        SourceDocumentResolver.ReceiptLineValue value = sourceDocumentResolver.valueReceiptLine(
+                purchaseOrderId, line.getSourceLineId(), line.getProductId(), receipt.quantity());
+        return new GoodsReceiptFactPublisher.GoodsReceiptLineFact(
+                value.poLineId(), line.getProductId(), receipt.quantity(), value.accruedAmountMinor());
     }
 
     /** Received exactly what was expected, less, or more. */
@@ -299,6 +355,12 @@ public class ReceivingServiceImpl implements ReceivingService {
                 actorUserId);
 
         applyCrossDockLineOutcome(line, request, workorderId, quantities, lot);
+        // Cross-docked goods skip the shelf, not the order: they arrived against it all the same.
+        publishGoodsReceipt(
+                session,
+                crossDockLocationId,
+                List.of(new ReceivedQuantity(line, quantities.quantityDelta())),
+                actorUserId);
         settleSessionStatus(session);
         receivingSessionRepository.save(session);
 

@@ -160,6 +160,9 @@ class ReceivingServiceImplTest {
     private com.positivity.inventory.internal.service.QuantityScaleGuard quantityScaleGuard =
             new com.positivity.inventory.internal.service.QuantityScaleGuard(uomConversionService);
 
+    @Mock
+    private com.positivity.inventory.internal.service.GoodsReceiptFactPublisher goodsReceiptFactPublisher;
+
     @InjectMocks
     private ReceivingServiceImpl receivingService;
 
@@ -1895,6 +1898,172 @@ class ReceivingServiceImplTest {
         verify(ledgerPostingService).post(posted.capture());
         assertThat(posted.getValue().getChangeInQuantity()).isEqualByComparingTo("1.01");
         assertThat(posted.getValue().getEventType()).isEqualTo(InventoryLedgerEventType.GOODS_RECEIPT);
+    }
+
+    // ─── #2417: session receiving reports goodsreceipt.recorded against its purchase order ──
+
+    private static final UUID RECEIPT_PO_ID = UUID.fromString("00000000-0000-0000-0000-0000000000c1");
+    private static final UUID RECEIPT_PO_LINE_ID = UUID.fromString("00000000-0000-0000-0000-0000000000c2");
+
+    private ReceivingSession sessionAgainstOrder(UUID sessionId, ReceivingLine... lines) {
+        ReceivingSession session = ReceivingSession.builder()
+                .sessionId(sessionId)
+                .sourceDocumentId(RECEIPT_PO_ID.toString())
+                .sourceDocumentType(SourceDocumentType.PO)
+                .status(ReceivingSessionStatus.OPEN)
+                .lines(new java.util.ArrayList<>(List.of(lines)))
+                .build();
+        for (ReceivingLine line : lines) {
+            line.setSession(session);
+        }
+        return session;
+    }
+
+    private static ReceivingLine expectedLine(UUID lineId, String productId, UUID sourceLineId, String expected) {
+        return ReceivingLine.builder()
+                .lineId(lineId)
+                .productId(productId)
+                .sourceLineId(sourceLineId)
+                .expectedQuantity(new BigDecimal(expected))
+                .receivedQuantity(BigDecimal.ZERO)
+                .status(ReceivingLineStatus.EXPECTED)
+                .build();
+    }
+
+    /**
+     * #2417: receiving into staging is a receipt against the session's purchase order, so it
+     * states what arrived through the same fact the goods-receipt endpoint publishes — otherwise
+     * pos-order never moves the order to PARTIALLY_RECEIVED / FULLY_RECEIVED.
+     */
+    @Test
+    void receiveItemsIntoStaging_publishesTheGoodsReceiptAgainstTheSessionsPurchaseOrder() {
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-0000000000d1");
+        UUID lineId = UUID.fromString("00000000-0000-0000-0000-0000000000d2");
+        UUID otherLineId = UUID.fromString("00000000-0000-0000-0000-0000000000d3");
+        ReceivingLine line = expectedLine(lineId, "PROD-001", RECEIPT_PO_LINE_ID, "10");
+        ReceivingLine notReceived = expectedLine(otherLineId, "PROD-002", null, "5");
+        ReceivingSession session = sessionAgainstOrder(sessionId, line, notReceived);
+        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
+        // A short receipt: four of ten arrive, which also records the shortage.
+        when(inventoryVarianceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(sourceDocumentResolver.receivingPurchaseOrderId(SourceDocumentType.PO, RECEIPT_PO_ID.toString()))
+                .thenReturn(Optional.of(RECEIPT_PO_ID));
+        when(sourceDocumentResolver.valueReceiptLine(
+                        RECEIPT_PO_ID, RECEIPT_PO_LINE_ID, "PROD-001", new BigDecimal("4")))
+                .thenReturn(new SourceDocumentResolver.ReceiptLineValue(RECEIPT_PO_LINE_ID, 4_000L));
+
+        receivingService.receiveItemsIntoStaging(
+                sessionId,
+                new ReceiveItemsRequest(List.of(new ReceiveLineRequest(lineId, new BigDecimal("4"), null, null, null))),
+                "receiver");
+
+        ArgumentCaptor<com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.ReceiptHeader> header =
+                ArgumentCaptor.forClass(
+                        com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.ReceiptHeader.class);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.GoodsReceiptLineFact>>
+                lines = ArgumentCaptor.forClass(List.class);
+        verify(goodsReceiptFactPublisher).publish(header.capture(), lines.capture());
+        assertThat(header.getValue().purchaseOrderId()).isEqualTo(RECEIPT_PO_ID);
+        assertThat(header.getValue().receiptId()).isNotNull();
+        assertThat(header.getValue().locationId()).isEqualTo(STAGING_LOCATION_ID);
+        assertThat(header.getValue().recordedBy()).isEqualTo("receiver");
+        assertThat(lines.getValue())
+                .containsExactly(
+                        new com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.GoodsReceiptLineFact(
+                                RECEIPT_PO_LINE_ID, "PROD-001", new BigDecimal("4"), 4_000L));
+    }
+
+    /** #2417: a receive call that matched none of the session's lines received nothing to report. */
+    @Test
+    void receiveItemsIntoStaging_nothingReceived_publishesNoGoodsReceipt() {
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-0000000000d1");
+        ReceivingSession session = sessionAgainstOrder(
+                sessionId,
+                expectedLine(
+                        UUID.fromString("00000000-0000-0000-0000-0000000000d2"), "PROD-001", RECEIPT_PO_LINE_ID, "10"));
+        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        receivingService.receiveItemsIntoStaging(
+                sessionId,
+                new ReceiveItemsRequest(List.of(new ReceiveLineRequest(
+                        UUID.fromString("00000000-0000-0000-0000-0000000000ff"), BigDecimal.ONE, null, null, null))),
+                "receiver");
+
+        verify(goodsReceiptFactPublisher, never())
+                .publish(
+                        any(com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.ReceiptHeader.class),
+                        any());
+    }
+
+    /** #2417: a session whose source document is not a purchase order has no order to advance. */
+    @Test
+    void receiveItemsIntoStaging_sourceDocumentIsNotAPurchaseOrder_publishesNoGoodsReceipt() {
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-0000000000d1");
+        UUID lineId = UUID.fromString("00000000-0000-0000-0000-0000000000d2");
+        ReceivingSession session =
+                sessionAgainstOrder(sessionId, expectedLine(lineId, "PROD-001", RECEIPT_PO_LINE_ID, "10"));
+        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(sourceDocumentResolver.receivingPurchaseOrderId(any(), any())).thenReturn(Optional.empty());
+
+        receivingService.receiveItemsIntoStaging(
+                sessionId,
+                new ReceiveItemsRequest(
+                        List.of(new ReceiveLineRequest(lineId, new BigDecimal("10"), null, null, null))),
+                "receiver");
+
+        verify(goodsReceiptFactPublisher, never())
+                .publish(
+                        any(com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.ReceiptHeader.class),
+                        any());
+    }
+
+    /**
+     * #2417: goods cross-docked straight to a workorder still arrived against the order, so the
+     * cross-docked quantity is reported as received at the cross-dock location.
+     */
+    @Test
+    void crossDockLineToWorkorder_publishesTheGoodsReceiptAgainstTheSessionsPurchaseOrder() {
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-0000000000d1");
+        UUID lineId = UUID.fromString("00000000-0000-0000-0000-0000000000d2");
+        UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-0000000000d4");
+        ReceivingLine line = expectedLine(lineId, "PROD-001", RECEIPT_PO_LINE_ID, "10");
+        ReceivingSession session = sessionAgainstOrder(sessionId, line);
+        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
+                .thenReturn(new WorkorderValidationService.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
+        when(sourceDocumentResolver.receivingPurchaseOrderId(SourceDocumentType.PO, RECEIPT_PO_ID.toString()))
+                .thenReturn(Optional.of(RECEIPT_PO_ID));
+        when(sourceDocumentResolver.valueReceiptLine(
+                        RECEIPT_PO_ID, RECEIPT_PO_LINE_ID, "PROD-001", new BigDecimal("3")))
+                .thenReturn(new SourceDocumentResolver.ReceiptLineValue(RECEIPT_PO_LINE_ID, 300L));
+
+        receivingService.crossDockLineToWorkorder(
+                sessionId,
+                lineId,
+                new CrossDockRequest("WO-001", workorderLineId.toString(), new BigDecimal("3"), null),
+                "receiver");
+
+        ArgumentCaptor<com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.ReceiptHeader> header =
+                ArgumentCaptor.forClass(
+                        com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.ReceiptHeader.class);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.GoodsReceiptLineFact>>
+                lines = ArgumentCaptor.forClass(List.class);
+        verify(goodsReceiptFactPublisher).publish(header.capture(), lines.capture());
+        assertThat(header.getValue().purchaseOrderId()).isEqualTo(RECEIPT_PO_ID);
+        assertThat(header.getValue().locationId()).isEqualTo(CROSS_DOCK_LOCATION_ID);
+        assertThat(lines.getValue())
+                .containsExactly(
+                        new com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.GoodsReceiptLineFact(
+                                RECEIPT_PO_LINE_ID, "PROD-001", new BigDecimal("3"), 300L));
     }
 
     private void stubSourceDocumentLines() {
