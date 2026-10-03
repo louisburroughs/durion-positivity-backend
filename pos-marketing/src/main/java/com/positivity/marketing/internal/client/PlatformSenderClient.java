@@ -25,8 +25,10 @@ import org.springframework.web.client.RestClientResponseException;
  * {@code sender.outcomes.v1} and are applied by
  * {@link com.positivity.marketing.internal.service.DeliveryOutcomeListener}.
  *
- * <p>The sender is pos-platform-sender, an ADR-0044 utility module (amendment 2026-10-03). It is
- * reached on a fixed base URL rather than through discovery, as a row of the non-gateway exception
+ * <p>The sender is pos-platform-sender, a domain module this class alone may call synchronously:
+ * a class-scoped ADR-0044 exception (amendment 2026-10-03), enforced by pos-archunit's
+ * {@code DomainWallsTest}, which reads the target from the base-url default below. It is reached
+ * on a fixed base URL rather than through discovery, as a row of the non-gateway exception
  * register ({@code durion/docs/architecture/INTERNAL_TRANSPORT_AND_SERVICE_DISCOVERY.md} §2): the
  * FI-2 contract is a shared-secret endpoint with no gateway route.
  *
@@ -51,7 +53,7 @@ public class PlatformSenderClient implements MessageChannelPort {
 
     public PlatformSenderClient(
             RestClient.Builder restClientBuilder,
-            @Value("${pos.marketing.sender.base-url}") String baseUrl,
+            @Value("${pos.marketing.sender.base-url:http://pos-platform-sender:8080}") String baseUrl,
             @Value("${pos.marketing.sender.api-secret:}") String apiSecret) {
         RestClient.Builder builder = restClientBuilder.clone().baseUrl(baseUrl);
         if (!apiSecret.isBlank()) {

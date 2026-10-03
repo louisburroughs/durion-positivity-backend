@@ -14,6 +14,9 @@ MODULE_TIMEOUT_SECONDS=420
 DRY_RUN=false
 AGGREGATE_OPENAPI=true
 AGGREGATE_OUTPUT="pos-api-gateway/docs/openapi-aggregate.yaml"
+# Specs kept out of the aggregate: the gateway has no route to these modules, so
+# their spec documents a service-to-service API, not one a client can reach (#2428).
+AGGREGATE_EXCLUDED_MODULES=(pos-platform-sender)
 VALIDATION_MODE="${OPENAPI_VALIDATION_MODE:-report}"
 GENERATE_PERMISSIONS=true
 
@@ -386,13 +389,20 @@ fi
 
 if [[ "$AGGREGATE_OPENAPI" == true ]]; then
   echo "Generating aggregate OpenAPI..."
-  # The aggregate must always index every module's spec, even when this run
+  # The aggregate must always index every routed module's spec, even when this run
   # only regenerated a subset — otherwise a single-module run drops all other
   # modules from the gateway's aggregated API index.
   mapfile -t AGGREGATE_MODULES < <(discover_modules)
   if [[ ${#AGGREGATE_MODULES[@]} -eq 0 ]]; then
     AGGREGATE_MODULES=("${MODULES[@]}")
   fi
+  INDEXED_MODULES=()
+  for module in "${AGGREGATE_MODULES[@]}"; do
+    if [[ " ${AGGREGATE_EXCLUDED_MODULES[*]} " != *" ${module} "* ]]; then
+      INDEXED_MODULES+=("$module")
+    fi
+  done
+  AGGREGATE_MODULES=("${INDEXED_MODULES[@]}")
   if ! generate_aggregate_openapi "$AGGREGATE_OUTPUT" "${AGGREGATE_MODULES[@]}"; then
     echo "ERROR: Failed to generate aggregate OpenAPI file." >&2
     exit 1

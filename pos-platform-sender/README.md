@@ -7,14 +7,17 @@ conventions and commands: `AGENTS.md` at the repository root.
 
 `pos-marketing` owns orchestration (audience, consent and suppression gating, batching, per-recipient
 state). This module owns everything that touches a provider: addresses, credentials, delivery and
-provider events. It is a utility module under ADR-0044 §1 (amendment 2026-10-03): `pos-marketing`
-calls it synchronously; it calls no domain module.
+provider events. It is a domain module under ADR-0044 §1 with one class-scoped synchronous caller
+(amendment 2026-10-03): `pos-marketing`'s `PlatformSenderClient`, the only client `DomainWallsTest`
+lets reach it. It calls no domain module itself.
 
 ## Send API
 
 `POST /platform-sender/v1/messages` (operationId `sendPlatformMessage`), service-to-service only (the gateway has
-no route here). The springdoc spec is served at `/v3/api-docs`; no `openapi.yaml` is committed for this
-internal-only module (#2428).
+no route here). The spec is committed as [`openapi.yaml`](openapi.yaml) for documentation and
+validation only (#2428): it stays out of the gateway's aggregated index, which lists routed APIs,
+and out of both SDKs, whose generators name their modules one by one. Regenerate it with
+`scripts/generate-openapi.sh pos-platform-sender`.
 
 | Header | Value |
 | --- | --- |
