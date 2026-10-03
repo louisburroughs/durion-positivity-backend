@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
@@ -281,6 +282,49 @@ class WarrantyEventsListenerTest {
 
         assertThatExceptionOfType(DataAccessResourceFailureException.class)
                 .isThrownBy(() -> listener.onWarrantyEvent(submitted("e-6", 1)));
+
+        verify(processedEvents, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("#2439: a recorder integrity violation propagates and the event is NOT marked processed")
+    void recorderIntegrityViolationPropagatesUnmarked() {
+        when(processedEvents.existsById("e-7")).thenReturn(false);
+        when(expectations.findById(REIMBURSEMENT_ID)).thenReturn(Optional.empty());
+        org.mockito.Mockito.doThrow(new DataIntegrityViolationException("duplicate key"))
+                .when(ingestionRecorder)
+                .record(any(), any(), any(), any(), any(), any(), any());
+
+        assertThatExceptionOfType(DataIntegrityViolationException.class)
+                .isThrownBy(() -> listener.onWarrantyEvent(submitted("e-7", 1)));
+
+        verify(processedEvents, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("#2439: a non-database recorder failure propagates and the event is NOT marked processed")
+    void recorderRuntimeFailurePropagatesUnmarked() {
+        when(processedEvents.existsById("e-8")).thenReturn(false);
+        when(expectations.findById(REIMBURSEMENT_ID)).thenReturn(Optional.empty());
+        org.mockito.Mockito.doThrow(new IllegalStateException("recorder broke"))
+                .when(ingestionRecorder)
+                .record(any(), any(), any(), any(), any(), any(), any());
+
+        assertThatExceptionOfType(IllegalStateException.class)
+                .isThrownBy(() -> listener.onWarrantyEvent(resolved("e-8", 2, "APPROVED")));
+
+        verify(processedEvents, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("#2439: a constraint violation on the expectation row propagates unmarked")
+    void expectationIntegrityViolationPropagatesUnmarked() {
+        when(processedEvents.existsById("e-9")).thenReturn(false);
+        when(expectations.findById(REIMBURSEMENT_ID)).thenReturn(Optional.empty());
+        when(expectations.save(any())).thenThrow(new DataIntegrityViolationException("value too long"));
+
+        assertThatExceptionOfType(DataIntegrityViolationException.class)
+                .isThrownBy(() -> listener.onWarrantyEvent(submitted("e-9", 1)));
 
         verify(processedEvents, never()).save(any());
     }
