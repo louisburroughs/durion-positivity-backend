@@ -38,8 +38,9 @@ import org.springframework.web.bind.annotation.RestController;
  * Suggestions are created by the replenishment scan only; these endpoints cover the
  * human decisions: accept, dismiss (with mandatory reason), and convert into a DRAFT
  * purchase order. Convert requires BOTH {@code inventory:replenishment:manage} and
- * {@code inventory:purchase_order:create} (dual authority, mirroring the cross-dock
- * endpoint) because it spends against the PO domain.
+ * {@code order:purchase_order:create} (dual authority, mirroring the cross-dock
+ * endpoint) because it spends against the PO domain, which pos-order owns since the
+ * CAP-320 move (#1334).
  */
 @RestController
 @RequestMapping("/v1/inventory/purchase-suggestions")
@@ -284,7 +285,7 @@ public class PurchaseSuggestionController {
                     (codes compare case-insensitively and the order carries the upper-case code), and all must \
                     resolve to a single ship-to site.
                     Required inputs: suggestionIds (non-empty list of UUIDs); duplicates are collapsed, and the \
-                    caller needs both inventory:replenishment:manage and inventory:purchase_order:create.
+                    caller needs both inventory:replenishment:manage and order:purchase_order:create.
                     Emits an INVENTORY_PURCHASE_SUGGESTION_CONVERT event and creates the DRAFT order through the \
                     standard purchase order path, with the latest expected date among the suggestions as the \
                     expected delivery date.

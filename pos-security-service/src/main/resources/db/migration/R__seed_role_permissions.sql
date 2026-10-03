@@ -97,10 +97,10 @@ SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', 
 --   here and enforced by no endpoint, so it granted nothing.
 -- * order:purchase_order:approve and :transmit (#1438) are held by ADMIN and
 --   the PO-approver personas LOCATION_MANAGER and INVENTORY_MANAGER only.
---   Note the legacy inventory:purchase_order:* family remains seeded
---   (ADMIN-only) although no controller enforces it — pos-order enforces
---   order:purchase_order:*; retiring the legacy family needs a versioned
---   migration and is tracked on #1438.
+--   The legacy inventory:purchase_order:* family is granted to no role:
+--   its grants went in the 2026-08 retirement wave below, and pos-order
+--   enforces order:purchase_order:*. Its permission-definition rows (bits
+--   71-74) stay in section 2 because bits are permanent (#2422).
 -- * The inventory adjustment roles (#1373) carry the documented model:
 --   INVENTORY_LEAD creates and views adjustment requests;
 --   INVENTORY_MANAGER and INVENTORY_CONTROLLER additionally approve them. The two

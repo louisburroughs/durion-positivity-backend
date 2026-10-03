@@ -253,8 +253,8 @@ public class PurchaseOrderController {
                     Approves a DRAFT purchase order, moving it to APPROVED and recording the approver, timestamp \
                     and optional notes.
                     Use this tool to release a drafted order for receiving; do not use cancelPurchaseOrder, which \
-                    terminates the order, and note that receivePurchaseOrder rejects orders that were never \
-                    approved.
+                    terminates the order, and note that receiving happens in pos-inventory, whose \
+                    createGoodsReceipt rejects orders that were never approved.
                     Preconditions: the purchase order must exist and be in DRAFT status; any other status is a \
                     conflict.
                     Required inputs: poId (UUIDv7) path parameter and a JSON body where approvalNotes is optional, \
