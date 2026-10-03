@@ -481,7 +481,8 @@ public class EventIngestionController {
                     whether retry/reprocess applies) and every idempotency outcome, generated from the \
                     enums so the set cannot drift.
                     Use this tool to populate the status and idempotency-outcome filters of \
-                    listAccountingEvents; the code is the value that filter accepts.
+                    listAccountingEvents; the code is the value that filter accepts. Do not use it to \
+                    find events in a given status; use listAccountingEvents with that status instead.
                     Preconditions: none.
                     Required inputs: none; there are no parameters and no request body.
                     Emits an ACCOUNTING_EVENT_STATUS_LIST audit event; no state changes.
