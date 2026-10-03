@@ -13,6 +13,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.assertj.core.api.SoftAssertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -24,11 +25,13 @@ import org.springframework.core.io.ClassPathResource;
  * mcp.rag.preload.docs} entry". The header is what a document author reads, the yml entry is what the
  * runtime enforces; a disagreement is a permission or scope mistake waiting to be shipped.
  *
- * <p>Two header shapes exist. YAML front matter ({@code rag_id}, {@code rag_scope}, {@code
- * required_permissions} list) wins when a document has it; otherwise the inline lines {@code RAG id:},
- * {@code RAG scope:} and {@code Required permissions:} (backticked, comma separated codes) are read.
- * A document with neither has no header to check. {@code entities:} is deliberately not in a header:
- * the yml entry is its only home.
+ * <p>Two header shapes exist: YAML front matter ({@code rag_id}, {@code rag_scope}, {@code
+ * required_permissions} list) and the inline lines {@code RAG id:}, {@code RAG scope:} and {@code
+ * Required permissions:} (backticked, comma separated codes) in the body. A document may carry both,
+ * and then each is checked on its own: the front matter is what tooling reads, the inline lines are
+ * what a reader (and the retriever) sees, so either one drifting is a mistake (#2423). A document with
+ * neither has no header to check. {@code entities:} is deliberately not in a header: the yml entry is
+ * its only home.
  */
 class RagDocumentHeaderAgreementTest {
 
@@ -45,60 +48,94 @@ class RagDocumentHeaderAgreementTest {
         }
     }
 
+    /** The headers of one document, by shape; either may be absent. */
+    private record Headers(Header frontMatter, Header inline) {
+
+        List<Header> present() {
+            return List.of(frontMatter, inline).stream().filter(Header::present).toList();
+        }
+    }
+
     @ParameterizedTest(name = "profile {0}")
     @ValueSource(strings = {"default", "alpha"})
     @DisplayName("each document header that exists agrees with its preload entry on id, scope and permissions")
     void headersAgreeWithPreloadEntries(String profile) {
         int withHeader = 0;
+        SoftAssertions softly = new SoftAssertions();
         for (StaticDocEntry entry : ScopeGraphRealConfigValidationTest.ragDocs(profile)) {
-            Header header = parse(read(entry.sourcePath()));
-            if (!header.present()) {
+            Headers headers = parse(read(entry.sourcePath()));
+            if (headers.present().isEmpty()) {
                 continue;
             }
             withHeader++;
-            header.id()
-                    .ifPresent(id -> assertThat(id)
-                            .as("%s: header RAG id vs preload id (%s)", entry.sourcePath(), profile)
-                            .isEqualTo(entry.id()));
-            header.scope()
-                    .ifPresent(scope -> assertThat(scope)
-                            .as("%s: header RAG scope vs preload rag-scope (%s)", entry.sourcePath(), profile)
-                            .isEqualTo(entry.ragScope()));
-            header.permissions()
-                    .ifPresent(permissions -> assertThat(permissions)
-                            .as(
-                                    "%s: header required permissions vs preload required-permissions (%s)",
-                                    entry.sourcePath(), profile)
-                            .isEqualTo(new TreeSet<>(entry.requiredPermissions())));
+            check(softly, entry, "front matter", headers.frontMatter(), profile);
+            check(softly, entry, "inline", headers.inline(), profile);
         }
+        softly.assertAll();
         assertThat(withHeader)
                 .as("documents with a readable header; the parser found none, so it is probably broken")
                 .isGreaterThan(20);
+    }
+
+    private static void check(
+            SoftAssertions softly, StaticDocEntry entry, String shape, Header header, String profile) {
+        header.id()
+                .ifPresent(id -> softly.assertThat(id)
+                        .as("%s: %s RAG id vs preload id (%s)", entry.sourcePath(), shape, profile)
+                        .isEqualTo(entry.id()));
+        header.scope()
+                .ifPresent(scope -> softly.assertThat(scope)
+                        .as("%s: %s RAG scope vs preload rag-scope (%s)", entry.sourcePath(), shape, profile)
+                        .isEqualTo(entry.ragScope()));
+        header.permissions()
+                .ifPresent(permissions -> softly.assertThat(permissions)
+                        .as(
+                                "%s: %s required permissions vs preload required-permissions (%s)",
+                                entry.sourcePath(), shape, profile)
+                        .isEqualTo(new TreeSet<>(entry.requiredPermissions())));
     }
 
     @Test
     @DisplayName("the parser reads front matter, inline lines, and tolerates a document without a header")
     void parserHandlesEveryHeaderShape() {
         Header frontMatter = parse(
-                "---\nrag_id: a.b\nrag_scope: order\nrequired_permissions:\n  - x:y:view\n  - z:w:read\n---\n\nbody");
+                        "---\nrag_id: a.b\nrag_scope: order\nrequired_permissions:\n  - x:y:view\n  - z:w:read\n---\n\nbody")
+                .frontMatter();
         assertThat(frontMatter.id()).contains("a.b");
         assertThat(frontMatter.scope()).contains("order");
         assertThat(frontMatter.permissions()).contains(Set.of("x:y:view", "z:w:read"));
 
         Header inline = parse(
-                "# Title\n\nRAG id: `c.d`  \nRAG scope: `tax`  \nRequired permissions: `p:q:view`, `r:s:call` (note).\n");
+                        "# Title\n\nRAG id: `c.d`  \nRAG scope: `tax`  \nRequired permissions: `p:q:view`, `r:s:call` (note).\n")
+                .inline();
         assertThat(inline.id()).contains("c.d");
         assertThat(inline.scope()).contains("tax");
         assertThat(inline.permissions()).contains(Set.of("p:q:view", "r:s:call"));
 
-        Header bare = parse("RAG id: e.f\nRAG scope: master\nRequired permissions: AUTHENTICATED\n");
+        Header bare = parse("RAG id: e.f\nRAG scope: master\nRequired permissions: AUTHENTICATED\n")
+                .inline();
         assertThat(bare.permissions()).contains(Set.of("AUTHENTICATED"));
 
-        assertThat(parse("# Just a title\n\nNo header here.\n").present()).isFalse();
+        assertThat(parse("# Just a title\n\nNo header here.\n").present()).isEmpty();
     }
 
-    private static Header parse(String text) {
+    @Test
+    @DisplayName("a document with front matter also has its inline lines read, so the two cannot drift (#2423)")
+    void parserReadsInlineLinesBelowFrontMatter() {
+        Headers both = parse("---\nrag_id: a.b\nrag_scope: order\nrequired_permissions:\n  - x:y:view\n"
+                + "  - z:w:read\n---\n\nRAG id: a.b\nRAG scope: order\nRequired permissions: x:y:view\n");
+        assertThat(both.frontMatter().permissions()).contains(Set.of("x:y:view", "z:w:read"));
+        assertThat(both.inline().id()).contains("a.b");
+        assertThat(both.inline().permissions()).contains(Set.of("x:y:view"));
+
+        Headers frontMatterOnly =
+                parse("---\nrag_id: a.b\nrag_scope: order\nrequired_permissions: [x:y:view]\n---\n\nbody\n");
+        assertThat(frontMatterOnly.inline().present()).isFalse();
+    }
+
+    private static Headers parse(String text) {
         List<String> lines = text.lines().toList();
+        Header none = new Header(Optional.empty(), Optional.empty(), Optional.empty());
         if (!lines.isEmpty() && lines.getFirst().strip().equals("---")) {
             int end = -1;
             for (int i = 1; i < lines.size(); i++) {
@@ -108,10 +145,10 @@ class RagDocumentHeaderAgreementTest {
                 }
             }
             if (end > 0) {
-                return frontMatter(lines.subList(1, end));
+                return new Headers(frontMatter(lines.subList(1, end)), inline(lines.subList(end + 1, lines.size())));
             }
         }
-        return inline(lines);
+        return new Headers(none, inline(lines));
     }
 
     private static Header frontMatter(List<String> lines) {

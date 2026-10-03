@@ -10,7 +10,7 @@ required_permissions:
 
 RAG id: accounting.journal-entries
 RAG scope: accounting
-Required permissions: accounting:je:view
+Required permissions: accounting:je:view, reporting:view:financial-statements
 Audience: internal staff.
 
 This document describes the implemented journal-entry posting and reversal lifecycle in pos-accounting.
