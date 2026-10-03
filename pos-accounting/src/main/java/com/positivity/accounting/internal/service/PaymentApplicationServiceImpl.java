@@ -32,6 +32,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -104,6 +105,29 @@ public class PaymentApplicationServiceImpl
             return receivablePaymentRepository
                     .findBySourceEventId(sourceEventId)
                     .orElseThrow(() -> new IllegalStateException("Payment not found after existence check"));
+        }
+
+        // The same payment reached accounting by another path first (an INVOICE_PAYMENT event, or an
+        // earlier fact with another event id, #2435): paymentId is the key, so reuse the recorded row
+        // when it agrees instead of failing on the primary key, and refuse one that does not.
+        Optional<ReceivablePayment> recorded = receivablePaymentRepository.findById(paymentId);
+        if (recorded.isPresent()) {
+            ReceivablePayment existing = recorded.get();
+            boolean agrees = existing.getTotalAmount() != null
+                    && existing.getTotalAmount().compareTo(totalAmount) == 0
+                    && customerId.equals(existing.getCustomerId())
+                    && currency.equalsIgnoreCase(String.valueOf(existing.getCurrency()));
+            if (!agrees) {
+                throw new IllegalStateException("Payment " + paymentId + " is already recorded (event "
+                        + existing.getSourceEventId() + ") with a different amount, currency or customer;"
+                        + " event " + sourceEventId + " conflicts with it");
+            }
+            log.info(
+                    "Payment {} already recorded by event {}; event {} reuses it",
+                    paymentId,
+                    existing.getSourceEventId(),
+                    sourceEventId);
+            return existing;
         }
 
         ReceivablePayment payment = new ReceivablePayment();
@@ -286,6 +310,39 @@ public class PaymentApplicationServiceImpl
                 .build();
     }
 
+    @Override
+    public PaymentApplicationResponse.@Nullable CustomerCreditInfo creditUnappliedPayment(
+            @NonNull UUID paymentId, @NonNull String creditRequestId) {
+        ReceivablePayment payment = receivablePaymentRepository
+                .findById(paymentId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, PAYMENT_NOT_FOUND + paymentId));
+        BigDecimal unapplied = payment.getUnappliedAmount();
+        if (unapplied == null || unapplied.compareTo(BigDecimal.ZERO) <= 0) {
+            // Already applied or credited in full: a replay changes nothing.
+            log.info("Payment {} has no unapplied balance to credit (request {})", paymentId, creditRequestId);
+            return null;
+        }
+        if (payment.getStatus() != ReceivablePaymentStatus.AVAILABLE) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Payment " + paymentId + " is not available (status: " + payment.getStatus() + ")");
+        }
+        validateSameCurrency(payment);
+
+        Instant timestamp = Instant.now(clock);
+        PaymentApplicationResponse.CustomerCreditInfo creditInfo = createCustomerCredit(payment, unapplied, timestamp);
+        // Same transaction as the CustomerCredit insert (transactional outbox, #975): the issuance
+        // leg posts Dr Undeposited Funds / Cr Customer Credit Liability for the whole amount.
+        enqueueCustomerCreditIssuanceGLPostingWorkItem(
+                paymentId, creditRequestId, payment, creditInfo.getCreditId(), unapplied, timestamp);
+
+        payment.applyAmount(unapplied);
+        payment.setUpdatedAt(timestamp);
+        payment.setModifiedBy(getCurrentUser());
+        receivablePaymentRepository.save(payment);
+        return creditInfo;
+    }
+
     /**
      * Void a receivable payment so it can no longer be applied.
      *
@@ -299,6 +356,7 @@ public class PaymentApplicationServiceImpl
      *
      * @param paymentId receivable payment ID
      */
+    @Override
     public void voidPayment(@NonNull UUID paymentId) {
         ReceivablePayment payment = receivablePaymentRepository
                 .findById(paymentId)

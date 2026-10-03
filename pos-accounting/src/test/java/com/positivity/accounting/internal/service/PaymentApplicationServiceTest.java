@@ -128,6 +128,68 @@ class PaymentApplicationServiceTest {
     }
 
     // ========================================
+    // creditUnappliedPayment() Tests (#2435)
+    // ========================================
+
+    @Test
+    @DisplayName("creditUnappliedPayment converts the whole unapplied balance to a CustomerCredit with its GL leg")
+    void creditUnappliedPayment_creditsWholeBalanceAndEnqueuesIssuance() {
+        UUID creditId = UUID.fromString("00000000-0000-0000-0000-0000000c2435");
+        when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+        when(customerCreditRepository.save(any(CustomerCredit.class))).thenAnswer(invocation -> {
+            CustomerCredit credit = invocation.getArgument(0);
+            credit.setCreditId(creditId);
+            return credit;
+        });
+
+        PaymentApplicationResponse.CustomerCreditInfo credit =
+                service.creditUnappliedPayment(testPaymentId, "INVOICE_PAYMENT:req");
+
+        assertThat(credit).isNotNull();
+        assertThat(credit.getCreditId()).isEqualTo(creditId);
+        assertThat(credit.getAmount()).isEqualByComparingTo("1000.00");
+        assertThat(testPayment.getUnappliedAmount()).isEqualByComparingTo("0");
+        verify(receivablePaymentRepository).save(testPayment);
+
+        ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(outboxService)
+                .saveToOutbox(
+                        any(UUID.class),
+                        eq("CustomerCreditIssuance"),
+                        eq(testPaymentId),
+                        eq(CustomerCreditIssuanceGLPostingEvent.class.getName()),
+                        eventCaptor.capture());
+        CustomerCreditIssuanceGLPostingEvent issuance = (CustomerCreditIssuanceGLPostingEvent) eventCaptor.getValue();
+        assertThat(issuance.getApplicationRequestId()).isEqualTo("INVOICE_PAYMENT:req");
+        assertThat(issuance.getCreditAmount()).isEqualByComparingTo("1000.00");
+        assertThat(issuance.getCreditId()).isEqualTo(creditId);
+    }
+
+    @Test
+    @DisplayName("creditUnappliedPayment is a no-op once nothing is left unapplied, so a replay changes nothing")
+    void creditUnappliedPayment_nothingUnapplied_returnsNullWithoutWriting() {
+        testPayment.setUnappliedAmount(BigDecimal.ZERO);
+        when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+
+        assertThat(service.creditUnappliedPayment(testPaymentId, "INVOICE_PAYMENT:req"))
+                .isNull();
+
+        verify(customerCreditRepository, never()).save(any());
+        verify(outboxService, never()).saveToOutbox(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("creditUnappliedPayment refuses a payment in a foreign currency before writing anything")
+    void creditUnappliedPayment_foreignCurrency_refused() {
+        testPayment.setCurrency("EUR");
+        when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+
+        assertThatThrownBy(() -> service.creditUnappliedPayment(testPaymentId, "INVOICE_PAYMENT:req"))
+                .isInstanceOf(CurrencyNotSupportedException.class);
+        verify(customerCreditRepository, never()).save(any());
+    }
+
+    // ========================================
     // handlePaymentCleared() Tests
     // ========================================
 
@@ -180,6 +242,39 @@ class PaymentApplicationServiceTest {
         // Assert
         assertThat(result).isEqualTo(testPayment);
         verify(receivablePaymentRepository).existsBySourceEventId(testSourceEventId);
+        verify(receivablePaymentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("A payment already recorded under another event id is reused when it agrees (#2435)")
+    void testHandlePaymentCleared_samePaymentIdOtherEvent_reusesRecordedPayment() {
+        UUID otherEventId = UUID.fromString("00000000-0000-0000-0000-0000000e2435");
+        when(receivablePaymentRepository.existsBySourceEventId(otherEventId)).thenReturn(false);
+        when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+
+        ReceivablePayment result = service.handlePaymentCleared(
+                testPaymentId, testCustomerId, "usd", new BigDecimal("1000.0"), Instant.now(TEST_CLOCK), otherEventId);
+
+        assertThat(result).isSameAs(testPayment);
+        verify(receivablePaymentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("A payment already recorded with a different amount is refused, not overwritten (#2435)")
+    void testHandlePaymentCleared_samePaymentIdOtherAmount_refused() {
+        UUID otherEventId = UUID.fromString("00000000-0000-0000-0000-0000000e2436");
+        when(receivablePaymentRepository.existsBySourceEventId(otherEventId)).thenReturn(false);
+        when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+
+        assertThatThrownBy(() -> service.handlePaymentCleared(
+                        testPaymentId,
+                        testCustomerId,
+                        "USD",
+                        new BigDecimal("999.00"),
+                        Instant.now(TEST_CLOCK),
+                        otherEventId))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("different amount");
         verify(receivablePaymentRepository, never()).save(any());
     }
 

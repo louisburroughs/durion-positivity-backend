@@ -72,6 +72,14 @@ pos:
         retention-cron: ${POS_ACCOUNTING_BANKREC_IMPORT_RETENTION_CRON:0 30 3 * * *}
         # Largest statement file accepted, in bytes (spring.servlet.multipart must allow it).
         max-file-bytes: ${POS_ACCOUNTING_BANKREC_IMPORT_MAX_FILE_BYTES:10485760}
+    # Drains RECEIVED accounting events submitted through POST /v1/accounting/events (#2435):
+    # INVOICE_PAYMENT to the AR subledger processor, every other type through the posting engine.
+    event-drainer:
+      enabled: ${POS_ACCOUNTING_EVENT_DRAINER_ENABLED:true}
+      poll-interval-ms: ${POS_ACCOUNTING_EVENT_DRAINER_POLL_INTERVAL_MS:30000}
+      batch-size: ${POS_ACCOUNTING_EVENT_DRAINER_BATCH_SIZE:50}
+      # RECEIVED longer than this counts toward the accounting.events.received.stale gauge.
+      stale-after-ms: ${POS_ACCOUNTING_EVENT_DRAINER_STALE_AFTER_MS:600000}
     credit-memo:
       # Required: GL account for revenue reversals (typically 4000-4999 range)
       revenue-account-id: ${POS_ACCOUNTING_CREDIT_MEMO_REVENUE_ACCOUNT_ID}

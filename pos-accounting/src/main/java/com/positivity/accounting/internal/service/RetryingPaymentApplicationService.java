@@ -11,6 +11,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.context.annotation.Primary;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
@@ -90,6 +91,12 @@ public class RetryingPaymentApplicationService implements PaymentApplicationServ
                         secondFailure);
             }
         }
+    }
+
+    @Override
+    public PaymentApplicationResponse.@Nullable CustomerCreditInfo creditUnappliedPayment(
+            @NonNull UUID paymentId, @NonNull String creditRequestId) {
+        return delegate.creditUnappliedPayment(paymentId, creditRequestId);
     }
 
     @Override
