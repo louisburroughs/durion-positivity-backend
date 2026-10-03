@@ -95,6 +95,38 @@ public class JournalEntryServiceImpl implements JournalEntryService {
     }
 
     /**
+     * Creates a manual draft entry (the REST create path, #2434): a request without a source type
+     * is stamped {@link JournalEntrySourceTypes#MANUAL}, and one without a source event id takes the
+     * entry's own id, so a manual entry is never stored without a source. A source the caller
+     * supplies is kept.
+     */
+    @Override
+    public JournalEntryResponse createManualJournalEntry(JournalEntryCreateRequest request) {
+        JournalEntry entry = JournalEntryMapper.toEntity(request);
+        entry.setJournalEntryId(UUIDv7Generator.generate());
+        if (entry.getSourceEventType() == null || entry.getSourceEventType().isBlank()) {
+            entry.setSourceEventType(JournalEntrySourceTypes.MANUAL);
+        }
+        if (entry.getSourceEventId() == null) {
+            entry.setSourceEventId(entry.getJournalEntryId());
+        }
+        return JournalEntryMapper.toResponse(createEntity(entry));
+    }
+
+    /**
+     * Fail fast when a posting path builds an entry without its source (#2434): every journal
+     * entry must say which fact or request produced it.
+     */
+    private static void requireSource(JournalEntry entry) {
+        if (entry.getSourceEventType() == null || entry.getSourceEventType().isBlank()) {
+            throw new IllegalArgumentException("Journal entry requires a non-blank sourceEventType");
+        }
+        if (entry.getSourceEventId() == null) {
+            throw new IllegalArgumentException("Journal entry requires a sourceEventId");
+        }
+    }
+
+    /**
      * Entity-level creation backing {@link #createJournalEntry(JournalEntryCreateRequest)}; kept
      * separate so the balance/GL-account validation and persistence logic reads independently of
      * the DTO conversion at the public seam.
@@ -108,6 +140,7 @@ public class JournalEntryServiceImpl implements JournalEntryService {
 
         // Validate balance
         validateBalance(entry);
+        requireSource(entry);
 
         // Validate all GL accounts are active at transaction date
         for (JournalEntryLine line : entry.getLines()) {
@@ -410,6 +443,8 @@ public class JournalEntryServiceImpl implements JournalEntryService {
         reversal.setTransactionDate(reversalTransactionDate);
         reversal.setDescription("REVERSAL of " + original.getJournalEntryId() + " - Reason: " + reversalReason);
         reversal.setSourceEventId(original.getSourceEventId());
+        // Same source as the entry it reverses, so the pair is traceable and filterable together (#2434).
+        reversal.setSourceEventType(original.getSourceEventType());
         reversal.setStatus(JournalEntryStatus.POSTED); // Reversals post immediately
         reversal.setPostedAt(now);
         reversal.setCreatedAt(now);

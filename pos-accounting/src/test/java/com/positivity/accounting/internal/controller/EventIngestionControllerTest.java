@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.accounting.BaseIntegrationTest;
+import com.positivity.accounting.internal.config.AccountingEventTypeRegistry;
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
 import com.positivity.accounting.internal.dto.ContractField;
 import com.positivity.accounting.internal.dto.EventEnvelopeContract;
@@ -98,6 +99,41 @@ class EventIngestionControllerTest extends BaseIntegrationTest {
         @DisplayName("should return 403 when caller lacks accounting:events:view authority")
         void getEventStatuses_returns403_whenUnauthorized() throws Exception {
             mockMvc.perform(get(BASE_URL + "/statuses")
+                            .header("X-Authorities", "accounting:read")
+                            .header("X-User", TEST_USER))
+                    .andExpect(status().isForbidden());
+        }
+    }
+
+    @Nested
+    @DisplayName("GET /v1/accounting/events/types")
+    class ListAccountingEventTypes {
+
+        @Test
+        @DisplayName("should return 200 with the registry, not shadowed by /{eventId}")
+        void listAccountingEventTypes_returns200() throws Exception {
+            mockMvc.perform(get(BASE_URL + "/types")
+                            .header("X-Authorities", VIEW_AUTHORITY)
+                            .header("X-User", TEST_USER))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.length()")
+                            .value(AccountingEventTypeRegistry.entries().size()))
+                    .andExpect(jsonPath("$[?(@.code=='INVOICE_PAYMENT')].ingestion")
+                            .value("API"))
+                    .andExpect(jsonPath("$[?(@.code=='INVOICE_PAYMENT')].postsToGl")
+                            .value(false))
+                    .andExpect(jsonPath("$[?(@.code=='inventory.scrap.posted')].ingestion")
+                            .value("KAFKA"))
+                    .andExpect(jsonPath("$[?(@.code=='inventory.scrap.posted')].postsToGl")
+                            .value(true))
+                    .andExpect(jsonPath("$[?(@.code=='inventory.scrap.posted')].sourceDomain")
+                            .value("inventory"));
+        }
+
+        @Test
+        @DisplayName("should return 403 when caller lacks accounting:events:view authority")
+        void listAccountingEventTypes_returns403_whenUnauthorized() throws Exception {
+            mockMvc.perform(get(BASE_URL + "/types")
                             .header("X-Authorities", "accounting:read")
                             .header("X-User", TEST_USER))
                     .andExpect(status().isForbidden());

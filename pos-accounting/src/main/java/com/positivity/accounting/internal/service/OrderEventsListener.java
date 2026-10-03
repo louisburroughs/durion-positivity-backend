@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.config.AccountingEventTypeRegistry;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
@@ -7,6 +8,8 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.ObjectProvider;
@@ -41,16 +44,30 @@ import tools.jackson.databind.ObjectMapper;
  * <p>Posting itself (idempotent on sessionId via posting key, period-gated, accounts resolved
  * through the {@code REGISTER_OVER_SHORT} posting category, zero-variance posts nothing) lives in
  * {@link RegisterOverShortPostingService}.
+ *
+ * <p><b>Ingestion record (#2433).</b> Every consumed session-close fact writes one {@code
+ * accounting_event} row through {@link KafkaFactIngestionRecorder} in the handler transaction:
+ * {@code PROCESSED / NEW} linked to the posted entry, {@code PROCESSED / NEW} with no entry for a
+ * zero variance, {@code PROCESSED / DUPLICATE_IGNORED} when the session's posting key was already
+ * registered. A currency hold writes its own {@code SUSPENDED} row inside the posting service.
  */
 @Slf4j
 @Component
 @ConditionalOnProperty(prefix = "pos.accounting.kafka", name = "enabled", havingValue = "true")
 public class OrderEventsListener {
 
+    /**
+     * Event type codes this listener records an {@code accounting_event} row for, one per consumed
+     * fact (#2433).
+     */
+    public static final List<String> RECORDED_EVENT_TYPES =
+            AccountingEventTypeRegistry.kafkaCodes(AccountingEventTypeRegistry.DOMAIN_ORDER);
+
     private final Clock clock;
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
     private final RegisterOverShortPostingService registerOverShortPostingService;
+    private final KafkaFactIngestionRecorder ingestionRecorder;
     private final Counter payloadRejectedCounter;
 
     /** The handler plus its processed mark, or a failure's mark alone, per transaction; see the class doc. */
@@ -61,12 +78,14 @@ public class OrderEventsListener {
             ObjectMapper objectMapper,
             ProcessedEventRepository processedEventRepository,
             RegisterOverShortPostingService registerOverShortPostingService,
+            KafkaFactIngestionRecorder ingestionRecorder,
             ObjectProvider<MeterRegistry> meterRegistry,
             PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.registerOverShortPostingService = registerOverShortPostingService;
+        this.ingestionRecorder = ingestionRecorder;
         this.handlerTransaction = new TransactionTemplate(transactionManager);
         this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         MeterRegistry registry = meterRegistry.getIfAvailable();
@@ -129,7 +148,15 @@ public class OrderEventsListener {
 
         try {
             handlerTransaction.executeWithoutResult(_ -> {
-                registerOverShortPostingService.postOverShort(fact, eventId);
+                FactPostingOutcome outcome = registerOverShortPostingService.postOverShort(fact, eventId);
+                ingestionRecorder.record(
+                        RegisterOverShortPostingService.SOURCE_SYSTEM,
+                        RegisterSessionClosedV1.EVENT_TYPE,
+                        eventId,
+                        fact.sessionId(),
+                        LocalDateTime.ofInstant(fact.closedAt(), clock.getZone()),
+                        fact,
+                        outcome);
                 markProcessed(eventId);
             });
         } catch (DatabindException e) {

@@ -64,7 +64,7 @@ public class RegisterOverShortPostingService {
     private final GLMappingResolver glMappingResolver;
     private final GLPostingService glPostingService;
     private final LedgerCurrency ledgerCurrency;
-    private final InventoryFactIngestionRecorder ingestionRecorder;
+    private final KafkaFactIngestionRecorder ingestionRecorder;
 
     /**
      * Post the drawer over/short variance for a closed session, exactly once per sessionId. A
@@ -72,19 +72,21 @@ public class RegisterOverShortPostingService {
      *
      * @param fact the consumed session-closed fact
      * @param envelopeEventId the consumed envelope's event id, kept on a currency-held record
+     * @return what the fact did, for the listener's ingestion record (#2433)
      */
     @Transactional
-    public void postOverShort(@NonNull RegisterSessionClosedV1 fact, @NonNull String envelopeEventId) {
+    public @NonNull FactPostingOutcome postOverShort(
+            @NonNull RegisterSessionClosedV1 fact, @NonNull String envelopeEventId) {
         BigDecimal overShort = fact.overShort();
         if (overShort == null || overShort.signum() == 0) {
             log.debug("Zero-variance register close, nothing to post | sessionId={}", fact.sessionId());
-            return;
+            return FactPostingOutcome.nothingToPost();
         }
 
         String idempotencyKey = IDEMPOTENCY_KEY_PREFIX + fact.sessionId();
         if (idempotencyService.isKeyProcessed(idempotencyKey)) {
             log.info("Register over/short GL posting already processed, skipping | sessionId={}", fact.sessionId());
-            return;
+            return new FactPostingOutcome.AlreadyPosted(null, toSourceEventId(fact.sessionId()));
         }
 
         // Business time, not processing time: redeliveries land in the same period.
@@ -94,7 +96,7 @@ public class RegisterOverShortPostingService {
         // visibly with its currency reason, not posted into the ledger's currency.
         if (ledgerCurrency.isForeign(fact.currencyCode())) {
             holdForeignCurrency(fact, envelopeEventId, transactionDate);
-            return;
+            return new FactPostingOutcome.CurrencyHeld();
         }
         BigDecimal amount = overShort.abs();
 
@@ -137,6 +139,7 @@ public class RegisterOverShortPostingService {
                 shortage ? "SHORTAGE" : "OVERAGE",
                 amount,
                 posted);
+        return FactPostingOutcome.posted(posted);
     }
 
     private void holdForeignCurrency(

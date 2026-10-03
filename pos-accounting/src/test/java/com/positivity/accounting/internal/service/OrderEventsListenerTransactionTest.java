@@ -56,6 +56,9 @@ class OrderEventsListenerTransactionTest {
     @Autowired
     private ObjectProvider<MeterRegistry> meterRegistry;
 
+    @Autowired
+    private KafkaFactIngestionRecorder ingestionRecorder;
+
     private OrderEventsListener listener;
     private String eventId;
 
@@ -69,6 +72,7 @@ class OrderEventsListenerTransactionTest {
                 new ObjectMapper(),
                 processedEventRepository,
                 failingPostingService,
+                ingestionRecorder,
                 meterRegistry,
                 transactionManager);
     }
@@ -175,7 +179,8 @@ class OrderEventsListenerTransactionTest {
 
         @Override
         @Transactional
-        public void postOverShort(@NonNull RegisterSessionClosedV1 fact, @NonNull String envelopeEventId) {
+        public @NonNull FactPostingOutcome postOverShort(
+                @NonNull RegisterSessionClosedV1 fact, @NonNull String envelopeEventId) {
             sawActiveTransaction.set(TransactionSynchronizationManager.isActualTransactionActive());
             throw failure.get();
         }

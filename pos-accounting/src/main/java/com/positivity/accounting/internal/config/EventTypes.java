@@ -133,6 +133,9 @@ public final class EventTypes {
                         .build(),
                 EventTypeRegistration.fastRead("ACCOUNTING_EVENT_STATUS_LIST", "List accounting event statuses")
                         .build(),
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_EVENT_TYPE_LIST", "List the accounting event types the module records")
+                        .build(),
                 EventTypeRegistration.write("ACCOUNTING_EVENT_SUBMIT", "Submit a new accounting event for processing")
                         .build(),
                 EventTypeRegistration.write("ACCOUNTING_EVENT_RETRY", "Retry processing for a failed accounting event")

@@ -1219,6 +1219,7 @@ class BankReconciliationApprovalPostgresIT extends PostgresTenancyTestBase {
     private UUID draft(UUID debit, UUID credit, String amount, LocalDate day) {
         return journalEntries
                 .createJournalEntry(JournalEntryCreateRequest.builder()
+                        .sourceEventType("TEST")
                         .transactionDate(day.atTime(12, 0))
                         .sourceEventId(UUIDv7Generator.generate())
                         .description("Approval IT")
@@ -1241,6 +1242,7 @@ class BankReconciliationApprovalPostgresIT extends PostgresTenancyTestBase {
         return inTx(() -> {
             UUID created = journalEntries
                     .createJournalEntry(JournalEntryCreateRequest.builder()
+                            .sourceEventType("TEST")
                             .transactionDate(day.atTime(12, 0))
                             .sourceEventId(UUIDv7Generator.generate())
                             .description(description)

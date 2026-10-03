@@ -140,6 +140,8 @@ class JournalEntryNumberingConcurrencyIT {
 
     private JournalEntryResponse createDraft() {
         JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
+                .sourceEventType("TEST")
+                .sourceEventId(UUID.randomUUID())
                 .transactionDate(TX_DATE)
                 .description("A2 concurrency IT")
                 .lines(java.util.List.of(

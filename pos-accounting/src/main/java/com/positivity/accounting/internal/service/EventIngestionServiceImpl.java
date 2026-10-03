@@ -8,6 +8,7 @@ import com.positivity.accounting.internal.dto.DuplicateEventException;
 import com.positivity.accounting.internal.dto.EventEnvelopeContract;
 import com.positivity.accounting.internal.dto.EventProcessingLogEntry;
 import com.positivity.accounting.internal.dto.FactConsumptionIdempotency;
+import com.positivity.accounting.internal.dto.FactPostingKeyDescriptor;
 import com.positivity.accounting.internal.dto.IdempotencyOutcomeDescriptor;
 import com.positivity.accounting.internal.dto.IdempotencyOutcomesContract;
 import com.positivity.accounting.internal.dto.IdentifierStrategy;
@@ -28,6 +29,7 @@ import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.exception.EventNotFoundException;
 import com.positivity.accounting.internal.exception.EventValidationException;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
+import com.positivity.domainevents.payment.PaymentSettledV1;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -662,12 +664,78 @@ public class EventIngestionServiceImpl implements EventIngestionService {
                 .toList();
         FactConsumptionIdempotency factConsumption = FactConsumptionIdempotency.builder()
                 .mechanism("DETERMINISTIC_SOURCE_EVENT_ID")
+                .envelopeDeduplication("PROCESSED_EVENTS_BY_EVENT_ID")
+                .postingDeduplication(buildFactPostingKeys())
                 .outcomes(factOutcomes)
                 .build();
         return IdempotencyOutcomesContract.builder()
                 .restSubmission(restSubmission)
                 .factConsumption(factConsumption)
                 .build();
+    }
+
+    /**
+     * Each consuming listener's posting-deduplication key (#2433): how a re-emitted fact (new
+     * envelope eventId, same business fact) is matched, and what its row records. Source systems
+     * and event types come from the listeners' own constants.
+     */
+    private static List<FactPostingKeyDescriptor> buildFactPostingKeys() {
+        String jeDuplicate = "Matched to the earlier posting: no new journal entry; the row is PROCESSED / "
+                + "DUPLICATE_IGNORED and references the earlier entry.";
+        return List.of(
+                FactPostingKeyDescriptor.builder()
+                        .sourceSystem(InventoryEventsListener.SOURCE_SYSTEM)
+                        .eventTypes(InventoryEventsListener.RECORDED_EVENT_TYPES)
+                        .postingKey("Deterministic sourceEventId derived from the scrapId, the adjustmentKind + "
+                                + "adjustmentId, or the revaluationId")
+                        .postsJournalEntry(true)
+                        .duplicateOutcome(IdempotencyOutcome.DUPLICATE_IGNORED)
+                        .onDuplicate(jeDuplicate)
+                        .build(),
+                FactPostingKeyDescriptor.builder()
+                        .sourceSystem(InvoiceEventsListener.SOURCE_SYSTEM)
+                        .eventTypes(InvoiceEventsListener.RECORDED_EVENT_TYPES)
+                        .postingKey("Deterministic sourceEventId derived from the invoiceId + finalizedAt; an open "
+                                + "revenue recognition for the invoice also matches")
+                        .postsJournalEntry(true)
+                        .duplicateOutcome(IdempotencyOutcome.DUPLICATE_IGNORED)
+                        .onDuplicate(jeDuplicate)
+                        .build(),
+                FactPostingKeyDescriptor.builder()
+                        .sourceSystem(RegisterOverShortPostingService.SOURCE_SYSTEM)
+                        .eventTypes(OrderEventsListener.RECORDED_EVENT_TYPES)
+                        .postingKey("Deterministic sourceEventId derived from the register sessionId")
+                        .postsJournalEntry(true)
+                        .duplicateOutcome(IdempotencyOutcome.DUPLICATE_IGNORED)
+                        .onDuplicate(jeDuplicate)
+                        .build(),
+                FactPostingKeyDescriptor.builder()
+                        .sourceSystem(SupplierInvoiceEventsListener.SOURCE_SYSTEM)
+                        .eventTypes(SupplierInvoiceEventsListener.RECORDED_EVENT_TYPES)
+                        .postingKey("Vendor + vendor invoice number (the vendor bill's business key)")
+                        .postsJournalEntry(false)
+                        .duplicateOutcome(IdempotencyOutcome.DUPLICATE_IGNORED)
+                        .onDuplicate("The held bill stands and nothing is posted: an identical re-issue records "
+                                + "PROCESSED / DUPLICATE_IGNORED; a re-issue with a different amount or currency "
+                                + "flags the bill for review and records PROCESSED / NEW.")
+                        .build(),
+                FactPostingKeyDescriptor.builder()
+                        .sourceSystem(WarrantyEventsListener.SOURCE_SYSTEM)
+                        .eventTypes(WarrantyEventsListener.RECORDED_EVENT_TYPES)
+                        .postingKey("Reimbursement id, ordered by aggregateVersion")
+                        .postsJournalEntry(false)
+                        .onDuplicate("Never recorded DUPLICATE_IGNORED: the expectation-row upsert is idempotent, so "
+                                + "a re-emitted fact at an equal or newer aggregateVersion is re-applied and records "
+                                + "PROCESSED / NEW, and one at an older version records SKIPPED / NOT_POSTABLE.")
+                        .build(),
+                FactPostingKeyDescriptor.builder()
+                        .sourceSystem(SettlementEventsListener.PAYMENT_SETTLED_SOURCE_SYSTEM)
+                        .eventTypes(List.of(PaymentSettledV1.EVENT_TYPE))
+                        .postingKey("Event type + paymentIntentId of a currency hold")
+                        .postsJournalEntry(false)
+                        .onDuplicate("Only a payment in a non-ledger currency writes a row (SUSPENDED / "
+                                + "CURRENCY_NOT_SUPPORTED); a re-emitted fact already held writes no second row.")
+                        .build());
     }
 
     /**

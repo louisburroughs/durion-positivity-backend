@@ -66,7 +66,7 @@ class SettlementEventsListenerTransactionTest {
     private ExtInvoiceDepositCreditApplicationRepository extInvoiceDepositCreditApplicationRepository;
 
     @Autowired
-    private InventoryFactIngestionRecorder ingestionRecorder;
+    private KafkaFactIngestionRecorder ingestionRecorder;
 
     @Autowired
     private ObjectProvider<MeterRegistry> meterRegistry;

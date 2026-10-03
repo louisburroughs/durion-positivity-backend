@@ -1,8 +1,8 @@
 package com.positivity.accounting.internal.enums;
 
 /**
- * Idempotency outcome recorded for a Kafka-consumed inventory posting fact
- * ({@code InventoryFactIngestionRecorder}, issue #2191/#2186 D5). Distinct from the REST
+ * Idempotency outcome recorded for a Kafka-consumed posting fact
+ * ({@code KafkaFactIngestionRecorder}, issues #2191, #2186 D5, #2433). Distinct from the REST
  * {@code submitEvent} idempotency mechanism (content-hash dedup via {@code IdempotencyService},
  * 24h window, rejects a replay with HTTP 409 {@code DUPLICATE_EVENT} and persists nothing) — this
  * enum covers only the fact-consumption path, where every consumed fact writes one
@@ -17,14 +17,17 @@ package com.positivity.accounting.internal.enums;
  */
 public enum IdempotencyOutcome {
     /**
-     * First delivery of this fact: a new {@code AccountingEvent} row was written, and — when the
-     * fact posts — a new journal entry.
+     * The fact was not matched to an earlier one on its posting key: a new {@code AccountingEvent}
+     * row was written, and — when the fact posts — a new journal entry.
      */
     NEW,
 
     /**
-     * A re-delivery of a fact already recorded, matched by its deterministic {@code
-     * sourceEventId}; the earlier journal entry (if any) was reused and no new posting was made.
+     * A re-emitted fact (new envelope {@code eventId}) matched on its listener's posting key — the
+     * deterministic {@code sourceEventId} of a journal-entry fact, or the vendor + bill number of a
+     * supplier invoice — so nothing new was posted; a journal-entry fact's row references the earlier
+     * entry. A redelivered envelope (same {@code eventId}) never gets here: {@code processed_events}
+     * short-circuits it and no row is written.
      */
     DUPLICATE_IGNORED;
 
@@ -32,11 +35,13 @@ public enum IdempotencyOutcome {
     public String description() {
         return switch (this) {
             case NEW ->
-                "First delivery of this fact; a new AccountingEvent row was written, "
+                "Not matched to an earlier fact on its posting key; a new AccountingEvent row was written, "
                         + "and a new journal entry if the fact posts.";
             case DUPLICATE_IGNORED ->
-                "Re-delivery matched by its deterministic sourceEventId; "
-                        + "the earlier journal entry was reused and no new posting was made.";
+                "Re-emitted fact (new envelope eventId) matched on its listener's posting key "
+                        + "(deterministic sourceEventId for a journal-entry fact, vendor + bill number for a "
+                        + "supplier invoice); nothing new was posted, and a journal-entry fact's row references "
+                        + "the earlier entry. A redelivered envelope (same eventId) writes no row at all.";
         };
     }
 

@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.config.AccountingEventTypeRegistry;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.domainevents.inventory.InventoryAdjustedV1;
@@ -11,6 +12,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
@@ -77,6 +79,16 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnProperty(prefix = "pos.accounting.kafka", name = "enabled", havingValue = "true")
 public class InventoryEventsListener {
 
+    /** Producing module, stamped as {@code sourceSystem} on every ingestion record this listener writes. */
+    public static final String SOURCE_SYSTEM = "pos-inventory";
+
+    /**
+     * Event type codes this listener records an {@code accounting_event} row for, one per consumed
+     * fact (issues #2191, #2433).
+     */
+    public static final List<String> RECORDED_EVENT_TYPES =
+            AccountingEventTypeRegistry.kafkaCodes(AccountingEventTypeRegistry.DOMAIN_INVENTORY);
+
     static final String POSTED_METRIC = "accounting.inventory.fact.posted";
     static final String SKIPPED_METRIC = "accounting.inventory.fact.skipped";
     static final String SKIP_REASON_UNCOSTED = "UNCOSTED";
@@ -87,7 +99,7 @@ public class InventoryEventsListener {
     private final InventoryShrinkagePostingService shrinkagePostingService;
     private final InventoryAdjustmentPostingService adjustmentPostingService;
     private final InventoryRevaluationPostingService revaluationPostingService;
-    private final InventoryFactIngestionRecorder ingestionRecorder;
+    private final KafkaFactIngestionRecorder ingestionRecorder;
     private final @Nullable MeterRegistry meterRegistry;
     private final @Nullable Counter payloadRejectedCounter;
 
@@ -101,7 +113,7 @@ public class InventoryEventsListener {
             InventoryShrinkagePostingService shrinkagePostingService,
             InventoryAdjustmentPostingService adjustmentPostingService,
             InventoryRevaluationPostingService revaluationPostingService,
-            InventoryFactIngestionRecorder ingestionRecorder,
+            KafkaFactIngestionRecorder ingestionRecorder,
             ObjectProvider<MeterRegistry> meterRegistry,
             PlatformTransactionManager transactionManager) {
         this.clock = clock;
@@ -232,7 +244,8 @@ public class InventoryEventsListener {
                     eventId,
                     fact.revaluationId());
             handlerTransaction.executeWithoutResult(_ -> {
-                ingestionRecorder.recordNothingToPost(eventType, eventId, fact.revaluationId(), transactionDate, fact);
+                ingestionRecorder.recordNothingToPost(
+                        SOURCE_SYSTEM, eventType, eventId, fact.revaluationId(), transactionDate, fact);
                 markProcessed(eventId);
             });
             return;
@@ -287,7 +300,14 @@ public class InventoryEventsListener {
             posted = handlerTransaction.execute(_ -> {
                 UUID journalEntryId = posting.get();
                 ingestionRecorder.recordPosted(
-                        eventType, eventId, domainKeyId, transactionDate, fact, journalEntryId, sourceEventId);
+                        SOURCE_SYSTEM,
+                        eventType,
+                        eventId,
+                        domainKeyId,
+                        transactionDate,
+                        fact,
+                        journalEntryId,
+                        sourceEventId);
                 markProcessed(eventId);
                 return journalEntryId;
             });
@@ -314,7 +334,8 @@ public class InventoryEventsListener {
             String detail) {
         try {
             handlerTransaction.executeWithoutResult(_ -> {
-                ingestionRecorder.recordUncostedSkip(eventType, eventId, domainKeyId, transactionDate, fact, detail);
+                ingestionRecorder.recordUncostedSkip(
+                        SOURCE_SYSTEM, eventType, eventId, domainKeyId, transactionDate, fact, detail);
                 markProcessed(eventId);
             });
         } catch (DatabindException e) {

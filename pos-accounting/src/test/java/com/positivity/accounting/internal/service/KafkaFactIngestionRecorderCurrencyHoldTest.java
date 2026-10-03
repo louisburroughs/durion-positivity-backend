@@ -26,12 +26,12 @@ import org.mockito.ArgumentCaptor;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * {@link InventoryFactIngestionRecorder#recordCurrencyHeld} (ADR-0067 PC-9, issue #2312): a fact in
+ * {@link KafkaFactIngestionRecorder#recordCurrencyHeld} (ADR-0067 PC-9, issue #2312): a fact in
  * a currency other than the ledger's is held as one visible {@code SUSPENDED /
  * CURRENCY_NOT_SUPPORTED} record (releasable through the audited reprocess path, #2334), and a
  * redelivery does not write a second.
  */
-class InventoryFactIngestionRecorderCurrencyHoldTest {
+class KafkaFactIngestionRecorderCurrencyHoldTest {
 
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-07-23T12:00:00Z"), ZoneOffset.UTC);
     private static final UUID SESSION_ID = UUID.fromString("00000000-0000-0000-0000-00000000000a");
@@ -42,11 +42,11 @@ class InventoryFactIngestionRecorderCurrencyHoldTest {
     private final AccountingEventRepository accountingEventRepository = mock(AccountingEventRepository.class);
     private final AccountingSequenceLocker sequenceLocker = mock(AccountingSequenceLocker.class);
 
-    private InventoryFactIngestionRecorder recorder;
+    private KafkaFactIngestionRecorder recorder;
 
     @BeforeEach
     void setUp() {
-        recorder = new InventoryFactIngestionRecorder(
+        recorder = new KafkaFactIngestionRecorder(
                 CLOCK,
                 new ObjectMapper(),
                 accountingEventRepository,

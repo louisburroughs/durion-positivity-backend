@@ -3842,6 +3842,45 @@ paths:
       - Accounting Events
       x-required-permissions:
       - accounting:events:view
+  /v1/accounting/events/types:
+    get:
+      description: 'Lists every accounting event type the module records, each with its code, display name, source domain, ingestion path (KAFKA or API) and whether a fact of that type can produce a journal entry.
+
+        Use this tool to discover the valid values of the eventType filter of listAccountingEvents, including types with no traffic yet; do not use listAccountingEvents itself, which lists ingested event instances, or getEventContract, which describes the submit envelope.
+
+        Preconditions: none beyond the caller holding accounting:events:view.
+
+        Required inputs: none; there is no request body and no filter.
+
+        Emits an ACCOUNTING_EVENT_TYPE_LIST audit event; no state changes.
+
+        Returns 200 with the full registry; the list is fixed by the deployed code, never empty.
+
+        '
+      operationId: listAccountingEventTypes
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/AccountingEventTypeResponse'
+                type: array
+          description: Event types listed
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden
+      security:
+      - bearerAuth:
+        - accounting:events:view
+      summary: List Accounting Event Types
+      tags:
+      - Accounting Events
+      x-required-permissions:
+      - accounting:events:view
   /v1/accounting/events/{eventId}:
     get:
       description: 'Returns one ingested accounting event with its payload, processing status and idempotency outcome.
@@ -5041,7 +5080,7 @@ paths:
 
         Preconditions: total debits must equal total credits across the lines, and every glAccountId must reference a GL account active on the transaction date.
 
-        Required inputs: transactionDate and at least one line with glAccountId (UUID) and a debitAmount or creditAmount; description (max 500), sourceEventId, sourceEventType and dimensions are optional.
+        Required inputs: transactionDate and at least one line with glAccountId (UUID) and a debitAmount or creditAmount; description (max 500), sourceEventId, sourceEventType and dimensions are optional. An entry created without a sourceEventType is stored with sourceEventType MANUAL, and one without a sourceEventId takes its own journalEntryId.
 
         Emits an ACCOUNTING_JOURNAL_ENTRY_CREATE event; GL balances are unchanged until posting.
 
@@ -11413,6 +11452,46 @@ components:
       - eventType
       - payload
       type: object
+    AccountingEventTypeResponse:
+      description: An accounting event type the module records
+      properties:
+        code:
+          description: Value accepted by the eventType filter of listAccountingEvents
+          example: inventory.scrap.posted
+          type: string
+        displayName:
+          description: Human label
+          example: Inventory scrap posted
+          type: string
+        ingestion:
+          description: How the event type reaches accounting
+          enum:
+          - KAFKA
+          - API
+          example: KAFKA
+          type: string
+        postsToGl:
+          description: Whether a fact of this type can produce a journal entry
+          example: true
+          type: boolean
+        sourceDomain:
+          description: Producing domain
+          enum:
+          - invoice
+          - order
+          - inventory
+          - supplier
+          - warranty
+          - payment
+          example: inventory
+          type: string
+      required:
+      - code
+      - displayName
+      - ingestion
+      - postsToGl
+      - sourceDomain
+      type: object
     AccountingPeriodReopenRequest:
       description: Request payload for reopening a closed accounting period
       properties:
@@ -15455,10 +15534,14 @@ components:
       - status
       type: object
     FactConsumptionIdempotency:
-      description: Idempotency mechanism for Kafka-consumed inventory posting facts
+      description: 'Idempotency for Kafka-consumed posting facts: envelope deduplication by eventId, then per-listener posting deduplication by business key'
       properties:
+        envelopeDeduplication:
+          description: 'Envelope deduplication: a redelivered envelope (same eventId) is short-circuited by processed_events before any work, and writes NO accounting_event row and no outcome'
+          example: PROCESSED_EVENTS_BY_EVENT_ID
+          type: string
         mechanism:
-          description: 'Dedup mechanism: a re-delivery is matched by its deterministic sourceEventId'
+          description: 'Posting-deduplication mechanism of the journal-entry-posting facts (pos-inventory, pos-invoice, pos-order): a re-emitted fact is matched by its deterministic sourceEventId. Sources that post no journal entry key differently; postingDeduplication lists every key'
           example: DETERMINISTIC_SOURCE_EVENT_ID
           type: string
         outcomes:
@@ -15466,9 +15549,52 @@ components:
           items:
             $ref: '#/components/schemas/IdempotencyOutcomeDescriptor'
           type: array
+        postingDeduplication:
+          description: 'Posting deduplication, per listener: the business key a re-emitted fact (new envelope eventId, same business fact) is matched on, and what its row then records'
+          items:
+            $ref: '#/components/schemas/FactPostingKeyDescriptor'
+          type: array
       required:
+      - envelopeDeduplication
       - mechanism
       - outcomes
+      - postingDeduplication
+      type: object
+    FactPostingKeyDescriptor:
+      description: How one consuming listener recognizes a re-emitted fact (new envelope eventId, same business fact)
+      properties:
+        duplicateOutcome:
+          description: Outcome recorded for a re-emitted fact matched on the key; absent when this source never records DUPLICATE_IGNORED
+          enum:
+          - NEW
+          - DUPLICATE_IGNORED
+          example: DUPLICATE_IGNORED
+          type: string
+        eventTypes:
+          description: Fact event types this key covers
+          items:
+            type: string
+          type: array
+        onDuplicate:
+          description: What a re-emitted fact matched on the key does
+          type: string
+        postingKey:
+          description: The business key a re-emitted fact is matched on
+          example: Deterministic sourceEventId derived from the scrapId / adjustmentKind + adjustmentId / revaluationId
+          type: string
+        postsJournalEntry:
+          description: Whether a fact under this key posts a journal entry
+          type: boolean
+        sourceSystem:
+          description: Producing module stamped as the rows' sourceSystem
+          example: pos-inventory
+          type: string
+      required:
+      - eventTypes
+      - onDuplicate
+      - postingKey
+      - postsJournalEntry
+      - sourceSystem
       type: object
     FieldError:
       description: Validation error for a specific request field
@@ -16196,7 +16322,7 @@ components:
       properties:
         description:
           description: Human-readable meaning of the outcome
-          example: First delivery of this fact; a new AccountingEvent row was written.
+          example: Not matched to an earlier fact on its posting key; a new AccountingEvent row was written.
           type: string
         outcome:
           description: The outcome constant

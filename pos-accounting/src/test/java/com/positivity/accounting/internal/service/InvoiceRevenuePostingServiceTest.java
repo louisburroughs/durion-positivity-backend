@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.config.OutboxEventWriter;
 import com.positivity.accounting.internal.entity.InvoiceGlPosting;
+import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.repository.InvoiceGlPostingRepository;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.accounting.InvoiceGlPostedV1;
@@ -142,7 +143,7 @@ class InvoiceRevenuePostingServiceTest {
         when(glPostingService.postInvoiceRevenue(any(), any(), any(), any(), any(), any(), any(), any(), anyString()))
                 .thenReturn(JOURNAL_ENTRY_ID);
 
-        service.postRevenue(finalized());
+        assertThat(service.postRevenue(finalized())).isEqualTo(FactPostingOutcome.posted(JOURNAL_ENTRY_ID));
 
         verify(glPostingService)
                 .postInvoiceRevenue(
@@ -243,7 +244,8 @@ class InvoiceRevenuePostingServiceTest {
         when(repository.findByInvoiceIdAndReversalJournalEntryIdIsNull(INVOICE_ID))
                 .thenReturn(Optional.of(openPosting()));
 
-        service.postRevenue(finalized());
+        assertThat(service.postRevenue(finalized()))
+                .isEqualTo(new FactPostingOutcome.AlreadyPosted(JOURNAL_ENTRY_ID, null));
 
         verify(glPostingService, never())
                 .postInvoiceRevenue(any(), any(), any(), any(), any(), any(), any(), any(), anyString());
@@ -259,7 +261,9 @@ class InvoiceRevenuePostingServiceTest {
         when(repository.existsByInvoiceIdAndFinalizedAt(INVOICE_ID, FINALIZED_AT))
                 .thenReturn(true);
 
-        service.postRevenue(finalized());
+        assertThat(service.postRevenue(finalized()))
+                .isEqualTo(new FactPostingOutcome.AlreadyPosted(
+                        null, InvoiceRevenuePostingService.toSourceEventId(INVOICE_ID, FINALIZED_AT)));
 
         verify(glPostingService, never())
                 .postInvoiceRevenue(any(), any(), any(), any(), any(), any(), any(), any(), anyString());
@@ -269,7 +273,11 @@ class InvoiceRevenuePostingServiceTest {
     @Test
     @DisplayName("Deposit-take invoice (depositSourceType set) funds a contract liability, not revenue — skipped")
     void depositTakeInvoiceIsSkipped() {
-        service.postRevenue(fact("FINALIZED", new BigDecimal("108.00"), BigDecimal.ZERO, FINALIZED_AT, "WORKORDER"));
+        assertThat(service.postRevenue(
+                        fact("FINALIZED", new BigDecimal("108.00"), BigDecimal.ZERO, FINALIZED_AT, "WORKORDER")))
+                .isInstanceOfSatisfying(
+                        FactPostingOutcome.Skipped.class,
+                        skipped -> assertThat(skipped.reason()).isEqualTo(PostingFailureReason.NOT_POSTABLE));
 
         verify(glPostingService, never())
                 .postInvoiceRevenue(any(), any(), any(), any(), any(), any(), any(), any(), anyString());
@@ -279,8 +287,10 @@ class InvoiceRevenuePostingServiceTest {
     @Test
     @DisplayName("Zero or null total posts nothing")
     void zeroTotalIsSkipped() {
-        service.postRevenue(fact("FINALIZED", BigDecimal.ZERO, BigDecimal.ZERO, FINALIZED_AT, null));
-        service.postRevenue(fact("FINALIZED", null, null, FINALIZED_AT, null));
+        assertThat(service.postRevenue(fact("FINALIZED", BigDecimal.ZERO, BigDecimal.ZERO, FINALIZED_AT, null)))
+                .isEqualTo(FactPostingOutcome.nothingToPost());
+        assertThat(service.postRevenue(fact("FINALIZED", null, null, FINALIZED_AT, null)))
+                .isEqualTo(FactPostingOutcome.nothingToPost());
 
         verify(glPostingService, never())
                 .postInvoiceRevenue(any(), any(), any(), any(), any(), any(), any(), any(), anyString());
@@ -289,7 +299,11 @@ class InvoiceRevenuePostingServiceTest {
     @Test
     @DisplayName("A FINALIZED fact without finalizedAt posts nothing")
     void missingFinalizedAtIsSkipped() {
-        service.postRevenue(fact("FINALIZED", new BigDecimal("216.53"), new BigDecimal("16.53"), null, null));
+        assertThat(service.postRevenue(
+                        fact("FINALIZED", new BigDecimal("216.53"), new BigDecimal("16.53"), null, null)))
+                .isInstanceOfSatisfying(
+                        FactPostingOutcome.Skipped.class,
+                        skipped -> assertThat(skipped.reason()).isEqualTo(PostingFailureReason.NOT_POSTABLE));
 
         verify(glPostingService, never())
                 .postInvoiceRevenue(any(), any(), any(), any(), any(), any(), any(), any(), anyString());
@@ -342,8 +356,10 @@ class InvoiceRevenuePostingServiceTest {
 
         // The revert fact carries recomputed (different) totals: the reversal must mirror the
         // amounts actually posted, not these.
-        service.reverseRevenue(
-                fact("DRAFT", new BigDecimal("999.00"), new BigDecimal("1.00"), FINALIZED_AT, null), REVERTED_AT);
+        assertThat(service.reverseRevenue(
+                        fact("DRAFT", new BigDecimal("999.00"), new BigDecimal("1.00"), FINALIZED_AT, null),
+                        REVERTED_AT))
+                .isEqualTo(FactPostingOutcome.posted(REVERSAL_ENTRY_ID));
 
         verify(glPostingService)
                 .postInvoiceRevenueReversal(
@@ -386,10 +402,12 @@ class InvoiceRevenuePostingServiceTest {
         when(repository.findByInvoiceIdAndReversalJournalEntryIdIsNull(INVOICE_ID))
                 .thenReturn(Optional.empty());
 
-        service.reverseRevenue(
-                fact("DRAFT", new BigDecimal("216.53"), new BigDecimal("16.53"), null, null), REVERTED_AT);
-        service.reverseRevenue(
-                fact("CANCELLED", new BigDecimal("216.53"), new BigDecimal("16.53"), null, null), REVERTED_AT);
+        assertThat(service.reverseRevenue(
+                        fact("DRAFT", new BigDecimal("216.53"), new BigDecimal("16.53"), null, null), REVERTED_AT))
+                .isEqualTo(FactPostingOutcome.nothingToPost());
+        assertThat(service.reverseRevenue(
+                        fact("CANCELLED", new BigDecimal("216.53"), new BigDecimal("16.53"), null, null), REVERTED_AT))
+                .isEqualTo(FactPostingOutcome.nothingToPost());
 
         verify(glPostingService, never())
                 .postInvoiceRevenueReversal(any(), any(), any(), any(), any(), any(), any(), any(), anyString());

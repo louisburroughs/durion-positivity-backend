@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.config.AccountingEventTypeRegistry;
 import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.ExtInvoiceTax;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
@@ -15,6 +16,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.io.Serial;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
@@ -61,6 +63,18 @@ import tools.jackson.databind.ObjectMapper;
  * rolls back only that work and is recorded in a separate transaction, instead of poisoning a
  * shared transaction whose commit then throws and sends the record round the container's retry
  * ladder; transient and integrity failures, and any posting failure, still propagate unrecorded.
+ *
+ * <p><b>Ingestion record (#2433).</b> Every consumed {@code invoice.invoice.updated} fact writes one
+ * {@code accounting_event} row ({@link #RECORDED_EVENT_TYPES}, source system {@value
+ * #SOURCE_SYSTEM}, {@code domainKeyId} the invoice id) through {@link KafkaFactIngestionRecorder},
+ * in the handler transaction: {@code PROCESSED / NEW} linked to the posted revenue (or reversal)
+ * entry; {@code PROCESSED / DUPLICATE_IGNORED} linked to the earlier entry when the invoice's
+ * revenue cycle was already posted (the {@code POSTED} fact that follows every {@code FINALIZED}
+ * one lands here); {@code PROCESSED / NEW} with no entry for a zero total or a revert with nothing
+ * open; {@code SKIPPED / NOT_POSTABLE} for a stale fact, a deposit-take invoice, a fact without
+ * {@code finalizedAt}, or a status that neither recognizes nor reverses. A recording failure is a
+ * posting failure: it propagates unmarked for retry / DLQ. Other event types on the topic write no
+ * row.
  */
 @Slf4j
 @Component
@@ -75,12 +89,23 @@ public class InvoiceEventsListener {
      */
     static final String OWNER = "invoice";
 
+    /** Producing module, stamped as {@code sourceSystem} on this listener's ingestion records. */
+    public static final String SOURCE_SYSTEM = "pos-invoice";
+
+    /**
+     * Event type codes this listener records an {@code accounting_event} row for, one per consumed
+     * fact (#2433).
+     */
+    public static final List<String> RECORDED_EVENT_TYPES =
+            AccountingEventTypeRegistry.kafkaCodes(AccountingEventTypeRegistry.DOMAIN_INVOICE);
+
     private final Clock clock;
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
     private final ExtInvoiceRepository extInvoiceRepository;
     private final ExtInvoiceTaxRepository extInvoiceTaxRepository;
     private final InvoiceRevenuePostingService invoiceRevenuePostingService;
+    private final KafkaFactIngestionRecorder ingestionRecorder;
     private final Counter payloadRejectedCounter;
     private final Counter replicaPersistFailedCounter;
 
@@ -94,6 +119,7 @@ public class InvoiceEventsListener {
             ExtInvoiceRepository extInvoiceRepository,
             ExtInvoiceTaxRepository extInvoiceTaxRepository,
             InvoiceRevenuePostingService invoiceRevenuePostingService,
+            KafkaFactIngestionRecorder ingestionRecorder,
             ObjectProvider<MeterRegistry> meterRegistry,
             PlatformTransactionManager transactionManager) {
         this.clock = clock;
@@ -102,6 +128,7 @@ public class InvoiceEventsListener {
         this.extInvoiceRepository = extInvoiceRepository;
         this.extInvoiceTaxRepository = extInvoiceTaxRepository;
         this.invoiceRevenuePostingService = invoiceRevenuePostingService;
+        this.ingestionRecorder = ingestionRecorder;
         this.handlerTransaction = new TransactionTemplate(transactionManager);
         this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         MeterRegistry registry = meterRegistry.getIfAvailable();
@@ -158,13 +185,13 @@ public class InvoiceEventsListener {
         try {
             handlerTransaction.executeWithoutResult(_ -> {
                 if (InvoiceUpdatedV1.EVENT_TYPE.equals(eventType)) {
-                    InvoiceUpdatedV1 applied = applyInvoiceUpdate(envelope);
-                    if (applied != null) {
-                        try {
-                            postRevenue(applied, envelope);
-                        } catch (RuntimeException e) {
-                            throw new RevenuePostingFailure(e);
-                        }
+                    InvoiceUpdatedV1 payload =
+                            objectMapper.treeToValue(envelope.path("payload"), InvoiceUpdatedV1.class);
+                    boolean applied = applyInvoiceUpdate(envelope, payload);
+                    try {
+                        postAndRecordRevenue(payload, envelope, eventId, applied);
+                    } catch (RuntimeException e) {
+                        throw new RevenuePostingFailure(e);
                     }
                 } else {
                     // Ignored types are still recorded as processed: the owner's manifest counts
@@ -248,28 +275,49 @@ public class InvoiceEventsListener {
     /**
      * Dispatch the applied (non-stale) fact to invoice revenue recognition (#1843) by status:
      * {@code FINALIZED}/{@code POSTED} recognize, {@code DRAFT}/{@code CANCELLED} reverse an open
-     * recognition, anything else ({@code ERROR}, unknown) is left alone. Failures propagate — see
-     * {@link #onInvoiceEvent}.
+     * recognition, anything else ({@code ERROR}, unknown) is left alone; then write the fact's
+     * ingestion record (#2433), a stale fact included. Failures propagate — see {@link
+     * #onInvoiceEvent}.
      */
-    private void postRevenue(@NonNull InvoiceUpdatedV1 payload, @NonNull JsonNode envelope) {
+    private void postAndRecordRevenue(
+            @NonNull InvoiceUpdatedV1 payload, @NonNull JsonNode envelope, @NonNull String eventId, boolean applied) {
         String status = payload.status();
-        if (InvoiceRevenuePostingService.POSTING_STATUSES.contains(status)) {
-            invoiceRevenuePostingService.postRevenue(payload);
+        String occurredAtText = envelope.path("occurredAtUtc").stringValue(null);
+        Instant occurredAt = occurredAtText == null ? Instant.now(clock) : Instant.parse(occurredAtText);
+        boolean recognizing = InvoiceRevenuePostingService.POSTING_STATUSES.contains(status);
+        FactPostingOutcome outcome;
+        if (!applied) {
+            outcome = FactPostingOutcome.notPostable("Stale invoice fact (aggregateVersion "
+                    + envelope.path("aggregateVersion").longValue(0)
+                    + " below the replica's) not applied; no revenue entry posted");
+        } else if (recognizing) {
+            outcome = invoiceRevenuePostingService.postRevenue(payload);
         } else if (InvoiceRevenuePostingService.REVERSING_STATUSES.contains(status)) {
-            String occurredAt = envelope.path("occurredAtUtc").stringValue(null);
-            invoiceRevenuePostingService.reverseRevenue(
-                    payload, occurredAt == null ? Instant.now(clock) : Instant.parse(occurredAt));
+            outcome = invoiceRevenuePostingService.reverseRevenue(payload, occurredAt);
+        } else {
+            outcome = FactPostingOutcome.notPostable(
+                    "Invoice status " + status + " neither recognizes nor reverses revenue; nothing posted");
         }
+        // Business time: the revenue entry's own date (finalizedAt) for a recognizing fact, else the
+        // fact's occurrence, which is also a reversal entry's date.
+        Instant businessTime = recognizing && payload.finalizedAt() != null ? payload.finalizedAt() : occurredAt;
+        ingestionRecorder.record(
+                SOURCE_SYSTEM,
+                InvoiceUpdatedV1.EVENT_TYPE,
+                eventId,
+                payload.invoiceId(),
+                LocalDateTime.ofInstant(businessTime, clock.getZone()),
+                payload,
+                outcome);
     }
 
     /**
      * Upsert the replica from the envelope's payload.
      *
-     * @return the parsed payload when it was applied, or {@code null} when the event was stale
-     *     and skipped — the caller only dispatches applied facts to GL posting
+     * @return whether it was applied; {@code false} when the event was stale and skipped — the
+     *     caller only dispatches applied facts to GL posting
      */
-    private @Nullable InvoiceUpdatedV1 applyInvoiceUpdate(JsonNode envelope) {
-        InvoiceUpdatedV1 payload = objectMapper.treeToValue(envelope.path("payload"), InvoiceUpdatedV1.class);
+    private boolean applyInvoiceUpdate(JsonNode envelope, InvoiceUpdatedV1 payload) {
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
         UUID invoiceId = payload.invoiceId();
 
@@ -286,7 +334,7 @@ public class InvoiceEventsListener {
                     invoiceId,
                     aggregateVersion,
                     existing.getAggregateVersion());
-            return null;
+            return false;
         }
 
         // saveAndFlush, not save (#1651): ExtInvoice's id is assigned (never generated), so a
@@ -320,7 +368,7 @@ public class InvoiceEventsListener {
                 invoiceId,
                 payload.status(),
                 aggregateVersion);
-        return payload;
+        return true;
     }
 
     /**
