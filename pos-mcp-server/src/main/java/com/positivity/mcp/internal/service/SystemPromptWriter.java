@@ -57,15 +57,15 @@ public class SystemPromptWriter {
     /**
      * Fail-soft: a row that cannot be written is logged, never propagated to the caller.
      *
-     * <p>{@code saveAndFlush}, not {@code save}, is what makes that true. A plain {@code save} only
-     * queues the insert; a unique-constraint violation on {@code system_prompts.name} would then
-     * surface at commit — after this catch block, in the transaction interceptor — and propagate out
-     * of a method whose whole contract is that it does not. Flushing inside the try brings the
-     * failure back where it can be caught. That race is reachable: two concurrent requests from
-     * users of a newly created role both miss, both fetch, and both try to insert the same row.
+     * <p>The transaction boundary is what makes that true. The catch sits outside the
+     * {@code REQUIRES_NEW} transaction, so whatever fails inside it, including a failure at commit,
+     * rolls that transaction back and then lands in the catch rather than escaping to the caller
+     * (#2421). A unique-constraint violation on {@code system_prompts.name} is the expected case:
+     * two concurrent requests from users of a newly created role both miss, both fetch, and both
+     * try to insert the same row.
      *
-     * <p>The catch sits outside the {@code REQUIRES_NEW} transaction, so the failed write is rolled
-     * back before it is swallowed and a commit-time failure is caught too (#2421).
+     * <p>{@code saveAndFlush} only moves that violation earlier, so it surfaces inside the callback
+     * with the row name in context instead of at commit; either way it is caught.
      */
     public void upsert(@NonNull String name, @NonNull String content) {
         try {
