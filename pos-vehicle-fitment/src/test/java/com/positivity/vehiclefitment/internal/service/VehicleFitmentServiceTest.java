@@ -345,7 +345,7 @@ class VehicleFitmentServiceTest {
         when(vehicleTypeRepository.findByMakeId(MAKE_ID)).thenReturn(List.of()).thenReturn(List.of(savedType));
 
         when(responseSpec.body(String.class))
-                .thenReturn("{\"Results\":[{\"VehicleTypeId\":\"1\",\"VehicleTypeName\":\"Passenger Car\"}]}");
+                .thenReturn("{\"Results\":[{\"VehicleTypeId\":1,\"VehicleTypeName\":\"Passenger Car\"}]}");
 
         List<VehicleTypeResponse> result = service.getVehicleTypesForMake(MAKE_ID);
 
@@ -515,7 +515,7 @@ class VehicleFitmentServiceTest {
         when(makeRepository.findById(MAKE_ID)).thenReturn(Optional.of(make(hourOld())));
         when(vehicleTypeRepository.findByMakeId(MAKE_ID)).thenReturn(List.of(vehicleType(dayOld())));
         when(responseSpec.body(String.class))
-                .thenReturn("{\"Results\":[{\"VehicleTypeId\":\"1\",\"VehicleTypeName\":\"Passenger Car\"}]}");
+                .thenReturn("{\"Results\":[{\"VehicleTypeId\":1,\"VehicleTypeName\":\"Passenger Car\"}]}");
 
         service.getVehicleTypesForMake(MAKE_ID);
 

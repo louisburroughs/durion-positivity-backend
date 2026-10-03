@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.vehiclefitment.internal.dto.MakeResponse;
 import com.positivity.vehiclefitment.internal.dto.ManufacturerResponse;
 import com.positivity.vehiclefitment.internal.dto.ModelResponse;
+import com.positivity.vehiclefitment.internal.dto.VehicleTypeResponse;
 import com.positivity.vehiclefitment.tenancy.PostgresTenancyTestBase;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -37,6 +38,7 @@ class VpicReferenceRefreshIT extends PostgresTenancyTestBase {
     private static final String MANUFACTURERS_URL = VPIC + "/getallmanufacturers?format=json";
     private static final String MAKES_URL = VPIC + "/GetMakeForManufacturer/955?format=json";
     private static final String MODELS_URL = VPIC + "/GetModelsForMakeId/441?format=json";
+    private static final String VEHICLE_TYPES_URL = VPIC + "/GetVehicleTypesForMakeId/441?format=json";
 
     private static final UUID TESLA = derived("manufacturer-955");
     private static final UUID TESLA_MAKE = derived("make-441");
@@ -155,6 +157,65 @@ class VpicReferenceRefreshIT extends PostgresTenancyTestBase {
                 .containsExactlyInAnyOrder(tuple(local, "tesla"), tuple(derived("manufacturer-1000"), "Rivian"));
     }
 
+    @Test
+    void vehicleTypesReferencedByAPartFitment_refreshInPlaceAndDroppedTypesAreKept() {
+        fillManufacturerMakeModel();
+        vpic.put(
+                VEHICLE_TYPES_URL,
+                vehicleTypes(
+                        "{\"VehicleTypeId\":2,\"VehicleTypeName\":\"Passenger Car\"}",
+                        "{\"VehicleTypeId\":7,\"VehicleTypeName\":\"Multipurpose Passenger Vehicle (MPV)\"}"));
+        UUID passengerCar = service.getVehicleTypesForMake(TESLA_MAKE).stream()
+                .filter(type -> "2".equals(type.getVehicleTypeId()))
+                .findFirst()
+                .orElseThrow()
+                .getId();
+        owner.update(
+                "INSERT INTO part_fitment_entity (id, part_number_id, vehicle_manufacturer_id, vehicle_make_id,"
+                        + " vehicle_model_id, vehicle_type_id, created_at, updated_at)"
+                        + " VALUES (?, 1, ?, ?, ?, ?, now(), now())",
+                UUID.randomUUID(),
+                TESLA,
+                TESLA_MAKE,
+                MODEL_S,
+                passengerCar);
+        ageCache();
+        vpic.put(
+                VEHICLE_TYPES_URL,
+                vehicleTypes(
+                        "{\"VehicleTypeId\":2,\"VehicleTypeName\":\"Passenger Car (Sedan)\"}",
+                        "{\"VehicleTypeId\":3,\"VehicleTypeName\":\"Truck\"}"));
+
+        assertThat(service.getVehicleTypesForMake(TESLA_MAKE))
+                .extracting(VehicleTypeResponse::getVehicleTypeId, VehicleTypeResponse::getVehicleTypeName)
+                .containsExactlyInAnyOrder(
+                        tuple("2", "Passenger Car (Sedan)"),
+                        tuple("7", "Multipurpose Passenger Vehicle (MPV)"),
+                        tuple("3", "Truck"));
+        assertThat(owner.queryForObject("SELECT vehicle_type_id FROM part_fitment_entity", UUID.class))
+                .isEqualTo(passengerCar);
+        assertThat(owner.queryForObject(
+                        "SELECT vehicle_type_name FROM vehicle_type WHERE id = ?", String.class, passengerCar))
+                .isEqualTo("Passenger Car (Sedan)");
+    }
+
+    @Test
+    void vehicleTypeCachedBeforeIdsWereDerived_isUpdatedNotDuplicated() {
+        fillManufacturerMakeModel();
+        UUID legacy = UUID.randomUUID();
+        owner.update(
+                "INSERT INTO vehicle_type (id, make_id, vehicle_type_name, vehicle_type_id, cache_timestamp,"
+                        + " created_at, updated_at) VALUES (?, ?, 'passenger car', '2', now() - interval '25 hours',"
+                        + " now(), now())",
+                legacy,
+                TESLA_MAKE);
+        vpic.put(VEHICLE_TYPES_URL, vehicleTypes("{\"VehicleTypeId\":2,\"VehicleTypeName\":\"Passenger Car\"}"));
+
+        assertThat(service.getVehicleTypesForMake(TESLA_MAKE))
+                .extracting(VehicleTypeResponse::getId, VehicleTypeResponse::getVehicleTypeName)
+                .containsExactly(tuple(legacy, "Passenger Car"));
+    }
+
     private void fillManufacturerMakeModel() {
         assertThat(service.getManufacturers())
                 .extracting(ManufacturerResponse::getId)
@@ -169,7 +230,7 @@ class VpicReferenceRefreshIT extends PostgresTenancyTestBase {
 
     /** Pushes every cached row outside the 24-hour window, so the next read refetches from vPIC. */
     private void ageCache() {
-        for (String table : List.of("manufacturer", "make", "model")) {
+        for (String table : List.of("manufacturer", "make", "model", "vehicle_type")) {
             owner.update("UPDATE " + table + " SET cache_timestamp = cache_timestamp - interval '25 hours'");
         }
     }
@@ -188,6 +249,10 @@ class VpicReferenceRefreshIT extends PostgresTenancyTestBase {
 
     private static String models(String... rows) {
         return envelope("\"Make ID:441\"", rows);
+    }
+
+    private static String vehicleTypes(String... rows) {
+        return envelope("\"Make ID: 441\"", rows);
     }
 
     private static String envelope(String searchCriteria, String... rows) {

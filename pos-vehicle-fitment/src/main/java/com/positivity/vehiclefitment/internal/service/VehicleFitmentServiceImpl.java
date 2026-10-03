@@ -256,15 +256,15 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
     }
 
     /*
-     * Manufacturers, makes and models refresh from vPIC in place (#2416): each vPIC row updates the row keyed by
-     * the id derived from vPIC's own id, or inserts it if new. Nothing is deleted. These rows are referenced by
-     * foreign keys (make -> manufacturer, model -> make, part_fitment_entity -> all three), so the delete and
-     * reinsert this replaced failed on the first refresh after any child existed. A row vPIC no longer returns
-     * is kept, with its children and part fitments.
+     * Manufacturers, makes, models and vehicle types refresh from vPIC in place (#2416): each vPIC row updates
+     * the row keyed by vPIC's own id, or inserts it under an id derived from that id if new. Nothing is deleted.
+     * These rows are referenced by foreign keys (make -> manufacturer, model and vehicle_type -> make,
+     * part_fitment_entity -> all four), so the delete and reinsert this replaced failed on the first refresh
+     * after any child existed. A row vPIC no longer returns is kept, with its children and part fitments.
      *
-     * Names are unique case-insensitively (per parent for makes and models). A vPIC row whose name already
-     * belongs to a different row, such as one created by a fitment request, is logged and skipped rather than
-     * aborting the whole refresh.
+     * Names are unique case-insensitively (per make for models and vehicle types, per manufacturer for makes).
+     * A vPIC row whose name already belongs to a different row, such as one created by a fitment request, is
+     * logged and skipped rather than aborting the whole refresh.
      */
     private List<Manufacturer> fetchManufacturers() {
         List<Manufacturer> cached = manufacturerRepository.findAll();
@@ -429,7 +429,7 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
                 .findById(makeId)
                 .orElseThrow(() -> new IllegalArgumentException("Make not found with ID: " + makeId));
         List<VehicleType> cached = vehicleTypeRepository.findByMakeId(makeId);
-        if (!cached.isEmpty() && isCacheFresh(cached.getFirst().getCacheTimestamp())) {
+        if (isCacheFresh(lastRefreshed(cached, VehicleType::getCacheTimestamp))) {
             return cached;
         }
         Long vpicMakeId = make.getNhtsaId();
@@ -442,12 +442,38 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
         try {
             JsonNode root = objectMapper.readTree(response);
             JsonNode results = root.get(RESULTS);
-            vehicleTypeRepository.deleteAll(cached);
+            // Upsert, never delete (see the note above fetchManufacturers): part_fitment_entity references
+            // vehicle_type too. vPIC's VehicleTypeId is global (2 = Passenger Car) while a row here belongs to
+            // one make, so the key is (make, VehicleTypeId). An existing row with that key is updated whatever
+            // its id, which also adopts rows cached before ids were derived; a new one gets an id derived from
+            // both vPIC ids.
             for (JsonNode node : results) {
-                VehicleType vt = new VehicleType();
+                String vehicleTypeId = Long.toString(vpicId(node, "VehicleTypeId"));
+                String name = firstNonBlank(node, "VehicleTypeName");
+                VehicleType vt = cached.stream()
+                        .filter(row -> vehicleTypeId.equals(row.getVehicleTypeId()))
+                        .findFirst()
+                        .orElseGet(() -> {
+                            VehicleType created = new VehicleType();
+                            created.setId(localId("vehicle-type-" + vpicMakeId + "-", Long.parseLong(vehicleTypeId)));
+                            return created;
+                        });
+                UUID id = vt.getId();
+                if (name != null
+                        && vehicleTypeRepository
+                                .findByMakeIdAndVehicleTypeNameIgnoreCase(makeId, name)
+                                .filter(other -> !id.equals(other.getId()))
+                                .isPresent()) {
+                    log.warn(
+                            "Skipping vPIC vehicle type {}: name '{}' belongs to another vehicle type of make {}",
+                            vehicleTypeId,
+                            name,
+                            makeId);
+                    continue;
+                }
                 vt.setMake(make);
-                vt.setVehicleTypeId(node.path("VehicleTypeId").asString(""));
-                vt.setVehicleTypeName(node.path("VehicleTypeName").asString(""));
+                vt.setVehicleTypeId(vehicleTypeId);
+                vt.setVehicleTypeName(name);
                 vt.setCacheTimestamp(LocalDateTime.now(clock));
                 vehicleTypeRepository.save(vt);
             }
@@ -458,7 +484,8 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
     }
 
     /**
-     * Reads one of vPIC's numeric ids ({@code Mfr_ID}, {@code Make_ID}, {@code Model_ID}). vPIC returns
+     * Reads one of vPIC's numeric ids ({@code Mfr_ID}, {@code Make_ID}, {@code Model_ID},
+     * {@code VehicleTypeId}). vPIC returns
      * these as JSON integers; anything else is not a payload this service understands, so it fails the
      * refresh rather than inventing an id (#2416).
      */
