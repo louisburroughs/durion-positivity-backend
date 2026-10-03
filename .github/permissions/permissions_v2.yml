@@ -260,15 +260,19 @@ permissions_by_domain:
   - name: inventory:purchase_order:approve
     description: Approve or cancel a purchase order
     source: pos-inventory/src/main/resources/permissions.yaml
+    deprecated: true
   - name: inventory:purchase_order:create
     description: Create or revise a purchase order (DRAFT state)
     source: pos-inventory/src/main/resources/permissions.yaml
+    deprecated: true
   - name: inventory:purchase_order:receive
     description: Record receipts against an approved purchase order
     source: pos-inventory/src/main/resources/permissions.yaml
+    deprecated: true
   - name: inventory:purchase_order:view
     description: View purchase orders and their line details
     source: pos-inventory/src/main/resources/permissions.yaml
+    deprecated: true
   - name: inventory:putaway:override_location_capacity
     description: Override location capacity limits when at or near full capacity
     source: pos-inventory/src/main/resources/permissions.yaml

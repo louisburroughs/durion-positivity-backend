@@ -4579,7 +4579,7 @@ paths:
 
         Preconditions: every listed suggestion must exist, be ACCEPTED, carry a vendor reference and a feed unit cost with an ISO 4217 currency code, all must share one vendor and one currency (codes compare case-insensitively and the order carries the upper-case code), and all must resolve to a single ship-to site.
 
-        Required inputs: suggestionIds (non-empty list of UUIDs); duplicates are collapsed, and the caller needs both inventory:replenishment:manage and inventory:purchase_order:create.
+        Required inputs: suggestionIds (non-empty list of UUIDs); duplicates are collapsed, and the caller needs both inventory:replenishment:manage and order:purchase_order:create.
 
         Emits an INVENTORY_PURCHASE_SUGGESTION_CONVERT event and creates the DRAFT order through the standard purchase order path, with the latest expected date among the suggestions as the expected delivery date.
 
