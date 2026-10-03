@@ -11,8 +11,10 @@ import org.jspecify.annotations.Nullable;
  * {@code com.positivity.platformsender.internal.client.AwsMessageTransport} ({@code aws}).
  *
  * <p>An implementation never throws for a provider answer; it classifies it. A permanent result is
- * one no retry can change (a refused address, a rejected message); a transient one is anything a
- * later attempt may get past (throttling, a provider 5xx, an I/O failure).
+ * one no retry can change (a refused address, a rejected message); a transient one is a failure the
+ * provider answered, or one that happened before the request left (throttling, a provider 5xx, a
+ * refused connection), which a later attempt may get past; an uncertain one is a request that may
+ * have been delivered without an answer coming back, which must never be sent again.
  */
 public interface MessageTransport {
 
@@ -55,7 +57,12 @@ public interface MessageTransport {
         public enum Kind {
             ACCEPTED,
             PERMANENT_FAILURE,
-            TRANSIENT_FAILURE
+            TRANSIENT_FAILURE,
+            /**
+             * The request may have reached the provider but no answer came back (a read timeout, a
+             * connection lost mid-response): it may have been delivered. Never retried by us.
+             */
+            UNCERTAIN
         }
 
         public static @NonNull TransportResult accepted(@NonNull String providerMessageId) {
@@ -68,6 +75,10 @@ public interface MessageTransport {
 
         public static @NonNull TransportResult transientFailure(@NonNull String code, @NonNull String reason) {
             return new TransportResult(Kind.TRANSIENT_FAILURE, null, code, reason);
+        }
+
+        public static @NonNull TransportResult uncertain(@NonNull String code, @NonNull String reason) {
+            return new TransportResult(Kind.UNCERTAIN, null, code, reason);
         }
     }
 }

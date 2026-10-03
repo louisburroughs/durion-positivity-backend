@@ -202,16 +202,50 @@ class AwsMessageTransportTest {
         }
 
         @Test
-        @DisplayName("an I/O failure before any answer is transient")
-        void ioFailureIsTransient() {
+        @DisplayName("a refused connection is transient: nothing left, a retry is safe")
+        void refusedConnectionIsTransient() {
             when(sms.sendTextMessage(any(SendTextMessageRequest.class)))
-                    .thenThrow(SdkClientException.create("Connection reset"));
+                    .thenThrow(SdkClientException.create(
+                            "Unable to execute HTTP request", new java.net.ConnectException("Connection refused")));
 
             TransportResult result = transport.send(text());
 
             assertThat(result.kind()).isEqualTo(Kind.TRANSIENT_FAILURE);
             assertThat(result.code()).isEqualTo("PROVIDER_UNREACHABLE");
         }
+
+        @Test
+        @DisplayName("a read timeout is uncertain: the message may have been delivered")
+        void readTimeoutIsUncertain() {
+            when(sms.sendTextMessage(any(SendTextMessageRequest.class)))
+                    .thenThrow(SdkClientException.create(
+                            "Unable to execute HTTP request", new java.net.SocketTimeoutException("Read timed out")));
+
+            TransportResult result = transport.send(text());
+
+            assertThat(result.kind()).isEqualTo(Kind.UNCERTAIN);
+            assertThat(result.code()).isEqualTo("PROVIDER_NO_RESPONSE");
+        }
+    }
+
+    @Test
+    @DisplayName("failures known to precede sending are transient; any other unanswered failure is uncertain")
+    void clientFailureClassification() {
+        assertThat(AwsMessageTransport.classifyClientFailure(SdkClientException.create(
+                                "x", new java.net.SocketTimeoutException("Connect timed out")))
+                        .kind())
+                .isEqualTo(Kind.TRANSIENT_FAILURE);
+        assertThat(AwsMessageTransport.classifyClientFailure(
+                                SdkClientException.create("x", new java.net.UnknownHostException("email.us-east-1")))
+                        .kind())
+                .isEqualTo(Kind.TRANSIENT_FAILURE);
+        assertThat(AwsMessageTransport.classifyClientFailure(SdkClientException.create(
+                                "Unable to load credentials from any of the providers in the chain"))
+                        .kind())
+                .isEqualTo(Kind.TRANSIENT_FAILURE);
+        assertThat(AwsMessageTransport.classifyClientFailure(SdkClientException.create("Connection reset"))
+                        .kind())
+                .isEqualTo(Kind.UNCERTAIN);
     }
 
     @Test

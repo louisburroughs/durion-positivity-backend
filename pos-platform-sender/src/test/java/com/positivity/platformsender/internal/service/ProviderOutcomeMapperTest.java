@@ -157,8 +157,35 @@ class ProviderOutcomeMapperTest {
 
             assertThat(mapped.eventType()).isEqualTo(SenderMessageOutcomeV1.EVENT_TYPE_BOUNCED);
             assertThat(mapped.outcome().permanent()).isFalse();
+            assertThat(mapped.outcome().address())
+                    .as("the message's destination, since a reject names no recipient")
+                    .isEqualTo("ada@example.com");
             assertThat(mapped.outcome().reason()).isEqualTo("Reject: Bad content");
             assertThat(mapped.outcome().occurredAt()).isEqualTo(Instant.parse("2026-10-03T12:00:00Z"));
+        }
+
+        @Test
+        @DisplayName("a bounce that lists no recipient falls back to the message's destination")
+        void bounceWithoutRecipientUsesDestination() {
+            SenderMessageOutcomeV1 outcome = mapped(ses(
+                            "Bounce",
+                            "bounce",
+                            "{\"bounceType\":\"Permanent\",\"timestamp\":\"2026-10-03T12:00:03.000Z\"}"))
+                    .outcome();
+
+            assertThat(outcome.address()).isEqualTo("ada@example.com");
+        }
+
+        @Test
+        @DisplayName("a bounce or complaint that names no address at all is unusable (FI-2 §2 requires one)")
+        void rejectionWithoutAnyAddressIsUnusable() {
+            String noDestination = ses(
+                            "Complaint",
+                            "complaint",
+                            "{\"complainedRecipients\":[],\"timestamp\":\"2026-10-03T13:00:00.000Z\"}")
+                    .replace("\"destination\":[\"ada@example.com\"],", "");
+
+            assertThat(mapper.map(noDestination)).isInstanceOf(Unusable.class);
         }
 
         @ParameterizedTest
@@ -248,6 +275,15 @@ class ProviderOutcomeMapperTest {
 
             assertThat(mapped.eventType()).isEqualTo(SenderMessageOutcomeV1.EVENT_TYPE_BOUNCED);
             assertThat(mapped.outcome().permanent()).isFalse();
+        }
+
+        @Test
+        @DisplayName("a failed SMS that names no destination number is unusable (FI-2 §2 requires one)")
+        void bounceWithoutNumberIsUnusable() {
+            String noNumber = sms("TEXT_INVALID", true, "Invalid destination phone number")
+                    .replace("\"destinationPhoneNumber\":\"+15550100100\",", "");
+
+            assertThat(mapper.map(noNumber)).isInstanceOf(Unusable.class);
         }
 
         @ParameterizedTest

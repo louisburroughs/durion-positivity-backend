@@ -1,4 +1,5 @@
-# pos-platform-sender: tables with no tenant_id and no row-level-security policy (ADR-0062 section 5).
+# pos-platform-sender: tables with no row-level-security policy and no tenant discriminator (ADR-0062 section 5);
+# a tenant_id column here is plain data, as on event_outbox.
 # Format: <table>  # <reason>. Every other table in this module is tenant-scoped.
 # TenancySchemaConformanceIT reads this file.
 event_outbox  # transactional outbox; the unbound poller publishes every tenant's rows (tenant_id carried as data)

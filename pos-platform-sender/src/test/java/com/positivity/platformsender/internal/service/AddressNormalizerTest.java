@@ -41,7 +41,17 @@ class AddressNormalizerTest {
 
     @ParameterizedTest
     @NullAndEmptySource
-    @ValueSource(strings = {"call me", "555-0100", "025550100100", "+1234567", "+1234567890123456"})
+    @ValueSource(
+            strings = {
+                "call me",
+                "555-0100",
+                "025550100100",
+                "+1234567",
+                "+1234567890123456",
+                "+00000000",
+                "+1abc5550100100",
+                "555 010 0100 ext 2"
+            })
     @DisplayName("a number with no unambiguous E.164 form is not deliverable")
     void ambiguousPhoneIsRejected(String stored) {
         assertThat(AddressNormalizer.e164(stored, "1")).isEmpty();

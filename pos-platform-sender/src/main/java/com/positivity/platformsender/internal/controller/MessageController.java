@@ -38,6 +38,7 @@ public class MessageController {
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
     @EmitEvent(id = "PLATFORM_SENDER_MESSAGE_SEND", apiVersion = "1")
     @Operation(
+            operationId = "sendPlatformMessage",
             summary = "Deliver one rendered message",
             description = "Resolves the recipient's address, hands the message to the provider and returns the"
                     + " provider message id. A replayed messageId answers 200 with the original ids and never"

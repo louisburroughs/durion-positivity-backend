@@ -12,7 +12,9 @@ calls it synchronously; it calls no domain module.
 
 ## Send API
 
-`POST /platform-sender/v1/messages`, service-to-service only (the gateway has no route here).
+`POST /platform-sender/v1/messages` (operationId `sendPlatformMessage`), service-to-service only (the gateway has
+no route here). The springdoc spec is served at `/v3/api-docs`; no `openapi.yaml` is committed for this
+internal-only module (#2428).
 
 | Header | Value |
 | --- | --- |
@@ -31,10 +33,13 @@ calls it synchronously; it calls no domain module.
 | `422` | `UNDELIVERABLE_ADDRESS` | The stored value is not a valid email, or has no E.164 form |
 | `422` | provider error code (`MessageRejected`, `ConflictException`, ...) | The provider refused the message for good (a replay answers the same) |
 | `503` | `SEND_IN_FLIGHT` | Another request holds this `messageId`, or an earlier attempt never settled |
-| `503` | provider error code, `PROVIDER_UNREACHABLE` | Throttled, provider 5xx or I/O failure; nothing was delivered |
+| `503` | provider error code, `PROVIDER_UNREACHABLE` | Throttled, provider 5xx, or a failure before the request left; nothing was delivered |
+| `503` | `PROVIDER_NO_RESPONSE` | No provider answer after the request left (a read timeout): it may have been delivered, so the claim stays `PENDING` and every replay answers `SEND_IN_FLIGHT` |
 
 Idempotency: the `messageId` is claimed in `sent_message` before the provider call and settled after
-it. A crash between the provider accepting and the row settling leaves the claim `PENDING`, which
+it. The SES and SMS clients make one attempt (no SDK retries): a provider call is retried only by the
+caller, and only when it is known not to have been delivered. A crash between the provider accepting
+and the row settling, or a provider call that got no answer, leaves the claim `PENDING`, which
 answers `503` to every replay: the caller's bounded retry then records the send as failed although it
 may have been delivered. That is the side FI-2's "no second delivery" rule errs on; neither provider
 accepts a client token.
@@ -76,6 +81,10 @@ queue, and `OutcomeQueuePoller` long-polls that queue:
 | SES `Complaint` | `sender.message.complained` | |
 | SES `Open` / `Click` | `sender.message.opened` / `sender.message.clicked` | |
 | SES `Send`, `DeliveryDelay`; SMS `TEXT_QUEUED`, `TEXT_PENDING`, `TEXT_SENT` | ignored (deleted) | |
+
+Every bounce and complaint carries `address`, which FI-2 §2 requires for the suppression hand-off:
+the recipient the event names, else the message's destination (`mail.destination` for SES,
+`destinationPhoneNumber` for SMS). An event that names neither is treated as unusable.
 
 Each outcome goes through the outbox under the tagged tenant (Kafka header `tenantId`, record key
 `providerMessageId`, envelope aggregate `messageId`), with a `processed_events` mark keyed by the

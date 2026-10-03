@@ -3,7 +3,12 @@ package com.positivity.platformsender.internal.client;
 import com.positivity.platformsender.internal.config.SenderProperties;
 import com.positivity.platformsender.internal.enums.MessageChannel;
 import com.positivity.platformsender.internal.service.MessageTransport;
+import java.net.ConnectException;
+import java.net.NoRouteToHostException;
+import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -34,10 +39,11 @@ import software.amazon.awssdk.services.sesv2.model.SendEmailRequest;
  * The configuration set named for each channel is what publishes those events to the outcomes
  * queue.
  *
- * <p>Provider answers are classified by status, not by exception type: throttling, a 5xx and any
- * client-side failure (I/O, timeout) are transient; every other 4xx (a rejected message, an
- * opted-out number, an unverified identity) is permanent for this message. The SDK has already
- * retried throttles and 5xx with its standard backoff before an answer gets here.
+ * <p>Provider answers are classified by status, not by exception type: throttling and a 5xx are
+ * transient; every other 4xx (a rejected message, an opted-out number, an unverified identity) is
+ * permanent for this message. A failure with no answer is transient only when it happened before the
+ * request left; otherwise it is uncertain ({@link #classifyClientFailure}). Retrying is the caller's
+ * job: the clients carry no SDK retries, which could repeat a request that was already delivered.
  */
 @Slf4j
 @Component
@@ -70,9 +76,7 @@ public class AwsMessageTransport implements MessageTransport {
         } catch (AwsServiceException e) {
             return classify(e);
         } catch (SdkException e) {
-            // Client side: I/O, timeout, credentials not yet available. Nothing reached the provider
-            // that it acknowledged, and a later attempt may succeed.
-            return TransportResult.transientFailure("PROVIDER_UNREACHABLE", describe(e));
+            return classifyClientFailure(e);
         }
     }
 
@@ -133,6 +137,43 @@ public class AwsMessageTransport implements MessageTransport {
             return TransportResult.transientFailure(code, reason);
         }
         return TransportResult.permanentFailure(code, reason);
+    }
+
+    /**
+     * A failure with no provider answer. When it is known to have happened before the request left
+     * (no connection, an unknown host, no credentials) nothing was sent and a retry is safe;
+     * anything else (a read timeout, a connection lost mid-exchange) may have been delivered, and
+     * is {@link TransportResult.Kind#UNCERTAIN}. The SES and SMS clients run without SDK retries
+     * ({@code AwsClientConfig}) for the same reason.
+     */
+    static TransportResult classifyClientFailure(SdkException e) {
+        if (failedBeforeSending(e)) {
+            return TransportResult.transientFailure("PROVIDER_UNREACHABLE", describe(e));
+        }
+        return TransportResult.uncertain("PROVIDER_NO_RESPONSE", describe(e));
+    }
+
+    private static boolean failedBeforeSending(Throwable failure) {
+        String message = failure.getMessage();
+        if (message != null && message.contains("Unable to load credentials")) {
+            return true;
+        }
+        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+            if (cause instanceof ConnectException
+                    || cause instanceof UnknownHostException
+                    || cause instanceof NoRouteToHostException) {
+                return true;
+            }
+            if (cause instanceof SocketTimeoutException timeout
+                    && timeout.getMessage() != null
+                    && timeout.getMessage().toLowerCase(Locale.ROOT).contains("connect")) {
+                return true;
+            }
+            if (cause.getCause() == cause) {
+                break;
+            }
+        }
+        return false;
     }
 
     private static String describe(SdkException e) {

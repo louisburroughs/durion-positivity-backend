@@ -85,6 +85,6 @@ public class SenderExceptionHandler {
         String correlationId = request.getHeader(X_CORRELATION_ID);
         return correlationId == null || correlationId.isBlank()
                 ? UUIDv7Generator.generate().toString()
-                : correlationId;
+                : correlationId.trim();
     }
 }

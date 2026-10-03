@@ -13,6 +13,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.MissingNode;
 
 /**
  * Translates one provider event, as it arrives on the outcomes queue, into the FI-2 §2 outcome it
@@ -39,6 +40,10 @@ import tools.jackson.databind.ObjectMapper;
  * {@code complained}; opens and clicks are engagement. Interim events (SES {@code Send} and
  * {@code DeliveryDelay}, SMS {@code TEXT_QUEUED}/{@code TEXT_PENDING}/{@code TEXT_SENT}) mean
  * nothing yet and are ignored.
+ *
+ * <p>Every bounce and complaint carries the recipient's address (FI-2 §2: the CRM suppression
+ * hand-off needs it): the one the event names, else the message's destination. An event that names
+ * neither is {@link Unusable}, never relayed without it.
  */
 @Component
 @RequiredArgsConstructor
@@ -154,7 +159,7 @@ public class ProviderOutcomeMapper {
                         at(bounce, mailTime),
                         reason,
                         "Permanent".equals(bounceType),
-                        email(text(recipient, "emailAddress")));
+                        recipientAddress(recipient, mail));
             }
             case "Complaint" -> {
                 JsonNode complaint = event.path("complaint");
@@ -169,7 +174,7 @@ public class ProviderOutcomeMapper {
                         at(complaint, mailTime),
                         feedback == null ? "complaint" : feedback,
                         null,
-                        email(text(complaint.path("complainedRecipients").path(0), "emailAddress")));
+                        recipientAddress(complaint.path("complainedRecipients").path(0), mail));
             }
             case "Open" ->
                 mapped(
@@ -207,7 +212,7 @@ public class ProviderOutcomeMapper {
                         mailTime,
                         join(eventType, text(event.path("reject"), "reason"), null),
                         false,
-                        null);
+                        recipientAddress(MissingNode.getInstance(), mail));
             default -> new Ignored("SES " + eventType + " is not an FI-2 outcome");
         };
     }
@@ -269,6 +274,14 @@ public class ProviderOutcomeMapper {
         if (occurredAt == null) {
             return new Unusable("Provider event " + eventType + " for " + providerMessageId + " has no timestamp");
         }
+        boolean rejection = SenderMessageOutcomeV1.EVENT_TYPE_BOUNCED.equals(eventType)
+                || SenderMessageOutcomeV1.EVENT_TYPE_COMPLAINED.equals(eventType);
+        if (rejection && address == null) {
+            // FI-2 §2 requires the address on every bounce and complaint: it is what the CRM
+            // suppression hand-off blocks. An event that names none is malformed, not relayable.
+            return new Unusable(
+                    "Provider event " + eventType + " for " + providerMessageId + " names no recipient address");
+        }
         return new Mapped(
                 dedupeKey,
                 tenantId,
@@ -316,6 +329,16 @@ public class ProviderOutcomeMapper {
 
     private static @Nullable String email(@Nullable String address) {
         return AddressNormalizer.email(address).orElse(null);
+    }
+
+    /**
+     * The recipient an SES bounce or complaint names, else the message's own destination
+     * ({@code mail.destination}, which every SES event carries). The sender addresses one recipient
+     * per message, so the two agree; the fallback covers an event whose recipient list is absent.
+     */
+    private static @Nullable String recipientAddress(JsonNode recipient, JsonNode mail) {
+        String named = email(text(recipient, "emailAddress"));
+        return named != null ? named : email(text(mail.path("destination").path(0)));
     }
 
     private static @Nullable String text(JsonNode node, String field) {

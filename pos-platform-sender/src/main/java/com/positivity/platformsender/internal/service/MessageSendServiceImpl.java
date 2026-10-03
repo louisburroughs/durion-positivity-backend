@@ -26,7 +26,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * the refusal, or, on a transient failure, the claim is released so the caller's retry can try
  * again. A replay reads the settled row and answers exactly as the first request was answered.
  *
- * <p>A crash between the provider accepting and the row settling leaves the claim {@code PENDING}.
+ * <p>A crash between the provider accepting and the row settling leaves the claim {@code PENDING},
+ * and so does a provider call that may have been delivered without an answer coming back (a read
+ * timeout: {@code UNCERTAIN}).
  * That row answers every replay as transient until the caller's bounded retry gives up: the message
  * may then be recorded as failed although it was delivered, which is the side FI-2's "a replayed
  * messageId MUST NOT produce a second delivery" leaves to err on. Neither SES nor End User Messaging
@@ -138,6 +140,16 @@ public class MessageSendServiceImpl implements MessageSendService {
             }
             case TRANSIENT_FAILURE -> {
                 release(claim);
+                throw new SenderUnavailableException(codeOf(result), reasonOf(result));
+            }
+            case UNCERTAIN -> {
+                // The provider may have taken it. Keep the claim PENDING so no retry can send it
+                // again; the caller sees a transient failure now and SEND_IN_FLIGHT on every replay.
+                log.warn(
+                        "{} message {} may have been delivered (no provider answer): {}",
+                        request.channel(),
+                        request.messageId(),
+                        reasonOf(result));
                 throw new SenderUnavailableException(codeOf(result), reasonOf(result));
             }
         };

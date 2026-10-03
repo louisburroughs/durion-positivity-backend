@@ -24,6 +24,19 @@ class AwsClientConfigTest {
             assertThat(ses.serviceClientConfiguration().region()).isEqualTo(Region.US_EAST_1);
             assertThat(sms.serviceClientConfiguration().region()).isEqualTo(Region.US_EAST_1);
             assertThat(sqs.serviceClientConfiguration().region()).isEqualTo(Region.US_EAST_1);
+            assertThat(ses.serviceClientConfiguration()
+                            .overrideConfiguration()
+                            .retryStrategy()
+                            .orElseThrow()
+                            .maxAttempts())
+                    .as("sending is not idempotent at the provider: one attempt, no SDK retry")
+                    .isEqualTo(1);
+            assertThat(sms.serviceClientConfiguration()
+                            .overrideConfiguration()
+                            .retryStrategy()
+                            .orElseThrow()
+                            .maxAttempts())
+                    .isEqualTo(1);
         }
     }
 }

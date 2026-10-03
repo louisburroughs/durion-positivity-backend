@@ -168,6 +168,18 @@ class MessageSendServiceImplTest {
         }
 
         @Test
+        @DisplayName("an uncertain send keeps the claim, so no retry can deliver it twice")
+        void uncertainKeepsClaim() {
+            when(transport.send(any())).thenReturn(TransportResult.uncertain("PROVIDER_NO_RESPONSE", "Read timed out"));
+
+            assertThatExceptionOfType(SenderUnavailableException.class)
+                    .isThrownBy(() -> service.send(email()))
+                    .satisfies(e -> assertThat(e.getCode()).isEqualTo("PROVIDER_NO_RESPONSE"));
+            verify(repository, never()).deleteById(any());
+            verify(repository, never()).save(any());
+        }
+
+        @Test
         @DisplayName("an unexpected transport fault releases the claim and propagates")
         void unexpectedFaultReleasesClaim() {
             when(transport.send(any())).thenThrow(new IllegalStateException("bug"));
