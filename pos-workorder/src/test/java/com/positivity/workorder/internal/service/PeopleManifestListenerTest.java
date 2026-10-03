@@ -2,6 +2,7 @@ package com.positivity.workorder.internal.service;
 
 import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -17,6 +18,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -61,6 +63,7 @@ class PeopleManifestListenerTest {
         when(meterRegistryProvider.getIfAvailable()).thenReturn(meterRegistry);
         listener = new PeopleManifestListener(repository, kafkaTemplate, objectMapper, meterRegistryProvider);
         ReflectionTestUtils.setField(listener, "peopleCommandsTopic", "people.commands.v1");
+        when(kafkaTemplate.send(any(ProducerRecord.class))).thenReturn(CompletableFuture.completedFuture(null));
     }
 
     /** UUIDv7-shaped id whose embedded timestamp is {@code at}. */
@@ -163,13 +166,16 @@ class PeopleManifestListenerTest {
     }
 
     @Test
-    @DisplayName("A failed replay publish is swallowed — the drift metric still fires")
-    void replayPublishFailureIsSwallowed() {
+    @DisplayName("A failed replay publish propagates for container redelivery — the drift metric still fires")
+    void replayPublishFailurePropagates() {
         when(repository.findEventIdsInRange(eq("people"), eq(TENANT_A), anyString(), anyString()))
                 .thenReturn(List.of());
         when(kafkaTemplate.send(any(ProducerRecord.class))).thenThrow(new IllegalStateException("broker down"));
 
-        listener.onManifest(manifestMessage(1, ReconciliationManifestV1.checksumOf(List.of(IN_WINDOW_ID_1))));
+        assertThatThrownBy(() -> listener.onManifest(
+                        manifestMessage(1, ReconciliationManifestV1.checksumOf(List.of(IN_WINDOW_ID_1)))))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("broker down");
 
         assertThat(driftCount()).isEqualTo(1.0);
     }
