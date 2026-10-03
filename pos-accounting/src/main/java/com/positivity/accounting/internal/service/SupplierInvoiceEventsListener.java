@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.config.AccountingEventTypeRegistry;
 import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
 import com.positivity.accounting.internal.entity.Vendor;
@@ -97,7 +98,8 @@ public class SupplierInvoiceEventsListener {
      * Event type codes this listener records an {@code accounting_event} row for, one per consumed
      * fact (#2433).
      */
-    public static final List<String> RECORDED_EVENT_TYPES = List.of(SupplierInvoiceReceivedV1.EVENT_TYPE);
+    public static final List<String> RECORDED_EVENT_TYPES =
+            AccountingEventTypeRegistry.kafkaCodes(AccountingEventTypeRegistry.DOMAIN_SUPPLIER);
 
     private static final String ORIGIN_EVENT_TYPE = "SUPPLIER_INVOICE_RECEIVED";
 

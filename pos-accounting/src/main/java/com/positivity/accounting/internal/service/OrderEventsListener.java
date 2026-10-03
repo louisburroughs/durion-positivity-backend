@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.config.AccountingEventTypeRegistry;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
@@ -59,7 +60,8 @@ public class OrderEventsListener {
      * Event type codes this listener records an {@code accounting_event} row for, one per consumed
      * fact (#2433).
      */
-    public static final List<String> RECORDED_EVENT_TYPES = List.of(RegisterSessionClosedV1.EVENT_TYPE);
+    public static final List<String> RECORDED_EVENT_TYPES =
+            AccountingEventTypeRegistry.kafkaCodes(AccountingEventTypeRegistry.DOMAIN_ORDER);
 
     private final Clock clock;
     private final ObjectMapper objectMapper;
