@@ -136,7 +136,7 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .collect(Collectors.toMap(ReceivingLine::getLineId, line -> line, (left, right) -> left));
 
         List<InventoryVariance> variances = new ArrayList<>();
-        List<ReceivingLine> receivedLines = new ArrayList<>();
+        List<ReceivedQuantity> received = new ArrayList<>();
         int linesProcessed = 0;
 
         // Once for the whole call, not once per line: every line of a session stages at the same
@@ -149,19 +149,14 @@ public class ReceivingServiceImpl implements ReceivingService {
                 // A line this session does not have: the request names it, we do not invent it.
                 continue;
             }
-            receiveLine(session, line, lineReq, sessionId, stagingLocationId, actorUserId, variances);
-            receivedLines.add(line);
+            // Captured per request line, not read back off the line afterwards: a request naming one
+            // line twice posts twice, and the line only remembers the last quantity.
+            received.add(new ReceivedQuantity(
+                    line, receiveLine(session, line, lineReq, sessionId, stagingLocationId, actorUserId, variances)));
             linesProcessed++;
         }
 
-        // receiveLine leaves this call's received quantity on each line, which is what arrived now.
-        publishGoodsReceipt(
-                session,
-                stagingLocationId,
-                receivedLines.stream()
-                        .map(line -> new ReceivedQuantity(line, line.getReceivedQuantity()))
-                        .toList(),
-                actorUserId);
+        publishGoodsReceipt(session, stagingLocationId, received, actorUserId);
 
         session.setStatus(
                 allLinesSettled(session) ? ReceivingSessionStatus.COMPLETED : ReceivingSessionStatus.IN_PROGRESS);
@@ -173,8 +168,12 @@ public class ReceivingServiceImpl implements ReceivingService {
         return buildReceiveItemsResponse(session, linesProcessed, variances);
     }
 
-    /** Receives one line into staging: quantity, lot, status, ledger entry, and any variance. */
-    private void receiveLine(
+    /**
+     * Receives one line into staging: quantity, lot, status, ledger entry, and any variance.
+     *
+     * @return the base quantity posted to the ledger for this request line
+     */
+    private @NonNull BigDecimal receiveLine(
             @NonNull ReceivingSession session,
             @NonNull ReceivingLine line,
             @NonNull ReceiveLineRequest lineReq,
@@ -233,6 +232,7 @@ public class ReceivingServiceImpl implements ReceivingService {
         if (cmp != 0) {
             variances.add(recordVariance(session, line, expectedQty, receivedQty, cmp, actorUserId));
         }
+        return receivedQty;
     }
 
     /** How much of one session line arrived in a single receive or cross-dock call. */

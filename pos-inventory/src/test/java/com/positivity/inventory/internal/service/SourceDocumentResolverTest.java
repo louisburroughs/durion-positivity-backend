@@ -324,10 +324,11 @@ class SourceDocumentResolverTest {
     }
 
     @Test
-    @DisplayName("receipt against order: a line priced per base unit needs no conversion")
-    void valueReceiptLine_noConversionFactor_isPricedPerBaseUnit() {
+    @DisplayName("receipt against order: a line priced per base unit (factor one) is valued as keyed")
+    void valueReceiptLine_unitConversionFactor_isPricedPerBaseUnit() {
         projectOrder("APPROVED");
-        when(purchaseOrderLineRepository.findById(LINE_ID)).thenReturn(Optional.of(pricedLine(LINE_ID, 250L, null)));
+        when(purchaseOrderLineRepository.findById(LINE_ID))
+                .thenReturn(Optional.of(pricedLine(LINE_ID, 250L, BigDecimal.ONE)));
 
         assertThat(resolver.valueReceiptLine(PO_ID, LINE_ID, SKU_ID.toString(), new BigDecimal("4"))
                         .accruedAmountMinor())
@@ -335,11 +336,24 @@ class SourceDocumentResolverTest {
     }
 
     @Test
+    @DisplayName("receipt against order: a line projected without a conversion factor is attributed but unvalued")
+    void valueReceiptLine_noConversionFactor_isAttributedButUnvalued() {
+        projectOrder("APPROVED");
+        when(purchaseOrderLineRepository.findById(LINE_ID)).thenReturn(Optional.of(pricedLine(LINE_ID, 250L, null)));
+
+        SourceDocumentResolver.ReceiptLineValue value =
+                resolver.valueReceiptLine(PO_ID, LINE_ID, SKU_ID.toString(), new BigDecimal("4"));
+
+        assertThat(value.poLineId()).isEqualTo(LINE_ID);
+        assertThat(value.accruedAmountMinor()).isZero();
+    }
+
+    @Test
     @DisplayName(
             "receipt against order: a link a revision replaced falls back to the order's only line for the product")
     void valueReceiptLine_staleLink_fallsBackToTheSoleLineForTheProduct() {
         UUID revisedLineId = UUID.fromString("01a02fd3-b675-7000-8000-000000000009");
-        ExtPurchaseOrderLineReplica revised = pricedLine(revisedLineId, 100L, null);
+        ExtPurchaseOrderLineReplica revised = pricedLine(revisedLineId, 100L, BigDecimal.ONE);
         projectOrder("PARTIALLY_RECEIVED", revised);
         when(purchaseOrderLineRepository.findById(LINE_ID)).thenReturn(Optional.empty());
 
@@ -354,7 +368,8 @@ class SourceDocumentResolverTest {
     @DisplayName("receipt against order: an order in another currency is still valued, in that currency")
     void valueReceiptLine_foreignCurrencyOrder_isValuedInTheOrdersCurrency() {
         projectOrder("APPROVED", "EUR");
-        when(purchaseOrderLineRepository.findById(LINE_ID)).thenReturn(Optional.of(pricedLine(LINE_ID, 500L, null)));
+        when(purchaseOrderLineRepository.findById(LINE_ID))
+                .thenReturn(Optional.of(pricedLine(LINE_ID, 500L, BigDecimal.ONE)));
 
         assertThat(resolver.valueReceiptLine(PO_ID, LINE_ID, SKU_ID.toString(), new BigDecimal("2"))
                         .accruedAmountMinor())

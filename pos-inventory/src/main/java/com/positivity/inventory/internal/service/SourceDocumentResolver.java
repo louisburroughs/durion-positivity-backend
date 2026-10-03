@@ -239,8 +239,10 @@ public class SourceDocumentResolver {
      * <p>The line is found exactly as {@link #resolveReceiptUnitCost} finds it: the linked line,
      * else the order's only line for the product. Unlike the ledger's cost, the value is not held
      * back for an order outside the functional currency: it is deducted from that order's own
-     * balance, which is kept in the order's currency. No line leaves the quantity unattributed and
-     * an unpriced line leaves it unvalued; pos-order then settles what it can.
+     * balance, which is kept in the order's currency. An unpriced line, or one projected without a
+     * conversion factor, is attributed but unvalued: pos-order reduces its open quantity and leaves
+     * the balance. With no line at all the receipt line is unattributed and unvalued, and pos-order
+     * changes nothing for it.
      */
     @NonNull
     public ReceiptLineValue valueReceiptLine(
@@ -266,12 +268,20 @@ public class SourceDocumentResolver {
             return 0L;
         }
         BigDecimal factor = line.getConversionFactor();
-        if (factor != null && factor.signum() <= 0) {
+        if (factor == null || factor.signum() <= 0) {
+            // A null factor marks a line projected before pos-order published what its price is
+            // per, so no per-base-unit price can be derived — the same reason
+            // resolveReceiptUnitCost declines to cost it. Guessing one would deduct the wrong value.
+            log.warn(
+                    "Purchase order line {} has no usable conversion factor ({}); its receipt is reported unvalued",
+                    line.getLineId(),
+                    factor);
             return 0L;
         }
-        BigDecimal priced = baseQuantity.multiply(BigDecimal.valueOf(unitCostMinor));
-        BigDecimal value = factor == null ? priced : priced.divide(factor, 6, RoundingMode.HALF_EVEN);
-        return value.setScale(0, RoundingMode.HALF_EVEN).longValueExact();
+        return baseQuantity
+                .multiply(BigDecimal.valueOf(unitCostMinor))
+                .divide(factor, 0, RoundingMode.HALF_EVEN)
+                .longValueExact();
     }
 
     private Optional<ExtPurchaseOrderLineReplica> soleLineForProduct(UUID poId, @Nullable String productId) {

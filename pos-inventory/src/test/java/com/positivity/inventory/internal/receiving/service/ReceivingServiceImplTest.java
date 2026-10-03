@@ -1976,6 +1976,57 @@ class ReceivingServiceImplTest {
                                 RECEIPT_PO_LINE_ID, "PROD-001", new BigDecimal("4"), 4_000L));
     }
 
+    /**
+     * #2417: a request naming the same line twice posts twice to the ledger, so the receipt must
+     * report each posting's own quantity — not the line's last quantity once per mention.
+     */
+    @Test
+    void receiveItemsIntoStaging_sameLineTwice_reportsEachPostedQuantity() {
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-0000000000d1");
+        UUID lineId = UUID.fromString("00000000-0000-0000-0000-0000000000d2");
+        ReceivingSession session =
+                sessionAgainstOrder(sessionId, expectedLine(lineId, "PROD-001", RECEIPT_PO_LINE_ID, "10"));
+        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(inventoryVarianceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(sourceDocumentResolver.receivingPurchaseOrderId(SourceDocumentType.PO, RECEIPT_PO_ID.toString()))
+                .thenReturn(Optional.of(RECEIPT_PO_ID));
+        when(sourceDocumentResolver.valueReceiptLine(eq(RECEIPT_PO_ID), eq(RECEIPT_PO_LINE_ID), eq("PROD-001"), any()))
+                .thenAnswer(inv -> new SourceDocumentResolver.ReceiptLineValue(
+                        RECEIPT_PO_LINE_ID, inv.<BigDecimal>getArgument(3).longValueExact() * 100L));
+
+        receivingService.receiveItemsIntoStaging(
+                sessionId,
+                new ReceiveItemsRequest(List.of(
+                        new ReceiveLineRequest(lineId, new BigDecimal("2"), null, null, null),
+                        new ReceiveLineRequest(lineId, new BigDecimal("3"), null, null, null))),
+                "receiver");
+
+        ArgumentCaptor<InventoryLedgerEntry> ledger = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
+        verify(ledgerPostingService, times(2)).post(ledger.capture());
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.GoodsReceiptLineFact>>
+                lines = ArgumentCaptor.forClass(List.class);
+        verify(goodsReceiptFactPublisher)
+                .publish(
+                        any(com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.ReceiptHeader.class),
+                        lines.capture());
+        assertThat(lines.getValue())
+                .extracting(
+                        com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.GoodsReceiptLineFact
+                                ::quantityReceived)
+                .containsExactly(new BigDecimal("2"), new BigDecimal("3"));
+        assertThat(lines.getValue().stream()
+                        .map(
+                                com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.GoodsReceiptLineFact
+                                        ::quantityReceived)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add))
+                .isEqualByComparingTo(ledger.getAllValues().stream()
+                        .map(InventoryLedgerEntry::getChangeInQuantity)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add));
+    }
+
     /** #2417: a receive call that matched none of the session's lines received nothing to report. */
     @Test
     void receiveItemsIntoStaging_nothingReceived_publishesNoGoodsReceipt() {

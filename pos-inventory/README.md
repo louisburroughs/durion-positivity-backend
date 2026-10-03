@@ -262,11 +262,20 @@ transaction:
 A session is opened against a purchase order (`sourceDocumentId` is the order id) and each of its
 lines keeps the order line it was built from (`receiving_line.source_line_id`), so no request
 field ties it to the order. Each receive or cross-dock call publishes one receipt with what that
-call posted to the ledger; a call that matched no session line publishes nothing. A line whose
-order line a revision replaced falls back to the order's only line for the SKU, as the receipt
-cost does; a line that still cannot be attributed is reported with no `poLineId`, and pos-order
-then deducts its value but not its quantity. The value is in the order's currency even when the
-ledger row is held awaiting cost (#2314), because it is deducted from the order's own balance.
+call posted to the ledger, one fact line per request line (a request naming a line twice reports
+both postings); a call that matched no session line publishes nothing. A line whose order line a
+revision replaced falls back to the order's only line for the SKU, as the receipt cost does. The
+value is the order line's price per base unit (`unitCostMinor` / `conversion_factor`) times the
+base quantity, in the order's currency even when the ledger row is held awaiting cost (#2314),
+because it is deducted from the order's own balance.
+
+What pos-order can do with a fact line depends on what the session could resolve:
+
+| Session line | `poLineId` | Value | Effect in pos-order |
+| --- | --- | --- | --- |
+| Order line found, priced, with a conversion factor | the order line | quantity × price per base unit | open quantity and open balance both reduced |
+| Order line found, unpriced or projected without a conversion factor | the order line | 0 (logged) | open quantity reduced, balance unchanged |
+| No order line (stale link and the SKU is on several lines, or not on the order) | null | 0 | nothing: the line is skipped |
 
 ### Work-order linkage on the ledger, returns, and cross-dock search (#2206, #2211)
 
