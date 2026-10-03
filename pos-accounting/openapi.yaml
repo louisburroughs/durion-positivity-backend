@@ -3809,7 +3809,7 @@ paths:
     get:
       description: 'Returns every accounting event status (code, label, meaning, whether it is terminal, whether retry/reprocess applies) and every idempotency outcome, generated from the enums so the set cannot drift.
 
-        Use this tool to populate the status and idempotency-outcome filters of listAccountingEvents; the code is the value that filter accepts.
+        Use this tool to populate the status and idempotency-outcome filters of listAccountingEvents; the code is the value that filter accepts. Do not use it to find events in a given status; use listAccountingEvents with that status instead.
 
         Preconditions: none.
 
