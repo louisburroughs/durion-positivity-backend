@@ -612,6 +612,36 @@ class JournalEntryServiceTest {
     }
 
     @Test
+    @DisplayName("reverseJournalEntry - legacy original with null type and id gets LEGACY_REVERSAL and original id")
+    void reverseJournalEntry_legacyNullTypeAndId_usesLegacyReversalAndOriginalId() {
+        JournalEntry original = arrangePostedOriginalForReversal();
+        original.setSourceEventType(null);
+        original.setSourceEventId(null);
+        arrangeReversalPersistence();
+        when(accountingPeriodService.isPeriodOpen(any(LocalDate.class))).thenReturn(true);
+
+        JournalEntryResponse reversal = service.reverseJournalEntry(testJournalEntryId, "CORRECTION", null);
+
+        assertThat(reversal.getSourceEventType()).isEqualTo(JournalEntrySourceTypes.LEGACY_REVERSAL);
+        assertThat(reversal.getSourceEventId()).isEqualTo(testJournalEntryId);
+    }
+
+    @Test
+    @DisplayName("reverseJournalEntry - legacy original with null type but an id keeps that id")
+    void reverseJournalEntry_legacyNullTypeWithId_usesLegacyReversalAndKeepsId() {
+        JournalEntry original = arrangePostedOriginalForReversal();
+        original.setSourceEventType(null);
+        original.setSourceEventId(testSourceEventId);
+        arrangeReversalPersistence();
+        when(accountingPeriodService.isPeriodOpen(any(LocalDate.class))).thenReturn(true);
+
+        JournalEntryResponse reversal = service.reverseJournalEntry(testJournalEntryId, "CORRECTION", null);
+
+        assertThat(reversal.getSourceEventType()).isEqualTo(JournalEntrySourceTypes.LEGACY_REVERSAL);
+        assertThat(reversal.getSourceEventId()).isEqualTo(testSourceEventId);
+    }
+
+    @Test
     @DisplayName("reverseJournalEntry - creates numbered reversal, flips original, audits with actor")
     void reverseJournalEntry_posted_success() {
         // Arrange
