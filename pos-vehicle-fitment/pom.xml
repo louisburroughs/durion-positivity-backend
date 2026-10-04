@@ -15,12 +15,12 @@
     <description>Vehicle Fitment Module</description>
 
     <properties>
-        <!-- Coverage ratchet: measured 88.2% line / 83.3% branch by the gate's own
+        <!-- Coverage ratchet: measured 89.8% line / 88.5% branch by the gate's own
              command, `verify -DskipITs` (../durion/docs/architecture/TEST_COVERAGE_POLICY.md §6.1).
              Floors sit 3 points under. Re-derive them ONLY from a -DskipITs run — an
              IT-inclusive measurement describes coverage the gate cannot see. -->
-        <jacoco.line.min>0.85</jacoco.line.min>
-        <jacoco.branch.min>0.80</jacoco.branch.min>
+        <jacoco.line.min>0.86</jacoco.line.min>
+        <jacoco.branch.min>0.85</jacoco.branch.min>
     </properties>
     <packaging>jar</packaging>
     <dependencies>
