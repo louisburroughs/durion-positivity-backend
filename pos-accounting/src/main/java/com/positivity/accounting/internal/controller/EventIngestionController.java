@@ -290,22 +290,29 @@ public class EventIngestionController {
             operationId = "retryAccountingEvent",
             summary = "Retry Accounting Event Processing",
             description = """
-                    Re-runs pipeline processing for a failed accounting event using its original payload and \
-                    the current rules.
+                    Re-runs posting for a FAILED accounting event through the posting engine using its \
+                    original payload and the current rules; the event ends PROCESSED, FAILED, SUSPENDED or SKIPPED (the engine's terminal \
+                    outcome for an event that posts nothing, e.g. no amount).
                     Use this tool for transient failures; do not use reprocessSuspendedEvent, which is the \
                     audited path for SUSPENDED events after a mapping or rule correction.
-                    Preconditions: the event must exist and be in a retryable failed state.
+                    Preconditions: the event must exist and be in status FAILED; any other status is \
+                    rejected and the event is left unchanged. The previous failure detail stays on the \
+                    event until the new outcome replaces it.
                     Required inputs: eventId (UUID) as a path parameter; the request body is optional and \
                     ignored.
-                    Emits an ACCOUNTING_EVENT_RETRY event and returns 202 while processing continues \
-                    asynchronously.
-                    Returns 404 EVENT_NOT_FOUND when the event does not exist.
+                    Emits an ACCOUNTING_EVENT_RETRY event and returns 202 with the event in its new status.
+                    Returns 404 EVENT_NOT_FOUND when the event does not exist, and 409 EVENT_NOT_RETRYABLE \
+                    when the event is not FAILED.
                     """,
             tags = {"Accounting Events"})
-    @ApiResponse(responseCode = "202", description = "Retry requested")
+    @ApiResponse(responseCode = "202", description = "Retry ran; the event carries its new status")
     @ApiResponse(
             responseCode = "404",
             description = "Event not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "EVENT_NOT_RETRYABLE: the event is not FAILED and was left unchanged",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_EVENT_RETRY", apiVersion = "1")
     public ResponseEntity<AccountingEventResponse> retryEventProcessing(

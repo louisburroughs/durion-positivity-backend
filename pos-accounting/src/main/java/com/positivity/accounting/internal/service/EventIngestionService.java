@@ -143,15 +143,6 @@ public interface EventIngestionService {
     Page<AccountingEventResponse> findBySourceSystem(String sourceSystem, Pageable pageable);
 
     /**
-     * Process all failed events asynchronously.
-     * Called by scheduled job to retry failed events.
-     *
-     * @param maxRetries maximum retries per record
-     * @return count of records processed
-     */
-    int processFailed(int maxRetries);
-
-    /**
      * Validate that an event has required fields and can be processed.
      *
      * @param event event to validate

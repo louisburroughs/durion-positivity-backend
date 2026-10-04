@@ -40,7 +40,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * goes to {@link InvoicePaymentEventProcessor} (AR subledger, no journal entry of its own); every
  * other type goes through the posting engine, which posts it or suspends it with a reason. Only
  * {@code RECEIVED} rows are touched: {@code SUSPENDED} events are released by reprocess alone, and
- * the retry endpoint puts a {@code FAILED} event back to {@code RECEIVED} for the next poll.
+ * the retry endpoint re-runs a {@code FAILED} event through the posting engine itself (an {@code
+ * INVOICE_PAYMENT} goes back to {@code RECEIVED} for the next poll).
  *
  * <p>A processor rejection or an unexpected failure rolls the processing transaction back; the
  * outcome is then recorded on the event in a fresh transaction, so a failing event never blocks the

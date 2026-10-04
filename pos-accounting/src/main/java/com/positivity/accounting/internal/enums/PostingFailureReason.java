@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.enums;
 
+import java.util.HashSet;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -112,22 +114,50 @@ public enum PostingFailureReason {
      * stays eligible for the audited manual reprocess.
      */
     public boolean isExcludedFromAutoRetry() {
-        return this == PERIOD_CLOSED || this == CURRENCY_NOT_SUPPORTED;
+        return this == PERIOD_CLOSED
+                || this == CURRENCY_NOT_SUPPORTED
+                // The payload never changes, so a retry fails the same way.
+                || this == VALIDATION_ERROR
+                || this == MISSING_AMOUNT;
     }
 
     /**
-     * {@link #isExcludedFromAutoRetry()} for a stored {@code failureReasonCode}; an absent or
-     * unknown code is not excluded.
+     * {@code INVOICE_PAYMENT} failure code (AR subledger processor, not a posting-engine reason): the
+     * same {@code paymentId} was already recorded with different details. A quarantine a person
+     * resolves, so it is never auto-retried.
+     */
+    public static final String INVOICE_PAYMENT_DUPLICATE_CONFLICT = "DUPLICATE_CONFLICT";
+
+    /**
+     * {@code INVOICE_PAYMENT} failure code: a required payload field is missing or malformed. The
+     * payload never changes, so it is never auto-retried.
+     */
+    public static final String INVOICE_PAYMENT_INVALID_PAYLOAD = "INVALID_PAYLOAD";
+
+    /**
+     * {@link #isExcludedFromAutoRetry()} for a stored {@code failureReasonCode}, which also covers the
+     * {@code INVOICE_PAYMENT} processor codes {@link #INVOICE_PAYMENT_DUPLICATE_CONFLICT} and {@link
+     * #INVOICE_PAYMENT_INVALID_PAYLOAD}; an absent or unknown code is not excluded.
      */
     public static boolean isExcludedFromAutoRetry(@Nullable String failureReasonCode) {
-        if (failureReasonCode == null) {
-            return false;
-        }
+        return failureReasonCode != null && autoRetryExcludedCodes().contains(failureReasonCode);
+    }
+
+    /**
+     * Every stored {@code failureReasonCode} the scheduled retry leaves alone: the engine reasons for
+     * which {@link #isExcludedFromAutoRetry()} holds plus the {@code INVOICE_PAYMENT} processor codes.
+     * The single source for both {@link #isExcludedFromAutoRetry(String)} and the retry's candidate
+     * query.
+     */
+    public static Set<String> autoRetryExcludedCodes() {
+        Set<String> codes = new HashSet<>();
         for (PostingFailureReason reason : values()) {
-            if (reason.name().equals(failureReasonCode)) {
-                return reason.isExcludedFromAutoRetry();
+            if (reason.isExcludedFromAutoRetry()) {
+                codes.add(reason.name());
             }
         }
-        return false;
+        codes.add(INVOICE_PAYMENT_DUPLICATE_CONFLICT);
+        codes.add(INVOICE_PAYMENT_INVALID_PAYLOAD);
+        return Set.copyOf(codes);
     }
 }

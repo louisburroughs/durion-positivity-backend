@@ -22,6 +22,7 @@ import com.positivity.accounting.internal.exception.AdjustmentSignInvalidExcepti
 import com.positivity.accounting.internal.exception.CurrencyNotSupportedException;
 import com.positivity.accounting.internal.exception.DefaultGLMappingNotFoundException;
 import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
+import com.positivity.accounting.internal.exception.EventNotRetryableException;
 import com.positivity.accounting.internal.exception.EventValidationException;
 import com.positivity.accounting.internal.exception.GLAccountNotActiveException;
 import com.positivity.accounting.internal.exception.GLAccountNotFoundException;
@@ -175,6 +176,8 @@ class AccountingExceptionHandlerTest {
                     }),
                     Named.of("handleIllegalState", (HandlerInvocation) request ->
                             handler.handleIllegalState(new IllegalStateException("Some other invalid state"), request)),
+                    Named.of("handleEventNotRetryable", (HandlerInvocation) request ->
+                            handler.handleEventNotRetryable(new EventNotRetryableException("not FAILED"), request)),
                     Named.of("handleDuplicateAccountCode", (HandlerInvocation)
                             request -> handler.handleDuplicateAccountCode(
                                     new DuplicateAccountCodeException("duplicate code"), request)),
@@ -401,6 +404,25 @@ class AccountingExceptionHandlerTest {
             assertThat(response.getBody().fieldErrors())
                     .extracting(ApiError.FieldError::field, ApiError.FieldError::message)
                     .containsExactly(org.assertj.core.groups.Tuple.tuple("openingBalance", "expected 12345.67"));
+        }
+    }
+
+    @Nested
+    @DisplayName("EVENT_NOT_RETRYABLE (#2411)")
+    class EventRetry {
+
+        private final AccountingExceptionHandler handler = new AccountingExceptionHandler(TEST_CLOCK);
+
+        @Test
+        @DisplayName("a retry of a non-FAILED event answers 409 EVENT_NOT_RETRYABLE")
+        void eventNotRetryableIs409() {
+            ResponseEntity<ApiError> response = handler.handleEventNotRetryable(
+                    new EventNotRetryableException("not FAILED"), requestWithoutHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("EVENT_NOT_RETRYABLE");
+            assertThat(response.getBody().status()).isEqualTo(409);
         }
     }
 

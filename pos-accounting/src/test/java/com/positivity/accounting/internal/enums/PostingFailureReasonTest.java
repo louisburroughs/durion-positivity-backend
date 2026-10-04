@@ -41,7 +41,10 @@ class PostingFailureReasonTest {
         }
         assertThat(excluded)
                 .containsExactlyInAnyOrder(
-                        PostingFailureReason.PERIOD_CLOSED, PostingFailureReason.CURRENCY_NOT_SUPPORTED);
+                        PostingFailureReason.PERIOD_CLOSED,
+                        PostingFailureReason.CURRENCY_NOT_SUPPORTED,
+                        PostingFailureReason.VALIDATION_ERROR,
+                        PostingFailureReason.MISSING_AMOUNT);
     }
 
     @Test
@@ -51,6 +54,14 @@ class PostingFailureReasonTest {
                 .isTrue();
         assertThat(PostingFailureReason.isExcludedFromAutoRetry("PERIOD_CLOSED"))
                 .isTrue();
+        for (String code :
+                new String[] {"DUPLICATE_CONFLICT", "INVALID_PAYLOAD", "VALIDATION_ERROR", "MISSING_AMOUNT"}) {
+            assertThat(PostingFailureReason.isExcludedFromAutoRetry(code))
+                    .as(code)
+                    .isTrue();
+        }
+        assertThat(PostingFailureReason.isExcludedFromAutoRetry("INVOICE_NOT_FOUND"))
+                .isFalse();
         assertThat(PostingFailureReason.isExcludedFromAutoRetry("UNMAPPED_EVENT_TYPE"))
                 .isFalse();
         assertThat(PostingFailureReason.isExcludedFromAutoRetry("NOT_A_REASON")).isFalse();
