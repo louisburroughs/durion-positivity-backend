@@ -39,7 +39,9 @@ public class CoverageRuleRequest {
     @Schema(
             description = "Type of coverage rule, matched case-insensitively. SERVICE_AREA covers the whole service"
                     + " area; DISTANCE_TIER covers it up to maxDistance, and a unit's DISTANCE_TIER rules must be"
-                    + " strictly ascending by maxDistance and end with one rule whose maxDistance is null.",
+                    + " strictly ascending by maxDistance and end with one rule whose maxDistance is null."
+                    + " Recorded and validated but not yet evaluated: eligibility matches on the rule's"
+                    + " service-area postal codes, the unit's status and the validity window only.",
             example = "SERVICE_AREA",
             allowableValues = {"SERVICE_AREA", "DISTANCE_TIER"},
             requiredMode = REQUIRED)

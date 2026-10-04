@@ -86,7 +86,8 @@ public class MobileUnitRequest {
 
     @Schema(
             description = "Identifier of the travel buffer policy applied to the mobile unit; must name an existing"
-                    + " policy (422 TRAVEL_BUFFER_POLICY_NOT_FOUND otherwise). Required for an ACTIVE unit.",
+                    + " policy (422 TRAVEL_BUFFER_POLICY_NOT_FOUND otherwise). Required for an ACTIVE unit."
+                    + " Recorded; not yet applied by scheduling.",
             example = "01960003-0000-7000-8000-000000000002",
             requiredMode = NOT_REQUIRED)
     private UUID travelBufferPolicyId;
@@ -100,7 +101,9 @@ public class MobileUnitRequest {
     @Schema(
             description = "Catalog operation codes this unit can perform off-site (CAP-325 D14): each must be an"
                     + " active catalog operationCode (UPPER-DASH, ADR-0059 §3), matched case-insensitively;"
-                    + " unknown or retired codes are rejected 422. Required, non-empty, for an ACTIVE unit.",
+                    + " unknown or retired codes are rejected 422. Required, non-empty, for an ACTIVE unit. Used by"
+                    + " the eligible mobile-unit lookup (GET /v1/mobile-units:eligible), whose operationCodes"
+                    + " filter keeps only units that claim every requested code.",
             example = "[\"OIL-CHANGE-FULL-SYNTHETIC\", \"BATTERY-REPLACEMENT\"]",
             requiredMode = NOT_REQUIRED)
     private List<String> serviceCapabilityCodes;

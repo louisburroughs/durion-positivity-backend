@@ -46,7 +46,8 @@ public class CoverageRuleResponse {
     private UUID serviceAreaId;
 
     @Schema(
-            description = "Type of coverage rule",
+            description = "Type of coverage rule. Recorded only, not yet evaluated: eligibility matches on the"
+                    + " rule's service-area postal codes, the unit's status and the validity window.",
             example = "SERVICE_AREA",
             allowableValues = {"SERVICE_AREA", "DISTANCE_TIER"},
             requiredMode = NOT_REQUIRED)
