@@ -20,6 +20,14 @@ public class VehicleVariable {
     @Column(columnDefinition = "UUID")
     private UUID id;
 
+    /**
+     * vPIC's own numeric id for this row (#2454): the id vPIC's dependent lookups take in their path, which
+     * the local UUID cannot stand in for. {@code null} when the row did not come from vPIC, or was cached
+     * before this column existed; such a row is served from cache and has no vPIC parent to refresh from.
+     */
+    @Column(name = "nhtsa_id")
+    private Long nhtsaId;
+
     private String name;
     private String description;
     private LocalDateTime cacheTimestamp;

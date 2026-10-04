@@ -30,6 +30,13 @@ public class VehicleVariable {
     @Column(columnDefinition = "UUID")
     private UUID id;
 
+    /**
+     * vPIC's own numeric id for this variable (#2454) — the id {@code GetVehicleVariableValuesList} takes in its
+     * path. {@code null} when the row did not come from vPIC; such a row cannot be refreshed from vPIC.
+     */
+    @Column(name = "nhtsa_id")
+    private Long nhtsaId;
+
     private String name;
 
     private String description;
