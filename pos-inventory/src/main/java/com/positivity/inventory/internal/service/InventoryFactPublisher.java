@@ -55,8 +55,9 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * <p>Ledger-writing services call {@link #markLedgerChanged} after appending entries; feed
  * ingest calls {@link #markLeadTimeChanged}. Keys are deduplicated per transaction and ONE
  * snapshot fact per touched (stockItem, location), storage location, and product is emitted at
- * {@code beforeCommit}, recomputed from the final persisted state. When Kafka publishing is
- * disabled the outbox writer bean is absent and every call is a no-op.
+ * {@code beforeCommit}, recomputed from the final persisted state. In the broker-less
+ * dev/test profiles the outbox writer bean ({@code @KafkaRails}) is absent and every call is a
+ * no-op.
  */
 @Slf4j
 @Component

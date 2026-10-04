@@ -21,9 +21,6 @@ pos:
   tenancy:
     # strict: nothing binds a tenant unless the test does
     default-tenant-id:
-  inventory:
-    kafka:
-      enabled: false
 
 eureka:
   client:

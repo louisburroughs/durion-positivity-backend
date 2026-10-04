@@ -428,7 +428,7 @@ remain as explicit overrides.
 
 ## Counter-sale consumption (order parity H2)
 
-When `pos.inventory.kafka.enabled` is on, `OrderEventsListener` consumes
+In every deployed profile (Kafka is tier-1, ADR-0044 §4), `OrderEventsListener` consumes
 `order.order.completed` and posts a `GOODS_ISSUE` ledger movement per fulfillable line
 (`stockItemId` = the line's SKU, at the order's shop location; WORKORDER-sourced lines never
 move stock — spec R7.5). Each line posts in its own transaction: a rejected post (insufficient

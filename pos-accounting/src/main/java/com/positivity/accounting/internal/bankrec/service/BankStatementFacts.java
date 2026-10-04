@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 /**
  * Queues the {@code accounting.bankstatement.committed} fact through the transactional outbox, in
  * the statement-commit transaction (SPEC §3.10, §4.4; story S2, #2301; ADR-0044 §4). A no-op when
- * the module's Kafka flag is off — the writer bean is conditional.
+ * the Kafka rails are off (dev/test profiles) — the writer bean is a {@code @KafkaRails} bean.
  */
 @Slf4j
 @Component

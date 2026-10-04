@@ -1141,57 +1141,35 @@ canonical ADR-0044 (`durion/docs/adr/0044-platform-event-only-domain-walls.adr.m
 `docker-compose up -d kafka` starts a single-node KRaft broker (`apache/kafka`). Services reach it
 at `kafka:29092` inside the compose network (host tools at `localhost:9092`). Kafka features remain
 opt-in per module (e.g. `WORKORDER_KAFKA_ENABLED=true`, `pos.customer.kafka.enabled=true`,
-`POS_INVOICE_KAFKA_ENABLED=true`) until the Phase 0.4 tier-1 flip — **except**
-`pos.accounting.kafka.enabled` / `pos.inventory.kafka.enabled` on `alpha` and `prod`, which are no
-longer opt-in there (issue #2192, below).
+`POS_INVOICE_KAFKA_ENABLED=true`) until each module's Phase 0.4 tier-1 flip (ADR-0044 §4).
 
-#### `pos.accounting.kafka.enabled` / `pos.inventory.kafka.enabled` — no longer opt-in on alpha/prod (#2192)
-
-Both flags default to `false` in the modules' base `application.yml`
-(`${POS_ACCOUNTING_KAFKA_ENABLED:false}` / `${POS_INVENTORY_KAFKA_ENABLED:false}`), same as every
-other module's Kafka flag. But pos-accounting's `InventoryEventsListener` posts GL entries for
-inventory facts and pos-inventory's `OutboxEventWriter` is how every fact it owns (scrap,
-adjustments, availability snapshots) leaves the module at all — an absent consumer or producer here
-means money not posted or facts never written, silently, with no error and no health signal
-(SPEC-inventory-adjustment-gl-posting.md §2.3). So on `alpha` and `prod` only:
-
-- `application-alpha.yml` and `application-prod.yml` now set the flag to the literal `true` in both
-  modules, replacing the inherited `${…:false}` default — a deployment that forgets to export the
-  environment variable no longer silently starts with the rails off.
-- A `KafkaEnabledGuard` bean (`internal/config`, active only on the `alpha` / `prod` profiles) reads
-  the **bound** property value after Spring's relaxed binding and refuses to start if it resolved to
-  `false` — including when an operator explicitly sets `POS_ACCOUNTING_KAFKA_ENABLED=false` /
-  `POS_INVENTORY_KAFKA_ENABLED=false` in the environment, which still overrides the profile literal.
-  The startup failure names the property (e.g. `pos.accounting.kafka.enabled is false in
-  profile(s) [prod]. ...`).
-- `dev` is unaffected by design (H2, no broker, no guard bean); so is every test suite in both
-  modules — `test`, `pg`, and the bespoke unit profiles all either exclude Kafka autoconfiguration
-  or set the flag `false` on purpose, and the guard only exists on `alpha` / `prod`.
-- **Override**: there is no supported way to run `alpha` or `prod` with the rails intentionally off
-  — that is exactly the state this guard exists to refuse. If a deployment genuinely needs it (e.g.
-  a broker outage), that is an operational incident, not a configuration a container should start
-  into quietly.
-- **Follow-up**: the Phase 0.4 tier-1 flip (ADR-0044 §4) removes the `@ConditionalOnProperty` opt-in
-  from these domain-flow beans entirely, at which point the flag and this guard are both retired —
-  tracked as a follow-up issue from #2192.
+**pos-accounting and pos-inventory have flipped (#2195).** They have no Kafka enable flag: their
+consumers, transactional outbox writer/publisher and command/manifest publishers are always active
+in every deployed profile (`docker`, `alpha`, `prod` — any profile but `dev` and the test ones), so both modules require a reachable
+broker (`KAFKA_BOOTSTRAP_SERVERS`) to run there. The beans carry the module's `@KafkaRails`
+annotation (`internal/config`), which leaves them out only in the broker-less `dev` profile and
+the `test` / `pg` test profiles (`local-kafka` puts them back for a developer with a local broker).
+`POS_ACCOUNTING_KAFKA_ENABLED` / `POS_INVENTORY_KAFKA_ENABLED` and the interim #2192
+`KafkaEnabledGuard` are gone; setting either variable now has no effect. There is no supported way
+to run these modules in a deployed profile with the rails off — a broker outage is an operational
+incident, not a configuration to start into.
 
 ### Warranty events rollout (#927)
 
 The warranty fact feed (`warranty.events.v1`) and its two consumers are live. Required flags per
 environment (already defaulted `true` in the root `docker-compose.yml` and set in
-`deployment/alpha/docker-compose.prod.yml`; export explicitly anywhere else):
+`deployment/alpha/docker-compose.prod.yml`; export explicitly anywhere else). pos-accounting and
+pos-inventory no longer have a flag (#2195): their consumers are always on in deployed profiles.
 
 - `POS_WARRANTY_KAFKA_ENABLED=true` — pos-warranty publishes all six `warranty.*` facts.
-- `POS_ACCOUNTING_KAFKA_ENABLED=true` — pos-accounting materializes
+- pos-accounting (always on) materializes
   `warranty.reimbursement.submitted/.resolved` into `warranty_reimbursement_expectation`
   (consumer group `pos-accounting-warranty-events`).
-- `POS_INVENTORY_KAFKA_ENABLED=true` — pos-inventory materializes
+- pos-inventory (always on) materializes
   `warranty.part-return.requested/.shipped` into `warranty_part_return_hold`
   (consumer group `pos-inventory-warranty-events`).
 
-Note the module flags are module-wide: enabling them also turns on those modules' other
-listeners/publishers (accounting customer/invoice replicas, inventory location/workorder replicas
-and outbox). `warranty.claim.settled` / `warranty.claim.snapshot` have no consumer yet — both
+`warranty.claim.settled` / `warranty.claim.snapshot` have no consumer yet — both
 consumers record their eventIds and skip them.
 
 ### Transactional outbox (producers)

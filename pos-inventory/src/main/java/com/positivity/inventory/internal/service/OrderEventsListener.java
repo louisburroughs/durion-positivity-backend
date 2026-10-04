@@ -4,6 +4,7 @@ import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.inventory.CounterSaleConsumptionFailedV1;
 import com.positivity.domainevents.order.OrderCompletedV1;
 import com.positivity.domainevents.order.OrderReturnedV1;
+import com.positivity.inventory.internal.config.KafkaRails;
 import com.positivity.inventory.internal.config.OutboxEventWriter;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.entity.ProcessedEvent;
@@ -19,7 +20,6 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -49,7 +49,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "pos.inventory.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class OrderEventsListener {
 
     /** Producing domain, per the repo-wide processed_events convention. */

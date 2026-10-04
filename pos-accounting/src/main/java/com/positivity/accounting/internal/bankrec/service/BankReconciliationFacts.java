@@ -23,7 +23,7 @@ import org.springframework.stereotype.Component;
  * Queues the {@code accounting.bankreconciliation.*} facts through the transactional outbox, in the
  * transaction that changes the reconciliation (SPEC §3.10; story S5, #2304; ADR-0044 §4). Every fact is
  * keyed by the reconciliation id, {@code schemaVersion} 1, on {@code accounting.events.v1}. A no-op when
- * the module's Kafka flag is off — the writer bean is conditional.
+ * the Kafka rails are off (dev/test profiles) — the writer bean is a {@code @KafkaRails} bean.
  */
 @Slf4j
 @Component

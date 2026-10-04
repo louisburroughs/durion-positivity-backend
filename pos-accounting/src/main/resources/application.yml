@@ -87,8 +87,9 @@ pos:
       tax-payable-account-id: ${POS_ACCOUNTING_CREDIT_MEMO_TAX_PAYABLE_ACCOUNT_ID}
       # Required: GL account for accounts receivable reductions (typically 1200-1299 range)
       ar-account-id: ${POS_ACCOUNTING_CREDIT_MEMO_AR_ACCOUNT_ID}
+    # Kafka is tier-1 (ADR-0044 §4, #2195): the consumers and outbox are always on outside the
+    # broker-less dev/test profiles (see KafkaRails); there is no enable flag. Topic names only.
     kafka:
-      enabled: ${POS_ACCOUNTING_KAFKA_ENABLED:false}
       customer-events-topic: ${POS_ACCOUNTING_KAFKA_CUSTOMER_EVENTS_TOPIC:customer.events.v1}
       invoice-events-topic: ${POS_ACCOUNTING_KAFKA_INVOICE_EVENTS_TOPIC:invoice.events.v1}
       # Warranty reimbursement expected-credit feed (#927)

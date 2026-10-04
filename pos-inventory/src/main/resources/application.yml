@@ -126,10 +126,10 @@ pos:
       # the previous stub.enabled default of false returned no lines, which made every
       # receiving-session creation answer 404, and a sync domain->domain client is
       # forbidden by ADR-0044's domain wall.
+    # Kafka is tier-1 (ADR-0044 §4, #2195): the consumers and outbox are always on outside the
+    # broker-less dev/test profiles (see KafkaRails); there is no enable flag. Topic names only.
     kafka:
-      # Location replica feed + reconciliation (ADR-0044 §6, #892). Off until the broker is
-      # provisioned; flip POS_INVENTORY_KAFKA_ENABLED per environment.
-      enabled: ${POS_INVENTORY_KAFKA_ENABLED:false}
+      # Location replica feed + reconciliation (ADR-0044 §6, #892).
       location-events-topic: ${POS_INVENTORY_LOCATION_EVENTS_TOPIC:location.events.v1}
       location-events-consumer-group: ${POS_INVENTORY_LOCATION_EVENTS_CONSUMER_GROUP:pos-inventory-location-events}
       location-manifest-topic: ${POS_INVENTORY_LOCATION_MANIFEST_TOPIC:location.manifest.v1}

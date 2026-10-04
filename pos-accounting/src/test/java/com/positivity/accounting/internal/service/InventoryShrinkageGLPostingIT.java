@@ -118,7 +118,7 @@ class InventoryShrinkageGLPostingIT {
 
     /**
      * The listener under test, wired with the real Spring collaborators. Constructed manually
-     * because the Kafka rails ({@code pos.accounting.kafka.enabled}) stay off in tests — the
+     * because the Kafka rails ({@code @KafkaRails}) stay off in tests — the
      * message path from envelope JSON to posting is identical.
      */
     private InventoryEventsListener listener;

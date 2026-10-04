@@ -59,7 +59,8 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>Each posting (and reversal) enqueues an {@link InvoiceGlPostedV1} fact on
  * {@code accounting.events.v1} through the transactional outbox, which pos-invoice consumes to
  * move the invoice {@code FINALIZED -> POSTED} with the real journal entry id. Publishing is a
- * no-op when the Kafka flag is off (the {@link OutboxEventWriter} bean is conditional).
+ * no-op when the Kafka rails are off (dev/test profiles; the {@link OutboxEventWriter} bean is a
+ * {@code @KafkaRails} bean).
  */
 @Slf4j
 @Component
@@ -256,7 +257,7 @@ public class InvoiceRevenuePostingService {
 
     /**
      * Enqueue the {@code accounting.invoice.gl-posted} fact through the transactional outbox
-     * (ADR-0044 §4). No-op when the Kafka flag is off — the writer bean is conditional.
+     * (ADR-0044 §4). No-op when the Kafka rails are off (dev/test profiles).
      */
     private void publishFact(@NonNull InvoiceGlPostedV1 payload) {
         OutboxEventWriter writer = outboxEventWriter.getIfAvailable();

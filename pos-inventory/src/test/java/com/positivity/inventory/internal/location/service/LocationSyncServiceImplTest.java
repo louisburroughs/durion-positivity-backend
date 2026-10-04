@@ -127,7 +127,7 @@ class LocationSyncServiceImplTest {
         assertThat(response.getOutcome()).isEqualTo("FAILED");
         ArgumentCaptor<LocationSyncLogEntity> logCaptor = ArgumentCaptor.forClass(LocationSyncLogEntity.class);
         verify(locationSyncLogRepository).save(logCaptor.capture());
-        assertThat(logCaptor.getValue().getErrorMessage()).contains("disabled");
+        assertThat(logCaptor.getValue().getErrorMessage()).contains("unavailable");
     }
 
     @Test

@@ -146,7 +146,7 @@ class InventoryRevaluationGLPostingIT {
         meterRegistry = new SimpleMeterRegistry();
         ObjectProvider<MeterRegistry> registryProvider = org.mockito.Mockito.mock(ObjectProvider.class);
         org.mockito.Mockito.when(registryProvider.getIfAvailable()).thenReturn(meterRegistry);
-        // Constructed manually: the Kafka rails (pos.accounting.kafka.enabled) stay off in tests.
+        // Constructed manually: the Kafka rails (@KafkaRails) stay off in tests.
         listener = new InventoryEventsListener(
                 clock,
                 objectMapper,

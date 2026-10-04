@@ -29,8 +29,6 @@ pos:
     # strict: nothing binds a tenant unless the test does
     default-tenant-id:
   accounting:
-    kafka:
-      enabled: false
     # Tests drive accounting events explicitly; the scheduled received-event drainer (#2435) stays off.
     event-drainer:
       enabled: false

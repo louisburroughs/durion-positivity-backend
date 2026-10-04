@@ -108,7 +108,7 @@ public class InvoiceRegenerationServiceImpl implements InvoiceRegenerationServic
             throw new ResponseStatusException(
                     HttpStatus.SERVICE_UNAVAILABLE,
                     "Invoice regeneration is asynchronous (ADR-0044 #900) and requires the Kafka event feed;"
-                            + " enable pos.accounting.kafka.enabled");
+                            + " the Kafka rails are not active in this profile (dev/test)");
         }
         return requestAsyncRegeneration(publisher, workorderId, idempotencyKey);
     }

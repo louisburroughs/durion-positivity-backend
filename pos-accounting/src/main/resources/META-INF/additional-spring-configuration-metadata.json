@@ -34,12 +34,6 @@
       "description": "GL account used for credit memo accounts receivable reversal entries."
     },
     {
-      "name": "pos.accounting.kafka.enabled",
-      "type": "java.lang.Boolean",
-      "description": "Enable accounting's Kafka consumers.",
-      "defaultValue": false
-    },
-    {
       "name": "pos.accounting.kafka.workorder-events-topic",
       "type": "java.lang.String",
       "description": "Workorder fact feed resolving outstanding invoice-regeneration commands (#1537 D1).",
