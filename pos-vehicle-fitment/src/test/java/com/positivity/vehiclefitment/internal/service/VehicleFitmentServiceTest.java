@@ -70,6 +70,7 @@ class VehicleFitmentServiceTest {
 
     private static final long MAKE_VPIC_ID = 441L;
     private static final long MODEL_VPIC_ID = 1685L;
+    private static final long VARIABLE_VPIC_ID = 86L;
     /**
      * Must match {@code VehicleFitmentServiceImpl.NHTSA_API_BASE}. Spelled out here rather than
      * read from the service so a wrong base path there fails the suite instead of agreeing with it.
@@ -146,7 +147,7 @@ class VehicleFitmentServiceTest {
         when(vehicleVariableRepository.findAll()).thenReturn(List.of()).thenReturn(List.of(saved));
 
         when(responseSpec.body(String.class))
-                .thenReturn("{\"Results\":[{\"Name\":\"ABS\",\"Description\":\"Anti-lock Braking\"}]}");
+                .thenReturn("{\"Results\":[{\"ID\":3,\"Name\":\"ABS\",\"Description\":\"Anti-lock Braking\"}]}");
 
         List<VehicleVariable> result = service.getVehicleVariables();
 
@@ -168,18 +169,18 @@ class VehicleFitmentServiceTest {
 
     @Test
     void getVehicleVariableValues_emptyCache_callsApiAndReturnsData() {
-        VehicleVariable variable = new VehicleVariable();
-        variable.setId(VARIABLE_ID);
+        VehicleVariable variable = vehicleVariable(hourOld());
         VehicleVariableValue saved = new VehicleVariableValue();
         saved.setVariable(variable);
         saved.setValue("Car");
         saved.setCacheTimestamp(LocalDateTime.now(TEST_CLOCK));
 
+        when(vehicleVariableRepository.findById(VARIABLE_ID)).thenReturn(Optional.of(variable));
         when(vehicleVariableValueRepository.findByVariable_Id(VARIABLE_ID))
                 .thenReturn(List.of())
                 .thenReturn(List.of(saved));
 
-        when(responseSpec.body(String.class)).thenReturn("{\"Results\":[{\"Value\":\"Car\",\"ValueId\":\"1\"}]}");
+        when(responseSpec.body(String.class)).thenReturn("{\"Results\":[{\"Id\":1,\"Name\":\"Car\"}]}");
 
         List<VehicleVariableValue> result = service.getVehicleVariableValues(VARIABLE_ID);
 
@@ -189,6 +190,7 @@ class VehicleFitmentServiceTest {
 
     @Test
     void getVehicleVariableValues_parseError_throwsVehicleFitmentException() {
+        when(vehicleVariableRepository.findById(VARIABLE_ID)).thenReturn(Optional.of(vehicleVariable(hourOld())));
         when(vehicleVariableValueRepository.findByVariable_Id(VARIABLE_ID)).thenReturn(List.of());
         when(responseSpec.body(String.class)).thenReturn("{bad-json}");
 
@@ -411,7 +413,7 @@ class VehicleFitmentServiceTest {
     void getVehicleVariables_staleCache_refetchesFromVpicOnce() {
         when(vehicleVariableRepository.findAll()).thenReturn(List.of(vehicleVariable(dayOld())));
         when(responseSpec.body(String.class))
-                .thenReturn("{\"Results\":[{\"Name\":\"ABS\",\"Description\":\"Anti-lock Braking\"}]}");
+                .thenReturn("{\"Results\":[{\"ID\":3,\"Name\":\"ABS\",\"Description\":\"Anti-lock Braking\"}]}");
 
         service.getVehicleVariables();
 
@@ -420,6 +422,7 @@ class VehicleFitmentServiceTest {
 
     @Test
     void getVehicleVariableValues_freshCache_servesCacheWithoutCallingVpic() {
+        when(vehicleVariableRepository.findById(VARIABLE_ID)).thenReturn(Optional.of(vehicleVariable(hourOld())));
         VehicleVariableValue cached = vehicleVariableValue(hourOld());
         when(vehicleVariableValueRepository.findByVariable_Id(VARIABLE_ID)).thenReturn(List.of(cached));
 
@@ -430,13 +433,145 @@ class VehicleFitmentServiceTest {
 
     @Test
     void getVehicleVariableValues_staleCache_refetchesFromVpicOnce() {
+        when(vehicleVariableRepository.findById(VARIABLE_ID)).thenReturn(Optional.of(vehicleVariable(hourOld())));
         when(vehicleVariableValueRepository.findByVariable_Id(VARIABLE_ID))
                 .thenReturn(List.of(vehicleVariableValue(dayOld())));
-        when(responseSpec.body(String.class)).thenReturn("{\"Results\":[{\"Value\":\"Car\",\"ValueId\":\"1\"}]}");
+        when(responseSpec.body(String.class)).thenReturn("{\"Results\":[{\"Id\":1,\"Name\":\"Car\"}]}");
 
         service.getVehicleVariableValues(VARIABLE_ID);
 
-        verifySingleVpicCall(VPIC_BASE + "/GetVehicleVariableValuesList/" + VARIABLE_ID + "?format=json");
+        verifySingleVpicCall(VPIC_BASE + "/GetVehicleVariableValuesList/" + VARIABLE_VPIC_ID + "?format=json");
+    }
+
+    // ─── variables keyed by vPIC id (#2454) ─────────────────────────────────────
+
+    @Test
+    void getVehicleVariables_integerId_storesVpicIdAndDerivesLocalId() {
+        when(vehicleVariableRepository.findAll()).thenReturn(List.of());
+        when(responseSpec.body(String.class))
+                .thenReturn("{\"Count\":1,\"Message\":\"Response returned successfully\",\"SearchCriteria\":null,"
+                        + "\"Results\":[{\"DataType\":\"string\",\"Description\":\"<p>Anti-lock</p>\","
+                        + "\"GroupName\":\"Active Safety System\",\"ID\":86,\"Name\":\"ABS\"}]}");
+
+        service.getVehicleVariables();
+
+        ArgumentCaptor<VehicleVariable> saved = ArgumentCaptor.forClass(VehicleVariable.class);
+        verify(vehicleVariableRepository).save(saved.capture());
+        assertThat(saved.getValue().getNhtsaId()).isEqualTo(86L);
+        assertThat(saved.getValue().getId()).isEqualTo(derived("variable-86"));
+        assertThat(saved.getValue().getName()).isEqualTo("ABS");
+        assertThat(saved.getValue().getDescription()).isEqualTo("<p>Anti-lock</p>");
+    }
+
+    @Test
+    void getVehicleVariables_longDescription_isTruncatedToColumnWidth() {
+        when(vehicleVariableRepository.findAll()).thenReturn(List.of());
+        when(responseSpec.body(String.class))
+                .thenReturn("{\"Results\":[{\"ID\":86,\"Name\":\"ABS\",\"Description\":\"" + "x".repeat(400) + "\"}]}");
+
+        service.getVehicleVariables();
+
+        ArgumentCaptor<VehicleVariable> saved = ArgumentCaptor.forClass(VehicleVariable.class);
+        verify(vehicleVariableRepository).save(saved.capture());
+        assertThat(saved.getValue().getDescription()).hasSize(255);
+    }
+
+    @Test
+    void getVehicleVariables_legacyRowWithoutVpicId_isAdoptedByName() {
+        VehicleVariable legacy = vehicleVariable(dayOld());
+        legacy.setNhtsaId(null);
+        when(vehicleVariableRepository.findAll()).thenReturn(List.of(legacy));
+        when(vehicleVariableRepository.findById(derived("variable-86"))).thenReturn(Optional.empty());
+        when(responseSpec.body(String.class))
+                .thenReturn("{\"Results\":[{\"ID\":86,\"Name\":\"abs\",\"Description\":\"d\"}]}");
+
+        service.getVehicleVariables();
+
+        verify(vehicleVariableRepository).save(legacy);
+        assertThat(legacy.getId()).isEqualTo(VARIABLE_ID);
+        assertThat(legacy.getNhtsaId()).isEqualTo(86L);
+    }
+
+    @Test
+    void getVehicleVariables_nonIntegerId_failsWholeRefreshWithNothingSaved() {
+        when(vehicleVariableRepository.findAll()).thenReturn(List.of());
+        when(responseSpec.body(String.class))
+                .thenReturn("{\"Results\":[{\"ID\":86,\"Name\":\"ABS\"},{\"ID\":\"x\",\"Name\":\"Bad\"}]}");
+
+        assertThatThrownBy(() -> service.getVehicleVariables())
+                .isInstanceOf(VehicleFitmentException.class)
+                .hasMessageContaining("Failed to parse vehicle variables");
+        verify(vehicleVariableRepository, never()).save(any(VehicleVariable.class));
+    }
+
+    @Test
+    void getVehicleVariableValues_requestsByVpicVariableIdAndDerivesLocalId() {
+        when(vehicleVariableRepository.findById(VARIABLE_ID)).thenReturn(Optional.of(vehicleVariable(hourOld())));
+        when(vehicleVariableValueRepository.findByVariable_Id(VARIABLE_ID)).thenReturn(List.of());
+        when(responseSpec.body(String.class))
+                .thenReturn("{\"Count\":1,\"Message\":\"Response returned successfully\",\"SearchCriteria\":null,"
+                        + "\"Results\":[{\"ElementName\":\"ABS\",\"Id\":1,\"Name\":\"Standard\"}]}");
+
+        service.getVehicleVariableValues(VARIABLE_ID);
+
+        verifySingleVpicCall(VPIC_BASE + "/GetVehicleVariableValuesList/86?format=json");
+        ArgumentCaptor<VehicleVariableValue> saved = ArgumentCaptor.forClass(VehicleVariableValue.class);
+        verify(vehicleVariableValueRepository).save(saved.capture());
+        assertThat(saved.getValue().getId()).isEqualTo(derived("variable-value-86-1"));
+        assertThat(saved.getValue().getValueId()).isEqualTo("1");
+        assertThat(saved.getValue().getValue()).isEqualTo("Standard");
+        verify(vehicleVariableValueRepository, never()).deleteAll(any());
+    }
+
+    @Test
+    void getVehicleVariableValues_existingRow_isUpdatedInPlace() {
+        UUID id = derived("variable-value-86-1");
+        VehicleVariableValue existing = vehicleVariableValue(dayOld());
+        existing.setId(id);
+        when(vehicleVariableRepository.findById(VARIABLE_ID)).thenReturn(Optional.of(vehicleVariable(hourOld())));
+        when(vehicleVariableValueRepository.findByVariable_Id(VARIABLE_ID)).thenReturn(List.of(existing));
+        when(vehicleVariableValueRepository.findById(id)).thenReturn(Optional.of(existing));
+        when(responseSpec.body(String.class)).thenReturn("{\"Results\":[{\"Id\":1,\"Name\":\"Optional\"}]}");
+
+        service.getVehicleVariableValues(VARIABLE_ID);
+
+        verify(vehicleVariableValueRepository).save(existing);
+        assertThat(existing.getValue()).isEqualTo("Optional");
+    }
+
+    @Test
+    void getVehicleVariableValues_nonIntegerId_failsWholeRefreshWithNothingSaved() {
+        when(vehicleVariableRepository.findById(VARIABLE_ID)).thenReturn(Optional.of(vehicleVariable(hourOld())));
+        when(vehicleVariableValueRepository.findByVariable_Id(VARIABLE_ID)).thenReturn(List.of());
+        when(responseSpec.body(String.class))
+                .thenReturn("{\"Results\":[{\"Id\":1,\"Name\":\"A\"},{\"Id\":\"1\",\"Name\":\"B\"}]}");
+
+        assertThatThrownBy(() -> service.getVehicleVariableValues(VARIABLE_ID))
+                .isInstanceOf(VehicleFitmentException.class)
+                .hasMessageContaining("Failed to parse vehicle variable values");
+        verify(vehicleVariableValueRepository, never()).save(any(VehicleVariableValue.class));
+    }
+
+    @Test
+    void getVehicleVariableValues_variableWithoutVpicId_servesCacheWithoutCallingVpic() {
+        VehicleVariable local = vehicleVariable(hourOld());
+        local.setNhtsaId(null);
+        when(vehicleVariableRepository.findById(VARIABLE_ID)).thenReturn(Optional.of(local));
+        when(vehicleVariableValueRepository.findByVariable_Id(VARIABLE_ID))
+                .thenReturn(List.of(vehicleVariableValue(dayOld())));
+
+        assertThat(service.getVehicleVariableValues(VARIABLE_ID)).hasSize(1);
+
+        verify(restClient, never()).get();
+    }
+
+    @Test
+    void getVehicleVariableValues_unknownVariable_isRejected() {
+        when(vehicleVariableRepository.findById(VARIABLE_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getVehicleVariableValues(VARIABLE_ID))
+                .isInstanceOf(IllegalArgumentException.class);
+        verify(restClient, never()).get();
     }
 
     @Test
@@ -1002,6 +1137,7 @@ class VehicleFitmentServiceTest {
     private static VehicleVariable vehicleVariable(LocalDateTime cachedAt) {
         VehicleVariable variable = new VehicleVariable();
         variable.setId(VARIABLE_ID);
+        variable.setNhtsaId(VARIABLE_VPIC_ID);
         variable.setName("ABS");
         variable.setCacheTimestamp(cachedAt);
         return variable;

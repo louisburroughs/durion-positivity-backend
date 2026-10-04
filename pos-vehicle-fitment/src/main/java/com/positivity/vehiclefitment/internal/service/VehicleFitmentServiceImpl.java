@@ -202,54 +202,85 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
         }
     }
 
+    /*
+     * Variables and their values refresh from vPIC in place (#2454), like manufacturers and makes (#2416): a
+     * variable is keyed by vPIC's own id ({@code ID}) and a value by (variable, vPIC {@code Id}), nothing is
+     * deleted, and the whole payload is validated before the one transaction that writes it. part_fitment_entity
+     * references values by foreign key, so the delete and reinsert this replaced failed once a fitment used one.
+     */
     @Override
     public List<VehicleVariable> getVehicleVariables() {
         List<VehicleVariable> cached = vehicleVariableRepository.findAll();
-        if (!cached.isEmpty() && isCacheFresh(cached.getFirst().getCacheTimestamp())) {
+        if (isCacheFresh(lastRefreshed(cached, VehicleVariable::getCacheTimestamp))) {
             return cached;
         }
         String url = NHTSA_API_BASE + "/GetVehicleVariableList?format=json";
         String response = restClient.get().uri(url).retrieve().body(String.class);
-        try {
-            JsonNode root = objectMapper.readTree(response);
-            JsonNode results = root.get(RESULTS);
-            vehicleVariableRepository.deleteAll();
-            for (JsonNode node : results) {
-                VehicleVariable variable = new VehicleVariable();
-                variable.setName(node.path("Name").asString(""));
-                variable.setDescription(node.path("Description").asString(""));
+        List<VpicRow> rows = parseRows(response, "vehicle variables", "ID", "Name");
+        transactionTemplate.executeWithoutResult(_ -> {
+            for (VpicRow row : rows) {
+                UUID id = localId("variable-", row.vpicId());
+                VehicleVariable variable = vehicleVariableRepository
+                        .findById(id)
+                        .orElseGet(() -> {
+                            // A row cached before vPIC ids were stored has a random id and no vPIC id: adopt it by name
+                            // so
+                            // its values and part fitments stay attached.
+                            VehicleVariable legacy = cached.stream()
+                                    .filter(existing -> existing.getNhtsaId() == null
+                                            && row.name() != null
+                                            && row.name().equalsIgnoreCase(existing.getName()))
+                                    .findFirst()
+                                    .orElseGet(VehicleVariable::new);
+                            if (legacy.getId() == null) {
+                                legacy.setId(id);
+                            }
+                            return legacy;
+                        });
+                variable.setNhtsaId(row.vpicId());
+                variable.setName(row.name() == null ? "" : row.name());
+                variable.setDescription(description(row.node()));
                 variable.setCacheTimestamp(LocalDateTime.now(clock));
                 vehicleVariableRepository.save(variable);
             }
-        } catch (Exception e) {
-            throw new VehicleFitmentException("Failed to parse vehicle variables", e);
-        }
+        });
         return vehicleVariableRepository.findAll();
     }
 
     @Override
     public List<VehicleVariableValue> getVehicleVariableValues(UUID variableId) {
+        VehicleVariable variable = vehicleVariableRepository
+                .findById(variableId)
+                .orElseThrow(() -> new IllegalArgumentException("Vehicle variable not found with ID: " + variableId));
         List<VehicleVariableValue> cached = vehicleVariableValueRepository.findByVariable_Id(variableId);
-        if (!cached.isEmpty() && isCacheFresh(cached.getFirst().getCacheTimestamp())) {
+        if (isCacheFresh(lastRefreshed(cached, VehicleVariableValue::getCacheTimestamp))) {
             return cached;
         }
-        String url = NHTSA_API_BASE + "/GetVehicleVariableValuesList/" + variableId + FORMAT_JSON;
+        Long vpicVariableId = variable.getNhtsaId();
+        if (vpicVariableId == null) {
+            log.debug("Variable {} has no vPIC id; serving its values from cache", variableId);
+            return cached;
+        }
+        String url = NHTSA_API_BASE + "/GetVehicleVariableValuesList/" + vpicVariableId + FORMAT_JSON;
         String response = restClient.get().uri(url).retrieve().body(String.class);
-        try {
-            JsonNode root = objectMapper.readTree(response);
-            JsonNode results = root.get(RESULTS);
-            vehicleVariableValueRepository.deleteAll(cached);
-            for (JsonNode node : results) {
-                VehicleVariableValue value = new VehicleVariableValue();
-                value.setVariable(vehicleVariableRepository.getReferenceById(variableId));
-                value.setValue(node.path("Value").asString(""));
-                value.setValueId(node.path("ValueId").asString(""));
+        List<VpicRow> rows = parseRows(response, "vehicle variable values", "Id", "Name", "Value");
+        transactionTemplate.executeWithoutResult(_ -> {
+            for (VpicRow row : rows) {
+                UUID id = localId("variable-value-" + vpicVariableId + "-", row.vpicId());
+                VehicleVariableValue value = vehicleVariableValueRepository
+                        .findById(id)
+                        .orElseGet(() -> {
+                            VehicleVariableValue created = new VehicleVariableValue();
+                            created.setId(id);
+                            return created;
+                        });
+                value.setVariable(variable);
+                value.setValue(row.name() == null ? "" : row.name());
+                value.setValueId(Long.toString(row.vpicId()));
                 value.setCacheTimestamp(LocalDateTime.now(clock));
                 vehicleVariableValueRepository.save(value);
             }
-        } catch (Exception e) {
-            throw new VehicleFitmentException("Failed to parse vehicle variable values", e);
-        }
+        });
         return vehicleVariableValueRepository.findByVariable_Id(variableId);
     }
 
@@ -474,7 +505,7 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
     }
 
     /** One vPIC result row, validated: its numeric id and its first non-blank name, if any. */
-    private record VpicRow(long vpicId, String name) {}
+    private record VpicRow(long vpicId, String name, JsonNode node) {}
 
     /**
      * Parses and validates the whole vPIC payload before anything is written, so a bad row anywhere fails the
@@ -486,7 +517,7 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
             JsonNode results = objectMapper.readTree(response).get(RESULTS);
             List<VpicRow> rows = new ArrayList<>();
             for (JsonNode node : results) {
-                rows.add(new VpicRow(vpicId(node, idField), firstNonBlank(node, nameFields)));
+                rows.add(new VpicRow(vpicId(node, idField), firstNonBlank(node, nameFields), node));
             }
             return rows;
         } catch (Exception e) {
@@ -506,6 +537,12 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
             throw new IllegalStateException("vPIC " + field + " is not an integer: " + id);
         }
         return id.asLong();
+    }
+
+    /** vPIC's variable descriptions can run past the 255-character column; keep what fits. */
+    private static String description(JsonNode node) {
+        String text = node.path("Description").asString("");
+        return text.length() > 255 ? text.substring(0, 255) : text;
     }
 
     /** The first of {@code fields} holding non-blank text, trimmed; {@code null} when none does. */

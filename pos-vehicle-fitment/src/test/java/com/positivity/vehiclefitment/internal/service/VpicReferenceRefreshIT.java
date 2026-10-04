@@ -40,6 +40,11 @@ class VpicReferenceRefreshIT extends PostgresTenancyTestBase {
     private static final String MODELS_URL = VPIC + "/GetModelsForMakeId/441?format=json";
     private static final String VEHICLE_TYPES_URL = VPIC + "/GetVehicleTypesForMakeId/441?format=json";
 
+    private static final String VARIABLES_URL = VPIC + "/GetVehicleVariableList?format=json";
+    private static final String VARIABLE_VALUES_URL = VPIC + "/GetVehicleVariableValuesList/86?format=json";
+
+    private static final UUID ABS = derived("variable-86");
+    private static final UUID ABS_STANDARD = derived("variable-value-86-1");
     private static final UUID TESLA = derived("manufacturer-955");
     private static final UUID TESLA_MAKE = derived("make-441");
     private static final UUID MODEL_S = derived("model-1685");
@@ -77,6 +82,8 @@ class VpicReferenceRefreshIT extends PostgresTenancyTestBase {
         owner = new JdbcTemplate(ownerDataSource());
         owner.execute("DELETE FROM part_fitment_entity_vehicle_variable_values");
         owner.execute("DELETE FROM part_fitment_entity");
+        owner.execute("DELETE FROM vehicle_variable_value");
+        owner.execute("DELETE FROM vehicle_variable");
         owner.execute("DELETE FROM vehicle_type");
         owner.execute("DELETE FROM model");
         owner.execute("DELETE FROM make");
@@ -216,6 +223,80 @@ class VpicReferenceRefreshIT extends PostgresTenancyTestBase {
                 .containsExactly(tuple(legacy, "Passenger Car"));
     }
 
+    @Test
+    void variableValuesRefreshedTwice_requestVpicIdAndKeepValueReferencedByAPartFitment() {
+        fillVariablesAndValues("Standard");
+        owner.update(
+                "INSERT INTO part_fitment_entity (id, part_number_id, created_at, updated_at)"
+                        + " VALUES (?, 1, now(), now())",
+                UUID.randomUUID());
+        owner.update(
+                "INSERT INTO part_fitment_entity_vehicle_variable_values (part_fitment_entity_id,"
+                        + " vehicle_variable_values_id) SELECT id, ? FROM part_fitment_entity",
+                ABS_STANDARD);
+        ageVariableCache();
+        vpic.put(
+                VARIABLES_URL,
+                variables("{\"DataType\":\"string\",\"Description\":\"Anti-lock brakes\",\"ID\":86,\"Name\":\"ABS\"}"));
+        vpic.put(
+                VARIABLE_VALUES_URL,
+                variableValues(
+                        "{\"ElementName\":\"ABS\",\"Id\":1,\"Name\":\"Standard (2)\"}",
+                        "{\"ElementName\":\"ABS\",\"Id\":2,\"Name\":\"Optional\"}"));
+
+        assertThat(service.getVehicleVariables()).extracting(v -> v.getId()).containsExactly(ABS);
+        assertThat(service.getVehicleVariableValues(ABS))
+                .extracting(v -> v.getId(), v -> v.getValue())
+                .containsExactlyInAnyOrder(
+                        tuple(ABS_STANDARD, "Standard (2)"), tuple(derived("variable-value-86-2"), "Optional"));
+        assertThat(owner.queryForObject(
+                        "SELECT count(*) FROM part_fitment_entity_vehicle_variable_values", Integer.class))
+                .isEqualTo(1);
+        assertThat(owner.queryForObject("SELECT nhtsa_id FROM vehicle_variable WHERE id = ?", Long.class, ABS))
+                .isEqualTo(86L);
+    }
+
+    @Test
+    void variableCachedBeforeVpicIdsWereStored_isAdoptedNotDuplicated() {
+        UUID legacy = UUID.randomUUID();
+        owner.update(
+                "INSERT INTO vehicle_variable (id, name, cache_timestamp, created_at, updated_at)"
+                        + " VALUES (?, 'abs', now() - interval '25 hours', now(), now())",
+                legacy);
+        vpic.put(VARIABLES_URL, variables("{\"Description\":\"d\",\"ID\":86,\"Name\":\"ABS\"}"));
+
+        assertThat(service.getVehicleVariables()).extracting(v -> v.getId()).containsExactly(legacy);
+        assertThat(owner.queryForObject("SELECT nhtsa_id FROM vehicle_variable WHERE id = ?", Long.class, legacy))
+                .isEqualTo(86L);
+    }
+
+    @Test
+    void variableWithoutVpicId_servesItsValuesFromCacheWithoutCallingVpic() {
+        UUID local = UUID.randomUUID();
+        owner.update(
+                "INSERT INTO vehicle_variable (id, name, created_at, updated_at) VALUES (?, 'local', now(), now())",
+                local);
+
+        assertThat(service.getVehicleVariableValues(local)).isEmpty();
+    }
+
+    private void fillVariablesAndValues(String valueName) {
+        vpic.put(VARIABLES_URL, variables("{\"Description\":\"d\",\"ID\":86,\"Name\":\"ABS\"}"));
+        vpic.put(
+                VARIABLE_VALUES_URL,
+                variableValues("{\"ElementName\":\"ABS\",\"Id\":1,\"Name\":\"" + valueName + "\"}"));
+        assertThat(service.getVehicleVariables()).extracting(v -> v.getId()).containsExactly(ABS);
+        assertThat(service.getVehicleVariableValues(ABS))
+                .extracting(v -> v.getId())
+                .containsExactly(ABS_STANDARD);
+    }
+
+    private void ageVariableCache() {
+        for (String table : List.of("vehicle_variable", "vehicle_variable_value")) {
+            owner.update("UPDATE " + table + " SET cache_timestamp = cache_timestamp - interval '25 hours'");
+        }
+    }
+
     private void fillManufacturerMakeModel() {
         assertThat(service.getManufacturers())
                 .extracting(ManufacturerResponse::getId)
@@ -237,6 +318,14 @@ class VpicReferenceRefreshIT extends PostgresTenancyTestBase {
 
     private static UUID derived(String name) {
         return UUID.nameUUIDFromBytes(name.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static String variables(String... rows) {
+        return envelope("null", rows);
+    }
+
+    private static String variableValues(String... rows) {
+        return envelope("\"Variable:86\"", rows);
     }
 
     private static String manufacturers(String... rows) {

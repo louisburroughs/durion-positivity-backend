@@ -14,12 +14,15 @@ import com.positivity.nhtsa.internal.entity.Manufacturer;
 import com.positivity.nhtsa.internal.entity.Model;
 import com.positivity.nhtsa.internal.entity.VehicleType;
 import com.positivity.nhtsa.internal.entity.VehicleVariable;
+import com.positivity.nhtsa.internal.entity.VehicleVariableValue;
+import com.positivity.nhtsa.internal.exception.CarApiException;
 import com.positivity.nhtsa.internal.repository.MakeRepository;
 import com.positivity.nhtsa.internal.repository.ManufacturerRepository;
 import com.positivity.nhtsa.internal.repository.ModelRepository;
 import com.positivity.nhtsa.internal.repository.VehicleTypeRepository;
 import com.positivity.nhtsa.internal.repository.VehicleVariableRepository;
 import com.positivity.nhtsa.internal.repository.VehicleVariableValueRepository;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -37,6 +40,8 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.client.RestClient;
 
 /**
@@ -101,6 +106,9 @@ class VehicleReferenceServiceTest {
     @Mock
     private VehicleVariableValueRepository vehicleVariableValueRepository;
 
+    @Mock
+    private PlatformTransactionManager transactionManager;
+
     private MockRestServiceServer server;
     private VehicleReferenceService service;
 
@@ -116,7 +124,8 @@ class VehicleReferenceServiceTest {
                 vehicleTypeRepository,
                 builder.build(),
                 vehicleVariableRepository,
-                vehicleVariableValueRepository);
+                vehicleVariableValueRepository,
+                new TransactionTemplate(transactionManager));
         when(makeRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(modelRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(manufacturerRepository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -134,6 +143,7 @@ class VehicleReferenceServiceTest {
     private static Manufacturer manufacturer(LocalDateTime cachedAt) {
         Manufacturer m = new Manufacturer();
         m.setId(MANUFACTURER_ID);
+        m.setNhtsaId(955L);
         m.setName("Toyota Motor Corporation");
         m.setCacheTimestamp(cachedAt);
         return m;
@@ -142,6 +152,7 @@ class VehicleReferenceServiceTest {
     private static Make make(LocalDateTime cachedAt) {
         Make make = new Make();
         make.setId(MAKE_ID);
+        make.setNhtsaId(440L);
         make.setName("Toyota");
         make.setCacheTimestamp(cachedAt);
         return make;
@@ -185,7 +196,7 @@ class VehicleReferenceServiceTest {
     void nhtsaIdsHashToStableUuids() {
         when(manufacturerRepository.findById(MANUFACTURER_ID)).thenReturn(Optional.of(manufacturer(fresh())));
         when(makeRepository.findByManufacturerId(MANUFACTURER_ID)).thenReturn(List.of());
-        server.expect(requestTo(BASE + "/GetMakeForManufacturer/" + MANUFACTURER_ID + "?format=json"))
+        server.expect(requestTo(BASE + "/GetMakeForManufacturer/955?format=json"))
                 .andRespond(withSuccess("""
                         {"Results":[{"Make_ID":440,"Make_Name":"TOYOTA"}]}""", MediaType.APPLICATION_JSON));
 
@@ -309,6 +320,181 @@ class VehicleReferenceServiceTest {
                 .isEqualTo("Passenger Car");
 
         // Third of the three call sites corrected by #1265.
+        server.verify();
+    }
+
+    // ─── dependent URLs use vPIC's integer ids, not local UUIDs (#2454) ──────────
+    //
+    // The payloads below are shaped like vPIC's own responses, integer ids included.
+
+    private static UUID derived(String name) {
+        return UUID.nameUUIDFromBytes(name.getBytes(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    @DisplayName("stores vPIC's manufacturer id and keeps it when the manufacturer is refreshed")
+    void manufacturerKeepsVpicId() {
+        when(manufacturerRepository.findAll()).thenReturn(List.of());
+        server.expect(requestTo(BASE + "/getallmanufacturers?format=json"))
+                .andRespond(withSuccess("""
+                        {"Count":1,"Message":"Response returned successfully","SearchCriteria":null,
+                        "Results":[{"Country":"UNITED STATES (USA)","Mfr_CommonName":"Tesla","Mfr_ID":955,
+                        "Mfr_Name":"TESLA, INC.","VehicleTypes":[]}]}""", MediaType.APPLICATION_JSON));
+
+        service.getManufacturers();
+
+        org.mockito.ArgumentCaptor<Manufacturer> captor = org.mockito.ArgumentCaptor.forClass(Manufacturer.class);
+        verify(manufacturerRepository).save(captor.capture());
+        assertThat(captor.getValue().getNhtsaId()).isEqualTo(955L);
+        assertThat(captor.getValue().getId()).isEqualTo(derived("manufacturer-955"));
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("requests a make's models and vehicle types by vPIC make id")
+    void modelsAndVehicleTypesRequestedByVpicMakeId() {
+        when(makeRepository.findById(MAKE_ID)).thenReturn(Optional.of(make(fresh())));
+        when(modelRepository.findByMakeId(MAKE_ID)).thenReturn(List.of());
+        when(vehicleTypeRepository.findByMakeId(MAKE_ID)).thenReturn(List.of());
+        server.expect(requestTo(BASE + "/GetModelsForMakeId/440?format=json"))
+                .andRespond(withSuccess("""
+                        {"Count":1,"Message":"Response returned successfully","SearchCriteria":"Make ID:440",
+                        "Results":[{"Make_ID":440,"Make_Name":"TOYOTA","Model_ID":1685,"Model_Name":"Camry"}]}""", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(BASE + "/GetVehicleTypesForMakeId/440?format=json"))
+                .andRespond(withSuccess("""
+                        {"Count":1,"Message":"Response returned successfully","SearchCriteria":"Make ID: 440",
+                        "Results":[{"VehicleTypeId":2,"VehicleTypeName":"Passenger Car"}]}""", MediaType.APPLICATION_JSON));
+
+        service.getModelsByMake(MAKE_ID);
+        service.getVehicleTypesForMake(MAKE_ID);
+
+        org.mockito.ArgumentCaptor<Model> model = org.mockito.ArgumentCaptor.forClass(Model.class);
+        verify(modelRepository).save(model.capture());
+        assertThat(model.getValue().getNhtsaId()).isEqualTo(1685L);
+        assertThat(model.getValue().getId()).isEqualTo(derived("model-1685"));
+        org.mockito.ArgumentCaptor<VehicleType> type = org.mockito.ArgumentCaptor.forClass(VehicleType.class);
+        verify(vehicleTypeRepository).save(type.capture());
+        assertThat(type.getValue().getVehicleTypeId()).isEqualTo("2");
+        assertThat(type.getValue().getId()).isEqualTo(derived("vehicle-type-440-2"));
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("updates an existing vehicle type of the make rather than adding a duplicate")
+    void existingVehicleTypeIsUpdatedInPlace() {
+        VehicleType existing = new VehicleType();
+        existing.setId(UUID.randomUUID());
+        existing.setVehicleTypeId("2");
+        existing.setVehicleTypeName("old");
+        existing.setCacheTimestamp(stale());
+        when(makeRepository.findById(MAKE_ID)).thenReturn(Optional.of(make(fresh())));
+        when(vehicleTypeRepository.findByMakeId(MAKE_ID)).thenReturn(List.of(existing));
+        server.expect(requestTo(BASE + "/GetVehicleTypesForMakeId/440?format=json"))
+                .andRespond(withSuccess("""
+                        {"Results":[{"VehicleTypeId":2,"VehicleTypeName":"Passenger Car"}]}""", MediaType.APPLICATION_JSON));
+
+        service.getVehicleTypesForMake(MAKE_ID);
+
+        verify(vehicleTypeRepository).save(existing);
+        assertThat(existing.getVehicleTypeName()).isEqualTo("Passenger Car");
+        verify(vehicleTypeRepository, never()).deleteAll(any());
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("serves dependents of a parent with no vPIC id from cache without calling vPIC")
+    void parentWithoutVpicIdServesCache() {
+        Manufacturer noId = manufacturer(fresh());
+        noId.setNhtsaId(null);
+        Make makeNoId = make(fresh());
+        makeNoId.setNhtsaId(null);
+        Model cachedModel = new Model();
+        cachedModel.setCacheTimestamp(stale());
+        VehicleType cachedType = new VehicleType();
+        cachedType.setCacheTimestamp(stale());
+        VehicleVariable noIdVariable = new VehicleVariable();
+        noIdVariable.setId(UUID.randomUUID());
+        when(manufacturerRepository.findById(MANUFACTURER_ID)).thenReturn(Optional.of(noId));
+        when(makeRepository.findByManufacturerId(MANUFACTURER_ID)).thenReturn(List.of(make(stale())));
+        when(makeRepository.findById(MAKE_ID)).thenReturn(Optional.of(makeNoId));
+        when(modelRepository.findByMakeId(MAKE_ID)).thenReturn(List.of(cachedModel));
+        when(vehicleTypeRepository.findByMakeId(MAKE_ID)).thenReturn(List.of(cachedType));
+        when(vehicleVariableRepository.findById(noIdVariable.getId())).thenReturn(Optional.of(noIdVariable));
+        when(vehicleVariableValueRepository.findByVariable_Id(noIdVariable.getId()))
+                .thenReturn(List.of());
+
+        assertThat(service.getMakesByManufacturer(MANUFACTURER_ID)).hasSize(1);
+        assertThat(service.getModelsByMake(MAKE_ID)).containsExactly(cachedModel);
+        assertThat(service.getVehicleTypesForMake(MAKE_ID)).containsExactly(cachedType);
+        assertThat(service.getVehicleVariableValues(noIdVariable.getId())).isEmpty();
+
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("requests a variable's values by vPIC variable id and derives the value ids")
+    void variableValuesRequestedByVpicVariableId() {
+        VehicleVariable variable = new VehicleVariable();
+        variable.setId(UUID.randomUUID());
+        variable.setNhtsaId(86L);
+        when(vehicleVariableRepository.findById(variable.getId())).thenReturn(Optional.of(variable));
+        when(vehicleVariableValueRepository.findByVariable_Id(variable.getId())).thenReturn(List.of());
+        server.expect(requestTo(BASE + "/GetVehicleVariableValuesList/86?format=json"))
+                .andRespond(withSuccess("""
+                        {"Count":1,"Message":"Response returned successfully","SearchCriteria":null,
+                        "Results":[{"ElementName":"ABS","Id":1,"Name":"Standard"}]}""", MediaType.APPLICATION_JSON));
+
+        service.getVehicleVariableValues(variable.getId());
+
+        org.mockito.ArgumentCaptor<VehicleVariableValue> captor =
+                org.mockito.ArgumentCaptor.forClass(VehicleVariableValue.class);
+        verify(vehicleVariableValueRepository).save(captor.capture());
+        assertThat(captor.getValue().getId()).isEqualTo(derived("variable-value-86-1"));
+        assertThat(captor.getValue().getValueId()).isEqualTo("1");
+        assertThat(captor.getValue().getValue()).isEqualTo("Standard");
+        verify(vehicleVariableValueRepository, never()).deleteAll(any());
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("stores vPIC's variable id, truncates a long description and adopts a legacy row by name")
+    void variablesKeepVpicIdAndAdoptLegacyRows() {
+        VehicleVariable legacy = new VehicleVariable();
+        legacy.setId(UUID.randomUUID());
+        legacy.setName("abs");
+        legacy.setCacheTimestamp(stale());
+        when(vehicleVariableRepository.findAll()).thenReturn(List.of(legacy));
+        server.expect(requestTo(BASE + "/GetVehicleVariableList?format=json"))
+                .andRespond(withSuccess(
+                        "{\"Results\":[{\"ID\":86,\"Name\":\"ABS\",\"Description\":\"" + "x".repeat(400)
+                                + "\"},{\"ID\":87,\"Name\":\"Other\",\"Description\":\"d\"}]}",
+                        MediaType.APPLICATION_JSON));
+
+        service.getVehicleVariables();
+
+        verify(vehicleVariableRepository).save(legacy);
+        assertThat(legacy.getNhtsaId()).isEqualTo(86L);
+        assertThat(legacy.getDescription()).hasSize(255);
+        org.mockito.ArgumentCaptor<VehicleVariable> captor = org.mockito.ArgumentCaptor.forClass(VehicleVariable.class);
+        verify(vehicleVariableRepository, org.mockito.Mockito.times(2)).save(captor.capture());
+        assertThat(captor.getAllValues().get(1).getId()).isEqualTo(derived("variable-87"));
+        verify(vehicleVariableRepository, never()).deleteAll();
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("rejects the whole payload, saving nothing, when any vPIC id is not an integer")
+    void nonIntegerIdFailsTheWholeRefresh() {
+        when(manufacturerRepository.findAll()).thenReturn(List.of());
+        server.expect(requestTo(BASE + "/getallmanufacturers?format=json"))
+                .andRespond(withSuccess("""
+                        {"Results":[{"Mfr_ID":955,"Mfr_CommonName":"Tesla"},{"Mfr_ID":"x","Mfr_CommonName":"Bad"}]}""", MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> service.getManufacturers())
+                .isInstanceOf(CarApiException.class)
+                .hasMessageContaining("Failed to parse manufacturers");
+
+        verify(manufacturerRepository, never()).save(any());
         server.verify();
     }
 
