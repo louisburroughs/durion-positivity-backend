@@ -146,27 +146,26 @@ public class ReplicaManifestListener {
         requestReplay(manifest, tenantId, owner, commandsTopic);
     }
 
+    /**
+     * Sends the replay request and waits for the broker to take it. A failure propagates for
+     * container redelivery (#2452): the owner publishes each window's manifest once, so no later
+     * manifest would re-detect this window's drift.
+     */
     private void requestReplay(
             @NonNull ReconciliationManifestV1 manifest,
             @NonNull UUID tenantId,
             @NonNull String owner,
             @NonNull String commandsTopic) {
-        try {
-            String command = objectMapper.writeValueAsString(new ReplayCommand(
-                    owner + ".outbox.replay-requested",
-                    new ReplayCommand.Payload(
-                            manifest.windowStartUtc().toString(),
-                            manifest.windowEndUtc().toString())));
-            kafkaTemplate.send(TenantKafkaHeaders.record(
-                    commandsTopic, manifest.windowStartUtc().toString(), command, tenantId));
-        } catch (Exception e) {
-            // Best effort: the drift metric already fired, and the next manifest re-detects.
-            log.warn(
-                    "Failed to publish {} outbox replay request for window starting {}",
-                    owner,
-                    manifest.windowStartUtc(),
-                    e);
-        }
+        String command = objectMapper.writeValueAsString(new ReplayCommand(
+                owner + ".outbox.replay-requested",
+                new ReplayCommand.Payload(
+                        manifest.windowStartUtc().toString(),
+                        manifest.windowEndUtc().toString())));
+        OutboxReplayRequests.send(
+                kafkaTemplate,
+                TenantKafkaHeaders.record(
+                        commandsTopic, manifest.windowStartUtc().toString(), command, tenantId),
+                manifest.windowStartUtc());
     }
 
     private void count(String name, String description, String owner, String entity, String tagKey, String tagValue) {
