@@ -1,6 +1,7 @@
 package com.positivity.vehiclefitment.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
@@ -115,6 +116,82 @@ class VpicReferenceRefreshIT extends PostgresTenancyTestBase {
                 .containsExactly(tuple(TESLA_MAKE, "TESLA MOTORS"));
         assertThat(owner.queryForObject("SELECT make_id FROM model WHERE id = ?", UUID.class, MODEL_S))
                 .isEqualTo(TESLA_MAKE);
+    }
+
+    @Test
+    void makeSharedByTwoManufacturers_isOneRowLinkedToBothAndSurvivesRefreshInAnyOrder() {
+        UUID alpha = derived("manufacturer-1001");
+        UUID beta = derived("manufacturer-1002");
+        UUID shared = derived("make-482");
+        vpic.put(
+                MANUFACTURERS_URL,
+                manufacturers(
+                        "{\"Mfr_CommonName\":\"Alpha Motors\",\"Mfr_ID\":1001,\"Mfr_Name\":\"ALPHA\"}",
+                        "{\"Mfr_CommonName\":\"Beta Motors\",\"Mfr_ID\":1002,\"Mfr_Name\":\"BETA\"}"));
+        String sharedMake = "{\"Make_ID\":482,\"Make_Name\":\"SHARED\"}";
+        vpic.put(VPIC + "/GetMakeForManufacturer/1001?format=json", makes(sharedMake));
+        vpic.put(VPIC + "/GetMakeForManufacturer/1002?format=json", makes(sharedMake));
+        vpic.put(
+                VPIC + "/GetModelsForMakeId/482?format=json",
+                models(
+                        "{\"Make_ID\":482,\"Make_Name\":\"SHARED\",\"Model_ID\":9001,\"Model_Name\":\"One\"}",
+                        "{\"Make_ID\":482,\"Make_Name\":\"SHARED\",\"Model_ID\":9002,\"Model_Name\":\"Two\"}"));
+        assertThat(service.getManufacturers()).hasSize(2);
+
+        // refresh A, then B, then A again: the make is neither duplicated nor taken over from the other
+        assertThat(service.getMakesByManufacturer(alpha))
+                .extracting(MakeResponse::getId)
+                .containsExactly(shared);
+        assertThat(service.getModelsByMake(shared)).hasSize(2);
+        List<UUID> modelIds = owner.queryForList("SELECT id FROM model ORDER BY id", UUID.class);
+        assertThat(service.getMakesByManufacturer(beta))
+                .extracting(MakeResponse::getId)
+                .containsExactly(shared);
+        ageCache();
+        assertThat(service.getMakesByManufacturer(alpha))
+                .extracting(MakeResponse::getId)
+                .containsExactly(shared);
+
+        for (UUID manufacturer : List.of(alpha, beta)) {
+            List<MakeResponse> listed = service.getMakesByManufacturer(manufacturer);
+            assertThat(listed).extracting(MakeResponse::getId).containsExactly(shared);
+            assertThat(listed.getFirst().getManufacturerIds())
+                    .containsExactlyInAnyOrder(alpha, beta)
+                    .isSortedAccordingTo(java.util.Comparator.comparing(UUID::toString));
+        }
+        assertThat(owner.queryForObject("SELECT count(*) FROM make", Integer.class))
+                .isEqualTo(1);
+        assertThat(owner.queryForList(
+                        "SELECT manufacturer_id FROM make_manufacturer WHERE make_id = ?", UUID.class, shared))
+                .containsExactlyInAnyOrder(alpha, beta);
+        assertThat(service.getModelsByMake(shared)).hasSize(2);
+        assertThat(owner.queryForList("SELECT id FROM model ORDER BY id", UUID.class))
+                .isEqualTo(modelIds);
+
+        // a fitment persists under either manufacturer, both pointing at the one make
+        for (String manufacturerName : List.of("Alpha Motors", "Beta Motors")) {
+            var request = new com.positivity.vehiclefitment.internal.service.dto.CreatePartFitmentRequest(1L);
+            request.setManufacturerName(manufacturerName);
+            request.setMakeName("SHARED");
+            service.createFitment(request);
+        }
+        assertThat(owner.queryForObject(
+                        "SELECT count(DISTINCT vehicle_make_id) FROM part_fitment_entity", Integer.class))
+                .isEqualTo(1);
+        assertThat(owner.queryForObject("SELECT count(*) FROM part_fitment_entity", Integer.class))
+                .isEqualTo(2);
+
+        // a manufacturer the make is not linked to is rejected by the database
+        UUID gamma = UUID.randomUUID();
+        owner.update(
+                "INSERT INTO manufacturer (id, name, created_at, updated_at) VALUES (?, 'Gamma', now(), now())", gamma);
+        assertThatThrownBy(() -> owner.update(
+                        "INSERT INTO part_fitment_entity (id, part_number_id, vehicle_manufacturer_id, vehicle_make_id,"
+                                + " created_at, updated_at) VALUES (?, 1, ?, ?, now(), now())",
+                        UUID.randomUUID(),
+                        gamma,
+                        shared))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
     }
 
     @Test

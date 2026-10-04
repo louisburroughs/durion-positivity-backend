@@ -129,28 +129,56 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
         }
     }
 
+    /**
+     * The make for a fitment request (#2453): one of the manufacturer's linked makes by name, else an existing
+     * make of that name (a vPIC row or a local one) which is linked to the manufacturer, else a new make linked
+     * to it. A make is one row per brand, so the name is looked up across manufacturers before creating one.
+     */
     private Make resolveMake(String name, Manufacturer manufacturer) {
         String normalized = name != null ? name.trim() : null;
         if (!StringUtils.hasText(normalized)) {
             return null;
         }
-        Optional<Make> found = manufacturer != null
-                ? makeRepository.findByManufacturerIdAndNameIgnoreCase(manufacturer.getId(), normalized)
-                : makeRepository.findByManufacturerIsNullAndNameIgnoreCase(normalized);
+        Optional<Make> found = findMakeByName(normalized, manufacturer);
         if (found.isPresent()) {
-            return found.get();
+            return linked(found.get(), manufacturer);
         }
         Make entity = new Make();
         entity.setName(normalized);
-        entity.setManufacturer(manufacturer);
+        if (manufacturer != null) {
+            entity.linkManufacturer(manufacturer);
+        }
         try {
             return makeRepository.saveAndFlush(entity);
         } catch (DataIntegrityViolationException _) {
-            return (manufacturer != null
-                            ? makeRepository.findByManufacturerIdAndNameIgnoreCase(manufacturer.getId(), normalized)
-                            : makeRepository.findByManufacturerIsNullAndNameIgnoreCase(normalized))
+            return findMakeByName(normalized, manufacturer)
+                    .map(existing -> linked(existing, manufacturer))
                     .orElseThrow(() -> new VehicleFitmentException("Concurrent insert race on make: " + normalized));
         }
+    }
+
+    private Optional<Make> findMakeByName(String name, Manufacturer manufacturer) {
+        if (manufacturer != null) {
+            Optional<Make> linkedMake =
+                    preferVpic(makeRepository.findByManufacturersIdAndNameIgnoreCase(manufacturer.getId(), name));
+            if (linkedMake.isPresent()) {
+                return linkedMake;
+            }
+        }
+        return preferVpic(makeRepository.findAllByNameIgnoreCase(name));
+    }
+
+    private static Optional<Make> preferVpic(List<Make> makes) {
+        return makes.stream()
+                .min(Comparator.comparing((Make m) -> m.getNhtsaId() == null).thenComparing(Make::getId));
+    }
+
+    /** Links the make to the manufacturer when it is not yet, flushing so a fitment row can reference the pair. */
+    private Make linked(Make make, Manufacturer manufacturer) {
+        if (manufacturer != null && make.linkManufacturer(manufacturer)) {
+            makeRepository.saveAndFlush(make);
+        }
+        return make;
     }
 
     private Model resolveModel(String name, Make make) {
@@ -272,11 +300,12 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
     /*
      * Manufacturers, makes, models and vehicle types refresh from vPIC in place (#2416): each vPIC row updates
      * the row keyed by vPIC's own id, or inserts it under an id derived from that id if new. Nothing is deleted.
-     * These rows are referenced by foreign keys (make -> manufacturer, model and vehicle_type -> make,
+     * These rows are referenced by foreign keys (make_manufacturer -> make and manufacturer, model and
+     * vehicle_type -> make,
      * part_fitment_entity -> all four), so the delete and reinsert this replaced failed on the first refresh
      * after any child existed. A row vPIC no longer returns is kept, with its children and part fitments.
      *
-     * Names are unique case-insensitively (per make for models and vehicle types, per manufacturer for makes).
+     * Names are unique case-insensitively (per make for models and vehicle types, among a manufacturer's linked makes).
      * A vPIC row whose name already belongs to a different row, such as one created by a fitment request, is
      * logged and skipped rather than aborting the whole refresh.
      */
@@ -326,7 +355,7 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
         Manufacturer manufacturer = manufacturerRepository
                 .findById(manufacturerId)
                 .orElseThrow(() -> new IllegalArgumentException("Manufacturer not found with ID: " + manufacturerId));
-        List<Make> cached = makeRepository.findByManufacturerId(manufacturerId);
+        List<Make> cached = makeRepository.findByManufacturersId(manufacturerId);
         if (isCacheFresh(lastRefreshed(cached, Make::getCacheTimestamp))) {
             return cached;
         }
@@ -344,12 +373,10 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
                 UUID id = localId("make-", row.vpicId());
                 String name = row.name();
                 if (name != null
-                        && makeRepository
-                                .findByManufacturerIdAndNameIgnoreCase(manufacturerId, name)
-                                .filter(other -> !id.equals(other.getId()))
-                                .isPresent()) {
+                        && makeRepository.findByManufacturersIdAndNameIgnoreCase(manufacturerId, name).stream()
+                                .anyMatch(other -> !id.equals(other.getId()))) {
                     log.warn(
-                            "Skipping vPIC make {}: name '{}' belongs to another make of manufacturer {}",
+                            "Skipping vPIC make {}: name '{}' belongs to another make linked to manufacturer {}",
                             row.vpicId(),
                             name,
                             manufacturerId);
@@ -359,12 +386,13 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
                 make.setId(id);
                 make.setNhtsaId(row.vpicId());
                 make.setName(name);
-                make.setManufacturer(manufacturer);
+                // Add this manufacturer's link; never remove another manufacturer's (#2453).
+                make.linkManufacturer(manufacturer);
                 make.setCacheTimestamp(LocalDateTime.now(clock));
                 makeRepository.save(make);
             }
         });
-        return makeRepository.findByManufacturerId(manufacturerId);
+        return makeRepository.findByManufacturersId(manufacturerId);
     }
 
     @Override
