@@ -24,6 +24,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.location.config.LocationScopeTestSupport;
 import com.positivity.location.internal.dto.CoverageRuleResponse;
+import com.positivity.location.internal.dto.DistanceDto;
 import com.positivity.location.internal.dto.MobileUnitRequest;
 import com.positivity.location.internal.dto.MobileUnitResponse;
 import com.positivity.location.internal.exception.DuplicateResourceException;
@@ -34,6 +35,7 @@ import com.positivity.location.internal.service.MobileUnitService;
 import com.positivity.security.common.LocationScopeAutoConfiguration;
 import com.positivity.security.common.LocationScopeDeniedException;
 import com.positivity.web.common.WebCommonErrorAutoConfiguration;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -108,7 +110,33 @@ class MobileUnitControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].baseLocationId").value(BASE_ID.toString()))
                 .andExpect(
-                        jsonPath("$.content[0].coverageRules[0].serviceAreaId").value(AREA_ID.toString()));
+                        jsonPath("$.content[0].coverageRules[0].serviceAreaId").value(AREA_ID.toString()))
+                .andExpect(jsonPath("$.content[0].coverageRules[0].maxDistance").doesNotHaveJsonPath());
+    }
+
+    @Test
+    @DisplayName("A coverage rule's distance ceiling serializes with its value and unit")
+    void coverageRuleCeilingKeepsValueAndUnit() throws Exception {
+        MobileUnitResponse withRules = van();
+        withRules.setCoverageRules(List.of(CoverageRuleResponse.builder()
+                .mobileUnitId(UNIT_ID)
+                .serviceAreaId(AREA_ID)
+                .ruleType("DISTANCE_TIER")
+                .priority(1)
+                .maxDistance(new DistanceDto(new BigDecimal("25"), "MI"))
+                .build()));
+        when(mobileUnitService.list(0, 20, BASE_ID, "ACTIVE", true)).thenReturn(new PageImpl<>(List.of(withRules)));
+        as(preRollout(LocationPermissions.MOBILE_UNIT_READ));
+
+        mockMvc.perform(get(UNITS_URL)
+                        .param("baseLocationId", BASE_ID.toString())
+                        .param("status", "ACTIVE")
+                        .param("include", "coverageRules"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].coverageRules[0].maxDistance.value")
+                        .value(25))
+                .andExpect(jsonPath("$.content[0].coverageRules[0].maxDistance.unit")
+                        .value("MI"));
     }
 
     @Test
