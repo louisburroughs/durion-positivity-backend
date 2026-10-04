@@ -660,7 +660,8 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `CYCLE_COUNT_CONFLICT` | 409 | Cycle-count approval rejected; the task is flagged CONFLICT and the reviewer must choose a recount or a recomputed approval |
 | `SOURCE_DOCUMENT_LINES_UNAVAILABLE` | 409 | The purchase-order line projection has not caught up (or the id is unknown); `nextAction` says to retry |
 | `PURCHASE_SUGGESTION_INVALID_STATE` | 409 | Accepting or dismissing a purchase suggestion from a terminal status |
-| `OVER_RECEIPT_NOT_PERMITTED` | 422 | The goods receipt would push the received total past the purchase order's open balance and the caller lacks `inventory:goods_receipt:override` |
+| `OVER_RECEIPT_NOT_PERMITTED` | 422 | The goods receipt would push the received total past the purchase order's open balance, or a receiving-session receive / cross-dock would push a line's cumulative received quantity past its expected quantity (#2455), and the caller lacks `inventory:goods_receipt:override` |
+| `IDEMPOTENCY_CONFLICT` | 409 | A receiving-session receive / cross-dock reused an `Idempotency-Key` that already recorded a receipt for a different payload (#2455); a retry with the same payload is a no-op that returns the original response |
 | `ROLLUP_EXPANSION_TOO_LARGE` | 422 | `expand=tree` was requested on a parent-location rollup whose descendant site count exceeds the configured cap |
 | `INSUFFICIENT_STOCK` | 422 | Not enough on-hand stock to fulfill |
 | `NEGATIVE_STOCK_OVERRIDE_REQUIRED` | 422 | The movement would drive stock negative and the policy requires an explicit override |

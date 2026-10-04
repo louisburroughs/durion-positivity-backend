@@ -20,6 +20,7 @@ import com.positivity.inventory.internal.enums.InventoryVarianceType;
 import com.positivity.inventory.internal.enums.ReceivingLineStatus;
 import com.positivity.inventory.internal.enums.ReceivingSessionStatus;
 import com.positivity.inventory.internal.enums.SourceDocumentType;
+import com.positivity.inventory.internal.exception.OverReceiptNotPermittedException;
 import com.positivity.inventory.internal.exception.PartMatchPermissionException;
 import com.positivity.inventory.internal.exception.ReceivingSessionNotFoundException;
 import com.positivity.inventory.internal.exception.WorkorderClosedException;
@@ -30,7 +31,6 @@ import com.positivity.inventory.internal.repository.InventoryLedgerEntryReposito
 import com.positivity.inventory.internal.repository.InventoryVarianceRepository;
 import com.positivity.inventory.internal.repository.ReceivingSessionRepository;
 import com.positivity.inventory.internal.service.DocumentQuantityConverter;
-import com.positivity.inventory.internal.service.GoodsReceiptFactPublisher;
 import com.positivity.inventory.internal.service.InventoryFactPublisher;
 import com.positivity.inventory.internal.service.InventoryLotCaptureService;
 import com.positivity.inventory.internal.service.LedgerPostingService;
@@ -40,12 +40,12 @@ import com.positivity.inventory.internal.service.SourceDocumentResolver;
 import com.positivity.inventory.internal.service.StagingLocationResolver;
 import com.positivity.inventory.internal.service.WorkorderValidationService;
 import com.positivity.security.common.SecurityContextHelper;
-import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -64,6 +64,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ReceivingServiceImpl implements ReceivingService {
 
     private static final String PART_MATCH_OVERRIDE_PERMISSION = "inventory:override:part-match";
+    private static final String OVER_RECEIPT_OVERRIDE_PERMISSION = "inventory:goods_receipt:override";
     private static final UUID DEFAULT_CROSS_DOCK_LOCATION_ID = UUID.fromString("00000000-0000-0000-0000-000000000003");
 
     private final ReceivingSessionRepository receivingSessionRepository;
@@ -79,7 +80,7 @@ public class ReceivingServiceImpl implements ReceivingService {
     private final QuantityScaleGuard quantityScaleGuard;
     private final ExtWorkorderReplicaRepository extWorkorderReplicaRepository;
     private final ExtWorkorderPartReplicaRepository extWorkorderPartReplicaRepository;
-    private final GoodsReceiptFactPublisher goodsReceiptFactPublisher;
+    private final SessionReceiptRecorder sessionReceiptRecorder;
 
     /** Cap on {@link #searchCrossDockWorkorders} results (#2211): also the blank-query default page size. */
     private static final int WORKORDER_SEARCH_LIMIT = 50;
@@ -131,32 +132,39 @@ public class ReceivingServiceImpl implements ReceivingService {
             @NonNull UUID sessionId, @NonNull ReceiveItemsRequest request, @NonNull String actorUserId) {
         ReceivingSession session = resolveSessionForReceive(sessionId);
 
+        // #2455: a retry under a recorded key is a no-op that answers what the first call answered.
+        String idempotencyKey = SessionReceiptRecorder.normalizeKey(request.getIdempotencyKey());
+        String fingerprint = SessionReceiptRecorder.fingerprint("receive|" + request.getLines());
+        Optional<ReceiveItemsResponse> replay = sessionReceiptRecorder.findReplay(
+                sessionId,
+                SessionReceiptRecorder.SCOPE_RECEIVE,
+                idempotencyKey,
+                fingerprint,
+                ReceiveItemsResponse.class);
+        if (replay.isPresent()) {
+            return replay.get();
+        }
+
         Map<UUID, ReceivingLine> lineMap = session.getLines().stream()
                 .filter(line -> line.getLineId() != null)
                 .collect(Collectors.toMap(ReceivingLine::getLineId, line -> line, (left, right) -> left));
 
+        // Planned and guarded in full before the first ledger write: a rejected call posts nothing.
+        List<PlannedReceipt> planned = planReceipts(session, lineMap, request);
+
         List<InventoryVariance> variances = new ArrayList<>();
-        List<ReceivedQuantity> received = new ArrayList<>();
-        int linesProcessed = 0;
+        List<SessionReceiptRecorder.ReceivedLine> received = new ArrayList<>();
 
         // Once for the whole call, not once per line: every line of a session stages at the same
         // place, and resolving per line would repeat the site-default lookup N times (#2009).
         UUID stagingLocationId = stagingLocationResolver.resolveStagingLocationIdFor(sessionSiteId(session));
 
-        for (ReceiveLineRequest lineReq : request.getLines()) {
-            ReceivingLine line = lineMap.get(lineReq.getLineId());
-            if (line == null) {
-                // A line this session does not have: the request names it, we do not invent it.
-                continue;
-            }
+        for (PlannedReceipt plan : planned) {
             // Captured per request line, not read back off the line afterwards: a request naming one
-            // line twice posts twice, and the line only remembers the last quantity.
-            received.add(new ReceivedQuantity(
-                    line, receiveLine(session, line, lineReq, sessionId, stagingLocationId, actorUserId, variances)));
-            linesProcessed++;
+            // line twice posts twice, and the line only remembers the running total.
+            received.add(receiveLine(session, plan, sessionId, stagingLocationId, actorUserId, variances));
         }
-
-        publishGoodsReceipt(session, stagingLocationId, received, actorUserId);
+        int linesProcessed = planned.size();
 
         session.setStatus(
                 allLinesSettled(session) ? ReceivingSessionStatus.COMPLETED : ReceivingSessionStatus.IN_PROGRESS);
@@ -164,39 +172,120 @@ public class ReceivingServiceImpl implements ReceivingService {
             receivingSessionRepository.save(session);
         }
 
+        ReceiveItemsResponse response = buildReceiveItemsResponse(session, linesProcessed, variances);
+        sessionReceiptRecorder.record(
+                session,
+                SessionReceiptRecorder.SCOPE_RECEIVE,
+                idempotencyKey,
+                fingerprint,
+                stagingLocationId,
+                received,
+                actorUserId,
+                response);
+
         log.info("Processed {} lines for session {}, {} variances", linesProcessed, sessionId, variances.size());
-        return buildReceiveItemsResponse(session, linesProcessed, variances);
+        return response;
+    }
+
+    /** One request line resolved against its session line: the base delta it receives. */
+    private record PlannedReceipt(
+            @NonNull ReceivingLine line,
+            @NonNull ReceiveLineRequest request,
+            DocumentQuantityConverter.@Nullable DocumentConversion conversion,
+            @NonNull BigDecimal quantity) {}
+
+    /**
+     * Resolves every request line to the base quantity it receives and applies the over-receipt
+     * guard to the cumulative totals (#2455), before anything is posted.
+     *
+     * <p>Lines the session does not have are skipped, as ever. A line whose running total (what the
+     * session already received, plus every earlier request line naming it in this call) passes its
+     * expected quantity is an over-receipt: rejected with 422 unless the caller holds
+     * {@code inventory:goods_receipt:override}. The expected quantity is the source order line's
+     * open quantity when the session opened, so a prior receipt in this session counts against it.
+     * Under-receipt is never an error.
+     */
+    private @NonNull List<PlannedReceipt> planReceipts(
+            @NonNull ReceivingSession session,
+            @NonNull Map<UUID, ReceivingLine> lineMap,
+            @NonNull ReceiveItemsRequest request) {
+        List<PlannedReceipt> planned = new ArrayList<>();
+        Map<UUID, BigDecimal> runningTotals = new java.util.HashMap<>();
+        List<String> overReceived = new ArrayList<>();
+        for (ReceiveLineRequest lineReq : request.getLines()) {
+            ReceivingLine line = lineMap.get(lineReq.getLineId());
+            if (line == null) {
+                // A line this session does not have: the request names it, we do not invent it.
+                continue;
+            }
+            // odoo-parity B2 (#1034): an optional document UoM converts to base BEFORE the
+            // expected-vs-received comparison and the ledger posting; keyed values are kept
+            // on the line for audit.
+            DocumentQuantityConverter.DocumentConversion conversion = documentQuantityConverter
+                    .convertIfPresent(
+                            parseProductId(line.getProductId()),
+                            line.getProductId(),
+                            lineReq.getDocumentUom(),
+                            lineReq.getDocumentQuantity())
+                    .orElse(null);
+            BigDecimal quantity = conversion != null ? conversion.baseQuantity() : lineReq.getReceivedQuantity();
+            if (quantity == null) {
+                throw new IllegalArgumentException(
+                        "receivedQuantity is required when documentUom/documentQuantity are absent");
+            }
+            BigDecimal runningTotal = runningTotals
+                    .getOrDefault(line.getLineId(), Quantities.nz(line.getReceivedQuantity()))
+                    .add(quantity);
+            runningTotals.put(line.getLineId(), runningTotal);
+            if (runningTotal.compareTo(line.getExpectedQuantity()) > 0) {
+                overReceived.add(line.getLineId() + " (expected=" + line.getExpectedQuantity() + ", cumulative="
+                        + runningTotal + ")");
+            }
+            planned.add(new PlannedReceipt(line, lineReq, conversion, quantity));
+        }
+        requireOverReceiptAuthority(session, overReceived);
+        return planned;
+    }
+
+    /**
+     * Rejects an over-receipt unless the caller holds the goods-receipt override, the same
+     * authority {@code POST /v1/inventory/goods-receipts} asks for (#2455).
+     */
+    private void requireOverReceiptAuthority(@NonNull ReceivingSession session, @NonNull List<String> overReceived) {
+        if (overReceived.isEmpty()) {
+            return;
+        }
+        if (SecurityContextHelper.hasAuthority(OVER_RECEIPT_OVERRIDE_PERMISSION)) {
+            log.warn(
+                    "Over-receipt accepted on session {} by override {}: {}",
+                    session.getSessionId(),
+                    OVER_RECEIPT_OVERRIDE_PERMISSION,
+                    overReceived);
+            return;
+        }
+        throw new OverReceiptNotPermittedException("Receiving more than expected on session " + session.getSessionId()
+                + " requires " + OVER_RECEIPT_OVERRIDE_PERMISSION + ": " + overReceived);
     }
 
     /**
      * Receives one line into staging: quantity, lot, status, ledger entry, and any variance.
+     * Cumulative: this call's quantity adds to what the line already received, as the ledger does.
      *
-     * @return the base quantity posted to the ledger for this request line
+     * @return what this request line received, for the goods receipt
      */
-    private @NonNull BigDecimal receiveLine(
+    private SessionReceiptRecorder.@NonNull ReceivedLine receiveLine(
             @NonNull ReceivingSession session,
-            @NonNull ReceivingLine line,
-            @NonNull ReceiveLineRequest lineReq,
+            @NonNull PlannedReceipt plan,
             @NonNull UUID sessionId,
             @NonNull UUID stagingLocationId,
             @NonNull String actorUserId,
             @NonNull List<InventoryVariance> variances) {
-        // odoo-parity B2 (#1034): an optional document UoM converts to base BEFORE the
-        // expected-vs-received comparison and the ledger posting; keyed values are kept
-        // on the line for audit.
-        DocumentQuantityConverter.DocumentConversion conversion = documentQuantityConverter
-                .convertIfPresent(
-                        parseProductId(line.getProductId()),
-                        line.getProductId(),
-                        lineReq.getDocumentUom(),
-                        lineReq.getDocumentQuantity())
-                .orElse(null);
-        BigDecimal receivedQty = conversion != null ? conversion.baseQuantity() : lineReq.getReceivedQuantity();
-        if (receivedQty == null) {
-            throw new IllegalArgumentException(
-                    "receivedQuantity is required when documentUom/documentQuantity are absent");
-        }
+        ReceivingLine line = plan.line();
+        ReceiveLineRequest lineReq = plan.request();
+        DocumentQuantityConverter.DocumentConversion conversion = plan.conversion();
+        BigDecimal receivedQty = plan.quantity();
         BigDecimal expectedQty = line.getExpectedQuantity();
+        BigDecimal cumulativeQty = Quantities.nz(line.getReceivedQuantity()).add(receivedQty);
 
         // odoo-parity E1 (#1038): LOT-tracked products require a lotNumber (422
         // LOT_NUMBER_REQUIRED) and find-or-create the lot; untracked products pass
@@ -208,13 +297,13 @@ public class ReceivingServiceImpl implements ReceivingService {
                 parseSupplierVendorId(session.getSupplierId()),
                 lineReq.getExpirationDate());
 
-        line.setReceivedQuantity(receivedQty);
+        line.setReceivedQuantity(cumulativeQty);
         line.setLotNumber(lineReq.getLotNumber());
         line.setDocumentUom(conversion == null ? null : conversion.documentUom());
         line.setDocumentQuantity(conversion == null ? null : conversion.documentQuantity());
         line.setConversionFactor(conversion == null ? null : conversion.conversionFactor());
 
-        int cmp = receivedQty.compareTo(expectedQty);
+        int cmp = cumulativeQty.compareTo(expectedQty);
         line.setStatus(statusFor(cmp));
 
         createGoodsReceiptLedgerEntry(
@@ -230,51 +319,9 @@ public class ReceivingServiceImpl implements ReceivingService {
                 actorUserId);
 
         if (cmp != 0) {
-            variances.add(recordVariance(session, line, expectedQty, receivedQty, cmp, actorUserId));
+            variances.add(recordVariance(session, line, expectedQty, cumulativeQty, cmp, actorUserId));
         }
-        return receivedQty;
-    }
-
-    /** How much of one session line arrived in a single receive or cross-dock call. */
-    private record ReceivedQuantity(
-            @NonNull ReceivingLine line, @NonNull BigDecimal quantity) {}
-
-    /**
-     * Tells pos-order what arrived against the session's purchase order (#2417), through the
-     * same {@code goodsreceipt.recorded} fact and outbox the goods-receipt endpoint uses, in this
-     * receive's transaction. Without it a session-received order kept its open quantities, open
-     * balance and status as if nothing had come in.
-     *
-     * <p>Each call is its own receipt: the fact is a delta, so one receipt per call reports
-     * exactly what that call posted to the ledger. A session whose source document is not a
-     * purchase order has no order to advance and publishes nothing, as does a call that received
-     * nothing.
-     */
-    private void publishGoodsReceipt(
-            @NonNull ReceivingSession session,
-            @Nullable UUID locationId,
-            @NonNull List<ReceivedQuantity> received,
-            @NonNull String actorUserId) {
-        if (received.isEmpty()) {
-            return;
-        }
-        sourceDocumentResolver
-                .receivingPurchaseOrderId(session.getSourceDocumentType(), session.getSourceDocumentId())
-                .ifPresent(purchaseOrderId -> goodsReceiptFactPublisher.publish(
-                        new GoodsReceiptFactPublisher.ReceiptHeader(
-                                UUIDv7Generator.generate(), null, purchaseOrderId, locationId, actorUserId),
-                        received.stream()
-                                .map(receipt -> receiptLineFact(purchaseOrderId, receipt))
-                                .toList()));
-    }
-
-    private GoodsReceiptFactPublisher.@NonNull GoodsReceiptLineFact receiptLineFact(
-            @NonNull UUID purchaseOrderId, @NonNull ReceivedQuantity receipt) {
-        ReceivingLine line = receipt.line();
-        SourceDocumentResolver.ReceiptLineValue value = sourceDocumentResolver.valueReceiptLine(
-                purchaseOrderId, line.getSourceLineId(), line.getProductId(), receipt.quantity());
-        return new GoodsReceiptFactPublisher.GoodsReceiptLineFact(
-                value.poLineId(), line.getProductId(), receipt.quantity(), value.accruedAmountMinor());
+        return new SessionReceiptRecorder.ReceivedLine(line, receivedQty, conversion, lineReq.getLotNumber());
     }
 
     /** Received exactly what was expected, less, or more. */
@@ -335,10 +382,25 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .orElseThrow(() -> new ReceivingSessionNotFoundException("Receiving session not found: " + sessionId));
         ReceivingLine line = requireLine(session, lineId);
 
+        // #2455: a retry under a recorded key is a no-op that answers what the first call answered.
+        String idempotencyKey = SessionReceiptRecorder.normalizeKey(request.getIdempotencyKey());
+        String scope = SessionReceiptRecorder.crossDockScope(lineId);
+        String fingerprint = SessionReceiptRecorder.fingerprint("cross-dock|" + request.getWorkorderId() + '|'
+                + request.getWorkorderLineId() + '|'
+                + (request.getQuantity() == null
+                        ? null
+                        : request.getQuantity().stripTrailingZeros().toPlainString())
+                + '|' + request.getLotNumber() + '|' + request.getNotes());
+        Optional<CrossDockResponse> replay = sessionReceiptRecorder.findReplay(
+                sessionId, scope, idempotencyKey, fingerprint, CrossDockResponse.class);
+        if (replay.isPresent()) {
+            return replay.get();
+        }
+
         String workorderId = request.getWorkorderId();
         validateWorkorderEligibility(workorderId, request, line, actorUserId);
 
-        CrossDockQuantityPlan quantities = planCrossDockQuantities(line, request, lineId);
+        CrossDockQuantityPlan quantities = planCrossDockQuantities(session, line, request, lineId);
         UUID crossDockLocationId = resolveCrossDockLocationId();
         CrossDockLot lot = resolveCrossDockLot(session, line, request);
 
@@ -355,16 +417,10 @@ public class ReceivingServiceImpl implements ReceivingService {
                 actorUserId);
 
         applyCrossDockLineOutcome(line, request, workorderId, quantities, lot);
-        // Cross-docked goods skip the shelf, not the order: they arrived against it all the same.
-        publishGoodsReceipt(
-                session,
-                crossDockLocationId,
-                List.of(new ReceivedQuantity(line, quantities.quantityDelta())),
-                actorUserId);
         settleSessionStatus(session);
         receivingSessionRepository.save(session);
 
-        return CrossDockResponse.builder()
+        CrossDockResponse response = CrossDockResponse.builder()
                 .lineId(lineId)
                 .workorderId(workorderId)
                 .workorderLineId(request.getWorkorderLineId())
@@ -374,6 +430,18 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .lineStatus(line.getStatus().name())
                 .ledgerEntryIds(ledgerEntryIds)
                 .build();
+        // Cross-docked goods skip the shelf, not the order: they arrived against it all the same.
+        sessionReceiptRecorder.record(
+                session,
+                scope,
+                idempotencyKey,
+                fingerprint,
+                crossDockLocationId,
+                List.of(new SessionReceiptRecorder.ReceivedLine(
+                        line, quantities.quantityDelta(), null, lot.lotNumber())),
+                actorUserId,
+                response);
+        return response;
     }
 
     @Override
@@ -437,25 +505,25 @@ public class ReceivingServiceImpl implements ReceivingService {
     private record CrossDockQuantityPlan(
             BigDecimal quantityDelta, BigDecimal cumulativeReceivedQuantity, BigDecimal expectedQuantity) {}
 
-    /** Computes the cross-dock's quantities, rejecting a request that would exceed what is expected. */
+    /** Computes the cross-dock's quantities, rejecting an over-receipt the caller may not override. */
     @NonNull
     private CrossDockQuantityPlan planCrossDockQuantities(
-            @NonNull ReceivingLine line, @NonNull CrossDockRequest request, @NonNull UUID lineId) {
+            @NonNull ReceivingSession session,
+            @NonNull ReceivingLine line,
+            @NonNull CrossDockRequest request,
+            @NonNull UUID lineId) {
         BigDecimal quantityDelta = toLedgerQuantity(line.getProductId(), request.getQuantity(), "quantity");
         BigDecimal existingReceivedQuantity =
                 line.getReceivedQuantity() != null ? line.getReceivedQuantity() : BigDecimal.ZERO;
         BigDecimal expectedQuantity = line.getExpectedQuantity() != null ? line.getExpectedQuantity() : BigDecimal.ZERO;
         BigDecimal cumulativeReceivedQuantity = existingReceivedQuantity.add(request.getQuantity());
         if (cumulativeReceivedQuantity.compareTo(expectedQuantity) > 0) {
-            throw new IllegalArgumentException("Cross-dock quantity exceeds expected quantity for line "
-                    + lineId
-                    + " (expected="
-                    + expectedQuantity
-                    + ", currentReceived="
-                    + existingReceivedQuantity
-                    + ", requested="
-                    + request.getQuantity()
-                    + ")");
+            // #2455: the receipt half of a cross-dock is a receipt like any other, so it takes the
+            // same over-receipt guard, and it runs before any ledger write.
+            requireOverReceiptAuthority(
+                    session,
+                    List.of(lineId + " (expected=" + expectedQuantity + ", cumulative=" + cumulativeReceivedQuantity
+                            + ")"));
         }
         return new CrossDockQuantityPlan(quantityDelta, cumulativeReceivedQuantity, expectedQuantity);
     }

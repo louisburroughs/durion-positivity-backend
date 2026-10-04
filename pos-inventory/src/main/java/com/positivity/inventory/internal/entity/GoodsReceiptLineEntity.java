@@ -61,6 +61,10 @@ public class GoodsReceiptLineEntity extends TenantScopedEntity {
 
     private String lotNumber;
 
+    /** The receiving session line this was received against (#2455); null for a sessionless receipt. */
+    @Column(name = "receiving_line_id")
+    private UUID receivingLineId;
+
     /** UoM the line was keyed in, when it differed from base (odoo-parity B2, #1034). */
     @Column(name = "document_uom", length = 32)
     private String documentUom;

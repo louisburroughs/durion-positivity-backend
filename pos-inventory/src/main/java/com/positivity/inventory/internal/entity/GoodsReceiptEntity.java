@@ -65,6 +65,26 @@ public class GoodsReceiptEntity extends TenantScopedEntity {
 
     private Long totalAccruedAmountMinor;
 
+    /** The receiving session this receipt was recorded from (#2455); null for a sessionless receipt. */
+    @Column(name = "receiving_session_id")
+    private UUID receivingSessionId;
+
+    /** The operation within the session the idempotency key applies to: RECEIVE or CROSS_DOCK:lineId. */
+    @Column(name = "idempotency_scope", length = 80)
+    private String idempotencyScope;
+
+    /** The caller's Idempotency-Key, or a server-generated one (#2455). */
+    @Column(name = "idempotency_key")
+    private String idempotencyKey;
+
+    /** SHA-256 of the canonical request, to tell a replay from a key reused for another request. */
+    @Column(name = "request_fingerprint", length = 64)
+    private String requestFingerprint;
+
+    /** The JSON response the original call returned, replayed on a retry. */
+    @Column(name = "response_snapshot", columnDefinition = "text")
+    private String responseSnapshot;
+
     @CreatedBy
     @Column(nullable = false, updatable = false)
     private String createdBy;

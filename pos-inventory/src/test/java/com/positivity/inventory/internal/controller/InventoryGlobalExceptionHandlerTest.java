@@ -11,6 +11,7 @@ import com.positivity.inventory.internal.exception.CycleCountPlanNotFoundExcepti
 import com.positivity.inventory.internal.exception.DuplicateAsnException;
 import com.positivity.inventory.internal.exception.DuplicateEnabledAnyPutawayRuleException;
 import com.positivity.inventory.internal.exception.FractionalQuantityNotAllowedException;
+import com.positivity.inventory.internal.exception.IdempotencyConflictException;
 import com.positivity.inventory.internal.exception.InsufficientAtpException;
 import com.positivity.inventory.internal.exception.InsufficientPermissionException;
 import com.positivity.inventory.internal.exception.InsufficientStockException;
@@ -212,6 +213,8 @@ class InventoryGlobalExceptionHandlerTest {
                     Named.of("handleOverReceiptNotPermitted", (HandlerInvocation)
                             () -> handler.handleOverReceiptNotPermitted(
                                     new OverReceiptNotPermittedException("over receipt"))),
+                    Named.of("handleIdempotencyConflict", (HandlerInvocation)
+                            () -> handler.handleIdempotencyConflict(new IdempotencyConflictException("key reused"))),
                     Named.of("handleTaskNotFound", (HandlerInvocation)
                             () -> handler.handleTaskNotFound(new TaskNotFoundException(UUID.randomUUID()))),
                     Named.of("handleCycleCountPlanNotFound", (HandlerInvocation)

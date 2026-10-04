@@ -8,6 +8,7 @@ import com.positivity.inventory.internal.exception.CycleCountPlanNotFoundExcepti
 import com.positivity.inventory.internal.exception.DuplicateAsnException;
 import com.positivity.inventory.internal.exception.DuplicateEnabledAnyPutawayRuleException;
 import com.positivity.inventory.internal.exception.FractionalQuantityNotAllowedException;
+import com.positivity.inventory.internal.exception.IdempotencyConflictException;
 import com.positivity.inventory.internal.exception.InsufficientAtpException;
 import com.positivity.inventory.internal.exception.InsufficientPermissionException;
 import com.positivity.inventory.internal.exception.InsufficientStockException;
@@ -195,6 +196,11 @@ public class InventoryGlobalExceptionHandler {
     @ExceptionHandler(OverReceiptNotPermittedException.class)
     public ResponseEntity<ApiError> handleOverReceiptNotPermitted(OverReceiptNotPermittedException ex) {
         return build(HttpStatus.valueOf(422), OverReceiptNotPermittedException.ERROR_CODE, ex.getMessage());
+    }
+
+    @ExceptionHandler(IdempotencyConflictException.class)
+    public ResponseEntity<ApiError> handleIdempotencyConflict(IdempotencyConflictException ex) {
+        return build(HttpStatus.CONFLICT, IdempotencyConflictException.ERROR_CODE, ex.getMessage());
     }
 
     @ExceptionHandler(TaskNotFoundException.class)
