@@ -39,7 +39,9 @@ public class CoverageRuleRequest {
     @Schema(
             description = "Type of coverage rule, matched case-insensitively. SERVICE_AREA covers the whole service"
                     + " area; DISTANCE_TIER covers it up to maxDistance, and a unit's DISTANCE_TIER rules must be"
-                    + " strictly ascending by maxDistance and end with one rule whose maxDistance is null.",
+                    + " strictly ascending by maxDistance and end with one rule whose maxDistance is null."
+                    + " Recorded and validated, but ruleType itself is not yet evaluated by eligibility: a"
+                    + " DISTANCE_TIER rule matches the same addresses a SERVICE_AREA rule would.",
             example = "SERVICE_AREA",
             allowableValues = {"SERVICE_AREA", "DISTANCE_TIER"},
             requiredMode = REQUIRED)
@@ -67,11 +69,10 @@ public class CoverageRuleRequest {
     private Instant validTo;
 
     @Schema(
-            implementation = DistanceDto.class,
+            allOf = DistanceDto.class,
             description = "Maximum service distance covered by the rule, an explicit {value, unit} object (KM or"
                     + " MI); converted at the edge and stored as kilometres (DECISION-LOCATION-028). A bare number"
-                    + " is refused. Not yet evaluated: coverage matches on the postal-code service area alone,"
-                    + " since geocoding does not exist.",
+                    + " is refused. Not yet evaluated by eligibility, since geocoding does not exist.",
             requiredMode = NOT_REQUIRED)
     private Object maxDistance;
 }

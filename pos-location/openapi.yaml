@@ -957,17 +957,17 @@ paths:
       x-required-permissions:
       - location:bay:read
     post:
-      description: 'Creates a service bay under a location with a type classification, concurrency capacity and optional capability and skill requirements.
+      description: 'Creates a service bay under a location with a type classification, concurrency capacity, an optional serviceCapabilityCodes specialty claim and an optional maxDutyClass. Leaving serviceCapabilityCodes out (or null) applies the bay type''s default specialty codes; an explicit empty list makes a general bay with no specialty claim.
 
         Use this tool when adding physical work capacity to a shop; do not use patchBay, which modifies a bay that already exists, and use createStorageLocation for inventory storage rather than vehicle bays.
 
-        Preconditions: the location must exist, no bay of that location may already use the name (case-insensitive, including a retired bay''s name), any serviceCapabilityCodes must name active catalog operation codes (a GENERAL_SERVICE bay declares none), and a status of OUT_OF_SERVICE must carry outOfServiceReason, with outOfServiceNote also required for OTHER.
+        Preconditions: the location must exist, no bay of that location may already use the name (case-insensitive, including a retired bay''s name), any serviceCapabilityCodes must name active catalog operation codes (GENERAL_SERVICE, HEAVY_DUTY and WASH_DETAIL have no default codes), and a status of OUT_OF_SERVICE must carry outOfServiceReason, with outOfServiceNote also required for OTHER.
 
         Required inputs: name, bayType (one of GENERAL_SERVICE, ALIGNMENT, TIRE_SERVICE, HEAVY_DUTY, INSPECTION or WASH_DETAIL) and capacity.maxConcurrentVehicles of at least 1; status is optional and defaults to ACTIVE, also accepting OUT_OF_SERVICE or RETIRED; displayOrder is optional and controls list ordering.
 
         Emits a LOCATION_BAY_CREATE event; no other records are touched.
 
-        Returns 400 when locationId does not parse as a UUID, 403 LOCATION_SCOPE_DENIED when a location-scoped location:bay:manage grant does not cover locationId (ADR-0061), 404 when the location does not exist, 409 when the bay name is already taken at that location (including a retired bay), and 422 OUT_OF_SERVICE_REASON_REQUIRED when status is OUT_OF_SERVICE without a reason, or with OTHER and no note.
+        Returns 400 when locationId does not parse as a UUID, 403 LOCATION_SCOPE_DENIED when a location-scoped location:bay:manage grant does not cover locationId (ADR-0061), 404 when the location does not exist, 409 when the bay name is already taken at that location (including a retired bay), 422 when serviceCapabilityCodes names a blank, unknown or retired catalog operation code, and 422 OUT_OF_SERVICE_REASON_REQUIRED when status is OUT_OF_SERVICE without a reason, or with OTHER and no note.
 
         '
       operationId: createBay
@@ -1109,7 +1109,7 @@ paths:
       x-required-permissions:
       - location:bay:manage
     get:
-      description: 'Returns a single service bay of a location, including its capacity, capability and skill requirement details.
+      description: 'Returns a single service bay of a location, including its type, status, capacity, serviceCapabilityCodes (the specialty claim) and maxDutyClass. Bays carry no skill requirements; skills live in the catalog service (CAP-329).
 
         Use this tool when both the location id and bay id are known; use listBays instead to search or enumerate.
 
@@ -1170,7 +1170,7 @@ paths:
       x-required-permissions:
       - location:bay:read
     patch:
-      description: 'Applies a partial update to a bay, changing only the supplied fields: name, bayType, status, the out-of-service reason/note/expected-return fields, displayOrder, capacity and the capability or skill requirement lists, and maxDutyClass. A field left out or sent as null is unchanged, except maxDutyClass: omit it to leave the limit alone, send JSON null to clear it back to no limit, or send a class from 1 to 8 to set it.
+      description: 'Applies a partial update to a bay, changing only the supplied fields: name, bayType, status, the out-of-service reason/note/expected-return fields, displayOrder, capacity and the serviceCapabilityCodes specialty claim, and maxDutyClass. A field left out or sent as null is unchanged, with two exceptions. maxDutyClass: omit it to leave the limit alone, send JSON null to clear it back to no limit, or send a class from 1 to 8 to set it. serviceCapabilityCodes: when bayType actually changes and the codes are not sent, they reset to the new type''s default specialty codes; codes sent in the same request win, the same bayType does not reset them, and an empty list clears the bay to general.
 
         Use this tool for status transitions among ACTIVE, OUT_OF_SERVICE and RETIRED and for capacity changes; do not use createBay, which adds a new bay, and do not use this tool to retire a bay for good — use deleteBay, which also sets RETIRED.
 
@@ -1180,7 +1180,7 @@ paths:
 
         Emits a LOCATION_BAY_UPDATE event; no other records are touched.
 
-        Returns 400 when either id does not parse as a UUID or a field fails validation (maxDutyClass outside 1-8, outOfServiceNote over 255 characters), 403 LOCATION_SCOPE_DENIED when a location-scoped location:bay:manage grant does not cover locationId (ADR-0061), 404 when the location or bay does not exist, 409 when the new name is already taken at that location, and 422 OUT_OF_SERVICE_REASON_REQUIRED when the resulting status is OUT_OF_SERVICE without a reason, or with OTHER and no note.
+        Returns 400 when either id does not parse as a UUID or a field fails validation (maxDutyClass outside 1-8, outOfServiceNote over 255 characters), 403 LOCATION_SCOPE_DENIED when a location-scoped location:bay:manage grant does not cover locationId (ADR-0061), 404 when the location or bay does not exist, 409 when the new name is already taken at that location, 422 when serviceCapabilityCodes names a blank, unknown or retired catalog operation code, and 422 OUT_OF_SERVICE_REASON_REQUIRED when the resulting status is OUT_OF_SERVICE without a reason, or with OTHER and no note.
 
         '
       operationId: patchBay
@@ -3123,7 +3123,7 @@ components:
           example: EQUIPMENT_FAILURE
           type: string
         serviceCapabilityCodes:
-          description: Catalog operation codes this bay type is the only one able to perform (CAP-325 D14). Null leaves unchanged; an empty list clears to general. Each value must be an active catalog operationCode; unknown codes are rejected 422.
+          description: Catalog operation codes this bay type is the only one able to perform (CAP-325 D14). Null leaves the codes unchanged unless bayType actually changes in the same request, in which case they reset to the new type's default specialty codes; codes sent alongside a bayType change win, and resending the same bayType does not reset them. An empty list clears the bay to general. No flag records whether the current codes are the type's defaults or customised, so a retype always replaces unsent codes. Each value must be an active catalog operationCode; unknown or retired codes are rejected 422.
           example:
           - WHEEL-ALIGNMENT-4-WHEEL
           items:
@@ -3194,7 +3194,7 @@ components:
           example: EQUIPMENT_FAILURE
           type: string
         serviceCapabilityCodes:
-          description: Catalog operation codes this bay type is the only one able to perform (CAP-325 D14). Omit or send empty for a general bay. Each value must be an active catalog operationCode (UPPER-DASH, ADR-0059 §3); unknown codes are rejected 422.
+          description: Catalog operation codes this bay type is the only one able to perform (CAP-325 D14). Omit or send null to apply the bay type's default specialty codes; send an empty list for a general bay with no specialty claim. Each value must be an active catalog operationCode (UPPER-DASH, ADR-0059 §3); unknown or retired codes are rejected 422.
           example:
           - WHEEL-ALIGNMENT-4-WHEEL
           items:
@@ -3550,7 +3550,9 @@ components:
       description: Request payload defining a coverage rule for a mobile unit
       properties:
         maxDistance:
-          $ref: '#/components/schemas/DistanceDto'
+          allOf:
+          - $ref: '#/components/schemas/DistanceDto'
+          description: Maximum service distance covered by the rule, an explicit {value, unit} object (KM or MI); converted at the edge and stored as kilometres (DECISION-LOCATION-028). A bare number is refused. Not yet evaluated by eligibility, since geocoding does not exist.
         priority:
           description: Evaluation priority of the rule (lower is evaluated first)
           example: 1
@@ -3558,7 +3560,7 @@ components:
           minimum: 0
           type: integer
         ruleType:
-          description: Type of coverage rule, matched case-insensitively. SERVICE_AREA covers the whole service area; DISTANCE_TIER covers it up to maxDistance, and a unit's DISTANCE_TIER rules must be strictly ascending by maxDistance and end with one rule whose maxDistance is null.
+          description: 'Type of coverage rule, matched case-insensitively. SERVICE_AREA covers the whole service area; DISTANCE_TIER covers it up to maxDistance, and a unit''s DISTANCE_TIER rules must be strictly ascending by maxDistance and end with one rule whose maxDistance is null. Recorded and validated, but ruleType itself is not yet evaluated by eligibility: a DISTANCE_TIER rule matches the same addresses a SERVICE_AREA rule would.'
           enum:
           - SERVICE_AREA
           - DISTANCE_TIER
@@ -3593,7 +3595,9 @@ components:
           format: uuid
           type: string
         maxDistance:
-          $ref: '#/components/schemas/DistanceDto'
+          allOf:
+          - $ref: '#/components/schemas/DistanceDto'
+          description: Maximum service distance covered by the rule, in the owning mobile unit's base location's distanceUnit; null for a rule with no distance ceiling. Not yet evaluated by eligibility, since geocoding does not exist.
         mobileUnitId:
           description: Identifier of the mobile unit this rule belongs to
           example: 01960003-0000-7000-8000-000000000002
@@ -3605,7 +3609,7 @@ components:
           format: int32
           type: integer
         ruleType:
-          description: Type of coverage rule
+          description: 'Type of coverage rule. Recorded only: ruleType itself is not yet evaluated by eligibility, so a DISTANCE_TIER rule matches the same addresses a SERVICE_AREA rule would.'
           enum:
           - SERVICE_AREA
           - DISTANCE_TIER
@@ -4284,7 +4288,7 @@ components:
           minLength: 0
           type: string
         serviceCapabilityCodes:
-          description: 'Catalog operation codes this unit can perform off-site (CAP-325 D14): each must be an active catalog operationCode (UPPER-DASH, ADR-0059 §3), matched case-insensitively; unknown or retired codes are rejected 422. Required, non-empty, for an ACTIVE unit.'
+          description: 'Catalog operation codes this unit can perform off-site (CAP-325 D14): each must be an active catalog operationCode (UPPER-DASH, ADR-0059 §3), matched case-insensitively; unknown or retired codes are rejected 422. Required, non-empty, for an ACTIVE unit. Used by the eligible mobile-unit lookup (GET /v1/mobile-units:eligible), whose operationCodes filter keeps only units that claim every requested code.'
           example:
           - OIL-CHANGE-FULL-SYNTHETIC
           - BATTERY-REPLACEMENT
@@ -4300,7 +4304,7 @@ components:
           example: ACTIVE
           type: string
         travelBufferPolicyId:
-          description: Identifier of the travel buffer policy applied to the mobile unit; must name an existing policy (422 TRAVEL_BUFFER_POLICY_NOT_FOUND otherwise). Required for an ACTIVE unit.
+          description: Identifier of the travel buffer policy applied to the mobile unit; must name an existing policy (422 TRAVEL_BUFFER_POLICY_NOT_FOUND otherwise). Required for an ACTIVE unit. Recorded; not yet applied by scheduling.
           example: 01960003-0000-7000-8000-000000000002
           format: uuid
           type: string
@@ -4378,7 +4382,7 @@ components:
           example: US-NC
           type: string
         serviceCapabilityCodes:
-          description: Catalog operation codes this unit can perform off-site (CAP-325 D14), UPPER-DASH per ADR-0059 §3; empty for a unit that has not declared any.
+          description: Catalog operation codes this unit can perform off-site (CAP-325 D14), UPPER-DASH per ADR-0059 §3; empty for a unit that has not declared any. Used by the eligible mobile-unit lookup (GET /v1/mobile-units:eligible), whose operationCodes filter keeps only units that claim every requested code.
           example:
           - OIL-CHANGE-FULL-SYNTHETIC
           - BATTERY-REPLACEMENT
@@ -4394,7 +4398,7 @@ components:
           example: ACTIVE
           type: string
         travelBufferPolicyId:
-          description: Identifier of the travel buffer policy applied to the mobile unit
+          description: Identifier of the travel buffer policy assigned to the mobile unit. Recorded; not yet applied by scheduling.
           example: 01960003-0000-7000-8000-000000000003
           format: uuid
           type: string

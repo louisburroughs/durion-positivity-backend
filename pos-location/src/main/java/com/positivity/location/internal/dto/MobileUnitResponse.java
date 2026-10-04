@@ -70,7 +70,8 @@ public class MobileUnitResponse {
     private Instant expectedReturnAt;
 
     @Schema(
-            description = "Identifier of the travel buffer policy applied to the mobile unit",
+            description = "Identifier of the travel buffer policy assigned to the mobile unit. Recorded; not yet"
+                    + " applied by scheduling.",
             example = "01960003-0000-7000-8000-000000000003",
             requiredMode = NOT_REQUIRED)
     private UUID travelBufferPolicyId;
@@ -83,7 +84,9 @@ public class MobileUnitResponse {
 
     @Schema(
             description = "Catalog operation codes this unit can perform off-site (CAP-325 D14), UPPER-DASH per"
-                    + " ADR-0059 §3; empty for a unit that has not declared any.",
+                    + " ADR-0059 §3; empty for a unit that has not declared any. Used by the eligible mobile-unit"
+                    + " lookup (GET /v1/mobile-units:eligible), whose operationCodes filter keeps only units that"
+                    + " claim every requested code.",
             example = "[\"OIL-CHANGE-FULL-SYNTHETIC\", \"BATTERY-REPLACEMENT\"]",
             requiredMode = NOT_REQUIRED)
     private List<String> serviceCapabilityCodes;

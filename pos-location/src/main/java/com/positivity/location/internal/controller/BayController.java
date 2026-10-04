@@ -116,8 +116,9 @@ public class BayController {
     }
 
     @Operation(operationId = "getBay", summary = "Get a Service Bay by Identifier", description = """
-                    Returns a single service bay of a location, including its capacity, capability and skill \
-                    requirement details.
+                    Returns a single service bay of a location, including its type, status, capacity, \
+                    serviceCapabilityCodes (the specialty claim) and maxDutyClass. Bays carry no skill \
+                    requirements; skills live in the catalog service (CAP-329).
                     Use this tool when both the location id and bay id are known; use listBays instead to search \
                     or enumerate.
                     Preconditions: the location must exist and the bay must belong to it.
@@ -153,14 +154,17 @@ public class BayController {
     }
 
     @Operation(operationId = "createBay", summary = "Create a Service Bay for Location", description = """
-                    Creates a service bay under a location with a type classification, concurrency capacity and \
-                    optional capability and skill requirements.
+                    Creates a service bay under a location with a type classification, concurrency capacity, an \
+                    optional serviceCapabilityCodes specialty claim and an optional maxDutyClass. Leaving \
+                    serviceCapabilityCodes out (or null) applies the bay type's default specialty codes; an \
+                    explicit empty list makes a general bay with no specialty claim.
                     Use this tool when adding physical work capacity to a shop; do not use patchBay, which \
                     modifies a bay that already exists, and use createStorageLocation for inventory storage \
                     rather than vehicle bays.
                     Preconditions: the location must exist, no bay of that location may already use the name \
                     (case-insensitive, including a retired bay's name), any serviceCapabilityCodes must name \
-                    active catalog operation codes (a GENERAL_SERVICE bay declares none), and a status of \
+                    active catalog operation codes (GENERAL_SERVICE, HEAVY_DUTY and WASH_DETAIL have no default \
+                    codes), and a status of \
                     OUT_OF_SERVICE must carry outOfServiceReason, with outOfServiceNote also required for OTHER.
                     Required inputs: name, bayType (one of GENERAL_SERVICE, ALIGNMENT, TIRE_SERVICE, HEAVY_DUTY, \
                     INSPECTION or WASH_DETAIL) and capacity.maxConcurrentVehicles of at least 1; status is \
@@ -170,7 +174,8 @@ public class BayController {
                     Returns 400 when locationId does not parse as a UUID, 403 LOCATION_SCOPE_DENIED when a \
                     location-scoped location:bay:manage grant does not cover locationId (ADR-0061), 404 when \
                     the location does not exist, 409 when the bay name is already taken at that location \
-                    (including a retired bay), and 422 OUT_OF_SERVICE_REASON_REQUIRED when status is \
+                    (including a retired bay), 422 when serviceCapabilityCodes names a blank, unknown or retired \
+                    catalog operation code, and 422 OUT_OF_SERVICE_REASON_REQUIRED when status is \
                     OUT_OF_SERVICE without a reason, or with OTHER and no note.
                     """)
     @ApiResponse(responseCode = "201", description = "Bay created successfully.")
@@ -224,9 +229,12 @@ public class BayController {
     @Operation(operationId = "patchBay", summary = "Patch Fields of a Service Bay", description = """
                     Applies a partial update to a bay, changing only the supplied fields: name, bayType, status, \
                     the out-of-service reason/note/expected-return fields, displayOrder, capacity and the \
-                    capability or skill requirement lists, and maxDutyClass. A field left out or sent as null is \
-                    unchanged, except maxDutyClass: omit it to leave the limit alone, send JSON null to clear it \
-                    back to no limit, or send a class from 1 to 8 to set it.
+                    serviceCapabilityCodes specialty claim, and maxDutyClass. A field left out or sent as null is \
+                    unchanged, with two exceptions. maxDutyClass: omit it to leave the limit alone, send JSON null \
+                    to clear it back to no limit, or send a class from 1 to 8 to set it. serviceCapabilityCodes: \
+                    when bayType actually changes and the codes are not sent, they reset to the new type's default \
+                    specialty codes; codes sent in the same request win, the same bayType does not reset them, and \
+                    an empty list clears the bay to general.
                     Use this tool for status transitions among ACTIVE, OUT_OF_SERVICE and RETIRED and for \
                     capacity changes; do not use createBay, which adds a new bay, and do not use this tool to \
                     retire a bay for good — use deleteBay, which also sets RETIRED.
@@ -241,6 +249,7 @@ public class BayController {
                     (maxDutyClass outside 1-8, outOfServiceNote over 255 characters), 403 LOCATION_SCOPE_DENIED \
                     when a location-scoped location:bay:manage grant does not cover locationId (ADR-0061), 404 \
                     when the location or bay does not exist, 409 when the new name is already taken at that location, \
+                    422 when serviceCapabilityCodes names a blank, unknown or retired catalog operation code, \
                     and 422 OUT_OF_SERVICE_REASON_REQUIRED when the resulting status is OUT_OF_SERVICE without a \
                     reason, or with OTHER and no note.
                     """)

@@ -107,8 +107,12 @@ public class BayPatchRequest {
 
     @Schema(
             description = "Catalog operation codes this bay type is the only one able to perform "
-                    + "(CAP-325 D14). Null leaves unchanged; an empty list clears to general. Each value must "
-                    + "be an active catalog operationCode; unknown codes are rejected 422.",
+                    + "(CAP-325 D14). Null leaves the codes unchanged unless bayType actually changes in the "
+                    + "same request, in which case they reset to the new type's default specialty codes; codes "
+                    + "sent alongside a bayType change win, and resending the same bayType does not reset them. "
+                    + "An empty list clears the bay to general. No flag records whether the current codes are "
+                    + "the type's defaults or customised, so a retype always replaces unsent codes. Each value "
+                    + "must be an active catalog operationCode; unknown or retired codes are rejected 422.",
             example = "[\"WHEEL-ALIGNMENT-4-WHEEL\"]",
             requiredMode = NOT_REQUIRED)
     private List<String> serviceCapabilityCodes;
