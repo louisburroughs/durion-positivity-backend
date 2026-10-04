@@ -29,6 +29,7 @@ import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.enums.IdempotencyOutcome;
 import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.exception.EventNotFoundException;
+import com.positivity.accounting.internal.exception.EventNotRetryableException;
 import com.positivity.accounting.internal.exception.EventValidationException;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.domainevents.payment.PaymentSettledV1;
@@ -50,6 +51,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -85,6 +87,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional
 public class EventIngestionServiceImpl implements EventIngestionService {
+    /** Triggering user recorded for an unaudited retry (no user is supplied on that path). */
+    static final String RETRY_TRIGGER = "ACCOUNTING_EVENT_RETRY";
+
     private static final String EVENT_NOT_FOUND_PREFIX = "Event not found: ";
 
     private final Clock clock;
@@ -253,20 +258,26 @@ public class EventIngestionServiceImpl implements EventIngestionService {
     }
 
     /**
-     * Retries processing of a failed event.
-     * Useful when posting rules have been updated or temporary errors resolved.
+     * Retries processing of a failed event: re-runs its posting through the posting engine with the
+     * current rules and returns the event in whatever status that ends in ({@code PROCESSED},
+     * {@code FAILED} or {@code SUSPENDED}). Only a {@code FAILED} event is retryable (#2411); any other
+     * status is rejected with {@link EventNotRetryableException} and left untouched. The previous
+     * failure detail stays on the event until the new outcome replaces it. It shares its posting path
+     * with {@link #reprocessEvent}, minus the mapping-version override.
      */
     @Override
     public AccountingEventResponse retryEventProcessing(UUID eventId) {
         AccountingEvent accountingEvent = accountingEventRepository
                 .findById(eventId)
                 .orElseThrow(() -> new EventNotFoundException(EVENT_NOT_FOUND_PREFIX + eventId));
+        if (accountingEvent.getStatus() != AccountingEventStatus.FAILED) {
+            String msg = EVENT_SPACE + eventId + " has status " + accountingEvent.getStatus()
+                    + " and cannot be retried. Only FAILED events can be retried.";
+            log.warn(msg);
+            throw new EventNotRetryableException(msg);
+        }
         log.info("Retrying event {}", eventId);
-
-        accountingEvent.setStatus(AccountingEventStatus.RECEIVED);
-        accountingEvent.setErrorMessage(null);
-
-        return AccountingEventMapper.toEventResponse(accountingEventRepository.save(accountingEvent));
+        return rerunPosting(accountingEvent, null, RETRY_TRIGGER);
     }
 
     /**
@@ -319,13 +330,24 @@ public class EventIngestionServiceImpl implements EventIngestionService {
             throw new IllegalStateException(msg);
         }
 
+        return rerunPosting(event, request.getMappingVersionToUse(), request.getTriggeredByUserId());
+    }
+
+    /**
+     * Shared posting path of {@link #reprocessEvent} and {@link #retryEventProcessing}: the caller has
+     * already checked the event is eligible. Re-runs the event through the posting engine (or hands an
+     * {@code INVOICE_PAYMENT} back to the drainer) and returns the reloaded event.
+     */
+    private AccountingEventResponse rerunPosting(
+            @NonNull AccountingEvent event, @Nullable String mappingVersionToUse, @NonNull String triggeredByUserId) {
+        UUID eventId = event.getEventId();
         // INVOICE_PAYMENT is recorded in the AR subledger, never posted by the engine (#2435): hand
         // it back to the received-event drainer, which runs InvoicePaymentEventProcessor on its next
         // poll, instead of evaluating posting rules that must not exist for it.
         if (InvoicePaymentEventProcessor.EVENT_TYPE.equals(event.getEventType())) {
             log.info("Event {} is {}: returned to RECEIVED for the drainer", eventId, event.getEventType());
             event.setStatus(AccountingEventStatus.RECEIVED);
-            event.setResolvedByUserId(request.getTriggeredByUserId());
+            event.setResolvedByUserId(triggeredByUserId);
             return AccountingEventMapper.toEventResponse(accountingEventRepository.save(event));
         }
 
@@ -344,12 +366,11 @@ public class EventIngestionServiceImpl implements EventIngestionService {
 
             // Parse mappingVersionToUse from String to UUID if present
             UUID mappingVersion = null;
-            if (request.getMappingVersionToUse() != null
-                    && !request.getMappingVersionToUse().isBlank()) {
+            if (mappingVersionToUse != null && !mappingVersionToUse.isBlank()) {
                 try {
-                    mappingVersion = UUID.fromString(request.getMappingVersionToUse());
+                    mappingVersion = UUID.fromString(mappingVersionToUse);
                 } catch (IllegalArgumentException e) {
-                    String msg = "Invalid UUID format for mappingVersionToUse: '" + request.getMappingVersionToUse()
+                    String msg = "Invalid UUID format for mappingVersionToUse: '" + mappingVersionToUse
                             + "'. Value must be a valid UUID or left empty to use the default active version.";
                     log.warn(msg);
                     throw new EventValidationException(msg, e);
@@ -357,7 +378,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
             }
 
             PostingResult postingResult = postingEngineOrchestrator.processEvent(
-                    event, mappingVersion, request.getTriggeredByUserId(), true // autoPost=true for reprocessing flow
+                    event, mappingVersion, triggeredByUserId, true // autoPost=true for reprocessing flow
                     );
 
             boolean reprocessingSucceeded = postingResult.isSuccess();

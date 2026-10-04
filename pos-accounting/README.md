@@ -377,6 +377,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `EVENT_NOT_FOUND` | 404 | Referenced AP payment event does not exist |
 | `EXPORT_JOB_NOT_FOUND` | 404 | Referenced report export job does not exist |
 | `DUPLICATE_EVENT` | 409 | Event with this ID has already been processed |
+| `EVENT_NOT_RETRYABLE` | 409 | Retry of an accounting event that is not `FAILED`; the event is left unchanged (#2411) |
 | `IDEMPOTENCY_CONFLICT` | 409 | An AP payment idempotency key was reused with a different payload |
 | `GL_POSTING_FAILED` | 409 | General ledger posting failed |
 | `DUPLICATE_ACCOUNT_CODE` | 409 | Chart of accounts code already exists |

@@ -25,6 +25,7 @@ import com.positivity.accounting.internal.entity.ReprocessingAttemptHistory;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.exception.EventNotFoundException;
+import com.positivity.accounting.internal.exception.EventNotRetryableException;
 import com.positivity.accounting.internal.exception.EventValidationException;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository;
@@ -41,6 +42,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -111,19 +114,65 @@ class EventIngestionServiceAdditionalTest {
     // ========================================
 
     @Test
-    @DisplayName("retryEventProcessing should reset status to RECEIVED and return response")
-    void retryEventProcessing_Success() {
-        AccountingEvent event = buildEvent(testEventId, AccountingEventStatus.FAILED);
-        AccountingEvent savedEvent = buildEvent(testEventId, AccountingEventStatus.RECEIVED);
-
-        when(accountingEventRepository.findById(testEventId)).thenReturn(Optional.of(event));
-        when(accountingEventRepository.save(event)).thenReturn(savedEvent);
+    @DisplayName("retryEventProcessing re-runs a FAILED event through the posting engine and returns its outcome")
+    void retryEventProcessing_FailedEventIsReposted() {
+        AccountingEvent failed = buildEvent(testEventId, AccountingEventStatus.FAILED);
+        failed.setErrorMessage("previous failure");
+        AccountingEvent processed = buildEvent(testEventId, AccountingEventStatus.PROCESSED);
+        when(accountingEventRepository.findById(testEventId))
+                .thenReturn(Optional.of(failed))
+                .thenReturn(Optional.of(processed));
+        when(accountingEventRepository.save(any(AccountingEvent.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(postingEngineOrchestrator.processEvent(any(), any(), anyString(), eq(true)))
+                .thenReturn(PostingResult.success(null, null));
 
         AccountingEventResponse result = service.retryEventProcessing(testEventId);
 
-        assertThat(result).isNotNull();
-        assertThat(result.getEventId()).isEqualTo(testEventId);
-        verify(accountingEventRepository).save(event);
+        assertThat(result.getStatus()).isEqualTo(AccountingEventStatus.PROCESSED);
+        assertThat(failed.getAttemptCount()).isEqualTo(1);
+        // Previous failure detail stays until the engine replaces it.
+        assertThat(failed.getErrorMessage()).isEqualTo("previous failure");
+        verify(postingEngineOrchestrator).processEvent(failed, null, EventIngestionServiceImpl.RETRY_TRIGGER, true);
+    }
+
+    @Test
+    @DisplayName("retryEventProcessing returns FAILED when the engine fails the event again")
+    void retryEventProcessing_FailsAgain() {
+        AccountingEvent failed = buildEvent(testEventId, AccountingEventStatus.FAILED);
+        AccountingEvent stillFailed = buildEvent(testEventId, AccountingEventStatus.FAILED);
+        when(accountingEventRepository.findById(testEventId))
+                .thenReturn(Optional.of(failed))
+                .thenReturn(Optional.of(stillFailed));
+        when(accountingEventRepository.save(any(AccountingEvent.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(postingEngineOrchestrator.processEvent(any(), any(), anyString(), eq(true)))
+                .thenReturn(PostingResult.failure(PostingFailureReason.INTERNAL_ERROR, "boom"));
+
+        AccountingEventResponse result = service.retryEventProcessing(testEventId);
+
+        assertThat(result.getStatus()).isEqualTo(AccountingEventStatus.FAILED);
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = AccountingEventStatus.class,
+            names = {"FAILED"},
+            mode = EnumSource.Mode.EXCLUDE)
+    @DisplayName("retryEventProcessing rejects any status but FAILED and leaves the event unchanged")
+    void retryEventProcessing_NonFailedRejected(AccountingEventStatus status) {
+        AccountingEvent event = buildEvent(testEventId, status);
+        event.setErrorMessage("kept");
+        event.setAttemptCount(2);
+        when(accountingEventRepository.findById(testEventId)).thenReturn(Optional.of(event));
+
+        assertThatThrownBy(() -> service.retryEventProcessing(testEventId))
+                .isInstanceOf(EventNotRetryableException.class)
+                .hasMessageContaining("cannot be retried");
+
+        assertThat(event.getStatus()).isEqualTo(status);
+        assertThat(event.getErrorMessage()).isEqualTo("kept");
+        assertThat(event.getAttemptCount()).isEqualTo(2);
+        verify(accountingEventRepository, never()).save(any(AccountingEvent.class));
+        verify(postingEngineOrchestrator, never()).processEvent(any(), any(), any(), anyBoolean());
     }
 
     @Test
@@ -139,16 +188,10 @@ class EventIngestionServiceAdditionalTest {
     @Test
     @DisplayName("retryEvent should delegate to retryEventProcessing")
     void retryEvent_DelegatesToRetryEventProcessing() {
-        AccountingEvent event = buildEvent(testEventId, AccountingEventStatus.FAILED);
-        AccountingEvent savedEvent = buildEvent(testEventId, AccountingEventStatus.RECEIVED);
+        AccountingEvent processed = buildEvent(testEventId, AccountingEventStatus.PROCESSED);
+        when(accountingEventRepository.findById(testEventId)).thenReturn(Optional.of(processed));
 
-        when(accountingEventRepository.findById(testEventId)).thenReturn(Optional.of(event));
-        when(accountingEventRepository.save(event)).thenReturn(savedEvent);
-
-        AccountingEventResponse result = service.retryEvent(testEventId);
-
-        assertThat(result).isNotNull();
-        assertThat(result.getEventId()).isEqualTo(testEventId);
+        assertThatThrownBy(() -> service.retryEvent(testEventId)).isInstanceOf(EventNotRetryableException.class);
     }
 
     // ========================================
