@@ -6778,7 +6778,7 @@ paths:
 
         Emits an INVENTORY_SCRAP_APPROVE event plus the ScrapPostedV1 fact on the posting, and a scrap created with shouldReplenish triggers a best-effort replenishment evaluation.
 
-        Returns 404 when the scrap does not exist, 409 when it is not PENDING_APPROVAL or FAILED, 403 when the override is requested without the permission, 422 (SCRAP_INSUFFICIENT_STOCK) when on-hand is insufficient — reconcile via cycle count or adjustment, or use an authorized override — and 500 (SCRAP_LEDGER_POST_FAILED) when the posting fails unexpectedly, which leaves the scrap FAILED with the cause in errorMessage.
+        Returns 404 when the scrap does not exist, 403 with LOCATION_SCOPE_DENIED when the scrap''s location is outside the caller''s location reach, 409 when it is not PENDING_APPROVAL or FAILED, 403 when the override is requested without the permission, 422 (SCRAP_INSUFFICIENT_STOCK) when on-hand is insufficient — reconcile via cycle count or adjustment, or use an authorized override — and 500 (SCRAP_LEDGER_POST_FAILED) when the posting fails unexpectedly, which leaves the scrap FAILED with the cause in errorMessage.
 
         '
       operationId: approveScrap
@@ -6814,7 +6814,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Missing inventory:scrap:approve, or override requested without inventory:adjustment:override
+          description: Missing inventory:scrap:approve, or override requested without inventory:adjustment:override; LOCATION_SCOPE_DENIED when the caller holds inventory:scrap:approve but the token scopes it to locations that do not cover the scrap's locationId (ADR-0061)
         '404':
           content:
             application/json:
@@ -6859,7 +6859,7 @@ paths:
 
         Emits an INVENTORY_SCRAP_REJECT event; inventory is untouched.
 
-        Returns 404 when the scrap does not exist, and 409 when it is not in PENDING_APPROVAL status.
+        Returns 404 when the scrap does not exist, 403 with LOCATION_SCOPE_DENIED when the scrap''s location is outside the caller''s location reach, and 409 when it is not in PENDING_APPROVAL status.
 
         '
       operationId: rejectScrap
@@ -6890,6 +6890,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ScrapResponse'
           description: Scrap rejected
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: FORBIDDEN when the caller lacks inventory:scrap:approve; LOCATION_SCOPE_DENIED when the token scopes it to locations that do not cover the scrap's locationId (ADR-0061)
         '404':
           content:
             application/json:
