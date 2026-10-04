@@ -42,6 +42,9 @@ class RetiredPermissionGrantsTest {
     private static final Pattern GRANT_PAIR =
             Pattern.compile("\\(\\s*'([A-Z_]+)'\\s*,\\s*'([A-Za-z0-9:_\\-]+)'\\s*\\)");
 
+    private static final Pattern FIXTURE_FILE =
+            Pattern.compile("(BaseIntegrationTest|BaseContractIntegrationTest|TestSecurityConfig)\\w*\\.java");
+
     private static Set<String> retired;
 
     @BeforeAll
@@ -120,52 +123,44 @@ class RetiredPermissionGrantsTest {
     }
 
     @Test
-    @DisplayName("pos-inventory test fixtures do not grant deprecated codes")
-    void posInventoryFixturesGrantNoDeprecatedCodes() throws IOException {
-        Set<String> offending = new TreeSet<>();
-
-        // Find the inventory module relative to current working directory
-        Path projectRoot = Path.of(System.getProperty("user.dir")).getParent();
-        Path inventoryModule = projectRoot.resolve("pos-inventory");
-
-        // Check BaseContractIntegrationTest
-        Path baseContractTest = inventoryModule.resolve(
-                "src/test/java/com/positivity/inventory/contract/BaseContractIntegrationTest.java");
-        if (Files.exists(baseContractTest)) {
-            String baseContractContent = Files.readString(baseContractTest, StandardCharsets.UTF_8);
-            for (String code : retired) {
-                if (baseContractContent.contains("\"" + code + "\"")) {
-                    offending.add("BaseContractIntegrationTest: " + code);
+    @DisplayName("no module's shared test authority fixture grants a retired code (#2456)")
+    void noSharedTestFixtureGrantsARetiredCode() throws IOException {
+        Path repoRoot = Path.of("..").toAbsolutePath().normalize();
+        List<Path> fixtures = new java.util.ArrayList<>();
+        try (Stream<Path> modules = Files.list(repoRoot)) {
+            for (Path module : modules.filter(path -> path.getFileName().toString().startsWith("pos-"))
+                    .toList()) {
+                Path testSources = module.resolve(Path.of("src", "test", "java"));
+                if (!Files.isDirectory(testSources)) {
+                    continue;
+                }
+                try (Stream<Path> walk = Files.walk(testSources)) {
+                    walk.filter(Files::isRegularFile)
+                            .filter(path -> FIXTURE_FILE.matcher(path.getFileName().toString())
+                                    .matches())
+                            .forEach(fixtures::add);
                 }
             }
         }
+        assertThat(fixtures)
+                .as("no shared authority fixture found under %s/pos-*/src/test/java: the walk is broken", repoRoot)
+                .isNotEmpty();
 
-        // Check TestSecurityConfig
-        Path testSecurityConfig =
-                inventoryModule.resolve("src/test/java/com/positivity/inventory/config/TestSecurityConfig.java");
-        if (Files.exists(testSecurityConfig)) {
-            String testSecurityContent = Files.readString(testSecurityConfig, StandardCharsets.UTF_8);
+        Map<String, Set<String>> offending = new TreeMap<>();
+        for (Path fixture : fixtures) {
+            String content = Files.readString(fixture, StandardCharsets.UTF_8);
             for (String code : retired) {
-                if (testSecurityContent.contains("\"" + code + "\"")) {
-                    offending.add("TestSecurityConfig: " + code);
+                if (Pattern.compile("(?<![\\w:])" + Pattern.quote(code) + "(?![\\w:])")
+                        .matcher(content)
+                        .find()) {
+                    offending
+                            .computeIfAbsent(repoRoot.relativize(fixture).toString(), key -> new TreeSet<>())
+                            .add(code);
                 }
             }
         }
-
-        // Check AsOfOnHandContractBehaviorIT
-        Path asOfOnHandTest = inventoryModule.resolve(
-                "src/test/java/com/positivity/inventory/contract/AsOfOnHandContractBehaviorIT.java");
-        if (Files.exists(asOfOnHandTest)) {
-            String asOfOnHandContent = Files.readString(asOfOnHandTest, StandardCharsets.UTF_8);
-            for (String code : retired) {
-                if (asOfOnHandContent.contains("\"" + code + "\"")) {
-                    offending.add("AsOfOnHandContractBehaviorIT: " + code);
-                }
-            }
-        }
-
         assertThat(offending)
-                .as("pos-inventory test fixtures must not grant deprecated codes (#2456)")
+                .as("test fixtures (%d scanned) granting a retired code", fixtures.size())
                 .isEmpty();
     }
 

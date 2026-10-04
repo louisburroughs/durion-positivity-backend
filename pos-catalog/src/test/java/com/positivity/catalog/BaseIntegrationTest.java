@@ -74,7 +74,6 @@ public abstract class BaseIntegrationTest {
             "catalog:price_book:read",
             "catalog:price_book:write",
             "catalog:supplier_cost:read",
-            "catalog:supplier_cost:write",
             "catalog:msrp:read",
             "catalog:msrp:write",
             "product:lifecycle:update",
