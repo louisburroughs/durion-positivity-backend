@@ -7,7 +7,6 @@ import com.positivity.tenancy.TenantResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,13 +19,13 @@ import tools.jackson.databind.ObjectMapper;
  * <p>Serializes a full {@link DomainEventEnvelope} into {@code kafka_event_outbox} within the
  * caller's transaction, so a fact exists if and only if the journal entry it describes committed.
  * {@link OutboxPublisher} drains the table to Kafka with at-least-once delivery. Mirrors
- * pos-invoice's writer; the bean is conditional on the module's Kafka flag, and callers hold it
- * through an {@code ObjectProvider} so publishing degrades to a no-op when Kafka is off.
+ * pos-invoice's writer; the bean is a {@link KafkaRails} bean (absent only in the broker-less dev/test profiles), and
+ * callers hold it through an {@code ObjectProvider} so publishing degrades to a no-op there.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(prefix = "pos.accounting.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class OutboxEventWriter {
 
     private final ObjectMapper objectMapper;

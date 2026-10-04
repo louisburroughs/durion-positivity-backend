@@ -145,7 +145,7 @@ class BankReconciliationFactsTest {
     }
 
     @Test
-    @DisplayName("nothing is queued while the module's Kafka flag is off")
+    @DisplayName("nothing is queued while the Kafka rails are off (no outbox writer bean)")
     void noWriter() {
         when(provider.getIfAvailable()).thenReturn(null);
         facts.approved(recon, "controller");

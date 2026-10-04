@@ -86,10 +86,7 @@ services:
     image: ${ECR_REGISTRY}/durion/pos-accounting:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
-    # Warranty events rollout (#927): consumes warranty.events.v1 into
-    # warranty_reimbursement_expectation (also enables the #838 customer/invoice replicas).
-    environment:
-      POS_ACCOUNTING_KAFKA_ENABLED: "true"
+    # No Kafka flag: pos-accounting's consumers and outbox are tier-1, always on (ADR-0044 §4, #2195).
 
   pos-api-gateway:
     image: ${ECR_REGISTRY}/durion/pos-api-gateway:${BACKEND_TAG}
@@ -134,10 +131,7 @@ services:
     image: ${ECR_REGISTRY}/durion/pos-inventory:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
-    # Warranty events rollout (#927): consumes warranty.events.v1 into
-    # warranty_part_return_hold (also enables the location/workorder replica feeds).
-    environment:
-      POS_INVENTORY_KAFKA_ENABLED: "true"
+    # No Kafka flag: pos-inventory's consumers and outbox are tier-1, always on (ADR-0044 §4, #2195).
 
   pos-invoice:
     image: ${ECR_REGISTRY}/durion/pos-invoice:${BACKEND_TAG}

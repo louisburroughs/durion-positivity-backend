@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.service;
 
 import com.positivity.domainevents.warranty.WarrantyPartReturnRequestedV1;
 import com.positivity.domainevents.warranty.WarrantyPartReturnShippedV1;
+import com.positivity.inventory.internal.config.KafkaRails;
 import com.positivity.inventory.internal.entity.ProcessedEvent;
 import com.positivity.inventory.internal.entity.WarrantyPartReturnHold;
 import com.positivity.inventory.internal.repository.ProcessedEventRepository;
@@ -14,7 +15,6 @@ import java.time.Instant;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -43,7 +43,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "pos.inventory.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class WarrantyEventsListener {
 
     static final String OWNER = "warranty";

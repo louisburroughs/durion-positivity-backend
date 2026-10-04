@@ -149,7 +149,7 @@ class InvoiceRegenerationServiceTest {
                 .satisfies(error -> {
                     ResponseStatusException ex = (ResponseStatusException) error;
                     assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
-                    assertThat(ex.getReason()).contains("pos.accounting.kafka.enabled");
+                    assertThat(ex.getReason()).contains("Kafka rails");
                 });
     }
 

@@ -253,8 +253,8 @@ Accounting is event-only inbound and outbound (ADR-0044 §6). Invoice revenue re
   `reversedJournalEntryId`) on `accounting.events.v1` through the transactional outbox
   (`kafka_event_outbox`, `OutboxEventWriter` / `OutboxPublisher`, at-least-once, keyed by invoice id).
   pos-invoice consumes it to move the invoice `FINALIZED → POSTED` with the real journal entry id. The outbox
-  writer is conditional on `pos.accounting.kafka.enabled`; with Kafka off the posting still happens and the
-  publish is a no-op. (`event_outbox` / `OutboxProcessor` is the unrelated in-process Spring-event outbox.)
+  writer is always active in deployed profiles (ADR-0044 §4, #2195); in the broker-less `dev`/test profiles it is
+  absent, the posting still happens and the publish is a no-op. (`event_outbox` / `OutboxProcessor` is the unrelated in-process Spring-event outbox.)
 
 ## Statement Lines: Signs and Totals (issue #2394)
 
@@ -438,7 +438,6 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `pos.accounting.credit-memo.revenue-account-id`     | required             | GL account for revenue reversals         |
 | `pos.accounting.credit-memo.tax-payable-account-id` | required             | GL account for tax payable reversals     |
 | `pos.accounting.credit-memo.ar-account-id`          | required             | GL account for AR reductions             |
-| `pos.accounting.kafka.enabled`                      | `false`              | Enable all of accounting's Kafka consumers (payment, workorder, invoice, invoice-manifest, customer, inventory, order, warranty, settlement-config) |
 | `pos.accounting.kafka.inventory-events-topic`       | `inventory.events.v1` | Inventory scrap and adjustment facts for shrinkage / adjustment GL posting (#1043, #2191) |
 | `pos.accounting.kafka.accounting-events-topic`      | `accounting.events.v1` | Accounting's own fact feed (`accounting.invoice.gl-posted`), drained from `kafka_event_outbox` (#1843) |
 | `pos.accounting.outbox.poll-interval-ms`            | `1000`               | Kafka outbox drain interval (#1843) |

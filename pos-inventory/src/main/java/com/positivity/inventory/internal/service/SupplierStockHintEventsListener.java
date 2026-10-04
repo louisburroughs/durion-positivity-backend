@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.service;
 
 import com.positivity.domainevents.supplier.SupplierStockReportLine;
 import com.positivity.domainevents.supplier.SupplierStockReportUpdatedV1;
+import com.positivity.inventory.internal.config.KafkaRails;
 import com.positivity.inventory.internal.entity.ProcessedEvent;
 import com.positivity.inventory.internal.entity.SupplierStockHint;
 import com.positivity.inventory.internal.entity.SupplierStockSnapshotChunk;
@@ -21,7 +22,6 @@ import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -73,7 +73,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "pos.inventory.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class SupplierStockHintEventsListener {
 
     /** Producing domain, per the repo-wide processed_events convention. */

@@ -89,7 +89,7 @@ public class LocationSyncServiceImpl implements LocationSyncService {
         KafkaTemplate<String, String> template = kafkaTemplate.getIfAvailable();
         if (template == null) {
             LocationSyncLogEntity saved = locationSyncLogRepository.save(runLog.outcome(LocationSyncOutcome.FAILED)
-                    .errorMessage("Location event feed is disabled (pos.inventory.kafka.enabled=false);"
+                    .errorMessage("Location event feed is unavailable (no Kafka template in this profile);"
                             + " cannot request an owner re-emit")
                     .completedAt(clock.instant())
                     .build());

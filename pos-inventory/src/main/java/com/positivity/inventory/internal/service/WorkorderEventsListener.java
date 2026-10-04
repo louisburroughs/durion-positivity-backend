@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.service;
 
 import com.positivity.domainevents.workorder.WorkorderUpdatedV1;
+import com.positivity.inventory.internal.config.KafkaRails;
 import com.positivity.inventory.internal.entity.ExtWorkorderPartReplica;
 import com.positivity.inventory.internal.entity.ExtWorkorderReplica;
 import com.positivity.inventory.internal.entity.ProcessedEvent;
@@ -16,7 +17,6 @@ import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -46,7 +46,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "pos.inventory.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class WorkorderEventsListener {
 
     static final String OWNER = "workorder";

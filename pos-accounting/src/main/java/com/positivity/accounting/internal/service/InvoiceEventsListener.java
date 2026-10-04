@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.config.AccountingEventTypeRegistry;
+import com.positivity.accounting.internal.config.KafkaRails;
 import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.ExtInvoiceTax;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
@@ -23,7 +24,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
@@ -78,7 +78,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "pos.accounting.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class InvoiceEventsListener {
 
     /**
