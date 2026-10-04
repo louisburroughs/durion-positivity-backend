@@ -49,6 +49,10 @@ public class BayTypeServiceImpl implements BayTypeService {
         for (BaySpecialtyOperationEntity row : operationRepository.findAll()) {
             String code = ServiceCapabilityCodeValidator.normalize(row.getOperationCode());
             if (row.getBayType() == null || code.isBlank()) {
+                log.warn(
+                        "Specialty map row {} has a blank bayType or operation code; omitted from GET /v1/bay-types"
+                                + " (seed defect, fix bay_specialty_operation)",
+                        row.getId());
                 continue;
             }
             codesByType
