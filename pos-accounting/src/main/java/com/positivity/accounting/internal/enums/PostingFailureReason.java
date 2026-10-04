@@ -112,16 +112,38 @@ public enum PostingFailureReason {
      * stays eligible for the audited manual reprocess.
      */
     public boolean isExcludedFromAutoRetry() {
-        return this == PERIOD_CLOSED || this == CURRENCY_NOT_SUPPORTED;
+        return this == PERIOD_CLOSED
+                || this == CURRENCY_NOT_SUPPORTED
+                // The payload never changes, so a retry fails the same way.
+                || this == VALIDATION_ERROR
+                || this == MISSING_AMOUNT;
     }
 
     /**
-     * {@link #isExcludedFromAutoRetry()} for a stored {@code failureReasonCode}; an absent or
-     * unknown code is not excluded.
+     * {@code INVOICE_PAYMENT} failure code (AR subledger processor, not a posting-engine reason): the
+     * same {@code paymentId} was already recorded with different details. A quarantine a person
+     * resolves, so it is never auto-retried.
+     */
+    public static final String INVOICE_PAYMENT_DUPLICATE_CONFLICT = "DUPLICATE_CONFLICT";
+
+    /**
+     * {@code INVOICE_PAYMENT} failure code: a required payload field is missing or malformed. The
+     * payload never changes, so it is never auto-retried.
+     */
+    public static final String INVOICE_PAYMENT_INVALID_PAYLOAD = "INVALID_PAYLOAD";
+
+    /**
+     * {@link #isExcludedFromAutoRetry()} for a stored {@code failureReasonCode}, which also covers the
+     * {@code INVOICE_PAYMENT} processor codes {@link #INVOICE_PAYMENT_DUPLICATE_CONFLICT} and {@link
+     * #INVOICE_PAYMENT_INVALID_PAYLOAD}; an absent or unknown code is not excluded.
      */
     public static boolean isExcludedFromAutoRetry(@Nullable String failureReasonCode) {
         if (failureReasonCode == null) {
             return false;
+        }
+        if (INVOICE_PAYMENT_DUPLICATE_CONFLICT.equals(failureReasonCode)
+                || INVOICE_PAYMENT_INVALID_PAYLOAD.equals(failureReasonCode)) {
+            return true;
         }
         for (PostingFailureReason reason : values()) {
             if (reason.name().equals(failureReasonCode)) {

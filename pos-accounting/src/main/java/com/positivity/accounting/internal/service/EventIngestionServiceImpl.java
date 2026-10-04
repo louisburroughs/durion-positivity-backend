@@ -28,6 +28,7 @@ import com.positivity.accounting.internal.entity.ReprocessingAttemptHistory;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.enums.IdempotencyOutcome;
 import com.positivity.accounting.internal.enums.PostingFailureReason;
+import com.positivity.accounting.internal.enums.ReprocessingOutcome;
 import com.positivity.accounting.internal.exception.EventNotFoundException;
 import com.positivity.accounting.internal.exception.EventNotRetryableException;
 import com.positivity.accounting.internal.exception.EventValidationException;
@@ -346,8 +347,20 @@ public class EventIngestionServiceImpl implements EventIngestionService {
         // poll, instead of evaluating posting rules that must not exist for it.
         if (InvoicePaymentEventProcessor.EVENT_TYPE.equals(event.getEventType())) {
             log.info("Event {} is {}: returned to RECEIVED for the drainer", eventId, event.getEventType());
+            int attempts = (event.getAttemptCount() == null ? 0 : event.getAttemptCount()) + 1;
+            event.setAttemptCount(attempts);
             event.setStatus(AccountingEventStatus.RECEIVED);
             event.setResolvedByUserId(triggeredByUserId);
+            // The attempt history is immutable and complete: the posting engine writes it for every other
+            // type, so the handoff records its own row (the drainer's later outcome lands on the event).
+            ReprocessingAttemptHistory handoff = new ReprocessingAttemptHistory();
+            handoff.setAccountingEvent(event);
+            handoff.setTriggeredByUserId(triggeredByUserId);
+            handoff.setAttemptedAt(Instant.now(clock));
+            handoff.setOutcome(ReprocessingOutcome.FAILURE);
+            handoff.setOutcomeDetails(
+                    "Returned to RECEIVED for the received-event drainer (not posted by this attempt)");
+            reprocessingAttemptHistoryRepository.save(handoff);
             return AccountingEventMapper.toEventResponse(accountingEventRepository.save(event));
         }
 
@@ -803,11 +816,10 @@ public class EventIngestionServiceImpl implements EventIngestionService {
         // issue #2334), are skipped: neither a closed period nor the ledger's
         // currency changes on the retry cadence, so retrying only burns
         // attempts. They stay eligible for the audited manual reprocess.
-        List<AccountingEvent> failedEvents = accountingEventRepository.findAll().stream()
-                .filter(event -> (event.getStatus() == AccountingEventStatus.FAILED
-                                || event.getStatus() == AccountingEventStatus.SUSPENDED)
-                        && (event.getAttemptCount() == null || event.getAttemptCount() < maxRetries)
-                        && !PostingFailureReason.isExcludedFromAutoRetry(event.getFailureReasonCode()))
+        List<AccountingEvent> failedEvents = accountingEventRepository
+                .findRetryCandidates(List.of(AccountingEventStatus.FAILED, AccountingEventStatus.SUSPENDED), maxRetries)
+                .stream()
+                .filter(event -> !PostingFailureReason.isExcludedFromAutoRetry(event.getFailureReasonCode()))
                 .toList();
 
         log.info("Found {} eligible failed/suspended events for retry", failedEvents.size());
@@ -824,6 +836,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
 
                 reprocessEvent(event.getEventId(), request);
                 processedCount++;
+                warnWhenExhausted(event, maxRetries);
 
             } catch (Exception e) {
                 log.error("Failed to retry event {}: {}", event.getEventId(), e.getMessage(), e);
@@ -834,6 +847,21 @@ public class EventIngestionServiceImpl implements EventIngestionService {
         log.info("Completed processing {} failed events out of {} candidates", processedCount, failedEvents.size());
 
         return processedCount;
+    }
+
+    /** WARN once an automatic attempt leaves the event unresolved with no attempts left (#2411). */
+    private void warnWhenExhausted(@NonNull AccountingEvent event, int maxRetries) {
+        boolean unresolved = event.getStatus() == AccountingEventStatus.FAILED
+                || event.getStatus() == AccountingEventStatus.SUSPENDED;
+        if (unresolved && event.getAttemptCount() != null && event.getAttemptCount() >= maxRetries) {
+            log.warn(
+                    "Accounting event {} exhausted its {} automatic retries and stays {} ({}); it needs a manual"
+                            + " reprocess",
+                    event.getEventId(),
+                    maxRetries,
+                    event.getStatus(),
+                    event.getFailureReasonCode());
+        }
     }
 
     /**

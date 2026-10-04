@@ -62,10 +62,10 @@ public class InvoicePaymentEventProcessor {
     static final String INVOICE_NOT_ELIGIBLE = "INVOICE_NOT_ELIGIBLE";
 
     /** The same {@code paymentId} was already recorded with different details. */
-    static final String DUPLICATE_CONFLICT = "DUPLICATE_CONFLICT";
+    static final String DUPLICATE_CONFLICT = PostingFailureReason.INVOICE_PAYMENT_DUPLICATE_CONFLICT;
 
     /** A required payload field is missing or malformed. */
-    static final String INVALID_PAYLOAD = "INVALID_PAYLOAD";
+    static final String INVALID_PAYLOAD = PostingFailureReason.INVOICE_PAYMENT_INVALID_PAYLOAD;
 
     static final String REQUEST_ID_PREFIX = EVENT_TYPE + ":";
 

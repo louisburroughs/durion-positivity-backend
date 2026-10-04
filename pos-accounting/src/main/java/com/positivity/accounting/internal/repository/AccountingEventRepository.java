@@ -5,6 +5,7 @@ import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.QueryHint;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -44,6 +45,15 @@ public interface AccountingEventRepository
     @Query("select e.eventId from AccountingEvent e where e.status = :status order by e.receivedAt asc")
     @NonNull
     List<UUID> findIdsByStatusOldestFirst(@NonNull AccountingEventStatus status, @NonNull Pageable pageable);
+
+    /**
+     * Events in any of {@code statuses} that have used fewer than {@code maxAttempts} attempts (a null
+     * count is zero), oldest first: the candidates of the scheduled failed-event retry (#2411).
+     */
+    @Query("select e from AccountingEvent e where e.status in :statuses"
+            + " and (e.attemptCount is null or e.attemptCount < :maxAttempts) order by e.receivedAt asc")
+    @NonNull
+    List<AccountingEvent> findRetryCandidates(@NonNull Collection<AccountingEventStatus> statuses, int maxAttempts);
 
     /**
      * Claim one event for processing: a row lock taken with SKIP LOCKED (lock timeout -2), so a
