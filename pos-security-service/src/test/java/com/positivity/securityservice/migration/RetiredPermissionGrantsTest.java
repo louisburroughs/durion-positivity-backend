@@ -128,7 +128,8 @@ class RetiredPermissionGrantsTest {
         Path repoRoot = Path.of("..").toAbsolutePath().normalize();
         List<Path> fixtures = new java.util.ArrayList<>();
         try (Stream<Path> modules = Files.list(repoRoot)) {
-            for (Path module : modules.filter(path -> path.getFileName().toString().startsWith("pos-"))
+            for (Path module : modules.filter(
+                            path -> path.getFileName().toString().startsWith("pos-"))
                     .toList()) {
                 Path testSources = module.resolve(Path.of("src", "test", "java"));
                 if (!Files.isDirectory(testSources)) {
@@ -136,7 +137,8 @@ class RetiredPermissionGrantsTest {
                 }
                 try (Stream<Path> walk = Files.walk(testSources)) {
                     walk.filter(Files::isRegularFile)
-                            .filter(path -> FIXTURE_FILE.matcher(path.getFileName().toString())
+                            .filter(path -> FIXTURE_FILE
+                                    .matcher(path.getFileName().toString())
                                     .matches())
                             .forEach(fixtures::add);
                 }

@@ -44,18 +44,11 @@ public abstract class BaseIntegrationTest {
 
     protected static final String TEST_AUTHORITIES = String.join(
             ",",
-            "people:role:view",
-            "people:role:assign",
-            "people:role:revoke",
-            "people:person:view",
-            "people:person:edit",
-            "people:person:delete",
             "people:employee:create",
             "people:employee:edit",
             "people:employee:view",
             "people:employee_pii:view",
             "people:employee:activation",
-            "people:userLink:view",
             "people:availability:view",
             "people:compliance:view",
             "people:timeAdjustment:create",
