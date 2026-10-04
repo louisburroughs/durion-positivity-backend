@@ -34,6 +34,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Mockito;
@@ -263,6 +265,22 @@ class EmployeeOffboardingRetryWorkerTest {
 
         verify(assignmentEnder, never()).apply(any(), any(), any(), any());
         verify(retryRepository, never()).delete(any(EmployeeOffboardingRetry.class));
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = EmployeeStatus.class,
+            names = {"ON_LEAVE", "SUSPENDED"})
+    @DisplayName(
+            "a row whose employee is now ON_LEAVE or SUSPENDED (not offboarded) is dropped, ending nothing (#2418)")
+    void notOffboardedStatusRowIsDropped(EmployeeStatus current) {
+        EmployeeOffboardingRetry row = dueRow(0);
+        when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(employee(current)));
+
+        worker.sweepTenant();
+
+        verify(assignmentEnder, never()).apply(any(), any(), any(), any());
+        verify(retryRepository).delete(row);
     }
 
     @Test
