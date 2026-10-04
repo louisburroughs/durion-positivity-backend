@@ -84,7 +84,7 @@ public class RolePromptResolverImpl implements RolePromptResolver {
     @Transactional(readOnly = true)
     public @NonNull AssembledPrompt assemble(
             @NonNull String role, @NonNull String ragScope, boolean writeCapableToolsPresent) {
-        List<String> layers = new ArrayList<>(5);
+        List<String> layers = new ArrayList<>(8);
         StringBuilder text = new StringBuilder();
 
         // BASE — master operating rules (built-in fallback if unseeded).
@@ -137,6 +137,12 @@ public class RolePromptResolverImpl implements RolePromptResolver {
             text.append("\n\n").append(SystemPromptDefaults.WRITE_GATE_LAYER_TEXT);
             layers.add("WRITE_GATE");
         }
+
+        // IDENTIFIER (#2415) — UUID display contract, always present and always last. Sits after
+        // WRITE-GATE because it narrows that layer's "echo every argument verbatim" rule: an
+        // id-valued argument is previewed as the record it names, not as its UUID.
+        text.append("\n\n").append(SystemPromptDefaults.identifierLayerText(role));
+        layers.add("IDENTIFIER");
 
         return new AssembledPrompt(text.toString(), List.copyOf(layers));
     }

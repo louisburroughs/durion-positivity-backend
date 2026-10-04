@@ -585,7 +585,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 answerResolutionLadder,
                 toolInvocationRecorder,
                 requestScopedUserContext,
-                observationRegistry);
+                observationRegistry,
+                SystemPromptDefaults.identifierLayerText(role));
         LOGGER.debug(
                 "Built MCP role agent role={} promptName={} ragScope={} tier={} toolNames={}",
                 role,
