@@ -481,7 +481,6 @@ class VehicleFitmentServiceTest {
         VehicleVariable legacy = vehicleVariable(dayOld());
         legacy.setNhtsaId(null);
         when(vehicleVariableRepository.findAll()).thenReturn(List.of(legacy));
-        when(vehicleVariableRepository.findById(derived("variable-86"))).thenReturn(Optional.empty());
         when(responseSpec.body(String.class))
                 .thenReturn("{\"Results\":[{\"ID\":86,\"Name\":\"abs\",\"Description\":\"d\"}]}");
 
@@ -490,6 +489,71 @@ class VehicleFitmentServiceTest {
         verify(vehicleVariableRepository).save(legacy);
         assertThat(legacy.getId()).isEqualTo(VARIABLE_ID);
         assertThat(legacy.getNhtsaId()).isEqualTo(86L);
+    }
+
+    @Test
+    void getVehicleVariables_secondRefreshAfterAdoption_updatesTheAdoptedRowNotADuplicate() {
+        VehicleVariable adopted = vehicleVariable(dayOld()); // random-style PK, vPIC id already stored
+        when(vehicleVariableRepository.findAll()).thenReturn(List.of(adopted));
+        when(responseSpec.body(String.class))
+                .thenReturn("{\"Results\":[{\"ID\":86,\"Name\":\"ABS renamed\",\"Description\":\"d\"}]}");
+
+        service.getVehicleVariables();
+
+        verify(vehicleVariableRepository).save(adopted);
+        assertThat(adopted.getId()).isEqualTo(VARIABLE_ID);
+        assertThat(adopted.getName()).isEqualTo("ABS renamed");
+    }
+
+    @Test
+    void getVehicleVariableValues_legacyValueWithBlankValueId_isAdoptedByNameAndKeepsItsKey() {
+        UUID legacyId = UUID.randomUUID();
+        VehicleVariableValue legacy = vehicleVariableValue(dayOld());
+        legacy.setId(legacyId);
+        legacy.setValueId("");
+        when(vehicleVariableRepository.findById(VARIABLE_ID)).thenReturn(Optional.of(vehicleVariable(hourOld())));
+        when(vehicleVariableValueRepository.findByVariable_Id(VARIABLE_ID)).thenReturn(List.of(legacy));
+        when(responseSpec.body(String.class)).thenReturn("{\"Results\":[{\"Id\":1,\"Name\":\"car\"}]}");
+
+        service.getVehicleVariableValues(VARIABLE_ID);
+
+        verify(vehicleVariableValueRepository, org.mockito.Mockito.times(1)).save(any(VehicleVariableValue.class));
+        verify(vehicleVariableValueRepository).save(legacy);
+        assertThat(legacy.getId()).isEqualTo(legacyId);
+        assertThat(legacy.getValueId()).isEqualTo("1");
+    }
+
+    @Test
+    void getVehicleVariableValues_secondRefreshAfterAdoption_matchesByValueIdNotName() {
+        VehicleVariableValue adopted = vehicleVariableValue(dayOld());
+        adopted.setId(UUID.randomUUID());
+        adopted.setValueId("1");
+        when(vehicleVariableRepository.findById(VARIABLE_ID)).thenReturn(Optional.of(vehicleVariable(hourOld())));
+        when(vehicleVariableValueRepository.findByVariable_Id(VARIABLE_ID)).thenReturn(List.of(adopted));
+        when(responseSpec.body(String.class)).thenReturn("{\"Results\":[{\"Id\":1,\"Name\":\"Renamed\"}]}");
+
+        service.getVehicleVariableValues(VARIABLE_ID);
+
+        verify(vehicleVariableValueRepository).save(adopted);
+        assertThat(adopted.getValue()).isEqualTo("Renamed");
+    }
+
+    @Test
+    void getVehicleVariableValues_legacyValueWithOtherValueId_isLeftAlone() {
+        VehicleVariableValue other = vehicleVariableValue(dayOld());
+        other.setId(UUID.randomUUID());
+        other.setValueId("9");
+        when(vehicleVariableRepository.findById(VARIABLE_ID)).thenReturn(Optional.of(vehicleVariable(hourOld())));
+        when(vehicleVariableValueRepository.findByVariable_Id(VARIABLE_ID)).thenReturn(List.of(other));
+        when(responseSpec.body(String.class)).thenReturn("{\"Results\":[{\"Id\":1,\"Name\":\"Car\"}]}");
+
+        service.getVehicleVariableValues(VARIABLE_ID);
+
+        org.mockito.ArgumentCaptor<VehicleVariableValue> saved =
+                org.mockito.ArgumentCaptor.forClass(VehicleVariableValue.class);
+        verify(vehicleVariableValueRepository).save(saved.capture());
+        assertThat(saved.getValue()).isNotSameAs(other);
+        assertThat(saved.getValue().getId()).isEqualTo(derived("variable-value-86-1"));
     }
 
     @Test
@@ -530,7 +594,6 @@ class VehicleFitmentServiceTest {
         existing.setId(id);
         when(vehicleVariableRepository.findById(VARIABLE_ID)).thenReturn(Optional.of(vehicleVariable(hourOld())));
         when(vehicleVariableValueRepository.findByVariable_Id(VARIABLE_ID)).thenReturn(List.of(existing));
-        when(vehicleVariableValueRepository.findById(id)).thenReturn(Optional.of(existing));
         when(responseSpec.body(String.class)).thenReturn("{\"Results\":[{\"Id\":1,\"Name\":\"Optional\"}]}");
 
         service.getVehicleVariableValues(VARIABLE_ID);

@@ -71,22 +71,7 @@ public class VehicleReferenceService {
         transactionTemplate.executeWithoutResult(_ -> {
             for (VpicRow row : rows) {
                 UUID id = localId("variable-", row.vpicId());
-                VehicleVariable variable = vehicleVariableRepository
-                        .findById(id)
-                        .orElseGet(() -> {
-                            // A row cached before vPIC ids were stored has a random id and no vPIC id: adopt it by name
-                            // so its values stay attached.
-                            VehicleVariable adopted = cached.stream()
-                                    .filter(existing -> existing.getNhtsaId() == null
-                                            && row.name() != null
-                                            && row.name().equalsIgnoreCase(existing.getName()))
-                                    .findFirst()
-                                    .orElseGet(VehicleVariable::new);
-                            if (adopted.getId() == null) {
-                                adopted.setId(id);
-                            }
-                            return adopted;
-                        });
+                VehicleVariable variable = matchVariable(cached, row, id);
                 variable.setNhtsaId(row.vpicId());
                 variable.setName(row.name() == null ? "" : row.name());
                 variable.setDescription(truncate(row.node().path("Description").asString("")));
@@ -116,13 +101,7 @@ public class VehicleReferenceService {
         transactionTemplate.executeWithoutResult(_ -> {
             for (VpicRow row : rows) {
                 UUID id = localId("variable-value-" + vpicVariableId + "-", row.vpicId());
-                VehicleVariableValue value = vehicleVariableValueRepository
-                        .findById(id)
-                        .orElseGet(() -> {
-                            VehicleVariableValue created = new VehicleVariableValue();
-                            created.setId(id);
-                            return created;
-                        });
+                VehicleVariableValue value = matchValue(cached, row, id);
                 value.setVariable(variable);
                 value.setValue(row.name() == null ? "" : row.name());
                 value.setValueId(Long.toString(row.vpicId()));
@@ -255,6 +234,61 @@ public class VehicleReferenceService {
             }
         });
         return vehicleTypeRepository.findByMakeId(makeId);
+    }
+
+    /**
+     * Finds the cached variable a vPIC row refreshes, in order: the row already holding that vPIC id (an adopted
+     * legacy row keeps its random primary key, so the derived id alone would miss it and duplicate it), the row
+     * with the derived id, then a legacy row with no vPIC id and the same name (case-insensitive). Otherwise a
+     * new row under the derived id.
+     */
+    private static VehicleVariable matchVariable(List<VehicleVariable> cached, VpicRow row, UUID derivedId) {
+        return cached.stream()
+                .filter(existing -> Objects.equals(existing.getNhtsaId(), row.vpicId()))
+                .findFirst()
+                .or(() -> cached.stream()
+                        .filter(existing -> derivedId.equals(existing.getId()))
+                        .findFirst())
+                .or(() -> cached.stream()
+                        .filter(existing -> existing.getNhtsaId() == null
+                                && row.name() != null
+                                && row.name().equalsIgnoreCase(existing.getName()))
+                        .findFirst())
+                .orElseGet(() -> {
+                    VehicleVariable created = new VehicleVariable();
+                    created.setId(derivedId);
+                    return created;
+                });
+    }
+
+    /**
+     * Finds the cached value a vPIC row refreshes, in order: the row whose {@code valueId} is that vPIC id, the
+     * row with the derived id, then a legacy row. Legacy policy: values cached before vPIC ids were stored have a
+     * random primary key and a blank {@code valueId} (the old parser read a {@code ValueId} field vPIC does not
+     * send), so they are adopted by (variable, case-insensitive name) and keep their primary key, which part
+     * fitments reference. A legacy row with a non-blank {@code valueId} that matches nothing is left alone. Once
+     * adopted a row carries its vPIC id in {@code valueId}, so it is matched by the first rule from then on and
+     * two payload rows can never claim the same legacy row.
+     */
+    private static VehicleVariableValue matchValue(List<VehicleVariableValue> cached, VpicRow row, UUID derivedId) {
+        String vpicValueId = Long.toString(row.vpicId());
+        return cached.stream()
+                .filter(existing -> vpicValueId.equals(existing.getValueId()))
+                .findFirst()
+                .or(() -> cached.stream()
+                        .filter(existing -> derivedId.equals(existing.getId()))
+                        .findFirst())
+                .or(() -> cached.stream()
+                        .filter(existing -> (existing.getValueId() == null
+                                        || existing.getValueId().isBlank())
+                                && row.name() != null
+                                && row.name().equalsIgnoreCase(existing.getValue()))
+                        .findFirst())
+                .orElseGet(() -> {
+                    VehicleVariableValue created = new VehicleVariableValue();
+                    created.setId(derivedId);
+                    return created;
+                });
     }
 
     /** One vPIC result row, validated: its numeric id, its first non-blank name if any, and the raw node. */

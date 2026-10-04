@@ -192,6 +192,40 @@ class VpicReferenceRefreshIT extends PostgresTenancyTestBase {
     }
 
     @Test
+    void preMigrationRowsAreAdoptedInPlaceAndSurviveASecondRefresh() {
+        // State as the old code left it: derived ids but no nhtsa_id for manufacturers, random ids for variables
+        // and values with a blank value_id.
+        UUID legacyVariable = UUID.randomUUID();
+        UUID legacyValue = UUID.randomUUID();
+        owner.update(
+                "INSERT INTO manufacturer (id, name, cache_timestamp) VALUES (?, 'Tesla', now() - interval '25 hours')",
+                TESLA);
+        owner.update(
+                "INSERT INTO vehicle_variable (id, name, cache_timestamp) VALUES (?, 'ABS', now() - interval '25 hours')",
+                legacyVariable);
+        owner.update(
+                "INSERT INTO vehicle_variable_value (id, variable_id, value, value_id, cache_timestamp)"
+                        + " VALUES (?, ?, 'standard', '', now() - interval '25 hours')",
+                legacyValue,
+                legacyVariable);
+
+        for (int refresh = 0; refresh < 2; refresh++) {
+            assertThat(service.getManufacturers())
+                    .extracting(Manufacturer::getId, Manufacturer::getNhtsaId)
+                    .containsExactly(tuple(TESLA, 955L));
+            assertThat(service.getVehicleVariables())
+                    .extracting(VehicleVariable::getId, VehicleVariable::getNhtsaId)
+                    .containsExactly(tuple(legacyVariable, 86L));
+            assertThat(service.getVehicleVariableValues(legacyVariable))
+                    .extracting(VehicleVariableValue::getId, VehicleVariableValue::getValueId)
+                    .containsExactly(tuple(legacyValue, "1"));
+            ageCache();
+        }
+        assertThat(owner.queryForObject("SELECT count(*) FROM vehicle_variable_value", Integer.class))
+                .isEqualTo(1);
+    }
+
+    @Test
     void badIdAnywhereInThePayload_savesNothing() {
         vpic.put(
                 MANUFACTURERS_URL,

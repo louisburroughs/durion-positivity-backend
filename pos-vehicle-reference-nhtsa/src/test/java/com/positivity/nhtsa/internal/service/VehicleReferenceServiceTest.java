@@ -483,6 +483,78 @@ class VehicleReferenceServiceTest {
     }
 
     @Test
+    @DisplayName("second refresh after adoption updates the adopted variable instead of adding a duplicate")
+    void secondRefreshAfterAdoptionDoesNotDuplicateVariable() {
+        VehicleVariable adopted = new VehicleVariable();
+        adopted.setId(UUID.randomUUID());
+        adopted.setNhtsaId(86L);
+        adopted.setName("ABS");
+        adopted.setCacheTimestamp(stale());
+        when(vehicleVariableRepository.findAll()).thenReturn(List.of(adopted));
+        server.expect(requestTo(BASE + "/GetVehicleVariableList?format=json"))
+                .andRespond(withSuccess("""
+                        {"Results":[{"ID":86,"Name":"ABS renamed","Description":"d"}]}""", MediaType.APPLICATION_JSON));
+
+        service.getVehicleVariables();
+
+        verify(vehicleVariableRepository).save(adopted);
+        assertThat(adopted.getName()).isEqualTo("ABS renamed");
+        server.verify();
+    }
+
+    private VehicleVariable valueVariable() {
+        VehicleVariable variable = new VehicleVariable();
+        variable.setId(UUID.randomUUID());
+        variable.setNhtsaId(86L);
+        when(vehicleVariableRepository.findById(variable.getId())).thenReturn(Optional.of(variable));
+        return variable;
+    }
+
+    @Test
+    @DisplayName("adopts a pre-migration value (random key, blank valueId) by name and keeps its key")
+    void legacyValueIsAdoptedByName() {
+        VehicleVariable variable = valueVariable();
+        VehicleVariableValue legacy = new VehicleVariableValue();
+        legacy.setId(UUID.randomUUID());
+        legacy.setValue("standard");
+        legacy.setValueId("");
+        legacy.setCacheTimestamp(stale());
+        UUID legacyId = legacy.getId();
+        when(vehicleVariableValueRepository.findByVariable_Id(variable.getId())).thenReturn(List.of(legacy));
+        server.expect(requestTo(BASE + "/GetVehicleVariableValuesList/86?format=json"))
+                .andRespond(withSuccess("""
+                        {"Results":[{"Id":1,"Name":"Standard"}]}""", MediaType.APPLICATION_JSON));
+
+        service.getVehicleVariableValues(variable.getId());
+
+        verify(vehicleVariableValueRepository).save(legacy);
+        assertThat(legacy.getId()).isEqualTo(legacyId);
+        assertThat(legacy.getValueId()).isEqualTo("1");
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("second refresh after adoption matches the value by its stored vPIC id even if renamed")
+    void secondRefreshAfterValueAdoptionDoesNotDuplicate() {
+        VehicleVariable variable = valueVariable();
+        VehicleVariableValue adopted = new VehicleVariableValue();
+        adopted.setId(UUID.randomUUID());
+        adopted.setValue("Standard");
+        adopted.setValueId("1");
+        adopted.setCacheTimestamp(stale());
+        when(vehicleVariableValueRepository.findByVariable_Id(variable.getId())).thenReturn(List.of(adopted));
+        server.expect(requestTo(BASE + "/GetVehicleVariableValuesList/86?format=json"))
+                .andRespond(withSuccess("""
+                        {"Results":[{"Id":1,"Name":"Renamed"}]}""", MediaType.APPLICATION_JSON));
+
+        service.getVehicleVariableValues(variable.getId());
+
+        verify(vehicleVariableValueRepository).save(adopted);
+        assertThat(adopted.getValue()).isEqualTo("Renamed");
+        server.verify();
+    }
+
+    @Test
     @DisplayName("rejects the whole payload, saving nothing, when any vPIC id is not an integer")
     void nonIntegerIdFailsTheWholeRefresh() {
         when(manufacturerRepository.findAll()).thenReturn(List.of());

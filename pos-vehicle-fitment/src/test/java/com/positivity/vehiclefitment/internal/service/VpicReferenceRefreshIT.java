@@ -271,6 +271,48 @@ class VpicReferenceRefreshIT extends PostgresTenancyTestBase {
     }
 
     @Test
+    void preMigrationValueReferencedByAPartFitment_isAdoptedKeepsItsFitmentAndSurvivesASecondRefresh() {
+        UUID legacyVariable = UUID.randomUUID();
+        UUID legacyValue = UUID.randomUUID();
+        owner.update(
+                "INSERT INTO vehicle_variable (id, name, cache_timestamp, created_at, updated_at)"
+                        + " VALUES (?, 'ABS', now() - interval '25 hours', now(), now())",
+                legacyVariable);
+        owner.update(
+                "INSERT INTO vehicle_variable_value (id, variable_id, variable_value, value_id, cache_timestamp,"
+                        + " created_at, updated_at) VALUES (?, ?, 'standard', '', now() - interval '25 hours',"
+                        + " now(), now())",
+                legacyValue,
+                legacyVariable);
+        owner.update(
+                "INSERT INTO part_fitment_entity (id, part_number_id, created_at, updated_at)"
+                        + " VALUES (?, 1, now(), now())",
+                UUID.randomUUID());
+        owner.update(
+                "INSERT INTO part_fitment_entity_vehicle_variable_values (part_fitment_entity_id,"
+                        + " vehicle_variable_values_id) SELECT id, ? FROM part_fitment_entity",
+                legacyValue);
+        vpic.put(VARIABLES_URL, variables("{\"Description\":\"d\",\"ID\":86,\"Name\":\"ABS\"}"));
+        vpic.put(VARIABLE_VALUES_URL, variableValues("{\"ElementName\":\"ABS\",\"Id\":1,\"Name\":\"Standard\"}"));
+
+        for (int refresh = 0; refresh < 2; refresh++) {
+            assertThat(service.getVehicleVariables()).extracting(v -> v.getId()).containsExactly(legacyVariable);
+            assertThat(service.getVehicleVariableValues(legacyVariable))
+                    .extracting(v -> v.getId(), v -> v.getValueId())
+                    .containsExactly(tuple(legacyValue, "1"));
+            assertThat(owner.queryForObject(
+                            "SELECT vehicle_variable_values_id FROM part_fitment_entity_vehicle_variable_values",
+                            UUID.class))
+                    .isEqualTo(legacyValue);
+            ageVariableCache();
+        }
+        assertThat(owner.queryForObject("SELECT count(*) FROM vehicle_variable", Integer.class))
+                .isEqualTo(1);
+        assertThat(owner.queryForObject("SELECT count(*) FROM vehicle_variable_value", Integer.class))
+                .isEqualTo(1);
+    }
+
+    @Test
     void variableWithoutVpicId_servesItsValuesFromCacheWithoutCallingVpic() {
         UUID local = UUID.randomUUID();
         owner.update(
