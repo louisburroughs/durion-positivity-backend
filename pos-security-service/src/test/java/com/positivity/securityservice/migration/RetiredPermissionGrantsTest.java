@@ -43,7 +43,7 @@ class RetiredPermissionGrantsTest {
             Pattern.compile("\\(\\s*'([A-Z_]+)'\\s*,\\s*'([A-Za-z0-9:_\\-]+)'\\s*\\)");
 
     private static final Pattern FIXTURE_FILE =
-            Pattern.compile("(BaseIntegrationTest|BaseContractIntegrationTest|TestSecurityConfig)\\w*\\.java");
+            Pattern.compile("(BaseIntegrationTest|BaseContractIntegrationTest|\\w*TestSecurityConfig)\\w*\\.java");
 
     private static Set<String> retired;
 
