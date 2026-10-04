@@ -421,6 +421,8 @@ paths:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1pricing~1location-overrides~1{overrideId}~1reject
   /v1/products/search:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1search
+  /v1/products/services:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1services
   /v1/products/services/name/{name}:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1services~1name~1{name}
   /v1/products/services/search:
@@ -939,6 +941,8 @@ paths:
     $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1{invoiceId}~1revert
   /v1/refunds:
     $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1refunds
+  /v1/bay-types:
+    $ref: ../../pos-location/openapi.yaml#/paths/~1v1~1bay-types
   /v1/locations:
     $ref: ../../pos-location/openapi.yaml#/paths/~1v1~1locations
   /v1/locations/bays/bulk-ingest:
