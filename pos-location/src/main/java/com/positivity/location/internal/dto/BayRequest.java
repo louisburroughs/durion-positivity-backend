@@ -62,7 +62,8 @@ public class BayRequest {
                     + "an empty list for a general bay with no specialty claim. Each value must be an active "
                     + "catalog operationCode (UPPER-DASH, ADR-0059 §3); unknown or retired codes are rejected 422.",
             example = "[\"WHEEL-ALIGNMENT-4-WHEEL\"]",
-            requiredMode = NOT_REQUIRED)
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
     private List<String> serviceCapabilityCodes;
 
     @Schema(
