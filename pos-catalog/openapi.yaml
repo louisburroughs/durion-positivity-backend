@@ -3088,7 +3088,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Page'
+                $ref: '#/components/schemas/ServiceDtoPage'
           description: A page of claimable services, by name.
         '400':
           content:
@@ -8039,6 +8039,59 @@ components:
         shortDescription:
           description: Short service description
           type: string
+      type: object
+    ServiceDtoPage:
+      description: A page of catalog services
+      properties:
+        content:
+          description: The services on this page
+          items:
+            $ref: '#/components/schemas/ServiceDto'
+          type: array
+        empty:
+          description: Whether this page has no services
+          type: boolean
+        first:
+          description: Whether this is the first page
+          type: boolean
+        last:
+          description: Whether this is the last page
+          type: boolean
+        number:
+          description: Zero-based index of this page
+          example: 0
+          format: int32
+          type: integer
+        numberOfElements:
+          description: Number of services on this page
+          example: 42
+          format: int32
+          type: integer
+        size:
+          description: Requested page size
+          example: 50
+          format: int32
+          type: integer
+        totalElements:
+          description: Total services across all pages
+          example: 42
+          format: int64
+          type: integer
+        totalPages:
+          description: Total number of pages
+          example: 1
+          format: int32
+          type: integer
+      required:
+      - content
+      - empty
+      - first
+      - last
+      - number
+      - numberOfElements
+      - size
+      - totalElements
+      - totalPages
       type: object
     ServiceFactReplayResultDto:
       description: Outcome of one page of a service-fact replay.

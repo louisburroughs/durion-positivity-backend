@@ -121,6 +121,24 @@ class ClaimableServicesControllerTest {
     }
 
     @Test
+    @DisplayName("the page metadata sits at the top level, as the ServiceDtoPage schema documents")
+    void pageMetadataMatchesTheDocumentedSchema() throws Exception {
+        when(catalogService.listClaimableServices(isNull(), isNull(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(oilChange()), PageRequest.of(1, 1), 3));
+
+        mockMvc.perform(get(BASE).header(AUTHORITIES, CatalogPermissions.SERVICE_TYPE_VIEW))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(3))
+                .andExpect(jsonPath("$.totalPages").value(3))
+                .andExpect(jsonPath("$.number").value(1))
+                .andExpect(jsonPath("$.size").value(1))
+                .andExpect(jsonPath("$.numberOfElements").value(1))
+                .andExpect(jsonPath("$.first").value(false))
+                .andExpect(jsonPath("$.last").value(false))
+                .andExpect(jsonPath("$.empty").value(false));
+    }
+
+    @Test
     @DisplayName("page defaults to 0 and size to 50")
     void pagingDefaults() throws Exception {
         when(catalogService.listClaimableServices(any(), any(), any(Pageable.class)))

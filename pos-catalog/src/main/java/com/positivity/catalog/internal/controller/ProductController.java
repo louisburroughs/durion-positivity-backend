@@ -20,6 +20,7 @@ import com.positivity.catalog.internal.dto.ProductReplacementRequest;
 import com.positivity.catalog.internal.dto.ProductTrackingLevelUpdateRequestDto;
 import com.positivity.catalog.internal.dto.ProductUpdateRequestDto;
 import com.positivity.catalog.internal.dto.ServiceDto;
+import com.positivity.catalog.internal.dto.ServiceDtoPage;
 import com.positivity.catalog.internal.enums.OperationCategory;
 import com.positivity.catalog.internal.security.CatalogPermissions;
 import com.positivity.catalog.internal.service.CatalogService;
@@ -920,7 +921,7 @@ public class ProductController {
     @ApiResponse(
             responseCode = "200",
             description = "A page of claimable services, by name.",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = Page.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ServiceDtoPage.class)))
     @ApiResponse(
             responseCode = "400",
             description = "An unknown operation category, or a page or page size out of range.",
