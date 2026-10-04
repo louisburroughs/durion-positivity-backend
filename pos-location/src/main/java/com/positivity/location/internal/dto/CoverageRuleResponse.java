@@ -75,8 +75,8 @@ public class CoverageRuleResponse {
             allOf = DistanceDto.class,
             implementation = Object.class,
             description = "Maximum service distance covered by the rule, in the owning mobile unit's base"
-                    + " location's distanceUnit; null for a rule with no distance ceiling. Not yet evaluated:"
-                    + " coverage matches on the postal-code service area alone, since geocoding does not exist.",
+                    + " location's distanceUnit; null for a rule with no distance ceiling. Not yet evaluated by"
+                    + " eligibility, since geocoding does not exist.",
             requiredMode = NOT_REQUIRED)
     private DistanceDto maxDistance;
 }

@@ -72,8 +72,7 @@ public class CoverageRuleRequest {
             allOf = DistanceDto.class,
             description = "Maximum service distance covered by the rule, an explicit {value, unit} object (KM or"
                     + " MI); converted at the edge and stored as kilometres (DECISION-LOCATION-028). A bare number"
-                    + " is refused. Not yet evaluated: coverage matches on the postal-code service area alone,"
-                    + " since geocoding does not exist.",
+                    + " is refused. Not yet evaluated by eligibility, since geocoding does not exist.",
             requiredMode = NOT_REQUIRED)
     private Object maxDistance;
 }

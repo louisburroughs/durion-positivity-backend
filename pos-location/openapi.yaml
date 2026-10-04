@@ -3462,7 +3462,7 @@ components:
         maxDistance:
           allOf:
           - $ref: '#/components/schemas/DistanceDto'
-          description: 'Maximum service distance covered by the rule, an explicit {value, unit} object (KM or MI); converted at the edge and stored as kilometres (DECISION-LOCATION-028). A bare number is refused. Not yet evaluated: coverage matches on the postal-code service area alone, since geocoding does not exist.'
+          description: Maximum service distance covered by the rule, an explicit {value, unit} object (KM or MI); converted at the edge and stored as kilometres (DECISION-LOCATION-028). A bare number is refused. Not yet evaluated by eligibility, since geocoding does not exist.
         priority:
           description: Evaluation priority of the rule (lower is evaluated first)
           example: 1
@@ -3507,7 +3507,7 @@ components:
         maxDistance:
           allOf:
           - $ref: '#/components/schemas/DistanceDto'
-          description: 'Maximum service distance covered by the rule, in the owning mobile unit''s base location''s distanceUnit; null for a rule with no distance ceiling. Not yet evaluated: coverage matches on the postal-code service area alone, since geocoding does not exist.'
+          description: Maximum service distance covered by the rule, in the owning mobile unit's base location's distanceUnit; null for a rule with no distance ceiling. Not yet evaluated by eligibility, since geocoding does not exist.
         mobileUnitId:
           description: Identifier of the mobile unit this rule belongs to
           example: 01960003-0000-7000-8000-000000000002
