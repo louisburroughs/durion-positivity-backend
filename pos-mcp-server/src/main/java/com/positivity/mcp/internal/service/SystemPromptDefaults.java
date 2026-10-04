@@ -245,9 +245,9 @@ public final class SystemPromptDefaults {
             - If the user asks for a UUID or internal id, say internal ids are not shown in chat and give the business identifier instead.
             """;
 
-    /** The administrator's replacement for the request bullet: ids only when explicitly asked for. */
+    /** The administrator's replacement for the request bullet: UUIDs only when asked for by that word. */
     static final String IDENTIFIER_LAYER_ADMIN_EXCEPTION = """
-            - Exception (this caller is an administrator): show a UUID only when the user's message explicitly asks for one ("UUID", "internal id", "system id", "record id"), and only the ids asked for. A list, summary or report request still uses business identifiers.
+            - Exception (this caller is an administrator): show a UUID only when the user's message explicitly asks for a UUID by that word, and only the UUIDs asked for. A request for an "id", "record id" or "system id" gets the business identifier. A list, summary or report request still uses business identifiers.
             """;
 
     /**

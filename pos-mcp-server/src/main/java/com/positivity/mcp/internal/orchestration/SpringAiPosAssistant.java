@@ -6,6 +6,7 @@ import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.service.AnswerResolutionLadder;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
 import com.positivity.mcp.internal.service.RequestScopedUserContext;
+import com.positivity.mcp.internal.service.SystemPromptDefaults;
 import com.positivity.mcp.internal.service.ToolInvocationRecorder;
 import io.micrometer.observation.ObservationRegistry;
 import java.util.ArrayList;
@@ -70,7 +71,12 @@ final class SpringAiPosAssistant implements PosAssistant {
     private final @Nullable AnswerResolutionLadder answerResolutionLadder;
     private final @Nullable ToolInvocationRecorder invocationRecorder;
     private final @Nullable RequestScopedUserContext requestScopedUserContext;
+    private final String identifierLayer;
 
+    /**
+     * Without a role, the re-render turn carries the default (non-administrator) identifier layer
+     * (#2415) — the safe variant.
+     */
     SpringAiPosAssistant(
             @NonNull ChatModel chatModel,
             @NonNull Supplier<String> systemPromptSupplier,
@@ -82,6 +88,38 @@ final class SpringAiPosAssistant implements PosAssistant {
             @Nullable ToolInvocationRecorder invocationRecorder,
             @Nullable RequestScopedUserContext requestScopedUserContext,
             @Nullable ObservationRegistry observationRegistry) {
+        this(
+                chatModel,
+                systemPromptSupplier,
+                staticTools,
+                ragRetriever,
+                chatMemoryProvider,
+                openApiToolProvider,
+                answerResolutionLadder,
+                invocationRecorder,
+                requestScopedUserContext,
+                observationRegistry,
+                SystemPromptDefaults.IDENTIFIER_LAYER_TEXT);
+    }
+
+    /**
+     * {@code identifierLayer} is the role's identifier display contract ({@link
+     * SystemPromptDefaults#identifierLayerText(String)}, #2415), carried into the tool-less re-render
+     * turn, which does not get the layered system prompt. The agent is cached per role, so a
+     * role-keyed layer is cache-safe.
+     */
+    SpringAiPosAssistant(
+            @NonNull ChatModel chatModel,
+            @NonNull Supplier<String> systemPromptSupplier,
+            @NonNull List<Object> staticTools,
+            @NonNull QueryDocumentRetriever ragRetriever,
+            @NonNull Function<String, ChatMemory> chatMemoryProvider,
+            @Nullable OpenApiToolProvider openApiToolProvider,
+            @Nullable AnswerResolutionLadder answerResolutionLadder,
+            @Nullable ToolInvocationRecorder invocationRecorder,
+            @Nullable RequestScopedUserContext requestScopedUserContext,
+            @Nullable ObservationRegistry observationRegistry,
+            @NonNull String identifierLayer) {
         this.chatModel = chatModel;
         this.chatClient = buildToolCallingChatClient(chatModel, observationRegistry, invocationRecorder);
         this.systemPromptSupplier = systemPromptSupplier;
@@ -92,6 +130,7 @@ final class SpringAiPosAssistant implements PosAssistant {
         this.answerResolutionLadder = answerResolutionLadder;
         this.invocationRecorder = invocationRecorder;
         this.requestScopedUserContext = requestScopedUserContext;
+        this.identifierLayer = identifierLayer;
     }
 
     @Override
@@ -224,13 +263,15 @@ final class SpringAiPosAssistant implements PosAssistant {
      * <p>The render prompt carries the conversation history (so a follow-up such as "and what open
      * work orders do they have?" keeps its referent) but not the layered system prompt or the RAG
      * block: those exist to drive tool selection and grounding, and this turn offers no tools. The
-     * as-of / period conventions come from the payload itself, which the instruction asks for.
+     * as-of / period conventions come from the payload itself, which the instruction asks for. The
+     * role's identifier display contract (#2415) is carried in: a payload is full of UUIDs, and
+     * without the contract the model would write them into the prose.
      * Latency: this is a second full model call on a path that only runs after the guard fired.
      */
     private @Nullable String renderToolPayload(
             @NonNull List<Message> history, @NonNull String userMessage, @NonNull String payload) {
         List<Message> messages = new ArrayList<>();
-        messages.add(new SystemMessage(RENDER_INSTRUCTION));
+        messages.add(new SystemMessage(RENDER_INSTRUCTION + "\n\n" + identifierLayer));
         messages.addAll(history);
         messages.add(new UserMessage(userMessage));
         messages.add(new AssistantMessage(payload));

@@ -53,6 +53,16 @@ class IdentifierDisplayLayerTest {
     }
 
     @Test
+    @DisplayName("the admin exception needs the word UUID; a generic id request gets the business identifier")
+    void adminExceptionRequiresExplicitUuidRequest() {
+        assertThat(SystemPromptDefaults.IDENTIFIER_LAYER_ADMIN_EXCEPTION)
+                .contains("explicitly asks for a UUID by that word")
+                .contains("only the UUIDs asked for")
+                .contains("A request for an \"id\", \"record id\" or \"system id\" gets the business identifier.")
+                .contains("A list, summary or report request still uses business identifiers.");
+    }
+
+    @Test
     @DisplayName("ROLE_USER fallback and PLATFORM_ADMIN get the default variant (exact ROLE_ADMIN match only)")
     void fallbackAndOtherAdminsGetDefault() {
         assertThat(resolver.assemble("ROLE_USER", "master", false).text())

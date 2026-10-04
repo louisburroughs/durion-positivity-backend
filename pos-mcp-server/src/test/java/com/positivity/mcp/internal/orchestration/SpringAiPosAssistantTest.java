@@ -16,6 +16,7 @@ import com.positivity.mcp.internal.service.AnswerResolutionLadder;
 import com.positivity.mcp.internal.service.AnswerResolutionLadder.LadderResult;
 import com.positivity.mcp.internal.service.AnswerResolutionLadder.Rung;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
+import com.positivity.mcp.internal.service.SystemPromptDefaults;
 import com.positivity.mcp.internal.service.ToolInvocationRecorder;
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationHandler;
@@ -158,6 +159,70 @@ class SpringAiPosAssistantTest {
         inOrder.verify(recorder).recordAnswerSource("CONTENT");
         inOrder.verify(recorder).recordAnswerSource("RE_RENDERED");
         inOrder.verify(recorder).recordAnswerSource("LADDER");
+    }
+
+    @Test
+    @DisplayName("the re-render turn carries the role's identifier contract, default variant without a role (#2415)")
+    void chat_reRenderPromptCarriesTheIdentifierContract() {
+        String uuidPayload = "{\"customerId\":\"0190f3a2-7c41-7d2e-9a1b-3c5d7e9f1a2b\",\"balance\":1500.00}";
+        ChatModel chatModel = mock(ChatModel.class);
+        ChatMemory chatMemory = mock(ChatMemory.class);
+        AnswerResolutionLadder ladder = mock(AnswerResolutionLadder.class);
+        when(chatModel.call(any(Prompt.class)))
+                .thenReturn(chatResponse(uuidPayload))
+                .thenReturn(chatResponse(PROSE));
+        SpringAiPosAssistant assistant = payloadAssistant(chatModel, chatMemory, ladder);
+
+        assistant.chat("user-1::ROLE_TECHNICIAN", "what does Harbor Tool owe", "ctx");
+
+        ArgumentCaptor<Prompt> prompts = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel, times(2)).call(prompts.capture());
+        Prompt render = prompts.getAllValues().get(1);
+        assertThat(render.getInstructions()
+                        .get(render.getInstructions().size() - 2)
+                        .getText())
+                .isEqualTo(uuidPayload);
+        assertThat(render.getInstructions().get(0).getText())
+                .contains("invent nothing")
+                .contains(SystemPromptDefaults.IDENTIFIER_LAYER_TEXT);
+    }
+
+    @Test
+    @DisplayName("an admin agent's re-render turn carries the admin identifier variant (#2415)")
+    void chat_reRenderPromptCarriesTheAdminIdentifierVariant() {
+        String uuidPayload = "{\"customerId\":\"0190f3a2-7c41-7d2e-9a1b-3c5d7e9f1a2b\",\"balance\":1500.00}";
+        ChatModel chatModel = mock(ChatModel.class);
+        ChatMemory chatMemory = mock(ChatMemory.class);
+        QueryDocumentRetriever ragRetriever = mock(QueryDocumentRetriever.class);
+        when(chatModel.getOptions())
+                .thenReturn(OllamaChatOptions.builder().model("gpt-oss:120b").build());
+        when(ragRetriever.retrieve(any())).thenReturn(List.of());
+        when(chatMemory.get(any())).thenReturn(List.of());
+        when(chatModel.call(any(Prompt.class)))
+                .thenReturn(chatResponse(uuidPayload))
+                .thenReturn(chatResponse(PROSE));
+        SpringAiPosAssistant assistant = new SpringAiPosAssistant(
+                chatModel,
+                () -> "base prompt",
+                List.of(new PingTool()),
+                ragRetriever,
+                ignored -> chatMemory,
+                null,
+                null,
+                null,
+                null,
+                null,
+                SystemPromptDefaults.identifierLayerText("ROLE_ADMIN"));
+
+        assertThat(assistant.chat("user-1::ROLE_ADMIN", "what does Harbor Tool owe", "ctx"))
+                .isEqualTo(PROSE);
+
+        ArgumentCaptor<Prompt> prompts = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel, times(2)).call(prompts.capture());
+        assertThat(prompts.getAllValues().get(1).getInstructions().get(0).getText())
+                .contains(SystemPromptDefaults.identifierLayerText("ROLE_ADMIN"))
+                .contains("explicitly asks for a UUID by that word")
+                .doesNotContain("say internal ids are not shown in chat");
     }
 
     @Test
