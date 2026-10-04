@@ -143,15 +143,6 @@ public interface EventIngestionService {
     Page<AccountingEventResponse> findBySourceSystem(String sourceSystem, Pageable pageable);
 
     /**
-     * Re-runs the FAILED and SUSPENDED events of the bound tenant that are under the attempt cap.
-     * Called by {@link FailedAccountingEventRetryJob}.
-     *
-     * @param maxRetries maximum retries per record
-     * @return count of records processed
-     */
-    int processFailed(int maxRetries);
-
-    /**
      * Validate that an event has required fields and can be processed.
      *
      * @param event event to validate

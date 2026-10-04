@@ -44,7 +44,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -152,6 +151,23 @@ class EventIngestionServiceAdditionalTest {
         AccountingEventResponse result = service.retryEventProcessing(testEventId);
 
         assertThat(result.getStatus()).isEqualTo(AccountingEventStatus.FAILED);
+    }
+
+    @Test
+    @DisplayName("retryEventProcessing returns SKIPPED when the engine ends the event terminally skipped")
+    void retryEventProcessing_EndsSkipped() {
+        AccountingEvent failed = buildEvent(testEventId, AccountingEventStatus.FAILED);
+        AccountingEvent skipped = buildEvent(testEventId, AccountingEventStatus.SKIPPED);
+        when(accountingEventRepository.findById(testEventId))
+                .thenReturn(Optional.of(failed))
+                .thenReturn(Optional.of(skipped));
+        when(accountingEventRepository.save(any(AccountingEvent.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(postingEngineOrchestrator.processEvent(any(), any(), anyString(), eq(true)))
+                .thenReturn(PostingResult.failure(PostingFailureReason.MISSING_AMOUNT, "no amount"));
+
+        AccountingEventResponse result = service.retryEventProcessing(testEventId);
+
+        assertThat(result.getStatus()).isEqualTo(AccountingEventStatus.SKIPPED);
     }
 
     @ParameterizedTest
@@ -463,127 +479,8 @@ class EventIngestionServiceAdditionalTest {
     }
 
     // ========================================
-    // processFailed Tests
+    // attempt history
     // ========================================
-
-    @Test
-    @DisplayName("processFailed should return 0 when no events are eligible")
-    void processFailed_EmptyList() {
-        when(accountingEventRepository.findRetryCandidates(any(), eq(3))).thenReturn(List.of());
-
-        int result = service.processFailed(3);
-
-        assertThat(result).isEqualTo(0);
-    }
-
-    @Test
-    @DisplayName("processFailed should return 0 and log errors when reprocessEvent throws")
-    void processFailed_ExceptionInLoop() {
-        UUID failedEventId = UUID.fromString("00000000-0000-0000-0000-000000000099");
-        AccountingEvent failedEvent = buildEvent(failedEventId, AccountingEventStatus.FAILED);
-        failedEvent.setAttemptCount(0);
-
-        when(accountingEventRepository.findRetryCandidates(any(), eq(3))).thenReturn(List.of(failedEvent));
-        // reprocessEvent will call findById → throw RuntimeException to simulate
-        // failure
-        when(accountingEventRepository.findById(failedEventId)).thenThrow(new RuntimeException("DB unavailable"));
-
-        int result = service.processFailed(3);
-
-        assertThat(result).isEqualTo(0);
-    }
-
-    @Test
-    @DisplayName("processFailed should skip PERIOD_CLOSED suspensions but retry other suspended events (B2)")
-    void processFailed_SkipsPeriodClosedSuspensions() {
-        // Given: two SUSPENDED events under maxRetries — one suspended for a
-        // closed accounting period (story B2, issue #944), one for a mapping
-        // gap. A closed period will not reopen on the retry cadence, so only
-        // the mapping-gap event is retried.
-        UUID periodClosedEventId = UUID.fromString("00000000-0000-0000-0000-000000000077");
-        AccountingEvent periodClosedEvent = buildEvent(periodClosedEventId, AccountingEventStatus.SUSPENDED);
-        periodClosedEvent.setAttemptCount(0);
-        periodClosedEvent.setFailureReasonCode(PostingFailureReason.PERIOD_CLOSED.name());
-
-        UUID unmappedEventId = UUID.fromString("00000000-0000-0000-0000-000000000078");
-        AccountingEvent unmappedEvent = buildEvent(unmappedEventId, AccountingEventStatus.SUSPENDED);
-        unmappedEvent.setAttemptCount(0);
-        unmappedEvent.setFailureReasonCode(PostingFailureReason.UNMAPPED_EVENT_TYPE.name());
-
-        when(accountingEventRepository.findRetryCandidates(any(), eq(3)))
-                .thenReturn(List.of(periodClosedEvent, unmappedEvent));
-        when(accountingEventRepository.findById(unmappedEventId)).thenReturn(Optional.of(unmappedEvent));
-        when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        when(postingEngineOrchestrator.processEvent(any(), any(), anyString(), eq(true)))
-                .thenReturn(PostingResult.builder()
-                        .success(true)
-                        .evaluationDetails(Map.of("postingReference", "je-ref"))
-                        .build());
-
-        // When
-        int result = service.processFailed(3);
-
-        // Then: only the mapping-gap event was retried; the PERIOD_CLOSED
-        // suspension was never touched (manual reprocess after reopen only).
-        assertThat(result).isEqualTo(1);
-        verify(accountingEventRepository, never()).findById(periodClosedEventId);
-        verify(postingEngineOrchestrator).processEvent(eq(unmappedEvent), any(), anyString(), eq(true));
-    }
-
-    @Test
-    @DisplayName("processFailed skips CURRENCY_NOT_SUPPORTED holds, like PERIOD_CLOSED (ADR-0067 PC-9, #2334)")
-    void processFailed_SkipsCurrencyHolds() {
-        // A fact held for its currency waits for a booking rate (B1) or manual handling; the retry
-        // cadence cannot change the ledger's currency, so retrying only burns attempts.
-        UUID heldEventId = UUID.fromString("00000000-0000-0000-0000-000000000079");
-        AccountingEvent heldEvent = buildEvent(heldEventId, AccountingEventStatus.SUSPENDED);
-        heldEvent.setAttemptCount(0);
-        heldEvent.setFailureReasonCode(PostingFailureReason.CURRENCY_NOT_SUPPORTED.name());
-
-        when(accountingEventRepository.findRetryCandidates(any(), eq(3))).thenReturn(List.of(heldEvent));
-
-        int result = service.processFailed(3);
-
-        assertThat(result).isZero();
-        verify(accountingEventRepository, never()).findById(heldEventId);
-        verify(postingEngineOrchestrator, never()).processEvent(any(), any(), anyString(), anyBoolean());
-    }
-
-    @Test
-    @DisplayName("processFailed asks the repository for FAILED and SUSPENDED events under the attempt cap")
-    void processFailed_QueriesCandidatesByStatusAndCap() {
-        when(accountingEventRepository.findRetryCandidates(any(), eq(5))).thenReturn(List.of());
-
-        service.processFailed(5);
-
-        verify(accountingEventRepository)
-                .findRetryCandidates(List.of(AccountingEventStatus.FAILED, AccountingEventStatus.SUSPENDED), 5);
-        verify(accountingEventRepository, never()).findAll();
-    }
-
-    @ParameterizedTest
-    @ValueSource(
-            strings = {
-                "DUPLICATE_CONFLICT",
-                "INVALID_PAYLOAD",
-                "VALIDATION_ERROR",
-                "MISSING_AMOUNT",
-                "PERIOD_CLOSED",
-                "CURRENCY_NOT_SUPPORTED"
-            })
-    @DisplayName("processFailed never retries a failure whose cause a retry cannot change")
-    void processFailed_SkipsNonRetryableCodes(String code) {
-        UUID id = UUID.randomUUID();
-        AccountingEvent event = buildEvent(id, AccountingEventStatus.FAILED);
-        event.setAttemptCount(0);
-        event.setFailureReasonCode(code);
-        when(accountingEventRepository.findRetryCandidates(any(), eq(3))).thenReturn(List.of(event));
-
-        int result = service.processFailed(3);
-
-        assertThat(result).isZero();
-        verify(accountingEventRepository, never()).findById(id);
-    }
 
     @Test
     @DisplayName("an INVOICE_PAYMENT handed back to the drainer still writes an attempt-history row")

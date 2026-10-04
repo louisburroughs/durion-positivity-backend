@@ -27,7 +27,6 @@ import com.positivity.accounting.internal.entity.AccountingSequence;
 import com.positivity.accounting.internal.entity.ReprocessingAttemptHistory;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.enums.IdempotencyOutcome;
-import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.enums.ReprocessingOutcome;
 import com.positivity.accounting.internal.exception.EventNotFoundException;
 import com.positivity.accounting.internal.exception.EventNotRetryableException;
@@ -795,73 +794,6 @@ public class EventIngestionServiceImpl implements EventIngestionService {
 
         Page<AccountingEvent> eventPage = accountingEventRepository.findBySourceSystem(sourceSystem, pageable);
         return eventPage.map(AccountingEventMapper::toEventResponse);
-    }
-
-    /**
-     * Process all failed events asynchronously.
-     * Called by scheduled job to retry failed events.
-     *
-     * @param maxRetries maximum retries per record
-     * @return count of records processed
-     */
-    @Override
-    public int processFailed(int maxRetries) {
-        log.info("Processing failed events (max retries: {})", maxRetries);
-
-        int processedCount = 0;
-
-        // Query all FAILED and SUSPENDED events that haven't exceeded max
-        // retries. Events suspended with PERIOD_CLOSED (story B2, issue #944)
-        // or held for their currency, CURRENCY_NOT_SUPPORTED (ADR-0067 PC-9,
-        // issue #2334), are skipped: neither a closed period nor the ledger's
-        // currency changes on the retry cadence, so retrying only burns
-        // attempts. They stay eligible for the audited manual reprocess.
-        List<AccountingEvent> failedEvents = accountingEventRepository
-                .findRetryCandidates(List.of(AccountingEventStatus.FAILED, AccountingEventStatus.SUSPENDED), maxRetries)
-                .stream()
-                .filter(event -> !PostingFailureReason.isExcludedFromAutoRetry(event.getFailureReasonCode()))
-                .toList();
-
-        log.info("Found {} eligible failed/suspended events for retry", failedEvents.size());
-
-        for (AccountingEvent event : failedEvents) {
-            try {
-                int currentAttempt = event.getAttemptCount() != null ? event.getAttemptCount() : 0;
-                log.debug("Retrying event {} (attempt {}/{})", event.getEventId(), currentAttempt + 1, maxRetries);
-
-                // Retry processing through reprocessEvent
-                ReprocessEventRequest request = new ReprocessEventRequest();
-                request.setTriggeredByUserId("SYSTEM_RETRY_JOB");
-                request.setMappingVersionToUse(null); // Use current active mapping
-
-                reprocessEvent(event.getEventId(), request);
-                processedCount++;
-                warnWhenExhausted(event, maxRetries);
-
-            } catch (Exception e) {
-                log.error("Failed to retry event {}: {}", event.getEventId(), e.getMessage(), e);
-                // Continue processing other events even if one fails
-            }
-        }
-
-        log.info("Completed processing {} failed events out of {} candidates", processedCount, failedEvents.size());
-
-        return processedCount;
-    }
-
-    /** WARN once an automatic attempt leaves the event unresolved with no attempts left (#2411). */
-    private void warnWhenExhausted(@NonNull AccountingEvent event, int maxRetries) {
-        boolean unresolved = event.getStatus() == AccountingEventStatus.FAILED
-                || event.getStatus() == AccountingEventStatus.SUSPENDED;
-        if (unresolved && event.getAttemptCount() != null && event.getAttemptCount() >= maxRetries) {
-            log.warn(
-                    "Accounting event {} exhausted its {} automatic retries and stays {} ({}); it needs a manual"
-                            + " reprocess",
-                    event.getEventId(),
-                    maxRetries,
-                    event.getStatus(),
-                    event.getFailureReasonCode());
-        }
     }
 
     /**

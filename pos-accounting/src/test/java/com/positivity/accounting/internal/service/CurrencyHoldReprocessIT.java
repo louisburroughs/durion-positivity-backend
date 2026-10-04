@@ -65,6 +65,9 @@ class CurrencyHoldReprocessIT {
     private EventIngestionService eventIngestionService;
 
     @Autowired
+    private FailedAccountingEventRetryJob retryJob;
+
+    @Autowired
     private AccountingEventRepository accountingEventRepository;
 
     @Autowired
@@ -117,7 +120,7 @@ class CurrencyHoldReprocessIT {
     void autoRetrySkipsTheHold() {
         overShortPostingService.postOverShort(eurShortage(), UUID.randomUUID().toString());
 
-        eventIngestionService.processFailed(3);
+        retryJob.retryBoundTenant();
 
         AccountingEvent held = onlyHeldRecord();
         assertThat(held.getStatus()).isEqualTo(AccountingEventStatus.SUSPENDED);

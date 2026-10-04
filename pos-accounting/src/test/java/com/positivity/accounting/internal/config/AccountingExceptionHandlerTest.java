@@ -408,6 +408,25 @@ class AccountingExceptionHandlerTest {
     }
 
     @Nested
+    @DisplayName("EVENT_NOT_RETRYABLE (#2411)")
+    class EventRetry {
+
+        private final AccountingExceptionHandler handler = new AccountingExceptionHandler(TEST_CLOCK);
+
+        @Test
+        @DisplayName("a retry of a non-FAILED event answers 409 EVENT_NOT_RETRYABLE")
+        void eventNotRetryableIs409() {
+            ResponseEntity<ApiError> response = handler.handleEventNotRetryable(
+                    new EventNotRetryableException("not FAILED"), requestWithoutHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("EVENT_NOT_RETRYABLE");
+            assertThat(response.getBody().status()).isEqualTo(409);
+        }
+    }
+
+    @Nested
     @DisplayName("OPTIMISTIC_LOCK (SPEC-manual-bank-reconciliation §6.3, #2300)")
     class OptimisticLock {
 

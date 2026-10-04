@@ -291,7 +291,8 @@ public class EventIngestionController {
             summary = "Retry Accounting Event Processing",
             description = """
                     Re-runs posting for a FAILED accounting event through the posting engine using its \
-                    original payload and the current rules; the event ends PROCESSED, FAILED or SUSPENDED.
+                    original payload and the current rules; the event ends PROCESSED, FAILED, SUSPENDED or SKIPPED (the engine's terminal \
+                    outcome for an event that posts nothing, e.g. no amount).
                     Use this tool for transient failures; do not use reprocessSuspendedEvent, which is the \
                     audited path for SUSPENDED events after a mapping or rule correction.
                     Preconditions: the event must exist and be in status FAILED; any other status is \
