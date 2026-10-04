@@ -1,12 +1,15 @@
 package com.positivity.catalog.internal.repository;
 
 import com.positivity.catalog.internal.entity.ServiceEntity;
+import com.positivity.catalog.internal.enums.OperationCategory;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -51,5 +54,28 @@ public interface ServiceRepository extends JpaRepository<ServiceEntity, UUID>, J
             var sorted = query.sortBy(BY_ID);
             return (pageable.isUnpaged() ? sorted : sorted.limit(pageable.getPageSize())).all();
         });
+    }
+
+    /**
+     * The capability-picker order: by name, with id as the tiebreak so two services sharing a name
+     * keep a stable position across pages.
+     */
+    Sort BY_NAME = Sort.by(Sort.Order.asc("name"), Sort.Order.asc("id"));
+
+    /**
+     * A page of claimable services (#2246) — those carrying an operation code — filtered by {@link
+     * ClaimableServiceSearch}.
+     *
+     * @param category only this operation category, or null for every category
+     * @param q case-insensitive substring of the name or operation code, or null/blank for none
+     * @param pageable supplies the page number and size only; the order is always {@link #BY_NAME}
+     * @return one page of services, by name
+     */
+    @NonNull
+    default Page<ServiceEntity> findClaimable(
+            @Nullable OperationCategory category, @Nullable String q, @NonNull Pageable pageable) {
+        return findAll(
+                ClaimableServiceSearch.matching(category, q),
+                PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), BY_NAME));
     }
 }

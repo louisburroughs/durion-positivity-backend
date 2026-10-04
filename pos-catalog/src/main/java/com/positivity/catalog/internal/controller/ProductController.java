@@ -20,6 +20,8 @@ import com.positivity.catalog.internal.dto.ProductReplacementRequest;
 import com.positivity.catalog.internal.dto.ProductTrackingLevelUpdateRequestDto;
 import com.positivity.catalog.internal.dto.ProductUpdateRequestDto;
 import com.positivity.catalog.internal.dto.ServiceDto;
+import com.positivity.catalog.internal.dto.ServiceDtoPage;
+import com.positivity.catalog.internal.enums.OperationCategory;
 import com.positivity.catalog.internal.security.CatalogPermissions;
 import com.positivity.catalog.internal.service.CatalogService;
 import com.positivity.catalog.internal.service.LocationPriceOverrideService;
@@ -48,6 +50,8 @@ import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -886,6 +890,61 @@ public class ProductController {
                     @RequestParam(defaultValue = "20")
                     int limit) {
         return ResponseEntity.ok(catalogService.searchServices(q, limit));
+    }
+
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.SERVICE_TYPE_VIEW + "')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"ROLE_ADMIN", CatalogPermissions.SERVICE_TYPE_VIEW})
+    @GetMapping("/services")
+    @Operation(
+            operationId = "listClaimableServices",
+            summary = "List Services Claimable as Capabilities",
+            description = """
+            Returns a page of every catalog service that carries an operation code, ordered by name with id \
+            as the tiebreak, each with its id, name, operationCode and operationCategory.
+            Use this tool to fill a capability picker for a bay's or mobile unit's serviceCapabilityCodes, or \
+            to browse which services exist; use searchCatalogServices instead for typeahead by partial name, \
+            and getServiceById when the id is known.
+            Preconditions: none. Services without an operation code are omitted because they cannot be \
+            claimed; a service has no status, so every service that still exists and has a code is active. \
+            pos-location validates capability codes against an eventually consistent replica of this list, \
+            so a service created moments ago may still be refused there with 422 until its fact arrives.
+            Required inputs: none; operationCategory narrows to one category, q matches a case-insensitive \
+            substring of the name or the operation code, and page and size are optional with size \
+            defaulting to 50 and capped at 200. The order is fixed and there is no sort parameter.
+            No events are emitted and no state changes; this is a read-only projection.
+            Returns 200 with an empty content array when nothing matches, so an empty result is not an error \
+            condition, and 400 when operationCategory is not one of the listed values or page or size is \
+            out of range.
+            """)
+    @ApiResponse(
+            responseCode = "200",
+            description = "A page of claimable services, by name.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ServiceDtoPage.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "An unknown operation category, or a page or page size out of range.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<Page<ServiceDto>> listClaimableServices(
+            @Parameter(description = "Only services of this operation category.") @RequestParam(required = false)
+                    OperationCategory operationCategory,
+            @Parameter(description = "Case-insensitive substring of the service name or operation code.")
+                    @RequestParam(required = false)
+                    String q,
+            @Parameter(description = "Zero-based page index.", schema = @Schema(type = "integer", example = "0"))
+                    @RequestParam(defaultValue = "0")
+                    @Min(0)
+                    int page,
+            @Parameter(
+                            description = "Page size, 1-200.",
+                            schema = @Schema(type = "integer", example = "50", defaultValue = "50"))
+                    @RequestParam(defaultValue = "50")
+                    @Min(1)
+                    @Max(200)
+                    int size) {
+        return ResponseEntity.ok(
+                catalogService.listClaimableServices(operationCategory, q, PageRequest.of(page, size)));
     }
 
     @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.SERVICE_TYPE_VIEW + "')")

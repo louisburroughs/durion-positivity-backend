@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.catalog.internal.config.CatalogFactPublisher;
 import com.positivity.catalog.internal.dto.ServiceDto;
 import com.positivity.catalog.internal.entity.ServiceEntity;
+import com.positivity.catalog.internal.enums.OperationCategory;
 import com.positivity.catalog.internal.repository.CatalogRepository;
 import com.positivity.catalog.internal.repository.NonInventoryProductRepository;
 import com.positivity.catalog.internal.repository.ProductRepository;
@@ -19,6 +20,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 @ExtendWith(MockitoExtension.class)
 class CatalogServiceImplTest {
@@ -89,5 +93,26 @@ class CatalogServiceImplTest {
                 .thenReturn(many);
 
         assertThat(catalogService.searchServices("service", 5)).hasSize(5);
+    }
+
+    @Test
+    void listClaimableServices_mapsCodeAndCategoryAndKeepsPaging() {
+        ServiceEntity rotation = service("Tire rotation");
+        rotation.setOperationCode("TIR-ROT");
+        rotation.setOperationCategory(OperationCategory.TIRE_SERVICE);
+        PageRequest pageable = PageRequest.of(1, 10);
+        when(serviceRepository.findClaimable(OperationCategory.TIRE_SERVICE, "rot", pageable))
+                .thenReturn(new PageImpl<>(List.of(rotation), pageable, 11));
+
+        Page<ServiceDto> result = catalogService.listClaimableServices(OperationCategory.TIRE_SERVICE, "rot", pageable);
+
+        assertThat(result.getTotalElements()).isEqualTo(11);
+        assertThat(result.getNumber()).isEqualTo(1);
+        assertThat(result.getContent()).singleElement().satisfies(dto -> {
+            assertThat(dto.getId()).isEqualTo(rotation.getId());
+            assertThat(dto.getName()).isEqualTo("Tire rotation");
+            assertThat(dto.getOperationCode()).isEqualTo("TIR-ROT");
+            assertThat(dto.getOperationCategory()).isEqualTo("TIRE_SERVICE");
+        });
     }
 }

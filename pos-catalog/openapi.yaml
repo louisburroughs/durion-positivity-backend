@@ -3031,6 +3031,80 @@ paths:
       - Products API
       x-required-permissions:
       - catalog:product:view
+  /v1/products/services:
+    get:
+      description: 'Returns a page of every catalog service that carries an operation code, ordered by name with id as the tiebreak, each with its id, name, operationCode and operationCategory.
+
+        Use this tool to fill a capability picker for a bay''s or mobile unit''s serviceCapabilityCodes, or to browse which services exist; use searchCatalogServices instead for typeahead by partial name, and getServiceById when the id is known.
+
+        Preconditions: none. Services without an operation code are omitted because they cannot be claimed; a service has no status, so every service that still exists and has a code is active. pos-location validates capability codes against an eventually consistent replica of this list, so a service created moments ago may still be refused there with 422 until its fact arrives.
+
+        Required inputs: none; operationCategory narrows to one category, q matches a case-insensitive substring of the name or the operation code, and page and size are optional with size defaulting to 50 and capped at 200. The order is fixed and there is no sort parameter.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty content array when nothing matches, so an empty result is not an error condition, and 400 when operationCategory is not one of the listed values or page or size is out of range.
+
+        '
+      operationId: listClaimableServices
+      parameters:
+      - description: Only services of this operation category.
+        in: query
+        name: operationCategory
+        required: false
+        schema:
+          enum:
+          - REPAIR
+          - DIAGNOSTIC
+          - MAINTENANCE
+          - TIRE_SERVICE
+          type: string
+      - description: Case-insensitive substring of the service name or operation code.
+        in: query
+        name: q
+        required: false
+        schema:
+          type: string
+      - description: Zero-based page index.
+        in: query
+        name: page
+        required: false
+        schema:
+          example: 0
+          minimum: 0
+          type: integer
+      - description: Page size, 1-200.
+        in: query
+        name: size
+        required: false
+        schema:
+          default: 50
+          example: 50
+          maximum: 200
+          minimum: 1
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceDtoPage'
+          description: A page of claimable services, by name.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: An unknown operation category, or a page or page size out of range.
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - catalog:service_type:view
+      summary: List Services Claimable as Capabilities
+      tags:
+      - Products API
+      x-required-permissions:
+      - catalog:service_type:view
   /v1/products/services/name/{name}:
     get:
       description: 'Returns every catalog service whose name equals the supplied value exactly; this is a whole-name match, not a substring search.
@@ -7965,6 +8039,59 @@ components:
         shortDescription:
           description: Short service description
           type: string
+      type: object
+    ServiceDtoPage:
+      description: A page of catalog services
+      properties:
+        content:
+          description: The services on this page
+          items:
+            $ref: '#/components/schemas/ServiceDto'
+          type: array
+        empty:
+          description: Whether this page has no services
+          type: boolean
+        first:
+          description: Whether this is the first page
+          type: boolean
+        last:
+          description: Whether this is the last page
+          type: boolean
+        number:
+          description: Zero-based index of this page
+          example: 0
+          format: int32
+          type: integer
+        numberOfElements:
+          description: Number of services on this page
+          example: 42
+          format: int32
+          type: integer
+        size:
+          description: Requested page size
+          example: 50
+          format: int32
+          type: integer
+        totalElements:
+          description: Total services across all pages
+          example: 42
+          format: int64
+          type: integer
+        totalPages:
+          description: Total number of pages
+          example: 1
+          format: int32
+          type: integer
+      required:
+      - content
+      - empty
+      - first
+      - last
+      - number
+      - numberOfElements
+      - size
+      - totalElements
+      - totalPages
       type: object
     ServiceFactReplayResultDto:
       description: Outcome of one page of a service-fact replay.
