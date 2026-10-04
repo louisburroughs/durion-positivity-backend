@@ -46,8 +46,8 @@ public class CoverageRuleResponse {
     private UUID serviceAreaId;
 
     @Schema(
-            description = "Type of coverage rule. Recorded only, not yet evaluated: eligibility matches on the"
-                    + " rule's service-area postal codes, the unit's status and the validity window.",
+            description = "Type of coverage rule. Recorded only: ruleType itself is not yet evaluated by"
+                    + " eligibility, so a DISTANCE_TIER rule matches the same addresses a SERVICE_AREA rule would.",
             example = "SERVICE_AREA",
             allowableValues = {"SERVICE_AREA", "DISTANCE_TIER"},
             requiredMode = NOT_REQUIRED)
@@ -72,6 +72,8 @@ public class CoverageRuleResponse {
     private Instant validTo;
 
     @Schema(
+            allOf = DistanceDto.class,
+            implementation = Object.class,
             description = "Maximum service distance covered by the rule, in the owning mobile unit's base"
                     + " location's distanceUnit; null for a rule with no distance ceiling. Not yet evaluated:"
                     + " coverage matches on the postal-code service area alone, since geocoding does not exist.",

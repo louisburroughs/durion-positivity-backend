@@ -3460,7 +3460,9 @@ components:
       description: Request payload defining a coverage rule for a mobile unit
       properties:
         maxDistance:
-          $ref: '#/components/schemas/DistanceDto'
+          allOf:
+          - $ref: '#/components/schemas/DistanceDto'
+          description: 'Maximum service distance covered by the rule, an explicit {value, unit} object (KM or MI); converted at the edge and stored as kilometres (DECISION-LOCATION-028). A bare number is refused. Not yet evaluated: coverage matches on the postal-code service area alone, since geocoding does not exist.'
         priority:
           description: Evaluation priority of the rule (lower is evaluated first)
           example: 1
@@ -3468,7 +3470,7 @@ components:
           minimum: 0
           type: integer
         ruleType:
-          description: 'Type of coverage rule, matched case-insensitively. SERVICE_AREA covers the whole service area; DISTANCE_TIER covers it up to maxDistance, and a unit''s DISTANCE_TIER rules must be strictly ascending by maxDistance and end with one rule whose maxDistance is null. Recorded and validated but not yet evaluated: eligibility matches on the rule''s service-area postal codes, the unit''s status and the validity window only.'
+          description: 'Type of coverage rule, matched case-insensitively. SERVICE_AREA covers the whole service area; DISTANCE_TIER covers it up to maxDistance, and a unit''s DISTANCE_TIER rules must be strictly ascending by maxDistance and end with one rule whose maxDistance is null. Recorded and validated, but ruleType itself is not yet evaluated by eligibility: a DISTANCE_TIER rule matches the same addresses a SERVICE_AREA rule would.'
           enum:
           - SERVICE_AREA
           - DISTANCE_TIER
@@ -3503,7 +3505,9 @@ components:
           format: uuid
           type: string
         maxDistance:
-          $ref: '#/components/schemas/DistanceDto'
+          allOf:
+          - $ref: '#/components/schemas/DistanceDto'
+          description: 'Maximum service distance covered by the rule, in the owning mobile unit''s base location''s distanceUnit; null for a rule with no distance ceiling. Not yet evaluated: coverage matches on the postal-code service area alone, since geocoding does not exist.'
         mobileUnitId:
           description: Identifier of the mobile unit this rule belongs to
           example: 01960003-0000-7000-8000-000000000002
@@ -3515,7 +3519,7 @@ components:
           format: int32
           type: integer
         ruleType:
-          description: 'Type of coverage rule. Recorded only, not yet evaluated: eligibility matches on the rule''s service-area postal codes, the unit''s status and the validity window.'
+          description: 'Type of coverage rule. Recorded only: ruleType itself is not yet evaluated by eligibility, so a DISTANCE_TIER rule matches the same addresses a SERVICE_AREA rule would.'
           enum:
           - SERVICE_AREA
           - DISTANCE_TIER
