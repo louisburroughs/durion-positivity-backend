@@ -210,6 +210,13 @@ public class ScrapServiceImpl implements ScrapService {
         String actor = currentActor();
         ScrapRecord scrap = scrapRepository.findById(scrapId).orElseThrow(() -> new ScrapNotFoundException(scrapId));
 
+        // ADR-0061 gate (#2472): after the not-found lookup, so ids cannot be probed, and before
+        // any state change. Approval is held by location-scoped roles (LOCATION_MANAGER,
+        // INVENTORY_MANAGER), so it is gated on the scrap's site — the location createScrap and
+        // getScrap are gated on, so an approver can never post a scrap it could not open. A record
+        // with no location is denied to a scoped approver (fail closed).
+        locationScopeService.require(scrap.getLocationId(), InventoryPermissionRegistry.SCRAP_APPROVE);
+
         // FAILED is approvable: an unexpected posting failure is the retryable case (#2170), and
         // approving again is how it is retried.
         if (scrap.getStatus() != ScrapStatus.PENDING_APPROVAL && scrap.getStatus() != ScrapStatus.FAILED) {
@@ -231,6 +238,9 @@ public class ScrapServiceImpl implements ScrapService {
     public @NonNull ScrapResponse rejectScrap(@NonNull UUID scrapId, @NonNull RejectScrapRequest request) {
         String actor = currentActor();
         ScrapRecord scrap = scrapRepository.findById(scrapId).orElseThrow(() -> new ScrapNotFoundException(scrapId));
+
+        // ADR-0061 gate (#2472): as in approveScrap, after the lookup and before any change.
+        locationScopeService.require(scrap.getLocationId(), InventoryPermissionRegistry.SCRAP_APPROVE);
 
         if (scrap.getStatus() != ScrapStatus.PENDING_APPROVAL) {
             throw new IllegalStateException("Cannot reject scrap in status: " + scrap.getStatus());

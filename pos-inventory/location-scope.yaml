@@ -180,6 +180,14 @@ decisions:
     shape: gate
     permission: inventory:scrap:create
     reason: The required body locationId names the site stock is scrapped from.
+  - operation: ScrapController.approveScrap
+    shape: gate
+    permission: inventory:scrap:approve
+    reason: Gated in the service on the loaded scrap's stored locationId after the not-found lookup and before the status check or any state change (#2472), the location createScrap and getScrap are gated on. Approval is held by location-scoped roles (LOCATION_MANAGER, INVENTORY_MANAGER), so an out-of-reach approver cannot post another site's write-off. A row with no location is denied to a scoped caller (fail closed); global callers are unaffected.
+  - operation: ScrapController.rejectScrap
+    shape: gate
+    permission: inventory:scrap:approve
+    reason: Sibling of approveScrap; gated on the stored locationId after the not-found lookup and before any state change (#2472).
   - operation: ScrapController.listScraps
     shape: narrow
     permission: inventory:scrap:view
