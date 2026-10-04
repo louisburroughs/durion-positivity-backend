@@ -114,7 +114,8 @@ public class BayPatchRequest {
                     + "the type's defaults or customised, so a retype always replaces unsent codes. Each value "
                     + "must be an active catalog operationCode; unknown or retired codes are rejected 422.",
             example = "[\"WHEEL-ALIGNMENT-4-WHEEL\"]",
-            requiredMode = NOT_REQUIRED)
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
     private List<String> serviceCapabilityCodes;
 
     @Schema(

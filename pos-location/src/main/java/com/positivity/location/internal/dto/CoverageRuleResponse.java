@@ -3,6 +3,7 @@ package com.positivity.location.internal.dto;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import java.time.Instant;
@@ -75,8 +76,9 @@ public class CoverageRuleResponse {
             allOf = DistanceDto.class,
             implementation = Object.class,
             description = "Maximum service distance covered by the rule, in the owning mobile unit's base"
-                    + " location's distanceUnit; null for a rule with no distance ceiling. Not yet evaluated by"
+                    + " location's distanceUnit; omitted for a rule with no distance ceiling. Not yet evaluated by"
                     + " eligibility, since geocoding does not exist.",
             requiredMode = NOT_REQUIRED)
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     private DistanceDto maxDistance;
 }

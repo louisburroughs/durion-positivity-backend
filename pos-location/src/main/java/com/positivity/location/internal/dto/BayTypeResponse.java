@@ -70,7 +70,8 @@ public class BayTypeResponse {
         @Schema(
                 description = "Catalog service name as replicated from pos-catalog; null when the catalog service"
                         + " carries no name",
-                example = "4-Wheel Alignment")
+                example = "4-Wheel Alignment",
+                nullable = true)
         private String name;
     }
 }

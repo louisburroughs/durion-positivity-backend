@@ -3128,7 +3128,9 @@ components:
           - WHEEL-ALIGNMENT-4-WHEEL
           items:
             type: string
-          type: array
+          type:
+          - array
+          - 'null'
         status:
           description: 'Operational status of the bay: ACTIVE, OUT_OF_SERVICE or RETIRED. Going OUT_OF_SERVICE requires outOfServiceReason in this same request or already on the bay; returning to ACTIVE clears outOfServiceReason, outOfServiceNote and expectedReturnAt. DELETE is the usual way to RETIRE a bay; RETIRED here is reversible the same as OUT_OF_SERVICE.'
           enum:
@@ -3199,7 +3201,9 @@ components:
           - WHEEL-ALIGNMENT-4-WHEEL
           items:
             type: string
-          type: array
+          type:
+          - array
+          - 'null'
         status:
           description: 'Operational status of the bay: ACTIVE, OUT_OF_SERVICE or RETIRED; defaults to ACTIVE.'
           enum:
@@ -3300,7 +3304,9 @@ components:
         name:
           description: Catalog service name as replicated from pos-catalog; null when the catalog service carries no name
           example: 4-Wheel Alignment
-          type: string
+          type:
+          - string
+          - 'null'
         operationCode:
           description: Catalog operation code (UPPER-DASH, ADR-0059)
           example: WHEEL-ALIGNMENT-4-WHEEL
@@ -3597,7 +3603,7 @@ components:
         maxDistance:
           allOf:
           - $ref: '#/components/schemas/DistanceDto'
-          description: Maximum service distance covered by the rule, in the owning mobile unit's base location's distanceUnit; null for a rule with no distance ceiling. Not yet evaluated by eligibility, since geocoding does not exist.
+          description: Maximum service distance covered by the rule, in the owning mobile unit's base location's distanceUnit; omitted for a rule with no distance ceiling. Not yet evaluated by eligibility, since geocoding does not exist.
         mobileUnitId:
           description: Identifier of the mobile unit this rule belongs to
           example: 01960003-0000-7000-8000-000000000002
