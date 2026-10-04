@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.service;
 
 import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -17,6 +18,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -57,6 +59,7 @@ class CatalogManifestListenerTest {
 
     @BeforeEach
     void setUp() {
+        when(kafkaTemplate.send(any(ProducerRecord.class))).thenReturn(CompletableFuture.completedFuture(null));
         when(meterRegistryProvider.getIfAvailable()).thenReturn(meterRegistry);
         listener = new CatalogManifestListener(repository, kafkaTemplate, objectMapper, meterRegistryProvider);
         ReflectionTestUtils.setField(listener, "catalogCommandsTopic", COMMANDS_TOPIC);
@@ -175,13 +178,16 @@ class CatalogManifestListenerTest {
     }
 
     @Test
-    @DisplayName("A failed replay publish is swallowed — drift metric already fired, next manifest re-detects")
-    void failedReplayPublishIsSwallowed() {
+    @DisplayName("A failed replay publish propagates so the container redelivers the manifest (#2452)")
+    void failedReplayPublishPropagates() {
         when(repository.findEventIdsInRange(eq("catalog"), eq(TENANT_A), anyString(), anyString()))
                 .thenReturn(List.of());
         when(kafkaTemplate.send(any(ProducerRecord.class))).thenThrow(new RuntimeException("broker down"));
 
-        listener.onManifest(manifestMessage(1, ReconciliationManifestV1.checksumOf(List.of(IN_WINDOW_ID_1))));
+        assertThatThrownBy(() -> listener.onManifest(
+                        manifestMessage(1, ReconciliationManifestV1.checksumOf(List.of(IN_WINDOW_ID_1)))))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("broker down");
 
         assertThat(driftCount()).isEqualTo(1.0);
     }
