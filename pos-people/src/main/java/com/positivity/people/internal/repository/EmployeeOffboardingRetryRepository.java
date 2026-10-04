@@ -9,6 +9,7 @@ import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -33,11 +34,18 @@ public interface EmployeeOffboardingRetryRepository extends JpaRepository<Employ
             @NonNull Instant now, int maxAttempts);
 
     /**
+     * Drops every pending row of the employee, so a new offboarding supersedes earlier ones (#2418).
+     * A bulk delete, not a derived one: it waits on a row the worker holds {@link
+     * #findByIdForUpdate for update} and skips a row the worker settled meanwhile, where a derived
+     * delete would fail the status change with a stale-state exception.
+     */
+    @Modifying
+    @Query("delete from EmployeeOffboardingRetry r where r.employeeId = :employeeId")
+    int deleteByEmployeeId(@Param("employeeId") @NonNull UUID employeeId);
+
+    /**
      * Rows that have used up their attempts and wait for an operator; drives the
      * {@code people.offboarding.retry.exhausted} gauge.
      */
-    /** Drops every pending row of the employee, so a new offboarding supersedes earlier ones (#2418). */
-    void deleteByEmployeeId(@NonNull UUID employeeId);
-
     long countByAttemptsGreaterThanEqual(int maxAttempts);
 }
