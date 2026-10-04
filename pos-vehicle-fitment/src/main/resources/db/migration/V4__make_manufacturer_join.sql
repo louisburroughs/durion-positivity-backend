@@ -52,37 +52,36 @@ FROM public.part_fitment_entity p
 WHERE p.vehicle_make_id IS NOT NULL AND p.vehicle_manufacturer_id IS NOT NULL
 ON CONFLICT DO NOTHING;
 
-UPDATE public.model x SET make_id = f.keep_id FROM make_fold f WHERE x.make_id = f.dup_id;
-UPDATE public.vehicle_type x SET make_id = f.keep_id FROM make_fold f WHERE x.make_id = f.dup_id;
-
--- Models and vehicle types that now share a make and a name: keep the lowest id, repoint fitments.
+-- Models and vehicle types are unique per make and name (ux_model_make_name_lower,
+-- ux_vehicle_type_make_name_lower), so rows that would share a folded make and a name are merged BEFORE they
+-- move: keep the lowest id, repoint the fitments that reference the others, then delete the others.
 CREATE TEMPORARY TABLE model_fold ON COMMIT DROP AS
-SELECT x.id AS dup_id, k.keep_id
-FROM public.model x
-JOIN (
-    SELECT make_id, lower(name) AS lname, (array_agg(id ORDER BY id))[1] AS keep_id
-    FROM public.model
-    WHERE make_id IS NOT NULL
-    GROUP BY make_id, lower(name)
-    HAVING count(*) > 1
-) k ON k.make_id = x.make_id AND k.lname = lower(x.name)
-WHERE x.id <> k.keep_id;
+SELECT g.id AS dup_id, g.keep_id
+FROM (
+    SELECT x.id,
+           (array_agg(x.id) OVER (PARTITION BY COALESCE(f.keep_id, x.make_id), lower(x.name) ORDER BY x.id))[1] AS keep_id
+    FROM public.model x
+    LEFT JOIN make_fold f ON f.dup_id = x.make_id
+    WHERE x.make_id IS NOT NULL
+) g
+WHERE g.id <> g.keep_id;
 UPDATE public.part_fitment_entity p SET vehicle_model_id = f.keep_id FROM model_fold f WHERE p.vehicle_model_id = f.dup_id;
 DELETE FROM public.model x USING model_fold f WHERE x.id = f.dup_id;
+UPDATE public.model x SET make_id = f.keep_id FROM make_fold f WHERE x.make_id = f.dup_id;
 
 CREATE TEMPORARY TABLE vehicle_type_fold ON COMMIT DROP AS
-SELECT x.id AS dup_id, k.keep_id
-FROM public.vehicle_type x
-JOIN (
-    SELECT make_id, lower(vehicle_type_name) AS lname, (array_agg(id ORDER BY id))[1] AS keep_id
-    FROM public.vehicle_type
-    WHERE make_id IS NOT NULL
-    GROUP BY make_id, lower(vehicle_type_name)
-    HAVING count(*) > 1
-) k ON k.make_id = x.make_id AND k.lname = lower(x.vehicle_type_name)
-WHERE x.id <> k.keep_id;
+SELECT g.id AS dup_id, g.keep_id
+FROM (
+    SELECT x.id,
+           (array_agg(x.id) OVER (PARTITION BY COALESCE(f.keep_id, x.make_id), lower(x.vehicle_type_name) ORDER BY x.id))[1] AS keep_id
+    FROM public.vehicle_type x
+    LEFT JOIN make_fold f ON f.dup_id = x.make_id
+    WHERE x.make_id IS NOT NULL
+) g
+WHERE g.id <> g.keep_id;
 UPDATE public.part_fitment_entity p SET vehicle_type_id = f.keep_id FROM vehicle_type_fold f WHERE p.vehicle_type_id = f.dup_id;
 DELETE FROM public.vehicle_type x USING vehicle_type_fold f WHERE x.id = f.dup_id;
+UPDATE public.vehicle_type x SET make_id = f.keep_id FROM make_fold f WHERE x.make_id = f.dup_id;
 
 DELETE FROM public.make m USING make_fold f WHERE m.id = f.dup_id;
 
