@@ -18,7 +18,6 @@ public abstract class BaseContractIntegrationTest {
                         String.join(
                                 ",",
                                 "inventory:on_hand:view",
-                                "inventory:on_hand:search",
                                 // ADR-0066 (#1494): availability is gated separately from on-hand.
                                 "inventory:availability:read",
                                 "inventory:availability:search",

@@ -34,7 +34,6 @@ public class TestSecurityConfig {
 
     private static final List<SimpleGrantedAuthority> TEST_AUTHORITIES = List.of(
             new SimpleGrantedAuthority("inventory:on_hand:view"),
-            new SimpleGrantedAuthority("inventory:on_hand:search"),
             // ADR-0066 (#1494): availability is gated separately from on-hand.
             new SimpleGrantedAuthority("inventory:availability:read"),
             new SimpleGrantedAuthority("inventory:availability:search"),

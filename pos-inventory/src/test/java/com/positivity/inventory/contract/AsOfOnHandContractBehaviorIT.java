@@ -53,18 +53,14 @@ class AsOfOnHandContractBehaviorIT extends BaseContractIntegrationTest {
      * {@code inventory:ledger:view} — which is what isolates the as-of gate: a request that
      * still 403s here failed on ledger-view alone, not on a missing read authority.
      *
-     * <p>That means both permission families, because these tests span both kinds of endpoint:
-     * the location-inquiry reads take {@code inventory:on_hand:*} (the stock record), while
-     * {@code /availability/{productId}} takes {@code inventory:availability:search} (the derived
-     * projection) since ADR-0066, #1494.
+     * <p>This grants the availability permission family, because these tests use the
+     * {@code /availability/{productId}} endpoint, which requires {@code inventory:availability:search}
+     * (the derived projection) since ADR-0066, #1494.
      */
     private MockHttpServletRequestBuilder withoutLedgerViewAuth(MockHttpServletRequestBuilder requestBuilder) {
         return requestBuilder
                 .header("X-User", "contract-test-user")
-                .header(
-                        "X-Authorities",
-                        "inventory:on_hand:view,inventory:on_hand:search,"
-                                + "inventory:availability:read,inventory:availability:search");
+                .header("X-Authorities", "inventory:availability:read,inventory:availability:search");
     }
 
     @Test

@@ -119,6 +119,56 @@ class RetiredPermissionGrantsTest {
                 .isEmpty();
     }
 
+    @Test
+    @DisplayName("pos-inventory test fixtures do not grant deprecated codes")
+    void posInventoryFixturesGrantNoDeprecatedCodes() throws IOException {
+        Set<String> offending = new TreeSet<>();
+
+        // Find the inventory module relative to current working directory
+        Path projectRoot = Path.of(System.getProperty("user.dir")).getParent();
+        Path inventoryModule = projectRoot.resolve("pos-inventory");
+
+        // Check BaseContractIntegrationTest
+        Path baseContractTest = inventoryModule.resolve(
+                "src/test/java/com/positivity/inventory/contract/BaseContractIntegrationTest.java");
+        if (Files.exists(baseContractTest)) {
+            String baseContractContent = Files.readString(baseContractTest, StandardCharsets.UTF_8);
+            for (String code : retired) {
+                if (baseContractContent.contains("\"" + code + "\"")) {
+                    offending.add("BaseContractIntegrationTest: " + code);
+                }
+            }
+        }
+
+        // Check TestSecurityConfig
+        Path testSecurityConfig =
+                inventoryModule.resolve("src/test/java/com/positivity/inventory/config/TestSecurityConfig.java");
+        if (Files.exists(testSecurityConfig)) {
+            String testSecurityContent = Files.readString(testSecurityConfig, StandardCharsets.UTF_8);
+            for (String code : retired) {
+                if (testSecurityContent.contains("\"" + code + "\"")) {
+                    offending.add("TestSecurityConfig: " + code);
+                }
+            }
+        }
+
+        // Check AsOfOnHandContractBehaviorIT
+        Path asOfOnHandTest = inventoryModule.resolve(
+                "src/test/java/com/positivity/inventory/contract/AsOfOnHandContractBehaviorIT.java");
+        if (Files.exists(asOfOnHandTest)) {
+            String asOfOnHandContent = Files.readString(asOfOnHandTest, StandardCharsets.UTF_8);
+            for (String code : retired) {
+                if (asOfOnHandContent.contains("\"" + code + "\"")) {
+                    offending.add("AsOfOnHandContractBehaviorIT: " + code);
+                }
+            }
+        }
+
+        assertThat(offending)
+                .as("pos-inventory test fixtures must not grant deprecated codes (#2456)")
+                .isEmpty();
+    }
+
     private static boolean isDeprecated(PermissionCode permission) {
         try {
             return PermissionCode.class.getField(permission.name()).isAnnotationPresent(Deprecated.class);
