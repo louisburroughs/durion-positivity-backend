@@ -36,5 +36,8 @@ public interface EmployeeOffboardingRetryRepository extends JpaRepository<Employ
      * Rows that have used up their attempts and wait for an operator; drives the
      * {@code people.offboarding.retry.exhausted} gauge.
      */
+    /** Drops every pending row of the employee, so a new offboarding supersedes earlier ones (#2418). */
+    void deleteByEmployeeId(@NonNull UUID employeeId);
+
     long countByAttemptsGreaterThanEqual(int maxAttempts);
 }

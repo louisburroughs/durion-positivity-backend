@@ -232,9 +232,9 @@ class EmployeeUpdateOffboardingIT extends BaseContractIntegrationTest {
     }
 
     @Test
-    @DisplayName("DISABLED with a grace period, then TERMINATED through updateEmployee: already offboarded, so"
-            + " the grace-dated assignment is left to its date")
-    void terminatingAnAlreadyDisabledEmployeeKeepsTheGracePeriod() throws Exception {
+    @DisplayName("DISABLED with a grace period, then TERMINATED through updateEmployee: the termination is a new"
+            + " IMMEDIATE offboarding that cuts the grace period short (#2418)")
+    void terminatingAnAlreadyDisabledEmployeeCutsTheGracePeriodShort() throws Exception {
         UUID employeeId = createEmployee("EMP-2361-007", "employee.2361.007@example.com");
         UUID assignmentId = createAssignment(employeeId, null);
         LocalDate graceEnd = today().plusDays(14);
@@ -247,10 +247,39 @@ class EmployeeUpdateOffboardingIT extends BaseContractIntegrationTest {
 
         update(employeeId, "EMP-2361-007", "employee.2361.007@example.com", EmployeeStatus.TERMINATED);
 
-        // Once, for the disable.
-        verify(offboardingEventListener, times(1)).onEmployeeOffboarded(any());
+        // Once for the disable, once for the termination.
+        verify(offboardingEventListener, times(2)).onEmployeeOffboarded(any());
+        verify(assignmentEnder).apply(employeeId, AssignmentTerminationPolicy.IMMEDIATE, null, TEST_USER);
         assertThat(retryRepository.count()).isZero();
-        assertActiveUntil(assignmentId, graceEnd);
+        EmployeeLocationAssignment ended =
+                assignmentRepository.findById(assignmentId).orElseThrow();
+        assertThat(ended.getStatus()).isEqualTo(AssignmentStatus.ENDED);
+        assertThat(ended.getEffectiveTo()).isEqualTo(today());
+    }
+
+    @Test
+    @DisplayName("Disable, re-enable, disable with the handler never running: only the newest policy's row is"
+            + " left (#2418)")
+    void aNewOffboardingSupersedesTheEarlierPendingRow() throws Exception {
+        UUID employeeId = createEmployee("EMP-2418-001", "employee.2418.001@example.com");
+        createAssignment(employeeId, null);
+        doNothing().when(offboardingEventListener).onEmployeeOffboarded(any());
+        mockMvc.perform(withAuth(post("/v1/people/employees/{employeeId}/disable", employeeId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"assignmentPolicy\": \"IMMEDIATE\"}")))
+                .andExpect(status().isOk());
+        update(employeeId, "EMP-2418-001", "employee.2418.001@example.com", EmployeeStatus.ACTIVE);
+        assertThat(retryRepository.count()).isEqualTo(1);
+        LocalDate graceEnd = today().plusDays(14);
+        mockMvc.perform(withAuth(post("/v1/people/employees/{employeeId}/disable", employeeId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"assignmentPolicy\": \"GRACE_PERIOD\", \"assignmentEndDate\": \"%s\"}"
+                                .formatted(graceEnd))))
+                .andExpect(status().isOk());
+
+        EmployeeOffboardingRetry row = onlyQueueRow();
+        assertThat(row.getAssignmentPolicy()).isEqualTo(AssignmentTerminationPolicy.GRACE_PERIOD);
+        assertThat(row.getAssignmentEndDate()).isEqualTo(graceEnd);
     }
 
     @Test

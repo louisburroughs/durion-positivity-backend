@@ -233,10 +233,14 @@ public class EmployeeServiceImpl implements EmployeeService {
         // A status that moves into TERMINATED or DISABLED here is an offboarding as much as
         // disableEmployee is (#2361), and this request carries no policy, so it is an IMMEDIATE
         // one: every active assignment ends now, dated ones included. Only the move into an
-        // offboarded status counts. An employee who already was offboarded had their assignments
-        // dealt with by that offboarding (a GRACE_PERIOD disable's are deliberately still ACTIVE),
-        // and an employment row this update has just created has no assignments to end.
-        if (existingEmployee && !isOffboarded(previousStatus) && isOffboarded(request.getStatus())) {
+        // offboarded status counts, with one exception (#2418): a move into TERMINATED from any
+        // other status is always an offboarding, so terminating an already DISABLED employee cuts a
+        // GRACE_PERIOD short. Otherwise an employee who already was offboarded had their assignments
+        // dealt with by that offboarding, and an employment row this update has just created has no
+        // assignments to end.
+        boolean terminating =
+                request.getStatus() == EmployeeStatus.TERMINATED && previousStatus != EmployeeStatus.TERMINATED;
+        if (existingEmployee && (terminating || (!isOffboarded(previousStatus) && isOffboarded(request.getStatus())))) {
             queueOffboarding(
                     employeeId,
                     AssignmentTerminationPolicy.IMMEDIATE,
@@ -852,6 +856,9 @@ public class EmployeeServiceImpl implements EmployeeService {
             @NonNull AssignmentTerminationPolicy policy,
             @Nullable LocalDate assignmentEndDate,
             @Nullable String reason) {
+        // Only the newest offboarding's policy may survive (#2418): a disable, re-enable, disable
+        // sequence must not leave the first disable's pending policy to be applied later.
+        employeeOffboardingRetryRepository.deleteByEmployeeId(employeeId);
         EmployeeOffboardingRetry retry = new EmployeeOffboardingRetry();
         retry.setEmployeeId(employeeId);
         retry.setAssignmentPolicy(policy);
