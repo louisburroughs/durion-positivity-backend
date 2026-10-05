@@ -20,6 +20,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.listener.MessageListenerContainer;
+import org.springframework.util.backoff.BackOffExecution;
 import org.springframework.util.backoff.FixedBackOff;
 
 class KafkaErrorHandlingConfigTest {
@@ -37,6 +38,21 @@ class KafkaErrorHandlingConfigTest {
     }
 
     @Test
+    @DisplayName("Production backoff is 1s doubling, capped at 30s, then stops after 5 retries")
+    void productionBackOffSequence() {
+        BackOffExecution execution = KafkaErrorHandlingConfig.backOff().start();
+
+        assertThat(List.of(
+                        execution.nextBackOff(),
+                        execution.nextBackOff(),
+                        execution.nextBackOff(),
+                        execution.nextBackOff(),
+                        execution.nextBackOff()))
+                .containsExactly(1000L, 2000L, 4000L, 8000L, 16000L);
+        assertThat(execution.nextBackOff()).isEqualTo(BackOffExecution.STOP);
+    }
+
+    @Test
     @DisplayName("A listener exception is retried, then the record is published to {topic}.dlq")
     @SuppressWarnings({"unchecked", "rawtypes"})
     void retriesThenDeadLetters() {
@@ -44,13 +60,13 @@ class KafkaErrorHandlingConfigTest {
         when(template.send(any(ProducerRecord.class))).thenReturn(CompletableFuture.completedFuture(null));
         DefaultErrorHandler handler = new KafkaErrorHandlingConfig().kafkaErrorHandler(template);
         // Same recoverer and classification, but no wall-clock backoff so the test runs instantly.
-        handler.setBackOffFunction((rec, ex) -> new FixedBackOff(0L, 5L));
+        handler.setBackOffFunction((rec, ex) -> new FixedBackOff(0L, KafkaErrorHandlingConfig.MAX_ATTEMPTS));
         ConsumerRecord<String, String> record = new ConsumerRecord<>("workorder.events.v1", 0, 7L, "k", "v");
         Consumer<?, ?> consumer = mock(Consumer.class);
         MessageListenerContainer container = mock(MessageListenerContainer.class);
         RuntimeException failure = new IllegalStateException("handler failed");
 
-        for (int attempt = 1; attempt <= 5; attempt++) {
+        for (int attempt = 1; attempt <= KafkaErrorHandlingConfig.MAX_ATTEMPTS; attempt++) {
             assertThatThrownBy(() -> handler.handleRemaining(failure, List.of(record), consumer, container))
                     .hasMessageContaining("Record in retry");
             verify(template, never()).send(any(ProducerRecord.class));
