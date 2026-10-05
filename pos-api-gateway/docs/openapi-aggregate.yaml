@@ -1335,6 +1335,8 @@ paths:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1audit~1exports
   /v1/audit/exports/{jobId}:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1audit~1exports~1{jobId}
+  /v1/audit/exports/{jobId}/download:
+    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1audit~1exports~1{jobId}~1download
   /v1/audit/pricing-snapshots:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1audit~1pricing-snapshots
   /v1/audit/pricing-snapshots/{snapshotId}:
