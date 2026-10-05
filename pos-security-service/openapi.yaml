@@ -427,7 +427,7 @@ paths:
 
         Use this tool for bulk extraction of audit data as a file; use searchAuditEvents instead for interactive paged queries.
 
-        Preconditions: the caller must hold security:audit:export; jobs are persisted per tenant and run in the background once the request commits.
+        Preconditions: the caller must hold security:audit:export; jobs are persisted per tenant, run in the background once the request commits, and are deleted with their file after the configured retention period.
 
         Required inputs: format (CSV or JSON) and deliveryMode, which must be DOWNLOAD; filters is optional and scopes the export with the same criteria as searchAuditEvents.
 
@@ -494,15 +494,15 @@ paths:
 
         Required inputs: jobId (UUID) as a path parameter.
 
-        No events are emitted; the only state change is that a job left PENDING or IN_PROGRESS past the configured timeout, for example by a service restart, is marked FAILED as interrupted so a poll never waits forever.
+        This is a read-only status projection that emits no events; a job interrupted by a service restart is moved to FAILED by a scheduled sweep once the configured timeout passes, so a poll never waits forever.
 
-        Returns 404 when the job id is unknown to the caller''s tenant.
+        Returns 404 when the job id is unknown to the caller''s tenant or the job was purged after the configured retention period (seven days by default).
 
         '
       operationId: getAuditExportJob
       parameters:
       - description: Export job UUID
-        example: 550e8400-e29b-41d4-a716-446655440000
+        example: 01960000-0000-7000-8000-000000000001
         in: path
         name: jobId
         required: true
@@ -559,13 +559,13 @@ paths:
 
         Emits a SECURITY_AUDIT_EXPORT_DOWNLOAD event and changes no state; CSV cells that begin with a formula character are prefixed with a single quote so spreadsheets do not evaluate them.
 
-        Returns 409 AUDIT_EXPORT_NOT_READY while the job is PENDING, IN_PROGRESS or FAILED, and 404 when the job id is unknown to the caller''s tenant.
+        Returns 409 AUDIT_EXPORT_NOT_READY while the job is PENDING, IN_PROGRESS or FAILED, and 404 when the job id is unknown to the caller''s tenant or the job was purged after the retention period.
 
         '
       operationId: downloadAuditExport
       parameters:
       - description: Export job UUID
-        example: 550e8400-e29b-41d4-a716-446655440000
+        example: 01960000-0000-7000-8000-000000000001
         in: path
         name: jobId
         required: true
@@ -5139,7 +5139,7 @@ components:
           type: string
         downloadUrl:
           description: Gateway-relative path that downloads the export file with the same security:audit:export authority (null until COMPLETED)
-          example: /security-service/v1/audit/exports/550e8400-e29b-41d4-a716-446655440000/download
+          example: /security-service/v1/audit/exports/01960000-0000-7000-8000-000000000001/download
           type: string
         errorMessage:
           description: Error message when status is FAILED
@@ -5154,7 +5154,7 @@ components:
           type: string
         jobId:
           description: Export job UUID
-          example: 550e8400-e29b-41d4-a716-446655440000
+          example: 01960000-0000-7000-8000-000000000001
           format: uuid
           type: string
         requestedAt:

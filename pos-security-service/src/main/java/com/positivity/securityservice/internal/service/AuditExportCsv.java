@@ -21,35 +21,39 @@ final class AuditExportCsv {
 
     private AuditExportCsv() {}
 
+    /** The header line, CRLF-terminated. */
+    @NonNull
+    static String headerLine() {
+        return HEADER + LINE_END;
+    }
+
+    /** One event as a CRLF-terminated line. */
+    @NonNull
+    static String row(@NonNull AuditLogEventDto event) {
+        return String.join(
+                        ",",
+                        cell(
+                                event.getEventId() == null
+                                        ? null
+                                        : event.getEventId().toString()),
+                        cell(
+                                event.getTimestamp() == null
+                                        ? null
+                                        : event.getTimestamp().toString()),
+                        cell(event.getEventType()),
+                        cell(event.getActorId()),
+                        cell(event.getEntityId()),
+                        cell(event.getEntityType()),
+                        cell(event.getOldValue()),
+                        cell(event.getNewValue()),
+                        cell(event.getContext()))
+                + LINE_END;
+    }
+
     @NonNull
     static String render(@NonNull List<AuditLogEventDto> events) {
-        StringBuilder out = new StringBuilder(HEADER).append(LINE_END);
-        for (AuditLogEventDto event : events) {
-            out.append(cell(
-                            event.getEventId() == null
-                                    ? null
-                                    : event.getEventId().toString()))
-                    .append(',')
-                    .append(cell(
-                            event.getTimestamp() == null
-                                    ? null
-                                    : event.getTimestamp().toString()))
-                    .append(',')
-                    .append(cell(event.getEventType()))
-                    .append(',')
-                    .append(cell(event.getActorId()))
-                    .append(',')
-                    .append(cell(event.getEntityId()))
-                    .append(',')
-                    .append(cell(event.getEntityType()))
-                    .append(',')
-                    .append(cell(event.getOldValue()))
-                    .append(',')
-                    .append(cell(event.getNewValue()))
-                    .append(',')
-                    .append(cell(event.getContext()))
-                    .append(LINE_END);
-        }
+        StringBuilder out = new StringBuilder(headerLine());
+        events.forEach(event -> out.append(row(event)));
         return out.toString();
     }
 

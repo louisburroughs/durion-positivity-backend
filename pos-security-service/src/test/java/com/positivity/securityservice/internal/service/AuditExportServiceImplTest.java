@@ -3,6 +3,13 @@ package com.positivity.securityservice.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.RETURNS_SELF;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -32,6 +39,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,31 +47,46 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.function.Function;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor.SpecificationFluentQuery;
 import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
+/**
+ * The repositories are in-memory fakes that honour the status-conditional updates the way the
+ * JPQL does, and the audit-event "table" hands out keyset pages of at most the requested limit, so
+ * the paging, the caps and the worker/sweep races are exercised as the database would see them.
+ */
 @DisplayName("AuditExportServiceImpl - persisted, tenant-scoped audit exports (#2408)")
 class AuditExportServiceImplTest {
 
     private static final Instant NOW = Instant.parse("2026-10-05T12:00:00Z");
+    private static final AuditExportProperties DEFAULTS = new AuditExportProperties(
+            100, 1_000_000, Duration.ofMinutes(30), Duration.ofDays(7), Duration.ofMinutes(5));
 
     private final ObjectMapper objectMapper = JsonMapper.builder().build();
     private final Map<UUID, AuditExportJob> jobs = new HashMap<>();
     private final Map<UUID, AuditExportFile> files = new HashMap<>();
     private final List<Runnable> queued = new ArrayList<>();
+    /** The audit_log_events rows in event-id order, and how far the export's keyset cursor has read. */
+    private final List<AuditLogEvent> events = new ArrayList<>();
+
+    private final List<Integer> requestedLimits = new ArrayList<>();
+    private int cursor;
+    private Runnable afterEachPage = () -> {};
 
     private AuditExportJobRepository jobRepository;
     private AuditExportFileRepository fileRepository;
     private AuditLogEventRepository auditLogEventRepository;
 
     @BeforeEach
+    @SuppressWarnings("unchecked")
     void setUp() {
         jobRepository = mock(AuditExportJobRepository.class);
         fileRepository = mock(AuditExportFileRepository.class);
@@ -77,44 +100,140 @@ class AuditExportServiceImplTest {
             return job;
         });
         when(jobRepository.findByJobId(any())).thenAnswer(inv -> Optional.ofNullable(jobs.get(inv.getArgument(0))));
+        when(jobRepository.markInProgress(any(), any()))
+                .thenAnswer(inv -> transition(inv.getArgument(0), List.of(AuditExportStatus.PENDING), job -> {
+                    job.setStatus(AuditExportStatus.IN_PROGRESS);
+                    job.setStartedAt(inv.getArgument(1));
+                }));
+        when(jobRepository.markCompleted(any(), anyLong(), any()))
+                .thenAnswer(inv -> transition(inv.getArgument(0), List.of(AuditExportStatus.IN_PROGRESS), job -> {
+                    job.setStatus(AuditExportStatus.COMPLETED);
+                    job.setRowCount(inv.getArgument(1));
+                    job.setCompletedAt(inv.getArgument(2));
+                }));
+        when(jobRepository.markFailed(any(), anyCollection(), anyString(), any()))
+                .thenAnswer(inv -> transition(
+                        inv.getArgument(0),
+                        inv.getArgument(1),
+                        job -> fail(job, inv.getArgument(2), inv.getArgument(3))));
+        when(jobRepository.failRequestedBefore(anyCollection(), any(), anyString(), any()))
+                .thenAnswer(inv -> {
+                    Collection<AuditExportStatus> from = inv.getArgument(0);
+                    Instant cutoff = inv.getArgument(1);
+                    int changed = 0;
+                    for (AuditExportJob job : jobs.values()) {
+                        if (from.contains(job.getStatus())
+                                && job.getRequestedAt().isBefore(cutoff)) {
+                            fail(job, inv.getArgument(2), inv.getArgument(3));
+                            changed++;
+                        }
+                    }
+                    return changed;
+                });
+        when(jobRepository.deleteExpired(any())).thenAnswer(inv -> {
+            Instant cutoff = inv.getArgument(0);
+            List<UUID> expired = jobs.values().stream()
+                    .filter(job -> (job.getCompletedAt() != null ? job.getCompletedAt() : job.getRequestedAt())
+                            .isBefore(cutoff))
+                    .map(AuditExportJob::getJobId)
+                    .toList();
+            expired.forEach(jobs::remove);
+            return expired.size();
+        });
         when(fileRepository.save(any(AuditExportFile.class))).thenAnswer(inv -> {
             AuditExportFile file = inv.getArgument(0);
             files.put(file.getJobId(), file);
             return file;
         });
         when(fileRepository.findByJobId(any())).thenAnswer(inv -> Optional.ofNullable(files.get(inv.getArgument(0))));
+        when(fileRepository.deleteForExpiredJobs(any())).thenAnswer(inv -> {
+            Instant cutoff = inv.getArgument(0);
+            List<UUID> doomed = files.keySet().stream()
+                    .filter(id -> jobs.containsKey(id)
+                            && (jobs.get(id).getCompletedAt() != null
+                                            ? jobs.get(id).getCompletedAt()
+                                            : jobs.get(id).getRequestedAt())
+                                    .isBefore(cutoff))
+                    .toList();
+            doomed.forEach(files::remove);
+            return doomed.size();
+        });
+        doAnswer(inv -> {
+                    SpecificationFluentQuery<AuditLogEvent> query = mock(SpecificationFluentQuery.class, RETURNS_SELF);
+                    List<List<AuditLogEvent>> served = new ArrayList<>();
+                    doAnswer(limitInv -> {
+                                int limit = limitInv.getArgument(0);
+                                requestedLimits.add(limit);
+                                served.add(
+                                        List.copyOf(events.subList(cursor, Math.min(events.size(), cursor + limit))));
+                                cursor += served.getLast().size();
+                                afterEachPage.run();
+                                return query;
+                            })
+                            .when(query)
+                            .limit(anyInt());
+                    doAnswer(allInv -> served.getLast()).when(query).all();
+                    Function<SpecificationFluentQuery<AuditLogEvent>, ?> fn = inv.getArgument(1);
+                    return fn.apply(query);
+                })
+                .when(auditLogEventRepository)
+                .findBy(any(Specification.class), any(Function.class));
     }
 
-    private AuditExportServiceImpl service(Executor executor, Clock clock, int maxRows) {
+    private int transition(
+            UUID jobId, Collection<AuditExportStatus> from, java.util.function.Consumer<AuditExportJob> to) {
+        AuditExportJob job = jobs.get(jobId);
+        if (job == null || !from.contains(job.getStatus())) {
+            return 0;
+        }
+        to.accept(job);
+        return 1;
+    }
+
+    private static void fail(AuditExportJob job, String message, Instant at) {
+        job.setStatus(AuditExportStatus.FAILED);
+        job.setErrorMessage(message);
+        job.setCompletedAt(at);
+    }
+
+    private AuditExportServiceImpl service(Executor executor, Clock clock, AuditExportProperties properties) {
         return new AuditExportServiceImpl(
                 jobRepository,
                 fileRepository,
                 auditLogEventRepository,
                 objectMapper,
                 clock,
-                new AuditExportProperties(maxRows, Duration.ofMinutes(30)),
+                properties,
                 executor,
                 mock(PlatformTransactionManager.class));
     }
 
+    private AuditExportServiceImpl inlineService(AuditExportProperties properties) {
+        return service(Runnable::run, Clock.fixed(NOW, ZoneOffset.UTC), properties);
+    }
+
     private AuditExportServiceImpl inlineService() {
-        return service(Runnable::run, Clock.fixed(NOW, ZoneOffset.UTC), 100);
+        return inlineService(DEFAULTS);
     }
 
-    private AuditExportServiceImpl queuingService(Clock clock) {
-        return service(queued::add, clock, 100);
+    private AuditExportServiceImpl queuingService(Instant at) {
+        return service(queued::add, Clock.fixed(at, ZoneOffset.UTC), DEFAULTS);
     }
 
-    @SuppressWarnings("unchecked")
-    private void auditEvents(AuditLogEvent... events) {
-        when(auditLogEventRepository.count(any(Specification.class))).thenReturn((long) events.length);
-        when(auditLogEventRepository.findAll(any(Specification.class), any(Sort.class)))
-                .thenReturn(List.of(events));
+    private static AuditExportProperties caps(int maxRows, long maxBytes) {
+        return new AuditExportProperties(
+                maxRows, maxBytes, Duration.ofMinutes(30), Duration.ofDays(7), Duration.ofMinutes(5));
+    }
+
+    private void auditEvents(int count, String newValue) {
+        for (int i = 0; i < count; i++) {
+            events.add(event("user-" + i, newValue));
+        }
     }
 
     private static AuditLogEvent event(String entityId, String newValue) {
         AuditLogEvent event = new AuditLogEvent();
-        event.setEventId(UUID.fromString("01960000-0000-7000-8000-000000000001"));
+        event.setEventId(UUID.randomUUID());
         event.setTimestamp(Instant.parse("2026-10-01T08:00:00Z"));
         event.setEventType("ROLE_ASSIGNED");
         event.setActorId("jane.doe");
@@ -135,10 +254,15 @@ class AuditExportServiceImplTest {
                 .build();
     }
 
+    private UUID requestCsv(AuditExportServiceImpl service) {
+        return service.requestExport(request(AuditExportFormat.CSV, AuditDeliveryMode.DOWNLOAD))
+                .getJobId();
+    }
+
     @Test
     @DisplayName("CSV DOWNLOAD job runs PENDING -> IN_PROGRESS -> COMPLETED and exposes the file")
     void csvExportCompletes() {
-        auditEvents(event("user-1", "{\"roles\":[\"CLERK\"]}"));
+        events.add(event("user-1", "{\"roles\":[\"CLERK\"]}"));
         AuditExportServiceImpl service = inlineService();
 
         AuditExportJobResponse created =
@@ -163,12 +287,28 @@ class AuditExportServiceImplTest {
         assertThat(csv)
                 .startsWith(AuditExportCsv.HEADER + "\r\n")
                 .contains("user-1,USER,{},\"{\"\"roles\"\":[\"\"CLERK\"\"]}\",");
+        assertThat(files.get(created.getJobId()).getSizeBytes()).isEqualTo(download.content().length);
+    }
+
+    @Test
+    @DisplayName("events are read in keyset pages of at most PAGE_SIZE and all land in the file")
+    void exportPagesThroughEvents() {
+        auditEvents(AuditExportServiceImpl.PAGE_SIZE * 2 + 3, "{}");
+        AuditExportServiceImpl service = inlineService(caps(10_000, 10_000_000));
+
+        UUID jobId = requestCsv(service);
+
+        assertThat(service.getExportJob(jobId).getRowCount()).isEqualTo(AuditExportServiceImpl.PAGE_SIZE * 2L + 3);
+        assertThat(requestedLimits).hasSize(3).allMatch(limit -> limit == AuditExportServiceImpl.PAGE_SIZE);
+        String csv = new String(service.getExportFile(jobId).content(), StandardCharsets.UTF_8);
+        assertThat(csv.split("\r\n")).hasSize(AuditExportServiceImpl.PAGE_SIZE * 2 + 3 + 1);
     }
 
     @Test
     @DisplayName("JSON job renders a JSON array of the matching events")
     void jsonExportCompletes() {
-        auditEvents(event("user-1", "{}"), event("user-2", "{}"));
+        events.add(event("user-1", "{}"));
+        events.add(event("user-2", "{}"));
         AuditExportServiceImpl service = inlineService();
 
         UUID jobId = service.requestExport(request(AuditExportFormat.JSON, AuditDeliveryMode.DOWNLOAD))
@@ -185,34 +325,101 @@ class AuditExportServiceImplTest {
     }
 
     @Test
-    @DisplayName("more matching events than max-rows FAILS the job with a narrow-the-filters message")
-    @SuppressWarnings("unchecked")
-    void exceedingTheRowCapFails() {
-        when(auditLogEventRepository.count(any(Specification.class))).thenReturn(101L);
+    @DisplayName("an empty match completes with an empty JSON array")
+    void emptyJsonExport() {
         AuditExportServiceImpl service = inlineService();
 
-        UUID jobId = service.requestExport(request(AuditExportFormat.CSV, AuditDeliveryMode.DOWNLOAD))
+        UUID jobId = service.requestExport(request(AuditExportFormat.JSON, AuditDeliveryMode.DOWNLOAD))
                 .getJobId();
+
+        assertThat(new String(service.getExportFile(jobId).content(), StandardCharsets.UTF_8))
+                .isEqualTo("[]");
+        assertThat(service.getExportJob(jobId).getRowCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("more matching events than max-rows FAILS the job; at most max-rows + 1 are read")
+    void exceedingTheRowCapFails() {
+        auditEvents(8, "{}");
+        AuditExportServiceImpl service = inlineService(caps(5, 1_000_000));
+
+        UUID jobId = requestCsv(service);
 
         AuditExportJobResponse polled = service.getExportJob(jobId);
         assertThat(polled.getStatus()).isEqualTo(AuditExportStatus.FAILED);
-        assertThat(polled.getErrorMessage()).contains("101", "limit of 100", "narrow the filters");
+        assertThat(polled.getErrorMessage()).contains("more than 5", "narrow the filters");
         assertThat(polled.getDownloadUrl()).isNull();
-        verify(auditLogEventRepository, never()).findAll(any(Specification.class), any(Sort.class));
-        verify(fileRepository, never()).save(any());
+        assertThat(requestedLimits).containsExactly(6);
+        assertThat(files).isEmpty();
+    }
+
+    @Test
+    @DisplayName("exactly max-rows events completes")
+    void exactlyTheRowCapCompletes() {
+        auditEvents(5, "{}");
+        AuditExportServiceImpl service = inlineService(caps(5, 1_000_000));
+
+        UUID jobId = requestCsv(service);
+
+        assertThat(service.getExportJob(jobId).getStatus()).isEqualTo(AuditExportStatus.COMPLETED);
+        assertThat(service.getExportJob(jobId).getRowCount()).isEqualTo(5L);
+    }
+
+    @Test
+    @DisplayName("events inserted while the export pages still count against max-rows (no stale count)")
+    void rowsInsertedMidExportStillHitTheCap() {
+        int cap = AuditExportServiceImpl.PAGE_SIZE + 10;
+        auditEvents(AuditExportServiceImpl.PAGE_SIZE, "{}");
+        // After the first page is served, more matching events arrive than the cap allows.
+        afterEachPage = () -> {
+            if (events.size() == AuditExportServiceImpl.PAGE_SIZE) {
+                auditEvents(20, "{}");
+            }
+        };
+        AuditExportServiceImpl service = inlineService(caps(cap, 10_000_000));
+
+        UUID jobId = requestCsv(service);
+
+        AuditExportJobResponse polled = service.getExportJob(jobId);
+        assertThat(polled.getStatus()).isEqualTo(AuditExportStatus.FAILED);
+        assertThat(polled.getErrorMessage()).contains("more than " + cap);
+        assertThat(requestedLimits).containsExactly(AuditExportServiceImpl.PAGE_SIZE, 11);
+        assertThat(files).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a file larger than max-bytes FAILS the job while rendering")
+    void exceedingTheByteCapFails() {
+        auditEvents(3, "x".repeat(400));
+        AuditExportServiceImpl service = inlineService(caps(100, 1_000));
+
+        UUID jobId = requestCsv(service);
+
+        AuditExportJobResponse polled = service.getExportJob(jobId);
+        assertThat(polled.getStatus()).isEqualTo(AuditExportStatus.FAILED);
+        assertThat(polled.getErrorMessage()).contains("larger than 1000 bytes", "narrow the filters");
+        assertThat(files).isEmpty();
+    }
+
+    @Test
+    @DisplayName("the byte count is UTF-8, not chars")
+    void utf8LengthCountsEncodedBytes() {
+        String text = "aé€😀";
+        assertThat(AuditExportServiceImpl.utf8Length(text)).isEqualTo(text.getBytes(StandardCharsets.UTF_8).length);
     }
 
     @Test
     @DisplayName("a query failure FAILS the job with a sanitised message, never the exception text")
     @SuppressWarnings("unchecked")
     void queryFailureFailsSanitised() {
-        when(auditLogEventRepository.count(any(Specification.class))).thenReturn(1L);
-        when(auditLogEventRepository.findAll(any(Specification.class), any(Sort.class)))
-                .thenThrow(new IllegalStateException("org.postgresql.util.PSQLException: relation secret_table"));
+        doAnswer(inv -> {
+                    throw new IllegalStateException("org.postgresql.util.PSQLException: relation secret_table");
+                })
+                .when(auditLogEventRepository)
+                .findBy(any(Specification.class), any(Function.class));
         AuditExportServiceImpl service = inlineService();
 
-        UUID jobId = service.requestExport(request(AuditExportFormat.CSV, AuditDeliveryMode.DOWNLOAD))
-                .getJobId();
+        UUID jobId = requestCsv(service);
 
         AuditExportJobResponse polled = service.getExportJob(jobId);
         assertThat(polled.getStatus()).isEqualTo(AuditExportStatus.FAILED);
@@ -251,36 +458,98 @@ class AuditExportServiceImplTest {
     }
 
     @Test
-    @DisplayName("a job left PENDING past stale-after is marked FAILED as interrupted on read, and never runs")
-    void staleJobIsInterruptedOnRead() {
-        UUID jobId = queuingService(Clock.fixed(NOW, ZoneOffset.UTC))
-                .requestExport(request(AuditExportFormat.CSV, AuditDeliveryMode.DOWNLOAD))
-                .getJobId();
-        AuditExportServiceImpl later = queuingService(Clock.fixed(NOW.plus(Duration.ofMinutes(31)), ZoneOffset.UTC));
+    @DisplayName("GET is read-only: a job past stale-after is reported as stored, not changed")
+    void getNeverMutates() {
+        UUID jobId = requestCsv(queuingService(NOW));
+        AuditExportServiceImpl later = queuingService(NOW.plus(Duration.ofMinutes(31)));
+
+        assertThat(later.getExportJob(jobId).getStatus()).isEqualTo(AuditExportStatus.PENDING);
+        verify(jobRepository, never()).markFailed(any(), anyCollection(), anyString(), any());
+        verify(jobRepository, never()).failRequestedBefore(anyCollection(), any(), anyString(), any());
+    }
+
+    @Test
+    @DisplayName("the sweep fails a job left PENDING past stale-after, and the late task then skips it")
+    void sweepInterruptsStaleJob() {
+        UUID jobId = requestCsv(queuingService(NOW));
+        AuditExportServiceImpl later = queuingService(NOW.plus(Duration.ofMinutes(31)));
+
+        assertThat(later.sweepBoundTenant()).isEqualTo(new AuditExportService.SweepResult(1, 0));
 
         AuditExportJobResponse polled = later.getExportJob(jobId);
-
         assertThat(polled.getStatus()).isEqualTo(AuditExportStatus.FAILED);
         assertThat(polled.getErrorMessage()).isEqualTo(AuditExportServiceImpl.INTERRUPTED_MESSAGE);
         queued.forEach(Runnable::run);
         assertThat(jobs.get(jobId).getStatus())
                 .as("the late task leaves it FAILED")
                 .isEqualTo(AuditExportStatus.FAILED);
-        verify(fileRepository, never()).save(any());
+        assertThat(files).isEmpty();
     }
 
     @Test
-    @DisplayName("a job still within stale-after stays PENDING on read")
-    void freshPendingJobStaysPending() {
-        UUID jobId = queuingService(Clock.fixed(NOW, ZoneOffset.UTC))
-                .requestExport(request(AuditExportFormat.CSV, AuditDeliveryMode.DOWNLOAD))
-                .getJobId();
-        AuditExportServiceImpl later = queuingService(Clock.fixed(NOW.plus(Duration.ofMinutes(29)), ZoneOffset.UTC));
+    @DisplayName("the sweep leaves a job still within stale-after alone")
+    void sweepLeavesFreshJob() {
+        UUID jobId = requestCsv(queuingService(NOW));
+        AuditExportServiceImpl later = queuingService(NOW.plus(Duration.ofMinutes(29)));
 
+        assertThat(later.sweepBoundTenant()).isEqualTo(new AuditExportService.SweepResult(0, 0));
         assertThat(later.getExportJob(jobId).getStatus()).isEqualTo(AuditExportStatus.PENDING);
         assertThatThrownBy(() -> later.getExportFile(jobId))
                 .isInstanceOf(AuditExportNotReadyException.class)
                 .hasMessageContaining("PENDING");
+    }
+
+    @Test
+    @DisplayName("a sweep that fails the job while it renders wins: completion writes no file")
+    void staleSweepDuringRenderingBeatsCompletion() {
+        auditEvents(3, "{}");
+        AuditExportServiceImpl worker = queuingService(NOW);
+        UUID jobId = requestCsv(worker);
+        AuditExportServiceImpl sweeper = queuingService(NOW.plus(Duration.ofMinutes(31)));
+        // The sweep runs between the worker's first page and its completion.
+        afterEachPage = () -> {
+            if (jobs.get(jobId).getStatus() == AuditExportStatus.IN_PROGRESS) {
+                sweeper.sweepBoundTenant();
+            }
+        };
+
+        queued.forEach(Runnable::run);
+
+        assertThat(jobs.get(jobId).getStatus()).isEqualTo(AuditExportStatus.FAILED);
+        assertThat(jobs.get(jobId).getErrorMessage()).isEqualTo(AuditExportServiceImpl.INTERRUPTED_MESSAGE);
+        assertThat(files).as("no orphan file").isEmpty();
+        verify(fileRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("a completed job is not failed by a later sweep")
+    void completionBeforeSweepStands() {
+        auditEvents(1, "{}");
+        UUID jobId = requestCsv(inlineService());
+
+        AuditExportServiceImpl later = queuingService(NOW.plus(Duration.ofMinutes(31)));
+        assertThat(later.sweepBoundTenant().interrupted()).isZero();
+        assertThat(jobs.get(jobId).getStatus()).isEqualTo(AuditExportStatus.COMPLETED);
+        assertThat(files).containsKey(jobId);
+    }
+
+    @Test
+    @DisplayName("the sweep purges jobs and files past retention; a purged job is not found")
+    void sweepPurgesPastRetention() {
+        auditEvents(1, "{}");
+        UUID old = requestCsv(inlineService());
+        UUID recent =
+                requestCsv(service(Runnable::run, Clock.fixed(NOW.plus(Duration.ofDays(6)), ZoneOffset.UTC), DEFAULTS));
+        AuditExportServiceImpl later =
+                queuingService(NOW.plus(Duration.ofDays(7)).plusSeconds(1));
+
+        assertThat(later.sweepBoundTenant()).isEqualTo(new AuditExportService.SweepResult(0, 1));
+
+        assertThatThrownBy(() -> later.getExportJob(old)).isInstanceOf(EntityNotFoundException.class);
+        assertThatThrownBy(() -> later.getExportFile(old)).isInstanceOf(EntityNotFoundException.class);
+        assertThat(files).doesNotContainKey(old).containsKey(recent);
+        verify(fileRepository).deleteForExpiredJobs(eq(NOW.plusSeconds(1)));
+        verify(jobRepository).deleteExpired(eq(NOW.plusSeconds(1)));
     }
 
     @Test
@@ -291,10 +560,9 @@ class AuditExportServiceImplTest {
                     throw new RejectedExecutionException("queue full");
                 },
                 Clock.fixed(NOW, ZoneOffset.UTC),
-                100);
+                DEFAULTS);
 
-        UUID jobId = service.requestExport(request(AuditExportFormat.CSV, AuditDeliveryMode.DOWNLOAD))
-                .getJobId();
+        UUID jobId = requestCsv(service);
 
         assertThat(jobs.get(jobId).getStatus()).isEqualTo(AuditExportStatus.FAILED);
         assertThat(jobs.get(jobId).getErrorMessage()).isEqualTo(AuditExportServiceImpl.QUEUE_FULL_MESSAGE);
@@ -322,6 +590,6 @@ class AuditExportServiceImplTest {
         inlineService().runExport(job.getJobId());
 
         assertThat(job.getStatus()).isEqualTo(AuditExportStatus.COMPLETED);
-        verify(auditLogEventRepository, never()).count(any(Specification.class));
+        verify(auditLogEventRepository, never()).findBy(any(Specification.class), any(Function.class));
     }
 }

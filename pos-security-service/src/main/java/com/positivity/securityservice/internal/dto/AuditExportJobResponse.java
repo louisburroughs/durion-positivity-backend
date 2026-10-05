@@ -23,7 +23,7 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Audit export job status response")
 public class AuditExportJobResponse {
 
-    @Schema(description = "Export job UUID", example = "550e8400-e29b-41d4-a716-446655440000", requiredMode = REQUIRED)
+    @Schema(description = "Export job UUID", example = "01960000-0000-7000-8000-000000000001", requiredMode = REQUIRED)
     private UUID jobId;
 
     @Schema(
@@ -51,7 +51,7 @@ public class AuditExportJobResponse {
     @Schema(
             description = "Gateway-relative path that downloads the export file with the same"
                     + " security:audit:export authority (null until COMPLETED)",
-            example = "/security-service/v1/audit/exports/550e8400-e29b-41d4-a716-446655440000/download",
+            example = "/security-service/v1/audit/exports/01960000-0000-7000-8000-000000000001/download",
             requiredMode = NOT_REQUIRED)
     private String downloadUrl;
 

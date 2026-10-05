@@ -336,7 +336,7 @@ those claims.
 - `POST /v1/users/{id}/unlock` — admin: unlock account
 - `POST /v1/users/{id}/enable` / `disable` — admin: enable/disable account
 - `POST /v1/audit/exports` — request an asynchronous, tenant-scoped audit export (CSV or JSON, `DOWNLOAD` only; auth: `security:audit:export`); answers 202 with a `PENDING` job
-- `GET /v1/audit/exports/{jobId}` — poll a job: `PENDING` → `IN_PROGRESS` → `COMPLETED` (with `downloadUrl`) or `FAILED` (with `errorMessage`)
+- `GET /v1/audit/exports/{jobId}` — poll a job (read-only): `PENDING` → `IN_PROGRESS` → `COMPLETED` (with `downloadUrl`) or `FAILED` (with `errorMessage`); jobs and files are purged after `pos.security.audit-export.retention` (7 days), after which the job answers 404
 - `GET /v1/audit/exports/{jobId}/download` — the completed job's file as an attachment; 409 `AUDIT_EXPORT_NOT_READY` until `COMPLETED`
 - `GET /v1/users/authorization/person-decision` — off-session check whether the user linked to a personId has a permission
 
@@ -542,7 +542,10 @@ committed spec against the controllers' declarations and fails on drift in eithe
 | `pos.security-service.location-scope.assigned-node-cap` | `8` | Assigned-node count above which `security.location-scope.assigned-nodes.cap-exceeded` fires (WARN + metric, never truncated) |
 | `pos.security-service.kafka.tenant-events-topic` | `tenant.events.v1` | Tenant registry facts (pos-tenant, ADR-0062 §7) feeding the `ext_tenant` replica |
 | `pos.security.audit-export.max-rows` (`POS_SECURITY_AUDIT_EXPORT_MAX_ROWS`) | `100000` | Most audit events one export may contain; a job whose filters match more ends `FAILED` asking for narrower filters (#2408) |
-| `pos.security.audit-export.stale-after` (`POS_SECURITY_AUDIT_EXPORT_STALE_AFTER`) | `PT30M` | A job still `PENDING`/`IN_PROGRESS` this long after it was requested is marked `FAILED` (interrupted) on its next read (#2408) |
+| `pos.security.audit-export.max-bytes` (`POS_SECURITY_AUDIT_EXPORT_MAX_BYTES`) | `26214400` (25 MiB) | Largest export file in UTF-8 bytes; rendering past it ends the job `FAILED` asking for narrower filters, so audit text cannot exhaust the heap (#2408) |
+| `pos.security.audit-export.stale-after` (`POS_SECURITY_AUDIT_EXPORT_STALE_AFTER`) | `PT30M` | A job still `PENDING`/`IN_PROGRESS` this long after it was requested is marked `FAILED` (interrupted) by the scheduled sweep; reads never change a job (#2408) |
+| `pos.security.audit-export.retention` (`POS_SECURITY_AUDIT_EXPORT_RETENTION`) | `P7D` | Jobs and their files older than this (from `completedAt`, else `requestedAt`) are deleted by the sweep; a purged job answers 404 (#2408) |
+| `pos.security.audit-export.sweep-interval` (`POS_SECURITY_AUDIT_EXPORT_SWEEP_INTERVAL`) | `PT5M` | Fixed delay (and initial delay) of the per-tenant audit export sweep (`TenantIterator`) (#2408) |
 | `pos.tenancy.default-tenant-id` | alpha default tenant | Transitional binding for unbound requests and pre-WS2b tokens without `tid`; empty means strict |
 | `pos.tenancy.unenforced-paths` | `/v1/auth/` | Paths that run unbound even in strict mode (login resolves the tenant itself) |
 

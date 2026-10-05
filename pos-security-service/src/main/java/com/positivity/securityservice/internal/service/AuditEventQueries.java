@@ -7,6 +7,7 @@ import com.positivity.securityservice.internal.exception.SecurityValidationExcep
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.domain.Specification;
 
@@ -57,6 +58,13 @@ final class AuditEventQueries {
             // TODO(B-3): locationIds filter - column not yet present
             return cb.and(predicates.toArray(Predicate[]::new));
         };
+    }
+
+    /** Keyset continuation: events whose id sorts after {@code lastEventId}; no restriction when null. */
+    @NonNull
+    static Specification<AuditLogEvent> after(UUID lastEventId) {
+        return (root, query, cb) ->
+                lastEventId == null ? cb.conjunction() : cb.greaterThan(root.<UUID>get("eventId"), lastEventId);
     }
 
     @NonNull

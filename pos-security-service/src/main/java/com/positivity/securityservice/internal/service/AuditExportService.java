@@ -24,9 +24,9 @@ public interface AuditExportService {
     AuditExportJobResponse requestExport(@NonNull AuditExportRequest request);
 
     /**
-     * Returns the current status of a previously submitted export job of the bound tenant. A job
-     * left PENDING or IN_PROGRESS longer than the configured timeout is marked FAILED as
-     * interrupted first.
+     * Returns the current status of a previously submitted export job of the bound tenant. Read-only:
+     * a job left PENDING or IN_PROGRESS past the configured timeout is reported as stored until the
+     * scheduled sweep marks it FAILED.
      *
      * @param jobId the export job UUID
      * @return job status response
@@ -54,4 +54,16 @@ public interface AuditExportService {
      * @param jobId the export job UUID
      */
     void runExport(@NonNull UUID jobId);
+
+    /**
+     * One tenant's housekeeping pass, with that tenant bound: marks jobs left PENDING or IN_PROGRESS
+     * past stale-after FAILED as interrupted, then deletes jobs (and their files) past retention.
+     *
+     * @return how many jobs were interrupted and how many were purged
+     */
+    @NonNull
+    SweepResult sweepBoundTenant();
+
+    /** Outcome of {@link #sweepBoundTenant()}. */
+    record SweepResult(int interrupted, int purged) {}
 }

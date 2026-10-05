@@ -23,6 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
@@ -45,11 +46,17 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <p>A request writes a PENDING {@link AuditExportJob} and, once that transaction commits, hands
  * the job to the {@link AuditExportConfig#EXECUTOR_BEAN} executor, whose task decorator carries the
- * requesting tenant to the worker. The worker claims the job (IN_PROGRESS), reads the matching audit
- * events through the same filter path as {@code searchAuditEvents}, renders CSV or JSON, and stores
- * the file with the job (COMPLETED) — or records a sanitised reason (FAILED). Every step runs in its
- * own transaction so a failure never hides the job's state. Work in flight when the service stops is
- * lost; a read past {@link AuditExportProperties#staleAfter()} marks such a job FAILED.
+ * requesting tenant to the worker. The worker claims the job (IN_PROGRESS), pages through the
+ * matching audit events by event id over the same filter path as {@code searchAuditEvents} (each
+ * page in its own read-only transaction, so no entity outlives its page), renders CSV or JSON
+ * incrementally under both a row and a byte cap, and stores the file with the job (COMPLETED) — or
+ * records a sanitised reason (FAILED).
+ *
+ * <p>Every lifecycle transition is a status-conditional update: completion writes the file only if
+ * the job is still IN_PROGRESS in the same transaction, so a job the sweep has already failed never
+ * gains an orphan file. Reads never change state; {@link #sweepBoundTenant()}, run per tenant on a
+ * schedule, fails jobs past {@link AuditExportProperties#staleAfter()} and purges jobs past {@link
+ * AuditExportProperties#retention()}.
  */
 @Slf4j
 @Service
@@ -63,7 +70,14 @@ public class AuditExportServiceImpl implements AuditExportService {
     static final String GENERIC_FAILURE_MESSAGE =
             "The export failed while reading or writing audit events; request a new export, or contact support with the job id.";
     static final String QUEUE_FULL_MESSAGE = "The export queue is full; request the export again later.";
-    private static final int ERROR_MESSAGE_MAX = 500;
+    static final String TOO_MANY_ROWS_MESSAGE = "The export matches more than %d audit events, the configured limit;"
+            + " narrow the filters (for example the date range) and request it again.";
+    static final String TOO_MANY_BYTES_MESSAGE = "The export file would be larger than %d bytes, the configured limit;"
+            + " narrow the filters (for example the date range) and request it again.";
+    static final int PAGE_SIZE = 500;
+    private static final Set<AuditExportStatus> ACTIVE =
+            Set.of(AuditExportStatus.PENDING, AuditExportStatus.IN_PROGRESS);
+    private static final Sort BY_EVENT_ID = Sort.by(Sort.Direction.ASC, "eventId");
 
     private final AuditExportJobRepository jobRepository;
     private final AuditExportFileRepository fileRepository;
@@ -140,11 +154,9 @@ public class AuditExportServiceImpl implements AuditExportService {
 
     @Override
     @NonNull
-    @Transactional
+    @Transactional(readOnly = true)
     public AuditExportJobResponse getExportJob(@NonNull UUID jobId) {
-        AuditExportJob job = findJob(jobId);
-        failIfStale(job);
-        return toResponse(job);
+        return toResponse(findJob(jobId));
     }
 
     @Override
@@ -169,18 +181,33 @@ public class AuditExportServiceImpl implements AuditExportService {
             return;
         }
         try {
-            Rendered rendered = readTx.execute(status -> render(jobId, claim));
-            if (rendered == null) {
-                throw new IllegalStateException("Export rendering produced nothing");
+            Rendered rendered = render(jobId, claim);
+            Boolean completed = writeTx.execute(status -> complete(jobId, rendered));
+            if (!Boolean.TRUE.equals(completed)) {
+                log.info("Audit export {} finished after it had been failed; result discarded", jobId);
             }
-            writeTx.executeWithoutResult(status -> complete(jobId, rendered));
-        } catch (ExportTooLargeException e) {
+        } catch (ExportLimitException e) {
             log.warn("Audit export {} refused: {}", jobId, e.getMessage());
             markFailed(jobId, e.getMessage());
         } catch (RuntimeException e) {
             log.error("Audit export {} failed", jobId, e);
             markFailed(jobId, GENERIC_FAILURE_MESSAGE);
         }
+    }
+
+    @Override
+    @NonNull
+    public SweepResult sweepBoundTenant() {
+        SweepResult result = writeTx.execute(status -> {
+            Instant now = clock.instant();
+            int interrupted = jobRepository.failRequestedBefore(
+                    ACTIVE, now.minus(properties.staleAfter()), INTERRUPTED_MESSAGE, now);
+            Instant retentionCutoff = now.minus(properties.retention());
+            fileRepository.deleteForExpiredJobs(retentionCutoff);
+            int purged = jobRepository.deleteExpired(retentionCutoff);
+            return new SweepResult(interrupted, purged);
+        });
+        return result == null ? new SweepResult(0, 0) : result;
     }
 
     private void dispatch(UUID jobId) {
@@ -193,13 +220,13 @@ public class AuditExportServiceImpl implements AuditExportService {
     }
 
     private Claim claim(UUID jobId) {
-        AuditExportJob job = jobRepository.findByJobId(jobId).orElse(null);
-        if (job == null || job.getStatus() != AuditExportStatus.PENDING) {
+        if (jobRepository.markInProgress(jobId, clock.instant()) == 0) {
             return null;
         }
-        job.setStatus(AuditExportStatus.IN_PROGRESS);
-        job.setStartedAt(clock.instant());
-        jobRepository.save(job);
+        AuditExportJob job = jobRepository.findByJobId(jobId).orElse(null);
+        if (job == null) {
+            return null;
+        }
         AuditEventSearchFilter filter = AuditEventSearchFilter.builder()
                 .fromDate(job.getFilterFromDate())
                 .toDate(job.getFilterToDate())
@@ -210,83 +237,118 @@ public class AuditExportServiceImpl implements AuditExportService {
         return new Claim(filter, job.getFormat());
     }
 
+    /**
+     * Pages through the matching events by event id, reading at most {@code maxRows + 1} so an
+     * over-limit export is detected without a separate count (which could disagree with the fetch
+     * when events arrive mid-export), and stops as soon as the rendered file passes {@code maxBytes}.
+     */
     private Rendered render(UUID jobId, Claim claim) {
-        Specification<AuditLogEvent> specification = AuditEventQueries.specification(claim.filter());
-        long matching = auditLogEventRepository.count(specification);
-        if (matching > properties.maxRows()) {
-            throw new ExportTooLargeException(matching, properties.maxRows());
-        }
-        List<AuditLogEventDto> events =
-                auditLogEventRepository
-                        .findAll(specification, Sort.by(Sort.Direction.ASC, "timestamp", "eventId"))
-                        .stream()
-                        .map(AuditEventQueries::toDto)
-                        .toList();
         boolean json = claim.format() == AuditExportFormat.JSON;
-        String content = json ? objectMapper.writeValueAsString(events) : AuditExportCsv.render(events);
+        Specification<AuditLogEvent> filter = AuditEventQueries.specification(claim.filter());
+        StringBuilder out = new StringBuilder();
+        long[] bytes = {0};
+        append(out, bytes, json ? "[" : AuditExportCsv.headerLine());
+        int rows = 0;
+        UUID lastEventId = null;
+        while (true) {
+            int limit = (int) Math.min(PAGE_SIZE, (long) properties.maxRows() + 1 - rows);
+            UUID after = lastEventId;
+            List<AuditLogEventDto> page = readTx.execute(status -> fetchPage(filter, after, limit));
+            if (page == null || page.isEmpty()) {
+                break;
+            }
+            for (AuditLogEventDto event : page) {
+                rows++;
+                if (rows > properties.maxRows()) {
+                    throw new ExportLimitException(TOO_MANY_ROWS_MESSAGE.formatted(properties.maxRows()));
+                }
+                String piece = json
+                        ? (rows > 1 ? "," : "") + objectMapper.writeValueAsString(event)
+                        : AuditExportCsv.row(event);
+                append(out, bytes, piece);
+                lastEventId = event.getEventId();
+            }
+            if (page.size() < limit) {
+                break;
+            }
+        }
+        if (json) {
+            append(out, bytes, "]");
+        }
         String fileName = "audit-export-" + jobId + (json ? ".json" : ".csv");
-        return new Rendered(fileName, json ? JSON_CONTENT_TYPE : CSV_CONTENT_TYPE, content, events.size());
+        return new Rendered(fileName, json ? JSON_CONTENT_TYPE : CSV_CONTENT_TYPE, out.toString(), bytes[0], rows);
     }
 
-    private void complete(UUID jobId, Rendered rendered) {
-        AuditExportJob job = jobRepository.findByJobId(jobId).orElse(null);
-        if (job == null || job.getStatus() != AuditExportStatus.IN_PROGRESS) {
-            // Marked FAILED as interrupted while it ran: keep the outcome callers already saw.
-            return;
+    private List<AuditLogEventDto> fetchPage(Specification<AuditLogEvent> filter, UUID after, int limit) {
+        return auditLogEventRepository
+                .findBy(
+                        filter.and(AuditEventQueries.after(after)),
+                        query -> query.sortBy(BY_EVENT_ID).limit(limit).all())
+                .stream()
+                .map(AuditEventQueries::toDto)
+                .toList();
+    }
+
+    private void append(StringBuilder out, long[] bytes, String piece) {
+        bytes[0] += utf8Length(piece);
+        if (bytes[0] > properties.maxBytes()) {
+            throw new ExportLimitException(TOO_MANY_BYTES_MESSAGE.formatted(properties.maxBytes()));
+        }
+        out.append(piece);
+    }
+
+    /** Encoded UTF-8 length without materialising the bytes. */
+    static long utf8Length(CharSequence text) {
+        long length = 0;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c < 0x80) {
+                length += 1;
+            } else if (c < 0x800) {
+                length += 2;
+            } else if (Character.isHighSurrogate(c)
+                    && i + 1 < text.length()
+                    && Character.isLowSurrogate(text.charAt(i + 1))) {
+                length += 4;
+                i++;
+            } else {
+                length += 3;
+            }
+        }
+        return length;
+    }
+
+    /**
+     * Marks the job COMPLETED and stores its file in one transaction, only if the job is still
+     * IN_PROGRESS: when the sweep has failed it meanwhile, nothing is written.
+     */
+    private boolean complete(UUID jobId, Rendered rendered) {
+        if (jobRepository.markCompleted(jobId, rendered.rowCount(), clock.instant()) == 0) {
+            return false;
         }
         AuditExportFile file = new AuditExportFile();
         file.setJobId(jobId);
         file.setFileName(rendered.fileName());
         file.setContentType(rendered.contentType());
         file.setContent(rendered.content());
-        file.setSizeBytes(rendered.content().getBytes(StandardCharsets.UTF_8).length);
+        file.setSizeBytes(rendered.sizeBytes());
         fileRepository.save(file);
-
-        job.setStatus(AuditExportStatus.COMPLETED);
-        job.setCompletedAt(clock.instant());
-        job.setRowCount((long) rendered.rowCount());
-        job.setErrorMessage(null);
-        jobRepository.save(job);
+        return true;
     }
 
     private void markFailed(UUID jobId, String message) {
         try {
-            writeTx.executeWithoutResult(status -> jobRepository
-                    .findByJobId(jobId)
-                    .filter(job -> !isTerminal(job.getStatus()))
-                    .ifPresent(job -> fail(job, message)));
+            writeTx.executeWithoutResult(status -> jobRepository.markFailed(jobId, ACTIVE, message, clock.instant()));
         } catch (RuntimeException e) {
-            // Nothing else to do: a later read marks the job FAILED as interrupted.
+            // Nothing else to do: the scheduled sweep fails the job as interrupted.
             log.error("Audit export {} could not be marked FAILED", jobId, e);
         }
-    }
-
-    private void failIfStale(AuditExportJob job) {
-        if (isTerminal(job.getStatus())) {
-            return;
-        }
-        Instant deadline = job.getRequestedAt().plus(properties.staleAfter());
-        if (deadline.isBefore(clock.instant())) {
-            log.warn("Audit export {} left {} past {}; marking it FAILED", job.getJobId(), job.getStatus(), deadline);
-            fail(job, INTERRUPTED_MESSAGE);
-        }
-    }
-
-    private void fail(AuditExportJob job, String message) {
-        job.setStatus(AuditExportStatus.FAILED);
-        job.setCompletedAt(clock.instant());
-        job.setErrorMessage(message.length() > ERROR_MESSAGE_MAX ? message.substring(0, ERROR_MESSAGE_MAX) : message);
-        jobRepository.save(job);
     }
 
     private AuditExportJob findJob(UUID jobId) {
         return jobRepository
                 .findByJobId(jobId)
                 .orElseThrow(() -> new EntityNotFoundException("Audit export job not found: " + jobId));
-    }
-
-    private static boolean isTerminal(AuditExportStatus status) {
-        return status == AuditExportStatus.COMPLETED || status == AuditExportStatus.FAILED;
     }
 
     private static AuditExportJobResponse toResponse(AuditExportJob job) {
@@ -310,14 +372,13 @@ public class AuditExportServiceImpl implements AuditExportService {
 
     private record Claim(AuditEventSearchFilter filter, AuditExportFormat format) {}
 
-    private record Rendered(String fileName, String contentType, String content, int rowCount) {}
+    private record Rendered(String fileName, String contentType, String content, long sizeBytes, int rowCount) {}
 
-    /** The filters match more events than {@link AuditExportProperties#maxRows()} allows. */
-    private static final class ExportTooLargeException extends RuntimeException {
+    /** The export passed {@link AuditExportProperties#maxRows()} or {@link AuditExportProperties#maxBytes()}. */
+    private static final class ExportLimitException extends RuntimeException {
 
-        ExportTooLargeException(long matching, int limit) {
-            super("The export matches " + matching + " audit events, more than the limit of " + limit
-                    + "; narrow the filters (for example the date range) and request it again.");
+        ExportLimitException(String message) {
+            super(message);
         }
     }
 }

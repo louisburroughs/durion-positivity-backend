@@ -137,12 +137,16 @@ pos:
       # (security.location-scope.assigned-nodes.cap-exceeded); the set is never truncated.
       assigned-node-cap: ${POS_SECURITY_LOCATION_SCOPE_ASSIGNED_NODE_CAP:8}
   security:
-    # Asynchronous audit exports (#2408): most events one export may hold (more FAILS the job with a
-    # narrow-the-filters message), and how long a PENDING/IN_PROGRESS job may sit before a read marks
-    # it FAILED as interrupted (in-flight work is lost on restart).
+    # Asynchronous audit exports (#2408): row and byte caps on one export (more FAILS the job with a
+    # narrow-the-filters message); a scheduled per-tenant sweep every sweep-interval fails jobs still
+    # PENDING/IN_PROGRESS stale-after past their request (in-flight work is lost on restart) and
+    # deletes jobs and files past retention.
     audit-export:
       max-rows: ${POS_SECURITY_AUDIT_EXPORT_MAX_ROWS:100000}
+      max-bytes: ${POS_SECURITY_AUDIT_EXPORT_MAX_BYTES:26214400}
       stale-after: ${POS_SECURITY_AUDIT_EXPORT_STALE_AFTER:PT30M}
+      retention: ${POS_SECURITY_AUDIT_EXPORT_RETENTION:P7D}
+      sweep-interval: ${POS_SECURITY_AUDIT_EXPORT_SWEEP_INTERVAL:PT5M}
     lockout:
       max-attempts: 5
       window: 10m

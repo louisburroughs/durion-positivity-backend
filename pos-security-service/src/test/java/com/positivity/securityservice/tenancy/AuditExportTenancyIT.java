@@ -99,6 +99,14 @@ class AuditExportTenancyIT extends PostgresTenancyTestBase {
                     .isZero();
         });
 
+        // The sweep's bulk updates and deletes run on Postgres under RLS: tenant B's pass touches
+        // nothing of tenant A's, and tenant A's pass leaves a fresh COMPLETED job alone.
+        asTenant(TENANT_B, () -> auditExportService.sweepBoundTenant());
+        asTenant(TENANT_A, () -> {
+            assertThat(auditExportService.sweepBoundTenant().purged()).isZero();
+            assertThat(auditExportService.getExportJob(jobId).getStatus()).isEqualTo(AuditExportStatus.COMPLETED);
+        });
+
         JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
         assertThat(count(
                         owner,

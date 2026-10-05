@@ -59,8 +59,9 @@ public class AuditExportController {
                     with the job id and an initial PENDING status.
                     Use this tool for bulk extraction of audit data as a file; use searchAuditEvents instead for \
                     interactive paged queries.
-                    Preconditions: the caller must hold security:audit:export; jobs are persisted per tenant and \
-                    run in the background once the request commits.
+                    Preconditions: the caller must hold security:audit:export; jobs are persisted per tenant, run \
+                    in the background once the request commits, and are deleted with their file after the \
+                    configured retention period.
                     Required inputs: format (CSV or JSON) and deliveryMode, which must be DOWNLOAD; filters is \
                     optional and scopes the export with the same criteria as searchAuditEvents.
                     Emits a SECURITY_AUDIT_EXPORT_REQUEST event; poll getAuditExportJob until the job is \
@@ -113,10 +114,11 @@ public class AuditExportController {
                     Preconditions: the caller must hold security:audit:export, and the job must belong to the \
                     caller's tenant, since another tenant's job id answers 404.
                     Required inputs: jobId (UUID) as a path parameter.
-                    No events are emitted; the only state change is that a job left PENDING or IN_PROGRESS past \
-                    the configured timeout, for example by a service restart, is marked FAILED as interrupted so \
-                    a poll never waits forever.
-                    Returns 404 when the job id is unknown to the caller's tenant.
+                    This is a read-only status projection that emits no events; a job interrupted by a service \
+                    restart is moved to FAILED by a scheduled sweep once the configured timeout passes, so a poll \
+                    never waits forever.
+                    Returns 404 when the job id is unknown to the caller's tenant or the job was purged after the \
+                    configured retention period (seven days by default).
                     """)
     @ApiResponse(
             responseCode = "200",
@@ -134,7 +136,7 @@ public class AuditExportController {
             @Parameter(
                             description = "Export job UUID",
                             required = true,
-                            example = "550e8400-e29b-41d4-a716-446655440000")
+                            example = "01960000-0000-7000-8000-000000000001")
                     @PathVariable
                     @NonNull
                     UUID jobId) {
@@ -155,7 +157,8 @@ public class AuditExportController {
                     Emits a SECURITY_AUDIT_EXPORT_DOWNLOAD event and changes no state; CSV cells that begin with \
                     a formula character are prefixed with a single quote so spreadsheets do not evaluate them.
                     Returns 409 AUDIT_EXPORT_NOT_READY while the job is PENDING, IN_PROGRESS or FAILED, and 404 \
-                    when the job id is unknown to the caller's tenant.
+                    when the job id is unknown to the caller's tenant or the job was purged after the retention \
+                    period.
                     """)
     @ApiResponse(
             responseCode = "200",
@@ -180,7 +183,7 @@ public class AuditExportController {
             @Parameter(
                             description = "Export job UUID",
                             required = true,
-                            example = "550e8400-e29b-41d4-a716-446655440000")
+                            example = "01960000-0000-7000-8000-000000000001")
                     @PathVariable
                     @NonNull
                     UUID jobId) {
