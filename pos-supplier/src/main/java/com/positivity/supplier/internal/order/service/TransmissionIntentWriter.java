@@ -69,8 +69,13 @@ public class TransmissionIntentWriter {
 
         SupplierProfileEntity profile = profileRepository
                 .findBySupplierRef(command.supplierRef())
-                .filter(SupplierProfileEntity::isEnabled)
-                .orElseThrow(() -> new UnknownSupplierException(command.supplierRef()));
+                .map(found -> {
+                    if (!found.isEnabled()) {
+                        throw UnknownSupplierException.disabled(command.supplierRef(), found.getVendorProfileId());
+                    }
+                    return found;
+                })
+                .orElseThrow(() -> UnknownSupplierException.neverConfigured(command.supplierRef()));
 
         String activeKey = SupplierTransmissionIntentEntity.activeKeyFor(
                 profile.getVendorProfileId(),
@@ -170,8 +175,39 @@ public class TransmissionIntentWriter {
 
         private static final long serialVersionUID = 1L;
 
-        public UnknownSupplierException(String supplierRef) {
+        private final String supplierRef;
+        private final UUID vendorProfileId;
+        private final String detail;
+
+        private UnknownSupplierException(String supplierRef, UUID vendorProfileId, String detail) {
             super("No enabled vendor profile is configured for supplier '" + supplierRef + "'");
+            this.supplierRef = supplierRef;
+            this.vendorProfileId = vendorProfileId;
+            this.detail = detail;
+        }
+
+        /** No profile exists for the alias. */
+        public static UnknownSupplierException neverConfigured(@NonNull String supplierRef) {
+            return new UnknownSupplierException(supplierRef, null, "no vendor profile for alias " + supplierRef);
+        }
+
+        /** A profile exists but is disabled. */
+        public static UnknownSupplierException disabled(@NonNull String supplierRef, @NonNull UUID vendorProfileId) {
+            return new UnknownSupplierException(
+                    supplierRef, vendorProfileId, "vendor profile " + vendorProfileId + " is disabled");
+        }
+
+        public String getSupplierRef() {
+            return supplierRef;
+        }
+
+        /** The disabled profile's id; null when no profile exists for the alias. */
+        public UUID getVendorProfileId() {
+            return vendorProfileId;
+        }
+
+        public String getDetail() {
+            return detail;
         }
     }
 }

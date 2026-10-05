@@ -35,5 +35,18 @@ public enum TransmissionState {
      * answer and must not be re-sent on a guess, so the buyer needs to see it rather than watch a
      * request sit in REQUESTED forever with nothing to explain it.
      */
-    MANUAL_REVIEW
+    MANUAL_REVIEW,
+
+    /**
+     * pos-supplier refused to dispatch the request because the vendor is not set up for electronic
+     * ordering (no vendor profile, or a disabled one), so the vendor has never seen this order
+     * (#2492, {@code supplier.order.notdispatched}).
+     *
+     * <p>Not {@link #REJECTED}: nothing was refused by the vendor, and a revised {@link #CONFIRMED}
+     * order that lands here still has its earlier version with the vendor. The request's effect on
+     * {@code transmissionCount} and {@code transmittedVersionNumber} is rolled back, so the next
+     * send is classified exactly as this one was. Re-sending is allowed once an administrator has
+     * configured or re-enabled the vendor profile; nothing re-sends automatically.
+     */
+    NOT_DISPATCHED
 }

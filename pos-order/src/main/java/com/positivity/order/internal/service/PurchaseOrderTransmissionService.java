@@ -104,6 +104,8 @@ public class PurchaseOrderTransmissionService {
         // order (ADR-0052 §1). It arrives back on the result events, and is recorded then.
         order.setTransmissionRequestedAt(now);
         order.setTransmissionCount(order.getTransmissionCount() == null ? 1 : order.getTransmissionCount() + 1);
+        // Kept so a NOT_DISPATCHED answer (#2492) can restore it; see SupplierOrderResultListener.
+        order.setPriorTransmittedVersionNumber(order.getTransmittedVersionNumber());
         order.setTransmittedVersionNumber(order.getVersionNumber());
         // Cleared, not kept: a previous refusal explains the order's last state, not this one, and
         // a stale reason beside a fresh request reads as though the vendor has refused it again.
@@ -166,7 +168,9 @@ public class PurchaseOrderTransmissionService {
             case MANUAL_REVIEW -> throw PurchaseOrderNotTransmittableException.awaitingManualReview();
             default -> {
                 // NOT_TRANSMITTED, CONFIRMED and REJECTED may all be sent: the first is a first
-                // send, and the other two are a revision and a re-order respectively.
+                // send, and the other two are a revision and a re-order respectively. So may
+                // NOT_DISPATCHED: the vendor never saw the order, and the buyer re-sends once an
+                // administrator has set the vendor up (#2492).
             }
         }
     }

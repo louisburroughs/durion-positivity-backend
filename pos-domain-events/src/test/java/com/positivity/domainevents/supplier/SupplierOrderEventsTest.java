@@ -443,4 +443,48 @@ class SupplierOrderEventsTest {
                     .isInstanceOf(UnsupportedOperationException.class);
         }
     }
+
+    @Nested
+    @DisplayName("supplier.order.notdispatched (#2492)")
+    class OrderNotDispatched {
+
+        private SupplierOrderNotDispatchedV1 build(UUID profileId, int revision) {
+            return new SupplierOrderNotDispatchedV1(
+                    PURCHASE_ORDER_ID,
+                    "michelin-eu",
+                    profileId,
+                    SupplierOrderNotDispatchedV1.Reason.SUPPLIER_NOT_CONFIGURED,
+                    "no vendor profile for alias michelin-eu",
+                    revision,
+                    INTENT_ID,
+                    OBSERVED_AT);
+        }
+
+        @Test
+        void publishesUnderTheContractedEventTypeAndVersion() {
+            assertThat(SupplierOrderNotDispatchedV1.EVENT_TYPE).isEqualTo("supplier.order.notdispatched");
+            assertThat(SupplierOrderNotDispatchedV1.SCHEMA_VERSION).isEqualTo(1);
+        }
+
+        @Test
+        void allowsAMissingVendorProfileForANeverConfiguredSupplier() {
+            assertThat(build(null, 0).vendorProfileId()).isNull();
+            assertThat(build(PROFILE_ID, 2).vendorProfileId()).isEqualTo(PROFILE_ID);
+        }
+
+        @Test
+        void refusesNullRequiredFieldsAndNegativeRevision() {
+            assertThatThrownBy(() -> new SupplierOrderNotDispatchedV1(
+                            null,
+                            "x",
+                            null,
+                            SupplierOrderNotDispatchedV1.Reason.SUPPLIER_NOT_CONFIGURED,
+                            "d",
+                            0,
+                            INTENT_ID,
+                            OBSERVED_AT))
+                    .isInstanceOf(NullPointerException.class);
+            assertThatThrownBy(() -> build(null, -1)).isInstanceOf(IllegalArgumentException.class);
+        }
+    }
 }

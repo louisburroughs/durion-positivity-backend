@@ -232,6 +232,98 @@ class SupplierOrderResultListenerTest {
         assertThat(order.getTransmissionVendorReason()).contains("timed out");
     }
 
+    private static String notDispatched(String eventId, int requestedRevision) {
+        return """
+            {"eventId":"%s","eventType":"supplier.order.notdispatched","payload":{
+              "purchaseOrderId":"%s","supplierRef":"acme-parts","vendorProfileId":null,
+              "reason":"SUPPLIER_NOT_CONFIGURED","detail":"no vendor profile for alias acme-parts",
+              "requestedRevision":%d,"commandEventId":"%s","occurredAt":"2026-08-16T11:30:00Z"}}
+            """.formatted(eventId, PO_ID, requestedRevision, INTENT_ID);
+    }
+
+    private void inFlightFirstSend() {
+        order.setVersionNumber(3);
+        order.setTransmissionCount(1);
+        order.setTransmittedVersionNumber(3);
+        order.setPriorTransmittedVersionNumber(null);
+    }
+
+    @Test
+    @DisplayName("not-dispatched on a never-sent order restores the pre-request counters and records the reason")
+    void notDispatchedRollsBackAFirstSend() {
+        inFlightFirstSend();
+
+        listener.onSupplierEvent(notDispatched("evt-nd-1", 3));
+
+        assertThat(order.getTransmissionState()).isEqualTo(TransmissionState.NOT_DISPATCHED);
+        assertThat(order.getTransmissionCount()).isZero();
+        assertThat(order.getTransmittedVersionNumber()).isNull();
+        assertThat(order.getTransmissionRejectionReason()).isEqualTo("SUPPLIER_NOT_CONFIGURED");
+        assertThat(order.getTransmissionVendorReason())
+                .isEqualTo("Not sent: acme-parts is not set up for electronic ordering."
+                        + " The vendor has not received this order.");
+        ArgumentCaptor<PurchaseOrderTransmissionEvent> captor =
+                ArgumentCaptor.forClass(PurchaseOrderTransmissionEvent.class);
+        verify(transmissionEventRepository).save(captor.capture());
+        assertThat(captor.getValue().getEventType()).isEqualTo("NOT_DISPATCHED");
+        assertThat(captor.getValue().getStatus()).isEqualTo("SUPPLIER_NOT_CONFIGURED");
+        assertThat(captor.getValue().getVendorReason()).contains("no vendor profile for alias acme-parts");
+    }
+
+    @Test
+    @DisplayName("not-dispatched on a revised order restores the earlier transmitted version")
+    void notDispatchedRollsBackARevision() {
+        order.setVersionNumber(5);
+        order.setTransmissionCount(2);
+        order.setTransmittedVersionNumber(5);
+        order.setPriorTransmittedVersionNumber(3);
+
+        listener.onSupplierEvent(notDispatched("evt-nd-2", 5));
+
+        assertThat(order.getTransmissionState()).isEqualTo(TransmissionState.NOT_DISPATCHED);
+        assertThat(order.getTransmissionCount()).isEqualTo(1);
+        assertThat(order.getTransmittedVersionNumber()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("not-dispatched is ignored once the order has been answered")
+    void notDispatchedIgnoredWhenNotRequested() {
+        inFlightFirstSend();
+        order.setTransmissionState(TransmissionState.CONFIRMED);
+
+        listener.onSupplierEvent(notDispatched("evt-nd-3", 3));
+
+        assertThat(order.getTransmissionState()).isEqualTo(TransmissionState.CONFIRMED);
+        assertThat(order.getTransmissionCount()).isEqualTo(1);
+        verify(transmissionEventRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("not-dispatched for a different revision than the one in flight is ignored")
+    void notDispatchedIgnoredOnRevisionMismatch() {
+        inFlightFirstSend();
+
+        listener.onSupplierEvent(notDispatched("evt-nd-4", 2));
+
+        assertThat(order.getTransmissionState()).isEqualTo(TransmissionState.REQUESTED);
+        assertThat(order.getTransmissionCount()).isEqualTo(1);
+        assertThat(order.getTransmittedVersionNumber()).isEqualTo(3);
+        verify(transmissionEventRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("not-dispatched is ignored for a MANUAL_REVIEW or REJECTED order")
+    void notDispatchedIgnoredForOtherStates() {
+        inFlightFirstSend();
+        for (TransmissionState state :
+                new TransmissionState[] {TransmissionState.MANUAL_REVIEW, TransmissionState.REJECTED}) {
+            order.setTransmissionState(state);
+            listener.onSupplierEvent(notDispatched("evt-nd-" + state, 3));
+            assertThat(order.getTransmissionState()).isEqualTo(state);
+        }
+        verify(transmissionEventRepository, never()).save(any());
+    }
+
     @Test
     @DisplayName("a late escalation does not drag an answered order back into limbo")
     void reviewRequiredDoesNotOverturnAnAnswer() {

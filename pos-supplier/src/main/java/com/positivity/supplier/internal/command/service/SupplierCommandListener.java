@@ -5,12 +5,14 @@ import com.positivity.domainevents.supplier.SupplierOrderRequestedV1;
 import com.positivity.domainevents.supplier.SupplierPriceCatalogRepublishRequestedV1;
 import com.positivity.supplier.internal.entity.ProcessedEvent;
 import com.positivity.supplier.internal.mktcat.service.MktCatRepublisher;
+import com.positivity.supplier.internal.order.service.OrderNotDispatchedPublisher;
 import com.positivity.supplier.internal.order.service.TransmissionIntentWriter;
 import com.positivity.supplier.internal.pricecatalog.service.PriceCatalogRepublisher;
 import com.positivity.supplier.internal.repository.ProcessedEventRepository;
 import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -94,6 +96,7 @@ public class SupplierCommandListener {
     private final TransmissionIntentWriter intentWriter;
     private final PriceCatalogRepublisher republisher;
     private final MktCatRepublisher mktCatRepublisher;
+    private final OrderNotDispatchedPublisher notDispatchedPublisher;
 
     /** A handler and its processed mark in one transaction; a failure's mark in its own. */
     private final TransactionTemplate handlerTransaction;
@@ -105,6 +108,7 @@ public class SupplierCommandListener {
             TransmissionIntentWriter intentWriter,
             PriceCatalogRepublisher republisher,
             MktCatRepublisher mktCatRepublisher,
+            OrderNotDispatchedPublisher notDispatchedPublisher,
             PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
@@ -112,6 +116,7 @@ public class SupplierCommandListener {
         this.intentWriter = intentWriter;
         this.republisher = republisher;
         this.mktCatRepublisher = mktCatRepublisher;
+        this.notDispatchedPublisher = notDispatchedPublisher;
         this.handlerTransaction = new TransactionTemplate(transactionManager);
         this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -157,7 +162,12 @@ public class SupplierCommandListener {
             throw e;
         } catch (TransmissionIntentWriter.UnknownSupplierException e) {
             log.error("Supplier order command eventId={} names an unusable vendor: {}", eventId, e.getMessage());
-            handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId, ownerOf(eventType, envelope)));
+            // The handler's transaction has rolled back; answering the ordering domain and marking
+            // the command processed commit together in a fresh one (#2492).
+            handlerTransaction.executeWithoutResult(_ -> {
+                publishNotDispatched(envelope, eventId, e);
+                recordProcessed(eventId, ownerOf(eventType, envelope));
+            });
         } catch (IllegalStateException e) {
             // Not a bad command — this module's own state contradicting itself. Swallowing it would
             // mislabel it as malformed input, blame the producer, and record as processed a command
@@ -182,6 +192,33 @@ public class SupplierCommandListener {
                 .owner(owner)
                 .processedAt(Instant.now(clock))
                 .build());
+    }
+
+    /**
+     * Tells the ordering domain the vendor is not set up, in the caller's transaction. The command
+     * is re-read from the envelope: the failed handler's transaction left nothing behind to reuse.
+     */
+    private void publishNotDispatched(
+            @NonNull JsonNode envelope,
+            @NonNull String eventId,
+            TransmissionIntentWriter.@NonNull UnknownSupplierException failure) {
+        UUID commandEventId;
+        try {
+            commandEventId = UUID.fromString(eventId);
+        } catch (IllegalArgumentException e) {
+            log.error("Supplier order command eventId={} is not a UUID; cannot answer it as not dispatched", eventId);
+            return;
+        }
+        SupplierOrderRequestedV1 command =
+                objectMapper.treeToValue(envelope.path("payload"), SupplierOrderRequestedV1.class);
+        notDispatchedPublisher.publish(
+                command.purchaseOrderId(),
+                command.revision(),
+                failure.getSupplierRef(),
+                failure.getVendorProfileId(),
+                failure.getDetail(),
+                commandEventId,
+                envelope.path("correlationId").stringValue(eventId));
     }
 
     private void applyOrderRequested(JsonNode envelope, String eventId) {
