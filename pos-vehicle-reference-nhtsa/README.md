@@ -18,7 +18,7 @@ Vehicle reference data service backed by the NHTSA (National Highway Traffic Saf
 ## API Endpoints
 
 - `GET /v1/vehicle-fitment/manufacturers` — list all NHTSA manufacturers
-- `GET /v1/vehicle-fitment/makes/{manufacturerId}` — makes for a manufacturer
+- `GET /v1/vehicle-fitment/makes/{manufacturerId}` — makes linked to a manufacturer (one make row per vPIC Make_ID, linked many-to-many through `make_manufacturer`; `MakeResponse.manufacturerIds` lists every linked manufacturer; the list is refreshed per manufacturer, `manufacturer.makes_refreshed_at`)
 - `GET /v1/vehicle-fitment/models/{makeId}` — models for a make
 - `GET /v1/vehicle-fitment/vehicle-types/{makeId}` — vehicle types for a make
 

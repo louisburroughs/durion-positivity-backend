@@ -86,7 +86,13 @@ class VpicReferenceRefreshIT extends PostgresTenancyTestBase {
         owner = new JdbcTemplate(ownerDataSource());
         requested.clear();
         for (String table : List.of(
-                "vehicle_variable_value", "vehicle_variable", "vehicle_type", "model", "make", "manufacturer")) {
+                "vehicle_variable_value",
+                "vehicle_variable",
+                "vehicle_type",
+                "model",
+                "make_manufacturer",
+                "make",
+                "manufacturer")) {
             owner.execute("DELETE FROM " + table);
         }
         vpic.put(
@@ -154,6 +160,72 @@ class VpicReferenceRefreshIT extends PostgresTenancyTestBase {
                 .isEqualTo(1);
         assertThat(owner.queryForObject("SELECT make_id FROM model", UUID.class))
                 .isEqualTo(TESLA_MAKE);
+    }
+
+    @Test
+    void makeSharedByTwoManufacturers_isOneRowLinkedToBothAndListedUnderBoth() {
+        // vPIC returns the same Make_ID 482 for two manufacturers (#2471).
+        String manufacturersUrl = MANUFACTURERS_URL;
+        vpic.put(
+                manufacturersUrl,
+                envelope("{\"Mfr_CommonName\":\"A\",\"Mfr_ID\":1001}", "{\"Mfr_CommonName\":\"B\",\"Mfr_ID\":1002}"));
+        String makesA = VPIC + "/GetMakeForManufacturer/1001?format=json";
+        String makesB = VPIC + "/GetMakeForManufacturer/1002?format=json";
+        vpic.put(
+                makesA,
+                envelope("{\"Make_ID\":482,\"Make_Name\":\"SHARED\"}", "{\"Make_ID\":483,\"Make_Name\":\"ONLY A\"}"));
+        vpic.put(makesB, envelope("{\"Make_ID\":482,\"Make_Name\":\"SHARED\"}"));
+        UUID a = derived("manufacturer-1001");
+        UUID b = derived("manufacturer-1002");
+        UUID shared = derived("make-482");
+        service.getManufacturers();
+
+        // Refreshed A, B, A.
+        assertThat(service.getMakesByManufacturer(a)).extracting(Make::getId).contains(shared);
+        assertThat(service.getMakesByManufacturer(b)).extracting(Make::getId).containsExactly(shared);
+        // Stale only A, so B stays fresh and is served from the join table without calling vPIC.
+        owner.update(
+                "UPDATE manufacturer SET makes_refreshed_at = makes_refreshed_at - interval '25 hours' WHERE id = ?",
+                a);
+        requested.clear();
+        assertThat(service.getMakesByManufacturer(a)).extracting(Make::getId).contains(shared);
+        assertThat(requested).containsExactly(makesA);
+
+        // B's list was not touched by A's second refresh: no vPIC call, link survived, shared make still listed.
+        requested.clear();
+        assertThat(service.getMakesByManufacturer(b)).extracting(Make::getId).containsExactly(shared);
+        assertThat(requested).isEmpty();
+        assertThat(owner.queryForObject("SELECT count(*) FROM make WHERE nhtsa_id = 482", Integer.class))
+                .isEqualTo(1);
+        assertThat(owner.queryForList(
+                        "SELECT manufacturer_id FROM make_manufacturer WHERE make_id = ?", UUID.class, shared))
+                .containsExactlyInAnyOrder(a, b);
+    }
+
+    @Test
+    void makeListFreshnessIsPerManufacturer() {
+        vpic.put(
+                MANUFACTURERS_URL,
+                envelope("{\"Mfr_CommonName\":\"A\",\"Mfr_ID\":1001}", "{\"Mfr_CommonName\":\"B\",\"Mfr_ID\":1002}"));
+        String makesA = VPIC + "/GetMakeForManufacturer/1001?format=json";
+        String makesB = VPIC + "/GetMakeForManufacturer/1002?format=json";
+        vpic.put(makesA, envelope("{\"Make_ID\":482,\"Make_Name\":\"SHARED\"}"));
+        vpic.put(makesB, envelope("{\"Make_ID\":482,\"Make_Name\":\"SHARED\"}"));
+        service.getManufacturers();
+        requested.clear();
+
+        service.getMakesByManufacturer(derived("manufacturer-1001"));
+        assertThat(requested).containsExactly(makesA);
+
+        // A's refresh stamped the shared make, but B's own list has never been fetched: vPIC is still called.
+        requested.clear();
+        service.getMakesByManufacturer(derived("manufacturer-1002"));
+        assertThat(requested).containsExactly(makesB);
+
+        requested.clear();
+        service.getMakesByManufacturer(derived("manufacturer-1001"));
+        service.getMakesByManufacturer(derived("manufacturer-1002"));
+        assertThat(requested).isEmpty();
     }
 
     @Test
@@ -246,6 +318,7 @@ class VpicReferenceRefreshIT extends PostgresTenancyTestBase {
                 "manufacturer", "make", "model", "vehicle_type", "vehicle_variable", "vehicle_variable_value")) {
             owner.update("UPDATE " + table + " SET cache_timestamp = cache_timestamp - interval '25 hours'");
         }
+        owner.update("UPDATE manufacturer SET makes_refreshed_at = makes_refreshed_at - interval '25 hours'");
     }
 
     private static UUID derived(String name) {
