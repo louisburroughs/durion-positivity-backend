@@ -83,7 +83,7 @@ Active on the Kafka rails (any profile but `dev`/`test`/`pg`, or `local-kafka`);
 
 ## Kafka error handling and dead-lettering (ADR-0044 §4, #2483)
 
-With `pos.invoice.kafka.enabled=true`, `KafkaErrorHandlingConfig` installs a `DefaultErrorHandler` on
+On the Kafka rails (outside dev/test), `KafkaErrorHandlingConfig` installs a `DefaultErrorHandler` on
 every pos-invoice listener container: exponential backoff (1s, x2, capped at 30s, 5 retries), then a
 `DeadLetterPublishingRecoverer` publishes the record to `{topic}.dlq`. Listeners rethrow retryable
 failures (`RetryableConsumerFailures`) so they reach this handler; a record whose retries are
