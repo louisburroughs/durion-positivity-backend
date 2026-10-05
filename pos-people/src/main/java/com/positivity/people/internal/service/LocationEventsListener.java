@@ -2,6 +2,7 @@ package com.positivity.people.internal.service;
 
 import com.positivity.domainevents.location.LocationDeletedV1;
 import com.positivity.domainevents.location.LocationUpdatedV1;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.people.internal.entity.ExtLocationParentReplica;
 import com.positivity.people.internal.entity.ExtLocationReplica;
 import com.positivity.people.internal.entity.ProcessedEvent;
@@ -17,7 +18,6 @@ import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -58,7 +58,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "pos.people.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class LocationEventsListener {
 
     static final String OWNER = "location";

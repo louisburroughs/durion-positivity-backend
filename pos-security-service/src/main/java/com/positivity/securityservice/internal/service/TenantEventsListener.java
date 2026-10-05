@@ -1,6 +1,7 @@
 package com.positivity.securityservice.internal.service;
 
 import com.positivity.domainevents.tenant.TenantEventTypes;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.securityservice.internal.entity.ExtTenant;
 import com.positivity.securityservice.internal.entity.ProcessedEvent;
 import com.positivity.securityservice.internal.repository.ExtTenantRepository;
@@ -16,7 +17,6 @@ import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,7 +42,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "pos.security-service.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class TenantEventsListener {
 
     static final String OWNER = "tenant";

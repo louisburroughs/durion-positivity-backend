@@ -87,7 +87,6 @@ pos:
       # ADR-0044 domain-event flow (people-contact.events.v1 facts via the transactional outbox,
       # people-contact.commands.v1 replay/bootstrap commands, people-contact.manifest.v1
       # reconciliation).
-      enabled: ${POS_PEOPLE_CONTACT_KAFKA_ENABLED:false}
       events-topic: ${POS_PEOPLE_CONTACT_EVENTS_TOPIC:people-contact.events.v1}
       commands-topic: ${POS_PEOPLE_CONTACT_COMMANDS_TOPIC:people-contact.commands.v1}
       commands-consumer-group: ${POS_PEOPLE_CONTACT_COMMANDS_CONSUMER_GROUP:pos-people-contact-commands}

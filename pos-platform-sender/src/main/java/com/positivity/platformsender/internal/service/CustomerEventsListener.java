@@ -2,6 +2,7 @@ package com.positivity.platformsender.internal.service;
 
 import com.positivity.domainevents.customer.CustomerPartyDeletedV1;
 import com.positivity.domainevents.customer.CustomerPartyUpdatedV1;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.platformsender.internal.entity.ExtCustomerPersonParty;
 import com.positivity.platformsender.internal.entity.ProcessedEvent;
 import com.positivity.platformsender.internal.repository.ExtCustomerPersonPartyRepository;
@@ -16,7 +17,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -39,7 +39,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "pos.platform-sender.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class CustomerEventsListener {
 
     static final String OWNER = "customer";

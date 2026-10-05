@@ -1,12 +1,6 @@
 {
   "properties": [
     {
-      "name": "pos.tenant.kafka.enabled",
-      "type": "java.lang.Boolean",
-      "description": "Publish tenant registry facts to tenant.events.v1 through the outbox and consume tenant.provisioned.",
-      "defaultValue": false
-    },
-    {
       "name": "pos.tenant.kafka.events-topic",
       "type": "java.lang.String",
       "description": "Topic for tenant registry facts (ADR-0062 section 7).",

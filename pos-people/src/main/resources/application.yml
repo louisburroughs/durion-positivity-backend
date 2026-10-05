@@ -110,7 +110,6 @@ pos:
       # people.commands.v1 replay commands, people.manifest.v1 reconciliation, plus the
       # people-contact.events.v1 replica consumer and person upsert commands toward
       # people-contact.commands.v1.
-      enabled: ${POS_PEOPLE_KAFKA_ENABLED:false}
       events-topic: ${POS_PEOPLE_EVENTS_TOPIC:people.events.v1}
       commands-topic: ${POS_PEOPLE_COMMANDS_TOPIC:people.commands.v1}
       commands-consumer-group: ${POS_PEOPLE_COMMANDS_CONSUMER_GROUP:pos-people-commands}

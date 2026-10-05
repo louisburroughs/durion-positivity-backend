@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
  * Emits {@code vehicle.vehicle.updated} to the vehicle outbox after registry mutations
  * (ADR-0044 §6, #843).
  *
- * <p>No-op when the Kafka feature flag ({@code pos.vehicle-inventory.kafka.enabled}) is off — the
+ * <p>No-op when the Kafka rails are off (dev/test profiles) — the
  * {@link OutboxEventWriter} bean is conditional, so this publisher degrades gracefully. Must be
  * called inside the mutating transaction (the writer requires {@code MANDATORY} propagation).
  */

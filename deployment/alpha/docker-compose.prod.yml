@@ -102,12 +102,7 @@ services:
     image: ${ECR_REGISTRY}/durion/pos-catalog:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
-    # pos-inventory validates products and UoMs against ext_product /
-    # ext_product_uom, which only this service's events populate. With the flag
-    # off nothing is written to its outbox at all, so those replicas stay empty
-    # and inventory rejects every product it is asked about.
-    environment:
-      POS_CATALOG_KAFKA_ENABLED: "true"
+    # No Kafka flag: the domain-event rails are tier-1, always on (ADR-0044 §4, #2463).
 
   pos-customer:
     image: ${ECR_REGISTRY}/durion/pos-customer:${BACKEND_TAG}
@@ -141,21 +136,13 @@ services:
     image: ${ECR_REGISTRY}/durion/pos-location:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
-    # pos-people validates staffing-assignment locations against ext_location,
-    # and pos-inventory against ext_storage_location / ext_location_parent.
-    # Same gating as pos-catalog above: flag off means no outbox rows, so those
-    # replicas are empty and every location lookup reports 'not found or
-    # inactive'.
-    environment:
-      POS_LOCATION_KAFKA_ENABLED: "true"
+    # No Kafka flag: the domain-event rails are tier-1, always on (ADR-0044 §4, #2463).
 
   pos-marketing:
     image: ${ECR_REGISTRY}/durion/pos-marketing:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
-    # No POS_MARKETING_KAFKA_ENABLED override: unlike the services above, the base
-    # compose already defaults this flag on, so the campaign/redemption publisher and
-    # the customer.events.v1 suppression replica are live as committed.
+    # No Kafka flag: the domain-event rails are tier-1, always on (ADR-0044 §4, #2463).
 
   pos-platform-sender:
     image: ${ECR_REGISTRY}/durion/pos-platform-sender:${BACKEND_TAG}
@@ -184,23 +171,13 @@ services:
     image: ${ECR_REGISTRY}/durion/pos-people:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
-    # ADR-0044 #875: counterpart to pos-people-contact below. Without this the
-    # base compose default (false) leaves every pos.people.kafka component off,
-    # including OutboxPublisher (person upsert commands toward
-    # people-contact.commands.v1) and PeopleContactEventsListener (which fills
-    # the ext_people_contact_person replica). StaffingAssignmentServiceImpl
-    # validates against that replica, so creating a staffing assignment fails
-    # with "Person not found" for a personId the service itself just reported.
-    environment:
-      POS_PEOPLE_KAFKA_ENABLED: "true"
+    # No Kafka flag: the domain-event rails are tier-1, always on (ADR-0044 §4, #2463).
 
   pos-people-contact:
     image: ${ECR_REGISTRY}/durion/pos-people-contact:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
-    # #838 second deploy: broker verified healthy, flag flipped on.
-    environment:
-      POS_PEOPLE_CONTACT_KAFKA_ENABLED: "true"
+    # No Kafka flag: the domain-event rails are tier-1, always on (ADR-0044 §4, #2463).
 
   pos-price:
     image: ${ECR_REGISTRY}/durion/pos-price:${BACKEND_TAG}
@@ -224,12 +201,7 @@ services:
     image: ${ECR_REGISTRY}/durion/pos-shop-manager:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
-    # Appointments validate crmCustomerId against ext_customer_party, which only
-    # customer.events.v1 fills. With the flag off that replica stays empty, so
-    # every appointment for a customer created after deployment is rejected with
-    # CUSTOMER_NOT_FOUND however long the caller waits.
-    environment:
-      POS_SHOP_MANAGER_KAFKA_ENABLED: "true"
+    # No Kafka flag: the domain-event rails are tier-1, always on (ADR-0044 §4, #2463).
 
   pos-supplier:
     image: ${ECR_REGISTRY}/durion/pos-supplier:${BACKEND_TAG}
@@ -245,10 +217,7 @@ services:
     image: ${ECR_REGISTRY}/durion/pos-tenant:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
-    # ADR-0062 section 7: the registry publishes tenant.events.v1; flag off means no outbox rows
-    # and pos-security-service's ext_tenant replica (plan WS2b) stays empty.
-    environment:
-      POS_TENANT_KAFKA_ENABLED: "true"
+    # No Kafka flag: the domain-event rails are tier-1, always on (ADR-0044 §4, #2463).
 
   pos-documents:
     image: ${ECR_REGISTRY}/durion/pos-documents:${BACKEND_TAG}
@@ -259,14 +228,7 @@ services:
     image: ${ECR_REGISTRY}/durion/pos-vehicle-inventory:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
-    # This service owns the vehicle aggregate and is the only publisher of
-    # vehicle.vehicle.updated on vehicle.events.v1. With the flag off nothing is
-    # written to its outbox, so every ext_vehicle replica downstream stays empty:
-    # pos-shop-manager rejects appointments with VEHICLE_NOT_FOUND, and
-    # pos-customer's own vehicle reads return an empty list for a vehicle that
-    # exists.
-    environment:
-      POS_VEHICLE_INVENTORY_KAFKA_ENABLED: "true"
+    # No Kafka flag: the domain-event rails are tier-1, always on (ADR-0044 §4, #2463).
 
   pos-warranty:
     image: ${ECR_REGISTRY}/durion/pos-warranty:${BACKEND_TAG}

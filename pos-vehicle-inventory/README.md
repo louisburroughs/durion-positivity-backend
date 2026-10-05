@@ -56,7 +56,6 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | ----------------------- | -------- | ---------------------------- |
 | `SPRING_DATASOURCE_URL` | required | PostgreSQL connection URL    |
 | `EUREKA_SERVER_URL`     | required | Eureka service discovery URL |
-| `POS_VEHICLE_INVENTORY_KAFKA_ENABLED` | `false` | Enables the ADR-0044 event pipeline (outbox drain, commands listener, manifests) |
 | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Kafka brokers for the domain-event channel |
 
 ## Multitenancy (ADR-0062, WS3 wave 10)

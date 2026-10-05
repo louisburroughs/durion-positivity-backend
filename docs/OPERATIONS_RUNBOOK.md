@@ -1316,7 +1316,7 @@ runs. Run the replay above after seeding, then re-check the consumer count.
 
 pos-catalog publishes products and services as separate facts, so seeding a catalog replica is two
 calls, not one. Both are paged and resumable — pass the previous response's `nextAfterId` until it
-comes back `complete: true` — and both **refuse with 409** when `pos.catalog.kafka.enabled` is off,
+comes back `complete: true` — and both **refuse with 409** when fact publication is off (the broker-less `dev`/`test`/`pg` profiles),
 rather than reporting a page of facts nobody received.
 
 ```bash

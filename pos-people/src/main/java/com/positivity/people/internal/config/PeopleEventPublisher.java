@@ -32,7 +32,7 @@ import tools.jackson.databind.ObjectMapper;
  * {@code people-contact.commands.v1}; pos-people-contact confirms with a
  * {@code people-contact.person.updated} fact that feeds this module's replica.
  *
- * <p>No-op when the Kafka feature flag ({@code pos.people.kafka.enabled}) is off — the
+ * <p>No-op when the Kafka rails are off (dev/test profiles) — the
  * {@link OutboxEventWriter} bean is conditional. Must be called inside the mutating transaction.
  * Employee and assignment rows carry no optimistic-lock version, so {@code aggregateVersion} is
  * the emission timestamp in epoch milliseconds (last-writer-wins hint; guard with {@code >=}).

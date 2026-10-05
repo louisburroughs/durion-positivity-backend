@@ -203,6 +203,12 @@
             <artifactId>spring-boot-starter-logging</artifactId>
         </dependency>
         <!-- pos-events for EmitEvent annotations -->
+        <!-- ADR-0044 §4 shared Kafka rails: @KafkaRails and its startup guard (#2463) -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-kafka-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>com.positivity</groupId>
             <artifactId>pos-events</artifactId>

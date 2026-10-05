@@ -13,12 +13,6 @@
       "defaultValue": "security-service"
     },
     {
-      "name": "pos.people-contact.kafka.enabled",
-      "type": "java.lang.Boolean",
-      "description": "Enable the ADR-0044 domain-event flow (outbox drain, command listener, manifests).",
-      "defaultValue": false
-    },
-    {
       "name": "pos.people-contact.kafka.events-topic",
       "type": "java.lang.String",
       "description": "Fact topic for people-contact identity events.",

@@ -90,6 +90,12 @@
             <groupId>com.github.ben-manes.caffeine</groupId>
             <artifactId>caffeine</artifactId>
         </dependency>
+        <!-- ADR-0044 §4 shared Kafka rails: @KafkaRails and its startup guard (#2463) -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-kafka-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>com.positivity</groupId>
             <artifactId>pos-events</artifactId>

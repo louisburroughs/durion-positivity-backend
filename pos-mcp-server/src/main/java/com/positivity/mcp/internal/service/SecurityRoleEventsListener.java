@@ -3,12 +3,12 @@ package com.positivity.mcp.internal.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.domainevents.security.RolePersonaChangedV1;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.mcp.internal.domain.RolePersona;
 import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
@@ -30,7 +30,7 @@ import org.springframework.stereotype.Component;
  * nothing.
  */
 @Component
-@ConditionalOnProperty(prefix = "pos.mcp.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class SecurityRoleEventsListener {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SecurityRoleEventsListener.class);

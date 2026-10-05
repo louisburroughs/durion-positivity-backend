@@ -20,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
  * Re-publishes {@code vehicle.vehicle.updated} for one bounded page of vehicles.
  *
  * <p>Exists because enabling publication only covers what changes afterwards. Vehicles written while
- * {@code POS_VEHICLE_INVENTORY_KAFKA_ENABLED} was false have no outbox rows at all, so the existing
+ * before publication was switched on have no outbox rows at all, so the existing
  * outbox replay - which re-queues rows already in that table - cannot reach them, and every
  * ext_vehicle replica downstream stays missing them until someone happens to edit each vehicle.
  * This reads the vehicles themselves instead. Mirrors pos-catalog's product-fact replay.

@@ -113,7 +113,7 @@ public class CampaignReferenceValidator {
      * <p><b>Cold-replica behaviour, chosen deliberately: the check stands down for a kind the
      * replica holds no rows of at all, and blocks otherwise.</b> The replica is fed by
      * {@code catalog.events.v1} and is empty until that feed runs
-     * ({@code POS_MARKETING_KAFKA_ENABLED} defaults to false), so resolving strictly against an
+     * (it does not run in the broker-less dev/test profiles), so resolving strictly against an
      * empty table would make every catalog reference a scheduling blocker in an environment that
      * never provisioned the feed — and, on a freshly deployed one, until pos-catalog's fact replays
      * ({@code POST /v1/products/facts/replay}, #1309, and {@code POST

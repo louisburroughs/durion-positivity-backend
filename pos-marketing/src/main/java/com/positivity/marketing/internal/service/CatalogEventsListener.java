@@ -3,6 +3,7 @@ package com.positivity.marketing.internal.service;
 import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.catalog.CatalogServiceUpdatedV1;
 import com.positivity.domainevents.catalog.ProductUpdatedV1;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.marketing.internal.entity.ExtCatalogReplica;
 import com.positivity.marketing.internal.entity.ProcessedEvent;
 import com.positivity.marketing.internal.enums.CatalogItemKind;
@@ -13,7 +14,6 @@ import java.time.Instant;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,7 +46,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "pos.marketing.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class CatalogEventsListener {
 
     /** Producing domain, per the repo-wide processed_events convention. */

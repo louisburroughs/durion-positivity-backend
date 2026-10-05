@@ -3,6 +3,7 @@ package com.positivity.peoplecontact.internal.config;
 import com.positivity.domainevents.peoplecontact.PersonUpsertRequestedV1;
 import com.positivity.domainevents.peoplecontact.UserPersonLinkCreateRequestedV1;
 import com.positivity.domainevents.peoplecontact.UserPersonLinkRemoveRequestedV1;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.peoplecontact.internal.repository.ProcessedEventRepository;
 import com.positivity.peoplecontact.internal.service.LinkCommandHandler;
 import com.positivity.peoplecontact.internal.service.OutboxReplayService;
@@ -17,7 +18,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
@@ -36,7 +36,7 @@ import tools.jackson.databind.ObjectMapper;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(prefix = "pos.people-contact.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class PeopleContactCommandListener {
     private static final String EVENT_ID = "eventId";
 

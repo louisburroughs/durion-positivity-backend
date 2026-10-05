@@ -1,11 +1,11 @@
 package com.positivity.mcp.internal.config;
 
+import com.positivity.kafka.common.KafkaRails;
 import java.util.function.BiFunction;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -25,7 +25,7 @@ import org.springframework.util.backoff.ExponentialBackOff;
  * container factory, so declaring the bean is sufficient.
  */
 @Configuration
-@ConditionalOnProperty(prefix = "pos.mcp.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class KafkaErrorHandlingConfig {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(KafkaErrorHandlingConfig.class);

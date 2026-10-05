@@ -2,6 +2,7 @@ package com.positivity.location.internal.service;
 
 import com.positivity.domainevents.ReconciliationManifestV1;
 import com.positivity.domainevents.UuidV7Timestamps;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.location.internal.repository.ProcessedEventRepository;
 import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import io.micrometer.core.instrument.Counter;
@@ -13,7 +14,6 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
@@ -38,7 +38,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "pos.location.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class InventoryManifestListener {
 
     private static final String REPLAY_COMMAND_TYPE = "inventory.outbox.replay-requested";

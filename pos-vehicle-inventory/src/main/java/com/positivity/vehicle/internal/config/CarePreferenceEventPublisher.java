@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component;
  * Emits {@code vehicle.care-preference.updated} to the vehicle outbox after care-preference
  * mutations (#1175), mirroring {@link VehicleEventPublisher}.
  *
- * <p>No-op when the Kafka feature flag ({@code pos.vehicle-inventory.kafka.enabled}) is off — the
+ * <p>No-op when the Kafka rails are off (dev/test profiles) — the
  * {@link OutboxEventWriter} bean is conditional, so this publisher degrades gracefully. Must be
  * called inside the mutating transaction (the writer requires {@code MANDATORY} propagation).
  *

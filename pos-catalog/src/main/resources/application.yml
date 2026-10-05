@@ -85,8 +85,6 @@ pos:
     kafka:
       # Inventory availability/lead-time replica feed + reconciliation (ADR-0044 §6, #899), and the
       # catalog.product.updated fact producer (#924).
-      # Off until the broker is provisioned; flip POS_CATALOG_KAFKA_ENABLED per environment.
-      enabled: ${POS_CATALOG_KAFKA_ENABLED:false}
       inventory-events-topic: ${POS_CATALOG_INVENTORY_EVENTS_TOPIC:inventory.events.v1}
       inventory-events-consumer-group: ${POS_CATALOG_INVENTORY_EVENTS_CONSUMER_GROUP:pos-catalog-inventory-events}
       inventory-manifest-topic: ${POS_CATALOG_INVENTORY_MANIFEST_TOPIC:inventory.manifest.v1}

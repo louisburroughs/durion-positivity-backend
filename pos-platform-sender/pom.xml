@@ -99,6 +99,12 @@
             <artifactId>spring-boot-starter-kafka</artifactId>
         </dependency>
         <!-- Domain-event envelope, payload contracts and reconciliation manifests (ADR-0044 §3) -->
+        <!-- ADR-0044 §4 shared Kafka rails: @KafkaRails and its startup guard (#2463) -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-kafka-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>com.positivity</groupId>
             <artifactId>pos-domain-events</artifactId>

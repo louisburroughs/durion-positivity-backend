@@ -31,8 +31,8 @@ import org.springframework.stereotype.Component;
  * (ADR-0044 §6, #924), {@code catalog.service.updated} after service mutations (#1306), and
  * {@code catalog.supplier-article-code.updated} (CAP-320 #1347) — to the catalog outbox.
  *
- * <p>No-op when the Kafka feature flag ({@code pos.catalog.kafka.enabled}) is off — the
- * {@link OutboxEventWriter} bean is conditional, so this publisher degrades gracefully. Must be
+ * <p>No-op when the Kafka rails are off (broker-less dev/test profiles) — the
+ * {@link OutboxEventWriter} bean is a {@code @KafkaRails} bean, so this publisher degrades gracefully. Must be
  * called inside the mutating transaction (the writer requires {@code MANDATORY} propagation).
  *
  * <p>Since #1023 (inventory Odoo-parity Story X1, schema version 2) the payload additionally
@@ -81,7 +81,7 @@ public class CatalogFactPublisher {
 
     /**
      * Whether facts published here actually reach the outbox — false when
-     * {@code pos.catalog.kafka.enabled} is off and the {@link OutboxEventWriter} bean is absent.
+     * the Kafka rails are off (dev/test profiles) and the {@link OutboxEventWriter} bean is absent.
      *
      * <p>Exposed so a bulk re-emit can refuse rather than report success for facts it silently
      * dropped: an ordinary write is right to carry on regardless (the business change is what

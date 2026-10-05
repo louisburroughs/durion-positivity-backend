@@ -73,7 +73,7 @@ public class ProductFactReplayServiceImpl implements ProductFactReplayService {
         // guard on the service replay (#1306); the two are run back to back and lied alike.
         if (!catalogFactPublisher.publicationEnabled()) {
             throw new CatalogBusinessRuleException(
-                    "Fact publication is disabled (pos.catalog.kafka.enabled=false); a replay would emit nothing");
+                    "Fact publication is disabled (Kafka rails off in this profile); a replay would emit nothing");
         }
         int pageSize = Math.min(Math.max(limit, 1), MAX_LIMIT);
         Instant startedAt = Instant.now(clock);

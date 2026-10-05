@@ -59,13 +59,13 @@ public class ServiceFactReplayServiceImpl implements ServiceFactReplayService {
     public ServiceFactReplayResultDto replayPage(
             @Nullable UUID afterServiceId, @Nullable Instant updatedSince, int limit) {
         // Refused rather than reported as a successful no-op. The publisher is deliberately silent
-        // when pos.catalog.kafka.enabled is off, which is right for an ordinary write — the
+        // when the Kafka rails are off (dev/test profiles), which is right for an ordinary write — the
         // business change is what matters — but a replay produces nothing else. Counting the rows
         // it read as facts it emitted would tell an operator a replica was seeded when the outbox
         // never saw a row, and the next thing they would do is trust it.
         if (!catalogFactPublisher.publicationEnabled()) {
             throw new CatalogBusinessRuleException(
-                    "Fact publication is disabled (pos.catalog.kafka.enabled=false); a replay would emit nothing");
+                    "Fact publication is disabled (Kafka rails off in this profile); a replay would emit nothing");
         }
         int pageSize = Math.min(Math.max(limit, 1), MAX_LIMIT);
         Instant startedAt = Instant.now(clock);

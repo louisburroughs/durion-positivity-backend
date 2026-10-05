@@ -1,6 +1,7 @@
 package com.positivity.location.internal.service;
 
 import com.positivity.domainevents.inventory.StorageLocationOnHandUpdatedV1;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.location.internal.entity.ExtStorageLocationOnHandReplica;
 import com.positivity.location.internal.entity.ProcessedEvent;
 import com.positivity.location.internal.repository.ExtStorageLocationOnHandReplicaRepository;
@@ -13,7 +14,6 @@ import java.time.Instant;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -43,7 +43,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "pos.location.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class InventoryEventsListener {
 
     static final String OWNER = "inventory";

@@ -1,6 +1,7 @@
 package com.positivity.marketing.internal.config;
 
 import com.positivity.domainevents.DomainEventEnvelope;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.marketing.internal.entity.OutboxEvent;
 import com.positivity.marketing.internal.repository.OutboxEventRepository;
 import com.positivity.tenancy.TenantResolver;
@@ -9,7 +10,6 @@ import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,13 +21,13 @@ import tools.jackson.databind.ObjectMapper;
  * <p>Serializes a full {@link DomainEventEnvelope} into {@code event_outbox} within the caller's
  * transaction, so an event exists if and only if the business state change committed.
  * {@link OutboxPublisher} drains the table to Kafka with at-least-once delivery. Domain code
- * should inject this bean via {@code ObjectProvider<OutboxEventWriter>} because it only exists
- * when {@code pos.marketing.kafka.enabled=true}.
+ * should inject this bean via {@code ObjectProvider<OutboxEventWriter>} because it is a
+ * {@code @KafkaRails} bean, absent in the broker-less dev/test profiles.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(prefix = "pos.marketing.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class OutboxEventWriter {
 
     private final Clock clock;

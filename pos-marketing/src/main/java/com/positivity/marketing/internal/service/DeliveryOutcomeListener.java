@@ -1,6 +1,7 @@
 package com.positivity.marketing.internal.service;
 
 import com.positivity.domainevents.marketing.MarketingCampaignSendOutcomeV1;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.marketing.internal.config.OutboxEventWriter;
 import com.positivity.marketing.internal.entity.Campaign;
 import com.positivity.marketing.internal.entity.CampaignSend;
@@ -16,7 +17,6 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,7 +50,7 @@ import tools.jackson.databind.node.ObjectNode;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "pos.marketing.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class DeliveryOutcomeListener {
 
     private static final String OWNER = "platform-sender";
