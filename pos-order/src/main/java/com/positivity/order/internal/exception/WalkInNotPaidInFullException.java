@@ -1,14 +1,16 @@
 package com.positivity.order.internal.exception;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
  * A walk-in sale must be paid in full now (CAP:550 S8, decision AW12): the cash and card the
  * cashier declared at checkout is absent or below the order's final grand total, computed by the
- * server after the last reprice and tax. Maps to {@code 422 ORDER_WALK_IN_NOT_PAID_IN_FULL} with
- * the grand total named in {@code fieldErrors[tenderedAmount]}.
+ * server after the last reprice and tax and rounded to the cent the register shows. Maps to
+ * {@code 422 ORDER_WALK_IN_NOT_PAID_IN_FULL} with the grand total named in
+ * {@code fieldErrors[tenderedAmount]}.
  */
 public class WalkInNotPaidInFullException extends RuntimeException {
 
@@ -32,13 +34,12 @@ public class WalkInNotPaidInFullException extends RuntimeException {
         return tenderedAmount;
     }
 
-    /** The grand total as the cashier reads it: at least two decimals, no padding beyond them. */
+    /** The grand total as the cashier reads it: exactly two decimals. */
     public @NonNull String grandTotalDisplay() {
         return display(grandTotal);
     }
 
     private static String display(BigDecimal amount) {
-        BigDecimal stripped = amount.stripTrailingZeros();
-        return (stripped.scale() < 2 ? stripped.setScale(2) : stripped).toPlainString();
+        return amount.setScale(2, RoundingMode.HALF_UP).toPlainString();
     }
 }

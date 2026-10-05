@@ -66,8 +66,10 @@ cart whose customer is that account is a *walk-in cart*:
 | Paid in full now | checkout, after the final reprice and tax | `422 ORDER_WALK_IN_NOT_PAID_IN_FULL`, `fieldErrors[tenderedAmount]` names the grand total |
 | Refunded to the original tender only | `POST /v1/returns` | `422 RETURN_WALK_IN_NOT_ALLOWED` for `STORE_CREDIT` / `ON_ACCOUNT_CREDIT` |
 
-- `tenderedAmount` is a declaration, compared with the server's own total; the payments are still
-  captured in pos-invoice after checkout. A refused cart stays `DRAFT`; retry with a new
+- `tenderedAmount` is a declaration, compared with the server's own total **at cent scale**
+  (`grandTotal` rounded HALF_UP to 2 dp — the figure the register shows and the amount pos-invoice
+  settles, S9); the 4-dp calculator residue of a percent discount or line tax is never demanded.
+  The payments are still captured in pos-invoice after checkout. A refused cart stays `DRAFT`; retry with a new
   `Idempotency-Key`. For a cart with a registered customer the field is ignored. A replay of a
   completed checkout returns the stored result and re-evaluates nothing.
 - When the replica holds no active house account for the tenant (not provisioned yet, or the party
@@ -80,8 +82,10 @@ cart whose customer is that account is a *walk-in cart*:
   customer is unknown). X and Z session reports carry `walkInByClerk[]` —
   `{clerkId, orderCount, walkInOrderCount, walkInTotal}` over the session's orders that left
   `DRAFT`, keyed on the order's `clerkId`.
-- Refusals are logged at INFO with the order number and code; checkout refusals also count on the
-  `order.checkout.refused` meter, tagged `code`.
+- Refusals are logged at INFO with the order number and code. The `order.checkout.refused` meter
+  (tag `code`) counts only the three S8 checkout refusals — `ORDER_CUSTOMER_REQUIRED`,
+  `ORDER_WALK_IN_NOT_ALLOWED`, `ORDER_WALK_IN_NOT_PAID_IN_FULL` — not the pre-existing ones
+  (empty cart, pending validation, serials, on-account eligibility).
 
 ## Location scope (ADR-0061, #1872)
 

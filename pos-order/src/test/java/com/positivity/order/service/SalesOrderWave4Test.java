@@ -309,7 +309,7 @@ class SalesOrderWave4Test {
         SalesOrder order = validatedCommercialOrder();
         grantAuthorities("order:order:charge_on_account");
 
-        CheckoutResult result = salesOrderService.checkout(ORDER_ID, "chk-1", "ON_ACCOUNT");
+        CheckoutResult result = salesOrderService.checkout(ORDER_ID, "chk-1", "ON_ACCOUNT", null);
 
         assertThat(result.summary().status()).isEqualTo("COMPLETED");
         assertThat(order.getAmountPaid()).isEqualByComparingTo(order.getGrandTotal());
@@ -326,7 +326,7 @@ class SalesOrderWave4Test {
         validatedCommercialOrder();
         grantAuthorities("order:order:checkout");
 
-        assertThatThrownBy(() -> salesOrderService.checkout(ORDER_ID, "chk-1", "ON_ACCOUNT"))
+        assertThatThrownBy(() -> salesOrderService.checkout(ORDER_ID, "chk-1", "ON_ACCOUNT", null))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
@@ -338,7 +338,7 @@ class SalesOrderWave4Test {
         when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
         grantAuthorities("order:order:charge_on_account");
 
-        assertThatThrownBy(() -> salesOrderService.checkout(ORDER_ID, "chk-1", "ON_ACCOUNT"))
+        assertThatThrownBy(() -> salesOrderService.checkout(ORDER_ID, "chk-1", "ON_ACCOUNT", null))
                 .isInstanceOf(com.positivity.order.internal.exception.OrderCustomerRequiredException.class);
     }
 
@@ -349,7 +349,7 @@ class SalesOrderWave4Test {
         when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
         grantAuthorities("order:order:charge_on_account");
 
-        assertThatThrownBy(() -> salesOrderService.checkout(ORDER_ID, "chk-1", "ON_ACCOUNT"))
+        assertThatThrownBy(() -> salesOrderService.checkout(ORDER_ID, "chk-1", "ON_ACCOUNT", null))
                 .isInstanceOf(InvalidCustomerException.class);
     }
 
@@ -368,7 +368,7 @@ class SalesOrderWave4Test {
                         .build()));
         grantAuthorities("order:order:charge_on_account");
 
-        assertThatThrownBy(() -> salesOrderService.checkout(ORDER_ID, "chk-1", "ON_ACCOUNT"))
+        assertThatThrownBy(() -> salesOrderService.checkout(ORDER_ID, "chk-1", "ON_ACCOUNT", null))
                 .isInstanceOf(InvalidCustomerException.class);
     }
 
@@ -379,7 +379,7 @@ class SalesOrderWave4Test {
         when(extBillingRulesRepository.findById(CUSTOMER_ID)).thenReturn(Optional.empty());
         grantAuthorities("order:order:charge_on_account");
 
-        assertThatThrownBy(() -> salesOrderService.checkout(ORDER_ID, "chk-1", "ON_ACCOUNT"))
+        assertThatThrownBy(() -> salesOrderService.checkout(ORDER_ID, "chk-1", "ON_ACCOUNT", null))
                 .isInstanceOf(InvalidCustomerException.class);
     }
 
@@ -397,7 +397,7 @@ class SalesOrderWave4Test {
                         .build()));
         grantAuthorities("order:order:charge_on_account");
 
-        assertThatThrownBy(() -> salesOrderService.checkout(ORDER_ID, "chk-1", "ON_ACCOUNT"))
+        assertThatThrownBy(() -> salesOrderService.checkout(ORDER_ID, "chk-1", "ON_ACCOUNT", null))
                 .isInstanceOf(InvalidCustomerException.class);
     }
 

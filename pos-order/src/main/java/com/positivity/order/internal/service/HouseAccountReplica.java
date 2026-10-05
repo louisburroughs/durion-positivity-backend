@@ -22,8 +22,10 @@ import org.springframework.stereotype.Component;
  *
  * <p>The flag is the whole test. A customer number of {@code CASH} or a display name of "Walk-in
  * customer" proves nothing, and a replica that has not yet received the flag simply has no walk-in
- * customer until a party-fact replay fills it. Every read goes through a tenant-filtered
- * repository call (ADR-0062), so one tenant's house account is never resolved for another.
+ * customer until a party-fact replay fills it. Every read runs on a connection bound to the
+ * caller's tenant, where Postgres's forced row-level security on {@code ext_customer} (ADR-0062)
+ * makes other tenants' rows invisible — so one tenant's house account is never resolved for
+ * another.
  */
 @Component
 @RequiredArgsConstructor

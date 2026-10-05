@@ -614,13 +614,19 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         orderTaxService.recomputeTax(order);
 
         // A walk-in sale is paid in full now: the declared cash and card must cover the total the
-        // server just computed — never a client preview. Sits with the tax-unavailable refusal, so
-        // reservation requests already sent behave exactly as they do for that refusal.
-        if (walkIn && (tenderedAmount == null || tenderedAmount.compareTo(order.getGrandTotal()) < 0)) {
-            throw checkoutRefused(
-                    order,
-                    CODE_WALK_IN_NOT_PAID_IN_FULL,
-                    new WalkInNotPaidInFullException(order.getGrandTotal(), tenderedAmount));
+        // server just computed — never a client preview. Compared at cent scale: the calculator
+        // keeps four decimals, so a percent discount or line tax can leave a sub-cent residue
+        // (76.1040) that no drawer can tender; the cents the register shows and pos-invoice settles
+        // are what must be covered. Sits with the tax-unavailable refusal, so reservation requests
+        // already sent behave exactly as they do for that refusal.
+        if (walkIn) {
+            BigDecimal payable = order.getGrandTotal().setScale(2, RoundingMode.HALF_UP);
+            if (tenderedAmount == null || tenderedAmount.compareTo(payable) < 0) {
+                throw checkoutRefused(
+                        order,
+                        CODE_WALK_IN_NOT_PAID_IN_FULL,
+                        new WalkInNotPaidInFullException(payable, tenderedAmount));
+            }
         }
 
         orderStateMachine.transition(order, SalesOrderStatus.PENDING_PAYMENT, "checkout");

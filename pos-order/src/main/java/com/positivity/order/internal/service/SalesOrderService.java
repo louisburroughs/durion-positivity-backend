@@ -107,13 +107,8 @@ public interface SalesOrderService {
             @Nullable BigDecimal tenderedAmount);
 
     @NonNull
-    default CheckoutResult checkout(@NonNull UUID orderId, @NonNull String idempotencyKey, String tenderType) {
-        return checkout(orderId, idempotencyKey, tenderType, null);
-    }
-
-    @NonNull
     default CheckoutResult checkout(@NonNull UUID orderId, @NonNull String idempotencyKey) {
-        return checkout(orderId, idempotencyKey, null);
+        return checkout(orderId, idempotencyKey, null, null);
     }
 
     /**

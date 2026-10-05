@@ -1452,7 +1452,7 @@ class SalesOrderCartLifecycleTest {
             SalesOrder order = checkoutReadyOrder();
             givenOrder(order);
 
-            CheckoutResult result = service.checkout(ORDER_ID, "co-1", null);
+            CheckoutResult result = service.checkout(ORDER_ID, "co-1", null, null);
 
             assertThat(result.replay()).isFalse();
             assertThat(order.getCheckoutIdempotencyKey()).isEqualTo("co-1");
@@ -1469,13 +1469,14 @@ class SalesOrderCartLifecycleTest {
         void acceptsDefaultTender() {
             givenOrder(checkoutReadyOrder());
 
-            assertThat(service.checkout(ORDER_ID, "co-1", " default ").replay()).isFalse();
+            assertThat(service.checkout(ORDER_ID, "co-1", " default ", null).replay())
+                    .isFalse();
         }
 
         @Test
         @DisplayName("requires an idempotency key")
         void requiresIdempotencyKey() {
-            assertThatThrownBy(() -> service.checkout(ORDER_ID, "  ", null))
+            assertThatThrownBy(() -> service.checkout(ORDER_ID, "  ", null, null))
                     .isInstanceOf(SalesOrderRequestValidationException.class)
                     .hasMessageContaining("Idempotency-Key is required");
         }
@@ -1483,7 +1484,7 @@ class SalesOrderCartLifecycleTest {
         @Test
         @DisplayName("rejects an unsupported tender type")
         void rejectsUnsupportedTender() {
-            assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", "CRYPTO"))
+            assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", "CRYPTO", null))
                     .isInstanceOf(SalesOrderRequestValidationException.class)
                     .hasMessageContaining("Unsupported tenderType");
         }
@@ -1495,7 +1496,7 @@ class SalesOrderCartLifecycleTest {
             order.setCheckoutIdempotencyKey("co-1");
             givenOrder(order);
 
-            assertThat(service.checkout(ORDER_ID, "co-1", null).replay()).isTrue();
+            assertThat(service.checkout(ORDER_ID, "co-1", null, null).replay()).isTrue();
             verify(invoicingPort, never()).createInvoiceForOrder(any());
         }
 
@@ -1507,7 +1508,7 @@ class SalesOrderCartLifecycleTest {
             other.setOrderId(OTHER_ORDER_ID);
             when(salesOrderRepository.findByCheckoutIdempotencyKey("co-1")).thenReturn(Optional.of(other));
 
-            assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", null))
+            assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", null, null))
                     .isInstanceOf(CartIdempotencyConflictException.class)
                     .hasMessageContaining("a different order");
         }
@@ -1519,7 +1520,7 @@ class SalesOrderCartLifecycleTest {
             order.setCustomerValidationStatus(CustomerValidationStatus.VALIDATED);
             givenOrder(order);
 
-            assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", null))
+            assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", null, null))
                     .isInstanceOf(SalesOrderUnprocessableException.class)
                     .hasMessageContaining("Cannot check out an empty cart");
         }
@@ -1531,7 +1532,7 @@ class SalesOrderCartLifecycleTest {
             order.setCustomerValidationStatus(CustomerValidationStatus.PENDING);
             givenOrder(order);
 
-            assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", null))
+            assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", null, null))
                     .isInstanceOf(InvalidCustomerException.class)
                     .hasMessageContaining("Customer validation is pending");
         }
@@ -1547,7 +1548,7 @@ class SalesOrderCartLifecycleTest {
             when(inventoryPort.checkAvailability(anyString(), any(), any()))
                     .thenReturn(new InventoryResult(false, BigDecimal.valueOf(0)));
 
-            CheckoutResult result = service.checkout(ORDER_ID, "co-1", null);
+            CheckoutResult result = service.checkout(ORDER_ID, "co-1", null, null);
 
             assertThat(result.replay()).isFalse();
             assertThat(order.getLines().get(0).getFulfillmentStatus()).isEqualTo(FulfillmentStatus.BACKORDER);
@@ -1563,7 +1564,7 @@ class SalesOrderCartLifecycleTest {
             when(inventoryPort.checkAvailability(anyString(), any(), any()))
                     .thenReturn(new InventoryResult(true, BigDecimal.valueOf(10)));
 
-            service.checkout(ORDER_ID, "co-1", null);
+            service.checkout(ORDER_ID, "co-1", null, null);
 
             // Re-evaluated at checkout, not trusted from line-add: stock moves in between.
             assertThat(order.getLines().get(0).getFulfillmentStatus()).isEqualTo(FulfillmentStatus.AVAILABLE);
@@ -1580,7 +1581,7 @@ class SalesOrderCartLifecycleTest {
                             .trackingLevel("SERIAL")
                             .build()));
 
-            assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", null))
+            assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", null, null))
                     .isInstanceOf(SalesOrderUnprocessableException.class)
                     .hasMessageContaining("is serial-tracked");
         }
@@ -1596,7 +1597,7 @@ class SalesOrderCartLifecycleTest {
                             .trackingLevel("LOT")
                             .build()));
 
-            assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", null))
+            assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", null, null))
                     .isInstanceOf(SalesOrderUnprocessableException.class)
                     .hasMessageContaining("is lot-tracked");
         }
@@ -1614,7 +1615,7 @@ class SalesOrderCartLifecycleTest {
                             .trackingLevel("SERIAL")
                             .build()));
 
-            assertThat(service.checkout(ORDER_ID, "co-1", null).replay()).isFalse();
+            assertThat(service.checkout(ORDER_ID, "co-1", null, null).replay()).isFalse();
         }
 
         @Test
@@ -1630,7 +1631,7 @@ class SalesOrderCartLifecycleTest {
                             .trackingLevel("SERIAL")
                             .build()));
 
-            assertThat(service.checkout(ORDER_ID, "co-1", null).replay()).isFalse();
+            assertThat(service.checkout(ORDER_ID, "co-1", null, null).replay()).isFalse();
         }
 
         @Test
@@ -1641,7 +1642,7 @@ class SalesOrderCartLifecycleTest {
             order.setDepositSourceId(WORKORDER_ID);
             givenOrder(order);
 
-            service.checkout(ORDER_ID, "co-1", null);
+            service.checkout(ORDER_ID, "co-1", null, null);
 
             ArgumentCaptor<com.positivity.shared.dto.OrderInvoiceCreationRequest> request =
                     ArgumentCaptor.forClass(com.positivity.shared.dto.OrderInvoiceCreationRequest.class);
@@ -1656,7 +1657,7 @@ class SalesOrderCartLifecycleTest {
         void omitsDepositFieldsForOrdinarySale() {
             givenOrder(checkoutReadyOrder());
 
-            service.checkout(ORDER_ID, "co-1", null);
+            service.checkout(ORDER_ID, "co-1", null, null);
 
             ArgumentCaptor<com.positivity.shared.dto.OrderInvoiceCreationRequest> request =
                     ArgumentCaptor.forClass(com.positivity.shared.dto.OrderInvoiceCreationRequest.class);
@@ -1702,7 +1703,7 @@ class SalesOrderCartLifecycleTest {
             SalesOrder order = onAccountOrder();
             givenOrder(order);
 
-            service.checkout(ORDER_ID, "co-1", "ON_ACCOUNT");
+            service.checkout(ORDER_ID, "co-1", "ON_ACCOUNT", null);
 
             assertThat(order.getAmountPaid()).isEqualByComparingTo("27.0000");
             assertThat(order.getBalanceDue()).isEqualByComparingTo("0");
@@ -1723,7 +1724,7 @@ class SalesOrderCartLifecycleTest {
             authenticate(MANUAL_PRICE_AUTHORITY);
             givenOrder(onAccountOrder());
 
-            assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", "ON_ACCOUNT"))
+            assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", "ON_ACCOUNT", null))
                     .isInstanceOf(AccessDeniedException.class)
                     .hasMessageContaining("order:order:charge_on_account");
         }
@@ -1735,13 +1736,13 @@ class SalesOrderCartLifecycleTest {
             SalesOrder noCustomer = onAccountOrder();
             noCustomer.setCustomerId(null);
             givenOrder(noCustomer);
-            assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", "ON_ACCOUNT"))
+            assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", "ON_ACCOUNT", null))
                     .isInstanceOf(OrderCustomerRequiredException.class);
 
             SalesOrder unvalidated = onAccountOrder();
             unvalidated.setCustomerValidationStatus(null);
             givenOrder(unvalidated);
-            assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", "ON_ACCOUNT"))
+            assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", "ON_ACCOUNT", null))
                     .isInstanceOf(InvalidCustomerException.class)
                     .hasMessageContaining("requires a validated customer");
         }
@@ -1757,7 +1758,7 @@ class SalesOrderCartLifecycleTest {
                             .requirementsMet(true)
                             .build()));
 
-            assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", "ON_ACCOUNT"))
+            assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", "ON_ACCOUNT", null))
                     .isInstanceOf(InvalidCustomerException.class)
                     .hasMessageContaining("requires a commercial customer account");
         }
@@ -1768,7 +1769,7 @@ class SalesOrderCartLifecycleTest {
             givenOrder(onAccountOrder());
             when(extCustomerRepository.findById(CUSTOMER_ID)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", "ON_ACCOUNT"))
+            assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", "ON_ACCOUNT", null))
                     .isInstanceOf(InvalidCustomerException.class)
                     .hasMessageContaining("requires a commercial customer account");
         }
@@ -1784,7 +1785,7 @@ class SalesOrderCartLifecycleTest {
                             .requirementsMet(false)
                             .build()));
 
-            assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", "ON_ACCOUNT"))
+            assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", "ON_ACCOUNT", null))
                     .isInstanceOf(InvalidCustomerException.class)
                     .hasMessageContaining("does not currently meet requirements");
         }
@@ -1794,7 +1795,7 @@ class SalesOrderCartLifecycleTest {
         void requiresPaymentTerms() {
             givenOrder(onAccountOrder());
             when(extBillingRulesRepository.findById(CUSTOMER_ID)).thenReturn(Optional.empty());
-            assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", "ON_ACCOUNT"))
+            assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", "ON_ACCOUNT", null))
                     .isInstanceOf(InvalidCustomerException.class)
                     .hasMessageContaining("no billing terms configured");
 
@@ -1803,7 +1804,7 @@ class SalesOrderCartLifecycleTest {
                             .partyId(CUSTOMER_ID)
                             .paymentTerms("  ")
                             .build()));
-            assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", "ON_ACCOUNT"))
+            assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", "ON_ACCOUNT", null))
                     .isInstanceOf(InvalidCustomerException.class)
                     .hasMessageContaining("no billing terms configured");
         }
@@ -1819,7 +1820,7 @@ class SalesOrderCartLifecycleTest {
                             .creditHold(true)
                             .build()));
 
-            assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", "ON_ACCOUNT"))
+            assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", "ON_ACCOUNT", null))
                     .isInstanceOf(InvalidCustomerException.class)
                     .hasMessageContaining("credit hold");
         }

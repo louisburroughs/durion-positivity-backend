@@ -705,6 +705,38 @@ class SalesOrderWalkInTest {
         }
 
         @Test
+        @DisplayName("the tender is compared at cent scale: a sub-cent residue in the 4-dp total is not short")
+        void tenderComparedAtCentScale() {
+            walkInCart();
+            // 10 % off 78.12 leaves 76.1040 at the calculator's 4-dp scale; the register shows 76.10.
+            givenFinalTaxMakesGrandTotal("76.1040");
+
+            WalkInNotPaidInFullException refusal = catchThrowableOfType(
+                    WalkInNotPaidInFullException.class,
+                    () -> service.checkout(ORDER_ID, "chk-1", null, new BigDecimal("76.09")));
+            assertThat(refusal.grandTotalDisplay()).isEqualTo("76.10");
+            assertThat(refusal.getGrandTotal()).isEqualByComparingTo("76.10");
+            assertThat(refusal.getMessage()).contains("76.10").doesNotContain("76.104");
+
+            assertThat(service.checkout(ORDER_ID, "chk-2", null, new BigDecimal("76.10"))
+                            .summary()
+                            .status())
+                    .as("tendering the displayed cents is paid in full")
+                    .isEqualTo(SalesOrderStatus.PENDING_PAYMENT.name());
+        }
+
+        @Test
+        @DisplayName("a whole-number total is named with two decimals")
+        void wholeTotalNamedWithTwoDecimals() {
+            walkInCart();
+            givenFinalTaxMakesGrandTotal("80.0000");
+
+            WalkInNotPaidInFullException refusal = catchThrowableOfType(
+                    WalkInNotPaidInFullException.class, () -> service.checkout(ORDER_ID, "chk-1", null, null));
+            assertThat(refusal.grandTotalDisplay()).isEqualTo("80.00");
+        }
+
+        @Test
         @DisplayName("for a cart with a registered customer the tendered amount is ignored")
         void tenderIgnoredForRegisteredCustomer() {
             cart(CUSTOMER_ID);
