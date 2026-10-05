@@ -42,6 +42,9 @@ class RetiredPermissionGrantsTest {
     private static final Pattern GRANT_PAIR =
             Pattern.compile("\\(\\s*'([A-Z_]+)'\\s*,\\s*'([A-Za-z0-9:_\\-]+)'\\s*\\)");
 
+    private static final Pattern FIXTURE_FILE =
+            Pattern.compile("(BaseIntegrationTest|BaseContractIntegrationTest|\\w*TestSecurityConfig)\\w*\\.java");
+
     private static Set<String> retired;
 
     @BeforeAll
@@ -116,6 +119,50 @@ class RetiredPermissionGrantsTest {
         }
         assertThat(offending)
                 .as("roles granted a retired code by role-permissions.csv")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("no module's shared test authority fixture grants a retired code (#2456)")
+    void noSharedTestFixtureGrantsARetiredCode() throws IOException {
+        Path repoRoot = Path.of("..").toAbsolutePath().normalize();
+        List<Path> fixtures = new java.util.ArrayList<>();
+        try (Stream<Path> modules = Files.list(repoRoot)) {
+            for (Path module : modules.filter(
+                            path -> path.getFileName().toString().startsWith("pos-"))
+                    .toList()) {
+                Path testSources = module.resolve(Path.of("src", "test", "java"));
+                if (!Files.isDirectory(testSources)) {
+                    continue;
+                }
+                try (Stream<Path> walk = Files.walk(testSources)) {
+                    walk.filter(Files::isRegularFile)
+                            .filter(path -> FIXTURE_FILE
+                                    .matcher(path.getFileName().toString())
+                                    .matches())
+                            .forEach(fixtures::add);
+                }
+            }
+        }
+        assertThat(fixtures)
+                .as("no shared authority fixture found under %s/pos-*/src/test/java: the walk is broken", repoRoot)
+                .isNotEmpty();
+
+        Map<String, Set<String>> offending = new TreeMap<>();
+        for (Path fixture : fixtures) {
+            String content = Files.readString(fixture, StandardCharsets.UTF_8);
+            for (String code : retired) {
+                if (Pattern.compile("(?<![\\w:])" + Pattern.quote(code) + "(?![\\w:])")
+                        .matcher(content)
+                        .find()) {
+                    offending
+                            .computeIfAbsent(repoRoot.relativize(fixture).toString(), key -> new TreeSet<>())
+                            .add(code);
+                }
+            }
+        }
+        assertThat(offending)
+                .as("test fixtures (%d scanned) granting a retired code", fixtures.size())
                 .isEmpty();
     }
 

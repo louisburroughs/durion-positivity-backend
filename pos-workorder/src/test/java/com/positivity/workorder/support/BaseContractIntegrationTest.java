@@ -79,7 +79,6 @@ public abstract class BaseContractIntegrationTest {
             "workorder:workorder:delete",
             "workorder:workorder:approve",
             "workorder:workorder:start",
-            "workorder:start",
             "workorder:workorder:complete",
             "workorder:workorder:generate_invoice",
             "workorder:workorder:reopen_completed",
@@ -90,7 +89,6 @@ public abstract class BaseContractIntegrationTest {
             // and location; a dispatcher who places work should not need it.
             "workorder:position:assign",
             "workorder:invoice:view",
-            "workorder:invoice:create",
             "workorder:parts:view",
             "workorder:parts:add",
             "workorder:labor:view",

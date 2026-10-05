@@ -163,6 +163,29 @@ how a new grant reaches an existing tenant is
 `FORBIDDEN` is a missing authority; a location-scope refusal is `403 LOCATION_SCOPE_DENIED` and says
 which permission and location it denied.
 
+### Approving a scrap write-off is `inventory:scrap:approve`, gated on the scrap's location (#2472)
+
+The scrap twin of #2149. The accelerated run raises a scrap about every ten virtual days: the
+inventory clerk (`INVENTORY_LEAD`) creates it and the shop manager (`LOCATION_MANAGER`) approves it.
+`ScrapController` enforces `inventory:scrap:approve` on `POST /{scrapId}/approve` and
+`POST /{scrapId}/reject`, and `LOCATION_MANAGER` had never held it, so every approval on alpha was a
+bare `403 FORBIDDEN`. As with #2149, the grant was missing from `role-permissions.csv` itself, the
+role's only grant source.
+
+- **`inventory:scrap:approve` is sufficient on its own.** `GET /{scrapId}` and `GET /` accept
+  `hasAnyAuthority(SCRAP_VIEW, SCRAP_APPROVE)`, so `LOCATION_MANAGER` is granted only the approve
+  code. `ScrapControllerTest` pins approve, reject and both reads against an approve-only caller, and
+  `ScrapApprovalGrantsTest` in pos-security-service pins the role grants per source.
+- **Creating and approving stay different people.** `INVENTORY_LEAD` holds `inventory:scrap:create`
+  and not `:approve`; `LOCATION_MANAGER` holds the reverse. Neither gets
+  `inventory:adjustment:override`, which `approveScrap` requires to honour `negativeStockOverride`.
+- **Approve and reject are location-scoped.** Before #2472 they were ungated while `createScrap`
+  and `getScrap` were gated, so the grant would have let a site manager carrying `LOCATION` scope
+  write off stock at any site. Both now gate in the service on the scrap's stored `locationId`
+  (`403 LOCATION_SCOPE_DENIED`), after the not-found lookup and before the status check or any state
+  change. A scrap with no `locationId` is denied to a location-scoped caller (fail closed); global
+  callers (ADMIN, INVENTORY_CONTROLLER) are unaffected.
+
 ### A count the ledger refuses is a 422, not a posting failure (#2167)
 
 Approving a cycle count adjustment (or creating one below the approval threshold, which posts at

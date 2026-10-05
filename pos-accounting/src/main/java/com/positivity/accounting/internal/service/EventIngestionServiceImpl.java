@@ -27,8 +27,9 @@ import com.positivity.accounting.internal.entity.AccountingSequence;
 import com.positivity.accounting.internal.entity.ReprocessingAttemptHistory;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.enums.IdempotencyOutcome;
-import com.positivity.accounting.internal.enums.PostingFailureReason;
+import com.positivity.accounting.internal.enums.ReprocessingOutcome;
 import com.positivity.accounting.internal.exception.EventNotFoundException;
+import com.positivity.accounting.internal.exception.EventNotRetryableException;
 import com.positivity.accounting.internal.exception.EventValidationException;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.domainevents.payment.PaymentSettledV1;
@@ -50,6 +51,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -85,6 +87,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional
 public class EventIngestionServiceImpl implements EventIngestionService {
+    /** Triggering user recorded for an unaudited retry (no user is supplied on that path). */
+    static final String RETRY_TRIGGER = "ACCOUNTING_EVENT_RETRY";
+
     private static final String EVENT_NOT_FOUND_PREFIX = "Event not found: ";
 
     private final Clock clock;
@@ -253,20 +258,26 @@ public class EventIngestionServiceImpl implements EventIngestionService {
     }
 
     /**
-     * Retries processing of a failed event.
-     * Useful when posting rules have been updated or temporary errors resolved.
+     * Retries processing of a failed event: re-runs its posting through the posting engine with the
+     * current rules and returns the event in whatever status that ends in ({@code PROCESSED},
+     * {@code FAILED} or {@code SUSPENDED}). Only a {@code FAILED} event is retryable (#2411); any other
+     * status is rejected with {@link EventNotRetryableException} and left untouched. The previous
+     * failure detail stays on the event until the new outcome replaces it. It shares its posting path
+     * with {@link #reprocessEvent}, minus the mapping-version override.
      */
     @Override
     public AccountingEventResponse retryEventProcessing(UUID eventId) {
         AccountingEvent accountingEvent = accountingEventRepository
                 .findById(eventId)
                 .orElseThrow(() -> new EventNotFoundException(EVENT_NOT_FOUND_PREFIX + eventId));
+        if (accountingEvent.getStatus() != AccountingEventStatus.FAILED) {
+            String msg = EVENT_SPACE + eventId + " has status " + accountingEvent.getStatus()
+                    + " and cannot be retried. Only FAILED events can be retried.";
+            log.warn(msg);
+            throw new EventNotRetryableException(msg);
+        }
         log.info("Retrying event {}", eventId);
-
-        accountingEvent.setStatus(AccountingEventStatus.RECEIVED);
-        accountingEvent.setErrorMessage(null);
-
-        return AccountingEventMapper.toEventResponse(accountingEventRepository.save(accountingEvent));
+        return rerunPosting(accountingEvent, null, RETRY_TRIGGER);
     }
 
     /**
@@ -319,13 +330,36 @@ public class EventIngestionServiceImpl implements EventIngestionService {
             throw new IllegalStateException(msg);
         }
 
+        return rerunPosting(event, request.getMappingVersionToUse(), request.getTriggeredByUserId());
+    }
+
+    /**
+     * Shared posting path of {@link #reprocessEvent} and {@link #retryEventProcessing}: the caller has
+     * already checked the event is eligible. Re-runs the event through the posting engine (or hands an
+     * {@code INVOICE_PAYMENT} back to the drainer) and returns the reloaded event.
+     */
+    private AccountingEventResponse rerunPosting(
+            @NonNull AccountingEvent event, @Nullable String mappingVersionToUse, @NonNull String triggeredByUserId) {
+        UUID eventId = event.getEventId();
         // INVOICE_PAYMENT is recorded in the AR subledger, never posted by the engine (#2435): hand
         // it back to the received-event drainer, which runs InvoicePaymentEventProcessor on its next
         // poll, instead of evaluating posting rules that must not exist for it.
         if (InvoicePaymentEventProcessor.EVENT_TYPE.equals(event.getEventType())) {
             log.info("Event {} is {}: returned to RECEIVED for the drainer", eventId, event.getEventType());
+            int attempts = (event.getAttemptCount() == null ? 0 : event.getAttemptCount()) + 1;
+            event.setAttemptCount(attempts);
             event.setStatus(AccountingEventStatus.RECEIVED);
-            event.setResolvedByUserId(request.getTriggeredByUserId());
+            event.setResolvedByUserId(triggeredByUserId);
+            // The attempt history is immutable and complete: the posting engine writes it for every other
+            // type, so the handoff records its own row (the drainer's later outcome lands on the event).
+            ReprocessingAttemptHistory handoff = new ReprocessingAttemptHistory();
+            handoff.setAccountingEvent(event);
+            handoff.setTriggeredByUserId(triggeredByUserId);
+            handoff.setAttemptedAt(Instant.now(clock));
+            handoff.setOutcome(ReprocessingOutcome.FAILURE);
+            handoff.setOutcomeDetails(
+                    "Returned to RECEIVED for the received-event drainer (not posted by this attempt)");
+            reprocessingAttemptHistoryRepository.save(handoff);
             return AccountingEventMapper.toEventResponse(accountingEventRepository.save(event));
         }
 
@@ -344,12 +378,11 @@ public class EventIngestionServiceImpl implements EventIngestionService {
 
             // Parse mappingVersionToUse from String to UUID if present
             UUID mappingVersion = null;
-            if (request.getMappingVersionToUse() != null
-                    && !request.getMappingVersionToUse().isBlank()) {
+            if (mappingVersionToUse != null && !mappingVersionToUse.isBlank()) {
                 try {
-                    mappingVersion = UUID.fromString(request.getMappingVersionToUse());
+                    mappingVersion = UUID.fromString(mappingVersionToUse);
                 } catch (IllegalArgumentException e) {
-                    String msg = "Invalid UUID format for mappingVersionToUse: '" + request.getMappingVersionToUse()
+                    String msg = "Invalid UUID format for mappingVersionToUse: '" + mappingVersionToUse
                             + "'. Value must be a valid UUID or left empty to use the default active version.";
                     log.warn(msg);
                     throw new EventValidationException(msg, e);
@@ -357,7 +390,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
             }
 
             PostingResult postingResult = postingEngineOrchestrator.processEvent(
-                    event, mappingVersion, request.getTriggeredByUserId(), true // autoPost=true for reprocessing flow
+                    event, mappingVersion, triggeredByUserId, true // autoPost=true for reprocessing flow
                     );
 
             boolean reprocessingSucceeded = postingResult.isSuccess();
@@ -761,58 +794,6 @@ public class EventIngestionServiceImpl implements EventIngestionService {
 
         Page<AccountingEvent> eventPage = accountingEventRepository.findBySourceSystem(sourceSystem, pageable);
         return eventPage.map(AccountingEventMapper::toEventResponse);
-    }
-
-    /**
-     * Process all failed events asynchronously.
-     * Called by scheduled job to retry failed events.
-     *
-     * @param maxRetries maximum retries per record
-     * @return count of records processed
-     */
-    @Override
-    public int processFailed(int maxRetries) {
-        log.info("Processing failed events (max retries: {})", maxRetries);
-
-        int processedCount = 0;
-
-        // Query all FAILED and SUSPENDED events that haven't exceeded max
-        // retries. Events suspended with PERIOD_CLOSED (story B2, issue #944)
-        // or held for their currency, CURRENCY_NOT_SUPPORTED (ADR-0067 PC-9,
-        // issue #2334), are skipped: neither a closed period nor the ledger's
-        // currency changes on the retry cadence, so retrying only burns
-        // attempts. They stay eligible for the audited manual reprocess.
-        List<AccountingEvent> failedEvents = accountingEventRepository.findAll().stream()
-                .filter(event -> (event.getStatus() == AccountingEventStatus.FAILED
-                                || event.getStatus() == AccountingEventStatus.SUSPENDED)
-                        && (event.getAttemptCount() == null || event.getAttemptCount() < maxRetries)
-                        && !PostingFailureReason.isExcludedFromAutoRetry(event.getFailureReasonCode()))
-                .toList();
-
-        log.info("Found {} eligible failed/suspended events for retry", failedEvents.size());
-
-        for (AccountingEvent event : failedEvents) {
-            try {
-                int currentAttempt = event.getAttemptCount() != null ? event.getAttemptCount() : 0;
-                log.debug("Retrying event {} (attempt {}/{})", event.getEventId(), currentAttempt + 1, maxRetries);
-
-                // Retry processing through reprocessEvent
-                ReprocessEventRequest request = new ReprocessEventRequest();
-                request.setTriggeredByUserId("SYSTEM_RETRY_JOB");
-                request.setMappingVersionToUse(null); // Use current active mapping
-
-                reprocessEvent(event.getEventId(), request);
-                processedCount++;
-
-            } catch (Exception e) {
-                log.error("Failed to retry event {}: {}", event.getEventId(), e.getMessage(), e);
-                // Continue processing other events even if one fails
-            }
-        }
-
-        log.info("Completed processing {} failed events out of {} candidates", processedCount, failedEvents.size());
-
-        return processedCount;
     }
 
     /**

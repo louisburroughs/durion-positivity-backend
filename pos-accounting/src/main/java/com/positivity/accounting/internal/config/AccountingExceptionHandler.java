@@ -16,6 +16,7 @@ import com.positivity.accounting.internal.exception.AdjustmentSignInvalidExcepti
 import com.positivity.accounting.internal.exception.CurrencyNotSupportedException;
 import com.positivity.accounting.internal.exception.DefaultGLMappingNotFoundException;
 import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
+import com.positivity.accounting.internal.exception.EventNotRetryableException;
 import com.positivity.accounting.internal.exception.EventValidationException;
 import com.positivity.accounting.internal.exception.GLAccountNotActiveException;
 import com.positivity.accounting.internal.exception.GLAccountNotFoundException;
@@ -217,6 +218,11 @@ public class AccountingExceptionHandler {
     public ResponseEntity<ApiError> handleIllegalState(IllegalStateException ex, HttpServletRequest request) {
         String code = resolveStateErrorCode(ex.getMessage());
         return build(HttpStatus.CONFLICT, code, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(EventNotRetryableException.class)
+    public ResponseEntity<ApiError> handleEventNotRetryable(EventNotRetryableException ex, HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, "EVENT_NOT_RETRYABLE", ex.getMessage(), request);
     }
 
     @ExceptionHandler(DuplicateAccountCodeException.class)

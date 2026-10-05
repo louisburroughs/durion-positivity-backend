@@ -532,4 +532,68 @@ class ScrapServiceImplTest {
 
         assertThatThrownBy(() -> service.getScrap(scrap.getScrapId())).isInstanceOf(LocationScopeDeniedException.class);
     }
+
+    // ─── ADR-0061 (#2472): approve and reject are gated on the scrap's location ──
+
+    @Test
+    @DisplayName("approveScrap gates on the loaded record's location before any state change")
+    void approveScrap_outsideReach_deniedBeforeAnyChange() {
+        ScrapRecord pending = pendingScrap();
+        when(scrapRepository.findById(pending.getScrapId())).thenReturn(Optional.of(pending));
+        doThrow(new LocationScopeDeniedException(InventoryPermissionRegistry.SCRAP_APPROVE, LOCATION_ID.toString()))
+                .when(locationScopeService)
+                .require(LOCATION_ID, InventoryPermissionRegistry.SCRAP_APPROVE);
+
+        assertThatThrownBy(() -> service.approveScrap(pending.getScrapId(), new ApproveScrapRequest()))
+                .isInstanceOf(LocationScopeDeniedException.class);
+
+        assertThat(pending.getStatus()).isEqualTo(ScrapStatus.PENDING_APPROVAL);
+        assertThat(pending.getApprovedBy()).isNull();
+        verify(scrapRepository, never()).save(any(ScrapRecord.class));
+        verifyNoInteractions(ledgerPostingService);
+        verify(inventoryFactPublisher, never()).recordScrapPosted(any());
+    }
+
+    @Test
+    @DisplayName("approveScrap gates before the status check, so an out-of-reach caller learns nothing of state")
+    void approveScrap_outsideReach_deniedEvenWhenNotApprovable() {
+        ScrapRecord posted = pendingScrap();
+        posted.setStatus(ScrapStatus.POSTED);
+        when(scrapRepository.findById(posted.getScrapId())).thenReturn(Optional.of(posted));
+        doThrow(new LocationScopeDeniedException(InventoryPermissionRegistry.SCRAP_APPROVE, LOCATION_ID.toString()))
+                .when(locationScopeService)
+                .require(LOCATION_ID, InventoryPermissionRegistry.SCRAP_APPROVE);
+
+        assertThatThrownBy(() -> service.approveScrap(posted.getScrapId(), new ApproveScrapRequest()))
+                .isInstanceOf(LocationScopeDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("approveScrap within reach is gated on the scrap's location with the approve authority")
+    void approveScrap_withinReach_gatesOnScrapLocation() {
+        ScrapRecord pending = pendingScrap();
+        when(scrapRepository.findById(pending.getScrapId())).thenReturn(Optional.of(pending));
+        stubPostingSuccess();
+
+        service.approveScrap(pending.getScrapId(), new ApproveScrapRequest());
+
+        verify(locationScopeService).require(LOCATION_ID, InventoryPermissionRegistry.SCRAP_APPROVE);
+    }
+
+    @Test
+    @DisplayName("rejectScrap gates on the loaded record's location before any state change")
+    void rejectScrap_outsideReach_deniedBeforeAnyChange() {
+        ScrapRecord pending = pendingScrap();
+        when(scrapRepository.findById(pending.getScrapId())).thenReturn(Optional.of(pending));
+        doThrow(new LocationScopeDeniedException(InventoryPermissionRegistry.SCRAP_APPROVE, LOCATION_ID.toString()))
+                .when(locationScopeService)
+                .require(LOCATION_ID, InventoryPermissionRegistry.SCRAP_APPROVE);
+
+        assertThatThrownBy(() -> service.rejectScrap(pending.getScrapId(), new RejectScrapRequest("Recovered")))
+                .isInstanceOf(LocationScopeDeniedException.class);
+
+        assertThat(pending.getStatus()).isEqualTo(ScrapStatus.PENDING_APPROVAL);
+        assertThat(pending.getRejectedBy()).isNull();
+        verify(scrapRepository, never()).save(any(ScrapRecord.class));
+    }
 }

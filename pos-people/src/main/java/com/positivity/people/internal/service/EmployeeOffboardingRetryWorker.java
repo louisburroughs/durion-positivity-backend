@@ -2,7 +2,6 @@ package com.positivity.people.internal.service;
 
 import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.EmployeeOffboardingRetry;
-import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.repository.EmployeeOffboardingRetryRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.tenancy.TenantIterator;
@@ -210,8 +209,11 @@ public class EmployeeOffboardingRetryWorker {
         }
         Employee employee =
                 employeeRepository.findByPersonId(row.getEmployeeId()).orElse(null);
-        if (employee == null || employee.getStatus() == EmployeeStatus.ACTIVE) {
-            // Re-enabled (or gone) since the disable: ending assignments now would undo the re-enable.
+        if (employee == null
+                || employee.getStatus() == null
+                || !OffboardingAssignmentEnder.OFFBOARDED_STATUSES.contains(employee.getStatus())) {
+            // Re-enabled, put on leave or suspended (or gone) since the offboarding: ending
+            // assignments now would undo that (#2418).
             log.info(
                     "Dropping offboarding retry {} for employee {}: no longer offboarded",
                     retryId,

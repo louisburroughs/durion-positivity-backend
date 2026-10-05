@@ -690,7 +690,9 @@ class EmployeeServiceImplTest {
             "ON_LEAVE, TERMINATED",
             "ON_LEAVE, DISABLED",
             "SUSPENDED, TERMINATED",
-            "SUSPENDED, DISABLED"
+            "SUSPENDED, DISABLED",
+            // Terminating an already DISABLED employee cuts a grace period short (#2418).
+            "DISABLED, TERMINATED"
         })
         void aStatusMovedIntoAnOffboardedOneQueuesAnImmediateOffboardingWithTheUpdate(
                 EmployeeStatus from, EmployeeStatus to) {
@@ -720,6 +722,8 @@ class EmployeeServiceImplTest {
             // The same shape as disableEmployee: status, then the row, then the event naming it.
             InOrder order = inOrder(employeeRepository, employeeOffboardingRetryRepository, applicationEventPublisher);
             order.verify(employeeRepository).save(any(Employee.class));
+            // Earlier pending rows of the employee are superseded by the new one (#2418).
+            order.verify(employeeOffboardingRetryRepository).deleteByEmployeeId(PERSON_ID);
             order.verify(employeeOffboardingRetryRepository).save(row);
             order.verify(applicationEventPublisher).publishEvent(new EmployeeOffboardedEvent(PERSON_ID, RETRY_ID));
             // The assignments are the listener's job, after commit; the service touches none.
@@ -748,7 +752,6 @@ class EmployeeServiceImplTest {
             // disable's are deliberately still ACTIVE).
             "TERMINATED, TERMINATED",
             "DISABLED, DISABLED",
-            "DISABLED, TERMINATED",
             "TERMINATED, DISABLED",
             // Back out of an offboarded status.
             "TERMINATED, ACTIVE",

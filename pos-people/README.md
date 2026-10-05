@@ -191,9 +191,16 @@ future included. It goes through the same queue row, after-commit handler and wo
 described below; the row's actor is the caller and its `disable_reason` is the fixed text `Status set to
 <status> through updateEmployee`. `statusEffectiveAt` is restamped, as on every status change through that
 endpoint. Nothing is queued when the status does not change, when it changes between statuses that are not
-offboarded, or when the employee already was `DISABLED` or `TERMINATED`: the earlier offboarding dealt with
-their assignments, so terminating an employee who was disabled with a `GRACE_PERIOD` leaves the grace-dated
-assignments to end on their date. A choice of policy still needs `disableEmployee`.
+offboarded, or when the employee already was `TERMINATED` or moves from `TERMINATED` to `DISABLED` (the earlier
+offboarding dealt with their assignments). Moving into `TERMINATED` from any other status, `DISABLED`
+included, is always a new `IMMEDIATE` offboarding (#2418): terminating an employee who was disabled with a
+`GRACE_PERIOD` cuts the grace period short and ends the grace-dated assignments now. A choice of policy still
+needs `disableEmployee`.
+
+**Only the newest offboarding's row survives (#2418).** Writing a queue row first deletes the employee's
+other pending rows, so disable, re-enable, disable leaves just the latest policy. The worker also drops a
+due row, ending nothing, whenever the employee's current status is not `DISABLED` or `TERMINATED` (`ACTIVE`,
+`ON_LEAVE` and `SUSPENDED` alike), not only after a re-enable.
 
 **The policy is durable with the disable (#2360).** `disableEmployee` saves the status change and, in the
 same transaction, inserts an `employee_offboarding_retry_queue` row carrying the policy, the

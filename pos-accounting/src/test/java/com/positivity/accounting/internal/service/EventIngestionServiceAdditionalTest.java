@@ -25,6 +25,7 @@ import com.positivity.accounting.internal.entity.ReprocessingAttemptHistory;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.exception.EventNotFoundException;
+import com.positivity.accounting.internal.exception.EventNotRetryableException;
 import com.positivity.accounting.internal.exception.EventValidationException;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository;
@@ -41,6 +42,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -111,19 +115,82 @@ class EventIngestionServiceAdditionalTest {
     // ========================================
 
     @Test
-    @DisplayName("retryEventProcessing should reset status to RECEIVED and return response")
-    void retryEventProcessing_Success() {
-        AccountingEvent event = buildEvent(testEventId, AccountingEventStatus.FAILED);
-        AccountingEvent savedEvent = buildEvent(testEventId, AccountingEventStatus.RECEIVED);
-
-        when(accountingEventRepository.findById(testEventId)).thenReturn(Optional.of(event));
-        when(accountingEventRepository.save(event)).thenReturn(savedEvent);
+    @DisplayName("retryEventProcessing re-runs a FAILED event through the posting engine and returns its outcome")
+    void retryEventProcessing_FailedEventIsReposted() {
+        AccountingEvent failed = buildEvent(testEventId, AccountingEventStatus.FAILED);
+        failed.setErrorMessage("previous failure");
+        AccountingEvent processed = buildEvent(testEventId, AccountingEventStatus.PROCESSED);
+        when(accountingEventRepository.findById(testEventId))
+                .thenReturn(Optional.of(failed))
+                .thenReturn(Optional.of(processed));
+        when(accountingEventRepository.save(any(AccountingEvent.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(postingEngineOrchestrator.processEvent(any(), any(), anyString(), eq(true)))
+                .thenReturn(PostingResult.success(null, null));
 
         AccountingEventResponse result = service.retryEventProcessing(testEventId);
 
-        assertThat(result).isNotNull();
-        assertThat(result.getEventId()).isEqualTo(testEventId);
-        verify(accountingEventRepository).save(event);
+        assertThat(result.getStatus()).isEqualTo(AccountingEventStatus.PROCESSED);
+        assertThat(failed.getAttemptCount()).isEqualTo(1);
+        // Previous failure detail stays until the engine replaces it.
+        assertThat(failed.getErrorMessage()).isEqualTo("previous failure");
+        verify(postingEngineOrchestrator).processEvent(failed, null, EventIngestionServiceImpl.RETRY_TRIGGER, true);
+    }
+
+    @Test
+    @DisplayName("retryEventProcessing returns FAILED when the engine fails the event again")
+    void retryEventProcessing_FailsAgain() {
+        AccountingEvent failed = buildEvent(testEventId, AccountingEventStatus.FAILED);
+        AccountingEvent stillFailed = buildEvent(testEventId, AccountingEventStatus.FAILED);
+        when(accountingEventRepository.findById(testEventId))
+                .thenReturn(Optional.of(failed))
+                .thenReturn(Optional.of(stillFailed));
+        when(accountingEventRepository.save(any(AccountingEvent.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(postingEngineOrchestrator.processEvent(any(), any(), anyString(), eq(true)))
+                .thenReturn(PostingResult.failure(PostingFailureReason.INTERNAL_ERROR, "boom"));
+
+        AccountingEventResponse result = service.retryEventProcessing(testEventId);
+
+        assertThat(result.getStatus()).isEqualTo(AccountingEventStatus.FAILED);
+    }
+
+    @Test
+    @DisplayName("retryEventProcessing returns SKIPPED when the engine ends the event terminally skipped")
+    void retryEventProcessing_EndsSkipped() {
+        AccountingEvent failed = buildEvent(testEventId, AccountingEventStatus.FAILED);
+        AccountingEvent skipped = buildEvent(testEventId, AccountingEventStatus.SKIPPED);
+        when(accountingEventRepository.findById(testEventId))
+                .thenReturn(Optional.of(failed))
+                .thenReturn(Optional.of(skipped));
+        when(accountingEventRepository.save(any(AccountingEvent.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(postingEngineOrchestrator.processEvent(any(), any(), anyString(), eq(true)))
+                .thenReturn(PostingResult.failure(PostingFailureReason.MISSING_AMOUNT, "no amount"));
+
+        AccountingEventResponse result = service.retryEventProcessing(testEventId);
+
+        assertThat(result.getStatus()).isEqualTo(AccountingEventStatus.SKIPPED);
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = AccountingEventStatus.class,
+            names = {"FAILED"},
+            mode = EnumSource.Mode.EXCLUDE)
+    @DisplayName("retryEventProcessing rejects any status but FAILED and leaves the event unchanged")
+    void retryEventProcessing_NonFailedRejected(AccountingEventStatus status) {
+        AccountingEvent event = buildEvent(testEventId, status);
+        event.setErrorMessage("kept");
+        event.setAttemptCount(2);
+        when(accountingEventRepository.findById(testEventId)).thenReturn(Optional.of(event));
+
+        assertThatThrownBy(() -> service.retryEventProcessing(testEventId))
+                .isInstanceOf(EventNotRetryableException.class)
+                .hasMessageContaining("cannot be retried");
+
+        assertThat(event.getStatus()).isEqualTo(status);
+        assertThat(event.getErrorMessage()).isEqualTo("kept");
+        assertThat(event.getAttemptCount()).isEqualTo(2);
+        verify(accountingEventRepository, never()).save(any(AccountingEvent.class));
+        verify(postingEngineOrchestrator, never()).processEvent(any(), any(), any(), anyBoolean());
     }
 
     @Test
@@ -139,16 +206,10 @@ class EventIngestionServiceAdditionalTest {
     @Test
     @DisplayName("retryEvent should delegate to retryEventProcessing")
     void retryEvent_DelegatesToRetryEventProcessing() {
-        AccountingEvent event = buildEvent(testEventId, AccountingEventStatus.FAILED);
-        AccountingEvent savedEvent = buildEvent(testEventId, AccountingEventStatus.RECEIVED);
+        AccountingEvent processed = buildEvent(testEventId, AccountingEventStatus.PROCESSED);
+        when(accountingEventRepository.findById(testEventId)).thenReturn(Optional.of(processed));
 
-        when(accountingEventRepository.findById(testEventId)).thenReturn(Optional.of(event));
-        when(accountingEventRepository.save(event)).thenReturn(savedEvent);
-
-        AccountingEventResponse result = service.retryEvent(testEventId);
-
-        assertThat(result).isNotNull();
-        assertThat(result.getEventId()).isEqualTo(testEventId);
+        assertThatThrownBy(() -> service.retryEvent(testEventId)).isInstanceOf(EventNotRetryableException.class);
     }
 
     // ========================================
@@ -418,104 +479,25 @@ class EventIngestionServiceAdditionalTest {
     }
 
     // ========================================
-    // processFailed Tests
+    // attempt history
     // ========================================
 
     @Test
-    @DisplayName("processFailed should return 0 when no events are eligible")
-    void processFailed_EmptyList() {
-        when(accountingEventRepository.findAll()).thenReturn(List.of());
+    @DisplayName("an INVOICE_PAYMENT handed back to the drainer still writes an attempt-history row")
+    void reprocessEvent_invoicePaymentHandoffWritesHistory() {
+        AccountingEvent event = buildEvent(testEventId, AccountingEventStatus.FAILED);
+        event.setEventType(InvoicePaymentEventProcessor.EVENT_TYPE);
+        when(accountingEventRepository.findById(testEventId)).thenReturn(Optional.of(event));
+        when(accountingEventRepository.save(any(AccountingEvent.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        int result = service.processFailed(3);
+        service.reprocessEvent(testEventId, buildReprocessRequest("SYSTEM_RETRY_JOB", null));
 
-        assertThat(result).isEqualTo(0);
-    }
-
-    @Test
-    @DisplayName("processFailed should return 0 and log errors when reprocessEvent throws")
-    void processFailed_ExceptionInLoop() {
-        UUID failedEventId = UUID.fromString("00000000-0000-0000-0000-000000000099");
-        AccountingEvent failedEvent = buildEvent(failedEventId, AccountingEventStatus.FAILED);
-        failedEvent.setAttemptCount(0);
-
-        when(accountingEventRepository.findAll()).thenReturn(List.of(failedEvent));
-        // reprocessEvent will call findById → throw RuntimeException to simulate
-        // failure
-        when(accountingEventRepository.findById(failedEventId)).thenThrow(new RuntimeException("DB unavailable"));
-
-        int result = service.processFailed(3);
-
-        assertThat(result).isEqualTo(0);
-    }
-
-    @Test
-    @DisplayName("processFailed should skip PERIOD_CLOSED suspensions but retry other suspended events (B2)")
-    void processFailed_SkipsPeriodClosedSuspensions() {
-        // Given: two SUSPENDED events under maxRetries — one suspended for a
-        // closed accounting period (story B2, issue #944), one for a mapping
-        // gap. A closed period will not reopen on the retry cadence, so only
-        // the mapping-gap event is retried.
-        UUID periodClosedEventId = UUID.fromString("00000000-0000-0000-0000-000000000077");
-        AccountingEvent periodClosedEvent = buildEvent(periodClosedEventId, AccountingEventStatus.SUSPENDED);
-        periodClosedEvent.setAttemptCount(0);
-        periodClosedEvent.setFailureReasonCode(PostingFailureReason.PERIOD_CLOSED.name());
-
-        UUID unmappedEventId = UUID.fromString("00000000-0000-0000-0000-000000000078");
-        AccountingEvent unmappedEvent = buildEvent(unmappedEventId, AccountingEventStatus.SUSPENDED);
-        unmappedEvent.setAttemptCount(0);
-        unmappedEvent.setFailureReasonCode(PostingFailureReason.UNMAPPED_EVENT_TYPE.name());
-
-        when(accountingEventRepository.findAll()).thenReturn(List.of(periodClosedEvent, unmappedEvent));
-        when(accountingEventRepository.findById(unmappedEventId)).thenReturn(Optional.of(unmappedEvent));
-        when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        when(postingEngineOrchestrator.processEvent(any(), any(), anyString(), eq(true)))
-                .thenReturn(PostingResult.builder()
-                        .success(true)
-                        .evaluationDetails(Map.of("postingReference", "je-ref"))
-                        .build());
-
-        // When
-        int result = service.processFailed(3);
-
-        // Then: only the mapping-gap event was retried; the PERIOD_CLOSED
-        // suspension was never touched (manual reprocess after reopen only).
-        assertThat(result).isEqualTo(1);
-        verify(accountingEventRepository, never()).findById(periodClosedEventId);
-        verify(postingEngineOrchestrator).processEvent(eq(unmappedEvent), any(), anyString(), eq(true));
-    }
-
-    @Test
-    @DisplayName("processFailed skips CURRENCY_NOT_SUPPORTED holds, like PERIOD_CLOSED (ADR-0067 PC-9, #2334)")
-    void processFailed_SkipsCurrencyHolds() {
-        // A fact held for its currency waits for a booking rate (B1) or manual handling; the retry
-        // cadence cannot change the ledger's currency, so retrying only burns attempts.
-        UUID heldEventId = UUID.fromString("00000000-0000-0000-0000-000000000079");
-        AccountingEvent heldEvent = buildEvent(heldEventId, AccountingEventStatus.SUSPENDED);
-        heldEvent.setAttemptCount(0);
-        heldEvent.setFailureReasonCode(PostingFailureReason.CURRENCY_NOT_SUPPORTED.name());
-
-        when(accountingEventRepository.findAll()).thenReturn(List.of(heldEvent));
-
-        int result = service.processFailed(3);
-
-        assertThat(result).isZero();
-        verify(accountingEventRepository, never()).findById(heldEventId);
-        verify(postingEngineOrchestrator, never()).processEvent(any(), any(), anyString(), anyBoolean());
-    }
-
-    @Test
-    @DisplayName("processFailed should skip events that already reached maxRetries")
-    void processFailed_SkipsEventsAtMaxRetries() {
-        UUID eventId = UUID.fromString("00000000-0000-0000-0000-000000000088");
-        AccountingEvent eventAtMax = buildEvent(eventId, AccountingEventStatus.FAILED);
-        eventAtMax.setAttemptCount(3); // at maxRetries
-
-        when(accountingEventRepository.findAll()).thenReturn(List.of(eventAtMax));
-
-        int result = service.processFailed(3);
-
-        assertThat(result).isEqualTo(0);
-        verify(accountingEventRepository, never()).findById(eventId);
+        ArgumentCaptor<ReprocessingAttemptHistory> history = ArgumentCaptor.forClass(ReprocessingAttemptHistory.class);
+        verify(reprocessingAttemptHistoryRepository).save(history.capture());
+        assertThat(history.getValue().getTriggeredByUserId()).isEqualTo("SYSTEM_RETRY_JOB");
+        assertThat(history.getValue().getAccountingEvent()).isSameAs(event);
+        assertThat(history.getValue().getAttemptedAt()).isNotNull();
+        assertThat(event.getAttemptCount()).isEqualTo(1);
     }
 
     // ========================================

@@ -187,8 +187,9 @@ public class ScrapController {
                     approving actor comes from the authenticated context.
                     Emits an INVENTORY_SCRAP_APPROVE event plus the ScrapPostedV1 fact on the posting, and a scrap \
                     created with shouldReplenish triggers a best-effort replenishment evaluation.
-                    Returns 404 when the scrap does not exist, 409 when it is not PENDING_APPROVAL or FAILED, 403 \
-                    when the override is requested without the permission, 422 (SCRAP_INSUFFICIENT_STOCK) when \
+                    Returns 404 when the scrap does not exist, 403 with LOCATION_SCOPE_DENIED when the scrap's \
+                    location is outside the caller's location reach, 409 when it is not PENDING_APPROVAL or FAILED, \
+                    403 when the override is requested without the permission, 422 (SCRAP_INSUFFICIENT_STOCK) when \
                     on-hand is insufficient — reconcile via cycle count or adjustment, or use an authorized \
                     override — and 500 (SCRAP_LEDGER_POST_FAILED) when the posting fails unexpectedly, which leaves \
                     the scrap FAILED with the cause in errorMessage.
@@ -198,7 +199,9 @@ public class ScrapController {
     @ApiResponse(
             responseCode = "403",
             description =
-                    "Missing inventory:scrap:approve, or override requested without inventory:adjustment:override",
+                    "Missing inventory:scrap:approve, or override requested without inventory:adjustment:override;"
+                            + " LOCATION_SCOPE_DENIED when the caller holds inventory:scrap:approve but the token scopes it"
+                            + " to locations that do not cover the scrap's locationId (ADR-0061)",
             content =
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -278,10 +281,19 @@ public class ScrapController {
                     Required inputs: scrapId (UUID) path parameter and rejectionReason (non-blank, max 1000 \
                     characters) in the body.
                     Emits an INVENTORY_SCRAP_REJECT event; inventory is untouched.
-                    Returns 404 when the scrap does not exist, and 409 when it is not in PENDING_APPROVAL status.
+                    Returns 404 when the scrap does not exist, 403 with LOCATION_SCOPE_DENIED when the scrap's \
+                    location is outside the caller's location reach, and 409 when it is not in PENDING_APPROVAL status.
                     """,
             tags = {"Scraps"})
     @ApiResponse(responseCode = "200", description = "Scrap rejected")
+    @ApiResponse(
+            responseCode = "403",
+            description = "FORBIDDEN when the caller lacks inventory:scrap:approve; LOCATION_SCOPE_DENIED when the"
+                    + " token scopes it to locations that do not cover the scrap's locationId (ADR-0061)",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Scrap not found",
