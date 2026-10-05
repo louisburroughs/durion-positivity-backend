@@ -5535,13 +5535,15 @@ paths:
 
         Use this tool when arrived stock should bypass staging and go straight to the demanding workorder; do not use receiveItemsIntoStaging, which books the quantity into the staging location for later putaway.
 
-        Preconditions: the session and line must exist, the workorder must not be COMPLETED, CANCELLED or CLOSED, the cumulative received quantity may not exceed the line''s expected quantity, and the line''s product must match the workorder line''s demanded product unless the caller holds inventory:override:part-match.
+        Preconditions: the session and line must exist, the workorder must not be COMPLETED, CANCELLED or CLOSED, the cumulative received quantity may not exceed the line''s expected quantity unless the caller holds inventory:goods_receipt:override (the same over-receipt guard as receiveItemsIntoStaging, evaluated before any ledger write), and the line''s product must match the workorder line''s demanded product unless the caller holds inventory:override:part-match.
 
         Required inputs: sessionId and lineId (UUIDv7) path parameters plus workorderId, workorderLineId and a positive quantity; lotNumber is mandatory for LOT-tracked products, falling back to the lot already keyed on the line, and notes is optional.
 
+        Each cross-dock is recorded as one goods receipt (linked to the session line) and publishes goodsreceipt.recorded from it. Idempotency: send an Idempotency-Key header (or the idempotencyKey body field; the header wins, both present and different is a 400); a retry with the same key and payload posts and publishes nothing and returns the original response, and the same key with a different payload is 409 IDEMPOTENCY_CONFLICT.
+
         Emits an INVENTORY_RECEIVING_CROSSDOCK event, stamps the workorder reference on the line, updates the line to RECEIVED, RECEIVED_SHORT or RECEIVED_OVER, and completes the session when every line is settled.
 
-        Returns 404 when the session or line is not found, 400 when the workorder is closed, the workorder line belongs to another workorder, or the quantity exceeds the expected quantity, 503 with a Retry-After header and WORKORDER_REPLICATION_PENDING when the workorder or its part line has not replicated from pos-workorder yet, 403 when the product mismatches the workorder demand without the override permission, and 422 when a LOT-tracked product resolves no lot number.
+        Returns 404 when the session or line is not found, 400 when the workorder is closed or the workorder line belongs to another workorder, 409 on an idempotency-key conflict, 422 OVER_RECEIPT_NOT_PERMITTED when the cumulative quantity exceeds the expected quantity without the override, 503 with a Retry-After header and WORKORDER_REPLICATION_PENDING when the workorder or its part line has not replicated from pos-workorder yet, 403 when the product mismatches the workorder demand without the override permission, and 422 when a LOT-tracked product resolves no lot number.
 
         '
       operationId: crossDockReceivingLine
@@ -5559,6 +5561,12 @@ paths:
         required: true
         schema:
           format: uuid
+          type: string
+      - description: Optional key that makes retries idempotent; takes precedence over the body's idempotencyKey
+        in: header
+        name: Idempotency-Key
+        required: false
+        schema:
           type: string
       requestBody:
         content:
@@ -5601,6 +5609,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Receiving session or line not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: IDEMPOTENCY_CONFLICT - the Idempotency-Key was already used for a different payload
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: OVER_RECEIPT_NOT_PERMITTED - the cumulative cross-docked quantity exceeds the expected quantity and the caller lacks inventory:goods_receipt:override; or LOT_NUMBER_REQUIRED
         '503':
           content:
             application/json:
@@ -5633,9 +5653,13 @@ paths:
 
         Required inputs: sessionId (UUIDv7) path parameter and lines (non-empty), each naming lineId plus either a whole-number receivedQuantity in base UoM or the documentUom/documentQuantity pair; lotNumber is mandatory for LOT-tracked products (expirationDate optionally stamps a new lot) and serialNumbers must enumerate exactly the received quantity for SERIAL-tracked products.
 
-        Emits an INVENTORY_RECEIVING_SESSION_COMPLETE event, marks each line RECEIVED, RECEIVED_SHORT or RECEIVED_OVER, and moves the session to COMPLETED when every line is settled or IN_PROGRESS otherwise.
+        Emits an INVENTORY_RECEIVING_SESSION_COMPLETE event, marks each line RECEIVED, RECEIVED_SHORT or RECEIVED_OVER, and moves the session to COMPLETED when every line is settled or IN_PROGRESS otherwise; receiving is cumulative: each call adds to the line''s receivedQuantity, and every call that receives against a purchase order is recorded as one goods receipt (linked to the session and its lines), visible through getGoodsReceipt, and publishes goodsreceipt.recorded from it.
 
-        Returns 404 when the receiving session does not exist, 400 when a quantity is missing or not a whole number, and 422 when a documentUom has no conversion path, a LOT-tracked line omits lotNumber, or a serialized line''s serial count mismatches the received quantity.
+        Over-receipt: a line whose cumulative received quantity would pass its expected quantity is rejected with 422 OVER_RECEIPT_NOT_PERMITTED, before anything is posted, unless the caller holds inventory:goods_receipt:override; with the override it is accepted as RECEIVED_OVER with an OVERAGE variance.
+
+        Idempotency: send an Idempotency-Key header (or the idempotencyKey body field; the header wins, and both present and different is a 400); a retry with the same key and payload posts and publishes nothing and returns the original response; the same key with a different payload is 409 IDEMPOTENCY_CONFLICT; without a key a retry is not recognised.
+
+        Returns 404 when the receiving session does not exist, 400 when a quantity is missing or not a whole number, 409 on an idempotency-key conflict, and 422 when the receipt is an over-receipt without the override, a documentUom has no conversion path, a LOT-tracked line omits lotNumber, or a serialized line''s serial count mismatches the received quantity.
 
         '
       operationId: receiveItemsIntoStaging
@@ -5646,6 +5670,12 @@ paths:
         required: true
         schema:
           format: uuid
+          type: string
+      - description: Optional key that makes retries idempotent; takes precedence over the body's idempotencyKey
+        in: header
+        name: Idempotency-Key
+        required: false
+        schema:
           type: string
       requestBody:
         content:
@@ -5688,6 +5718,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Receiving session not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: IDEMPOTENCY_CONFLICT - the Idempotency-Key was already used for a different payload
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: OVER_RECEIPT_NOT_PERMITTED - the cumulative received quantity exceeds the expected quantity and the caller lacks inventory:goods_receipt:override; or LOT_NUMBER_REQUIRED, SERIAL_COUNT_MISMATCH, UOM_CONVERSION_UNDEFINED
       security:
       - bearerAuth:
         - inventory:receiving:complete
@@ -10711,6 +10753,12 @@ components:
     CrossDockRequest:
       description: Request to cross-dock received stock directly against a workorder line
       properties:
+        idempotencyKey:
+          description: Optional idempotency key, the body fallback for the Idempotency-Key header (the header wins; both present and different is a 400). A retry with the same key and the same payload posts nothing and returns the original response; the same key with a different payload is a 409 IDEMPOTENCY_CONFLICT. Generated server-side when absent, in which case a retry is not recognised
+          example: receive-2026-10-04-dock3-0001
+          maxLength: 200
+          minLength: 0
+          type: string
         lotNumber:
           description: Lot or batch number of the cross-docked stock. Required (422 LOT_NUMBER_REQUIRED) when the product is LOT-tracked (falls back to the lot number already keyed on the receiving line); the lot is found-or-created like any receipt and stamped on BOTH paired ledger entries. Ignored for untracked products
           example: LOT-2026-A
@@ -12734,6 +12782,12 @@ components:
     ReceiveItemsRequest:
       description: Request to record received quantities for one or more receiving session lines
       properties:
+        idempotencyKey:
+          description: Optional idempotency key, the body fallback for the Idempotency-Key header (the header wins; both present and different is a 400). A retry with the same key and the same payload posts nothing and returns the original response; the same key with a different payload is a 409 IDEMPOTENCY_CONFLICT. Generated server-side when absent, in which case a retry is not recognised
+          example: receive-2026-10-04-dock3-0001
+          maxLength: 200
+          minLength: 0
+          type: string
         lines:
           description: Receiving lines with their received quantities; at least one line is required
           items:
