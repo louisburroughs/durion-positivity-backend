@@ -1,5 +1,6 @@
 package com.positivity.platformsender.internal.service;
 
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.platformsender.internal.config.SenderProperties;
 import com.positivity.tenancy.PlatformScoped;
 import io.micrometer.core.instrument.Counter;
@@ -31,6 +32,7 @@ import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
  */
 @Slf4j
 @Component
+@KafkaRails
 @ConditionalOnProperty(prefix = "pos.platform-sender.outcomes", name = "enabled", havingValue = "true")
 public class OutcomeQueuePoller {
 

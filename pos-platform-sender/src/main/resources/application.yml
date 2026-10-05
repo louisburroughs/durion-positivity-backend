@@ -98,7 +98,9 @@ pos:
       # Country calling code prepended to a stored number without one (10 digits, NANP).
       default-country-code: ${POS_PLATFORM_SENDER_SMS_DEFAULT_COUNTRY_CODE:1}
     outcomes:
-      # SQS long-poll of the SES and SMS event destinations (via SNS).
+      # SQS long-poll of the SES and SMS event destinations (via SNS). The relay writes to the outbox,
+      # so the poller and relay are @KafkaRails beans too: with this on they run only where the Kafka
+      # rails are active (docker/alpha/prod, or the local-kafka profile), never under dev/test/pg.
       enabled: ${POS_PLATFORM_SENDER_OUTCOMES_ENABLED:false}
       queue-url: ${POS_PLATFORM_SENDER_OUTCOMES_QUEUE_URL:}
       wait-time-seconds: ${POS_PLATFORM_SENDER_OUTCOMES_WAIT_TIME_SECONDS:20}

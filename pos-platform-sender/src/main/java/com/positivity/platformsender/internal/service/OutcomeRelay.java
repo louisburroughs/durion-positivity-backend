@@ -2,6 +2,7 @@ package com.positivity.platformsender.internal.service;
 
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.sender.SenderMessageOutcomeV1;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.platformsender.internal.config.OutboxEventWriter;
 import com.positivity.platformsender.internal.entity.ProcessedEvent;
 import com.positivity.platformsender.internal.repository.ProcessedEventRepository;
@@ -28,6 +29,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 @Slf4j
 @Service
+@KafkaRails
 @ConditionalOnProperty(prefix = "pos.platform-sender.outcomes", name = "enabled", havingValue = "true")
 public class OutcomeRelay {
 
