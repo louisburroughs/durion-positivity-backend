@@ -112,7 +112,8 @@ public class WorkorderDetailResponse {
             description =
                     "Display name of the assigned technician (first and last name only, no contact details), resolved from the people replica so TECHNICIAN and SERVICE_ADVISOR callers can show it without a people permission. Null when nobody is assigned or the name has not replicated yet.",
             example = "John Smith",
-            requiredMode = NOT_REQUIRED)
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
     private String assignedTechnicianName;
 
     // Line items

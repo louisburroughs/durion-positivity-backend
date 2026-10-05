@@ -36,7 +36,12 @@ public class TechnicianAssignmentResponse {
             requiredMode = NOT_REQUIRED)
     private String technicianId;
 
-    @Schema(description = "Technician display name", example = "John Smith", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description =
+                    "Technician display name (first and last name only); null when the name has not replicated yet",
+            example = "John Smith",
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
     private String technicianName;
 
     @Schema(
@@ -58,9 +63,11 @@ public class TechnicianAssignmentResponse {
     private String previousTechnicianId;
 
     @Schema(
-            description = "Previous technician name if this was a reassignment",
+            description =
+                    "Previous technician name if this was a reassignment; null otherwise or when the name has not replicated yet",
             example = "Jane Doe",
-            requiredMode = NOT_REQUIRED)
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
     private String previousTechnicianName;
 
     @Schema(description = "Status of the workorder after assignment", example = "ASSIGNED", requiredMode = NOT_REQUIRED)
@@ -143,7 +150,12 @@ public class TechnicianAssignmentResponse {
                 requiredMode = NOT_REQUIRED)
         private String technicianId;
 
-        @Schema(description = "Technician display name", example = "John Smith", requiredMode = NOT_REQUIRED)
+        @Schema(
+                description =
+                        "Technician display name (first and last name only); null when the name has not replicated yet",
+                example = "John Smith",
+                requiredMode = NOT_REQUIRED,
+                nullable = true)
         private String technicianName;
 
         @Schema(
