@@ -906,7 +906,8 @@ components:
           type: string
         manufacturerIds:
           description: Identifiers of every manufacturer this make is linked to, sorted. A make is a brand and one vPIC make can be built by several manufacturers, so it appears under each of them with this same id.
-          example: '["550e8400-e29b-41d4-a716-446655440001"]'
+          example:
+          - 550e8400-e29b-41d4-a716-446655440001
           items:
             format: uuid
             type: string

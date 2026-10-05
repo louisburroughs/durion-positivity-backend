@@ -3973,13 +3973,13 @@ paths:
       - accounting:events:view
   /v1/accounting/events/{eventId}/reprocess:
     post:
-      description: 'Reprocesses a SUSPENDED accounting event after a mapping or rule correction, recording an audited reprocessing attempt with the triggering user.
+      description: 'Reprocesses a SUSPENDED accounting event after a mapping or rule correction, recording an audited reprocessing attempt with the authenticated caller as the triggering user.
 
         Use this tool once the underlying mapping gap is fixed; do not use retryAccountingEvent, which is the unaudited retry for transient failures.
 
         Preconditions: the event must exist and be SUSPENDED; an event already PROCESSED is rejected to preserve idempotency. A fact held for its currency (failureReasonCode CURRENCY_NOT_SUPPORTED, ADR-0067 PC-9) is released here too; while its currency is still not the ledger''s it stays SUSPENDED with that reason and nothing is posted.
 
-        Required inputs: eventId (UUID) as a path parameter and triggeredByUserId in the body; mappingVersionToUse and reprocessingNotes are optional.
+        Required inputs: eventId (UUID) as a path parameter; the body is optional and may carry mappingVersionToUse (a UUID) and reprocessingNotes. The triggering user is the authenticated caller; any user field in the body is ignored.
 
         Emits an ACCOUNTING_EVENT_REPROCESS event; a successful synchronous outcome returns 200 with status PROCESSED while 202 means processing continues.
 
@@ -4002,12 +4002,11 @@ paths:
               Reprocess after mapping fix:
                 description: Reprocess after mapping fix
                 value:
+                  mappingVersionToUse: 0198a1b2-7c3d-7e4f-8a9b-0c1d2e3f4a5c
                   reprocessingNotes: Default mapping added for CASH_SALE
-                  triggeredByUserId: jdoe
             schema:
               $ref: '#/components/schemas/ReprocessEventRequest'
-        description: Audited reprocessing trigger with optional mapping version pin and notes.
-        required: true
+        description: Audited reprocessing trigger with optional mapping version pin and notes. May be omitted.
       responses:
         '202':
           content:
@@ -19228,23 +19227,16 @@ components:
       - status
       type: object
     ReprocessEventRequest:
-      description: Request to reprocess a suspended accounting event
+      description: Request to reprocess a suspended accounting event. The triggering user is the authenticated caller and is never taken from the body.
       properties:
         mappingVersionToUse:
-          description: Specific mapping version to use; defaults to latest when omitted
-          example: v3
+          description: Specific mapping version (UUID) to use; defaults to latest when omitted
+          example: 0198a1b2-7c3d-7e4f-8a9b-0c1d2e3f4a5c
           type: string
         reprocessingNotes:
           description: Optional notes about why reprocessing is being triggered
           example: Mapping rules corrected after vendor GL update
           type: string
-        triggeredByUserId:
-          description: Identifier of the user triggering the reprocessing (required for audit trail)
-          example: ap.manager
-          minLength: 1
-          type: string
-      required:
-      - triggeredByUserId
       type: object
     ReprocessingAttemptHistoryResponse:
       description: Historical record of a single reprocessing attempt
