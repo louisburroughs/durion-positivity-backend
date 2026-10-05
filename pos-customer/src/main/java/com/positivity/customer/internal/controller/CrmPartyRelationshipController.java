@@ -103,6 +103,8 @@ public class CrmPartyRelationshipController {
                     Returns 404 when the party or person cannot be found, 409 when an overlapping active \
                     relationship already exists for a requested role, and 400 when isPrimaryBillingContact \
                     is set without the BILLING role.
+                    Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant's system house account \
+                    (the CASH walk-in account), which no request can change.
                     """)
     @ApiResponse(
             responseCode = "201",
@@ -118,7 +120,8 @@ public class CrmPartyRelationshipController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "Conflict - overlapping relationship exists",
+            description =
+                    "Conflict - overlapping relationship exists; or HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant's system house account (the CASH walk-in account), which no request can change",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "401",
@@ -261,6 +264,8 @@ public class CrmPartyRelationshipController {
                     demoted in the same transaction.
                     Returns 404 when the relationship does not exist, and 400 when it belongs to a \
                     different party, lacks the BILLING role, or is no longer active.
+                    Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant's system house account \
+                    (the CASH walk-in account), which no request can change.
                     """)
     @ApiResponse(responseCode = "204", description = "Primary billing contact updated")
     @ApiResponse(
@@ -279,6 +284,11 @@ public class CrmPartyRelationshipController {
             responseCode = "403",
             description = "Forbidden - missing required permission",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description =
+                    "HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant's system house account (the CASH walk-in account), which no request can change",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Void> designatePrimaryBillingContact(
             @Parameter(description = "The commercial account party ID") @PathVariable UUID partyId,
             @Parameter(description = "The relationship ID to designate as primary") @PathVariable UUID relationshipId,
@@ -327,6 +337,8 @@ public class CrmPartyRelationshipController {
                     Emits a CRM_RELATIONSHIP_DEACTIVATE event and re-emits the person's identity fact \
                     because their account linkage changed.
                     Returns 404 when no relationship exists for the supplied relationshipId.
+                    Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant's system house account \
+                    (the CASH walk-in account), which no request can change.
                     """)
     @ApiResponse(responseCode = "204", description = "Relationship deactivated")
     @ApiResponse(
@@ -341,6 +353,11 @@ public class CrmPartyRelationshipController {
             responseCode = "403",
             description = "Forbidden - missing required permission",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description =
+                    "HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant's system house account (the CASH walk-in account), which no request can change",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Void> deactivateRelationship(
             @Parameter(description = "The commercial account party ID") @PathVariable UUID partyId,
             @Parameter(description = "The relationship ID to deactivate") @PathVariable UUID relationshipId,

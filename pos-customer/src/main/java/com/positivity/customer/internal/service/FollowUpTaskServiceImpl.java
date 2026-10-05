@@ -37,10 +37,12 @@ public class FollowUpTaskServiceImpl implements FollowUpTaskService {
     private final FollowUpTaskRepository taskRepository;
     private final CommercialPartyRepository commercialPartyRepository;
     private final PersonPartyRepository personPartyRepository;
+    private final HouseAccountGuard houseAccountGuard;
 
     @Override
     @Transactional
     public @NonNull FollowUpTaskResponse create(@NonNull UUID partyId, @NonNull CreateFollowUpTaskRequest request) {
+        houseAccountGuard.requireNotHouseAccount(partyId);
         assertPartyExists(partyId);
         FollowUpTask task = FollowUpTask.builder()
                 .partyId(partyId)

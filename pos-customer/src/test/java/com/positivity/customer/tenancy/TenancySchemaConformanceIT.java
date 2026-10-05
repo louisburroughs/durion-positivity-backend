@@ -110,6 +110,31 @@ class TenancySchemaConformanceIT extends PostgresTenancyTestBase {
                 .isTrue();
     }
 
+    /**
+     * The CASH house account's one-per-tenant rule (CAP:550 S7, #2505) is a partial unique index
+     * that leads with {@code tenant_id} (TENANCY_SCHEMA): uniqueness is per tenant, never across
+     * the fleet, and it is the arbiter when two instances provision the same tenant at once.
+     */
+    @Test
+    void theHouseAccountUniqueIndexLeadsWithTenantId() {
+        JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
+        Map<String, Object> index = owner.queryForMap("""
+                SELECT i.indisunique AS is_unique,
+                       pg_get_expr(i.indpred, i.indrelid) AS predicate,
+                       (SELECT string_agg(a.attname, ',' ORDER BY k.ord)
+                          FROM unnest(i.indkey) WITH ORDINALITY AS k(attnum, ord)
+                          JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum) AS columns
+                  FROM pg_index i
+                  JOIN pg_class ic ON ic.oid = i.indexrelid
+                  JOIN pg_class t ON t.oid = i.indrelid
+                 WHERE ic.relname = 'commercial_party_house_account_uk' AND t.relname = 'commercial_party'
+                """);
+
+        assertThat(index.get("is_unique")).isEqualTo(true);
+        assertThat(index.get("columns")).isEqualTo("tenant_id,house_account");
+        assertThat((String) index.get("predicate")).contains("house_account IS NOT NULL");
+    }
+
     private static Set<String> globalTables() throws IOException {
         return new ClassPathResource(GLOBAL_TABLES)
                 .getContentAsString(StandardCharsets.UTF_8)

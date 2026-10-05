@@ -109,7 +109,8 @@ class SegmentServiceImplTest {
                 segmentMemberRepository,
                 resolutionService,
                 marketingConsentService,
-                factPublisher);
+                factPublisher,
+                org.mockito.Mockito.mock(HouseAccountGuard.class));
     }
 
     private static SegmentPredicate predicate() {

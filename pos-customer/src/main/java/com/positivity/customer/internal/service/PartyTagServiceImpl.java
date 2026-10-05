@@ -39,6 +39,7 @@ public class PartyTagServiceImpl implements PartyTagService {
     private final PartyTagRepository tagRepository;
     private final PartyTagAssignmentRepository assignmentRepository;
     private final CustomerFactPublisher factPublisher;
+    private final HouseAccountGuard houseAccountGuard;
 
     @Override
     @Transactional
@@ -118,6 +119,7 @@ public class PartyTagServiceImpl implements PartyTagService {
     @Transactional
     public @NonNull PartyTagAssignmentResponse assignTag(
             @NonNull UUID partyId, @NonNull AssignPartyTagRequest request) {
+        houseAccountGuard.requireNotHouseAccount(partyId);
         PartyTag tag = requireTag(request.getTagId());
         Optional<PartyTagAssignment> existing = assignmentRepository.findByPartyIdAndTagId(partyId, tag.getTagId());
         if (existing.isPresent()) {
@@ -154,6 +156,7 @@ public class PartyTagServiceImpl implements PartyTagService {
     @Override
     @Transactional
     public void removeTag(@NonNull UUID partyId, @NonNull UUID tagId) {
+        houseAccountGuard.requireNotHouseAccount(partyId);
         Optional<PartyTagAssignment> existing = assignmentRepository.findByPartyIdAndTagId(partyId, tagId);
         if (existing.isEmpty()) {
             return;

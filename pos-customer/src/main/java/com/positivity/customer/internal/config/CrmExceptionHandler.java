@@ -7,6 +7,8 @@ import com.positivity.customer.internal.exception.CrmTooManyRequestsException;
 import com.positivity.customer.internal.exception.CrmUnprocessableEntityException;
 import com.positivity.customer.internal.exception.CrmValidationException;
 import com.positivity.customer.internal.exception.DuplicateRedemptionException;
+import com.positivity.customer.internal.exception.HouseAccountImmutableException;
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.servlet.http.HttpServletRequest;
@@ -34,6 +36,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
  * <li>{@link DuplicateRedemptionException} - 409 Conflict</li>
  * <li>{@link CrmDuplicateResourceException} - 409 Conflict</li>
  * <li>{@link CrmConflictException} - 409 Conflict (state conflict, no duplicate key)</li>
+ * <li>{@link HouseAccountImmutableException} - 409 Conflict {@code HOUSE_ACCOUNT_IMMUTABLE}</li>
  * <li>{@link MethodArgumentNotValidException} - 400 Bad Request
  * (validation)</li>
  * <li>{@link AccessDeniedException} - 403 Forbidden</li>
@@ -59,6 +62,10 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 @RequiredArgsConstructor
 public class CrmExceptionHandler {
     private static final String X_CORRELATION_ID = "X-Correlation-Id";
+
+    /** Error code of a refused write to a system house account (CAP:550 S7, #2505). */
+    public static final String HOUSE_ACCOUNT_IMMUTABLE = "HOUSE_ACCOUNT_IMMUTABLE";
+
     private final Clock clock;
 
     @ExceptionHandler(AccessDeniedException.class)
@@ -147,6 +154,34 @@ public class CrmExceptionHandler {
                 .body(ApiError.of(
                         "STATE_CONFLICT",
                         ex.getMessage(),
+                        HttpStatus.CONFLICT.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    /**
+     * A write targeted the tenant's system house account (the CASH walk-in account), which no
+     * request may change, merge, delete or attach data to (CAP:550 S7, #2505). Its own code so a
+     * caller can tell "this account is never editable" from a retryable state conflict. Logged at
+     * INFO with the actor and the target party: a refused attempt is expected behaviour, not a
+     * fault, and the guarded endpoints' {@code @EmitEvent} records already carry the audit trail.
+     */
+    @ExceptionHandler(HouseAccountImmutableException.class)
+    public ResponseEntity<ApiError> handleHouseAccountImmutable(
+            HouseAccountImmutableException ex, HttpServletRequest request, HttpServletResponse response) {
+        String path = request != null ? request.getRequestURI() : "";
+        log.info(
+                "Refused a write to house account {} on {} by {}",
+                ex.getPartyId(),
+                path,
+                SecurityContextHelper.getCurrentUsernameOrDefault("system"));
+        String correlationId = resolveCorrelationId(request);
+        response.setHeader(X_CORRELATION_ID, correlationId);
+
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiError.of(
+                        HOUSE_ACCOUNT_IMMUTABLE,
+                        "This is a system house account and cannot be changed",
                         HttpStatus.CONFLICT.value(),
                         Instant.now(clock).toString(),
                         correlationId));

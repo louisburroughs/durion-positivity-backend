@@ -1,6 +1,7 @@
 package com.positivity.customer.internal.repository;
 
 import com.positivity.customer.internal.entity.CommercialParty;
+import com.positivity.customer.internal.enums.HouseAccountKind;
 import com.positivity.tenancy.TenantAudited;
 import java.time.Instant;
 import java.util.List;
@@ -33,6 +34,16 @@ public interface CommercialPartyRepository
      * same name is refused at create rather than left to poison those lookups (issue #1978).
      */
     Optional<CommercialParty> findFirstByLegalNameIgnoreCase(@NonNull String legalName);
+
+    /**
+     * Whether the given party is a system house account of the bound tenant (CAP:550 S7, #2505).
+     * The single read behind {@code HouseAccountGuard}; another tenant's house account is not a
+     * row this tenant can see, so it answers false (ADR-0062).
+     */
+    boolean existsByPartyIdAndHouseAccountIsNotNull(@NonNull UUID partyId);
+
+    /** The bound tenant's house account of the given kind, if it has been provisioned. */
+    Optional<CommercialParty> findByHouseAccount(@NonNull HouseAccountKind houseAccount);
 
     /**
      * Commercial parties currently associated with the given vehicle VIN. Used by the

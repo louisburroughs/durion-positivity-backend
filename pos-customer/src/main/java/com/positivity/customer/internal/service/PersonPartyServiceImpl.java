@@ -34,6 +34,7 @@ public class PersonPartyServiceImpl implements CustomerService {
     private final PersonPartyRepository customerRepository;
     private final PersonDirectoryService personDirectoryService;
     private final CustomerFactPublisher customerFactPublisher;
+    private final HouseAccountGuard houseAccountGuard;
 
     /**
      * Retrieves all customers as DTOs.
@@ -156,6 +157,9 @@ public class PersonPartyServiceImpl implements CustomerService {
     @Transactional
     public Optional<CustomerDTO> updateCustomer(@NonNull UUID id, @NonNull CustomerDTO dto) {
         log.debug("Updating customer with id: {}", id);
+        // PUT /v1/crm/{id} routes here whenever the body does not say COMMERCIAL; the house
+        // account answers 409 whichever store the caller named (#2505).
+        houseAccountGuard.requireNotHouseAccount(id);
 
         // Try to find in person repository first
         Optional<PersonParty> personOpt = customerRepository.findById(id);

@@ -81,7 +81,8 @@ class PartyRelationshipServiceImplTest {
                 personRepository,
                 personDirectoryService,
                 Clock.fixed(Instant.parse("2026-03-01T12:00:00Z"), ZoneOffset.UTC),
-                customerFactPublisher);
+                customerFactPublisher,
+                org.mockito.Mockito.mock(HouseAccountGuard.class));
         when(partyRepository.findById(PARTY_ID)).thenReturn(Optional.of(commercialParty()));
         when(personRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(personParty()));
         when(partyRelationshipRepository.findOverlappingRelationships(any(), any(), any(), any()))

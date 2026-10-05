@@ -52,6 +52,7 @@ public class SegmentServiceImpl implements SegmentService {
     private final SegmentResolutionService resolutionService;
     private final MarketingConsentService marketingConsentService;
     private final CustomerFactPublisher factPublisher;
+    private final HouseAccountGuard houseAccountGuard;
 
     @Override
     @Transactional
@@ -145,6 +146,9 @@ public class SegmentServiceImpl implements SegmentService {
     @Transactional
     public @NonNull SegmentResponse addMembers(@NonNull UUID segmentId, @NonNull SegmentMembersRequest request) {
         Segment segment = requireSegment(segmentId);
+        // A house account is never a segment member (#2505): the whole request is refused before
+        // any member is pinned, rather than silently dropping the one id.
+        request.getPartyIds().forEach(houseAccountGuard::requireNotHouseAccount);
         if (segment.getType() != SegmentType.STATIC) {
             throw new CrmUnprocessableEntityException(
                     "Members can only be pinned on a STATIC segment; this segment is DYNAMIC");
@@ -172,6 +176,7 @@ public class SegmentServiceImpl implements SegmentService {
     @Override
     @Transactional
     public void removeMember(@NonNull UUID segmentId, @NonNull UUID partyId) {
+        houseAccountGuard.requireNotHouseAccount(partyId);
         segmentMemberRepository
                 .findBySegmentIdAndPartyId(segmentId, partyId)
                 .ifPresent(segmentMemberRepository::delete);

@@ -94,6 +94,8 @@ public class CrmInteractionController {
                     occurredAt defaults to now, and channel accepts EMAIL or SMS.
                     Emits a CRM_INTERACTION_RECORD event and persists the interaction row.
                     Returns 400 when type is missing or subject, summary, or body exceed their length limits.
+                    Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant's system house account \
+                    (the CASH walk-in account), which no request can change.
                     """)
     @ApiResponses({
         @ApiResponse(
@@ -107,6 +109,11 @@ public class CrmInteractionController {
         @ApiResponse(
                 responseCode = "403",
                 description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "409",
+                description =
+                        "HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant's system house account (the CASH walk-in account), which no request can change",
                 content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PostMapping

@@ -14,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.customer.config.WebMvcTestSecurityConfig;
 import com.positivity.customer.internal.config.CrmExceptionHandler;
 import com.positivity.customer.internal.exception.CrmValidationException;
+import com.positivity.customer.internal.exception.HouseAccountImmutableException;
 import com.positivity.customer.internal.service.ContactRoleService;
 import com.positivity.web.common.WebCommonErrorAutoConfiguration;
 import java.time.Clock;
@@ -115,6 +116,32 @@ class CrmContactsControllerErrorHandlingTest {
                 .andExpect(jsonPath("$.correlationId").isNotEmpty());
 
         verify(contactRoleService, never()).updateContactRoles(any(), any(), any());
+    }
+
+    /**
+     * CAP:550 S7 (#2505): a guarded write whose target is the tenant's CASH house account answers
+     * {@code 409 HOUSE_ACCOUNT_IMMUTABLE} with the envelope — the wire shape every guarded
+     * endpoint shares, since they all raise the same exception from the service layer.
+     */
+    @Test
+    @DisplayName("a write to the house account answers 409 HOUSE_ACCOUNT_IMMUTABLE with the envelope")
+    void aWriteToTheHouseAccountAnswers409WithTheEnvelope() throws Exception {
+        when(contactRoleService.updateContactRoles(eq(PARTY_ID), eq(CONTACT_ID), any()))
+                .thenThrow(new HouseAccountImmutableException(PARTY_ID));
+
+        mockMvc.perform(put(ROLES_PATH)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"roles":[{"roleCode":"BILLING","isPrimary":true}]}
+                                """)
+                        .header("X-Authorities", "crm:contact_role:assign")
+                        .header("X-Correlation-Id", "corr-2505"))
+                .andExpect(status().isConflict())
+                .andExpect(header().string("X-Correlation-Id", "corr-2505"))
+                .andExpect(jsonPath("$.code").value("HOUSE_ACCOUNT_IMMUTABLE"))
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.timestamp").value(NOW.toString()))
+                .andExpect(jsonPath("$.correlationId").value("corr-2505"));
     }
 
     @Test

@@ -581,6 +581,8 @@ paths:
 
         Returns 404 when no commercial party exists for the supplied partyId.
 
+        Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant''s system house account (the CASH walk-in account), which no request can change.
+
         '
       operationId: upsertPartyBillingRules
       parameters:
@@ -637,6 +639,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Party not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant''s system house account (the CASH walk-in account), which no request can change'
       security:
       - bearerAuth:
         - crm:billing_rules:edit
@@ -709,6 +717,8 @@ paths:
 
         Returns 404 when no commercial party exists for the supplied partyId, and 400 when the request body is missing.
 
+        Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant''s system house account (the CASH walk-in account), which no request can change.
+
         '
       operationId: upsertAccountCommunicationPreferences
       parameters:
@@ -759,6 +769,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Party not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant''s system house account (the CASH walk-in account), which no request can change'
       security:
       - bearerAuth:
         - crm:contact_preference:edit
@@ -780,6 +796,8 @@ paths:
         Emits a CUSTOMER_PARTY_MERGE event and republishes customer facts for both parties and for contacts whose account linkage moved.
 
         Returns 404 when either party cannot be found, and 400 when losingPartyId or justification is missing, losingPartyId is not a valid UUID, or both ids refer to the same party.
+
+        Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant''s system house account (the CASH walk-in account), which no request can change.
 
         '
       operationId: mergeParties
@@ -829,6 +847,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Party not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant''s system house account (the CASH walk-in account), which no request can change'
       security:
       - bearerAuth:
         - crm:party:merge
@@ -850,6 +874,8 @@ paths:
         Emits a CUSTOMER_VEHICLE_CREATE event and republishes the party-changed customer fact.
 
         Returns 404 when the party does not exist, 409 when the VIN is already associated with the party, and 400 when vinNumber is missing or blank.
+
+        Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant''s system house account (the CASH walk-in account), which no request can change.
 
         '
       operationId: createVehicleForParty
@@ -902,6 +928,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Party not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant''s system house account (the CASH walk-in account), which no request can change'
       security:
       - bearerAuth:
         - crm:vehicle:create
@@ -1251,6 +1283,8 @@ paths:
 
         Returns 404 when the party or person cannot be found, 409 when an overlapping active relationship already exists for a requested role, and 400 when isPrimaryBillingContact is set without the BILLING role.
 
+        Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant''s system house account (the CASH walk-in account), which no request can change.
+
         '
       operationId: createPartyRelationship
       parameters:
@@ -1314,7 +1348,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Conflict - overlapping relationship exists
+          description: 'Conflict - overlapping relationship exists; or HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant''s system house account (the CASH walk-in account), which no request can change'
       security:
       - bearerAuth:
         - crm:relationship:create
@@ -1336,6 +1370,8 @@ paths:
         Emits a CRM_RELATIONSHIP_DEACTIVATE event and re-emits the person''s identity fact because their account linkage changed.
 
         Returns 404 when no relationship exists for the supplied relationshipId.
+
+        Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant''s system house account (the CASH walk-in account), which no request can change.
 
         '
       operationId: deactivatePartyRelationship
@@ -1375,6 +1411,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Relationship not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant''s system house account (the CASH walk-in account), which no request can change'
       security:
       - bearerAuth:
         - crm:relationship:delete
@@ -1396,6 +1438,8 @@ paths:
         Emits a CRM_RELATIONSHIP_PRIMARY_BILLING_UPDATE event; the previous primary, if any, is demoted in the same transaction.
 
         Returns 404 when the relationship does not exist, and 400 when it belongs to a different party, lacks the BILLING role, or is no longer active.
+
+        Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant''s system house account (the CASH walk-in account), which no request can change.
 
         '
       operationId: designatePrimaryBillingContact
@@ -1441,6 +1485,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Relationship not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant''s system house account (the CASH walk-in account), which no request can change'
       security:
       - bearerAuth:
         - crm:relationship:update
@@ -2198,6 +2248,8 @@ paths:
 
         Returns 404 when no party exists for the supplied partyId.
 
+        Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant''s system house account (the CASH walk-in account), which no request can change.
+
         '
       operationId: upsertCommunicationPreferences
       parameters:
@@ -2253,6 +2305,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Party not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant''s system house account (the CASH walk-in account), which no request can change'
       security:
       - bearerAuth:
         - crm:contact_preference:edit
@@ -2384,6 +2442,8 @@ paths:
 
         Returns 404 when the party or contact person cannot be found, and 400 when a roleCode is not a recognized role.
 
+        Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant''s system house account (the CASH walk-in account), which no request can change.
+
         '
       operationId: updateContactRoles
       parameters:
@@ -2442,6 +2502,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Party or contact not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant''s system house account (the CASH walk-in account), which no request can change'
       security:
       - bearerAuth:
         - crm:contact_role:assign
@@ -2530,6 +2596,8 @@ paths:
 
         Returns 404 when no party exists for the supplied partyId, and 400 when type is missing.
 
+        Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant''s system house account (the CASH walk-in account), which no request can change.
+
         '
       operationId: createFollowUpTask
       parameters:
@@ -2574,6 +2642,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Party not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant''s system house account (the CASH walk-in account), which no request can change'
       security:
       - bearerAuth:
         - crm:followup:manage
@@ -2666,6 +2740,8 @@ paths:
 
         Returns 400 when type is missing or subject, summary, or body exceed their length limits.
 
+        Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant''s system house account (the CASH walk-in account), which no request can change.
+
         '
       operationId: recordInteraction
       parameters:
@@ -2710,6 +2786,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant''s system house account (the CASH walk-in account), which no request can change'
       security:
       - bearerAuth:
         - crm:interaction:manage
@@ -2781,6 +2863,8 @@ paths:
 
         Returns 404 when no party exists for the supplied partyId.
 
+        Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant''s system house account (the CASH walk-in account), which no request can change.
+
         '
       operationId: updateMarketingConsent
       parameters:
@@ -2823,6 +2907,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Party not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant''s system house account (the CASH walk-in account), which no request can change'
       security:
       - bearerAuth:
         - crm:consent:manage
@@ -2844,6 +2934,8 @@ paths:
         Emits a CRM_MARKETING_ACCOUNT_GATE_SET event, and when the gate actually flips it republishes the resolved eligibility decisions for both channels.
 
         Returns 404 when no commercial party exists for the supplied partyId.
+
+        Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant''s system house account (the CASH walk-in account), which no request can change.
 
         '
       operationId: setAccountMarketingGate
@@ -2878,6 +2970,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Commercial party not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant''s system house account (the CASH walk-in account), which no request can change'
       security:
       - bearerAuth:
         - crm:consent:manage
@@ -2997,6 +3095,8 @@ paths:
 
         Returns 404 when the tag does not exist, and 422 when the tag is inactive and not already assigned.
 
+        Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant''s system house account (the CASH walk-in account), which no request can change.
+
         '
       operationId: assignTagToParty
       parameters:
@@ -3038,6 +3138,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Tag not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant''s system house account (the CASH walk-in account), which no request can change'
         '422':
           content:
             application/json:
@@ -3064,7 +3170,9 @@ paths:
 
         Emits a CRM_PARTY_TAG_REMOVE event and publishes a party-tag-changed fact when an assignment was actually removed.
 
-        Returns 204 in every authorized call, including when nothing was assigned.
+        Returns 204 in every other authorized call, including when nothing was assigned.
+
+        Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant''s system house account (the CASH walk-in account), which no request can change.
 
         '
       operationId: removeTagFromParty
@@ -3090,6 +3198,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant''s system house account (the CASH walk-in account), which no request can change'
       security:
       - bearerAuth:
         - crm:tag:assign
@@ -3717,6 +3831,8 @@ paths:
 
         Returns 404 when the segment does not exist, and 422 when the segment is DYNAMIC.
 
+        Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant''s system house account (the CASH walk-in account), which no request can change.
+
         '
       operationId: addSegmentMembers
       parameters:
@@ -3759,6 +3875,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Segment not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant''s system house account (the CASH walk-in account), which no request can change'
         '422':
           content:
             application/json:
@@ -3785,7 +3907,9 @@ paths:
 
         Emits a CRM_SEGMENT_MEMBER_REMOVE event; at most one membership row is deleted.
 
-        Returns 204 in every authorized call, including when nothing was actually removed.
+        Returns 204 in every other authorized call, including when nothing was actually removed.
+
+        Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant''s system house account (the CASH walk-in account), which no request can change.
 
         '
       operationId: removeSegmentMember
@@ -3811,6 +3935,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant''s system house account (the CASH walk-in account), which no request can change'
       security:
       - bearerAuth:
         - crm:segment:manage
@@ -4662,6 +4792,8 @@ paths:
 
         Returns 404 when neither store holds a party for the supplied id.
 
+        Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant''s system house account (the CASH walk-in account), which no request can change.
+
         '
       operationId: deleteCustomer
       parameters:
@@ -4682,6 +4814,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Customer not found.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant''s system house account (the CASH walk-in account), which no request can change'
       security:
       - bearerAuth:
         - crm:party:deactivate
@@ -4748,6 +4886,8 @@ paths:
 
         Returns 404 when no party of the selected type exists for the supplied id.
 
+        Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant''s system house account (the CASH walk-in account), which no request can change.
+
         '
       operationId: updateCustomer
       parameters:
@@ -4787,6 +4927,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Customer not found.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant''s system house account (the CASH walk-in account), which no request can change'
       security:
       - bearerAuth:
         - crm:party:edit
@@ -6355,6 +6501,15 @@ components:
           maxLength: 100
           minLength: 0
           type: string
+        houseAccount:
+          description: 'House-account kind when this customer is a system house account (CASH_SALE is the tenant''s walk-in CASH account, which no request can change); null for every ordinary customer. Read-only: a value sent on create or update is ignored.'
+          enum:
+          - CASH_SALE
+          example: CASH_SALE
+          readOnly: true
+          type:
+          - string
+          - 'null'
         id:
           description: Unique identifier of the customer
           example: 01960003-0000-7000-8000-000000000001
@@ -6786,6 +6941,14 @@ components:
           description: Display/trading name
           example: Acme Supply
           type: string
+        houseAccount:
+          description: House-account kind when this party is a system house account (CASH_SALE is the tenant's walk-in CASH account, which no request can change); null or absent for every ordinary party. Recognise a house account from this value only, never from a name or customer number.
+          enum:
+          - CASH_SALE
+          example: CASH_SALE
+          type:
+          - string
+          - 'null'
         legalName:
           description: Legal name of the party
           example: Acme Industrial Supply LLC
@@ -7362,6 +7525,14 @@ components:
           description: Display name of the party
           example: Acme
           type: string
+        houseAccount:
+          description: House-account kind when this party is a system house account (CASH_SALE is the tenant's walk-in CASH account, which no request can change); null for every ordinary party. Recognise a house account from this value only, never from a name or customer number.
+          enum:
+          - CASH_SALE
+          example: CASH_SALE
+          type:
+          - string
+          - 'null'
         legalName:
           description: Legal name of the party
           example: Acme Corporation

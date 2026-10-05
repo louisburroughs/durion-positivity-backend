@@ -52,6 +52,9 @@ public class AccountTierServiceImpl implements AccountTierService {
     private static final BigDecimal PLATINUM_THRESHOLD = new BigDecimal("500000");
     private static final BigDecimal ENTERPRISE_THRESHOLD = new BigDecimal("1000000");
 
+    /** Resolution reason reported for a house account, whose tier is fixed (#2505). */
+    static final String HOUSE_ACCOUNT_TIER_REASON = "System house account: the tier is fixed and never recalculated.";
+
     private static final int BRONZE_AGE_MONTHS = 3;
     private static final int SILVER_CONTRACTS = 2;
     private static final int GOLD_CONTRACTS = 3;
@@ -103,6 +106,19 @@ public class AccountTierServiceImpl implements AccountTierService {
                 .orElseThrow(() -> new CrmResourceNotFoundException("Account", request.getAccountId()));
 
         AccountTier currentTier = party.getTier() != null ? party.getTier() : AccountTier.STANDARD;
+        if (party.getHouseAccount() != null) {
+            // A house account is never re-tiered (#2505): answer the stored tier without running
+            // the calculation, whatever the request asks to apply or force.
+            log.info("Skipping tier resolution for house account {}", request.getAccountId());
+            return ResolveAccountTierResponse.builder()
+                    .accountId(request.getAccountId())
+                    .currentTier(currentTier)
+                    .recommendedTier(currentTier)
+                    .tierApplied(false)
+                    .manualOverrideActive(true)
+                    .resolutionReason(HOUSE_ACCOUNT_TIER_REASON)
+                    .build();
+        }
         boolean manualOverride = party.isTierManualOverride();
 
         // Calculate recommended tier based on business rules

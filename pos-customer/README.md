@@ -14,6 +14,7 @@ CRM service for the Durion Positivity ETSMS platform. Manages the customer party
 - Project workorder facts from `workorder.events.v1` (`WorkorderEventsListener`): service completions into service history, declined service lines into follow-up tasks, and customer notes into `party_note` plus the `WORKORDER_NOTE` interaction timeline (#1584)
 - Consume `vehicle.events.v1` (`VehicleEventsListener`, idempotent via `processed_events`) and reconcile the replica against `vehicle.manifest.v1` manifests (`VehicleManifestListener`)
 - Support bulk customer import via `POST /v1/customer/bulk-ingest`
+- Keep exactly one system **CASH house account** per tenant — the registered customer a walk-in sale paid in full is recorded against (see [CASH house account](#cash-house-account-cap550-s7-2505))
 
 ## Key Classes
 
@@ -23,6 +24,8 @@ CRM service for the Durion Positivity ETSMS platform. Manages the customer party
 - `AccountTierService` — evaluates and assigns customer loyalty tiers
 - `PromotionRedemptionService` — validates and records promotion code redemptions
 - `CrmVehicleService` — read-side vehicle queries from the `ext_vehicle` replica; associations stay customer-owned per ADR-0012
+- `HouseAccountProvisioner` / `HouseAccountProvisioningService` — create each tenant's CASH house account at startup and on a sweep
+- `HouseAccountGuard` — the one service-layer check that refuses every write to a house account
 
 ## API Endpoints
 
@@ -50,12 +53,13 @@ CRM service for the Durion Positivity ETSMS platform. Manages the customer party
 
 Every non-2xx response carries the platform `ApiError` envelope (see
 [`durion/docs/architecture/api/ERROR_ENVELOPE.md`](../../durion/docs/architecture/api/ERROR_ENVELOPE.md)).
-This table lists only the replica-lag code; the module's other codes are defined beside the
-`CrmExceptionHandler` that mints them.
+This table lists the replica-lag code and the house-account code; the module's other codes are defined
+beside the `CrmExceptionHandler` that mints them.
 
 | Code | Status | Description |
 |------|--------|-------------|
 | `VEHICLE_REPLICATION_PENDING` | 503 | `GET /v1/crm/{customerId}/vehicles/{vehicleId}`: the vehicle is not in the `ext_vehicle` replica yet (it arrives by `vehicle.events.v1`, and a vehicle id cannot be mapped to a VIN any other way). Carries `Retry-After` and `referenceId` = the vehicle id; not-yet, not no, so retry (#1994). A vehicle that is present but not associated with the customer stays `404 RESOURCE_NOT_FOUND` |
+| `HOUSE_ACCOUNT_IMMUTABLE` | 409 | The target party is the tenant's system CASH house account, which no request may change, merge, delete or attach data to. Answered by every guarded write listed under [CASH house account](#cash-house-account-cap550-s7-2505), before any change is made and before any fact is queued. Not retryable |
 
 ## Configuration
 
@@ -63,6 +67,59 @@ This table lists only the replica-lag code; the module's other codes are defined
 | ----------------------- | -------- | ---------------------------- |
 | `SPRING_DATASOURCE_URL` | required | PostgreSQL connection URL    |
 | `EUREKA_SERVER_URL`     | required | Eureka service discovery URL |
+| `pos.customer.house-account.enabled` (`POS_CUSTOMER_HOUSE_ACCOUNT_ENABLED`) | `true` | Provision the CASH house account for every active tenant, at startup and on the sweep. `false` removes the provisioner (test contexts switch it off) |
+| `pos.customer.house-account.sweep-interval-ms` (`POS_CUSTOMER_HOUSE_ACCOUNT_SWEEP_INTERVAL_MS`) | `3600000` | Fixed delay between provisioning sweeps; the sweep is what gives a tenant added while the service runs its account |
+
+## CASH house account (CAP:550 S7, #2505)
+
+Every tenant has exactly one system party that a walk-in sale paid in full is recorded against, so no
+module has to invent a person for it (accounting workspace spec §4.4 item 2, decisions AW12 and AW13).
+
+**Shape.** A `CommercialParty` with `houseAccount = CASH_SALE` (column `commercial_party.house_account`),
+customer number `CASH`, legal and display name `Walk-in customer`, `status = ACTIVE`,
+`lifecycleStage = ACTIVE`, tier `STANDARD` under a manual override, and the account marketing gate shut. It
+has no tax id, address, billing rules, contacts, relationships, vehicles, tags, consents or communication
+preferences. Its identity is the flag: never recognise it by name or number, and show a localised label
+from the flag rather than the stored name.
+
+**Provisioning.** `HouseAccountProvisioner` runs once at startup (failures are logged and never block
+startup) and then every `pos.customer.house-account.sweep-interval-ms`. It visits each active tenant through
+`TenantIterator` — tenant bound, one transaction per tenant, never the platform tenant — creates the account
+when the tenant has none, and queues its `customer.party.updated` fact through the outbox in the same
+transaction. It is idempotent: at most one per tenant is enforced by the partial unique index
+`commercial_party_house_account_uk (tenant_id, house_account) WHERE house_account IS NOT NULL`, and an
+instance that loses a race on it treats the tenant as already provisioned and queues no second fact. A
+tenant whose transaction fails is logged at WARN and retried on the next sweep. The sweep stands in until
+pos-customer consumes `tenant.events.v1`. Provisioning only creates the account; no earlier sale, invoice or
+party is reassigned to it (AW13). Counter: `customer.house_account.provisioned{outcome=created|existing|failed}`.
+
+**Fact and reads.** `CustomerPartyUpdatedV1` carries `houseAccount` (`"CASH_SALE"` for the house account,
+`null` for every other party; additive within schema version 1, and fact replay re-emits it).
+`GetPartyResponse`, `SearchPartiesResponse.PartySummary` and `CustomerDTO` carry the same field. Browse and
+search still return the house account; the client decides whether to show it.
+
+**Guards.** `HouseAccountGuard.requireNotHouseAccount(partyId)` is called from the service method behind each
+of these writes, so every one answers `409 HOUSE_ACCOUNT_IMMUTABLE` when its target is a house account:
+
+- `PUT /v1/crm/{id}`, `DELETE /v1/crm/{id}`
+- `POST /v1/crm/accounts/parties/{partyId}/merge` (as survivor in the path or as `losingPartyId` in the body),
+  `POST …/communicationPreferences`, `POST …/vehicles`, `PUT …/billing-rules`
+- `POST /v1/crm/parties/{partyId}/communicationPreferences`
+- `PUT /v1/crm/parties/{partyId}/marketing-consent`, `PUT …/marketing-consent/account-gate`
+- `PUT /v1/crm/parties/{partyId}/contacts/{contactId}/roles`
+- `POST /v1/crm/parties/{partyId}/follow-ups`, `POST /v1/crm/parties/{partyId}/interactions`
+- `POST /v1/crm/commercial-accounts/{partyId}/relationships`, `PUT …/relationships/{relationshipId}/primary-billing`,
+  `DELETE …/relationships/{relationshipId}`
+- `POST /v1/crm/parties/{partyId}/tags`, `DELETE /v1/crm/parties/{partyId}/tags/{tagId}`
+- `POST /v1/crm/segments/{segmentId}/members` (any listed party), `DELETE /v1/crm/segments/{segmentId}/members/{partyId}`
+
+The guard's lookup runs under the bound tenant, so another tenant's house account id is simply not found
+(ADR-0062). A new write that takes a party id must call the guard too.
+
+**Left out of pos-customer's own analytics.** Segment candidates, attribute previews and static membership
+(`SegmentResolutionService`), the duplicate check (`checkPartyDuplicates`), and tier resolution
+(`resolveAccountTier` answers the stored tier without recalculating). Money measures by customer are served
+by pos-invoice and pos-accounting, which exclude it from their own replicas of the flag.
 
 ## Multitenancy (ADR-0062, WS3 wave 6)
 
@@ -87,6 +144,7 @@ The outbox row carries the producing tenant as data (`tenant_id`, stamped from t
 | `OutboxPublisher.publishPending` | platform-scoped | Drains `event_outbox`; each row's `tenant_id` becomes the record header |
 | `ManifestPublisher.publishDueManifest` | platform-scoped | Groups the window's `event_outbox` rows by `tenant_id` and publishes one manifest per tenant, stamped with that tenant; every active tenant of the registry gets one, zero-count when it published nothing |
 | `ServiceDueReminderJob.generateReminders` | per-tenant | `service_history` and `follow_up_task` are scoped; one run per tenant of the registry |
+| `HouseAccountProvisioner.sweep` | per-tenant | `commercial_party` is scoped; one transaction per tenant of the registry, at startup and on the sweep |
 
 The one native query, `CommercialPartyRepository`'s `nextval('commercial_party_customer_number_seq')`, carries
 `@TenantAudited`: it reads a platform-wide sequence, not a table.
@@ -94,7 +152,7 @@ The one native query, `CommercialPartyRepository`'s `nextval('commercial_party_c
 Proof: `TenantIsolationIT` (tenant A's `party_tag` row is invisible to tenant B and to an unbound
 connection, through the repository and through raw SQL) and `TenancySchemaConformanceIT` (every
 non-whitelisted table has `tenant_id`, RLS enabled and forced, and the `tenant_isolation` policy; the pool is
-`pos_app` with no bypass), both on Testcontainers Postgres (`./mvnw -pl pos-customer -am verify`), next to the
+`pos_app` with no bypass; the house-account unique index leads with `tenant_id`), both on Testcontainers Postgres (`./mvnw -pl pos-customer -am verify`), next to the
 existing `FlywayMigrationIT` and `CommercialCustomerNumberIT` on the same strict `pg` profile.
 
 ## Dependencies
@@ -110,8 +168,9 @@ existing `FlywayMigrationIT` and `CommercialCustomerNumberIT` on the same strict
 
 Uses Flyway with PostgreSQL. Migrations at `src/main/resources/db/migration`: `V1__baseline_customer.sql` (the
 2026-09-09 flattened baseline with the tenancy schema on every scoped table), `V2__event_outbox_tenant_id.sql`
-(`tenant_id` as data on the global outbox table, see Multitenancy above) and the repeatable operational seed, which
-binds the alpha default tenant for its own transaction.
+(`tenant_id` as data on the global outbox table, see Multitenancy above), `V3__commercial_party_house_account.sql`
+(the `house_account` marker, its check constraint and the one-per-tenant partial unique index) and the repeatable
+operational seed, which binds the alpha default tenant for its own transaction.
 
 ## Development
 

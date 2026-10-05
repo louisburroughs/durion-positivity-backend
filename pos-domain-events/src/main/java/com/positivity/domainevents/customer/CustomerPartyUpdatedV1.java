@@ -31,6 +31,11 @@ import org.jspecify.annotations.Nullable;
  * @param requirementsMet owner-computed verdict: party currently meets work requirements
  * @param creditHold commercial billing-rules credit hold flag (null when not applicable)
  * @param parentPartyId parent commercial account (null for roots and person parties)
+ * @param houseAccount house-account kind when the party is a system house account, e.g.
+ *     {@code CASH_SALE} for the tenant's CASH (walk-in) account; null for every ordinary party.
+ *     Additive within schema version 1 (ADR-0044 §3): an envelope published before the field
+ *     existed deserializes with null. Consumers recognise a house account from this flag only,
+ *     never from a name or customer number.
  */
 public record CustomerPartyUpdatedV1(
         @NonNull UUID partyId,
@@ -43,10 +48,14 @@ public record CustomerPartyUpdatedV1(
         @Nullable String tier,
         boolean requirementsMet,
         @Nullable Boolean creditHold,
-        @Nullable UUID parentPartyId) {
+        @Nullable UUID parentPartyId,
+        @Nullable String houseAccount) {
 
     public static final String EVENT_TYPE = "customer.party.updated";
     public static final int SCHEMA_VERSION = 1;
+
+    /** {@link #houseAccount} value of the per-tenant CASH (walk-in) house account. */
+    public static final String HOUSE_ACCOUNT_CASH_SALE = "CASH_SALE";
 
     public CustomerPartyUpdatedV1 {
         if (partyId == null) {

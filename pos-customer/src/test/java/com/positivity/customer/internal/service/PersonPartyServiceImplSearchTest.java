@@ -30,7 +30,8 @@ class PersonPartyServiceImplSearchTest {
         return new PersonPartyServiceImpl(
                 personPartyRepository,
                 personDirectoryService,
-                org.mockito.Mockito.mock(com.positivity.customer.internal.service.CustomerFactPublisher.class));
+                org.mockito.Mockito.mock(com.positivity.customer.internal.service.CustomerFactPublisher.class),
+                org.mockito.Mockito.mock(HouseAccountGuard.class));
     }
 
     private PersonParty person(UUID partyId, UUID personId) {

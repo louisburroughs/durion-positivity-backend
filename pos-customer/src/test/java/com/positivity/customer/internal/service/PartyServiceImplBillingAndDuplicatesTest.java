@@ -125,7 +125,8 @@ class PartyServiceImplBillingAndDuplicatesTest {
                 customerFactPublisher,
                 marketingConsentService,
                 customerInteractionService,
-                entityManager);
+                entityManager,
+                org.mockito.Mockito.mock(HouseAccountGuard.class));
         when(outboxEventWriter.getIfAvailable()).thenReturn(writer);
         when(customerFactPublisher.eventsTopic()).thenReturn(TOPIC);
     }
