@@ -179,6 +179,11 @@
         </dependency>
         <!-- Kafka producer for the transactional outbox drain (ADR-0044 §4) -->
         <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-kafka-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-kafka</artifactId>
         </dependency>

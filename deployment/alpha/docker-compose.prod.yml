@@ -207,6 +207,7 @@ services:
     image: ${ECR_REGISTRY}/durion/pos-supplier:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
+    # No Kafka flag: the domain-event rails are tier-1, always on (ADR-0044 §4, #2463).
 
   pos-tax:
     image: ${ECR_REGISTRY}/durion/pos-tax:${BACKEND_TAG}

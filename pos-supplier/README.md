@@ -95,7 +95,7 @@ domain-to-domain synchronous calls and R3 makes replicas the read path, so pos-c
 product identity codes on `catalog.events.v1` and `CatalogProductEventsListener` maintains the copy
 (`processed_events` idempotency, stale guard on `aggregateVersion`). The trade is staleness: a product
 created seconds ago may not be matchable yet, and its line is quarantined until the next import. An
-empty replica — Kafka disabled, or nothing consumed yet — reports `CATALOG_UNAVAILABLE` rather than
+empty replica — a broker-less `dev`/`test`/`pg` profile, or nothing consumed yet — reports `CATALOG_UNAVAILABLE` rather than
 turning a whole vendor catalog into `NO_CATALOG_MATCH` misses an operator would go hunting for.
 
 **Freshness and run metadata (#1637 decisions 3-5).** `GET …/price-catalog/{vendorProfileId}/freshness`
@@ -659,6 +659,15 @@ Proof: `TenantIsolationIT` (tenant A's `ext_product_code` row is invisible to te
 connection, through the repository and through raw SQL) and `TenancySchemaConformanceIT` (every
 non-whitelisted table has `tenant_id`, RLS enabled and forced, and the `tenant_isolation` policy; the pool is
 `pos_app` with no bypass), both on Testcontainers Postgres (`./mvnw -pl pos-supplier -am verify`).
+
+### Before enabling on an existing environment (#2463)
+
+Kafka used to be off by default here (a per-module opt-in flag, retired); the rails are now always on outside the broker-less `dev`/`test`/`pg` profiles. On an environment that has run this module with them off (alpha did), audit before the first start of the new image:
+
+1. **Vendor bindings.** In `pos_supplier_db`, list enabled vendor profiles that carry an order-transmission or workorder-authorization binding with resolvable credentials. With none, the consumers have nothing to act on and the rest of this list is moot.
+2. **Unpublished outbox rows.** `SELECT count(*), min(created_at) FROM supplier_event_outbox WHERE published_at IS NULL;` Everything queued while the flag was off drains on start. A queued `SupplierInvoiceReceivedV1` reaches accounting AP, so read what is in there first.
+3. **Consumer-group reset.** If a live binding exists, reset `pos-supplier-commands` and `pos-supplier-workorder-events` to latest before the first start (`kafka-consumer-groups.sh --reset-offsets --to-latest --execute`), so retained history is not replayed as new orders or sign-offs. Offsets for `auto-offset-reset: earliest` apply to a group with no committed offset, which is every group here.
+4. **Catalog replica.** After the first start, trigger a catalog re-emit-all so `ext_product_code` is backfilled; until then price-catalog matching reports `CATALOG_UNAVAILABLE`.
 
 ## Working on this module
 
