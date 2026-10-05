@@ -151,6 +151,28 @@ public class VendorBillServiceImpl implements VendorBillService {
      * original is read by {@link VendorBillDuplicateGuard#findOriginalAfterCollision} in a {@code
      * REQUIRES_NEW} transaction of its own, which is what makes the read possible, so both paths
      * give the same answer.
+     *
+     * <p><strong>Connections.</strong> The bill's number is drawn under the tenant's counter row lock
+     * ({@link #generateBillNumber}), which is held until the transaction ends, so concurrent creates in
+     * a tenant queue on it, each holding a pooled connection. While that lock is held this method
+     * therefore asks for no second connection: on a small pool the holder would wait for one behind
+     * the very writers waiting for its lock, until the pool's timeout, and for that long no tenant
+     * would get a connection at all (the defect #2342 removed from the counter's own bootstrap). The
+     * vendor-directory write, which used to run in a {@code REQUIRES_NEW} transaction of its own, is
+     * made on the bill's connection with a conflict-tolerant insert
+     * ({@link VendorDirectoryService#recordVendorInCurrentTransaction}), so it commits with the bill
+     * and a refused or rolled-back create writes no directory row. Nothing else between the number
+     * and the commit leaves the bill's connection: the duplicate check, the bill and its lines, and
+     * the GL posting event's handler and event ingestion all join this transaction.
+     *
+     * <p>One exception remains, on the collision path only. When this method runs inside a caller's
+     * transaction and the unique index refuses the insert, that transaction is aborted but still
+     * holds the counter lock until the caller rolls it back, and reading the original takes one more
+     * connection meanwhile. The cost is bounded: one extra connection per refused create, for one
+     * indexed read, and only for a collision inside a caller's transaction. If the pool has none to
+     * give, the read fails after the pool's connection timeout and that error is thrown instead of
+     * the refusal; no bill is created either way. When this method began the transaction itself, it
+     * has rolled back, lock and connection released, before the original is read.
      */
     @Override
     public @NonNull VendorBillResponse handleGoodsReceivedEvent(@NonNull GoodsReceivedEvent event) {
@@ -213,7 +235,6 @@ public class VendorBillServiceImpl implements VendorBillService {
         VendorBill bill = new VendorBill();
         bill.setVendorId(event.getVendorId());
         bill.setVendorName(event.getVendorName());
-        bill.setBillNumber(generateBillNumber(event.getVendorId()));
         bill.setBillDate(event.getReceivedDate());
         bill.setStatus(VendorBillStatus.PENDING_RECEIPT_MATCH);
         bill.setOriginEventId(event.getEventId());
@@ -228,8 +249,12 @@ public class VendorBillServiceImpl implements VendorBillService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         bill.setTotalAmount(totalAmount);
 
+        // The number, as late as it can be drawn: from here to the end of this transaction the
+        // tenant's counter row is locked, and nothing below asks for a second connection.
+        bill.setBillNumber(generateBillNumber(event.getVendorId()));
+
         // Step 4: The duplicate rule (#2501), then the insert. Flushed here so the unique index
-        // answers before the vendor directory, the lines or the GL posting event see the bill.
+        // answers before the lines or the GL posting event see the bill.
         duplicateGuard.refuseIfDuplicate(
                 VendorBillDuplicateGuard.Channel.GOODS_RECEIPT,
                 bill.getVendorId(),
@@ -246,17 +271,11 @@ public class VendorBillServiceImpl implements VendorBillService {
             throw e;
         }
 
-        // Keep the AP vendor directory (name typeahead) in sync (Issue #816).
-        // Best-effort: runs in its own transaction, and a failure (e.g. a
-        // concurrent insert of the same vendor) must never fail bill creation.
-        try {
-            vendorDirectoryService.recordVendor(event.getVendorId(), event.getVendorName());
-        } catch (RuntimeException e) {
-            log.warn(
-                    "Vendor directory sync failed, continuing bill creation | vendorId={} | error={}",
-                    event.getVendorId(),
-                    e.getMessage());
-        }
+        // Keep the AP vendor directory (name typeahead) in sync (Issue #816), on this connection:
+        // the counter row lock is held, so no second connection may be requested here
+        // (handleGoodsReceivedEvent). The insert tolerates an existing row, so it cannot fail the
+        // bill for the reason the former REQUIRES_NEW write was isolated against.
+        vendorDirectoryService.recordVendorInCurrentTransaction(event.getVendorId(), event.getVendorName());
 
         // Step 5: Save line items for three-way matching
         int lineNumber = 1;
@@ -769,8 +788,9 @@ public class VendorBillServiceImpl implements VendorBillService {
      * shared one would hand every tenant numbers out of one series.
      *
      * <p>The counter row is read under {@code FOR UPDATE} and incremented inside the bill's own
-     * transaction, so concurrent creates in a tenant take distinct numbers one after another, and a
-     * create that rolls back (a refused duplicate included) rolls the increment back with it: the
+     * transaction, so concurrent creates in a tenant take distinct numbers one after another (and
+     * the caller must request no second pooled connection until that transaction ends; see {@link
+     * #handleGoodsReceivedEvent}), and a create that rolls back (a refused duplicate included) rolls the increment back with it: the
      * number is not consumed, and the next create takes it. A tenant's row for a month is created on
      * first use by the locker; nothing provisions it.
      */

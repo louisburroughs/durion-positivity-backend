@@ -62,4 +62,19 @@ public interface VendorDirectoryService {
      *                   null/blank, in which case the call is a no-op)
      */
     void recordVendor(@NonNull UUID vendorId, @Nullable String vendorName);
+
+    /**
+     * {@link #recordVendor} for a caller that must stay on the connection it already holds (#2501):
+     * the goods-receipt bill create, which holds its tenant's bill-number counter row lock until its
+     * transaction ends, and on a small pool would wait for a second connection behind the writers
+     * waiting for that lock. Runs in the caller's transaction, so the directory row commits or rolls
+     * back with the bill. It never throws for the one failure {@code recordVendor} was isolated
+     * against, a row that already exists (a concurrent insert, or another tenant's row under the
+     * same id): the insert is conflict-tolerant. A null/blank name is ignored as before.
+     *
+     * @param vendorId   vendor UUID from the upstream event
+     * @param vendorName vendor display name from the upstream event (may be null/blank, in which
+     *                   case the call is a no-op)
+     */
+    void recordVendorInCurrentTransaction(@NonNull UUID vendorId, @Nullable String vendorName);
 }

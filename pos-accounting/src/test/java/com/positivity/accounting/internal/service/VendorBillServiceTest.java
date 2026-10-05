@@ -695,6 +695,7 @@ class VendorBillServiceTest {
             verify(billLineRepository, never()).save(any());
             verify(eventPublisher, never()).publishEvent(any(Object.class));
             verify(vendorDirectoryService, never()).recordVendor(any(), any());
+            verify(vendorDirectoryService, never()).recordVendorInCurrentTransaction(any(), any());
             // The number was drawn from the tenant's counter in the same transaction as the refused
             // bill; that transaction rolls back, and the increment with it (Postgres IT).
             assertThat(counter.getNextValue()).isEqualTo(8L);
@@ -715,7 +716,7 @@ class VendorBillServiceTest {
         void goodsReceiptThatLosesTheRaceIsRefusedWithTheOriginal() {
             UUID eventId = UUID.fromString("00000000-0000-0000-0000-000000000033");
             when(billRepository.findByOriginEventId(eventId)).thenReturn(Optional.empty());
-            AccountingSequence counter = counterAt(7);
+            counterAt(7);
             VendorBill live = original(GENERATED, BILL_DATE_CLOSE, VendorBillStatus.PENDING_RECEIPT_MATCH);
             // The pre-check sees nothing; the competing writer commits; the read after the collision sees it.
             when(billRepository.findLiveDuplicate(any(), any(), any(), any(), any()))
@@ -733,6 +734,7 @@ class VendorBillServiceTest {
 
             verify(eventPublisher, never()).publishEvent(any(Object.class));
             verify(vendorDirectoryService, never()).recordVendor(any(), any());
+            verify(vendorDirectoryService, never()).recordVendorInCurrentTransaction(any(), any());
         }
 
         @Test
@@ -740,7 +742,7 @@ class VendorBillServiceTest {
         void anotherIntegrityViolationIsNotADuplicate() {
             UUID eventId = UUID.fromString("00000000-0000-0000-0000-000000000034");
             when(billRepository.findByOriginEventId(eventId)).thenReturn(Optional.empty());
-            AccountingSequence counter = counterAt(7);
+            counterAt(7);
             when(billRepository.saveAndFlush(any(VendorBill.class)))
                     .thenThrow(new DataIntegrityViolationException("value too long for type character varying(50)"));
 

@@ -681,6 +681,39 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
         }
     }
 
+    @Test
+    @DisplayName(
+            "the directory write rides with the bill: another tenant's row under the same vendor id does not fail the create")
+    void directoryRowOfAnotherTenantUnderTheSameIdDoesNotFailTheCreate() {
+        owner.update(
+                "INSERT INTO ap_vendor (tenant_id, vendor_id, name, status, created_at, updated_at)"
+                        + " VALUES (?, ?, 'Acme Tire (tenant A)', 'ACTIVE', TIMESTAMPTZ '2026-09-01 00:00:00+00',"
+                        + " TIMESTAMPTZ '2026-09-01 00:00:00+00')",
+                TENANT_A,
+                vendor);
+        VendorBillService service = committingService();
+
+        // ap_vendor is keyed on vendor_id alone and row-level security hides tenant A's row from
+        // tenant B, so a plain insert would hit the primary key and abort the bill's transaction.
+        String number = create(service, TENANT_B, vendor);
+
+        assertThat(sequenceOf(number)).isEqualTo(1L);
+        assertThat(owner.queryForList("SELECT tenant_id FROM vendor_bill WHERE vendor_id = ?", UUID.class, vendor))
+                .containsExactly(TENANT_B);
+        assertThat(owner.queryForList(
+                        "SELECT tenant_id || ' ' || name FROM ap_vendor WHERE vendor_id = ?", String.class, vendor))
+                .as("tenant A's row is untouched and tenant B has none")
+                .containsExactly(TENANT_A + " Acme Tire (tenant A)");
+
+        // The same tenant's own row is refreshed on the bill's connection, never duplicated.
+        inTenant(TENANT_A, () -> {
+            vendorDirectoryService.recordVendorInCurrentTransaction(vendor, "Acme Tire and Wheel");
+            return null;
+        });
+        assertThat(owner.queryForList("SELECT name FROM ap_vendor WHERE vendor_id = ?", String.class, vendor))
+                .containsExactly("Acme Tire and Wheel");
+    }
+
     /** The production service, wired by hand so that it commits without posting to the ledger. */
     private VendorBillService committingService() {
         ApplicationEventPublisher noGlPosting = event -> {};
