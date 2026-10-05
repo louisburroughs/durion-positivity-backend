@@ -95,6 +95,13 @@ public class VendorBillDuplicateGuard {
      * it back or, when it belongs to a caller further up, only marked it rollback-only. {@code
      * REQUIRES_NEW} is what makes the read correct in both cases: it suspends whatever is left of
      * that transaction and reads on a connection of its own.
+     *
+     * <p>That connection is the method's cost. After a rollback the writer holds none, so this is
+     * its only one. Inside a caller's transaction the writer still holds its first connection, and
+     * with it any row lock it took (a goods-receipt create holds its tenant's bill counter), until
+     * the caller rolls back: one extra pooled connection per refused write, for one indexed read, on
+     * the collision path only. A pool with none to give makes this call fail after the pool's
+     * connection timeout instead of returning the original.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
     public @NonNull Optional<VendorBill> findOriginalAfterCollision(

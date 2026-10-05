@@ -389,6 +389,22 @@ counts, `PAID` and `CURRENCY_HOLD` included.
   tenant's row is created on first use; nothing provisions it. Before this, the number came from a
   database sequence `bill_number_seq` that no migration created, so the create failed on every Postgres
   database.
+- **Connections under the counter lock**: the counter row stays locked from the draw to the end of the
+  bill's transaction, so creates in one tenant queue on it, each holding a pooled connection. The create
+  therefore asks for no second connection while it holds the lock. The vendor-directory row, which used to be
+  written in a `REQUIRES_NEW` transaction of its own (a second connection), is written on the bill's
+  connection with a conflict-tolerant insert (`VendorDirectoryService.recordVendorInCurrentTransaction`,
+  `INSERT … ON CONFLICT DO NOTHING`), so it commits with the bill, a refused or rolled-back create writes no
+  directory row, and another tenant's `ap_vendor` row under the same vendor id (the table is keyed on
+  `vendor_id` alone) cannot abort the bill. Before, on a pool as small as Compose's (`maximum-pool-size 3`),
+  three concurrent creates left the lock holder waiting for a fourth connection until the pool's timeout,
+  with no connection free for any tenant meanwhile (`VendorBillGoodsReceiptSmallPoolIT`). Nothing else between
+  the number and the commit leaves the bill's connection: the GL posting hook and event ingestion join the
+  transaction. One bounded exception: a create that loses the race under the unique index *inside a caller's
+  transaction* reads the original on one extra connection while the aborted transaction still holds the lock;
+  if the pool has none, that read fails after the pool's connection timeout and the create fails with that
+  error instead of 409. No bill is created either way. `recordVendor`, in a transaction of its own, remains
+  for a caller that holds no lock; the goods-receipt create no longer uses it.
 - **Observability**: one `accounting.vendor_bill.duplicate` increment per event, tagged `channel`
   (`goods_receipt`, `match`, `edi`) and `outcome` (`refused`, `flagged`, `ignored`, `retried`), and one log
   line: WARN for a refusal or a flag, DEBUG for an ignored duplicate (overlapping fetch windows republish by

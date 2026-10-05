@@ -1,10 +1,10 @@
 package com.positivity.accounting.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -26,6 +26,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -148,20 +149,24 @@ class VendorBillServiceGLPostingTest {
 
         vendorBillService.handleGoodsReceivedEvent(testEvent);
 
-        verify(vendorDirectoryService).recordVendor(testVendorId, "Test Vendor Inc");
+        // On the bill's own connection (#2501): the counter row lock is held, so no second
+        // connection may be requested; the former REQUIRES_NEW recordVendor is not called.
+        verify(vendorDirectoryService).recordVendorInCurrentTransaction(testVendorId, "Test Vendor Inc");
+        verify(vendorDirectoryService, never()).recordVendor(any(), any());
     }
 
     @Test
-    @DisplayName("Should not fail bill creation when vendor directory sync fails")
-    void shouldNotFailBillCreationWhenDirectorySyncFails() {
+    @DisplayName("The directory row is written after the bill is flushed and before the GL posting event")
+    void directoryRowIsWrittenAfterTheBillAndBeforeThePosting() {
         when(billRepository.findByOriginEventId(testEvent.getEventId())).thenReturn(Optional.empty());
         when(billRepository.saveAndFlush(any(VendorBill.class))).thenReturn(createSavedBill());
-        doThrow(new RuntimeException("duplicate key"))
-                .when(vendorDirectoryService)
-                .recordVendor(any(), any());
 
-        assertThatCode(() -> vendorBillService.handleGoodsReceivedEvent(testEvent))
-                .doesNotThrowAnyException();
+        vendorBillService.handleGoodsReceivedEvent(testEvent);
+
+        InOrder order = inOrder(billRepository, vendorDirectoryService, eventPublisher);
+        order.verify(billRepository).saveAndFlush(any(VendorBill.class));
+        order.verify(vendorDirectoryService).recordVendorInCurrentTransaction(testVendorId, "Test Vendor Inc");
+        order.verify(eventPublisher).publishEvent(any(Object.class));
     }
 
     @Test

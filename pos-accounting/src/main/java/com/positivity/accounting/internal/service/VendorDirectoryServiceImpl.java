@@ -3,6 +3,9 @@ package com.positivity.accounting.internal.service;
 import com.positivity.accounting.internal.dto.VendorResponse;
 import com.positivity.accounting.internal.entity.Vendor;
 import com.positivity.accounting.internal.repository.VendorRepository;
+import com.positivity.tenancy.TenantResolver;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -30,6 +33,8 @@ public class VendorDirectoryServiceImpl implements VendorDirectoryService {
     private static final int DEFAULT_LIMIT = 20;
 
     private final VendorRepository vendorRepository;
+    private final TenantResolver tenantResolver;
+    private final Clock clock;
 
     @Override
     @Transactional(readOnly = true)
@@ -76,6 +81,36 @@ public class VendorDirectoryServiceImpl implements VendorDirectoryService {
 
         log.info("Adding vendor to directory | vendorId={}", vendorId);
         vendorRepository.save(new Vendor(vendorId, name));
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Insert-if-absent first, on the caller's connection, then the name refresh on the row this
+     * tenant can see. When the id belongs to another tenant's row the insert does nothing and the
+     * read finds nothing, so this tenant simply has no directory entry for the vendor; the typeahead
+     * is a convenience, and {@code ap_vendor} keyed on {@code vendor_id} alone is what makes it so
+     * (retired with the vendor copies).
+     */
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void recordVendorInCurrentTransaction(@NonNull UUID vendorId, @Nullable String vendorName) {
+        if (vendorName == null || vendorName.isBlank()) {
+            return;
+        }
+        String name = vendorName.trim();
+
+        if (vendorRepository.insertIfAbsent(tenantResolver.require(), vendorId, name, Instant.now(clock)) == 1) {
+            log.info("Adding vendor to directory | vendorId={}", vendorId);
+            return;
+        }
+        vendorRepository.findById(vendorId).ifPresent(vendor -> {
+            if (!name.equals(vendor.getName())) {
+                log.info("Refreshing vendor directory name | vendorId={}", vendorId);
+                vendor.setName(name);
+                vendorRepository.save(vendor);
+            }
+        });
     }
 
     private static VendorResponse toResponse(Vendor vendor) {
