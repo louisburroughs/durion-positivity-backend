@@ -115,11 +115,14 @@ public final class EventTypes {
                 EventTypeRegistration.write("SECURITY_USER_ROLE_REVOKE", "Revoke a role from a user")
                         .build(),
 
-                // AuditController - 3 events
+                // AuditController / AuditExportController - 4 events
                 EventTypeRegistration.write("SECURITY_AUDIT_EVENT_CREATE", "Create an immutable audit event")
                         .build(),
                 EventTypeRegistration.write(
                                 "SECURITY_AUDIT_EXPORT_REQUEST", "Submit an asynchronous audit export job request")
+                        .build(),
+                EventTypeRegistration.search(
+                                "SECURITY_AUDIT_EXPORT_DOWNLOAD", "Download the file of a completed audit export job")
                         .build(),
                 EventTypeRegistration.write(
                                 "SECURITY_AUDIT_PRICING_SNAPSHOT_CREATE",

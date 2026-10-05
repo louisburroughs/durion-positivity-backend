@@ -5,19 +5,25 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.securityservice.internal.config.AuditEventService;
+import com.positivity.securityservice.internal.dto.AuditExportDownload;
 import com.positivity.securityservice.internal.dto.AuditExportJobResponse;
 import com.positivity.securityservice.internal.dto.AuditLogEventDto;
 import com.positivity.securityservice.internal.enums.AuditExportStatus;
+import com.positivity.securityservice.internal.exception.AuditExportNotReadyException;
+import com.positivity.securityservice.internal.exception.AuditExportWebhookUnsupportedException;
 import com.positivity.securityservice.internal.security.JwtAuthenticationFilter;
 import com.positivity.securityservice.internal.service.AuditExportService;
 import com.positivity.securityservice.internal.service.CustomUserDetailsService;
 import com.positivity.securityservice.internal.service.PricingSnapshotService;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.FilterChain;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -33,6 +39,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
@@ -282,6 +289,91 @@ class AuditControllerTest {
     @DisplayName("GET /v1/audit/exports/{jobId} without security:audit:export authority → 403 Forbidden")
     void getAuditExportJob_missingAuthority_returns403() throws Exception {
         mockMvc.perform(get("/v1/audit/exports/{jobId}", KNOWN_JOB_ID)).andExpect(status().isForbidden());
+    }
+
+    // ── #2408: WEBHOOK refusal and GET /v1/audit/exports/{jobId}/download ────
+
+    @Test
+    @WithMockUser(authorities = "security:audit:export")
+    @DisplayName("POST /v1/audit/exports with WEBHOOK delivery → 400 AUDIT_EXPORT_WEBHOOK_UNSUPPORTED")
+    void requestAuditExport_webhook_returns400() throws Exception {
+        when(auditExportService.requestExport(any())).thenThrow(new AuditExportWebhookUnsupportedException());
+
+        mockMvc.perform(post("/v1/audit/exports")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"format\":\"CSV\",\"deliveryMode\":\"WEBHOOK\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("AUDIT_EXPORT_WEBHOOK_UNSUPPORTED"));
+    }
+
+    @Test
+    @WithMockUser(authorities = "security:audit:export")
+    @DisplayName("GET /v1/audit/exports/{jobId} for a COMPLETED job → 200 with downloadUrl")
+    void getAuditExportJob_completedJob_returnsDownloadUrl() throws Exception {
+        String downloadUrl = "/security-service/v1/audit/exports/" + KNOWN_JOB_ID + "/download";
+        when(auditExportService.getExportJob(KNOWN_JOB_ID))
+                .thenReturn(AuditExportJobResponse.builder()
+                        .jobId(KNOWN_JOB_ID)
+                        .status(AuditExportStatus.COMPLETED)
+                        .requestedAt(Instant.parse("2026-01-01T00:00:00Z"))
+                        .completedAt(Instant.parse("2026-01-01T00:01:00Z"))
+                        .rowCount(2L)
+                        .downloadUrl(downloadUrl)
+                        .build());
+
+        mockMvc.perform(get("/v1/audit/exports/{jobId}", KNOWN_JOB_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.rowCount").value(2))
+                .andExpect(jsonPath("$.downloadUrl").value(downloadUrl));
+    }
+
+    @Test
+    @WithMockUser(authorities = "security:audit:export")
+    @DisplayName("GET /v1/audit/exports/{jobId}/download for a COMPLETED job → 200 attachment")
+    void downloadAuditExport_completed_returnsAttachment() throws Exception {
+        byte[] csv = "eventId,timestamp\r\n".getBytes(StandardCharsets.UTF_8);
+        String fileName = "audit-export-" + KNOWN_JOB_ID + ".csv";
+        when(auditExportService.getExportFile(KNOWN_JOB_ID))
+                .thenReturn(new AuditExportDownload(fileName, "text/csv", csv));
+
+        mockMvc.perform(get("/v1/audit/exports/{jobId}/download", KNOWN_JOB_ID))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith("text/csv"))
+                .andExpect(
+                        header().string(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\""))
+                .andExpect(content().bytes(csv));
+    }
+
+    @Test
+    @WithMockUser(authorities = "security:audit:export")
+    @DisplayName("GET /v1/audit/exports/{jobId}/download before COMPLETED → 409 AUDIT_EXPORT_NOT_READY")
+    void downloadAuditExport_notCompleted_returns409() throws Exception {
+        when(auditExportService.getExportFile(KNOWN_JOB_ID))
+                .thenThrow(new AuditExportNotReadyException(KNOWN_JOB_ID, AuditExportStatus.IN_PROGRESS));
+
+        mockMvc.perform(get("/v1/audit/exports/{jobId}/download", KNOWN_JOB_ID))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("AUDIT_EXPORT_NOT_READY"));
+    }
+
+    @Test
+    @WithMockUser(authorities = "security:audit:export")
+    @DisplayName("GET /v1/audit/exports/{unknownId}/download → 404 Not Found")
+    void downloadAuditExport_unknownJob_returns404() throws Exception {
+        when(auditExportService.getExportFile(UNKNOWN_JOB_ID))
+                .thenThrow(new EntityNotFoundException("Audit export job not found: " + UNKNOWN_JOB_ID));
+
+        mockMvc.perform(get("/v1/audit/exports/{jobId}/download", UNKNOWN_JOB_ID))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+    }
+
+    @Test
+    @WithMockUser(roles = "VIEWER")
+    @DisplayName("GET /v1/audit/exports/{jobId}/download without security:audit:export authority → 403")
+    void downloadAuditExport_missingAuthority_returns403() throws Exception {
+        mockMvc.perform(get("/v1/audit/exports/{jobId}/download", KNOWN_JOB_ID)).andExpect(status().isForbidden());
     }
 
     // ── Test slice configuration ──────────────────────────────────────────────

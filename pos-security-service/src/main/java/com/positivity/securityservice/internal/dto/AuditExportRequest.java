@@ -32,6 +32,10 @@ public class AuditExportRequest {
     private AuditExportFormat format;
 
     @NotNull
-    @Schema(description = "Delivery mode for the exported file", example = "DOWNLOAD", requiredMode = REQUIRED)
+    @Schema(
+            description = "Delivery mode for the exported file; only DOWNLOAD is accepted, WEBHOOK answers 400"
+                    + " AUDIT_EXPORT_WEBHOOK_UNSUPPORTED until a per-tenant webhook destination exists",
+            example = "DOWNLOAD",
+            requiredMode = REQUIRED)
     private AuditDeliveryMode deliveryMode;
 }

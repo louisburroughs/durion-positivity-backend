@@ -423,17 +423,17 @@ paths:
       - security:audit:view
   /v1/audit/exports:
     post:
-      description: 'Submits an asynchronous audit export job and answers 202 Accepted with the job id and an initial PENDING status.
+      description: 'Submits an asynchronous audit export job for the caller''s tenant and answers 202 Accepted with the job id and an initial PENDING status.
 
         Use this tool for bulk extraction of audit data as a file; use searchAuditEvents instead for interactive paged queries.
 
-        Preconditions: the caller must hold security:audit:export; jobs are currently held in an in-memory store, so they do not survive a service restart.
+        Preconditions: the caller must hold security:audit:export; jobs are persisted per tenant, run in the background once the request commits, and are deleted with their file after the configured retention period.
 
-        Required inputs: format (CSV or JSON) and deliveryMode (DOWNLOAD or WEBHOOK); filters is optional and scopes the export with the same criteria as searchAuditEvents.
+        Required inputs: format (CSV or JSON) and deliveryMode, which must be DOWNLOAD; filters is optional and scopes the export with the same criteria as searchAuditEvents.
 
-        Emits a SECURITY_AUDIT_EXPORT_REQUEST event; execution is deferred, so callers must poll getAuditExportJob for status and the eventual download URL.
+        Emits a SECURITY_AUDIT_EXPORT_REQUEST event; poll getAuditExportJob until the job is COMPLETED, then fetch its downloadUrl with downloadAuditExport, or FAILED, where errorMessage says why (for example more matching events than the configured row limit).
 
-        Returns 400 when format or deliveryMode is missing or not a valid enum value.
+        Returns 400 when format or deliveryMode is missing or invalid or fromDate is not before toDate, and 400 AUDIT_EXPORT_WEBHOOK_UNSUPPORTED for WEBHOOK delivery, which has no configured destination yet.
 
         '
       operationId: requestAuditExport
@@ -464,7 +464,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Invalid export request
+          description: Invalid export request, or WEBHOOK delivery (AUDIT_EXPORT_WEBHOOK_UNSUPPORTED)
         '401':
           content:
             application/json:
@@ -486,23 +486,23 @@ paths:
       - security:audit:export
   /v1/audit/exports/{jobId}:
     get:
-      description: 'Returns the current status of a previously submitted audit export job, including completion time, download URL, and error message when present.
+      description: 'Returns the current status of an audit export job of the caller''s tenant (PENDING, IN_PROGRESS, COMPLETED or FAILED) with its completion time, row count, download URL and error message when present.
 
-        Use this tool to poll a job created by requestAuditExport; do not resubmit the export while a job is still PENDING.
+        Use this tool to poll a job created by requestAuditExport; do not resubmit the export while the job is still PENDING or IN_PROGRESS.
 
-        Preconditions: the caller must hold security:audit:export and the job must exist in the in-memory store, which is cleared on service restart.
+        Preconditions: the caller must hold security:audit:export, and the job must belong to the caller''s tenant, since another tenant''s job id answers 404.
 
         Required inputs: jobId (UUID) as a path parameter.
 
-        No events are emitted and no state changes; this is a read-only status projection.
+        This is a read-only status projection that emits no events; a job interrupted by a service restart is moved to FAILED by a scheduled sweep once the configured timeout passes, so a poll never waits forever.
 
-        Returns 404 when the job id is unknown or the store was cleared by a restart.
+        Returns 404 when the job id is unknown to the caller''s tenant or the job was purged after the configured retention period (seven days by default).
 
         '
       operationId: getAuditExportJob
       parameters:
       - description: Export job UUID
-        example: 550e8400-e29b-41d4-a716-446655440000
+        example: 01960000-0000-7000-8000-000000000001
         in: path
         name: jobId
         required: true
@@ -543,6 +543,80 @@ paths:
       security:
       - bearerAuth: []
       summary: Get Audit Export Job Status
+      tags:
+      - Audit Exports
+      x-required-permissions:
+      - security:audit:export
+  /v1/audit/exports/{jobId}/download:
+    get:
+      description: 'Downloads the file a COMPLETED audit export job produced, as an attachment in the job''s format (text/csv or application/json).
+
+        Use this tool after getAuditExportJob reports COMPLETED; the job''s downloadUrl is this endpoint''s gateway path.
+
+        Preconditions: the caller must hold security:audit:export and the job must belong to the caller''s tenant.
+
+        Required inputs: jobId (UUID) as a path parameter.
+
+        Emits a SECURITY_AUDIT_EXPORT_DOWNLOAD event and changes no state; CSV cells that begin with a formula character are prefixed with a single quote so spreadsheets do not evaluate them.
+
+        Returns 409 AUDIT_EXPORT_NOT_READY while the job is PENDING, IN_PROGRESS or FAILED, and 404 when the job id is unknown to the caller''s tenant or the job was purged after the retention period.
+
+        '
+      operationId: downloadAuditExport
+      parameters:
+      - description: Export job UUID
+        example: 01960000-0000-7000-8000-000000000001
+        in: path
+        name: jobId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                format: binary
+                type: string
+            text/csv:
+              schema:
+                format: binary
+                type: string
+          description: Export file as an attachment
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Bad Request
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Insufficient authority
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Export job not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Export job is not COMPLETED
+      security:
+      - bearerAuth: []
+      summary: Download a Completed Audit Export
       tags:
       - Audit Exports
       x-required-permissions:
@@ -5064,16 +5138,23 @@ components:
           format: date-time
           type: string
         downloadUrl:
-          description: Pre-signed download URL (null until COMPLETED)
-          example: https://exports.example.com/audit/550e8400.csv?sig=...
+          description: Gateway-relative path that downloads the export file with the same security:audit:export authority (null until COMPLETED)
+          example: /security-service/v1/audit/exports/01960000-0000-7000-8000-000000000001/download
           type: string
         errorMessage:
           description: Error message when status is FAILED
-          example: Export source unavailable
+          example: The export matches 250000 audit events, more than the limit of 100000; narrow the filters (for example the date range) and request it again.
+          type: string
+        format:
+          description: Output format of the export file
+          enum:
+          - CSV
+          - JSON
+          example: CSV
           type: string
         jobId:
           description: Export job UUID
-          example: 550e8400-e29b-41d4-a716-446655440000
+          example: 01960000-0000-7000-8000-000000000001
           format: uuid
           type: string
         requestedAt:
@@ -5081,16 +5162,22 @@ components:
           example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
+        rowCount:
+          description: Number of audit events in the export file (null until COMPLETED)
+          example: 1250
+          format: int64
+          type: integer
         status:
-          description: Current status of the export job
+          description: 'Current status of the export job: PENDING (queued), IN_PROGRESS (running), COMPLETED (file ready to download) or FAILED (see errorMessage)'
           enum:
           - PENDING
           - IN_PROGRESS
           - COMPLETED
           - FAILED
-          example: IN_PROGRESS
+          example: COMPLETED
           type: string
       required:
+      - format
       - jobId
       - requestedAt
       - status
@@ -5099,7 +5186,7 @@ components:
       description: Audit export job submission request
       properties:
         deliveryMode:
-          description: Delivery mode for the exported file
+          description: Delivery mode for the exported file; only DOWNLOAD is accepted, WEBHOOK answers 400 AUDIT_EXPORT_WEBHOOK_UNSUPPORTED until a per-tenant webhook destination exists
           enum:
           - DOWNLOAD
           - WEBHOOK
