@@ -138,7 +138,6 @@ class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest {
 
         // Act: Reprocess the suspended event
         ReprocessEventRequest reprocessRequest = ReprocessEventRequest.builder()
-                .triggeredByUserId("test-admin")
                 .reprocessingNotes("Testing reprocess after rule correction")
                 .build();
 
@@ -179,7 +178,6 @@ class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest {
 
         // Act: Reprocess the suspended event
         ReprocessEventRequest reprocessRequest = ReprocessEventRequest.builder()
-                .triggeredByUserId("test-admin")
                 .reprocessingNotes("Testing reprocess that remains pending")
                 .build();
 
@@ -203,7 +201,6 @@ class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest {
 
         // Act: Attempt to reprocess a PROCESSED event
         ReprocessEventRequest reprocessRequest = ReprocessEventRequest.builder()
-                .triggeredByUserId("test-admin")
                 .reprocessingNotes("Testing idempotency")
                 .build();
 
@@ -241,8 +238,7 @@ class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest {
                 UUID.fromString(eventId), "Test setup: simulating suspended event for success history");
 
         // Act: Reprocess the event
-        ReprocessEventRequest reprocessRequest =
-                ReprocessEventRequest.builder().triggeredByUserId("test-admin").build();
+        ReprocessEventRequest reprocessRequest = ReprocessEventRequest.builder().build();
 
         mockMvc.perform(withAuth(post(API_V1 + "/{eventId}/reprocess", eventId))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -254,7 +250,7 @@ class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest {
                 .andDo(print())
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$[0].triggeredByUserId").value("test-admin"))
+                .andExpect(jsonPath("$[0].triggeredByUserId").value(TEST_USER))
                 .andExpect(jsonPath("$[0].outcome").value("SUCCESS"));
     }
 
@@ -283,8 +279,7 @@ class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest {
         markEventAsSuspended(UUID.fromString(eventId), "Test setup: simulating suspended event for failure history");
 
         // Act: Reprocess the event
-        ReprocessEventRequest reprocessRequest =
-                ReprocessEventRequest.builder().triggeredByUserId("test-admin").build();
+        ReprocessEventRequest reprocessRequest = ReprocessEventRequest.builder().build();
 
         mockMvc.perform(withAuth(post(API_V1 + "/{eventId}/reprocess", eventId))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -296,7 +291,7 @@ class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest {
                 .andDo(print())
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$[0].triggeredByUserId").value("test-admin"))
+                .andExpect(jsonPath("$[0].triggeredByUserId").value(TEST_USER))
                 .andExpect(jsonPath("$[0].outcome").value("FAILURE"));
     }
 
@@ -311,8 +306,7 @@ class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest {
         UUID nonExistentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         // Act: Attempt to reprocess
-        ReprocessEventRequest reprocessRequest =
-                ReprocessEventRequest.builder().triggeredByUserId("test-admin").build();
+        ReprocessEventRequest reprocessRequest = ReprocessEventRequest.builder().build();
 
         // Assert: Should return 404 Not Found
         mockMvc.perform(withAuth(post(API_V1 + "/{eventId}/reprocess", nonExistentId))
@@ -329,8 +323,7 @@ class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest {
         String invalidId = "not-a-valid-uuid";
 
         // Act: Attempt to reprocess with invalid UUID format
-        ReprocessEventRequest reprocessRequest =
-                ReprocessEventRequest.builder().triggeredByUserId("test-admin").build();
+        ReprocessEventRequest reprocessRequest = ReprocessEventRequest.builder().build();
 
         // Assert: Should return 400 Bad Request
         mockMvc.perform(withAuth(post(API_V1 + "/{eventId}/reprocess", invalidId))
@@ -341,21 +334,34 @@ class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     @Test
-    @DisplayName("Reprocess requires triggeredByUserId")
-    void testReprocessRequiresUserId() throws Exception {
-        // Arrange: Create request without triggeredByUserId
-        ReprocessEventRequest invalidRequest = ReprocessEventRequest.builder()
-                .reprocessingNotes("Missing user ID")
-                .build();
+    @DisplayName("Reprocess records the authenticated caller; a triggeredByUserId in the body is ignored")
+    void testReprocessIgnoresBodyUser() throws Exception {
+        // The module does not fail on unknown JSON properties (Spring Boot default), so the old field is dropped.
+        AccountingEventSubmitRequest submitRequest = new AccountingEventSubmitRequest();
+        submitRequest.setEventType(REPROCESS_FAILURE_EVENT_TYPE);
+        submitRequest.setOrganizationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        submitRequest.setSourceSystem("TEST_SYSTEM");
+        submitRequest.setTransactionDate(LocalDateTime.now(TEST_CLOCK));
+        submitRequest.setPayload(Map.of("invoiceId", "INV-BODY-USER", "amount", 200.00, "description", "body user"));
+        MvcResult submitResult = mockMvc.perform(withAuth(post(API_V1))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(submitRequest)))
+                .andExpect(status().isAccepted())
+                .andReturn();
+        String eventId = extractEventIdFromResponse(submitResult);
+        markEventAsSuspended(UUID.fromString(eventId), "Test setup: suspended for body-user check");
 
-        UUID eventId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-
-        // Act & Assert: Should return 400 Bad Request
         mockMvc.perform(withAuth(post(API_V1 + "/{eventId}/reprocess", eventId))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(invalidRequest)))
-                .andDo(print())
-                .andExpect(status().isBadRequest());
+                        .content("{\"triggeredByUserId\":\"spoofed-user\",\"reprocessingNotes\":\"x\"}"))
+                .andExpect(status().isAccepted());
+
+        mockMvc.perform(withAuth(get(API_V1 + "/{eventId}/reprocessing-history", eventId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].triggeredByUserId").value(TEST_USER));
+        AccountingEvent after =
+                accountingEventRepository.findById(UUID.fromString(eventId)).orElseThrow();
+        org.assertj.core.api.Assertions.assertThat(after.getResolvedByUserId()).isNotEqualTo("spoofed-user");
     }
 
     // ===============================================

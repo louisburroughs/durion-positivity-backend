@@ -383,10 +383,7 @@ class AccountingEventWriteGuardTest {
         void pinnedVersionSkipsDryRun() {
             eventReads(event("SUSPENDED"));
             Map<String, Object> pinned = Map.of(
-                    "pathParams",
-                    Map.of("eventId", EVENT_ID),
-                    "body",
-                    Map.of("triggeredByUserId", "jdoe", "mappingVersionToUse", RULE_VERSION_ID));
+                    "pathParams", Map.of("eventId", EVENT_ID), "body", Map.of("mappingVersionToUse", RULE_VERSION_ID));
 
             AccountingEventWriteGuard.Inspection inspection =
                     guard.inspect(AccountingEventWriteGuard.REPROCESS_TOOL, pinned, AUTH);

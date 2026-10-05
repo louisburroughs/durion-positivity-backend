@@ -124,8 +124,7 @@ public class FailedAccountingEventRetryJob {
                     .filter(event -> event.getAttemptCount() == null || event.getAttemptCount() < maxRetries)
                     .map(event -> {
                         ReprocessEventRequest request = new ReprocessEventRequest();
-                        request.setTriggeredByUserId(RETRY_USER);
-                        eventIngestionService.reprocessEvent(eventId, request);
+                        eventIngestionService.reprocessEvent(eventId, request, RETRY_USER);
                         return event;
                     })
                     .orElse(null));

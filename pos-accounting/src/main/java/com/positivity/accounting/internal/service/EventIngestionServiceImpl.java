@@ -300,15 +300,17 @@ public class EventIngestionServiceImpl implements EventIngestionService {
      * - Returns 409 Conflict if entry is already PROCESSED
      *
      * @param eventId the event identifier
-     * @param request reprocess request with user context
+     * @param request reprocess request (mapping version pin, notes)
+     * @param triggeredByUserId the authenticated caller (or system job) recorded in the audit trail
      * @return updated accounting event response
      * @throws EventNotFoundException if event not found
      * @throws IllegalStateException  if event is not SUSPENDED or already
      *                                PROCESSED
      */
     @Override
-    public AccountingEventResponse reprocessEvent(@NonNull UUID eventId, @NonNull ReprocessEventRequest request) {
-        log.info("Reprocessing suspended event {} triggered by user {}", eventId, request.getTriggeredByUserId());
+    public AccountingEventResponse reprocessEvent(
+            @NonNull UUID eventId, @NonNull ReprocessEventRequest request, @NonNull String triggeredByUserId) {
+        log.info("Reprocessing suspended event {} triggered by user {}", eventId, triggeredByUserId);
 
         // Load the accounting event
         AccountingEvent event = accountingEventRepository
@@ -330,7 +332,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
             throw new IllegalStateException(msg);
         }
 
-        return rerunPosting(event, request.getMappingVersionToUse(), request.getTriggeredByUserId());
+        return rerunPosting(event, request.getMappingVersionToUse(), triggeredByUserId);
     }
 
     /**

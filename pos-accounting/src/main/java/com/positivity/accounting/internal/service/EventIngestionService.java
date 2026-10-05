@@ -84,13 +84,14 @@ public interface EventIngestionService {
      * - Returns 409 Conflict if entry is already PROCESSED
      *
      * @param eventId the event identifier
-     * @param request reprocess request with user context
+     * @param request reprocess request (mapping version pin, notes)
+     * @param triggeredByUserId the authenticated caller (or system job) recorded in the audit trail
      * @return updated accounting event response
      * @throws EventNotFoundException if event not found
      * @throws IllegalStateException  if event is not SUSPENDED or already
      *                                PROCESSED
      */
-    AccountingEventResponse reprocessEvent(UUID eventId, ReprocessEventRequest request);
+    AccountingEventResponse reprocessEvent(UUID eventId, ReprocessEventRequest request, String triggeredByUserId);
 
     /**
      * Retrieves all reprocessing attempt history for an accounting event.

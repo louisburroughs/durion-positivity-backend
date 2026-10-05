@@ -11,7 +11,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.accounting.internal.dto.ReprocessEventRequest;
 import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.entity.ReprocessingAttemptHistory;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
@@ -143,9 +142,7 @@ class FailedAccountingEventRetryJobTest {
 
         assertThat(job.retryBoundTenant()).isEqualTo(1);
 
-        ArgumentCaptor<ReprocessEventRequest> request = ArgumentCaptor.forClass(ReprocessEventRequest.class);
-        verify(eventIngestionService).reprocessEvent(eq(EVENT_ID), request.capture());
-        assertThat(request.getValue().getTriggeredByUserId()).isEqualTo("SYSTEM_RETRY_JOB");
+        verify(eventIngestionService).reprocessEvent(eq(EVENT_ID), any(), eq("SYSTEM_RETRY_JOB"));
     }
 
     @Test
@@ -161,7 +158,7 @@ class FailedAccountingEventRetryJobTest {
                 .thenReturn(Optional.of(failed(MAX)));
 
         assertThat(job.retryBoundTenant()).isZero();
-        verify(eventIngestionService, never()).reprocessEvent(any(), any());
+        verify(eventIngestionService, never()).reprocessEvent(any(), any(), any());
     }
 
     @Test
@@ -178,13 +175,13 @@ class FailedAccountingEventRetryJobTest {
                 .thenReturn(Optional.of(other));
         doThrow(new IllegalStateException("rollback-only"))
                 .when(eventIngestionService)
-                .reprocessEvent(eq(EVENT_ID), any());
+                .reprocessEvent(eq(EVENT_ID), any(), any());
         AccountingEvent fresh = failed(1);
         when(eventRepository.findById(EVENT_ID)).thenReturn(Optional.of(fresh));
 
         assertThat(job.retryBoundTenant()).isEqualTo(2);
 
-        verify(eventIngestionService).reprocessEvent(eq(second), any());
+        verify(eventIngestionService).reprocessEvent(eq(second), any(), any());
         assertThat(fresh.getAttemptCount()).isEqualTo(2);
         assertThat(fresh.getStatus()).isEqualTo(AccountingEventStatus.FAILED);
         assertThat(fresh.getFailureReasonCode()).isEqualTo("INTERNAL_ERROR");

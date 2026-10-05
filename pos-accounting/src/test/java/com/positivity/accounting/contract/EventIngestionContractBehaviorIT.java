@@ -198,8 +198,6 @@ class EventIngestionContractBehaviorIT extends BaseContractIntegrationTest {
         accountingEventRepository.save(event);
 
         ReprocessEventRequest request = new ReprocessEventRequest();
-        request.setTriggeredByUserId(
-                UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
         request.setReprocessingNotes("Manual reprocessing after rule update");
 
         // When/Then - reprocess the event
@@ -222,8 +220,6 @@ class EventIngestionContractBehaviorIT extends BaseContractIntegrationTest {
 
         // When - reprocess the event to create history
         ReprocessEventRequest request = new ReprocessEventRequest();
-        request.setTriggeredByUserId(
-                UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
         request.setReprocessingNotes("First reprocessing attempt");
 
         mockMvc.perform(withAuth(post(API_V1_EVENTS + "/{eventId}/reprocess", eventId))
@@ -285,8 +281,6 @@ class EventIngestionContractBehaviorIT extends BaseContractIntegrationTest {
         UUID nonExistentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         ReprocessEventRequest request = new ReprocessEventRequest();
-        request.setTriggeredByUserId(
-                UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
         request.setReprocessingNotes("Test");
 
         // When/Then - expect 404 Not Found
@@ -307,8 +301,6 @@ class EventIngestionContractBehaviorIT extends BaseContractIntegrationTest {
         accountingEventRepository.save(event);
 
         ReprocessEventRequest request = new ReprocessEventRequest();
-        request.setTriggeredByUserId(
-                UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
         request.setReprocessingNotes("Attempt to reprocess");
 
         // When/Then - expect 409 Conflict with structured ApiError body

@@ -1,10 +1,8 @@
 package com.positivity.accounting.internal.dto;
 
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
-import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -21,27 +19,18 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "Request to reprocess a suspended accounting event")
+@Schema(
+        description = "Request to reprocess a suspended accounting event. The triggering user is the authenticated"
+                + " caller and is never taken from the body.")
 public class ReprocessEventRequest {
-
-    /**
-     * User ID triggering the reprocessing.
-     * Required for audit trail.
-     */
-    @Schema(
-            description = "Identifier of the user triggering the reprocessing (required for audit trail)",
-            example = "ap.manager",
-            requiredMode = REQUIRED)
-    @NotBlank(message = "triggeredByUserId is required")
-    private String triggeredByUserId;
 
     /**
      * Optional: specific mapping version to use for reprocessing.
      * If not provided, uses current (latest) mapping rules.
      */
     @Schema(
-            description = "Specific mapping version to use; defaults to latest when omitted",
-            example = "v3",
+            description = "Specific mapping version (UUID) to use; defaults to latest when omitted",
+            example = "0198a1b2-7c3d-7e4f-8a9b-0c1d2e3f4a5c",
             requiredMode = NOT_REQUIRED)
     private String mappingVersionToUse;
 
