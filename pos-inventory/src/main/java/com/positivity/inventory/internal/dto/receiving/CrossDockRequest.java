@@ -57,8 +57,25 @@ public class CrossDockRequest {
     @Size(max = 128)
     private String lotNumber;
 
+    @Schema(
+            description = "Optional idempotency key, the body fallback for the Idempotency-Key header (the header wins;"
+                    + " both present and different is a 400). A retry with the same key and the same payload posts"
+                    + " nothing and returns the original response; the same key with a different payload is a 409"
+                    + " IDEMPOTENCY_CONFLICT. Generated server-side when absent, in which case a retry is not"
+                    + " recognised",
+            example = "receive-2026-10-04-dock3-0001",
+            requiredMode = NOT_REQUIRED)
+    @Size(max = 200)
+    private String idempotencyKey;
+
+    /** Pre-#2455 arity kept for existing callers/tests: no idempotency key. */
+    public CrossDockRequest(
+            String workorderId, String workorderLineId, BigDecimal quantity, String notes, String lotNumber) {
+        this(workorderId, workorderLineId, quantity, notes, lotNumber, null);
+    }
+
     /** Pre-E2 arity kept for existing callers/tests: no lot number keyed. */
     public CrossDockRequest(String workorderId, String workorderLineId, BigDecimal quantity, String notes) {
-        this(workorderId, workorderLineId, quantity, notes, null);
+        this(workorderId, workorderLineId, quantity, notes, null, null);
     }
 }

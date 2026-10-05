@@ -20,6 +20,7 @@ import com.positivity.inventory.internal.dto.receiving.ReceiveLineRequest;
 import com.positivity.inventory.internal.dto.receiving.ReceivingSessionResponse;
 import com.positivity.inventory.internal.entity.ExtProductReplica;
 import com.positivity.inventory.internal.entity.ExtProductUomReplica;
+import com.positivity.inventory.internal.entity.GoodsReceiptEntity;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.entity.ReceivingLine;
 import com.positivity.inventory.internal.entity.ReceivingSession;
@@ -28,6 +29,8 @@ import com.positivity.inventory.internal.enums.ReceivingLineStatus;
 import com.positivity.inventory.internal.enums.ReceivingSessionStatus;
 import com.positivity.inventory.internal.enums.SourceDocumentType;
 import com.positivity.inventory.internal.exception.FractionalQuantityNotAllowedException;
+import com.positivity.inventory.internal.exception.IdempotencyConflictException;
+import com.positivity.inventory.internal.exception.OverReceiptNotPermittedException;
 import com.positivity.inventory.internal.exception.PartMatchPermissionException;
 import com.positivity.inventory.internal.exception.ReceivingSessionNotFoundException;
 import com.positivity.inventory.internal.exception.SourceDocumentAlreadyReceivedException;
@@ -66,6 +69,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.util.ReflectionTestUtils;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Unit tests for {@code ReceivingServiceImpl}, including characterisation coverage for
@@ -98,6 +103,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 @ExtendWith(MockitoExtension.class)
 class ReceivingServiceImplTest {
 
+    private static final String OVERRIDE = "inventory:goods_receipt:override";
     private static final UUID STAGING_LOCATION_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
     private static final UUID CROSS_DOCK_LOCATION_ID = UUID.fromString("00000000-0000-0000-0000-000000000003");
 
@@ -163,8 +169,28 @@ class ReceivingServiceImplTest {
     @Mock
     private com.positivity.inventory.internal.service.GoodsReceiptFactPublisher goodsReceiptFactPublisher;
 
+    @Mock
+    private com.positivity.inventory.internal.repository.GoodsReceiptRepository goodsReceiptRepository;
+
     @InjectMocks
     private ReceivingServiceImpl receivingService;
+
+    @BeforeEach
+    void wireSessionReceiptRecorder() {
+        // The real recorder over a mock repository and publisher: the receipt it records and the
+        // fact it publishes are what these tests assert on.
+        lenient()
+                .when(goodsReceiptRepository.save(any(GoodsReceiptEntity.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        ReflectionTestUtils.setField(
+                receivingService,
+                "sessionReceiptRecorder",
+                new SessionReceiptRecorder(
+                        goodsReceiptRepository,
+                        goodsReceiptFactPublisher,
+                        sourceDocumentResolver,
+                        JsonMapper.builder().build()));
+    }
 
     @BeforeEach
     void stubDefaultStagingLocation() {
@@ -293,7 +319,7 @@ class ReceivingServiceImplTest {
                 .lines(List.of(receivingLine))
                 .build();
         receivingLine.setSession(session);
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
 
         ReceiveItemsResponse response = receivingService.receiveItemsIntoStaging(sessionId, request, "test-user");
 
@@ -322,7 +348,7 @@ class ReceivingServiceImplTest {
                 .lines(List.of(receivingLine))
                 .build();
         receivingLine.setSession(session);
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(inventoryVarianceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         ReceiveItemsResponse response = receivingService.receiveItemsIntoStaging(sessionId, request, "test-user");
@@ -340,6 +366,7 @@ class ReceivingServiceImplTest {
     // quantities
     @Test
     void receiveItemsIntoStaging_overQuantity_returnsOverageVariance() {
+        authenticateAs("test-user", OVERRIDE);
         UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID lineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         ReceiveLineRequest line = new ReceiveLineRequest(lineId, new BigDecimal("12"), null, null, null);
@@ -356,7 +383,7 @@ class ReceivingServiceImplTest {
                 .lines(List.of(receivingLine))
                 .build();
         receivingLine.setSession(session);
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(inventoryVarianceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         ReceiveItemsResponse response = receivingService.receiveItemsIntoStaging(sessionId, request, "test-user");
@@ -380,7 +407,7 @@ class ReceivingServiceImplTest {
         ReceiveItemsRequest request = new ReceiveItemsRequest(List.of(line));
 
         // We need to mock the repository to throw the exception
-        when(receivingSessionRepository.findById(unknownSessionId)).thenReturn(Optional.empty());
+        when(receivingSessionRepository.findByIdForUpdate(unknownSessionId)).thenReturn(Optional.empty());
 
         assertThrows(
                 ReceivingSessionNotFoundException.class,
@@ -401,7 +428,7 @@ class ReceivingServiceImplTest {
                 .sessionId(sessionId)
                 .lines(List.of(knownLine))
                 .build();
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
 
         ReceiveLineRequest knownLineRequest =
                 new ReceiveLineRequest(knownLineId, new BigDecimal("10"), null, null, null);
@@ -440,7 +467,7 @@ class ReceivingServiceImplTest {
         line1.setSession(session);
         line2.setSession(session);
 
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(inventoryVarianceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         ReceiveLineRequest req1 = new ReceiveLineRequest(lineId1, new BigDecimal("10"), null, null, null); // Exact
@@ -479,7 +506,7 @@ class ReceivingServiceImplTest {
         line1.setSession(session);
         line2.setSession(session);
 
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
 
         ReceiveLineRequest req1 = new ReceiveLineRequest(lineId1, new BigDecimal("10"), null, null, null); // Exact
         ReceiveItemsRequest request = new ReceiveItemsRequest(List.of(req1));
@@ -513,7 +540,7 @@ class ReceivingServiceImplTest {
         line1.setSession(session);
         line2.setSession(session);
 
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
 
         ReceiveLineRequest req1 = new ReceiveLineRequest(lineId1, new BigDecimal("10"), null, null, null);
         ReceiveLineRequest req2 = new ReceiveLineRequest(lineId2, new BigDecimal("20"), null, null, null);
@@ -586,7 +613,7 @@ class ReceivingServiceImplTest {
         line1.setSession(session);
         line2.setSession(session);
 
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
 
         ReceiveLineRequest req1 = new ReceiveLineRequest(lineId1, new BigDecimal("10"), null, null, null);
         ReceiveItemsRequest request = new ReceiveItemsRequest(List.of(req1));
@@ -614,7 +641,7 @@ class ReceivingServiceImplTest {
                 .lines(new java.util.ArrayList<>(List.of(line)))
                 .build();
         line.setSession(session);
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         ReceiveLineRequest lineReq = new ReceiveLineRequest(lineId, new BigDecimal("10"), null, null, null);
@@ -647,7 +674,7 @@ class ReceivingServiceImplTest {
                 .lines(new java.util.ArrayList<>(List.of(line)))
                 .build();
         line.setSession(session);
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation("PROD-001", STAGING_LOCATION_ID))
@@ -692,7 +719,7 @@ class ReceivingServiceImplTest {
                 .lines(new java.util.ArrayList<>(List.of(line)))
                 .build();
         line.setSession(session);
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
         when(sourceDocumentResolver.resolveReceiptUnitCost(SourceDocumentType.PO, poId, sourceLineId, "PROD-001"))
@@ -733,7 +760,7 @@ class ReceivingServiceImplTest {
                 .lines(new java.util.ArrayList<>(List.of(line)))
                 .build();
         line.setSession(session);
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
         when(sourceDocumentResolver.resolveReceiptUnitCost(SourceDocumentType.PO, poId, sourceLineId, "PROD-001"))
@@ -773,7 +800,7 @@ class ReceivingServiceImplTest {
                 .lines(new java.util.ArrayList<>(List.of(line)))
                 .build();
         line.setSession(session);
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -820,7 +847,7 @@ class ReceivingServiceImplTest {
         when(stagingLocationResolver.resolveStagingLocationIdFor(siteId)).thenReturn(siteStagingFloor);
 
         ReceivingSession session = sessionAt(sessionId, siteId, line(lineId, "10"));
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation("PROD-001", siteStagingFloor))
@@ -860,7 +887,7 @@ class ReceivingServiceImplTest {
                 .thenReturn(stagingAtThatSite);
 
         ReceivingSession session = sessionAt(sessionId, siteAtSessionOpen, line(lineId, "10"));
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation("PROD-001", stagingAtThatSite))
@@ -889,7 +916,7 @@ class ReceivingServiceImplTest {
         when(stagingLocationResolver.resolveStagingLocationIdFor(siteId)).thenReturn(siteStagingFloor);
 
         ReceivingSession session = sessionAt(sessionId, siteId, line(firstLineId, "10"), line(secondLineId, "10"));
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation("PROD-001", siteStagingFloor))
@@ -923,7 +950,7 @@ class ReceivingServiceImplTest {
 
         ReceivingSession session = sessionAt(sessionId, null, line(lineId, "10"));
         session.setSourceDocumentId(purchaseOrderId.toString());
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation("PROD-001", siteStagingFloor))
@@ -1000,7 +1027,7 @@ class ReceivingServiceImplTest {
                 .lines(new java.util.ArrayList<>(List.of(line)))
                 .build();
         line.setSession(session);
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation("PROD-001", siteDefaultStagingLocationId))
@@ -1038,7 +1065,7 @@ class ReceivingServiceImplTest {
                 .lines(new java.util.ArrayList<>(List.of(line)))
                 .build();
         line.setSession(session);
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(inventoryVarianceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -1056,6 +1083,7 @@ class ReceivingServiceImplTest {
 
     @Test
     void receiveItemsIntoStaging_overReceipt_overageVariance() {
+        authenticateAs("test-user", OVERRIDE);
         UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID lineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         ReceivingLine line = ReceivingLine.builder()
@@ -1072,7 +1100,7 @@ class ReceivingServiceImplTest {
                 .lines(new java.util.ArrayList<>(List.of(line)))
                 .build();
         line.setSession(session);
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(inventoryVarianceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -1112,7 +1140,7 @@ class ReceivingServiceImplTest {
                 .build();
         line1.setSession(session);
         line2.setSession(session);
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         ReceiveItemsRequest request = new ReceiveItemsRequest(List.of(
@@ -1154,7 +1182,7 @@ class ReceivingServiceImplTest {
                 .build();
         line.setSession(session);
 
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
                 .thenReturn(new WorkorderValidationService.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
@@ -1201,7 +1229,7 @@ class ReceivingServiceImplTest {
                 .build();
         line.setSession(session);
 
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
                 .thenReturn(new WorkorderValidationService.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
@@ -1240,7 +1268,7 @@ class ReceivingServiceImplTest {
                 .build();
         line.setSession(session);
 
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
                 .thenReturn(new WorkorderValidationService.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
@@ -1275,18 +1303,19 @@ class ReceivingServiceImplTest {
                 .build();
         line.setSession(session);
 
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
                 .thenReturn(new WorkorderValidationService.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
 
         CrossDockRequest request =
                 new CrossDockRequest("WO-001", workorderLineId.toString(), new BigDecimal("3"), null);
 
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
+        authenticateAs("actor-user");
+        OverReceiptNotPermittedException exception = assertThrows(
+                OverReceiptNotPermittedException.class,
                 () -> receivingService.crossDockLineToWorkorder(sessionId, lineId, request, "actor-user"));
 
-        assertThat(exception.getMessage()).contains("exceeds expected quantity");
+        assertThat(exception.getMessage()).contains("inventory:goods_receipt:override");
         verify(ledgerPostingService, never()).post(any());
         verify(receivingSessionRepository, never()).save(any(ReceivingSession.class));
     }
@@ -1319,7 +1348,7 @@ class ReceivingServiceImplTest {
                 .build();
         line.setSession(session);
 
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
 
         when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
                 .thenReturn(new WorkorderValidationService.WorkorderLineValidation("CANCELLED", null));
@@ -1342,7 +1371,7 @@ class ReceivingServiceImplTest {
     @Test
     void crossDockLineToWorkorder_sessionNotFound_throwsNotFoundException() {
         // Arrange
-        when(receivingSessionRepository.findById(any())).thenReturn(Optional.empty());
+        when(receivingSessionRepository.findByIdForUpdate(any())).thenReturn(Optional.empty());
         CrossDockRequest request = new CrossDockRequest(
                 "WO-001",
                 UUID.fromString("00000000-0000-0000-0000-000000000001").toString(),
@@ -1381,7 +1410,7 @@ class ReceivingServiceImplTest {
                 .build();
         line.setSession(session);
 
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
                 .thenReturn(new WorkorderValidationService.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
 
@@ -1421,7 +1450,7 @@ class ReceivingServiceImplTest {
                 .build();
         line.setSession(session);
 
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
                 .thenReturn(new WorkorderValidationService.WorkorderLineValidation(
                         "WORK_IN_PROGRESS",
@@ -1459,7 +1488,7 @@ class ReceivingServiceImplTest {
                 .build();
         line.setSession(session);
 
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
                 .thenReturn(new WorkorderValidationService.WorkorderLineValidation(
@@ -1499,7 +1528,7 @@ class ReceivingServiceImplTest {
                 .build();
         line.setSession(session);
 
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(ledgerPostingService.post(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
@@ -1559,7 +1588,7 @@ class ReceivingServiceImplTest {
                 .build();
         line.setSession(session);
 
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(ledgerPostingService.post(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
@@ -1612,7 +1641,7 @@ class ReceivingServiceImplTest {
                 .build();
         line.setSession(session);
 
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
 
         CrossDockRequest request = new CrossDockRequest("WO-001", "wol-1", new BigDecimal("1"), null);
 
@@ -1657,7 +1686,7 @@ class ReceivingServiceImplTest {
         line.setSession(session);
         otherLine.setSession(session);
 
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
                 .thenReturn(new WorkorderValidationService.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
@@ -1697,7 +1726,7 @@ class ReceivingServiceImplTest {
                 .build();
         line.setSession(session);
 
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
         when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
@@ -1743,7 +1772,7 @@ class ReceivingServiceImplTest {
                 .build();
         line.setSession(session);
 
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
         when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
@@ -1784,7 +1813,7 @@ class ReceivingServiceImplTest {
                 .build();
         line1.setSession(session);
         line2.setSession(session);
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         ReceiveItemsRequest request = new ReceiveItemsRequest(
@@ -1812,7 +1841,7 @@ class ReceivingServiceImplTest {
                 .build();
         line.setSession(session);
 
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
 
         ReceiveItemsRequest request = new ReceiveItemsRequest(
                 List.of(new ReceiveLineRequest(lineId, new BigDecimal("2.75"), null, null, null)));
@@ -1885,7 +1914,7 @@ class ReceivingServiceImplTest {
                 .status(ReceivingSessionStatus.OPEN)
                 .build();
         line.setSession(session);
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any(ReceivingSession.class))).thenAnswer(inv -> inv.getArgument(0));
         when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -1943,7 +1972,7 @@ class ReceivingServiceImplTest {
         ReceivingLine line = expectedLine(lineId, "PROD-001", RECEIPT_PO_LINE_ID, "10");
         ReceivingLine notReceived = expectedLine(otherLineId, "PROD-002", null, "5");
         ReceivingSession session = sessionAgainstOrder(sessionId, line, notReceived);
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
         // A short receipt: four of ten arrive, which also records the shortage.
@@ -1959,17 +1988,14 @@ class ReceivingServiceImplTest {
                 new ReceiveItemsRequest(List.of(new ReceiveLineRequest(lineId, new BigDecimal("4"), null, null, null))),
                 "receiver");
 
-        ArgumentCaptor<com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.ReceiptHeader> header =
-                ArgumentCaptor.forClass(
-                        com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.ReceiptHeader.class);
+        ArgumentCaptor<GoodsReceiptEntity> header = ArgumentCaptor.forClass(GoodsReceiptEntity.class);
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.GoodsReceiptLineFact>>
                 lines = ArgumentCaptor.forClass(List.class);
-        verify(goodsReceiptFactPublisher).publish(header.capture(), lines.capture());
-        assertThat(header.getValue().purchaseOrderId()).isEqualTo(RECEIPT_PO_ID);
-        assertThat(header.getValue().receiptId()).isNotNull();
-        assertThat(header.getValue().locationId()).isEqualTo(STAGING_LOCATION_ID);
-        assertThat(header.getValue().recordedBy()).isEqualTo("receiver");
+        verify(goodsReceiptFactPublisher).publish(header.capture(), lines.capture(), any());
+        assertThat(header.getValue().getPurchaseOrderId()).isEqualTo(RECEIPT_PO_ID);
+        assertThat(header.getValue().getLocationId()).isEqualTo(STAGING_LOCATION_ID);
+        assertThat(header.getValue().getCreatedBy()).isEqualTo("receiver");
         assertThat(lines.getValue())
                 .containsExactly(
                         new com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.GoodsReceiptLineFact(
@@ -1986,7 +2012,7 @@ class ReceivingServiceImplTest {
         UUID lineId = UUID.fromString("00000000-0000-0000-0000-0000000000d2");
         ReceivingSession session =
                 sessionAgainstOrder(sessionId, expectedLine(lineId, "PROD-001", RECEIPT_PO_LINE_ID, "10"));
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
         when(inventoryVarianceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -2008,10 +2034,7 @@ class ReceivingServiceImplTest {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.GoodsReceiptLineFact>>
                 lines = ArgumentCaptor.forClass(List.class);
-        verify(goodsReceiptFactPublisher)
-                .publish(
-                        any(com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.ReceiptHeader.class),
-                        lines.capture());
+        verify(goodsReceiptFactPublisher).publish(any(GoodsReceiptEntity.class), lines.capture(), any());
         assertThat(lines.getValue())
                 .extracting(
                         com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.GoodsReceiptLineFact
@@ -2035,7 +2058,7 @@ class ReceivingServiceImplTest {
                 sessionId,
                 expectedLine(
                         UUID.fromString("00000000-0000-0000-0000-0000000000d2"), "PROD-001", RECEIPT_PO_LINE_ID, "10"));
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         receivingService.receiveItemsIntoStaging(
@@ -2044,10 +2067,7 @@ class ReceivingServiceImplTest {
                         UUID.fromString("00000000-0000-0000-0000-0000000000ff"), BigDecimal.ONE, null, null, null))),
                 "receiver");
 
-        verify(goodsReceiptFactPublisher, never())
-                .publish(
-                        any(com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.ReceiptHeader.class),
-                        any());
+        verify(goodsReceiptFactPublisher, never()).publish(any(GoodsReceiptEntity.class), any(), any());
     }
 
     /** #2417: a session whose source document is not a purchase order has no order to advance. */
@@ -2057,7 +2077,7 @@ class ReceivingServiceImplTest {
         UUID lineId = UUID.fromString("00000000-0000-0000-0000-0000000000d2");
         ReceivingSession session =
                 sessionAgainstOrder(sessionId, expectedLine(lineId, "PROD-001", RECEIPT_PO_LINE_ID, "10"));
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
         when(sourceDocumentResolver.receivingPurchaseOrderId(any(), any())).thenReturn(Optional.empty());
@@ -2068,10 +2088,7 @@ class ReceivingServiceImplTest {
                         List.of(new ReceiveLineRequest(lineId, new BigDecimal("10"), null, null, null))),
                 "receiver");
 
-        verify(goodsReceiptFactPublisher, never())
-                .publish(
-                        any(com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.ReceiptHeader.class),
-                        any());
+        verify(goodsReceiptFactPublisher, never()).publish(any(GoodsReceiptEntity.class), any(), any());
     }
 
     /**
@@ -2085,7 +2102,7 @@ class ReceivingServiceImplTest {
         UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-0000000000d4");
         ReceivingLine line = expectedLine(lineId, "PROD-001", RECEIPT_PO_LINE_ID, "10");
         ReceivingSession session = sessionAgainstOrder(sessionId, line);
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
         when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
@@ -2102,19 +2119,337 @@ class ReceivingServiceImplTest {
                 new CrossDockRequest("WO-001", workorderLineId.toString(), new BigDecimal("3"), null),
                 "receiver");
 
-        ArgumentCaptor<com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.ReceiptHeader> header =
-                ArgumentCaptor.forClass(
-                        com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.ReceiptHeader.class);
+        ArgumentCaptor<GoodsReceiptEntity> header = ArgumentCaptor.forClass(GoodsReceiptEntity.class);
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.GoodsReceiptLineFact>>
                 lines = ArgumentCaptor.forClass(List.class);
-        verify(goodsReceiptFactPublisher).publish(header.capture(), lines.capture());
-        assertThat(header.getValue().purchaseOrderId()).isEqualTo(RECEIPT_PO_ID);
-        assertThat(header.getValue().locationId()).isEqualTo(CROSS_DOCK_LOCATION_ID);
+        verify(goodsReceiptFactPublisher).publish(header.capture(), lines.capture(), any());
+        assertThat(header.getValue().getPurchaseOrderId()).isEqualTo(RECEIPT_PO_ID);
+        assertThat(header.getValue().getLocationId()).isEqualTo(CROSS_DOCK_LOCATION_ID);
         assertThat(lines.getValue())
                 .containsExactly(
                         new com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.GoodsReceiptLineFact(
                                 RECEIPT_PO_LINE_ID, "PROD-001", new BigDecimal("3"), 300L));
+    }
+
+    // ─── #2455: over-receipt guard, idempotency, goods-receipt row ────────────
+
+    private ReceivingSession openReceiptSession(UUID sessionId, ReceivingLine... lines) {
+        ReceivingSession session = sessionAgainstOrder(sessionId, lines);
+        lenient().when(receivingSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
+        lenient().when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(inventoryVarianceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        lenient()
+                .when(sourceDocumentResolver.receivingPurchaseOrderId(SourceDocumentType.PO, RECEIPT_PO_ID.toString()))
+                .thenReturn(Optional.of(RECEIPT_PO_ID));
+        lenient()
+                .when(sourceDocumentResolver.valueReceiptLine(eq(RECEIPT_PO_ID), any(), any(), any()))
+                .thenAnswer(inv -> new SourceDocumentResolver.ReceiptLineValue(
+                        RECEIPT_PO_LINE_ID, inv.<BigDecimal>getArgument(3).longValueExact() * 100L));
+        return session;
+    }
+
+    private static ReceiveItemsRequest receiveRequest(UUID lineId, String quantity, String idempotencyKey) {
+        return new ReceiveItemsRequest(
+                List.of(new ReceiveLineRequest(lineId, new BigDecimal(quantity), null, null, null)), idempotencyKey);
+    }
+
+    @Test
+    void receiveItemsIntoStaging_overReceiptWithoutOverride_isRejectedAndPostsNothing() {
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-0000000000e1");
+        UUID lineId = UUID.fromString("00000000-0000-0000-0000-0000000000e2");
+        openReceiptSession(sessionId, expectedLine(lineId, "PROD-001", RECEIPT_PO_LINE_ID, "10"));
+        authenticateAs("receiver");
+
+        assertThrows(
+                OverReceiptNotPermittedException.class,
+                () -> receivingService.receiveItemsIntoStaging(
+                        sessionId, receiveRequest(lineId, "11", null), "receiver"));
+
+        verify(ledgerPostingService, never()).post(any());
+        verify(goodsReceiptRepository, never()).save(any(GoodsReceiptEntity.class));
+        verify(goodsReceiptFactPublisher, never()).publish(any(GoodsReceiptEntity.class), any(), any());
+    }
+
+    @Test
+    void receiveItemsIntoStaging_overReceiptWithOverride_isAcceptedAsReceivedOver() {
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-0000000000e1");
+        UUID lineId = UUID.fromString("00000000-0000-0000-0000-0000000000e2");
+        ReceivingSession session =
+                openReceiptSession(sessionId, expectedLine(lineId, "PROD-001", RECEIPT_PO_LINE_ID, "10"));
+        authenticateAs("receiver", OVERRIDE);
+
+        ReceiveItemsResponse response =
+                receivingService.receiveItemsIntoStaging(sessionId, receiveRequest(lineId, "11", null), "receiver");
+
+        assertThat(session.getLines().get(0).getStatus()).isEqualTo(ReceivingLineStatus.RECEIVED_OVER);
+        assertThat(response.getVariances()).singleElement().satisfies(variance -> {
+            assertThat(variance.getVarianceType()).isEqualTo("OVERAGE");
+            assertThat(variance.getVarianceQuantity()).isEqualByComparingTo("1");
+        });
+        verify(goodsReceiptFactPublisher).publish(any(GoodsReceiptEntity.class), any(), any());
+    }
+
+    @Test
+    void receiveItemsIntoStaging_guardIsCumulativeAcrossCalls() {
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-0000000000e1");
+        UUID lineId = UUID.fromString("00000000-0000-0000-0000-0000000000e2");
+        ReceivingSession session =
+                openReceiptSession(sessionId, expectedLine(lineId, "PROD-001", RECEIPT_PO_LINE_ID, "10"));
+        authenticateAs("receiver");
+
+        receivingService.receiveItemsIntoStaging(sessionId, receiveRequest(lineId, "6", null), "receiver");
+        assertThat(session.getLines().get(0).getReceivedQuantity()).isEqualByComparingTo("6");
+
+        // 6 + 5 passes the 10 expected even though neither call alone does.
+        assertThrows(
+                OverReceiptNotPermittedException.class,
+                () -> receivingService.receiveItemsIntoStaging(
+                        sessionId, receiveRequest(lineId, "5", null), "receiver"));
+        assertThat(session.getLines().get(0).getReceivedQuantity()).isEqualByComparingTo("6");
+
+        // 6 + 4 settles it exactly: received quantity is the running total, not the last call's.
+        receivingService.receiveItemsIntoStaging(sessionId, receiveRequest(lineId, "4", null), "receiver");
+        assertThat(session.getLines().get(0).getReceivedQuantity()).isEqualByComparingTo("10");
+        assertThat(session.getLines().get(0).getStatus()).isEqualTo(ReceivingLineStatus.RECEIVED);
+    }
+
+    @Test
+    void receiveItemsIntoStaging_retryWithSameKey_postsAndPublishesOnce() {
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-0000000000e1");
+        UUID lineId = UUID.fromString("00000000-0000-0000-0000-0000000000e2");
+        ReceivingSession session =
+                openReceiptSession(sessionId, expectedLine(lineId, "PROD-001", RECEIPT_PO_LINE_ID, "10"));
+        authenticateAs("receiver");
+        java.util.concurrent.atomic.AtomicReference<GoodsReceiptEntity> recorded =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        when(goodsReceiptRepository.save(any(GoodsReceiptEntity.class))).thenAnswer(inv -> {
+            recorded.set(inv.getArgument(0));
+            return inv.getArgument(0);
+        });
+        when(goodsReceiptRepository.findByReceivingSessionIdAndIdempotencyScopeAndIdempotencyKey(
+                        eq(sessionId), eq("RECEIVE"), eq("key-1")))
+                .thenAnswer(inv -> Optional.ofNullable(recorded.get()));
+
+        ReceiveItemsResponse first =
+                receivingService.receiveItemsIntoStaging(sessionId, receiveRequest(lineId, "4", "key-1"), "receiver");
+        ReceiveItemsResponse retry =
+                receivingService.receiveItemsIntoStaging(sessionId, receiveRequest(lineId, "4", "key-1"), "receiver");
+
+        assertThat(retry).isEqualTo(first);
+        assertThat(session.getLines().get(0).getReceivedQuantity()).isEqualByComparingTo("4");
+        verify(ledgerPostingService, times(1)).post(any());
+        verify(goodsReceiptRepository, times(1)).save(any(GoodsReceiptEntity.class));
+        ArgumentCaptor<java.util.UUID> eventId = ArgumentCaptor.forClass(java.util.UUID.class);
+        verify(goodsReceiptFactPublisher, times(1)).publish(any(GoodsReceiptEntity.class), any(), eventId.capture());
+        // Ordinary UUIDv7 ids (ADR-0013), the event id kept on the row; the retry never publishes.
+        assertThat(eventId.getValue().version()).isEqualTo(7);
+        assertThat(recorded.get().getEventId()).isEqualTo(eventId.getValue());
+        assertThat(recorded.get().getReceivingSessionId()).isEqualTo(sessionId);
+        assertThat(recorded.get().getLines()).singleElement().satisfies(receiptLine -> {
+            assertThat(receiptLine.getReceivingLineId()).isEqualTo(lineId);
+            assertThat(receiptLine.getQuantityReceived()).isEqualByComparingTo("4");
+            assertThat(receiptLine.getPoLineId()).isEqualTo(RECEIPT_PO_LINE_ID);
+        });
+    }
+
+    @Test
+    void receiveItemsIntoStaging_sameKeyDifferentPayload_isAConflictAndPostsNothingMore() {
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-0000000000e1");
+        UUID lineId = UUID.fromString("00000000-0000-0000-0000-0000000000e2");
+        openReceiptSession(sessionId, expectedLine(lineId, "PROD-001", RECEIPT_PO_LINE_ID, "10"));
+        authenticateAs("receiver");
+        java.util.concurrent.atomic.AtomicReference<GoodsReceiptEntity> recorded =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        when(goodsReceiptRepository.save(any(GoodsReceiptEntity.class))).thenAnswer(inv -> {
+            recorded.set(inv.getArgument(0));
+            return inv.getArgument(0);
+        });
+        when(goodsReceiptRepository.findByReceivingSessionIdAndIdempotencyScopeAndIdempotencyKey(
+                        eq(sessionId), eq("RECEIVE"), eq("key-1")))
+                .thenAnswer(inv -> Optional.ofNullable(recorded.get()));
+        receivingService.receiveItemsIntoStaging(sessionId, receiveRequest(lineId, "4", "key-1"), "receiver");
+
+        assertThrows(
+                IdempotencyConflictException.class,
+                () -> receivingService.receiveItemsIntoStaging(
+                        sessionId, receiveRequest(lineId, "3", "key-1"), "receiver"));
+
+        verify(ledgerPostingService, times(1)).post(any());
+        verify(goodsReceiptFactPublisher, times(1)).publish(any(GoodsReceiptEntity.class), any(), any());
+    }
+
+    @Test
+    void crossDockLineToWorkorder_overReceiptWithOverride_isAccepted() {
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-0000000000e1");
+        UUID lineId = UUID.fromString("00000000-0000-0000-0000-0000000000e2");
+        UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-0000000000e4");
+        ReceivingSession session =
+                openReceiptSession(sessionId, expectedLine(lineId, "PROD-001", RECEIPT_PO_LINE_ID, "10"));
+        when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
+                .thenReturn(new WorkorderValidationService.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
+        authenticateAs("receiver", OVERRIDE);
+
+        receivingService.crossDockLineToWorkorder(
+                sessionId,
+                lineId,
+                new CrossDockRequest("WO-001", workorderLineId.toString(), new BigDecimal("11"), null),
+                "receiver");
+
+        assertThat(session.getLines().get(0).getStatus()).isEqualTo(ReceivingLineStatus.RECEIVED_OVER);
+        verify(goodsReceiptFactPublisher).publish(any(GoodsReceiptEntity.class), any(), any());
+        ArgumentCaptor<com.positivity.inventory.internal.entity.InventoryVariance> variance =
+                ArgumentCaptor.forClass(com.positivity.inventory.internal.entity.InventoryVariance.class);
+        verify(inventoryVarianceRepository).save(variance.capture());
+        assertThat(variance.getValue().getVarianceType())
+                .isEqualTo(com.positivity.inventory.internal.enums.InventoryVarianceType.OVERAGE);
+        assertThat(variance.getValue().getVarianceQuantity()).isEqualByComparingTo("1");
+        assertThat(variance.getValue().getReceivedQuantity()).isEqualByComparingTo("11");
+    }
+
+    /** Fingerprints are structured, so a key reused with a payload that merely prints alike is a conflict. */
+    @Test
+    void receiveItemsIntoStaging_sameKeySerialListsThatPrintAlike_isAConflict() {
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-0000000000e1");
+        UUID lineId = UUID.fromString("00000000-0000-0000-0000-0000000000e2");
+        openReceiptSession(sessionId, expectedLine(lineId, "PROD-001", RECEIPT_PO_LINE_ID, "10"));
+        authenticateAs("receiver");
+        java.util.concurrent.atomic.AtomicReference<GoodsReceiptEntity> recorded =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        when(goodsReceiptRepository.save(any(GoodsReceiptEntity.class))).thenAnswer(inv -> {
+            recorded.set(inv.getArgument(0));
+            return inv.getArgument(0);
+        });
+        when(goodsReceiptRepository.findByReceivingSessionIdAndIdempotencyScopeAndIdempotencyKey(
+                        eq(sessionId), eq("RECEIVE"), eq("k")))
+                .thenAnswer(inv -> Optional.ofNullable(recorded.get()));
+        receivingService.receiveItemsIntoStaging(
+                sessionId,
+                new ReceiveItemsRequest(
+                        List.of(new ReceiveLineRequest(
+                                lineId, new BigDecimal("2"), null, null, null, null, List.of("a, b"))),
+                        "k"),
+                "receiver");
+
+        assertThrows(
+                IdempotencyConflictException.class,
+                () -> receivingService.receiveItemsIntoStaging(
+                        sessionId,
+                        new ReceiveItemsRequest(
+                                List.of(new ReceiveLineRequest(
+                                        lineId, new BigDecimal("2"), null, null, null, null, List.of("a", "b"))),
+                                "k"),
+                        "receiver"));
+    }
+
+    @Test
+    void crossDockLineToWorkorder_sameKeyFieldsThatConcatenateAlike_isAConflict() {
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-0000000000e1");
+        UUID lineId = UUID.fromString("00000000-0000-0000-0000-0000000000e2");
+        UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-0000000000e4");
+        openReceiptSession(sessionId, expectedLine(lineId, "PROD-001", RECEIPT_PO_LINE_ID, "10"));
+        when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
+                .thenReturn(new WorkorderValidationService.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
+        authenticateAs("receiver");
+        java.util.concurrent.atomic.AtomicReference<GoodsReceiptEntity> recorded =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        when(goodsReceiptRepository.save(any(GoodsReceiptEntity.class))).thenAnswer(inv -> {
+            recorded.set(inv.getArgument(0));
+            return inv.getArgument(0);
+        });
+        when(goodsReceiptRepository.findByReceivingSessionIdAndIdempotencyScopeAndIdempotencyKey(
+                        eq(sessionId), eq("CROSS_DOCK:" + lineId), eq("cd")))
+                .thenAnswer(inv -> Optional.ofNullable(recorded.get()));
+        receivingService.crossDockLineToWorkorder(
+                sessionId,
+                lineId,
+                new CrossDockRequest("WO-001", workorderLineId.toString(), new BigDecimal("3"), "C", "A|B", "cd"),
+                "receiver");
+
+        assertThrows(
+                IdempotencyConflictException.class,
+                () -> receivingService.crossDockLineToWorkorder(
+                        sessionId,
+                        lineId,
+                        new CrossDockRequest(
+                                "WO-001", workorderLineId.toString(), new BigDecimal("3"), "B|C", "A", "cd"),
+                        "receiver"));
+    }
+
+    @Test
+    void crossDockLineToWorkorder_retryWithSameKey_postsAndPublishesOnce() {
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-0000000000e1");
+        UUID lineId = UUID.fromString("00000000-0000-0000-0000-0000000000e2");
+        UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-0000000000e4");
+        openReceiptSession(sessionId, expectedLine(lineId, "PROD-001", RECEIPT_PO_LINE_ID, "10"));
+        when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
+                .thenReturn(new WorkorderValidationService.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
+        authenticateAs("receiver");
+        java.util.concurrent.atomic.AtomicReference<GoodsReceiptEntity> recorded =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        when(goodsReceiptRepository.save(any(GoodsReceiptEntity.class))).thenAnswer(inv -> {
+            recorded.set(inv.getArgument(0));
+            return inv.getArgument(0);
+        });
+        when(goodsReceiptRepository.findByReceivingSessionIdAndIdempotencyScopeAndIdempotencyKey(
+                        eq(sessionId), eq("CROSS_DOCK:" + lineId), eq("cd-1")))
+                .thenAnswer(inv -> Optional.ofNullable(recorded.get()));
+        CrossDockRequest request =
+                new CrossDockRequest("WO-001", workorderLineId.toString(), new BigDecimal("3"), null, null, "cd-1");
+
+        CrossDockResponse first = receivingService.crossDockLineToWorkorder(sessionId, lineId, request, "receiver");
+        CrossDockResponse retry = receivingService.crossDockLineToWorkorder(sessionId, lineId, request, "receiver");
+
+        assertThat(retry).isEqualTo(first);
+        // One paired receipt + issue, once.
+        verify(ledgerPostingService, times(2)).post(any());
+        verify(goodsReceiptFactPublisher, times(1)).publish(any(GoodsReceiptEntity.class), any(), any());
+        assertThat(recorded.get().getLocationId()).isEqualTo(CROSS_DOCK_LOCATION_ID);
+    }
+
+    /**
+     * #2455: receive and cross-dock lock the session row before the idempotency lookup and the
+     * guard, so concurrent calls on one session serialise.
+     */
+    @Test
+    void receiveItemsIntoStaging_locksTheSessionBeforeTheIdempotencyLookup() {
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-0000000000e1");
+        UUID lineId = UUID.fromString("00000000-0000-0000-0000-0000000000e2");
+        openReceiptSession(sessionId, expectedLine(lineId, "PROD-001", RECEIPT_PO_LINE_ID, "10"));
+        authenticateAs("receiver");
+
+        receivingService.receiveItemsIntoStaging(sessionId, receiveRequest(lineId, "4", "k"), "receiver");
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(receivingSessionRepository, goodsReceiptRepository);
+        order.verify(receivingSessionRepository).findByIdForUpdate(sessionId);
+        order.verify(goodsReceiptRepository)
+                .findByReceivingSessionIdAndIdempotencyScopeAndIdempotencyKey(eq(sessionId), eq("RECEIVE"), eq("k"));
+        verify(receivingSessionRepository, never()).findById(any());
+    }
+
+    @Test
+    void crossDockLineToWorkorder_locksTheSessionBeforeTheIdempotencyLookup() {
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-0000000000e1");
+        UUID lineId = UUID.fromString("00000000-0000-0000-0000-0000000000e2");
+        UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-0000000000e4");
+        openReceiptSession(sessionId, expectedLine(lineId, "PROD-001", RECEIPT_PO_LINE_ID, "10"));
+        when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
+                .thenReturn(new WorkorderValidationService.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
+        authenticateAs("receiver");
+
+        receivingService.crossDockLineToWorkorder(
+                sessionId,
+                lineId,
+                new CrossDockRequest("WO-001", workorderLineId.toString(), new BigDecimal("3"), null, null, "cd"),
+                "receiver");
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(receivingSessionRepository, goodsReceiptRepository);
+        order.verify(receivingSessionRepository).findByIdForUpdate(sessionId);
+        order.verify(goodsReceiptRepository)
+                .findByReceivingSessionIdAndIdempotencyScopeAndIdempotencyKey(
+                        eq(sessionId), eq("CROSS_DOCK:" + lineId), eq("cd"));
+        verify(receivingSessionRepository, never()).findById(any());
     }
 
     private void stubSourceDocumentLines() {

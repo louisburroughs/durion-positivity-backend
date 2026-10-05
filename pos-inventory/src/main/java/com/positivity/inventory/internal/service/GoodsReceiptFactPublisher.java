@@ -47,6 +47,18 @@ public class GoodsReceiptFactPublisher {
 
     /** Queues the receipt for publication, in the caller's transaction. */
     public void publish(@NonNull GoodsReceiptEntity receipt, @NonNull List<GoodsReceiptLineFact> lines) {
+        publish(receipt, lines, null);
+    }
+
+    /**
+     * Queues the receipt for publication under a caller-chosen event id (#2455): a receiving
+     * session derives it from the call's idempotency key, so pos-order's event-id de-duplication
+     * also catches a retry that somehow reached the outbox twice. A null id takes a fresh one.
+     */
+    public void publish(
+            @NonNull GoodsReceiptEntity receipt,
+            @NonNull List<GoodsReceiptLineFact> lines,
+            java.util.@Nullable UUID eventId) {
         publish(
                 new ReceiptHeader(
                         receipt.getReceiptId(),
@@ -54,15 +66,19 @@ public class GoodsReceiptFactPublisher {
                         receipt.getPurchaseOrderId(),
                         receipt.getLocationId(),
                         receipt.getCreatedBy()),
-                lines);
+                lines,
+                eventId);
     }
 
-    /**
-     * Queues a receipt that has no goods-receipt document of its own for publication, in the
-     * caller's transaction — a receiving session's receive or cross-dock (#2417), which records
-     * what arrived on the session's lines rather than on a {@link GoodsReceiptEntity}.
-     */
+    /** Queues a receipt that has no goods-receipt document of its own for publication. */
     public void publish(@NonNull ReceiptHeader receipt, @NonNull List<GoodsReceiptLineFact> lines) {
+        publish(receipt, lines, null);
+    }
+
+    private void publish(
+            @NonNull ReceiptHeader receipt,
+            @NonNull List<GoodsReceiptLineFact> lines,
+            java.util.@Nullable UUID eventId) {
         OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
         if (writer == null) {
             return;
@@ -86,7 +102,7 @@ public class GoodsReceiptFactPublisher {
         writer.publish(
                 DomainTopics.events("inventory"),
                 new DomainEventEnvelope<>(
-                        UUIDv7Generator.generate(),
+                        eventId != null ? eventId : UUIDv7Generator.generate(),
                         GoodsReceiptRecordedV1.EVENT_TYPE,
                         GoodsReceiptRecordedV1.SCHEMA_VERSION,
                         // Keyed on the order rather than the receipt, so every receipt against one

@@ -30,6 +30,7 @@ import com.positivity.inventory.internal.repository.GoodsReceiptRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.service.DocumentQuantityConverter;
 import com.positivity.inventory.internal.service.GoodsReceiptFactPublisher;
+import com.positivity.inventory.internal.service.GoodsReceiptFactory;
 import com.positivity.inventory.internal.service.InventoryFactPublisher;
 import com.positivity.inventory.internal.service.InventoryLotCaptureService;
 import com.positivity.inventory.internal.service.LedgerPostingService;
@@ -38,7 +39,6 @@ import com.positivity.inventory.internal.service.QuantityScaleGuard;
 import com.positivity.inventory.internal.service.ReceiptCostCurrencyPolicy;
 import com.positivity.inventory.internal.service.ReceiptUnitCosts;
 import com.positivity.security.common.SecurityContextHelper;
-import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.web.common.ReplicationPendingException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -544,7 +544,7 @@ public class AsnServiceImpl implements AsnService {
     }
 
     private String generateReceiptNumber() {
-        return "GR-" + UUIDv7Generator.generate().toString().substring(0, 8).toUpperCase();
+        return GoodsReceiptFactory.newReceiptNumber();
     }
 
     private @NonNull AsnResponse toAsnResponse(@NonNull AdvanceShippingNoticeEntity entity) {
