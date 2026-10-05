@@ -829,11 +829,16 @@ class SalesOrderWalkInTest {
             verifyNoInteractions(invoicingPort, inventoryPort, orderTaxService);
             assertThat(refusedCount("ORDER_CUSTOMER_REQUIRED")).isZero();
 
-            // Likewise a walk-in order whose replay declares no tender at all.
+            // Likewise a walk-in order whose replay declares no tender at all, or a negative one:
+            // the stored result comes back before the tender is looked at.
             SalesOrder walkIn = walkInCart();
             walkIn.setStatus(SalesOrderStatus.PENDING_PAYMENT);
             walkIn.setCheckoutIdempotencyKey("chk-2");
             assertThat(service.checkout(ORDER_ID, "chk-2", "ON_ACCOUNT", null).replay())
+                    .isTrue();
+            assertThat(service.checkout(ORDER_ID, "chk-2", null, new BigDecimal("-1"))
+                            .replay())
+                    .as("a replayed key returns the stored 200 even with a negative tenderedAmount")
                     .isTrue();
         }
 

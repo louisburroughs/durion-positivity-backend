@@ -567,14 +567,16 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         if (!onAccount && tender != null && !"DEFAULT".equals(tender)) {
             throw new SalesOrderRequestValidationException("Unsupported tenderType: " + tenderType);
         }
-        if (tenderedAmount != null && tenderedAmount.signum() < 0) {
-            throw new SalesOrderRequestValidationException("tenderedAmount must not be negative");
-        }
         SalesOrder order =
                 salesOrderRepository.findById(orderId).orElseThrow(() -> new SalesOrderNotFoundException(orderId));
 
         if (key.equals(order.getCheckoutIdempotencyKey())) {
             return new CheckoutResult(toSummary(order), true);
+        }
+        // After the replay return: a replay answers the stored result whatever it declares (AC8);
+        // only a fresh checkout has its tender looked at.
+        if (tenderedAmount != null && tenderedAmount.signum() < 0) {
+            throw new SalesOrderRequestValidationException("tenderedAmount must not be negative");
         }
         Optional<SalesOrder> keyOwner = salesOrderRepository.findByCheckoutIdempotencyKey(key);
         if (keyOwner.isPresent() && !orderId.equals(keyOwner.get().getOrderId())) {
