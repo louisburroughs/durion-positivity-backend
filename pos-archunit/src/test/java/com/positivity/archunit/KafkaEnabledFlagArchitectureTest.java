@@ -2,11 +2,19 @@ package com.positivity.archunit;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.members;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.archunit.fixture.kafkaenabled.FixtureClassPrefixNameGate;
+import com.positivity.archunit.fixture.kafkaenabled.FixtureClassValueGate;
+import com.positivity.archunit.fixture.kafkaenabled.FixtureMethodPrefixNameGate;
+import com.positivity.archunit.fixture.kafkaenabled.FixtureMethodValueGate;
+import com.positivity.archunit.fixture.kafkaenabled.FixtureUnrelatedGate;
 import com.tngtech.archunit.core.domain.JavaAnnotation;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaMember;
 import com.tngtech.archunit.core.domain.properties.HasAnnotations;
+import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
@@ -17,6 +25,8 @@ import com.tngtech.archunit.lang.SimpleConditionEvent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 
 /**
  * ADR-0044 §4 (#2195, #2463): Kafka is tier-1 infrastructure, so no bean may be gated on a
@@ -114,5 +124,51 @@ class KafkaEnabledFlagArchitectureTest {
 
     static boolean endsWithKafkaEnabled(String key) {
         return key.endsWith("kafka.enabled");
+    }
+
+    private static void assertRejected(Class<?> fixture, String expectedMessagePart) {
+        var imported = new ClassFileImporter().importClasses(fixture);
+        assertThatThrownBy(() -> {
+                    NO_KAFKA_ENABLED_ON_CLASSES.check(imported);
+                    NO_KAFKA_ENABLED_ON_MEMBERS.check(imported);
+                })
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining(expectedMessagePart)
+                .hasMessageContaining("pos.fixture.kafka");
+    }
+
+    @Test
+    @DisplayName("class-level prefix + name ...kafka.enabled is rejected")
+    void classPrefixNameRejected() {
+        assertRejected(FixtureClassPrefixNameGate.class, "FixtureClassPrefixNameGate");
+    }
+
+    @Test
+    @DisplayName("class-level shorthand value ...kafka.enabled is rejected")
+    void classValueRejected() {
+        assertRejected(FixtureClassValueGate.class, "FixtureClassValueGate");
+    }
+
+    @Test
+    @DisplayName("method-level prefix + name ...kafka.enabled is rejected")
+    void methodPrefixNameRejected() {
+        assertRejected(FixtureMethodPrefixNameGate.class, "gatedByPrefixAndName");
+    }
+
+    @Test
+    @DisplayName("method-level shorthand value ...kafka.enabled is rejected")
+    void methodValueRejected() {
+        assertRejected(FixtureMethodValueGate.class, "gatedByValue");
+    }
+
+    @Test
+    @DisplayName("an unrelated property gate passes both rules")
+    void unrelatedPropertyPasses() {
+        var imported = new ClassFileImporter().importClasses(FixtureUnrelatedGate.class);
+        assertThatCode(() -> {
+                    NO_KAFKA_ENABLED_ON_CLASSES.check(imported);
+                    NO_KAFKA_ENABLED_ON_MEMBERS.check(imported);
+                })
+                .doesNotThrowAnyException();
     }
 }
