@@ -81,6 +81,10 @@ public class GoodsReceiptEntity extends TenantScopedEntity {
     @Column(name = "request_fingerprint", length = 64)
     private String requestFingerprint;
 
+    /** The id of the goodsreceipt.recorded event published from this receipt (UUIDv7). */
+    @Column(name = "event_id")
+    private UUID eventId;
+
     /** The JSON response the original call returned, replayed on a retry. */
     @Column(name = "response_snapshot", columnDefinition = "text")
     private String responseSnapshot;

@@ -4,6 +4,7 @@ import com.positivity.inventory.internal.entity.ReceivingSession;
 import jakarta.persistence.LockModeType;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -18,5 +19,6 @@ public interface ReceivingSessionRepository extends JpaRepository<ReceivingSessi
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT s FROM ReceivingSession s WHERE s.sessionId = :sessionId")
-    Optional<ReceivingSession> findByIdForUpdate(@Param("sessionId") UUID sessionId);
+    @NonNull
+    Optional<ReceivingSession> findByIdForUpdate(@Param("sessionId") @NonNull UUID sessionId);
 }

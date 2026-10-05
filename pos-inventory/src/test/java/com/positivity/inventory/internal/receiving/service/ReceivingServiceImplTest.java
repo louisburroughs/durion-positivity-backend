@@ -1994,7 +1994,6 @@ class ReceivingServiceImplTest {
                 lines = ArgumentCaptor.forClass(List.class);
         verify(goodsReceiptFactPublisher).publish(header.capture(), lines.capture(), any());
         assertThat(header.getValue().getPurchaseOrderId()).isEqualTo(RECEIPT_PO_ID);
-        assertThat(header.getValue().getReceiptId()).isNotNull();
         assertThat(header.getValue().getLocationId()).isEqualTo(STAGING_LOCATION_ID);
         assertThat(header.getValue().getCreatedBy()).isEqualTo("receiver");
         assertThat(lines.getValue())
@@ -2244,10 +2243,9 @@ class ReceivingServiceImplTest {
         verify(goodsReceiptRepository, times(1)).save(any(GoodsReceiptEntity.class));
         ArgumentCaptor<java.util.UUID> eventId = ArgumentCaptor.forClass(java.util.UUID.class);
         verify(goodsReceiptFactPublisher, times(1)).publish(any(GoodsReceiptEntity.class), any(), eventId.capture());
-        // The receipt and event ids are derived from the key, so a retry that did publish would carry
-        // the id pos-order already de-duplicates on.
-        assertThat(eventId.getValue()).isNotNull();
-        assertThat(recorded.get().getReceiptId()).isNotNull();
+        // Ordinary UUIDv7 ids (ADR-0013), the event id kept on the row; the retry never publishes.
+        assertThat(eventId.getValue().version()).isEqualTo(7);
+        assertThat(recorded.get().getEventId()).isEqualTo(eventId.getValue());
         assertThat(recorded.get().getReceivingSessionId()).isEqualTo(sessionId);
         assertThat(recorded.get().getLines()).singleElement().satisfies(receiptLine -> {
             assertThat(receiptLine.getReceivingLineId()).isEqualTo(lineId);
@@ -2301,6 +2299,82 @@ class ReceivingServiceImplTest {
 
         assertThat(session.getLines().get(0).getStatus()).isEqualTo(ReceivingLineStatus.RECEIVED_OVER);
         verify(goodsReceiptFactPublisher).publish(any(GoodsReceiptEntity.class), any(), any());
+        ArgumentCaptor<com.positivity.inventory.internal.entity.InventoryVariance> variance =
+                ArgumentCaptor.forClass(com.positivity.inventory.internal.entity.InventoryVariance.class);
+        verify(inventoryVarianceRepository).save(variance.capture());
+        assertThat(variance.getValue().getVarianceType())
+                .isEqualTo(com.positivity.inventory.internal.enums.InventoryVarianceType.OVERAGE);
+        assertThat(variance.getValue().getVarianceQuantity()).isEqualByComparingTo("1");
+        assertThat(variance.getValue().getReceivedQuantity()).isEqualByComparingTo("11");
+    }
+
+    /** Fingerprints are structured, so a key reused with a payload that merely prints alike is a conflict. */
+    @Test
+    void receiveItemsIntoStaging_sameKeySerialListsThatPrintAlike_isAConflict() {
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-0000000000e1");
+        UUID lineId = UUID.fromString("00000000-0000-0000-0000-0000000000e2");
+        openReceiptSession(sessionId, expectedLine(lineId, "PROD-001", RECEIPT_PO_LINE_ID, "10"));
+        authenticateAs("receiver");
+        java.util.concurrent.atomic.AtomicReference<GoodsReceiptEntity> recorded =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        when(goodsReceiptRepository.save(any(GoodsReceiptEntity.class))).thenAnswer(inv -> {
+            recorded.set(inv.getArgument(0));
+            return inv.getArgument(0);
+        });
+        when(goodsReceiptRepository.findByReceivingSessionIdAndIdempotencyScopeAndIdempotencyKey(
+                        eq(sessionId), eq("RECEIVE"), eq("k")))
+                .thenAnswer(inv -> Optional.ofNullable(recorded.get()));
+        receivingService.receiveItemsIntoStaging(
+                sessionId,
+                new ReceiveItemsRequest(
+                        List.of(new ReceiveLineRequest(
+                                lineId, new BigDecimal("2"), null, null, null, null, List.of("a, b"))),
+                        "k"),
+                "receiver");
+
+        assertThrows(
+                IdempotencyConflictException.class,
+                () -> receivingService.receiveItemsIntoStaging(
+                        sessionId,
+                        new ReceiveItemsRequest(
+                                List.of(new ReceiveLineRequest(
+                                        lineId, new BigDecimal("2"), null, null, null, null, List.of("a", "b"))),
+                                "k"),
+                        "receiver"));
+    }
+
+    @Test
+    void crossDockLineToWorkorder_sameKeyFieldsThatConcatenateAlike_isAConflict() {
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-0000000000e1");
+        UUID lineId = UUID.fromString("00000000-0000-0000-0000-0000000000e2");
+        UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-0000000000e4");
+        openReceiptSession(sessionId, expectedLine(lineId, "PROD-001", RECEIPT_PO_LINE_ID, "10"));
+        when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
+                .thenReturn(new WorkorderValidationService.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
+        authenticateAs("receiver");
+        java.util.concurrent.atomic.AtomicReference<GoodsReceiptEntity> recorded =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        when(goodsReceiptRepository.save(any(GoodsReceiptEntity.class))).thenAnswer(inv -> {
+            recorded.set(inv.getArgument(0));
+            return inv.getArgument(0);
+        });
+        when(goodsReceiptRepository.findByReceivingSessionIdAndIdempotencyScopeAndIdempotencyKey(
+                        eq(sessionId), eq("CROSS_DOCK:" + lineId), eq("cd")))
+                .thenAnswer(inv -> Optional.ofNullable(recorded.get()));
+        receivingService.crossDockLineToWorkorder(
+                sessionId,
+                lineId,
+                new CrossDockRequest("WO-001", workorderLineId.toString(), new BigDecimal("3"), "C", "A|B", "cd"),
+                "receiver");
+
+        assertThrows(
+                IdempotencyConflictException.class,
+                () -> receivingService.crossDockLineToWorkorder(
+                        sessionId,
+                        lineId,
+                        new CrossDockRequest(
+                                "WO-001", workorderLineId.toString(), new BigDecimal("3"), "B|C", "A", "cd"),
+                        "receiver"));
     }
 
     @Test

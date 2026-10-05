@@ -46,6 +46,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ReceivingController {
 
     private static final String IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
+    private static final int MAX_IDEMPOTENCY_KEY_LENGTH = 200;
 
     private static final String NO_CURRENT_USER = "No current user";
     private final ReceivingService receivingService;
@@ -422,7 +423,12 @@ public class ReceivingController {
             throw new IllegalArgumentException(
                     "Idempotency-Key header and idempotencyKey body field are both set and differ");
         }
-        return headerKey != null ? headerKey : bodyKey;
+        String key = headerKey != null ? headerKey : bodyKey;
+        if (key != null && key.length() > MAX_IDEMPOTENCY_KEY_LENGTH) {
+            throw new IllegalArgumentException(
+                    "Idempotency key must be at most " + MAX_IDEMPOTENCY_KEY_LENGTH + " characters");
+        }
+        return key;
     }
 
     @GetMapping("/workorders")

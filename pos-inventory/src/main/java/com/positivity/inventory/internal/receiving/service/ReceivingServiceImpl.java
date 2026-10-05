@@ -134,7 +134,7 @@ public class ReceivingServiceImpl implements ReceivingService {
 
         // #2455: a retry under a recorded key is a no-op that answers what the first call answered.
         String idempotencyKey = SessionReceiptRecorder.normalizeKey(request.getIdempotencyKey());
-        String fingerprint = SessionReceiptRecorder.fingerprint("receive|" + request.getLines());
+        String fingerprint = sessionReceiptRecorder.fingerprintReceive(request);
         Optional<ReceiveItemsResponse> replay = sessionReceiptRecorder.findReplay(
                 sessionId,
                 SessionReceiptRecorder.SCOPE_RECEIVE,
@@ -386,12 +386,7 @@ public class ReceivingServiceImpl implements ReceivingService {
         // #2455: a retry under a recorded key is a no-op that answers what the first call answered.
         String idempotencyKey = SessionReceiptRecorder.normalizeKey(request.getIdempotencyKey());
         String scope = SessionReceiptRecorder.crossDockScope(lineId);
-        String fingerprint = SessionReceiptRecorder.fingerprint("cross-dock|" + request.getWorkorderId() + '|'
-                + request.getWorkorderLineId() + '|'
-                + (request.getQuantity() == null
-                        ? null
-                        : request.getQuantity().stripTrailingZeros().toPlainString())
-                + '|' + request.getLotNumber() + '|' + request.getNotes());
+        String fingerprint = sessionReceiptRecorder.fingerprintCrossDock(request);
         Optional<CrossDockResponse> replay = sessionReceiptRecorder.findReplay(
                 sessionId, scope, idempotencyKey, fingerprint, CrossDockResponse.class);
         if (replay.isPresent()) {
@@ -418,6 +413,17 @@ public class ReceivingServiceImpl implements ReceivingService {
                 actorUserId);
 
         applyCrossDockLineOutcome(line, request, workorderId, quantities, lot);
+        int expectedVsReceived = quantities.cumulativeReceivedQuantity().compareTo(quantities.expectedQuantity());
+        if (expectedVsReceived > 0) {
+            // An override-accepted over-receipt leaves the same OVERAGE record a receive does (#2455).
+            recordVariance(
+                    session,
+                    line,
+                    quantities.expectedQuantity(),
+                    quantities.cumulativeReceivedQuantity(),
+                    expectedVsReceived,
+                    actorUserId);
+        }
         settleSessionStatus(session);
         receivingSessionRepository.save(session);
 

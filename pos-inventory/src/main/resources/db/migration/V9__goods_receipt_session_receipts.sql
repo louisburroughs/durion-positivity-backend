@@ -16,6 +16,7 @@ ALTER TABLE goods_receipt ADD COLUMN idempotency_scope varchar(80);
 ALTER TABLE goods_receipt ADD COLUMN idempotency_key varchar(255);
 ALTER TABLE goods_receipt ADD COLUMN request_fingerprint varchar(64);
 ALTER TABLE goods_receipt ADD COLUMN response_snapshot text;
+ALTER TABLE goods_receipt ADD COLUMN event_id uuid;
 
 ALTER TABLE goods_receipt_line ADD COLUMN receiving_line_id uuid;
 
@@ -27,6 +28,8 @@ COMMENT ON COLUMN goods_receipt.idempotency_key IS
     'Caller-supplied Idempotency-Key, or a server-generated one when the caller sent none (#2455).';
 COMMENT ON COLUMN goods_receipt.request_fingerprint IS
     'SHA-256 of the canonical request payload, to tell a replay from a key reused for a different request (#2455).';
+COMMENT ON COLUMN goods_receipt.event_id IS
+    'Id of the goodsreceipt.recorded event published from this receipt (#2455). Null for receipts that publish under a generated id.';
 COMMENT ON COLUMN goods_receipt.response_snapshot IS
     'The JSON response the original call returned, replayed verbatim on a retry (#2455).';
 COMMENT ON COLUMN goods_receipt_line.receiving_line_id IS
