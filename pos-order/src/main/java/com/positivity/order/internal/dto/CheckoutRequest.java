@@ -3,6 +3,7 @@ package com.positivity.order.internal.dto;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.math.BigDecimal;
 import lombok.Data;
 
 @Data
@@ -16,4 +17,13 @@ public class CheckoutRequest {
             example = "ON_ACCOUNT",
             requiredMode = NOT_REQUIRED)
     private String tenderType;
+
+    @Schema(
+            description = "Total of cash and card the cashier is taking now. Required for a walk-in cart (the "
+                    + "customer is the business's Walk-in customer), where it must cover the final grand total "
+                    + "computed at checkout; ignored for any other cart. Never negative",
+            example = "84.37",
+            minimum = "0",
+            requiredMode = NOT_REQUIRED)
+    private BigDecimal tenderedAmount;
 }

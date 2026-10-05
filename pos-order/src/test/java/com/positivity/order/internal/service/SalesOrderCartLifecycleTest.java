@@ -39,6 +39,7 @@ import com.positivity.order.internal.entity.SourceType;
 import com.positivity.order.internal.exception.CartIdempotencyConflictException;
 import com.positivity.order.internal.exception.InvalidCustomerException;
 import com.positivity.order.internal.exception.InvalidSkuException;
+import com.positivity.order.internal.exception.OrderCustomerRequiredException;
 import com.positivity.order.internal.exception.OrderVoidBlockedException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.order.internal.exception.SalesOrderRequestValidationException;
@@ -189,6 +190,11 @@ class SalesOrderCartLifecycleTest {
             inventoryCommandPublisherProvider =
                     org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class);
 
+    /** CAP:550 S8: no meter registry in these unit tests; refusals are logged but not counted. */
+    @SuppressWarnings("unchecked")
+    private final org.springframework.beans.factory.ObjectProvider<io.micrometer.core.instrument.MeterRegistry>
+            meterRegistryProvider = org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class);
+
     @BeforeEach
     void setUp() {
         service = new SalesOrderServiceImpl(
@@ -209,7 +215,9 @@ class SalesOrderCartLifecycleTest {
                 orderNumberService,
                 totalsCalculator,
                 orderTaxService,
+                new com.positivity.order.internal.service.HouseAccountReplica(extCustomerRepository),
                 inventoryCommandPublisherProvider,
+                meterRegistryProvider,
                 Clock.fixed(NOW, ZoneOffset.UTC));
         // @Value-injected field; no Spring context here.
         ReflectionTestUtils.setField(service, "quoteValidity", Duration.ofDays(7));
@@ -1425,6 +1433,8 @@ class SalesOrderCartLifecycleTest {
 
         private SalesOrder checkoutReadyOrder() {
             SalesOrder order = order(SalesOrderStatus.DRAFT);
+            // CAP:550 S8: checkout refuses a cart that names no customer.
+            order.setCustomerId(CUSTOMER_ID);
             order.setCustomerValidationStatus(CustomerValidationStatus.VALIDATED);
             line(order, "SKU-1", 2);
             return order;
@@ -1721,12 +1731,12 @@ class SalesOrderCartLifecycleTest {
         @Test
         @DisplayName("requires a validated customer on the order")
         void requiresValidatedCustomer() {
+            // CAP:550 S8: a cart with no customer never reaches the on-account gate.
             SalesOrder noCustomer = onAccountOrder();
             noCustomer.setCustomerId(null);
             givenOrder(noCustomer);
             assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", "ON_ACCOUNT"))
-                    .isInstanceOf(InvalidCustomerException.class)
-                    .hasMessageContaining("requires a validated customer");
+                    .isInstanceOf(OrderCustomerRequiredException.class);
 
             SalesOrder unvalidated = onAccountOrder();
             unvalidated.setCustomerValidationStatus(null);

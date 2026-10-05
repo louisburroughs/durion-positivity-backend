@@ -16,10 +16,14 @@ import com.positivity.order.internal.entity.*;
 import com.positivity.order.internal.exception.CartIdempotencyConflictException;
 import com.positivity.order.internal.exception.InvalidCustomerException;
 import com.positivity.order.internal.exception.InvalidSkuException;
+import com.positivity.order.internal.exception.OrderCustomerRequiredException;
 import com.positivity.order.internal.exception.OrderVoidBlockedException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.order.internal.exception.SalesOrderRequestValidationException;
 import com.positivity.order.internal.exception.SalesOrderUnprocessableException;
+import com.positivity.order.internal.exception.WalkInNotAllowedException;
+import com.positivity.order.internal.exception.WalkInNotPaidInFullException;
+import com.positivity.order.internal.exception.WalkInUnavailableException;
 import com.positivity.order.internal.repository.ExtBillingRulesRepository;
 import com.positivity.order.internal.repository.ExtCustomerRepository;
 import com.positivity.order.internal.repository.ExtProductRepository;
@@ -35,15 +39,18 @@ import com.positivity.order.internal.service.model.CreateCartResult;
 import com.positivity.order.internal.service.model.OrderDiscountCommand;
 import com.positivity.order.internal.service.model.SalesOrderLineSummary;
 import com.positivity.order.internal.service.model.SalesOrderSummary;
+import com.positivity.order.internal.service.model.SetCartCustomerCommand;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.dto.OrderInvoiceCreationRequest;
 import com.positivity.shared.dto.OrderInvoiceLineItem;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -67,6 +74,14 @@ public class SalesOrderServiceImpl implements SalesOrderService {
 
     private static final String ON_ACCOUNT = "ON_ACCOUNT";
 
+    /** Counts checkouts refused by the customer and walk-in rules, tagged by error code (CAP:550 S8). */
+    static final String CHECKOUT_REFUSED_COUNTER = "order.checkout.refused";
+
+    private static final String CODE_CUSTOMER_REQUIRED = "ORDER_CUSTOMER_REQUIRED";
+    private static final String CODE_WALK_IN_NOT_ALLOWED = "ORDER_WALK_IN_NOT_ALLOWED";
+    private static final String CODE_WALK_IN_NOT_PAID_IN_FULL = "ORDER_WALK_IN_NOT_PAID_IN_FULL";
+    private static final String CODE_WALK_IN_UNAVAILABLE = "ORDER_WALK_IN_UNAVAILABLE";
+
     private final SalesOrderRepository salesOrderRepository;
     private final SalesOrderLineRepository salesOrderLineRepository;
     private final PricingPort pricingPort;
@@ -84,6 +99,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
     private final OrderNumberService orderNumberService;
     private final OrderTotalsCalculator totalsCalculator;
     private final OrderTaxService orderTaxService;
+    private final HouseAccountReplica houseAccounts;
 
     /**
      * Absent when this module runs with Kafka disabled (local/dev profiles). Checkout still
@@ -91,6 +107,9 @@ public class SalesOrderServiceImpl implements SalesOrderService {
      * behaviour every profile had before CAP #1315.
      */
     private final ObjectProvider<InventoryCommandPublisher> inventoryCommandPublisher;
+
+    /** Absent in slices that run without a meter registry; refusals are then logged but not counted. */
+    private final ObjectProvider<MeterRegistry> meterRegistry;
 
     private final Clock clock;
 
@@ -176,6 +195,51 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         SalesOrder saved = salesOrderRepository.save(order);
         orderStateMachine.recordCreation(saved);
         return new CreateCartResult(toSummary(saved), false);
+    }
+
+    @Override
+    @Transactional
+    public SalesOrderSummary setCartCustomer(UUID orderId, SetCartCustomerCommand command) {
+        if (command.walkIn() == (command.customerId() != null)) {
+            throw new SalesOrderRequestValidationException("Provide exactly one of customerId or walkIn: true");
+        }
+        if (command.walkIn() && command.vehicleId() != null) {
+            throw new SalesOrderRequestValidationException("vehicleId cannot be combined with walkIn");
+        }
+        SalesOrder order =
+                salesOrderRepository.findById(orderId).orElseThrow(() -> new SalesOrderNotFoundException(orderId));
+        orderStateMachine.requireEditable(order);
+
+        // Walk-in is only ever this explicit choice (or an explicit customerId that is the house
+        // account): nothing here falls back to it, and a tenant whose replica holds no house
+        // account gets a refusal rather than a substitute (decision AW12).
+        UUID customerId = command.walkIn()
+                ? houseAccounts
+                        .findActiveCashSale()
+                        .map(ExtCustomer::getPartyId)
+                        .orElseThrow(() -> refused(order, CODE_WALK_IN_UNAVAILABLE, new WalkInUnavailableException()))
+                : command.customerId();
+        if (command.walkIn() || houseAccounts.isCashSale(customerId)) {
+            WalkInNotAllowedException.Reason blocker = walkInBlocker(order, false);
+            if (blocker != null) {
+                throw refused(order, CODE_WALK_IN_NOT_ALLOWED, new WalkInNotAllowedException(blocker));
+            }
+        }
+        // Spec R7.2: a workorder's customer terms are contractual, so a linked cart keeps the
+        // customer it was linked under.
+        if (isWorkorderLinked(order) && !customerId.equals(order.getCustomerId())) {
+            throw new SalesOrderUnprocessableException(
+                    "Cannot change the customer: this cart carries a linked WORKORDER source");
+        }
+
+        CustomerValidationStatus validationStatus = validateCustomerAndVehicle(customerId, command.vehicleId());
+        order.setCustomerId(customerId);
+        order.setVehicleId(command.vehicleId());
+        order.setCustomerValidationStatus(validationStatus);
+        // Pricing and tax are both customer-aware, so the cart's figures are provisional until the
+        // next quote or checkout recomputes them.
+        recomputeAfterMutation(order);
+        return toSummary(salesOrderRepository.save(order));
     }
 
     @Override
@@ -297,14 +361,24 @@ public class SalesOrderServiceImpl implements SalesOrderService {
     public List<SalesOrderSummary> listCarts(String clerkId, String terminalId, String status, int page, int size) {
         SalesOrderStatus statusFilter = normalizeBlank(status) == null ? null : parseSalesOrderStatus(status.trim());
         int pageSize = Math.min(Math.max(size, 1), 100);
-        return salesOrderRepository
+        List<SalesOrder> carts = salesOrderRepository
                 .search(
                         normalizeBlank(clerkId),
                         normalizeBlank(terminalId),
                         statusFilter,
                         PageRequest.of(Math.max(page, 0), pageSize))
-                .map(this::toListSummary)
                 .getContent();
+        // One replica read for the page rather than one per cart.
+        Map<UUID, ExtCustomer> customers = extCustomerRepository
+                .findAllById(carts.stream()
+                        .map(SalesOrder::getCustomerId)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet()))
+                .stream()
+                .collect(Collectors.toMap(ExtCustomer::getPartyId, customer -> customer, (a, b) -> a));
+        return carts.stream()
+                .map(cart -> toSummary(cart, List.of(), customers.get(cart.getCustomerId())))
+                .toList();
     }
 
     @Override
@@ -316,6 +390,12 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 salesOrderRepository.findById(orderId).orElseThrow(() -> new SalesOrderNotFoundException(orderId));
         orderStateMachine.requireEditable(order);
         requireCustomerForWorkorderLink(order, type);
+        if (SourceType.WORKORDER.equals(type) && houseAccounts.isCashSale(order.getCustomerId())) {
+            throw refused(
+                    order,
+                    CODE_WALK_IN_NOT_ALLOWED,
+                    new WalkInNotAllowedException(WalkInNotAllowedException.Reason.WORKORDER_LINK));
+        }
 
         Set<String> alreadyLinkedKeys = alreadyLinkedSourceKeys(order, sourceId);
         List<SourceDocumentLine> sourceLines = sourceDocumentPort.fetchLines(type, sourceId);
@@ -475,7 +555,8 @@ public class SalesOrderServiceImpl implements SalesOrderService {
 
     @Override
     @Transactional
-    public CheckoutResult checkout(UUID orderId, String idempotencyKey, String tenderType) {
+    public CheckoutResult checkout(
+            UUID orderId, String idempotencyKey, String tenderType, @Nullable BigDecimal tenderedAmount) {
         String key = normalizeBlank(idempotencyKey);
         if (key == null) {
             throw new SalesOrderRequestValidationException("Idempotency-Key is required for checkout");
@@ -485,6 +566,9 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         boolean onAccount = ON_ACCOUNT.equals(tender);
         if (!onAccount && tender != null && !"DEFAULT".equals(tender)) {
             throw new SalesOrderRequestValidationException("Unsupported tenderType: " + tenderType);
+        }
+        if (tenderedAmount != null && tenderedAmount.signum() < 0) {
+            throw new SalesOrderRequestValidationException("tenderedAmount must not be negative");
         }
         SalesOrder order =
                 salesOrderRepository.findById(orderId).orElseThrow(() -> new SalesOrderNotFoundException(orderId));
@@ -501,11 +585,22 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         if (order.getLines().stream().filter(Objects::nonNull).findAny().isEmpty()) {
             throw new SalesOrderUnprocessableException("Cannot check out an empty cart");
         }
+        // CAP:550 S8 (decision AW12): every sale reaches the invoice and the ledger with a real
+        // party. Refused before any demand is registered, and never repaired by assigning the
+        // house account — Walk-in is only ever the cashier's explicit choice.
+        if (order.getCustomerId() == null) {
+            throw checkoutRefused(order, CODE_CUSTOMER_REQUIRED, new OrderCustomerRequiredException());
+        }
         // Resolved Q8: PENDING customer validation hard-blocks financially consequential
         // transitions; the cart stays workable until CRM resolves.
         if (order.getCustomerValidationStatus() == CustomerValidationStatus.PENDING) {
             throw new InvalidCustomerException(
                     "Customer validation is pending; checkout is blocked until CRM confirms the customer");
+        }
+        boolean walkIn = houseAccounts.isCashSale(order.getCustomerId());
+        WalkInNotAllowedException.Reason blocker = walkIn ? walkInBlocker(order, onAccount) : null;
+        if (blocker != null) {
+            throw checkoutRefused(order, CODE_WALK_IN_NOT_ALLOWED, new WalkInNotAllowedException(blocker));
         }
         if (onAccount) {
             requireOnAccountEligibility(order);
@@ -517,6 +612,16 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         // Final reprice (no stale prices, spec R2.1) + authoritative tax before the freeze.
         repriceLines(order, true);
         orderTaxService.recomputeTax(order);
+
+        // A walk-in sale is paid in full now: the declared cash and card must cover the total the
+        // server just computed — never a client preview. Sits with the tax-unavailable refusal, so
+        // reservation requests already sent behave exactly as they do for that refusal.
+        if (walkIn && (tenderedAmount == null || tenderedAmount.compareTo(order.getGrandTotal()) < 0)) {
+            throw checkoutRefused(
+                    order,
+                    CODE_WALK_IN_NOT_PAID_IN_FULL,
+                    new WalkInNotPaidInFullException(order.getGrandTotal(), tenderedAmount));
+        }
 
         orderStateMachine.transition(order, SalesOrderStatus.PENDING_PAYMENT, "checkout");
         order.setCheckoutIdempotencyKey(key);
@@ -594,6 +699,39 @@ public class SalesOrderServiceImpl implements SalesOrderService {
             publisher.requestReservation(
                     line.getOrderLineId(), stockItemId, BigDecimal.valueOf(line.getQuantity()), locationId, null);
         }
+    }
+
+    /**
+     * Walk-in eligibility (CAP:550 S8, decision AW12): the CASH house account is only for a sale
+     * paid in full now, so a walk-in cart is never charged on account, never a deposit take and
+     * never workorder-linked. Checked when the customer is set, when a source is linked and again
+     * at checkout before any demand is registered.
+     *
+     * @return why the walk-in customer is refused on this cart, or null when it is eligible
+     */
+    private static WalkInNotAllowedException.@Nullable Reason walkInBlocker(SalesOrder order, boolean onAccount) {
+        if (onAccount) {
+            return WalkInNotAllowedException.Reason.ON_ACCOUNT;
+        }
+        if (order.getDepositSourceType() != null) {
+            return WalkInNotAllowedException.Reason.DEPOSIT;
+        }
+        return isWorkorderLinked(order) ? WalkInNotAllowedException.Reason.WORKORDER_LINK : null;
+    }
+
+    /** Logs a customer or walk-in refusal with the order number, the wire code and the reason. */
+    private static <E extends RuntimeException> E refused(SalesOrder order, String code, E refusal) {
+        log.info("Order {} refused: {} ({})", order.getOrderNumber(), code, refusal.getMessage());
+        return refusal;
+    }
+
+    /** As {@link #refused}, and counted on {@code order.checkout.refused} tagged by code. */
+    private <E extends RuntimeException> E checkoutRefused(SalesOrder order, String code, E refusal) {
+        MeterRegistry registry = meterRegistry.getIfAvailable();
+        if (registry != null) {
+            registry.counter(CHECKOUT_REFUSED_COUNTER, "code", code).increment();
+        }
+        return refused(order, code, refusal);
     }
 
     /**
@@ -727,14 +865,18 @@ public class SalesOrderServiceImpl implements SalesOrderService {
      * quoting. Reject when the order references a workorder directly or via imported lines.
      */
     private void requireNoWorkorderLink(SalesOrder order) {
-        boolean workorderLinked = order.getWorkOrderId() != null
-                || order.getLines().stream()
-                        .filter(Objects::nonNull)
-                        .anyMatch(l -> SourceType.WORKORDER.equals(l.getSourceType()));
-        if (workorderLinked) {
+        if (isWorkorderLinked(order)) {
             throw new SalesOrderUnprocessableException(
                     "QUOTE_NOT_ALLOWED_FOR_WORKORDER: workorder-linked orders are quoted via pos-workorder estimates");
         }
+    }
+
+    /** The order references a workorder directly or through imported WORKORDER lines. */
+    private static boolean isWorkorderLinked(SalesOrder order) {
+        return order.getWorkOrderId() != null
+                || order.getLines().stream()
+                        .filter(Objects::nonNull)
+                        .anyMatch(l -> SourceType.WORKORDER.equals(l.getSourceType()));
     }
 
     private void repriceLines(SalesOrder order, boolean failOnUnavailable) {
@@ -935,19 +1077,24 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 line.getReturnable());
     }
 
-    private SalesOrderSummary toListSummary(SalesOrder order) {
-        return toSummary(order, List.of());
-    }
-
     private SalesOrderSummary toSummary(SalesOrder order) {
         List<SalesOrderLineSummary> lines = order.getLines().stream()
                 .filter(Objects::nonNull)
                 .map(this::toLineSummary)
                 .toList();
-        return toSummary(order, lines);
+        ExtCustomer customer = order.getCustomerId() == null
+                ? null
+                : extCustomerRepository.findById(order.getCustomerId()).orElse(null);
+        return toSummary(order, lines, customer);
     }
 
-    private SalesOrderSummary toSummary(SalesOrder order, List<SalesOrderLineSummary> lines) {
+    /**
+     * @param customer the replica row of the order's customer, or null when the order has none or
+     *     the replica does not know it; walk-in and the display name are derived from it, never
+     *     stored on the order
+     */
+    private SalesOrderSummary toSummary(
+            SalesOrder order, List<SalesOrderLineSummary> lines, @Nullable ExtCustomer customer) {
         return new SalesOrderSummary(
                 order.getOrderId().toString(),
                 order.getOrderNumber(),
@@ -981,6 +1128,8 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 order.getUpdatedAt(),
                 order.getCreatedBy(),
                 order.getUpdatedBy(),
+                HouseAccountReplica.isCashSale(customer),
+                customer != null ? customer.getDisplayName() : null,
                 lines);
     }
 }

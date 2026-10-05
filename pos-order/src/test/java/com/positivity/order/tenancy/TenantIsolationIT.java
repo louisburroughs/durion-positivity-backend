@@ -6,10 +6,24 @@ import static com.positivity.tenancy.testing.TenantTestSupport.asTenant;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.domainevents.customer.CustomerPartyUpdatedV1;
+import com.positivity.order.internal.entity.ExtCustomer;
 import com.positivity.order.internal.entity.OrderNumberSequence;
+import com.positivity.order.internal.entity.SalesOrder;
+import com.positivity.order.internal.entity.SalesOrderStatus;
+import com.positivity.order.internal.exception.WalkInUnavailableException;
+import com.positivity.order.internal.repository.ExtCustomerRepository;
 import com.positivity.order.internal.repository.OrderNumberSequenceRepository;
+import com.positivity.order.internal.repository.SalesOrderRepository;
+import com.positivity.order.internal.service.HouseAccountReplica;
+import com.positivity.order.internal.service.SalesOrderService;
+import com.positivity.order.internal.service.model.SalesOrderSummary;
+import com.positivity.order.internal.service.model.SetCartCustomerCommand;
 import com.positivity.tenancy.TenantContext;
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -34,6 +48,18 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
 
     @Autowired
     private DataSource dataSource;
+
+    @Autowired
+    private ExtCustomerRepository customers;
+
+    @Autowired
+    private SalesOrderRepository orders;
+
+    @Autowired
+    private HouseAccountReplica houseAccounts;
+
+    @Autowired
+    private SalesOrderService salesOrderService;
 
     @AfterEach
     void clear() {
@@ -86,6 +112,74 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
                 () -> assertThat(sequences.findById(key).orElseThrow().getNextValue())
                         .as("tenant B's UPDATE touched nothing")
                         .isEqualTo(7L));
+    }
+
+    /**
+     * CAP:550 S8 AC9: Walk-in resolves the bound tenant's CASH house account and nobody else's. A
+     * tenant whose replica holds none is refused ({@code ORDER_WALK_IN_UNAVAILABLE}) even while
+     * another tenant's house account sits in the same table, and once it has its own, that is the
+     * one resolved.
+     */
+    @Test
+    void walkInResolvesOnlyTheBoundTenantsHouseAccount() {
+        UUID houseA = UUID.randomUUID();
+        UUID houseB = UUID.randomUUID();
+        asTenant(TENANT_A, () -> customers.saveAndFlush(houseAccount(houseA)));
+
+        AtomicReference<UUID> cartB = new AtomicReference<>();
+        asTenant(TENANT_B, () -> {
+            assertThat(houseAccounts.findActiveCashSale())
+                    .as("tenant B holds no house account; tenant A's is invisible")
+                    .isEmpty();
+            assertThat(houseAccounts.isCashSale(houseA))
+                    .as("tenant A's house account is not a walk-in customer for tenant B")
+                    .isFalse();
+
+            cartB.set(orders.saveAndFlush(draftCart()).getOrderId());
+            assertThatThrownBy(() -> salesOrderService.setCartCustomer(
+                            cartB.get(), new SetCartCustomerCommand(null, true, null)))
+                    .isInstanceOf(WalkInUnavailableException.class);
+            assertThat(orders.findById(cartB.get()).orElseThrow().getCustomerId())
+                    .as("no other tenant's house account was put on the cart")
+                    .isNull();
+
+            customers.saveAndFlush(houseAccount(houseB));
+            SalesOrderSummary walkIn =
+                    salesOrderService.setCartCustomer(cartB.get(), new SetCartCustomerCommand(null, true, null));
+            assertThat(walkIn.customerId()).isEqualTo(houseB.toString());
+            assertThat(walkIn.walkIn()).isTrue();
+        });
+
+        asTenant(
+                TENANT_A,
+                () -> assertThat(
+                                houseAccounts.findActiveCashSale().orElseThrow().getPartyId())
+                        .as("tenant A still resolves its own")
+                        .isEqualTo(houseA));
+    }
+
+    private static ExtCustomer houseAccount(UUID partyId) {
+        return ExtCustomer.builder()
+                .partyId(partyId)
+                .status("ACTIVE")
+                .displayName("Walk-in customer")
+                .partyType("COMMERCIAL")
+                .requirementsMet(true)
+                .houseAccount(CustomerPartyUpdatedV1.HOUSE_ACCOUNT_CASH_SALE)
+                .aggregateVersion(1)
+                .syncedAt(Instant.now())
+                .build();
+    }
+
+    private static SalesOrder draftCart() {
+        return SalesOrder.builder()
+                .clerkId("clerk-tenancy")
+                .terminalId("terminal-tenancy")
+                .status(SalesOrderStatus.DRAFT)
+                .subtotal(BigDecimal.ZERO.setScale(4))
+                .createdBy("tenancy-it")
+                .updatedBy("tenancy-it")
+                .build();
     }
 
     private static int countByLocation(JdbcTemplate jdbc, UUID locationId) {

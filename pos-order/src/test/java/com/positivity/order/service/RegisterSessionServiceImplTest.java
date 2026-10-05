@@ -82,6 +82,9 @@ class RegisterSessionServiceImplTest {
     @Mock
     private OrderDomainEventPublisher domainEventPublisher;
 
+    private final com.positivity.order.internal.repository.ExtCustomerRepository extCustomerRepository =
+            org.mockito.Mockito.mock(com.positivity.order.internal.repository.ExtCustomerRepository.class);
+
     private RegisterSessionServiceImpl service;
 
     @org.junit.jupiter.api.BeforeEach
@@ -92,6 +95,7 @@ class RegisterSessionServiceImplTest {
                 salesOrderRepository,
                 paymentRecordRepository,
                 domainEventPublisher,
+                new com.positivity.order.internal.service.HouseAccountReplica(extCustomerRepository),
                 clock);
         ReflectionTestUtils.setField(service, "authorizedDifferenceLimit", new BigDecimal("5.00"));
         // Default caller: a pre-rollout token (no loc_* claims), which ADR-0061 treats as unscoped
@@ -351,6 +355,87 @@ class RegisterSessionServiceImplTest {
         assertThat(report.theoreticalCash()).isEqualByComparingTo("130.00");
         assertThat(report.cashMovements()).isEqualByComparingTo("-20.00");
         assertThat(report.reportType()).isEqualTo("X");
+    }
+
+    private static final UUID HOUSE_ACCOUNT_ID = UUID.fromString("00000000-0000-0000-0000-0000000000c1");
+
+    private static com.positivity.order.internal.entity.SalesOrder sessionOrder(
+            UUID sessionId, String clerkId, SalesOrderStatus status, UUID customerId, String grandTotal) {
+        return com.positivity.order.internal.entity.SalesOrder.builder()
+                .orderId(UUID.randomUUID())
+                .sessionId(sessionId)
+                .clerkId(clerkId)
+                .terminalId(TERMINAL)
+                .status(status)
+                .customerId(customerId)
+                .subtotal(new BigDecimal(grandTotal))
+                .grandTotal(new BigDecimal(grandTotal))
+                .build();
+    }
+
+    @Test
+    @DisplayName("RSS-W1 (CAP:550 S8 AC7): X and Z reports carry the walk-in share per cashier")
+    void report_walkInShareByClerk() {
+        UUID id = UUID.randomUUID();
+        UUID registered = UUID.randomUUID();
+        when(registerSessionRepository.findById(id)).thenReturn(Optional.of(openSession(id)));
+        when(paymentRecordRepository.findBySessionId(id)).thenReturn(List.of());
+        when(cashMovementRepository.findBySessionIdOrderByOccurredAtAsc(id)).thenReturn(List.of());
+        when(salesOrderRepository.findBySessionId(id))
+                .thenReturn(List.of(
+                        // Clerk A: three orders that left DRAFT, one of them a walk-in sale.
+                        sessionOrder(id, "clerk-a", SalesOrderStatus.COMPLETED, HOUSE_ACCOUNT_ID, "84.3700"),
+                        sessionOrder(id, "clerk-a", SalesOrderStatus.COMPLETED, registered, "40.0000"),
+                        sessionOrder(id, "clerk-a", SalesOrderStatus.PENDING_PAYMENT, registered, "12.0000"),
+                        // Clerk B: two orders, no walk-in.
+                        sessionOrder(id, "clerk-b", SalesOrderStatus.COMPLETED, registered, "15.0000"),
+                        sessionOrder(id, "clerk-b", SalesOrderStatus.VOIDED, null, "9.0000"),
+                        // Still DRAFT: counted for nobody, walk-in or not.
+                        sessionOrder(id, "clerk-a", SalesOrderStatus.DRAFT, HOUSE_ACCOUNT_ID, "500.0000"),
+                        sessionOrder(id, "clerk-c", SalesOrderStatus.DRAFT, null, "1.0000")));
+        when(extCustomerRepository.findAllById(any()))
+                .thenReturn(List.of(
+                        com.positivity.order.internal.entity.ExtCustomer.builder()
+                                .partyId(HOUSE_ACCOUNT_ID)
+                                .status("ACTIVE")
+                                .houseAccount(
+                                        com.positivity.domainevents.customer.CustomerPartyUpdatedV1
+                                                .HOUSE_ACCOUNT_CASH_SALE)
+                                .build(),
+                        com.positivity.order.internal.entity.ExtCustomer.builder()
+                                .partyId(registered)
+                                .status("ACTIVE")
+                                .displayName("Walk-in customer")
+                                .build()));
+
+        for (SessionReport report : List.of(service.xReport(id), service.zReport(id))) {
+            assertThat(report.orderCount())
+                    .as("orderCount is unchanged: every session order")
+                    .isEqualTo(7);
+            assertThat(report.walkInByClerk()).hasSize(2);
+            SessionReport.ClerkWalkInShare a = report.walkInByClerk().get(0);
+            assertThat(a.clerkId()).isEqualTo("clerk-a");
+            assertThat(a.orderCount()).isEqualTo(3);
+            assertThat(a.walkInOrderCount()).isEqualTo(1);
+            assertThat(a.walkInTotal()).isEqualByComparingTo("84.37");
+            SessionReport.ClerkWalkInShare b = report.walkInByClerk().get(1);
+            assertThat(b.clerkId()).isEqualTo("clerk-b");
+            assertThat(b.orderCount()).isEqualTo(2);
+            assertThat(b.walkInOrderCount()).isZero();
+            assertThat(b.walkInTotal()).isEqualByComparingTo("0.00");
+        }
+    }
+
+    @Test
+    @DisplayName("RSS-W2: a session with no orders past DRAFT reports an empty walk-in share")
+    void report_walkInShareEmpty() {
+        UUID id = UUID.randomUUID();
+        when(registerSessionRepository.findById(id)).thenReturn(Optional.of(openSession(id)));
+        when(paymentRecordRepository.findBySessionId(id)).thenReturn(List.of());
+        when(cashMovementRepository.findBySessionIdOrderByOccurredAtAsc(id)).thenReturn(List.of());
+        when(salesOrderRepository.findBySessionId(id)).thenReturn(List.of());
+
+        assertThat(service.xReport(id).walkInByClerk()).isEmpty();
     }
 
     @Test

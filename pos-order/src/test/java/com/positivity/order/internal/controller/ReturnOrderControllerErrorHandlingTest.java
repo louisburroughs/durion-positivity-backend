@@ -4,12 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.order.BaseControllerSliceTest;
 import com.positivity.order.internal.exception.ReturnLineNotReturnableException;
 import com.positivity.order.internal.exception.ReturnRequestValidationException;
+import com.positivity.order.internal.exception.ReturnWalkInNotAllowedException;
 import com.positivity.order.internal.service.ReturnOrderService;
 import com.positivity.security.common.GatewaySecurityConfig;
 import com.positivity.web.common.WebCommonErrorAutoConfiguration;
@@ -18,6 +20,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
@@ -64,6 +67,28 @@ class ReturnOrderControllerErrorHandlingTest extends BaseControllerSliceTest {
         mockMvc.perform(withGatewayAuth(get("/v1/returns/{returnOrderId}", RETURN_ID), "order:return:view"))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("RETURN_LINE_NOT_RETURNABLE"))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("a credit refund of a walk-in sale answers 422 RETURN_WALK_IN_NOT_ALLOWED (CAP:550 S8)")
+    void aCreditRefundOfAWalkInSaleAnswers422WithItsOwnCode() throws Exception {
+        when(returnOrderService.createReturn(any())).thenThrow(new ReturnWalkInNotAllowedException("STORE_CREDIT"));
+
+        mockMvc.perform(withGatewayAuth(
+                        post("/v1/returns")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {"originalOrderId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01",
+                                         "refundMethod":"STORE_CREDIT",
+                                         "lines":[{"originalOrderLineId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a02",
+                                                   "returnQty":1,"condition":"RESTOCK"}]}
+                                        """),
+                        "order:return:create"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("RETURN_WALK_IN_NOT_ALLOWED"))
+                .andExpect(jsonPath("$.status").value(422))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("STORE_CREDIT")))
                 .andExpect(jsonPath("$.correlationId").isNotEmpty());
     }
 

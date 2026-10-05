@@ -87,6 +87,39 @@ class TenancySchemaConformanceIT extends PostgresTenancyTestBase {
                 .containsAll(global);
     }
 
+    /**
+     * CAP:550 S8 (V3): the house-account flag lives on the tenant-scoped customer replica, so it
+     * is covered by the same forced row-level security as the rest of the row — no new table, no
+     * new policy. Nullable, because ordinary parties and rows replicated before the flag existed
+     * carry none.
+     */
+    @Test
+    void theCustomerReplicaCarriesTheHouseAccountFlagUnderTheSameTenantPolicy() {
+        JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
+        Map<String, Object> column = owner.queryForMap("""
+                SELECT data_type, character_maximum_length, is_nullable, column_default
+                  FROM information_schema.columns
+                 WHERE table_schema = 'public' AND table_name = 'ext_customer' AND column_name = 'house_account'
+                """);
+        assertThat(column.get("data_type")).isEqualTo("character varying");
+        assertThat(column.get("character_maximum_length")).isEqualTo(20);
+        assertThat(column.get("is_nullable")).isEqualTo("YES");
+        assertThat(column.get("column_default")).isNull();
+
+        Map<String, Object> table = owner.queryForMap("""
+                SELECT c.relrowsecurity AS rls_enabled, c.relforcerowsecurity AS rls_forced,
+                       (SELECT count(*) FROM pg_policies p
+                         WHERE p.schemaname = 'public' AND p.tablename = 'ext_customer') AS policies
+                  FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                 WHERE n.nspname = 'public' AND c.relname = 'ext_customer'
+                """);
+        assertThat(table.get("rls_enabled")).isEqualTo(true);
+        assertThat(table.get("rls_forced")).isEqualTo(true);
+        assertThat(((Number) table.get("policies")).intValue())
+                .as("still exactly the tenant_isolation policy")
+                .isEqualTo(1);
+    }
+
     @Test
     void theApplicationConnectsAsANonOwnerRoleWithNoBypass() {
         JdbcTemplate app = new JdbcTemplate(applicationDataSource);

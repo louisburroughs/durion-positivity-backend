@@ -161,6 +161,9 @@ public class CustomerEventsListener {
         replica.setDisplayName(payload.path("displayName").stringValue(null));
         replica.setPartyType(payload.path("partyType").stringValue(null));
         replica.setRequirementsMet(payload.path("requirementsMet").booleanValue(false));
+        // CAP:550 S8: absent on envelopes published before the field existed, which leaves the
+        // row unflagged until a party-fact replay resends it.
+        replica.setHouseAccount(payload.path("houseAccount").stringValue(null));
         replica.setAggregateVersion(aggregateVersion);
         replica.setSyncedAt(Instant.now(clock));
         extCustomerRepository.save(replica);

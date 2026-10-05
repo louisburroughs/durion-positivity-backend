@@ -7,15 +7,26 @@ import com.positivity.order.internal.service.model.CreateCartResult;
 import com.positivity.order.internal.service.model.OrderDiscountCommand;
 import com.positivity.order.internal.service.model.SalesOrderLineSummary;
 import com.positivity.order.internal.service.model.SalesOrderSummary;
+import com.positivity.order.internal.service.model.SetCartCustomerCommand;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 public interface SalesOrderService {
 
     @NonNull
     CreateCartResult createCart(@NonNull CreateCartCommand command);
+
+    /**
+     * Sets or changes a DRAFT cart's customer (CAP:550 S8, decision AW12): a registered customer,
+     * validated as at creation, or the tenant's CASH house account by an explicit Walk-in choice.
+     * A walk-in cart must be walk-in eligible (no deposit take, no workorder link), and a cart
+     * with a linked WORKORDER source keeps the customer it was linked under.
+     */
+    @NonNull
+    SalesOrderSummary setCartCustomer(@NonNull UUID orderId, @NonNull SetCartCustomerCommand command);
 
     @NonNull
     SalesOrderLineSummary addItem(@NonNull UUID orderId, @NonNull AddItemCommand command);
@@ -82,9 +93,23 @@ public interface SalesOrderService {
      * Idempotent on the required {@code Idempotency-Key}; settlement completion is asynchronous
      * (story C3). With {@code tenderType = ON_ACCOUNT} (story C4, spec R4.5) the accepted AR
      * invoice counts as settlement and the order completes synchronously.
+     *
+     * <p>CAP:550 S8 (decision AW12): the cart must name a customer. When that customer is the
+     * tenant's CASH house account (a walk-in cart) the sale is never on account, a deposit take or
+     * workorder-linked, and {@code tenderedAmount} — the cash and card being taken now — must
+     * cover the final grand total. For any other cart {@code tenderedAmount} is ignored.
      */
     @NonNull
-    CheckoutResult checkout(@NonNull UUID orderId, @NonNull String idempotencyKey, String tenderType);
+    CheckoutResult checkout(
+            @NonNull UUID orderId,
+            @NonNull String idempotencyKey,
+            String tenderType,
+            @Nullable BigDecimal tenderedAmount);
+
+    @NonNull
+    default CheckoutResult checkout(@NonNull UUID orderId, @NonNull String idempotencyKey, String tenderType) {
+        return checkout(orderId, idempotencyKey, tenderType, null);
+    }
 
     @NonNull
     default CheckoutResult checkout(@NonNull UUID orderId, @NonNull String idempotencyKey) {

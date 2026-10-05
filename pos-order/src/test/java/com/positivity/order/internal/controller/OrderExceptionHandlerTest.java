@@ -8,6 +8,7 @@ import com.positivity.order.internal.exception.InvalidCustomerException;
 import com.positivity.order.internal.exception.InvalidPriceOverrideException;
 import com.positivity.order.internal.exception.InvalidSkuException;
 import com.positivity.order.internal.exception.InvoicingUnavailableException;
+import com.positivity.order.internal.exception.OrderCustomerRequiredException;
 import com.positivity.order.internal.exception.OrderVoidBlockedException;
 import com.positivity.order.internal.exception.OverCapReturnException;
 import com.positivity.order.internal.exception.PriceOverrideIdempotencyConflictException;
@@ -21,14 +22,19 @@ import com.positivity.order.internal.exception.ReturnOrderNotFoundException;
 import com.positivity.order.internal.exception.ReturnOrderStateConflictException;
 import com.positivity.order.internal.exception.ReturnOrderUnprocessableException;
 import com.positivity.order.internal.exception.ReturnRequestValidationException;
+import com.positivity.order.internal.exception.ReturnWalkInNotAllowedException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.order.internal.exception.SalesOrderRequestValidationException;
 import com.positivity.order.internal.exception.SalesOrderUnprocessableException;
 import com.positivity.order.internal.exception.SessionCloseBlockedException;
 import com.positivity.order.internal.exception.TaxUnavailableException;
+import com.positivity.order.internal.exception.WalkInNotAllowedException;
+import com.positivity.order.internal.exception.WalkInNotPaidInFullException;
+import com.positivity.order.internal.exception.WalkInUnavailableException;
 import com.positivity.order.internal.exception.WarrantyReturnRoutingException;
 import com.positivity.shared.error.ApiError;
 import jakarta.servlet.http.HttpServletRequest;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -216,6 +222,35 @@ class OrderExceptionHandlerTest {
         }
 
         @Test
+        @DisplayName("maps the customer and walk-in refusals to 422 with their own codes (CAP:550 S8)")
+        void customerRequiredAndWalkIn() {
+            ResponseEntity<ApiError> customerRequired =
+                    salesOrder.handleCustomerRequired(new OrderCustomerRequiredException(), request);
+            assertEnvelope(customerRequired, HttpStatus.UNPROCESSABLE_CONTENT, "ORDER_CUSTOMER_REQUIRED");
+            assertThat(customerRequired.getBody().message()).isEqualTo("Choose a customer before taking payment");
+            assertThat(customerRequired.getBody().fieldErrors()).isNull();
+
+            assertEnvelope(
+                    salesOrder.handleWalkInUnavailable(new WalkInUnavailableException(), request),
+                    HttpStatus.UNPROCESSABLE_CONTENT,
+                    "ORDER_WALK_IN_UNAVAILABLE");
+
+            for (WalkInNotAllowedException.Reason reason : WalkInNotAllowedException.Reason.values()) {
+                ResponseEntity<ApiError> notAllowed =
+                        salesOrder.handleWalkInNotAllowed(new WalkInNotAllowedException(reason), request);
+                assertEnvelope(notAllowed, HttpStatus.UNPROCESSABLE_CONTENT, "ORDER_WALK_IN_NOT_ALLOWED");
+                assertThat(notAllowed.getBody().fieldErrors())
+                        .containsExactly(new ApiError.FieldError("walkIn", reason.name()));
+            }
+
+            ResponseEntity<ApiError> notPaidInFull = salesOrder.handleWalkInNotPaidInFull(
+                    new WalkInNotPaidInFullException(new BigDecimal("84.3700"), new BigDecimal("80.00")), request);
+            assertEnvelope(notPaidInFull, HttpStatus.UNPROCESSABLE_CONTENT, "ORDER_WALK_IN_NOT_PAID_IN_FULL");
+            assertThat(notPaidInFull.getBody().fieldErrors())
+                    .containsExactly(new ApiError.FieldError("tenderedAmount", "must cover the grand total 84.37"));
+        }
+
+        @Test
         @DisplayName("maps a domain-policy refusal to 422 ORDER_UNPROCESSABLE")
         void unprocessableRequest() {
             // #1730: a structurally valid cart request a rule refuses on its merits — an empty
@@ -312,6 +347,17 @@ class OrderExceptionHandlerTest {
                                         new InvoicingUnavailableException("invoicing down"), request)),
                         Named.of("handleInvalidCustomer", (HandlerInvocation) request ->
                                 handler.handleInvalidCustomer(new InvalidCustomerException("unknown party"), request)),
+                        Named.of("handleCustomerRequired", (HandlerInvocation) request ->
+                                handler.handleCustomerRequired(new OrderCustomerRequiredException(), request)),
+                        Named.of("handleWalkInUnavailable", (HandlerInvocation)
+                                request -> handler.handleWalkInUnavailable(new WalkInUnavailableException(), request)),
+                        Named.of(
+                                "handleWalkInNotAllowed", (HandlerInvocation) request -> handler.handleWalkInNotAllowed(
+                                        new WalkInNotAllowedException(WalkInNotAllowedException.Reason.DEPOSIT),
+                                        request)),
+                        Named.of("handleWalkInNotPaidInFull", (HandlerInvocation)
+                                request -> handler.handleWalkInNotPaidInFull(
+                                        new WalkInNotPaidInFullException(new BigDecimal("84.37"), null), request)),
                         Named.of("handleInvalidSku", (HandlerInvocation) request ->
                                 handler.handleInvalidSku(new InvalidSkuException("BAD", "no such sku"), request)),
                         Named.of("handleUnprocessableRequest", (HandlerInvocation)
@@ -433,6 +479,15 @@ class OrderExceptionHandlerTest {
         }
 
         @Test
+        @DisplayName("maps a credit refund of a walk-in sale to 422 RETURN_WALK_IN_NOT_ALLOWED (CAP:550 S8)")
+        void walkInCreditRefund() {
+            assertEnvelope(
+                    returns.handleWalkInNotAllowed(new ReturnWalkInNotAllowedException("STORE_CREDIT"), request),
+                    HttpStatus.UNPROCESSABLE_CONTENT,
+                    "RETURN_WALK_IN_NOT_ALLOWED");
+        }
+
+        @Test
         @DisplayName("maps a rejected state transition to 409, the same status every advice now answers")
         void stateConflictIsAConflictHere() {
             assertEnvelope(
@@ -508,6 +563,9 @@ class OrderExceptionHandlerTest {
                                 new ReturnOrderUnprocessableException(
                                         "No invoice on the original order to refund against"),
                                 request)),
+                        Named.of(
+                                "handleWalkInNotAllowed", (HandlerInvocation) request -> handler.handleWalkInNotAllowed(
+                                        new ReturnWalkInNotAllowedException("STORE_CREDIT"), request)),
                         Named.of("handleInvalidRequest", (HandlerInvocation) request -> handler.handleInvalidRequest(
                                 new ReturnRequestValidationException("qty must be positive"), request)),
                         Named.of("handleLineNotReturnable", (HandlerInvocation) request ->

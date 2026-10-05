@@ -35,6 +35,8 @@ public record SalesOrderSummary(
         Instant updatedAt,
         String createdBy,
         String updatedBy,
+        boolean walkIn,
+        String customerDisplayName,
         List<SalesOrderLineSummary> lines) {
 
     public SalesOrderSummary {

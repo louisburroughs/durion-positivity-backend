@@ -45,6 +45,14 @@ public class ExtCustomer extends TenantScopedEntity {
     @Column(nullable = false)
     private boolean requirementsMet;
 
+    /**
+     * Owner's house-account kind ({@code CASH_SALE} for the tenant's walk-in account); null for
+     * every ordinary party. The flag is the only thing that marks a walk-in customer — never the
+     * name or the customer number (CAP:550 S8).
+     */
+    @Column(name = "house_account", length = 20)
+    private String houseAccount;
+
     /** Envelope aggregateVersion of the last applied event — stale-event guard. */
     @Column(nullable = false)
     private long aggregateVersion;

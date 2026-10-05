@@ -117,6 +117,54 @@ class CustomerEventsListenerTest {
         assertThat(saved.getSyncedAt()).isEqualTo(NOW);
     }
 
+    private static String houseAccountEnvelope(long version) {
+        return """
+                {"eventId":"evt-house","eventType":"%s","aggregateVersion":%d,
+                 "payload":{"partyId":"%s","status":"ACTIVE","displayName":"Walk-in customer",
+                   "customerNumber":"CASH","partyType":"COMMERCIAL","requirementsMet":true,
+                   "houseAccount":"%s"}}
+                """.formatted(
+                CustomerPartyUpdatedV1.EVENT_TYPE, version, PARTY_ID, CustomerPartyUpdatedV1.HOUSE_ACCOUNT_CASH_SALE);
+    }
+
+    @Test
+    @DisplayName("stores the house-account flag from the party fact (CAP:550 S8)")
+    void storesHouseAccountFlag() {
+        listener.onCustomerEvent(houseAccountEnvelope(1));
+
+        ArgumentCaptor<ExtCustomer> captor = ArgumentCaptor.forClass(ExtCustomer.class);
+        verify(extCustomerRepository).save(captor.capture());
+        assertThat(captor.getValue().getHouseAccount()).isEqualTo("CASH_SALE");
+        assertThat(captor.getValue().getDisplayName()).isEqualTo("Walk-in customer");
+    }
+
+    @Test
+    @DisplayName("an ordinary party, or a payload published before the field existed, carries no flag")
+    void ordinaryPartyCarriesNoHouseAccountFlag() {
+        listener.onCustomerEvent(updateEnvelope(3));
+
+        ArgumentCaptor<ExtCustomer> captor = ArgumentCaptor.forClass(ExtCustomer.class);
+        verify(extCustomerRepository).save(captor.capture());
+        assertThat(captor.getValue().getHouseAccount()).isNull();
+    }
+
+    @Test
+    @DisplayName("a party-fact replay at the held version fills the flag on an existing row")
+    void replayFillsHouseAccountFlagOnExistingRow() {
+        ExtCustomer existing = new ExtCustomer();
+        existing.setPartyId(PARTY_ID);
+        existing.setStatus("ACTIVE");
+        existing.setAggregateVersion(5);
+        when(extCustomerRepository.findById(PARTY_ID)).thenReturn(Optional.of(existing));
+
+        listener.onCustomerEvent(houseAccountEnvelope(5));
+
+        ArgumentCaptor<ExtCustomer> captor = ArgumentCaptor.forClass(ExtCustomer.class);
+        verify(extCustomerRepository).save(captor.capture());
+        assertThat(captor.getValue()).isSameAs(existing);
+        assertThat(captor.getValue().getHouseAccount()).isEqualTo("CASH_SALE");
+    }
+
     @Test
     @DisplayName("defaults a missing status to UNKNOWN rather than storing null")
     void missingStatusBecomesUnknown() {

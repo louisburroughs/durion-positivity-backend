@@ -167,6 +167,8 @@ class SalesOrderControllerLocationScopeTest {
                 Instant.parse("2026-09-07T08:00:00Z"),
                 "clerk-1",
                 "clerk-1",
+                false,
+                null,
                 List.of());
     }
 

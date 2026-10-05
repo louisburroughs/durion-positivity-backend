@@ -59,6 +59,9 @@ class SalesOrderCheckoutTest {
     private static final UUID ORDER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID INVOICE_ID = UUID.fromString("00000000-0000-0000-0000-000000000009");
 
+    /** A registered customer: checkout refuses a cart without one (CAP:550 S8). */
+    private static final UUID CUSTOMER_ID = UUID.fromString("00000000-0000-0000-0000-000000000007");
+
     @Mock
     private SalesOrderRepository salesOrderRepository;
 
@@ -120,6 +123,11 @@ class SalesOrderCheckoutTest {
             inventoryCommandPublisherProvider =
                     org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class);
 
+    /** CAP:550 S8: no meter registry in these unit tests; refusals are logged but not counted. */
+    @SuppressWarnings("unchecked")
+    private final org.springframework.beans.factory.ObjectProvider<io.micrometer.core.instrument.MeterRegistry>
+            meterRegistryProvider = org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class);
+
     @BeforeEach
     void setUp() {
         salesOrderService = new SalesOrderServiceImpl(
@@ -140,7 +148,9 @@ class SalesOrderCheckoutTest {
                 orderNumberService,
                 new OrderTotalsCalculator(),
                 orderTaxService,
+                new com.positivity.order.internal.service.HouseAccountReplica(extCustomerRepository),
                 inventoryCommandPublisherProvider,
+                meterRegistryProvider,
                 java.time.Clock.systemUTC());
         when(salesOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(extProductRepository.findFirstBySkuIgnoreCaseAndActiveTrue(anyString()))
@@ -163,6 +173,7 @@ class SalesOrderCheckoutTest {
     private SalesOrder draftOrderWithLine() {
         SalesOrder order = SalesOrder.builder()
                 .orderId(ORDER_ID)
+                .customerId(CUSTOMER_ID)
                 .clerkId("clerk-1")
                 .terminalId("terminal-1")
                 .status(SalesOrderStatus.DRAFT)
@@ -336,6 +347,7 @@ class SalesOrderCheckoutTest {
     private SalesOrder depositTakeOrderWithTax() {
         SalesOrder order = SalesOrder.builder()
                 .orderId(ORDER_ID)
+                .customerId(CUSTOMER_ID)
                 .clerkId("clerk-1")
                 .terminalId("terminal-1")
                 .status(SalesOrderStatus.DRAFT)

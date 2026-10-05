@@ -64,7 +64,8 @@ public class ReturnOrderController {
                     line's remaining returnable quantity.
                     Preconditions: the original order must be COMPLETED, every line must be returnable (workorder \
                     consumed lines without an imported returnable flag are not), and each sold line may appear at \
-                    most once in the request.
+                    most once in the request. A return against a walk-in sale (the original order's customer is \
+                    the business's Walk-in customer) can only be refunded to ORIGINAL_TENDER.
                     Required inputs: originalOrderId (UUID), refundMethod (ORIGINAL_TENDER, STORE_CREDIT or \
                     ON_ACCOUNT_CREDIT), and at least one line with originalOrderLineId, a positive returnQty, and \
                     condition (RESTOCK, SCRAP or WARRANTY); reasonCode, per-line serialNumbers, and the \
@@ -76,8 +77,9 @@ public class ReturnOrderController {
                     line reference is duplicated or unknown, returnQty is not positive, or refundMethod/condition \
                     is unrecognised, 404 when the original order does not exist, 409 when the original order is \
                     not COMPLETED, and 422 when a line exceeds its returnable remainder (each offending line's \
-                    returnableQty is listed in fieldErrors), a line is not returnable, or a WARRANTY-condition \
-                    line must route to pos-warranty.
+                    returnableQty is listed in fieldErrors), a line is not returnable, a WARRANTY-condition \
+                    line must route to pos-warranty, or a walk-in sale is asked to refund to STORE_CREDIT or \
+                    ON_ACCOUNT_CREDIT (RETURN_WALK_IN_NOT_ALLOWED).
                     """,
             tags = {"Returns"})
     @PostMapping
