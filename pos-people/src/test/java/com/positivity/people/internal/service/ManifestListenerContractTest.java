@@ -230,8 +230,8 @@ class ManifestListenerContractTest {
                 .isInstanceOf(RuntimeException.class)
                 .hasMessage("broker down");
 
-        // Best effort by design: the metric already fired and the next manifest re-detects, so a
-        // broker outage must not take the consumer down with it.
+        // The drift metric fires before the send. The exception must reach the container's error
+        // handler (backoff, then {topic}.dlq): no later manifest covers this window again (#2452).
         assertThat(driftCount(listener.owner())).isEqualTo(1.0);
     }
 

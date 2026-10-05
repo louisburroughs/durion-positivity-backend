@@ -16,9 +16,10 @@ import org.springframework.kafka.core.KafkaTemplate;
  *
  * <p>The owners publish one manifest per consecutive, non-overlapping window, once, so no later
  * manifest re-detects a window whose replay request was lost. A request that cannot be sent, or that
- * the broker rejects, therefore leaves the listener as an exception: the container's error handler
- * retries the manifest with backoff and dead-letters it to {@code {topic}.dlq} when the retries run
- * out (ADR-0044 §4, {@code KafkaErrorHandlingConfig}). Redelivery is safe: the comparison is a read,
+ * the broker rejects, therefore leaves the listener as an exception for the container's error
+ * handler. This module has no {@code KafkaErrorHandlingConfig} yet, so Spring Kafka's default handler
+ * retries the manifest a few times and then logs and skips it; backoff and {@code {topic}.dlq}
+ * recovery (ADR-0044 §4) are tracked by #2483. Redelivery is safe: the comparison is a read,
  * and the command is keyed by window start, so a repeat asks the owner for the same idempotent
  * replay.
  */

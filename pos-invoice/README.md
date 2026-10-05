@@ -224,7 +224,7 @@ Uses Flyway with PostgreSQL. Migrations at `src/main/resources/db/migration`.
 
 A manifest listener that finds drift sends the owner's `outbox.replay-requested` command through
 `OutboxReplayRequests`, which waits up to 30s for the broker's acknowledgement. A request that cannot
-be handed to Kafka, that the broker rejects, or that is not acknowledged in time propagates to the container's error handler. This module declares no `KafkaErrorHandlingConfig` yet, so Spring Kafka's default handler retries and then logs and skips the record; a backoff and `{topic}.dlq` handler is still to be added (#2452).
+be handed to Kafka, that the broker rejects, or that is not acknowledged in time propagates to the container's error handler. This module declares no `KafkaErrorHandlingConfig` yet, so Spring Kafka's default handler retries and then logs and skips the record; a backoff and `{topic}.dlq` handler is still to be added (#2483).
 Swallowing it would lose the repair for good, because each owner publishes a window's manifest once
 and no later manifest covers that window again. Redelivery is safe: a manifest writes nothing, the
 comparison only reads, and the replay command is keyed by window start. A manifest that does not parse
