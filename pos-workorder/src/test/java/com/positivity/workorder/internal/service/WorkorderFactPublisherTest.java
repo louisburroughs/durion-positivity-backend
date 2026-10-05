@@ -18,14 +18,17 @@ import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.enums.ResourceType;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.repository.ServicePositionAssignmentRepository;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -54,6 +57,8 @@ class WorkorderFactPublisherTest {
     private final WorkorderServiceRepository workorderServiceRepository = mock(WorkorderServiceRepository.class);
     private final TechnicianAssignmentRepository technicianAssignmentRepository =
             mock(TechnicianAssignmentRepository.class);
+    private final ServicePositionAssignmentRepository servicePositionAssignmentRepository =
+            mock(ServicePositionAssignmentRepository.class);
     private final EntityManager entityManager = mock(EntityManager.class);
 
     private WorkorderFactPublisher publisher;
@@ -69,7 +74,9 @@ class WorkorderFactPublisherTest {
                 workorderPartRepository,
                 workorderServiceRepository,
                 technicianAssignmentRepository,
-                entityManager);
+                servicePositionAssignmentRepository,
+                entityManager,
+                Clock.systemUTC());
         TransactionSynchronizationManager.initSynchronization();
     }
 
@@ -483,6 +490,135 @@ class WorkorderFactPublisherTest {
             @Override
             public UUID getAppointmentId() {
                 return appointmentId;
+            }
+        };
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Position history (#2530)
+    // ---------------------------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("#2530 - the fact carries the whole position history, oldest first, as instants")
+    void publishesThePositionHistory() {
+        UUID workorderId = UUID.randomUUID();
+        UUID locationId = UUID.randomUUID();
+        UUID bayOne = UUID.randomUUID();
+        UUID bayTwo = UUID.randomUUID();
+        // A completed job: the workorder row no longer names a bay, the history still does.
+        Workorder workorder = Workorder.builder()
+                .id(workorderId)
+                .status(WorkorderStatus.COMPLETED)
+                .version(4L)
+                .build();
+        when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
+        when(workorderPartRepository.findByWorkorderId(workorderId)).thenReturn(List.of());
+        when(servicePositionAssignmentRepository.findHistory(Set.of(workorderId)))
+                .thenReturn(List.of(
+                        positionRow(
+                                workorderId,
+                                bayOne,
+                                locationId,
+                                LocalDateTime.parse("2026-10-05T09:00:00"),
+                                LocalDateTime.parse("2026-10-05T10:00:00")),
+                        positionRow(
+                                workorderId,
+                                bayTwo,
+                                locationId,
+                                LocalDateTime.parse("2026-10-05T10:00:00"),
+                                LocalDateTime.parse("2026-10-05T11:30:00"))));
+
+        publisher.markChanged(workorderId);
+        fireBeforeCommit();
+
+        ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(writer).publish(any(), anyInt(), any(), anyLong(), payloadCaptor.capture());
+        WorkorderUpdatedV1 fact = (WorkorderUpdatedV1) payloadCaptor.getValue();
+        assertThat(fact.resourceId()).isNull();
+        assertThat(fact.positions())
+                .containsExactly(
+                        new WorkorderUpdatedV1.PositionInterval(
+                                "BAY",
+                                bayOne,
+                                locationId,
+                                Instant.parse("2026-10-05T09:00:00Z"),
+                                Instant.parse("2026-10-05T10:00:00Z")),
+                        new WorkorderUpdatedV1.PositionInterval(
+                                "BAY",
+                                bayTwo,
+                                locationId,
+                                Instant.parse("2026-10-05T10:00:00Z"),
+                                Instant.parse("2026-10-05T11:30:00Z")));
+    }
+
+    @Test
+    @DisplayName("#2530 - a position still held publishes a null releasedAt; a workorder never placed, an empty list")
+    void publishesAnOpenPlacementAndAnEmptyHistory() {
+        UUID placedId = UUID.randomUUID();
+        UUID neverPlacedId = UUID.randomUUID();
+        UUID bay = UUID.randomUUID();
+        for (UUID id : List.of(placedId, neverPlacedId)) {
+            when(workorderRepository.findById(id))
+                    .thenReturn(Optional.of(Workorder.builder()
+                            .id(id)
+                            .status(WorkorderStatus.WORK_IN_PROGRESS)
+                            .version(1L)
+                            .build()));
+            when(workorderPartRepository.findByWorkorderId(id)).thenReturn(List.of());
+        }
+        when(servicePositionAssignmentRepository.findHistory(Set.of(placedId, neverPlacedId)))
+                .thenReturn(
+                        List.of(positionRow(placedId, bay, null, LocalDateTime.parse("2026-10-05T09:00:00"), null)));
+
+        publisher.markChanged(placedId);
+        publisher.markChanged(neverPlacedId);
+        fireBeforeCommit();
+
+        verify(servicePositionAssignmentRepository, times(1)).findHistory(any());
+        ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(writer, times(2)).publish(any(), anyInt(), any(), anyLong(), payloadCaptor.capture());
+        WorkorderUpdatedV1 placed =
+                (WorkorderUpdatedV1) payloadCaptor.getAllValues().get(0);
+        WorkorderUpdatedV1 neverPlaced =
+                (WorkorderUpdatedV1) payloadCaptor.getAllValues().get(1);
+        assertThat(placed.positions()).hasSize(1);
+        assertThat(placed.positions().get(0).releasedAt()).isNull();
+        assertThat(placed.positions().get(0).locationId()).isNull();
+        // Empty, not null: "never placed" is a statement, an absent field is not.
+        assertThat(neverPlaced.positions()).isEmpty();
+    }
+
+    private static ServicePositionAssignmentRepository.PositionInterval positionRow(
+            UUID workorderId, UUID bayId, UUID locationId, LocalDateTime assignedAt, LocalDateTime releasedAt) {
+        return new ServicePositionAssignmentRepository.PositionInterval() {
+            @Override
+            public UUID getWorkorderId() {
+                return workorderId;
+            }
+
+            @Override
+            public ResourceType getResourceType() {
+                return ResourceType.BAY;
+            }
+
+            @Override
+            public UUID getResourceId() {
+                return bayId;
+            }
+
+            @Override
+            public UUID getLocationId() {
+                return locationId;
+            }
+
+            @Override
+            public LocalDateTime getAssignedAt() {
+                return assignedAt;
+            }
+
+            @Override
+            public LocalDateTime getReleasedAt() {
+                return releasedAt;
             }
         };
     }

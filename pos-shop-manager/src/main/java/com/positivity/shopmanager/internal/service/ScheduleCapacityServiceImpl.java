@@ -4,12 +4,14 @@ import com.positivity.shopmanager.internal.dto.ScheduleCapacityResponse;
 import com.positivity.shopmanager.internal.entity.Appointment;
 import com.positivity.shopmanager.internal.entity.ExtBayReplica;
 import com.positivity.shopmanager.internal.entity.ExtLocationReplica;
+import com.positivity.shopmanager.internal.entity.ExtWorkorderPositionReplica;
 import com.positivity.shopmanager.internal.enums.ScheduleCapacityDayStatus;
 import com.positivity.shopmanager.internal.exception.ScheduleCapacityRangeExceededException;
 import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.ExtBayReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtLocationReplicaRepository;
+import com.positivity.shopmanager.internal.repository.ExtWorkorderPositionReplicaRepository;
 import com.positivity.shopmanager.internal.repository.WorkOrderAppointmentMappingRepository;
 import com.positivity.shopmanager.internal.repository.WorkorderActuals;
 import com.positivity.shopmanager.internal.service.LocationHoursParser.RawOperatingHoursEntry;
@@ -29,6 +31,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -62,7 +65,11 @@ import org.springframework.transaction.annotation.Transactional;
  *       (#2085). See {@code AppointmentRepository#findAppointmentsForCapacity}. The {@code EXISTS} is
  *       a subquery of that same statement, not a second one;
  *   <li>one batch workorder-actuals query for every appointment fetched by (3) — issued only when
- *       (3) returned at least one row, so a location with nothing booked still costs 3.
+ *       (3) returned at least one row, so a location with nothing booked still costs 3;
+ *   <li>one query over this module's {@code ext_workorder_position} replica for every bay held at
+ *       the location during the assembly window (#2530), appointment or not;
+ *   <li>one batch lookup of which of those workorders are linked to an appointment — issued only
+ *       when (5) returned at least one row.
  * </ol>
  *
  * <p>Building the per-day, per-bay occupancy — and now the carry-over overflow between days — from
@@ -163,6 +170,34 @@ import org.springframework.transaction.annotation.Transactional;
  * Monday 15:00 to Wednesday 22:00 with Tuesday malformed gives Monday 120, Tuesday {@code
  * UNAVAILABLE}, Wednesday its full 540, and the real 300-minute overrun onto Thursday. Only what
  * passes 1 could not reach is declined.
+ *
+ * <h2>What holds a bay (#2530)</h2>
+ *
+ * A date that has already happened answers "how busy was this bay", and a date still to come
+ * answers "what is booked for it". Both are built from the same unit, a {@link BayHold}: one bay,
+ * one window, one job. Holds come from two sources, and a job contributes through exactly one of
+ * them for any instant, so nothing is counted twice:
+ *
+ * <ul>
+ *   <li><em>Position holds.</em> Every interval a workorder held a bay for, from {@code
+ *       ext_workorder_position} (the owner's position history, replicated by {@code
+ *       WorkorderEventsListener}). The bay is the one actually held, so a job worked on a different
+ *       bay than it was booked on is charged where it stood, and a job that moved is charged to each
+ *       bay for its own interval. An interval still open ends at the instant this view is generated
+ *       and no later — a projected finish is never invented. A walk-in has nothing but these.
+ *   <li><em>Appointment holds.</em> An appointment whose linked workorder has taken a bay (it has a
+ *       position hold) contributes only what is still booked: the part of its planned window after
+ *       now, on the bay its workorder currently holds if any, else the one it was booked on — and
+ *       nothing once the workorder has completed. An appointment whose workorder has not taken a bay
+ *       (not started, a walk-in-less booking, or history older than #2530) contributes its effective
+ *       window as before (#2021): actual start and finish where the linked workorder has them, else
+ *       the planned window.
+ * </ul>
+ *
+ * <p>The one rule the product decided on top of that: on a date before today (in the location's
+ * zone), an appointment that never produced work — no workorder, or one that never started — is not
+ * counted at all. A past date reports what held the bay; a booking nobody showed up for held nothing.
+ * Today and future dates still count it, because it is still a booking.
  *
  * <h2>Actual-vs-planned occupancy and carry-over (#2021 AC1-AC6, #2050)</h2>
  *
@@ -308,6 +343,7 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
     private final ExtBayReplicaRepository extBayReplicaRepository;
     private final AppointmentRepository appointmentRepository;
     private final WorkOrderAppointmentMappingRepository workOrderAppointmentMappingRepository;
+    private final ExtWorkorderPositionReplicaRepository extWorkorderPositionReplicaRepository;
     private final LocationHoursParser locationHoursParser;
 
     @Override
@@ -367,18 +403,37 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
         // the same fixed-count discipline AC7 already enforces.
         Map<UUID, WorkorderActuals> actualsByAppointmentId = resolveActuals(appointmentsByBay);
 
-        Map<UUID, AppointmentCarryOverContext> carryOverContexts =
-                zoneId == null ? Map.of() : buildCarryOverContexts(appointmentsByBay, actualsByAppointmentId, zoneId);
+        // Queries (5) and (6) (#2530): every bay held at the location over the assembly window, and
+        // which of those workorders belong to an appointment. The same in-memory bay membership as
+        // the appointments above.
+        Instant now = Instant.now(clock);
+        List<ExtWorkorderPositionReplica> positions = zoneId == null
+                ? List.of()
+                : extWorkorderPositionReplicaRepository
+                        .findBaysHeldAtLocation(
+                                locationId,
+                                assemblyFrom.atStartOfDay(zoneId).toInstant(),
+                                to.plusDays(1).atStartOfDay(zoneId).toInstant())
+                        .stream()
+                        .filter(position -> activeBayIds.contains(position.getResourceId()))
+                        .toList();
+        Map<UUID, UUID> appointmentByWorkorder = resolveLinks(positions);
+
+        List<BayHold> holds = zoneId == null
+                ? List.of()
+                : buildHolds(appointmentsByBay, actualsByAppointmentId, positions, appointmentByWorkorder, now);
+        Map<UUID, JobContext> jobContexts = zoneId == null ? Map.of() : buildJobContexts(holds, zoneId);
+        LocalDate today = zoneId == null ? null : LocalDate.ofInstant(now, zoneId);
 
         List<ScheduleCapacityResponse.DayCapacityView> dayViews =
-                assembleDayViews(assemblies, from, bays, appointmentsByBay, actualsByAppointmentId, carryOverContexts);
+                assembleDayViews(assemblies, from, today, bays, holds, jobContexts);
 
         ScheduleCapacityResponse response = new ScheduleCapacityResponse();
         response.setLocationId(locationId);
         response.setFrom(from);
         response.setTo(to);
         response.setTimezone(zoneId == null ? null : zoneId.getId());
-        response.setViewGeneratedAt(Instant.now(clock));
+        response.setViewGeneratedAt(now);
         response.setDays(dayViews);
         return response;
     }
@@ -522,55 +577,159 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
     }
 
     /**
-     * Builds every date's view in two passes over the same day/bay/appointment data so carry-over
-     * (pass 2) can never disagree with the occupancy (pass 1) it is layered on top of (#2021 AC5),
-     * plus a final annotation step that derives {@code carryOverIn} from what those two passes
-     * actually contributed (#2050 AC1).
+     * Which of the workorders holding a bay are linked to an appointment (#2530), one query, issued
+     * only when there is a position to resolve.
+     */
+    private Map<UUID, UUID> resolveLinks(List<ExtWorkorderPositionReplica> positions) {
+        List<UUID> workorderIds = positions.stream()
+                .map(ExtWorkorderPositionReplica::getWorkorderId)
+                .distinct()
+                .toList();
+        if (workorderIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, UUID> links = new HashMap<>();
+        for (WorkOrderAppointmentMappingRepository.LinkedAppointment link :
+                workOrderAppointmentMappingRepository.findLinkedAppointments(workorderIds)) {
+            links.putIfAbsent(link.getWorkOrderId(), link.getAppointmentId());
+        }
+        return links;
+    }
+
+    /**
+     * Every hold on a bay over the assembly window, from both sources (see the class javadoc, "What
+     * holds a bay"). A job's key is its appointment when it has one, else its workorder, so a linked
+     * job's position holds and its remaining booking ledger to the same {@code carryOverIn} entry.
+     */
+    private List<BayHold> buildHolds(
+            Map<UUID, List<Appointment>> appointmentsByBay,
+            Map<UUID, WorkorderActuals> actualsByAppointmentId,
+            List<ExtWorkorderPositionReplica> positions,
+            Map<UUID, UUID> appointmentByWorkorder,
+            Instant now) {
+        List<BayHold> holds = new ArrayList<>();
+        Set<UUID> placedWorkorders = new HashSet<>();
+        Map<UUID, ExtWorkorderPositionReplica> openPositionByWorkorder = new HashMap<>();
+
+        for (ExtWorkorderPositionReplica position : positions) {
+            placedWorkorders.add(position.getWorkorderId());
+            Instant end = position.getReleasedAt() != null ? position.getReleasedAt() : now;
+            if (position.getReleasedAt() == null) {
+                openPositionByWorkorder.merge(
+                        position.getWorkorderId(),
+                        position,
+                        (a, b) -> a.getAssignedAt().isAfter(b.getAssignedAt()) ? a : b);
+            }
+            if (!position.getAssignedAt().isBefore(end)) {
+                continue;
+            }
+            UUID appointmentId = appointmentByWorkorder.get(position.getWorkorderId());
+            holds.add(new BayHold(
+                    holds.size(),
+                    appointmentId != null ? appointmentId : position.getWorkorderId(),
+                    position.getResourceId(),
+                    position.getAssignedAt(),
+                    end,
+                    false,
+                    appointmentId,
+                    position.getWorkorderId()));
+        }
+
+        for (Map.Entry<UUID, List<Appointment>> entry : appointmentsByBay.entrySet()) {
+            UUID bookedBayId = entry.getKey();
+            for (Appointment appointment : entry.getValue()) {
+                UUID appointmentId = appointment.getAppointmentId();
+                WorkorderActuals actuals = actualsByAppointmentId.get(appointmentId);
+                UUID workorderId = actuals == null ? null : actuals.workOrderId();
+                if (workorderId != null && placedWorkorders.contains(workorderId)) {
+                    // Its time on a bay is already in the position holds. What remains is the
+                    // booking still ahead, and only while the job is not finished.
+                    if (actuals.completedAt() != null) {
+                        continue;
+                    }
+                    Instant start = maxInstant(appointment.getStartAt(), now);
+                    Instant end = appointment.getEndAt();
+                    if (!start.isBefore(end)) {
+                        continue;
+                    }
+                    ExtWorkorderPositionReplica open = openPositionByWorkorder.get(workorderId);
+                    UUID bayId = open != null ? open.getResourceId() : bookedBayId;
+                    holds.add(new BayHold(
+                            holds.size(), appointmentId, bayId, start, end, false, appointmentId, workorderId));
+                    continue;
+                }
+                boolean bookedOnly = actuals == null || actuals.workStartedAt() == null;
+                holds.add(new BayHold(
+                        holds.size(),
+                        appointmentId,
+                        bookedBayId,
+                        effectiveStart(appointment, actuals),
+                        effectiveEnd(appointment, actuals),
+                        bookedOnly,
+                        appointmentId,
+                        workorderId));
+            }
+        }
+        return holds;
+    }
+
+    /**
+     * Builds every date's view in two passes over the same day/bay/hold data so carry-over (pass 2)
+     * can never disagree with the occupancy (pass 1) it is layered on top of (#2021 AC5), plus a
+     * final annotation step that derives {@code carryOverIn} from what those two passes actually
+     * contributed (#2050 AC1).
      *
      * <p>{@code assemblies} spans the assembly window; {@code emissionFrom} is the requested {@code
      * from}. Every assembly participates in both passes, and only those on or after {@code
-     * emissionFrom} become a {@code DayCapacityView}.
+     * emissionFrom} become a {@code DayCapacityView}. {@code today} is the location-local date the
+     * view is generated on; a hold that is only a booking (see {@link BayHold#bookedOnly}) is skipped
+     * on every day before it (#2530).
      */
     private List<ScheduleCapacityResponse.DayCapacityView> assembleDayViews(
             List<DayAssembly> assemblies,
             LocalDate emissionFrom,
+            @Nullable LocalDate today,
             List<ExtBayReplica> bays,
-            Map<UUID, List<Appointment>> appointmentsByBay,
-            Map<UUID, WorkorderActuals> actualsByAppointmentId,
-            Map<UUID, AppointmentCarryOverContext> carryOverContexts) {
+            List<BayHold> holds,
+            Map<UUID, JobContext> jobContexts) {
 
-        // Pass 1: base occupancy per OK day, fed each appointment's effective (actual-if-known,
-        // else planned) window. Tracks, per appointment, the last (chronologically latest) OK day
-        // its effective window actually overlapped — carry-over in pass 2 only ever looks forward
-        // from there.
+        Map<UUID, List<BayHold>> holdsByBay = new HashMap<>();
+        for (BayHold hold : holds) {
+            holdsByBay
+                    .computeIfAbsent(hold.bayId(), ignored -> new ArrayList<>())
+                    .add(hold);
+        }
+
+        // Pass 1: base occupancy per OK day, fed each hold's window. Tracks, per hold, the last
+        // (chronologically latest) OK day it actually overlapped — carry-over in pass 2 only ever
+        // looks forward from there.
         Map<LocalDate, Map<UUID, BayDayAccumulator>> accumulatorsByDate = new HashMap<>();
-        Map<UUID, OverrunTracker> lastOverlapByAppointment = new HashMap<>();
+        Map<BayHold, OverrunTracker> lastOverlapByHold = new HashMap<>();
 
         for (DayAssembly assembly : assemblies) {
             if (assembly.status() != ScheduleCapacityDayStatus.OK) {
                 continue;
             }
+            boolean pastDate = today != null && assembly.date().isBefore(today);
             int slotCount = computeSlotCount(assembly.dayStartAt(), assembly.dayEndAt());
             Map<UUID, BayDayAccumulator> byBay = new HashMap<>();
             for (ExtBayReplica bay : bays) {
                 BayDayAccumulator accumulator = new BayDayAccumulator(slotCount);
-                List<Appointment> bayAppointments = appointmentsByBay.getOrDefault(bay.getBayId(), List.of());
-                for (Appointment appointment : bayAppointments) {
-                    WorkorderActuals actuals = actualsByAppointmentId.get(appointment.getAppointmentId());
-                    Instant effectiveStart = effectiveStart(appointment, actuals);
-                    Instant effectiveEnd = effectiveEnd(appointment, actuals);
-                    Instant overlapStart = maxInstant(effectiveStart, assembly.dayStartAt());
-                    Instant overlapEnd = minInstant(effectiveEnd, assembly.dayEndAt());
+                for (BayHold hold : holdsByBay.getOrDefault(bay.getBayId(), List.of())) {
+                    if (pastDate && hold.bookedOnly()) {
+                        continue;
+                    }
+                    Instant overlapStart = maxInstant(hold.start(), assembly.dayStartAt());
+                    Instant overlapEnd = minInstant(hold.end(), assembly.dayEndAt());
                     if (!overlapStart.isBefore(overlapEnd)) {
                         continue;
                     }
                     long overlapMinutes =
                             Duration.between(overlapStart, overlapEnd).toMinutes();
                     accumulator.occupiedMinutes += overlapMinutes;
-                    accumulator.recordContribution(appointment.getAppointmentId(), overlapMinutes);
+                    accumulator.recordContribution(hold.jobKey(), overlapMinutes);
                     markSlots(accumulator.occupancy, assembly.dayStartAt(), overlapStart, overlapEnd);
-                    lastOverlapByAppointment.put(
-                            appointment.getAppointmentId(), new OverrunTracker(assembly, bay, effectiveEnd));
+                    lastOverlapByHold.put(hold, new OverrunTracker(assembly, bay, hold.end()));
                 }
                 byBay.put(bay.getBayId(), accumulator);
             }
@@ -592,24 +751,25 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
         //
         // This pass now only does the minute arithmetic. It records each hop's minutes in the target
         // accumulator's ledger and builds no CarryOverView of its own — the final step below derives
-        // the whole list from that ledger, so an appointment is reported once per bay-day whatever
-        // route it arrived by (#2050 AC1). A re-anchored hop and a direct overlap cannot in fact land
-        // on the same bay-day for the same appointment: cursorDay starts at lastOverlapDay, the
-        // chronologically last OK day with a direct overlap, and nextCarryOverTarget only returns days
-        // strictly after the cursor, so hop targets are disjoint from direct-overlap days by
-        // construction. The source day can itself be a pre-range lookback day, which is how a job
-        // planned entirely before the range reaches it.
+        // the whole list from that ledger, so a job is reported once per bay-day whatever route it
+        // arrived by (#2050 AC1). A re-anchored hop and a direct overlap of one hold cannot land on
+        // the same bay-day: cursorDay starts at lastOverlapDay, the chronologically last OK day with
+        // a direct overlap, and nextCarryOverTarget only returns days strictly after the cursor, so
+        // hop targets are disjoint from direct-overlap days by construction. The source day can
+        // itself be a pre-range lookback day, which is how a job planned entirely before the range
+        // reaches it.
         //
-        // Iteration order over lastOverlapByAppointment is a HashMap's and therefore unspecified,
-        // which is safe: every write below is commutative (minute addition, slot increments, ledger
-        // merge) and the one ordered output, carryOverIn, is sorted in the final step.
-        for (Map.Entry<UUID, OverrunTracker> entry : lastOverlapByAppointment.entrySet()) {
+        // Iteration order over lastOverlapByHold is a HashMap's and therefore unspecified, which is
+        // safe: every write below is commutative (minute addition, slot increments, ledger merge)
+        // and the one ordered output, carryOverIn, is sorted in the final step.
+        for (Map.Entry<BayHold, OverrunTracker> entry : lastOverlapByHold.entrySet()) {
             OverrunTracker tracker = entry.getValue();
             DayAssembly sourceDay = tracker.lastOverlapDay();
             if (!tracker.effectiveEnd().isAfter(sourceDay.dayEndAt())) {
                 continue;
             }
-            AppointmentCarryOverContext context = carryOverContexts.get(entry.getKey());
+            UUID jobKey = entry.getKey().jobKey();
+            JobContext context = jobContexts.get(jobKey);
             LocalDate effectiveEndDate = context == null ? null : context.endedOn();
             long remainingMinutes = Duration.between(sourceDay.dayEndAt(), tracker.effectiveEnd())
                     .toMinutes();
@@ -630,7 +790,7 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
                 long minutesForThisDay = Math.min(remainingMinutes, targetDayCapacityMinutes);
 
                 targetAccumulator.occupiedMinutes += minutesForThisDay;
-                targetAccumulator.recordContribution(entry.getKey(), minutesForThisDay);
+                targetAccumulator.recordContribution(jobKey, minutesForThisDay);
                 markSlots(
                         targetAccumulator.occupancy,
                         targetDay.dayStartAt(),
@@ -642,15 +802,14 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
             }
         }
 
-        // Final step: carryOverIn (#2050 AC1). Every appointment that contributed minutes to a
-        // bay-day — by direct overlap or by a re-anchored hop, never both, see pass 2 above — and
-        // whose effective window began on an earlier local date than that day is listed once, with
-        // the total it contributed.
+        // Final step: carryOverIn (#2050 AC1). Every job that contributed minutes to a bay-day — by
+        // direct overlap or by a re-anchored hop — and whose window began on an earlier local date
+        // than that day is listed once, with the total it contributed.
         // Nothing here touches occupiedMinutes or occupancy: the ledger is a record of what passes 1
         // and 2 already did, so the detail cannot disagree with the number it explains (#2021 AC5).
         for (Map.Entry<LocalDate, Map<UUID, BayDayAccumulator>> dayEntry : accumulatorsByDate.entrySet()) {
             for (BayDayAccumulator accumulator : dayEntry.getValue().values()) {
-                accumulator.buildCarryOverIn(dayEntry.getKey(), carryOverContexts);
+                accumulator.buildCarryOverIn(dayEntry.getKey(), jobContexts);
             }
         }
 
@@ -666,36 +825,31 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
     }
 
     /**
-     * The per-appointment facts the two later steps need, resolved once for the whole read: the local
-     * dates its effective window began and ended on, and the linked workorder when there is one.
+     * The per-job facts the two later steps need, resolved once for the whole read: the local dates
+     * its window began and ended on across every hold it has, and the ids it is reported under.
      *
-     * <p>The <em>start</em> date and the workorder are what {@code carryOverIn} reports (#2050 AC1).
-     * The <em>end</em> date is what pass 2 tests an {@code UNAVAILABLE} day against, to tell a day the
+     * <p>The <em>start</em> date and the ids are what {@code carryOverIn} reports (#2050 AC1). The
+     * <em>end</em> date is what pass 2 tests an {@code UNAVAILABLE} day against, to tell a day the
      * job was still running through — which stops the carry-over walk — from one it had already
      * finished before, which is skipped like a closure (#2086).
      *
-     * <p>Both dates come from the appointment's own effective window — actual when known, else
-     * planned — never from the last day that window happened to overlap. Two legal requests covering
-     * the same date must report the same {@code fromDate} for the same appointment (#2050 AC2), and
-     * must agree about whether a job was running through an unknown day (#2086); only a fact derived
-     * from the row itself has that property, and anything derived from the range being served does
-     * not.
+     * <p>Both dates come from the job's own holds — never from the last day a window happened to
+     * overlap. Two legal requests covering the same date must report the same {@code fromDate} for
+     * the same job (#2050 AC2), and must agree about whether a job was running through an unknown
+     * day (#2086); only a fact derived from the rows themselves has that property, and anything
+     * derived from the range being served does not.
      */
-    private Map<UUID, AppointmentCarryOverContext> buildCarryOverContexts(
-            Map<UUID, List<Appointment>> appointmentsByBay,
-            Map<UUID, WorkorderActuals> actualsByAppointmentId,
-            ZoneId zoneId) {
-        Map<UUID, AppointmentCarryOverContext> contexts = new HashMap<>();
-        for (List<Appointment> bayAppointments : appointmentsByBay.values()) {
-            for (Appointment appointment : bayAppointments) {
-                WorkorderActuals actuals = actualsByAppointmentId.get(appointment.getAppointmentId());
-                contexts.putIfAbsent(
-                        appointment.getAppointmentId(),
-                        new AppointmentCarryOverContext(
-                                LocalDate.ofInstant(effectiveStart(appointment, actuals), zoneId),
-                                LocalDate.ofInstant(effectiveEnd(appointment, actuals), zoneId),
-                                actuals == null ? null : actuals.workOrderId()));
-            }
+    private Map<UUID, JobContext> buildJobContexts(List<BayHold> holds, ZoneId zoneId) {
+        Map<UUID, JobContext> contexts = new HashMap<>();
+        for (BayHold hold : holds) {
+            contexts.merge(
+                    hold.jobKey(),
+                    new JobContext(
+                            LocalDate.ofInstant(hold.start(), zoneId),
+                            LocalDate.ofInstant(hold.end(), zoneId),
+                            hold.appointmentId(),
+                            hold.workorderId()),
+                    JobContext::merge);
         }
         return contexts;
     }
@@ -838,11 +992,12 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
         private final List<ScheduleCapacityResponse.CarryOverView> carryOverIn = new ArrayList<>();
 
         /**
-         * Minutes this bay-day received from each appointment, whatever the route — a direct overlap
+         * Minutes this bay-day received from each job, keyed by {@link BayHold#jobKey}, whatever the route — a direct overlap
          * (pass 1) or a re-anchored hop (pass 2) — which is what lets {@code carryOverIn} report one
          * total per appointment per bay-day (#2050 AC1). The two routes are disjoint by construction
-         * (see the class javadoc), so the merge in {@link #recordContribution} is defensive rather
-         * than a case that occurs: at most one route writes a given appointment's entry here.
+         * (see the class javadoc), so the merge in {@link #recordContribution} also folds a job's
+         * several holds on one bay-day (a linked job's bay time plus its remaining booking, or a
+         * workorder that left a bay and came back) into one entry.
          *
          * <p>Created on first write rather than in the constructor: most bay-days in a 42-day range
          * with a 42-day lookback are empty, and one accumulator exists per bay per assembled day.
@@ -853,14 +1008,14 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
             this.occupancy = new int[slotCount];
         }
 
-        void recordContribution(UUID appointmentId, long minutes) {
+        void recordContribution(UUID jobKey, long minutes) {
             if (minutes <= 0) {
                 return;
             }
             if (contributedMinutesByAppointment == null) {
                 contributedMinutesByAppointment = new HashMap<>();
             }
-            contributedMinutesByAppointment.merge(appointmentId, minutes, Long::sum);
+            contributedMinutesByAppointment.merge(jobKey, minutes, Long::sum);
         }
 
         /**
@@ -869,24 +1024,29 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
          * (fromDate, appointmentId)} so the list is deterministic (the ledger is a {@code HashMap}
          * and the appointment query has no {@code ORDER BY}).
          */
-        void buildCarryOverIn(LocalDate dayDate, Map<UUID, AppointmentCarryOverContext> contexts) {
+        void buildCarryOverIn(LocalDate dayDate, Map<UUID, JobContext> contexts) {
             if (contributedMinutesByAppointment == null) {
                 return;
             }
             for (Map.Entry<UUID, Long> contribution : contributedMinutesByAppointment.entrySet()) {
-                AppointmentCarryOverContext context = contexts.get(contribution.getKey());
+                JobContext context = contexts.get(contribution.getKey());
                 if (context == null || !context.startedOn().isBefore(dayDate)) {
                     continue;
                 }
                 ScheduleCapacityResponse.CarryOverView view = new ScheduleCapacityResponse.CarryOverView();
                 view.setFromDate(context.startedOn());
-                view.setAppointmentId(contribution.getKey());
+                view.setAppointmentId(context.appointmentId());
                 view.setWorkorderId(context.workOrderId());
                 view.setBayHours(bayHours(contribution.getValue()));
                 carryOverIn.add(view);
             }
             carryOverIn.sort(Comparator.comparing(ScheduleCapacityResponse.CarryOverView::getFromDate)
-                    .thenComparing(ScheduleCapacityResponse.CarryOverView::getAppointmentId));
+                    .thenComparing(
+                            ScheduleCapacityResponse.CarryOverView::getAppointmentId,
+                            Comparator.nullsLast(Comparator.naturalOrder()))
+                    .thenComparing(
+                            ScheduleCapacityResponse.CarryOverView::getWorkorderId,
+                            Comparator.nullsLast(Comparator.naturalOrder())));
         }
 
         ScheduleCapacityResponse.BayCapacityView toView(ExtBayReplica bay) {
@@ -901,7 +1061,7 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
     }
 
     /**
-     * The last OK day one appointment's effective window directly overlapped, and the bay it did so
+     * The last OK day one hold directly overlapped, and the bay it did so
      * in — the seed carry-over (pass 2) walks forward from. With the lookback in place this day can
      * itself be a pre-range day, which is exactly how a job planned entirely before {@code from}
      * reaches the requested range (#2050).
@@ -909,16 +1069,47 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
     private record OverrunTracker(DayAssembly lastOverlapDay, ExtBayReplica bay, Instant effectiveEnd) {}
 
     /**
-     * One appointment's carry-over identity: the local dates its effective window began and ended
-     * on, and the linked workorder when known. Range-independent by construction (#2050 AC2) — every
-     * field is derived from the appointment row and its actuals, never from the range being served.
+     * One bay, one window, one job (#2530): the unit both passes work on. See the class javadoc,
+     * "What holds a bay", for where holds come from.
+     *
+     * @param ordinal position in the build order, so two holds with identical fields are still two
+     *     map keys
+     * @param jobKey the appointment when the job has one, else its workorder — what the ledger and
+     *     {@code carryOverIn} report a job under
+     * @param bookedOnly true for an appointment hold with no work behind it (no workorder, or one
+     *     that never started): counted on today and future dates, skipped on dates before today
+     */
+    private record BayHold(
+            int ordinal,
+            UUID jobKey,
+            UUID bayId,
+            Instant start,
+            Instant end,
+            boolean bookedOnly,
+            @Nullable UUID appointmentId,
+            @Nullable UUID workorderId) {}
+
+    /**
+     * One job's carry-over identity: the local dates its window began and ended on across every hold
+     * it has, and the ids it is reported under. Range-independent by construction (#2050 AC2) —
+     * every field is derived from the rows themselves, never from the range being served.
      *
      * <p>{@code startedOn} is what {@code carryOverIn} reports as {@code fromDate}; {@code endedOn} is
      * what pass 2 tests an {@code UNAVAILABLE} day against, to tell a day the job was still running
      * through from one it had already finished before (#2086).
      */
-    private record AppointmentCarryOverContext(
+    private record JobContext(
             LocalDate startedOn,
             LocalDate endedOn,
-            @Nullable UUID workOrderId) {}
+            @Nullable UUID appointmentId,
+            @Nullable UUID workOrderId) {
+
+        JobContext merge(JobContext other) {
+            return new JobContext(
+                    startedOn.isBefore(other.startedOn) ? startedOn : other.startedOn,
+                    endedOn.isAfter(other.endedOn) ? endedOn : other.endedOn,
+                    appointmentId != null ? appointmentId : other.appointmentId,
+                    workOrderId != null ? workOrderId : other.workOrderId);
+        }
+    }
 }

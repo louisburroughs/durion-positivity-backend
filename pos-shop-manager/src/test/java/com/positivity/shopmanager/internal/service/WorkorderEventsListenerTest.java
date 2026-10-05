@@ -1,6 +1,7 @@
 package com.positivity.shopmanager.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -10,13 +11,16 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.domainevents.workorder.WorkorderUpdatedV1;
 import com.positivity.shopmanager.internal.dto.WorkorderStatusChangedEvent;
+import com.positivity.shopmanager.internal.entity.ExtWorkorderPositionReplica;
 import com.positivity.shopmanager.internal.entity.ExtWorkorderReplica;
 import com.positivity.shopmanager.internal.enums.ShopDashboardUnitType;
+import com.positivity.shopmanager.internal.repository.ExtWorkorderPositionReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtWorkorderReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ProcessedEventRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -69,6 +73,9 @@ class WorkorderEventsListenerTest {
     private ExtWorkorderReplicaRepository workorderRepository;
 
     @Mock
+    private ExtWorkorderPositionReplicaRepository positionRepository;
+
+    @Mock
     private WorkorderAppointmentLinkService workorderAppointmentLinkService;
 
     @Mock
@@ -86,6 +93,7 @@ class WorkorderEventsListenerTest {
                 objectMapper,
                 processedEventRepository,
                 workorderRepository,
+                positionRepository,
                 workorderAppointmentLinkService,
                 applicationEventPublisher,
                 Mockito.mock(ObjectProvider.class),
@@ -385,6 +393,61 @@ class WorkorderEventsListenerTest {
         listener.onWorkorderEvent(envelopeWithAppointment(4, "\"" + APPOINTMENT_ID + "\""));
 
         verifyNoInteractions(workorderAppointmentLinkService);
+    }
+
+    @Test
+    @DisplayName("#2530 - the fact's position history replaces this module's copy, bays and all")
+    void positionHistoryReplacesTheReplicaCopy() {
+        UUID bayTwo = UUID.fromString("00000000-0000-0000-0000-0000000000c2");
+        listener.onWorkorderEvent(envelopeWith(3, """
+                "positions":[
+                  {"resourceType":"BAY","resourceId":"%s","locationId":"%s",
+                   "assignedAt":"2026-09-03T09:00:00Z","releasedAt":"2026-09-03T10:00:00Z"},
+                  {"resourceType":"BAY","resourceId":"%s","locationId":null,
+                   "assignedAt":"2026-09-03T10:00:00Z","releasedAt":null}]""".formatted(BAY_ID, LOCATION_ID, bayTwo)));
+
+        InOrder inOrder = Mockito.inOrder(positionRepository);
+        inOrder.verify(positionRepository).deleteAllByWorkorderId(WORKORDER_ID);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<ExtWorkorderPositionReplica>> captor = ArgumentCaptor.forClass(List.class);
+        inOrder.verify(positionRepository).saveAll(captor.capture());
+        assertThat(captor.getValue())
+                .extracting(
+                        ExtWorkorderPositionReplica::getWorkorderId,
+                        ExtWorkorderPositionReplica::getResourceType,
+                        ExtWorkorderPositionReplica::getResourceId,
+                        ExtWorkorderPositionReplica::getLocationId,
+                        ExtWorkorderPositionReplica::getAssignedAt,
+                        ExtWorkorderPositionReplica::getReleasedAt)
+                .containsExactly(
+                        tuple(
+                                WORKORDER_ID,
+                                "BAY",
+                                BAY_ID,
+                                LOCATION_ID,
+                                Instant.parse("2026-09-03T09:00:00Z"),
+                                Instant.parse("2026-09-03T10:00:00Z")),
+                        // History without a site falls back to the fact's own site.
+                        tuple(WORKORDER_ID, "BAY", bayTwo, LOCATION_ID, Instant.parse("2026-09-03T10:00:00Z"), null));
+    }
+
+    @Test
+    @DisplayName("#2530 - an empty history clears the copy; an absent or null one leaves it alone")
+    void emptyHistoryClearsAbsentHistoryKeeps() {
+        listener.onWorkorderEvent(envelopeWith(3, "\"positions\":[]"));
+        verify(positionRepository).deleteAllByWorkorderId(WORKORDER_ID);
+        verify(positionRepository).saveAll(List.of());
+
+        Mockito.clearInvocations(positionRepository);
+        listener.onWorkorderEvent(envelopeWith(4, "\"positions\":null"));
+        listener.onWorkorderEvent(envelope(5, "WORK_IN_PROGRESS", BAY_ID, "BAY"));
+        verifyNoInteractions(positionRepository);
+    }
+
+    /** The standard envelope plus one more raw JSON member on the payload. */
+    private String envelopeWith(long aggregateVersion, String extraMemberJson) {
+        String base = envelope(aggregateVersion, "WORK_IN_PROGRESS", BAY_ID, "BAY");
+        return base.substring(0, base.length() - 2) + "," + extraMemberJson + "}}";
     }
 
     /** The standard envelope plus the #2531 field, given as raw JSON so a test can pass {@code null}. */

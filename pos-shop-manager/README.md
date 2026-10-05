@@ -404,9 +404,38 @@ but the event consumer writes them, and no synchronous call crosses a domain wal
 | `ext_catalog_service`, `ext_catalog_service_skill` | `catalog.events.v1` | `CatalogEventsListener` |
 | `ext_people_contact_person` | `people-contact.events.v1` | `PeopleContactEventsListener` |
 | `ext_workorder` | `workorder.events.v1` | `WorkorderEventsListener` |
+| `ext_workorder_position` | `workorder.events.v1` | `WorkorderEventsListener` (the fact's `positions`, replace-set per fact, #2530) |
 | `ext_bay`, `ext_mobile_unit` | `location.events.v1` | `LocationEventsListener` |
 | `ext_location`, `ext_location_parent` | `location.events.v1` | `LocationEventsListener` |
 | `ext_bay_type`, `ext_bay_specialty_map` | `location.events.v1` | `LocationEventsListener` (#2261) |
+
+### What holds a bay on the capacity read (#2530)
+
+`GET /v1/schedules/capacity` counts work that actually held a bay, appointment or not. Its unit is a
+*bay hold*: one bay, one window, one job. Holds come from two sources and a job contributes through
+exactly one of them for any instant, so nothing is counted twice:
+
+- **Position holds** — every interval a workorder held a bay for, from `ext_workorder_position`. The
+  bay is the one actually held, so a job worked on a different bay than booked is charged where it
+  stood, and a job that moved is charged to each bay for its own interval. An interval still open ends
+  at the instant the view is generated and no later. A walk-in has nothing but these.
+- **Appointment holds** — an appointment whose linked workorder has taken a bay contributes only what
+  is still booked: the part of its planned window after now, on the bay its workorder currently holds
+  (else the booked one), and nothing once the workorder has completed. An appointment whose workorder
+  has not taken a bay (not started, or history older than #2530) contributes its effective window as
+  before (#2021).
+
+On a date before today, in the location's zone, an appointment that never produced work (no workorder,
+or one that never started) is not counted: a past date reports how busy the bay was, not what was
+booked for it. Today and future dates still count it.
+
+`carryOverIn` names a job by `appointmentId`, with `workorderId` when linked, or by `workorderId`
+alone for a walk-in; `appointmentId` is no longer required on `CarryOverView`.
+
+`ext_workorder` says only where a workorder is now, and pos-workorder clears that when the workorder
+closes, which is why the history is replicated separately. Workorders that existed before #2530 get
+their history on their next fact; the owner's `workorder.fact-backfill.requested` command re-emits
+facts for started or completed workorders, so one run backfills the history the past needs.
 
 ### Workorder-to-appointment link (#2531)
 

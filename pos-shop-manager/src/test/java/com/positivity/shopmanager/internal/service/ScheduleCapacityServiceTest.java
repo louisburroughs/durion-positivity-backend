@@ -9,6 +9,7 @@ import com.positivity.shopmanager.internal.dto.ScheduleCapacityResponse;
 import com.positivity.shopmanager.internal.entity.Appointment;
 import com.positivity.shopmanager.internal.entity.ExtBayReplica;
 import com.positivity.shopmanager.internal.entity.ExtLocationReplica;
+import com.positivity.shopmanager.internal.entity.ExtWorkorderPositionReplica;
 import com.positivity.shopmanager.internal.entity.ExtWorkorderReplica;
 import com.positivity.shopmanager.internal.entity.WorkOrderAppointmentMapping;
 import com.positivity.shopmanager.internal.enums.AppointmentStatus;
@@ -19,9 +20,11 @@ import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
@@ -33,6 +36,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,8 +52,25 @@ import org.springframework.transaction.annotation.Transactional;
 @SpringBootTest
 @ActiveProfiles("test")
 @Transactional
+@Import(ScheduleCapacityServiceTest.FixedClockConfig.class)
 @DisplayName("ScheduleCapacityServiceTest")
 class ScheduleCapacityServiceTest {
+
+    /**
+     * "Now" is Monday 2026-10-05 at noon UTC (#2530): the scenarios below book that week, and since
+     * #2530 a past date no longer counts an appointment nobody worked, so the week must stay "today
+     * and later" however long after 2026 this suite runs.
+     */
+    static final Instant NOW = Instant.parse("2026-10-05T12:00:00Z");
+
+    @TestConfiguration
+    static class FixedClockConfig {
+        @Bean
+        @Primary
+        Clock clock() {
+            return Clock.fixed(NOW, ZoneOffset.UTC);
+        }
+    }
 
     private static final UUID CUSTOMER_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID VEHICLE_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
@@ -480,8 +504,9 @@ class ScheduleCapacityServiceTest {
                 .as("42 days must not cost more queries than 1 day")
                 .isEqualTo(queriesForOneDay);
         assertThat(queriesForOneDay)
-                .as("location replica, active bays, appointments in range: three fixed statements")
-                .isEqualTo(3L);
+                .as("location replica, active bays, appointments in range, bays held (#2530): four fixed "
+                        + "statements")
+                .isEqualTo(4L);
     }
 
     private long measureCapacityStatements(Statistics statistics, UUID locationId, LocalDate from, LocalDate to) {
@@ -761,9 +786,9 @@ class ScheduleCapacityServiceTest {
                 .as("42 days must not cost more queries than 1 day, even with actuals to resolve")
                 .isEqualTo(queriesForOneDay);
         assertThat(queriesForOneDay)
-                .as("location replica, active bays, appointments in range, batched workorder actuals: "
-                        + "four fixed statements")
-                .isEqualTo(4L);
+                .as("location replica, active bays, appointments in range, batched workorder actuals, "
+                        + "bays held (#2530): five fixed statements")
+                .isEqualTo(5L);
     }
 
     // -------------------------------------------------------------------------
@@ -2010,8 +2035,9 @@ class ScheduleCapacityServiceTest {
         long queriesForFortyTwoDays = measureCapacityStatements(statistics, locationId, MONDAY, MONDAY.plusDays(41));
 
         assertThat(queriesForFourDays)
-                .as("location replica, active bays, appointments, workorder actuals: four statements")
-                .isEqualTo(4L);
+                .as("location replica, active bays, appointments, workorder actuals, bays held (#2530): "
+                        + "five statements")
+                .isEqualTo(5L);
         assertThat(queriesForFortyTwoDays)
                 .as("constant in the number of days, malformed entries and all")
                 .isEqualTo(queriesForFourDays);
@@ -2144,8 +2170,9 @@ class ScheduleCapacityServiceTest {
         long queriesForFortyTwoDays = measureCapacityStatements(statistics, locationId, MONDAY, MONDAY.plusDays(41));
 
         assertThat(queriesForFourDays)
-                .as("location replica, active bays, appointments, workorder actuals: four statements")
-                .isEqualTo(4L);
+                .as("location replica, active bays, appointments, workorder actuals, bays held (#2530): "
+                        + "five statements")
+                .isEqualTo(5L);
         assertThat(queriesForFortyTwoDays)
                 .as("the disjunction changes which rows come back, never how many statements")
                 .isEqualTo(queriesForFourDays);
@@ -2220,5 +2247,271 @@ class ScheduleCapacityServiceTest {
                 .as("nothing from beyond the lookback, and nothing planned ahead that has not begun")
                 .allSatisfy(appointment ->
                         assertThat(appointment.getStartAt()).isNotEqualTo(instant(MONDAY.minusDays(43), 9, 0)));
+    }
+
+    // -------------------------------------------------------------------------
+    // What holds a bay: actual bay use from workorders (#2530)
+    // -------------------------------------------------------------------------
+
+    /**
+     * A workorder with no appointment: an {@code ext_workorder} row and its bay history, no mapping.
+     */
+    private UUID persistWalkIn(UUID locationId, @Nullable Instant workStartedAt, @Nullable Instant completedAt) {
+        UUID workorderId = UUIDv7Generator.generate();
+        em.persist(ExtWorkorderReplica.builder()
+                .workorderId(workorderId)
+                .locationId(locationId)
+                .aggregateVersion(1)
+                .updatedAt(Instant.now())
+                .workStartedAt(workStartedAt)
+                .completedAt(completedAt)
+                .build());
+        return workorderId;
+    }
+
+    private void persistPosition(
+            UUID workorderId, UUID locationId, UUID bayId, Instant assignedAt, @Nullable Instant releasedAt) {
+        em.persist(ExtWorkorderPositionReplica.builder()
+                .workorderId(workorderId)
+                .resourceType("BAY")
+                .resourceId(bayId)
+                .locationId(locationId)
+                .assignedAt(assignedAt)
+                .releasedAt(releasedAt)
+                .build());
+    }
+
+    private ScheduleCapacityResponse.BayCapacityView bayOn(UUID locationId, LocalDate date, int bayIndex) {
+        ScheduleCapacityResponse response = scheduleCapacityService.getCapacity(locationId, date, date);
+        return response.getDays().get(0).getBays().get(bayIndex);
+    }
+
+    @Test
+    @DisplayName("#2530 AC1 - a walk-in that held Bay 1 09:00-11:30 on a past day reads 150 occupied minutes there")
+    void walkInHoldsTheBayItWasWorkedIn() {
+        UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
+        UUID bayId = persistBay("Bay 1", locationId);
+        LocalDate pastMonday = MONDAY.minusWeeks(1);
+        UUID walkIn = persistWalkIn(locationId, instant(pastMonday, 9, 0), instant(pastMonday, 11, 30));
+        persistPosition(walkIn, locationId, bayId, instant(pastMonday, 9, 0), instant(pastMonday, 11, 30));
+        flushAndClear();
+
+        ScheduleCapacityResponse.BayCapacityView bay = bayOn(locationId, pastMonday, 0);
+
+        assertThat(bay.getOccupiedMinutes()).isEqualTo(150);
+        // 08:00 is slot 0: 09:00, 10:00 and 11:00 hold a job, the rest are free.
+        assertThat(bay.getOccupancy()).containsExactly(0, 1, 1, 1, 0, 0, 0, 0, 0);
+        assertThat(bay.getCarryOverIn())
+                .as("began on this date: not a carry-over")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("#2530 AC2 - a linked job with bay history is counted once, by the time it held the bay")
+    void linkedJobWithHistoryIsCountedOnce() {
+        UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
+        UUID bayId = persistBay("Bay 1", locationId);
+        LocalDate pastMonday = MONDAY.minusWeeks(1);
+        // Booked 09:00-11:00, actually on the bay 09:10-11:40.
+        Appointment appointment = persistAppointment(
+                locationId, bayId, instant(pastMonday, 9, 0), instant(pastMonday, 11, 0), AppointmentStatus.COMPLETED);
+        UUID workorderId = UUIDv7Generator.generate();
+        persistWorkorderLink(workorderId, appointment, instant(pastMonday, 9, 10), instant(pastMonday, 11, 40));
+        persistPosition(workorderId, locationId, bayId, instant(pastMonday, 9, 10), instant(pastMonday, 11, 40));
+        flushAndClear();
+
+        ScheduleCapacityResponse.BayCapacityView bay = bayOn(locationId, pastMonday, 0);
+
+        // 150 from the bay history alone: neither the planned window nor the effective window is
+        // added on top of it.
+        assertThat(bay.getOccupiedMinutes()).isEqualTo(150);
+        assertThat(bay.getOccupancy()).containsExactly(0, 1, 1, 1, 0, 0, 0, 0, 0);
+    }
+
+    @Test
+    @DisplayName("#2530 AC3 - a linked job worked on a different bay than booked is charged to the bay it held")
+    void linkedJobIsChargedToTheBayActuallyHeld() {
+        UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
+        UUID bookedBay = persistBay("Bay 1", locationId);
+        UUID heldBay = persistBay("Bay 2", locationId);
+        LocalDate pastMonday = MONDAY.minusWeeks(1);
+        Appointment appointment = persistAppointment(
+                locationId,
+                bookedBay,
+                instant(pastMonday, 9, 0),
+                instant(pastMonday, 11, 0),
+                AppointmentStatus.COMPLETED);
+        UUID workorderId = UUIDv7Generator.generate();
+        persistWorkorderLink(workorderId, appointment, instant(pastMonday, 9, 0), instant(pastMonday, 11, 0));
+        persistPosition(workorderId, locationId, heldBay, instant(pastMonday, 9, 0), instant(pastMonday, 11, 0));
+        flushAndClear();
+
+        ScheduleCapacityResponse response = scheduleCapacityService.getCapacity(locationId, pastMonday, pastMonday);
+        List<ScheduleCapacityResponse.BayCapacityView> bays =
+                response.getDays().get(0).getBays();
+
+        assertThat(bays.get(0).getOccupiedMinutes())
+                .as("booked bay, never held")
+                .isZero();
+        assertThat(bays.get(1).getOccupiedMinutes()).as("bay actually held").isEqualTo(120);
+    }
+
+    @Test
+    @DisplayName("#2530 AC4 - an open walk-in that took its bay at 09:00 today holds it up to now and no further")
+    void openWalkInIsCountedUpToNow() {
+        UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
+        UUID bayId = persistBay("Bay 1", locationId);
+        // NOW is Monday 12:00 UTC; the job took the bay at 09:00 and still holds it.
+        UUID walkIn = persistWalkIn(locationId, instant(MONDAY, 9, 0), null);
+        persistPosition(walkIn, locationId, bayId, instant(MONDAY, 9, 0), null);
+        flushAndClear();
+
+        ScheduleCapacityResponse.BayCapacityView bay = bayOn(locationId, MONDAY, 0);
+
+        assertThat(bay.getOccupiedMinutes()).isEqualTo(180);
+        assertThat(bay.getOccupancy()).containsExactly(0, 1, 1, 1, 0, 0, 0, 0, 0);
+        // Tomorrow is not touched: no finish is projected for an open job.
+        assertThat(bayOn(locationId, TUESDAY, 0).getOccupiedMinutes()).isZero();
+    }
+
+    @Test
+    @DisplayName(
+            "#2530 AC5 - a workorder that moved from Bay 1 to Bay 2 at 10:00 charges each bay for its own interval")
+    void movedWorkorderChargesEachBayForItsOwnInterval() {
+        UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
+        UUID bayOne = persistBay("Bay 1", locationId);
+        UUID bayTwo = persistBay("Bay 2", locationId);
+        LocalDate pastMonday = MONDAY.minusWeeks(1);
+        UUID walkIn = persistWalkIn(locationId, instant(pastMonday, 9, 0), instant(pastMonday, 11, 0));
+        persistPosition(walkIn, locationId, bayOne, instant(pastMonday, 9, 0), instant(pastMonday, 10, 0));
+        persistPosition(walkIn, locationId, bayTwo, instant(pastMonday, 10, 0), instant(pastMonday, 11, 0));
+        flushAndClear();
+
+        ScheduleCapacityResponse response = scheduleCapacityService.getCapacity(locationId, pastMonday, pastMonday);
+        List<ScheduleCapacityResponse.BayCapacityView> bays =
+                response.getDays().get(0).getBays();
+
+        assertThat(bays.get(0).getOccupiedMinutes()).isEqualTo(60);
+        assertThat(bays.get(0).getOccupancy()).containsExactly(0, 1, 0, 0, 0, 0, 0, 0, 0);
+        assertThat(bays.get(1).getOccupiedMinutes()).isEqualTo(60);
+        assertThat(bays.get(1).getOccupancy()).containsExactly(0, 0, 1, 0, 0, 0, 0, 0, 0);
+    }
+
+    @Test
+    @DisplayName("#2530 AC6 - a walk-in still holding a bay from an earlier open day is netted into the later day "
+            + "and listed in carryOverIn under its workorder")
+    void walkInCarriesOverLikeAnAppointment() {
+        UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
+        UUID bayId = persistBay("Bay 1", locationId);
+        LocalDate pastMonday = MONDAY.minusWeeks(1);
+        LocalDate pastTuesday = pastMonday.plusDays(1);
+        // Took the bay Monday 15:00, gave it up Tuesday 11:00.
+        UUID walkIn = persistWalkIn(locationId, instant(pastMonday, 15, 0), instant(pastTuesday, 11, 0));
+        persistPosition(walkIn, locationId, bayId, instant(pastMonday, 15, 0), instant(pastTuesday, 11, 0));
+        flushAndClear();
+
+        ScheduleCapacityResponse.BayCapacityView tuesday = bayOn(locationId, pastTuesday, 0);
+
+        assertThat(tuesday.getOccupiedMinutes())
+                .as("08:00-11:00 held by Monday's job")
+                .isEqualTo(180);
+        assertThat(carryOverTuples(tuesday)).containsExactly(tuple(pastMonday, null, walkIn, new BigDecimal("3.0")));
+    }
+
+    @Test
+    @DisplayName("#2530 decision - a past appointment that never produced work holds nothing; today's still does")
+    void pastAppointmentWithoutWorkIsNotCounted() {
+        UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
+        UUID bayId = persistBay("Bay 1", locationId);
+        LocalDate pastMonday = MONDAY.minusWeeks(1);
+        // No workorder at all.
+        persistAppointment(
+                locationId, bayId, instant(pastMonday, 9, 0), instant(pastMonday, 11, 0), AppointmentStatus.SCHEDULED);
+        // A workorder that never started.
+        Appointment neverStarted = persistAppointment(
+                locationId,
+                bayId,
+                instant(pastMonday, 13, 0),
+                instant(pastMonday, 14, 0),
+                AppointmentStatus.CHECKED_IN);
+        persistWorkorderLink(UUIDv7Generator.generate(), neverStarted, null, null);
+        // Today, booked for the afternoon and not started yet: still a booking.
+        persistAppointment(
+                locationId, bayId, instant(MONDAY, 14, 0), instant(MONDAY, 16, 0), AppointmentStatus.SCHEDULED);
+        // Tomorrow, likewise.
+        persistAppointment(
+                locationId, bayId, instant(TUESDAY, 9, 0), instant(TUESDAY, 10, 0), AppointmentStatus.SCHEDULED);
+        flushAndClear();
+
+        assertThat(bayOn(locationId, pastMonday, 0).getOccupiedMinutes())
+                .as("a date that has happened")
+                .isZero();
+        assertThat(bayOn(locationId, MONDAY, 0).getOccupiedMinutes())
+                .as("today")
+                .isEqualTo(120);
+        assertThat(bayOn(locationId, TUESDAY, 0).getOccupiedMinutes())
+                .as("tomorrow")
+                .isEqualTo(60);
+    }
+
+    @Test
+    @DisplayName("#2530 - a past appointment whose workorder started but has no bay history still counts its "
+            + "effective window (pre-#2530 history)")
+    void pastAppointmentWithWorkButNoHistoryKeepsTheEffectiveWindow() {
+        UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
+        UUID bayId = persistBay("Bay 1", locationId);
+        LocalDate pastMonday = MONDAY.minusWeeks(1);
+        Appointment appointment = persistAppointment(
+                locationId, bayId, instant(pastMonday, 9, 0), instant(pastMonday, 11, 0), AppointmentStatus.COMPLETED);
+        persistWorkorderLink(
+                UUIDv7Generator.generate(), appointment, instant(pastMonday, 9, 0), instant(pastMonday, 12, 0));
+        flushAndClear();
+
+        assertThat(bayOn(locationId, pastMonday, 0).getOccupiedMinutes()).isEqualTo(180);
+    }
+
+    @Test
+    @DisplayName("#2530 AC7 - a future booking is untouched: its linked, placed workorder still holds the bay now, "
+            + "and what is booked after now stays on the bay it holds")
+    void futureBookingOfAPlacedJobStaysBooked() {
+        UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
+        UUID bookedBay = persistBay("Bay 1", locationId);
+        UUID heldBay = persistBay("Bay 2", locationId);
+        // Booked today 11:00-15:00 on Bay 1; the car was put on Bay 2 at 10:30 and is still there at NOW (12:00).
+        Appointment appointment = persistAppointment(
+                locationId,
+                bookedBay,
+                instant(MONDAY, 11, 0),
+                instant(MONDAY, 15, 0),
+                AppointmentStatus.WORK_IN_PROGRESS);
+        UUID workorderId = UUIDv7Generator.generate();
+        persistWorkorderLink(workorderId, appointment, instant(MONDAY, 10, 30), null);
+        persistPosition(workorderId, locationId, heldBay, instant(MONDAY, 10, 30), null);
+        flushAndClear();
+
+        ScheduleCapacityResponse response = scheduleCapacityService.getCapacity(locationId, MONDAY, MONDAY);
+        List<ScheduleCapacityResponse.BayCapacityView> bays =
+                response.getDays().get(0).getBays();
+
+        assertThat(bays.get(0).getOccupiedMinutes())
+                .as("booked bay: the job is not there")
+                .isZero();
+        // 10:30-12:00 held (90) plus the booking still ahead, 12:00-15:00 (180), on the bay it holds.
+        assertThat(bays.get(1).getOccupiedMinutes()).isEqualTo(270);
+        assertThat(bays.get(1).getOccupancy()).containsExactly(0, 0, 1, 1, 1, 1, 1, 0, 0);
+    }
+
+    @Test
+    @DisplayName("#2530 - a bay history row on a bay this location does not list is not a bay for this read")
+    void historyOnAnUnknownBayIsIgnored() {
+        UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
+        persistBay("Bay 1", locationId);
+        LocalDate pastMonday = MONDAY.minusWeeks(1);
+        UUID walkIn = persistWalkIn(locationId, instant(pastMonday, 9, 0), instant(pastMonday, 10, 0));
+        persistPosition(
+                walkIn, locationId, UUIDv7Generator.generate(), instant(pastMonday, 9, 0), instant(pastMonday, 10, 0));
+        flushAndClear();
+
+        assertThat(bayOn(locationId, pastMonday, 0).getOccupiedMinutes()).isZero();
     }
 }

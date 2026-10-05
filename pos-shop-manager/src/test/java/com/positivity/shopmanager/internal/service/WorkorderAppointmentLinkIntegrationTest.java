@@ -7,6 +7,7 @@ import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.shopmanager.internal.entity.Appointment;
 import com.positivity.shopmanager.internal.enums.AppointmentStatus;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
+import com.positivity.shopmanager.internal.repository.ExtWorkorderPositionReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtWorkorderReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ProcessedEventRepository;
 import com.positivity.shopmanager.internal.repository.WorkOrderAppointmentMappingRepository;
@@ -64,6 +65,9 @@ class WorkorderAppointmentLinkIntegrationTest {
     private ExtWorkorderReplicaRepository extWorkorderReplicaRepository;
 
     @Autowired
+    private ExtWorkorderPositionReplicaRepository extWorkorderPositionReplicaRepository;
+
+    @Autowired
     private ProcessedEventRepository processedEventRepository;
 
     @Autowired
@@ -101,6 +105,7 @@ class WorkorderAppointmentLinkIntegrationTest {
                 new ObjectMapper(),
                 processedEventRepository,
                 extWorkorderReplicaRepository,
+                extWorkorderPositionReplicaRepository,
                 workorderAppointmentLinkService,
                 applicationEventPublisher,
                 Mockito.mock(ObjectProvider.class),
@@ -111,6 +116,9 @@ class WorkorderAppointmentLinkIntegrationTest {
     void cleanUp() {
         // The mapping first: it carries the foreign key onto appointment.
         mappingRepository.deleteAll();
+        new TransactionTemplate(transactionManager)
+                .executeWithoutResult(
+                        status -> extWorkorderPositionReplicaRepository.deleteAllByWorkorderId(workorderId));
         extWorkorderReplicaRepository.deleteById(workorderId);
         eventIds.forEach(processedEventRepository::deleteById);
         appointmentRepository.deleteById(appointmentId);
@@ -198,6 +206,37 @@ class WorkorderAppointmentLinkIntegrationTest {
         assertThat(extWorkorderReplicaRepository.existsById(workorderId)).isTrue();
         assertThat(mappingRepository.count()).isZero();
         assertThat(processedEventRepository.existsById(eventIds.get(0))).isTrue();
+    }
+
+    @Test
+    @DisplayName("#2530 - the bay history lands with the replica row and the next fact replaces it")
+    void positionHistoryIsReplicatedAndReplaced() {
+        UUID bayOne = UUIDv7Generator.generate();
+        UUID bayTwo = UUIDv7Generator.generate();
+        listener.onWorkorderEvent(
+                factWithPositions(1, "WORK_IN_PROGRESS", positionJson(bayOne, "2026-10-05T15:00:00Z", null)));
+        listener.onWorkorderEvent(factWithPositions(
+                2,
+                "WORK_IN_PROGRESS",
+                positionJson(bayOne, "2026-10-05T15:00:00Z", "2026-10-05T16:00:00Z") + ","
+                        + positionJson(bayTwo, "2026-10-05T16:00:00Z", null)));
+
+        assertThat(inTransaction(() ->
+                        extWorkorderPositionReplicaRepository.findAllByWorkorderIdOrderByAssignedAtAsc(workorderId)))
+                .extracting(p -> p.getResourceId(), p -> p.getReleasedAt())
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(bayOne, Instant.parse("2026-10-05T16:00:00Z")),
+                        org.assertj.core.groups.Tuple.tuple(bayTwo, null));
+    }
+
+    private String positionJson(UUID bayId, String assignedAt, String releasedAt) {
+        return "{\"resourceType\":\"BAY\",\"resourceId\":\"" + bayId + "\",\"locationId\":\"" + LOCATION_ID
+                + "\",\"assignedAt\":\"" + assignedAt + "\",\"releasedAt\":" + json(releasedAt) + "}";
+    }
+
+    private String factWithPositions(long version, String status, String positionsJson) {
+        String base = fact(version, status, null, ACTUAL_START, null);
+        return base.substring(0, base.length() - 2) + ",\"positions\":[" + positionsJson + "]}}";
     }
 
     private UUID linkedAppointmentOf(UUID workorder) {

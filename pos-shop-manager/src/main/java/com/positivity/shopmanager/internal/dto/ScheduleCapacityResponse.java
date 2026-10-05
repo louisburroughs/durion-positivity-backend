@@ -113,16 +113,23 @@ public class ScheduleCapacityResponse {
         private String name;
 
         @Schema(
-                description = "Total minutes of the day's window occupied by appointments in this bay "
-                        + "(the real overlap, not slots * 60; CANCELLED appointments never occupy a bay)",
+                description = "Total minutes of the day's window this bay was held for (the real overlap, "
+                        + "not slots * 60). What holds a bay (#2530): on any date, every interval a workorder "
+                        + "actually held the bay for, appointment or walk-in, an open workorder counting up "
+                        + "to the instant the view was generated and no further; and on today and future "
+                        + "dates, what is still booked — an appointment's planned window, from now on, when "
+                        + "its workorder has not finished. A past appointment that never produced work is "
+                        + "not counted: a date that has happened reports how busy the bay was, not what was "
+                        + "booked for it. CANCELLED appointments never occupy a bay.",
                 example = "240",
                 requiredMode = REQUIRED)
         private int occupiedMinutes;
 
         @Schema(
                 description = "One slot per hour of the day's window (a partial trailing hour still gets a "
-                        + "slot); each value is the count of appointments overlapping that hour, so a "
-                        + "double-booking reads greater than 1. Work that began on an earlier date (listed "
+                        + "slot); each value is the count of jobs holding the bay in that hour (see "
+                        + "occupiedMinutes for what counts), so a double-booking reads greater than 1. Work "
+                        + "that began on an earlier date (listed "
                         + "in carryOverIn below) is already reflected here, but not always in the same "
                         + "slots: an appointment whose effective window simply runs on into this day marks "
                         + "the hours it really occupies on the clock, while minutes re-anchored from a prior "
@@ -133,10 +140,12 @@ public class ScheduleCapacityResponse {
         private List<Integer> occupancy;
 
         @Schema(
-                description = "Every appointment holding this bay on this date that did not begin on this "
-                        + "date — its effective window opened on an earlier local date, whether it overran a "
-                        + "prior open day's close or is simply still running — listed once each, sorted by "
-                        + "(fromDate, appointmentId) (issues #2021 AC4/AC5/AC6, #2050). Already netted into "
+                description = "Every job holding this bay on this date that did not begin on this date — "
+                        + "its window opened on an earlier local date, whether it overran a prior open day's "
+                        + "close or is simply still running — listed once each, sorted by (fromDate, "
+                        + "appointmentId, workorderId) (issues #2021 AC4/AC5/AC6, #2050). A job is an "
+                        + "appointment, with its workorder when linked, or a walk-in workorder with no "
+                        + "appointment at all (#2530). Already netted into "
                         + "occupiedMinutes and occupancy above — this list is the detail behind those "
                         + "numbers, never an addition to them. Populated only when status is OK. Two "
                         + "independent arms fetch what is listed here, and only a job that escapes both "
@@ -151,22 +160,26 @@ public class ScheduleCapacityResponse {
                         + "actuals did not reach the range either — no started workorder, or one that had "
                         + "already completed before the range began. Neither bound carries over to "
                         + "fromDate, which reports when the work actually began and can therefore be "
-                        + "earlier than the lookback reaches. Empty when this bay has no appointments on "
-                        + "this date, or when every appointment it does have began on this date.",
+                        + "earlier than the lookback reaches. A walk-in is fetched by its own bay history "
+                        + "over the same window. Empty when this bay has no jobs on this date, or when "
+                        + "every job it does have began on this date.",
                 requiredMode = REQUIRED)
         private List<CarryOverView> carryOverIn = new ArrayList<>();
     }
 
     @Data
     @Schema(
-            description = "One earlier-starting appointment's contribution to this bay's capacity on this "
-                    + "date — the minutes it holds here because its work began before this date, however "
-                    + "those minutes reached the day (issues #2021 AC4/AC5/AC6, #2050)")
+            description = "One earlier-starting job's contribution to this bay's capacity on this date — "
+                    + "the minutes it holds here because its work began before this date, however those "
+                    + "minutes reached the day (issues #2021 AC4/AC5/AC6, #2050). At least one of "
+                    + "appointmentId and workorderId is set: an appointment is named with its linked "
+                    + "workorder when it has one, a walk-in by its workorder alone (#2530).")
     public static class CarryOverView {
 
         @Schema(
-                description = "The local date this appointment's effective window began — the linked "
-                        + "workorder's actual start when known, else the appointment's planned start. It "
+                description = "The local date this job's window began — when its workorder first took a "
+                        + "bay, else the linked workorder's actual start when known, else the appointment's "
+                        + "planned start. It "
                         + "names when the work started, which is what lets a board say what is still "
                         + "holding the bay; it is not necessarily the date of an overrun, nor necessarily "
                         + "an open day (#2050).",
@@ -175,24 +188,25 @@ public class ScheduleCapacityResponse {
         private LocalDate fromDate;
 
         @Schema(
-                description = "The identifier of the appointment holding the bay",
+                description = "The identifier of the appointment holding the bay; absent for a walk-in "
+                        + "workorder with no appointment (#2530)",
                 example = "01960003-0000-7000-8000-000000000001",
-                requiredMode = REQUIRED)
+                requiredMode = NOT_REQUIRED)
         private UUID appointmentId;
 
         @Schema(
-                description = "The linked workorder identifier this contribution's effective window came "
-                        + "from, when known",
+                description = "The workorder holding the bay — the appointment's linked workorder when "
+                        + "known, or the walk-in itself; absent only for an appointment with no workorder yet",
                 example = "01960003-0000-7000-8000-000000000005",
                 requiredMode = NOT_REQUIRED)
         private UUID workorderId;
 
         @Schema(
-                description = "Bay-hours of this date that this appointment accounts for, in tenths of an "
+                description = "Bay-hours of this date that this job accounts for, in tenths of an "
                         + "hour, whichever of two ways they reached it: either its real-clock overlap with "
                         + "this day's window, or the minutes re-anchored onto this day from a prior open "
                         + "day's overrun. The two sources are disjoint by construction — re-anchoring only "
-                        + "ever targets days after the last day the appointment directly overlapped — so "
+                        + "ever targets days after the last day the job directly overlapped — so "
                         + "exactly one of them produced this number (#2050)",
                 example = "1.5",
                 requiredMode = REQUIRED)

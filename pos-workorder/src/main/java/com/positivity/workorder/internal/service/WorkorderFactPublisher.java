@@ -8,11 +8,15 @@ import com.positivity.workorder.internal.config.OutboxEventWriter;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderServiceLine;
+import com.positivity.workorder.internal.repository.ServicePositionAssignmentRepository;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import jakarta.persistence.EntityManager;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -57,6 +61,13 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * appointment a workorder belongs to. Read as an id-only projection for the whole pending set, for
  * the reason {@link WorkorderRepository#findSourceAppointments} gives.
  *
+ * <p>The fact also carries {@code positions} (#2530) — the workorder's whole service-position
+ * history, oldest first. {@code resourceId} says only where the job is now and {@code
+ * releaseOnClose} clears it on COMPLETED and CANCELLED, so without the history a completed job's
+ * fact no longer says which bay it was done in, and a consumer cannot answer "how busy was this
+ * bay". History rows are written as {@code LocalDateTime.now(clock)}; they are published as
+ * instants in that same clock's zone.
+ *
  * <p>{@code mechanicIds} (#2015) is the workorder's current {@code technician_assignment} first,
  * followed by any {@code mechanic_ids} entry not already named — the same rule
  * {@code DashboardServiceImpl.assignedMechanics} applies for the dispatch board. The technician
@@ -94,7 +105,9 @@ public class WorkorderFactPublisher {
     private final WorkorderPartRepository workorderPartRepository;
     private final WorkorderServiceRepository workorderServiceRepository;
     private final TechnicianAssignmentRepository technicianAssignmentRepository;
+    private final ServicePositionAssignmentRepository servicePositionAssignmentRepository;
     private final EntityManager entityManager;
+    private final Clock clock;
 
     /** Mark a workorder as changed in the current transaction; one fact is emitted at commit. */
     public void markChanged(@NonNull UUID workorderId) {
@@ -156,6 +169,26 @@ public class WorkorderFactPublisher {
             }
         }
 
+        // And one for the position history (#2530), already ordered oldest first by the query.
+        Map<UUID, List<WorkorderUpdatedV1.PositionInterval>> positionsByWorkorder = new HashMap<>();
+        for (ServicePositionAssignmentRepository.PositionInterval row :
+                servicePositionAssignmentRepository.findHistory(pending)) {
+            if (row.getWorkorderId() == null
+                    || row.getResourceType() == null
+                    || row.getResourceId() == null
+                    || row.getAssignedAt() == null) {
+                continue;
+            }
+            positionsByWorkorder
+                    .computeIfAbsent(row.getWorkorderId(), ignored -> new ArrayList<>())
+                    .add(new WorkorderUpdatedV1.PositionInterval(
+                            row.getResourceType().name(),
+                            row.getResourceId(),
+                            row.getLocationId(),
+                            toInstant(row.getAssignedAt()),
+                            row.getReleasedAt() == null ? null : toInstant(row.getReleasedAt())));
+        }
+
         for (UUID workorderId : pending) {
             Workorder workorder = workorderRepository.findById(workorderId).orElse(null);
             if (workorder == null) {
@@ -201,7 +234,10 @@ public class WorkorderFactPublisher {
                     // Same precedent as promisedAt above — null until the owner actually has the field.
                     null,
                     // The appointment this work was booked as (#2531); null for a walk-in.
-                    sourceAppointmentByWorkorder.get(workorderId));
+                    sourceAppointmentByWorkorder.get(workorderId),
+                    // Every position held (#2530). Always a list, never null: an empty history is a
+                    // statement ("never placed") a consumer may act on, where an absent field is not.
+                    positionsByWorkorder.getOrDefault(workorderId, List.of()));
             writer.publish(
                     WorkorderUpdatedV1.EVENT_TYPE,
                     WorkorderUpdatedV1.SCHEMA_VERSION,
@@ -209,6 +245,11 @@ public class WorkorderFactPublisher {
                     workorder.getVersion(),
                     payload);
         }
+    }
+
+    /** History rows are stamped {@code LocalDateTime.now(clock)}, so this clock's zone reads them back. */
+    private Instant toInstant(LocalDateTime localDateTime) {
+        return localDateTime.atZone(clock.getZone()).toInstant();
     }
 
     /**
