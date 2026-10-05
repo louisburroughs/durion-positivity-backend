@@ -1,13 +1,13 @@
 package com.positivity.inventory.internal.service;
 
 import com.positivity.domainevents.workorder.WorkorderUpdatedV1;
-import com.positivity.inventory.internal.config.KafkaRails;
 import com.positivity.inventory.internal.entity.ExtWorkorderPartReplica;
 import com.positivity.inventory.internal.entity.ExtWorkorderReplica;
 import com.positivity.inventory.internal.entity.ProcessedEvent;
 import com.positivity.inventory.internal.repository.ExtWorkorderPartReplicaRepository;
 import com.positivity.inventory.internal.repository.ExtWorkorderReplicaRepository;
 import com.positivity.inventory.internal.repository.ProcessedEventRepository;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;

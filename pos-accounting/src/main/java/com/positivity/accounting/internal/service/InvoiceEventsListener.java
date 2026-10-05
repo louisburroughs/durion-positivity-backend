@@ -1,7 +1,6 @@
 package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.config.AccountingEventTypeRegistry;
-import com.positivity.accounting.internal.config.KafkaRails;
 import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.ExtInvoiceTax;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
@@ -11,6 +10,7 @@ import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.invoice.InvoiceUpdatedV1;
 import com.positivity.domainevents.invoice.TaxBreakdownLine;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;

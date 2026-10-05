@@ -3,6 +3,7 @@ package com.positivity.inventory.internal.config;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.inventory.internal.entity.OutboxEvent;
 import com.positivity.inventory.internal.repository.OutboxEventRepository;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.TenantResolver;
 import java.time.Clock;
 import java.time.Instant;

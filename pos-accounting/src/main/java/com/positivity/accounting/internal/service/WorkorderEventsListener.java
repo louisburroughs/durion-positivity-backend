@@ -1,12 +1,12 @@
 package com.positivity.accounting.internal.service;
 
-import com.positivity.accounting.internal.config.KafkaRails;
 import com.positivity.accounting.internal.entity.InvoiceRegenerationRequest;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
 import com.positivity.accounting.internal.repository.InvoiceRegenerationRequestRepository;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.domainevents.workorder.WorkorderServiceCompletedV1;
 import com.positivity.domainevents.workorder.WorkorderUpdatedV1;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.TenantIterator;
 import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import java.time.Clock;

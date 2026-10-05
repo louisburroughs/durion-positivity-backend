@@ -2,7 +2,6 @@ package com.positivity.inventory.internal.service;
 
 import com.positivity.domainevents.supplier.SupplierStockReportLine;
 import com.positivity.domainevents.supplier.SupplierStockReportUpdatedV1;
-import com.positivity.inventory.internal.config.KafkaRails;
 import com.positivity.inventory.internal.entity.ProcessedEvent;
 import com.positivity.inventory.internal.entity.SupplierStockHint;
 import com.positivity.inventory.internal.entity.SupplierStockSnapshotChunk;
@@ -14,6 +13,7 @@ import com.positivity.inventory.internal.repository.ProcessedEventRepository;
 import com.positivity.inventory.internal.repository.SupplierStockHintRepository;
 import com.positivity.inventory.internal.repository.SupplierStockSnapshotChunkRepository;
 import com.positivity.inventory.internal.repository.SupplierStockSnapshotReceiptRepository;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import java.time.Clock;
 import java.time.Instant;

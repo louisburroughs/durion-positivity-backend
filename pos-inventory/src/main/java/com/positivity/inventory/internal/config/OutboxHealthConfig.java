@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.config;
 
 import com.positivity.events.outbox.OutboxHealthContributor;
 import com.positivity.inventory.internal.repository.OutboxEventRepository;
+import com.positivity.kafka.common.KafkaRails;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Duration;

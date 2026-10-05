@@ -1,7 +1,6 @@
 package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.config.AccountingEventTypeRegistry;
-import com.positivity.accounting.internal.config.KafkaRails;
 import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
 import com.positivity.accounting.internal.entity.Vendor;
@@ -11,6 +10,7 @@ import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.accounting.internal.repository.VendorRepository;
 import com.positivity.domainevents.supplier.SupplierInvoiceReceivedV1;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import java.io.Serial;
 import java.math.BigDecimal;

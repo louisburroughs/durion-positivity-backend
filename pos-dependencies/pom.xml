@@ -35,6 +35,12 @@
                 <artifactId>pos-tenancy-common</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <!-- ADR-0044 §4 shared Kafka rails (@KafkaRails + startup guard) -->
+            <dependency>
+                <groupId>com.positivity</groupId>
+                <artifactId>pos-kafka-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
             <dependency>
                 <groupId>com.positivity</groupId>
                 <artifactId>pos-tenant</artifactId>

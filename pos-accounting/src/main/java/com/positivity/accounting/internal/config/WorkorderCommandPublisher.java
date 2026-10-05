@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.config;
 
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.tenancy.TenantResolver;
 import com.positivity.tenancy.kafka.TenantKafkaHeaders;
