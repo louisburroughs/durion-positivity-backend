@@ -325,6 +325,34 @@ class SupplierOrderResultListenerTest {
     }
 
     @Test
+    @DisplayName("a status poll from the earlier confirmed intent does not overwrite NOT_DISPATCHED")
+    void staleStatusDoesNotOverwriteNotDispatched() {
+        order.setVersionNumber(5);
+        order.setTransmissionCount(2);
+        order.setTransmittedVersionNumber(5);
+        order.setPriorTransmittedVersionNumber(3);
+        listener.onSupplierEvent(notDispatched("evt-nd-5", 5));
+
+        listener.onSupplierEvent(statusChanged("evt-st-5", "CONFIRMED", "2026-08-16T12:30:00Z", "\"2026-09-10\""));
+
+        assertThat(order.getTransmissionState()).isEqualTo(TransmissionState.NOT_DISPATCHED);
+        assertThat(order.getTransmissionCount()).isEqualTo(1);
+        assertThat(order.getTransmittedVersionNumber()).isEqualTo(3);
+        // Timeline still records it: not-dispatched entry plus the status observation.
+        verify(transmissionEventRepository, org.mockito.Mockito.times(2)).save(any());
+    }
+
+    @Test
+    @DisplayName("a late review escalation does not overwrite NOT_DISPATCHED")
+    void reviewRequiredDoesNotOverwriteNotDispatched() {
+        order.setTransmissionState(TransmissionState.NOT_DISPATCHED);
+
+        listener.onSupplierEvent(reviewRequired("evt-rr-5"));
+
+        assertThat(order.getTransmissionState()).isEqualTo(TransmissionState.NOT_DISPATCHED);
+    }
+
+    @Test
     @DisplayName("a late escalation does not drag an answered order back into limbo")
     void reviewRequiredDoesNotOverturnAnAnswer() {
         order.setTransmissionState(TransmissionState.CONFIRMED);

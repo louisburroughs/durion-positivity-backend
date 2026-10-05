@@ -246,8 +246,11 @@ public class SupplierOrderResultListener {
 
         // An order the vendor has already answered is not dragged back into limbo by a late
         // escalation about an earlier attempt.
+        // NOT_DISPATCHED is a newer, settled fact (#2492): an escalation can only be about an
+        // earlier intent, and would block the re-send the buyer is entitled to.
         if (order.getTransmissionState() == TransmissionState.CONFIRMED
-                || order.getTransmissionState() == TransmissionState.REJECTED) {
+                || order.getTransmissionState() == TransmissionState.REJECTED
+                || order.getTransmissionState() == TransmissionState.NOT_DISPATCHED) {
             log.debug("Ignoring review-required for {}: already answered", fact.purchaseOrderId());
             return;
         }
@@ -391,8 +394,11 @@ public class SupplierOrderResultListener {
         }
         // An outcome already reached is not revisited by a poll. A vendor that has confirmed or
         // refused has decided, and a status observation is a weaker statement than a decision.
+        // NOT_DISPATCHED too (#2492): polling of an earlier confirmed intent continues, and its
+        // observations describe the earlier version, not this refused request.
         if (order.getTransmissionState() == TransmissionState.CONFIRMED
-                || order.getTransmissionState() == TransmissionState.REJECTED) {
+                || order.getTransmissionState() == TransmissionState.REJECTED
+                || order.getTransmissionState() == TransmissionState.NOT_DISPATCHED) {
             order.setTransmissionObservedAt(fact.observedAt());
             order.setSupplierOrderNumber(
                     fact.supplierOrderNumber() == null ? order.getSupplierOrderNumber() : fact.supplierOrderNumber());
