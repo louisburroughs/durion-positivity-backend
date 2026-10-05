@@ -4,6 +4,7 @@ import com.positivity.catalog.internal.dto.ProductFactReplayResultDto;
 import com.positivity.catalog.internal.dto.ServiceFactReplayResultDto;
 import com.positivity.catalog.internal.dto.SupplierArticleCodeReplayResultDto;
 import com.positivity.catalog.internal.exception.CatalogBusinessRuleException;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.TenantResolver;
 import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import com.positivity.tenancy.kafka.TenantKafkaHeaders;
@@ -16,7 +17,6 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -163,7 +163,7 @@ import tools.jackson.databind.ObjectMapper;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(prefix = "pos.catalog.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class CatalogCommandListener {
 
     /** Canonical dotted name normalized to command-type form: CATALOG_OUTBOX_REPLAY_REQUESTED. */

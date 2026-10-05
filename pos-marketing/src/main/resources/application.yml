@@ -72,9 +72,7 @@ pos:
   marketing:
     kafka:
       # Domain-event publishing (ADR-0044 §4) plus the customer-events consumer that keeps
-      # the local suppression replica current. Off until the broker is provisioned; flip
-      # POS_MARKETING_KAFKA_ENABLED per environment.
-      enabled: ${POS_MARKETING_KAFKA_ENABLED:false}
+      # the local suppression replica current.
       # This module's own fact topic.
       events-topic: ${POS_MARKETING_EVENTS_TOPIC:marketing.events.v1}
       # Suppression, consent decisions, segment definitions, resolved membership, and

@@ -1,6 +1,7 @@
 package com.positivity.people.internal.service;
 
 import com.positivity.domainevents.workorder.JobTimeRecordedV1;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.people.internal.entity.ExtJobTimeReplica;
 import com.positivity.people.internal.entity.ProcessedEvent;
 import com.positivity.people.internal.repository.ExtJobTimeReplicaRepository;
@@ -13,7 +14,6 @@ import java.time.Instant;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -41,7 +41,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "pos.people.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class WorkorderEventsListener {
 
     static final String OWNER = "workorder";

@@ -1,19 +1,17 @@
 package com.positivity.platformsender.internal.config;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import com.positivity.kafka.common.KafkaRails;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.annotation.EnableKafka;
 
 /**
- * Enables Kafka listener infrastructure for pos-platform-sender when Kafka integration is enabled
+ * Enables Kafka listener infrastructure for pos-platform-sender (ADR-0044 §4 tier-1 rails)
  * (pos-accounting {@code KafkaConfig} pattern).
  *
- * <p>Activation is controlled by {@code pos.platform-sender.kafka.enabled=true} in application
- * configuration. When disabled (the default), no listener containers are registered and the
- * module runs without a message broker dependency — the outbox writer/publisher share the
- * same flag.
+ * <p>A {@code @KafkaRails} bean: active in every deployed profile, absent only in the
+ * broker-less dev and test profiles. The outbox writer/publisher share the same gate.
  */
 @Configuration
 @EnableKafka
-@ConditionalOnProperty(prefix = "pos.platform-sender.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class KafkaConfig {}

@@ -1,6 +1,7 @@
 package com.positivity.securityservice.internal.service;
 
 import com.positivity.domainevents.people.StaffingAssignmentUpdatedV1;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.securityservice.internal.entity.ExtStaffingAssignmentReplica;
 import com.positivity.securityservice.internal.entity.ProcessedEvent;
 import com.positivity.securityservice.internal.repository.ExtStaffingAssignmentReplicaRepository;
@@ -14,7 +15,6 @@ import java.time.LocalDate;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -51,7 +51,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "pos.security-service.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class PeopleEventsListener {
     private static final String PAYLOAD = "payload";
     private static final String AGGREGATE_VERSION = "aggregateVersion";

@@ -117,6 +117,12 @@
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
         </dependency>
+        <!-- ADR-0044 §4 shared Kafka rails: @KafkaRails and its startup guard (#2463) -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-kafka-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>com.positivity</groupId>
             <artifactId>pos-events</artifactId>
@@ -132,8 +138,8 @@
 
         <!-- Kafka consumer support for those facts. Spring Boot 4 moved KafkaAutoConfiguration out
              of spring-boot-autoconfigure into spring-boot-kafka, so the bare spring-kafka dependency
-             no longer yields an auto-configured listener container factory. Listeners are gated on
-             pos.mcp.kafka.enabled, so the broker stays optional for this service. -->
+             no longer yields an auto-configured listener container factory. Listeners are
+             @KafkaRails beans (ADR-0044 §4). -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-kafka</artifactId>

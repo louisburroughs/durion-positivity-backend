@@ -6,11 +6,11 @@ import com.positivity.domainevents.supplier.SupplierCatalogRepublishCompletedV1;
 import com.positivity.domainevents.supplier.SupplierCatalogUpdatedV1;
 import com.positivity.domainevents.supplier.SupplierPriceCatalogImportCompletedV1;
 import com.positivity.domainevents.supplier.SupplierPriceCatalogUpdatedV1;
+import com.positivity.kafka.common.KafkaRails;
 import java.time.Clock;
 import java.time.Instant;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
@@ -57,7 +57,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "pos.catalog.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class SupplierEventsListener {
 
     /** Producing domain, per the repo-wide processed_events convention. */

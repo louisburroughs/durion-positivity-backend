@@ -111,9 +111,8 @@ fixtures it was built from).
 | `sms.configuration-set` | `POS_PLATFORM_SENDER_SMS_CONFIGURATION_SET` | blank | End User Messaging configuration set with the SNS event destination |
 | `sms.message-type` | `POS_PLATFORM_SENDER_SMS_MESSAGE_TYPE` | `PROMOTIONAL` | `TRANSACTIONAL` or `PROMOTIONAL` |
 | `sms.default-country-code` | `POS_PLATFORM_SENDER_SMS_DEFAULT_COUNTRY_CODE` | `1` | Code for stored national numbers |
-| `outcomes.enabled` | `POS_PLATFORM_SENDER_OUTCOMES_ENABLED` | `false` | Run the queue poll (needs `kafka.enabled`) |
+| `outcomes.enabled` | `POS_PLATFORM_SENDER_OUTCOMES_ENABLED` | `false` | Run the queue poll |
 | `outcomes.queue-url` | `POS_PLATFORM_SENDER_OUTCOMES_QUEUE_URL` | blank | The SQS queue the SNS topic(s) deliver to |
-| `kafka.enabled` | `POS_PLATFORM_SENDER_KAFKA_ENABLED` | `false` | Replica consumers and the outbox drain |
 
 Credentials come from the AWS default provider chain: on the alpha host, the EC2 instance profile
 (`durion-alpha-instance-profile`; the container reaches IMDSv2, which needs a hop limit of 2). The

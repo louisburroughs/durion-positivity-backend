@@ -19,7 +19,7 @@ import org.springframework.stereotype.Component;
  *
  * <p>Called by {@link TenantServiceImpl} after {@code saveAndFlush}, so the entity's {@code
  * @Version} already reflects the mutation and the envelope's {@code aggregateVersion} strictly
- * increases per committed change. When Kafka publishing is off ({@code pos.tenant.kafka.enabled=false})
+ * increases per committed change. When the Kafka rails are off (broker-less dev/test profiles)
  * the writer bean is absent and every method is a no-op.
  */
 @Slf4j

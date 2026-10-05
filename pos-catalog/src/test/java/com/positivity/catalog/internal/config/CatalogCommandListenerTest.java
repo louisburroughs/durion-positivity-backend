@@ -266,18 +266,17 @@ class CatalogCommandListenerTest {
     }
 
     @Test
-    @DisplayName("Kafka disabled: without a component (ConditionalOnProperty false) no listener bean exists,"
+    @DisplayName("Kafka rails off: without a component (@KafkaRails excluded) no listener bean exists,"
             + " so onCommand is never invoked in that profile — verified via the disabled refusal path instead")
     void kafkaDisabledSurfacesAsPublicationDisabledRefusal() {
-        // pos.catalog.kafka.enabled=false means CatalogFactPublisher.publicationEnabled() is false,
+        // With the rails off (dev/test) CatalogFactPublisher.publicationEnabled() is false,
         // which every replay service surfaces as CatalogBusinessRuleException — already covered by
         // publicationDisabledOnOneScopeDoesNotBlockOthers. This test documents that this listener
         // itself carries no separate enabled/disabled branch: it is entirely gated out of the
-        // Spring context by @ConditionalOnProperty when Kafka is off (mirroring LocationCommandListener),
+        // Spring context by @KafkaRails when the rails are off (mirroring LocationCommandListener),
         // and delegates the "would emit nothing" refusal to the replay services it calls.
-        assertThat(CatalogCommandListener.class.getAnnotation(
-                        org.springframework.boot.autoconfigure.condition.ConditionalOnProperty.class))
-                .isNotNull();
+        assertThat(CatalogCommandListener.class.isAnnotationPresent(com.positivity.kafka.common.KafkaRails.class))
+                .isTrue();
     }
 
     // ------------------------------------------------------------------

@@ -26,7 +26,7 @@ import org.springframework.stereotype.Component;
 /**
  * Emits people-contact identity facts to the outbox after mutations (ADR-0044 §6, #874).
  *
- * <p>No-op when the Kafka feature flag ({@code pos.people-contact.kafka.enabled}) is off — the
+ * <p>No-op when the Kafka rails are off (dev/test profiles) — the
  * {@link OutboxEventWriter} bean is conditional, so this publisher degrades gracefully. Must be
  * called inside the mutating transaction (the writer requires {@code MANDATORY} propagation).
  *

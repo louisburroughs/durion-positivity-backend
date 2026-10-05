@@ -95,7 +95,6 @@ tenant. Global tables: `db/tenancy-global-tables.txt`.
 | --- | --- | --- |
 | `pos.tenant.registry.api-secret` | (blank: refuse) | Shared secret for `GET /internal/v1/tenants` (`POS_TENANT_REGISTRY_API_SECRET`) |
 | `pos.tenancy.unenforced-paths` | `/internal/v1/tenants` | Paths `TenantContextFilter` never refuses for lack of a tenant |
-| `pos.tenant.kafka.enabled` | `false` | Outbox drain, fact publishing and the `tenant.provisioned` consumer |
 | `pos.tenant.kafka.events-topic` | `tenant.events.v1` | Fact topic |
 | `pos.tenant.kafka.events-consumer-group` | `pos-tenant-events` | Consumer group |
 | `pos.tenant.outbox.poll-interval-ms` / `send-timeout-ms` | `1000` / `10000` | Outbox drain |

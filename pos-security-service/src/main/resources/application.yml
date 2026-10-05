@@ -105,7 +105,6 @@ pos:
       # ADR-0044 / amended ADR-0043 (#876): people-contact.events.v1 feeds the users.person_id
       # projection and the identity replica; person/link commands go out via the outbox to
       # people-contact.commands.v1; people-contact.manifest.v1 drives reconciliation.
-      enabled: ${POS_SECURITY_SERVICE_KAFKA_ENABLED:false}
       people-contact-events-topic: ${POS_SECURITY_PC_EVENTS_TOPIC:people-contact.events.v1}
       people-contact-events-consumer-group: ${POS_SECURITY_PC_EVENTS_CONSUMER_GROUP:pos-security-people-contact-events}
       people-contact-manifest-topic: ${POS_SECURITY_PC_MANIFEST_TOPIC:people-contact.manifest.v1}

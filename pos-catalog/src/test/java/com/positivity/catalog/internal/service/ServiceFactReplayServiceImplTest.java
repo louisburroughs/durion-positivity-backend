@@ -169,7 +169,7 @@ class ServiceFactReplayServiceImplTest {
     @Test
     @DisplayName("refuses when fact publication is disabled, rather than reporting a successful no-op")
     void refusesWhenPublicationIsDisabled() {
-        // The publisher is silent with pos.catalog.kafka.enabled=false, so a replay would read
+        // The publisher is silent with the Kafka rails off, so a replay would read
         // every row, queue nothing, and report the rows it read as facts it emitted — telling an
         // operator a replica was seeded when the outbox never saw a row.
         when(catalogFactPublisher.publicationEnabled()).thenReturn(false);

@@ -1,18 +1,18 @@
 package com.positivity.mcp.internal.config;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import com.positivity.kafka.common.KafkaRails;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.annotation.EnableKafka;
 
 /**
  * Enables Kafka listener infrastructure for pos-mcp-server (#1613).
  *
- * <p>Activated by {@code pos.mcp.kafka.enabled=true}. When disabled — the default — no Kafka beans
- * are registered and the service runs without a broker, falling back to the startup pull, the
- * on-miss fetch, and the scheduled re-pull. The broker is an optimization here, not a dependency:
- * it removes the staleness window on a persona edit, and nothing else.
+ * <p>A {@code @KafkaRails} bean (ADR-0044 §4): active in every deployed profile, absent only in the
+ * broker-less dev and test profiles, where the service falls back to the startup pull, the
+ * on-miss fetch, and the scheduled re-pull. The listener removes the staleness window on a persona
+ * edit.
  */
 @Configuration
 @EnableKafka
-@ConditionalOnProperty(prefix = "pos.mcp.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class KafkaConfig {}

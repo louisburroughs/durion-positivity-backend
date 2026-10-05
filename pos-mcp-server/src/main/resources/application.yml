@@ -675,10 +675,6 @@ pos:
     default-tenant-id: ${POS_TENANCY_DEFAULT_TENANT_ID:01900000-0000-7000-8000-000000000001}
   mcp:
     kafka:
-      # Off by default: this service has no other broker dependency, and the pull tiers keep role
-      # personas correct without one (#1613). Enabling it only removes the staleness window on a
-      # persona edit to a role already in the snapshot, which never triggers the on-miss fetch.
-      enabled: ${POS_MCP_KAFKA_ENABLED:false}
       security-events-topic: ${POS_MCP_SECURITY_EVENTS_TOPIC:security.events.v1}
       security-events-consumer-group: ${POS_MCP_SECURITY_EVENTS_CONSUMER_GROUP:pos-mcp-security-events}
   accounting:

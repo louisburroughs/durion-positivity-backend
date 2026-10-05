@@ -39,7 +39,7 @@ import org.springframework.stereotype.Component;
  * (issue #1668). Retiring either aggregate (DECISION-LOCATION-026, issue #2264) is a {@code status}
  * change like any other, published through these same methods — there is no bay/mobile-unit
  * tombstone fact any more.
- * When Kafka publishing is disabled ({@code pos.location.kafka.enabled=false}) the outbox writer
+ * When the Kafka rails are off (broker-less dev/test profiles) the outbox writer
  * bean is absent and every method is a no-op, so callers never need their own guard.
  *
  * <p>Bay and mobile-unit lifecycle facts (issue #1668) close the gap that left pos-workorder's and

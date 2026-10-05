@@ -98,16 +98,13 @@ pos:
       # Country calling code prepended to a stored number without one (10 digits, NANP).
       default-country-code: ${POS_PLATFORM_SENDER_SMS_DEFAULT_COUNTRY_CODE:1}
     outcomes:
-      # SQS long-poll of the SES and SMS event destinations (via SNS). Needs kafka.enabled.
+      # SQS long-poll of the SES and SMS event destinations (via SNS).
       enabled: ${POS_PLATFORM_SENDER_OUTCOMES_ENABLED:false}
       queue-url: ${POS_PLATFORM_SENDER_OUTCOMES_QUEUE_URL:}
       wait-time-seconds: ${POS_PLATFORM_SENDER_OUTCOMES_WAIT_TIME_SECONDS:20}
       max-messages: ${POS_PLATFORM_SENDER_OUTCOMES_MAX_MESSAGES:10}
       poll-delay-ms: ${POS_PLATFORM_SENDER_OUTCOMES_POLL_DELAY_MS:1000}
     kafka:
-      # Replica consumers plus the outbox drain to sender.outcomes.v1. Off until the broker is
-      # provisioned; flip POS_PLATFORM_SENDER_KAFKA_ENABLED per environment.
-      enabled: ${POS_PLATFORM_SENDER_KAFKA_ENABLED:false}
       # This module's own fact topic (FI-2 §2).
       outcomes-topic: ${POS_PLATFORM_SENDER_OUTCOMES_TOPIC:sender.outcomes.v1}
       # CRM person parties -> pos-people-contact person (ADR-0044 R3 replica).

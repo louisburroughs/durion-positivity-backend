@@ -1,6 +1,7 @@
 package com.positivity.platformsender.internal.config;
 
 import com.positivity.domainevents.DomainEventEnvelope;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.platformsender.internal.entity.OutboxEvent;
 import com.positivity.platformsender.internal.repository.OutboxEventRepository;
 import com.positivity.tenancy.TenantResolver;
@@ -9,7 +10,6 @@ import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,12 +21,12 @@ import tools.jackson.databind.ObjectMapper;
  * <p>Serializes a full {@link DomainEventEnvelope} into {@code event_outbox} within the caller's
  * transaction, so an outcome is queued if and only if the provider event that produced it is
  * recorded as relayed. {@link OutboxPublisher} drains the table to Kafka with at-least-once
- * delivery. Exists only when {@code pos.platform-sender.kafka.enabled=true}.
+ * delivery. A {@code @KafkaRails} bean: absent in the broker-less dev/test profiles.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(prefix = "pos.platform-sender.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class OutboxEventWriter {
 
     private final Clock clock;

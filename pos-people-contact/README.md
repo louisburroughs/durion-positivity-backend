@@ -21,7 +21,7 @@ Identity, contact, and user-link authority service for the Durion Positivity pla
 - Publishes reconciliation manifests to `people-contact.manifest.v1`
 - Consumes `people-contact.commands.v1` (`people-contact.outbox.replay-requested`
   for replica bootstrap / drift repair)
-- Feature flag: `pos.people-contact.kafka.enabled` (`POS_PEOPLE_CONTACT_KAFKA_ENABLED`)
+- No feature flag: the Kafka rails are tier-1 (`@KafkaRails`), off only in the broker-less `dev`/`test`/`pg` profiles
 
 ## Permissions
 

@@ -47,9 +47,6 @@ pos:
   tenancy:
     # strict: nothing binds a tenant unless the test does
     default-tenant-id:
-  mcp:
-    kafka:
-      enabled: false
   events:
     base-url: http://127.0.0.1:1
 

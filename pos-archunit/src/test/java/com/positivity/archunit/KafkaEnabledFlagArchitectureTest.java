@@ -42,22 +42,10 @@ class KafkaEnabledFlagArchitectureTest {
             "org.springframework.boot.autoconfigure.condition.ConditionalOnProperty";
 
     /**
-     * Root packages of modules whose {@code kafka.enabled} opt-in is not yet retired (#2463 PRs 2 and
-     * 3 delete entries; the end state is an empty set).
+     * Root packages of modules whose {@code kafka.enabled} opt-in is not yet retired (#2463: only pos-supplier
+     * remains, held back because alpha runs it with the flag off; the end state is an empty set).
      */
-    static final Set<String> NOT_YET_CONVERTED = Set.of(
-            "com.positivity.location",
-            "com.positivity.catalog",
-            "com.positivity.shopmanager",
-            "com.positivity.people",
-            "com.positivity.securityservice",
-            "com.positivity.platformsender",
-            "com.positivity.marketing",
-            "com.positivity.vehicle",
-            "com.positivity.peoplecontact",
-            "com.positivity.tenant",
-            "com.positivity.supplier",
-            "com.positivity.mcp");
+    static final Set<String> NOT_YET_CONVERTED = Set.of("com.positivity.supplier");
 
     @ArchTest
     static final ArchRule NO_KAFKA_ENABLED_ON_CLASSES = classes()

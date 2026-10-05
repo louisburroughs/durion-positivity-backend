@@ -2,6 +2,7 @@ package com.positivity.location.internal.service;
 
 import com.positivity.domainevents.peoplecontact.PersonDeletedV1;
 import com.positivity.domainevents.peoplecontact.PersonUpdatedV1;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.location.internal.entity.ExtPersonReplica;
 import com.positivity.location.internal.entity.ProcessedEvent;
 import com.positivity.location.internal.repository.ExtPersonReplicaRepository;
@@ -16,7 +17,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -44,7 +44,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "pos.location.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class PeopleContactEventsListener {
 
     static final String OWNER = "people-contact";

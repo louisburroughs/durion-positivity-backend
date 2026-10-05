@@ -1,13 +1,13 @@
 package com.positivity.tenant.internal.service;
 
 import com.positivity.domainevents.tenant.TenantEventTypes;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.PlatformTenant;
 import com.positivity.tenancy.TenantContext;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
@@ -28,7 +28,7 @@ import tools.jackson.databind.ObjectMapper;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(prefix = "pos.tenant.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class TenantEventsListener {
 
     private final ObjectMapper objectMapper;

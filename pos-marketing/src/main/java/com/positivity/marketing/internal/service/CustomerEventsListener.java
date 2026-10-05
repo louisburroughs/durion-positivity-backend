@@ -5,6 +5,7 @@ import com.positivity.domainevents.customer.CustomerRedemptionRecordedV1;
 import com.positivity.domainevents.customer.CustomerSegmentChangedV1;
 import com.positivity.domainevents.customer.CustomerSegmentResolvedV1;
 import com.positivity.domainevents.customer.CustomerSuppressionChangedV1;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.marketing.internal.entity.Campaign;
 import com.positivity.marketing.internal.entity.CampaignAttribution;
 import com.positivity.marketing.internal.entity.CampaignAudienceMember;
@@ -26,7 +27,6 @@ import java.util.List;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,7 +54,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "pos.marketing.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class CustomerEventsListener {
 
     private static final String OWNER = "pos-customer";

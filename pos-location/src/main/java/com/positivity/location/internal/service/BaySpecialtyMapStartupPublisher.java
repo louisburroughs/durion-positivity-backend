@@ -1,12 +1,12 @@
 package com.positivity.location.internal.service;
 
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.TenantIterator;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
@@ -33,7 +33,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(prefix = "pos.location.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class BaySpecialtyMapStartupPublisher implements ApplicationRunner {
 
     private final TenantIterator tenantIterator;
