@@ -80,7 +80,7 @@ added_modes:
 
 # initial prompt for the project. It will always be given to the LLM upon activating the project
 # (contrary to the memories, which are loaded on demand).
-initial_prompt: ""
+initial_prompt: "Before navigating ADRs, domains, backend modules or platform docs, consult the workspace knowledge catalog at ../durion/knowledge-catalog/index.md (see memory knowledge_catalog). Entries are pointers: follow their path: frontmatter to the authoritative source."
 
 # time budget (seconds) per tool call for the retrieval of additional symbol information
 # such as docstrings or parameter information.

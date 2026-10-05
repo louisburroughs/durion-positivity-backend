@@ -4084,17 +4084,17 @@ paths:
       - accounting:events:view
   /v1/accounting/events/{eventId}/retry:
     post:
-      description: 'Re-runs pipeline processing for a failed accounting event using its original payload and the current rules.
+      description: 'Re-runs posting for a FAILED accounting event through the posting engine using its original payload and the current rules; the event ends PROCESSED, FAILED, SUSPENDED or SKIPPED (the engine''s terminal outcome for an event that posts nothing, e.g. no amount).
 
         Use this tool for transient failures; do not use reprocessSuspendedEvent, which is the audited path for SUSPENDED events after a mapping or rule correction.
 
-        Preconditions: the event must exist and be in a retryable failed state.
+        Preconditions: the event must exist and be in status FAILED; any other status is rejected and the event is left unchanged. The previous failure detail stays on the event until the new outcome replaces it.
 
         Required inputs: eventId (UUID) as a path parameter; the request body is optional and ignored.
 
-        Emits an ACCOUNTING_EVENT_RETRY event and returns 202 while processing continues asynchronously.
+        Emits an ACCOUNTING_EVENT_RETRY event and returns 202 with the event in its new status.
 
-        Returns 404 EVENT_NOT_FOUND when the event does not exist.
+        Returns 404 EVENT_NOT_FOUND when the event does not exist, and 409 EVENT_NOT_RETRYABLE when the event is not FAILED.
 
         '
       operationId: retryAccountingEvent
@@ -4121,13 +4121,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AccountingEventResponse'
-          description: Retry requested
+          description: Retry ran; the event carries its new status
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Event not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'EVENT_NOT_RETRYABLE: the event is not FAILED and was left unchanged'
       security:
       - bearerAuth:
         - accounting:events:retry
