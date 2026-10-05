@@ -2,6 +2,7 @@ package com.positivity.securityservice.internal.service;
 
 import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -17,6 +18,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -49,6 +51,7 @@ class PeopleManifestListenerTest {
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setUp() {
+        when(kafkaTemplate.send(any(ProducerRecord.class))).thenReturn(CompletableFuture.completedFuture(null));
         meterRegistry = new SimpleMeterRegistry();
         ObjectProvider<MeterRegistry> provider = mock(ObjectProvider.class);
         when(provider.getIfAvailable()).thenReturn(meterRegistry);
@@ -132,12 +135,14 @@ class PeopleManifestListenerTest {
     }
 
     @Test
-    @DisplayName("swallows a failure to publish the replay request")
-    void whenReplayPublishFails_doesNotPropagate() {
+    @DisplayName("propagates a failed replay publish so the container redelivers the manifest (#2452)")
+    void whenReplayPublishFails_propagates() {
         replicaHas(List.of());
         when(kafkaTemplate.send(any(ProducerRecord.class))).thenThrow(new RuntimeException("broker down"));
 
-        listener.onManifest(manifestFor(List.of("id-1")));
+        assertThatThrownBy(() -> listener.onManifest(manifestFor(List.of("id-1"))))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("broker down");
 
         assertThat(driftCount()).isEqualTo(1d);
     }

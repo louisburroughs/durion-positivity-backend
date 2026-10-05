@@ -47,6 +47,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.BeforeEach;
@@ -743,6 +744,12 @@ class ReplicaAndManifestListenerContractTest {
     @DisplayName("manifest listeners")
     class Manifests {
 
+        /** A replay request the broker acknowledges; a test that wants a failure re-stubs it. */
+        @BeforeEach
+        void brokerAcknowledgesReplayRequests() {
+            when(kafkaTemplate.send(any(ProducerRecord.class))).thenReturn(CompletableFuture.completedFuture(null));
+        }
+
         @ParameterizedTest
         @FieldSource("com.positivity.shopmanager.internal.service.ReplicaAndManifestListenerContractTest#MANIFESTS")
         @DisplayName("stays silent on a matching window")
@@ -796,7 +803,7 @@ class ReplicaAndManifestListenerContractTest {
 
         @ParameterizedTest
         @FieldSource("com.positivity.shopmanager.internal.service.ReplicaAndManifestListenerContractTest#MANIFESTS")
-        @DisplayName("drops an unparseable manifest and survives a failed replay publish")
+        @DisplayName("drops an unparseable manifest, propagates a failed replay publish")
         void robustness(String owner) {
             Manifest manifest = manifest(owner);
 
@@ -806,7 +813,9 @@ class ReplicaAndManifestListenerContractTest {
             replicaHolds(manifest, List.of());
             when(kafkaTemplate.send(any(ProducerRecord.class))).thenThrow(new IllegalStateException("broker down"));
 
-            manifest.dispatch().accept(manifestMessage(3, "owner-checksum"));
+            assertThatThrownBy(() -> manifest.dispatch().accept(manifestMessage(3, "owner-checksum")))
+                    .isInstanceOf(RuntimeException.class)
+                    .hasMessage("broker down");
 
             // Metric still fired; the broker outage must not take the consumer down.
             assertThat(driftCount(manifest.owner())).isEqualTo(1.0);

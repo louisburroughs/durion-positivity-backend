@@ -603,3 +603,13 @@ flattened into the baseline for ADR-0062; see `../durion/docs/architecture/deplo
 ```bash
 ./mvnw -pl pos-accounting -am spring-boot:run
 ```
+
+## Reconciliation manifest replay requests (#2452)
+
+A manifest listener that finds drift sends the owner's `outbox.replay-requested` command through
+`OutboxReplayRequests`, which waits up to 30s for the broker's acknowledgement. A request that cannot
+be handed to Kafka, that the broker rejects, or that is not acknowledged in time propagates to `KafkaErrorHandlingConfig`, which retries the manifest with backoff and then dead-letters it to `{topic}.dlq`.
+Swallowing it would lose the repair for good, because each owner publishes a window's manifest once
+and no later manifest covers that window again. Redelivery is safe: a manifest writes nothing, the
+comparison only reads, and the replay command is keyed by window start. A manifest that does not parse
+is still dropped.

@@ -2,6 +2,7 @@ package com.positivity.people.internal.service;
 
 import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
@@ -16,6 +17,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.BeforeEach;
@@ -85,6 +87,7 @@ class ManifestListenerContractTest {
 
     @BeforeEach
     void setUp() {
+        when(kafkaTemplate.send(any(ProducerRecord.class))).thenReturn(CompletableFuture.completedFuture(null));
         meterRegistry = new SimpleMeterRegistry();
         when(meterRegistryProvider.getIfAvailable()).thenReturn(meterRegistry);
     }
@@ -217,16 +220,18 @@ class ManifestListenerContractTest {
 
     @ParameterizedTest
     @FieldSource("LISTENERS")
-    @DisplayName("still counts drift when the replay request cannot be published")
+    @DisplayName("counts drift and propagates when the replay request cannot be published")
     void replayPublishFailureStillCountsDrift(String owner) {
         Listener listener = listener(owner);
         replicaHolds(listener, List.of());
         when(kafkaTemplate.send(any(ProducerRecord.class))).thenThrow(new IllegalStateException("broker down"));
 
-        listener.dispatch().accept(manifest(3, "owner-checksum"));
+        assertThatThrownBy(() -> listener.dispatch().accept(manifest(3, "owner-checksum")))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("broker down");
 
-        // Best effort by design: the metric already fired and the next manifest re-detects, so a
-        // broker outage must not take the consumer down with it.
+        // The drift metric fires before the send. The exception must reach the container's error
+        // handler (backoff, then {topic}.dlq): no later manifest covers this window again (#2452).
         assertThat(driftCount(listener.owner())).isEqualTo(1.0);
     }
 

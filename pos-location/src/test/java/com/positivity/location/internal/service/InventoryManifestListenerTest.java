@@ -2,6 +2,7 @@ package com.positivity.location.internal.service;
 
 import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -17,6 +18,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -59,6 +61,7 @@ class InventoryManifestListenerTest {
 
     @BeforeEach
     void setUp() {
+        when(kafkaTemplate.send(any(ProducerRecord.class))).thenReturn(CompletableFuture.completedFuture(null));
         meterRegistry = new SimpleMeterRegistry();
         listener = newListener(meterRegistry);
     }
@@ -180,16 +183,19 @@ class InventoryManifestListenerTest {
     }
 
     @Test
-    void survivesAFailureToPublishTheReplayRequest() {
+    void failedReplayPublishPropagates() {
         when(processedEventRepository.findEventIdsInRange(anyString(), any(), anyString(), anyString()))
                 .thenReturn(List.of());
         org.mockito.Mockito.doThrow(new IllegalStateException("broker down"))
                 .when(kafkaTemplate)
                 .send(any(ProducerRecord.class));
 
-        listener.onManifest(envelope(EVENT_IDS.size(), ReconciliationManifestV1.checksumOf(EVENT_IDS)));
+        assertThatThrownBy(() ->
+                        listener.onManifest(envelope(EVENT_IDS.size(), ReconciliationManifestV1.checksumOf(EVENT_IDS))))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("broker down");
 
-        // The drift metric still fired; the next manifest re-detects the gap.
+        // The drift metric still fired before the send failed.
         assertThat(driftCount()).isEqualTo(1.0d);
     }
 

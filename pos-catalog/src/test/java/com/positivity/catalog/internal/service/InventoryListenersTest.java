@@ -29,6 +29,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -303,6 +304,12 @@ class InventoryListenersTest {
     @DisplayName("reconciliation manifest listener")
     class Manifest {
 
+        /** A replay request the broker acknowledges; a test that wants a failure re-stubs it. */
+        @BeforeEach
+        void brokerAcknowledgesReplayRequests() {
+            when(kafkaTemplate.send(any(ProducerRecord.class))).thenReturn(CompletableFuture.completedFuture(null));
+        }
+
         private InventoryManifestListener manifestListener() {
             InventoryManifestListener manifestListener = new InventoryManifestListener(
                     processedEventRepository, kafkaTemplate, objectMapper, meterRegistryProvider);
@@ -367,7 +374,7 @@ class InventoryListenersTest {
         }
 
         @Test
-        @DisplayName("drops an unparseable manifest and survives a failed replay publish")
+        @DisplayName("drops an unparseable manifest, propagates a failed replay publish")
         void robustness() {
             manifestListener().onManifest("{not json");
             verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
@@ -375,7 +382,9 @@ class InventoryListenersTest {
             replicaHolds(List.of());
             when(kafkaTemplate.send(any(ProducerRecord.class))).thenThrow(new IllegalStateException("broker down"));
 
-            manifestListener().onManifest(manifestMessage(3, "owner-checksum"));
+            assertThatThrownBy(() -> manifestListener().onManifest(manifestMessage(3, "owner-checksum")))
+                    .isInstanceOf(RuntimeException.class)
+                    .hasMessage("broker down");
 
             assertThat(driftCount()).isEqualTo(1.0);
         }
