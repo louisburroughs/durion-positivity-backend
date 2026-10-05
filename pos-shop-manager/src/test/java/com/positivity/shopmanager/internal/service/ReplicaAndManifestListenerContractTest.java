@@ -277,6 +277,7 @@ class ReplicaAndManifestListenerContractTest {
                                 objectMapper,
                                 processedEventRepository,
                                 workorderRepository,
+                                org.mockito.Mockito.mock(WorkorderAppointmentLinkService.class),
                                 applicationEventPublisher,
                                 org.mockito.Mockito.mock(ObjectProvider.class),
                                 org.mockito.Mockito.mock(PlatformTransactionManager.class))::onWorkorderEvent,

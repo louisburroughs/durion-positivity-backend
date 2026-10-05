@@ -408,6 +408,24 @@ but the event consumer writes them, and no synchronous call crosses a domain wal
 | `ext_location`, `ext_location_parent` | `location.events.v1` | `LocationEventsListener` |
 | `ext_bay_type`, `ext_bay_specialty_map` | `location.events.v1` | `LocationEventsListener` (#2261) |
 
+### Workorder-to-appointment link (#2531)
+
+`work_order_appointment_mapping` is not a replica but is written from the same feed.
+`WorkorderEventsListener` is its only writer: when a `workorder.workorder.updated` fact names an
+`appointmentId` (the appointment the workorder's estimate came from), the listener links the workorder
+to that appointment in the transaction that writes the `ext_workorder` row, through
+`WorkorderAppointmentLinkService`. The link is what the appointment status sync
+(`WorkorderStatusEventService`), the appointment's actual start and finish, and the capacity read's
+carry-over all look up.
+
+- One row per workorder (`work_order_id` is the key). A workorder already linked keeps its link; every
+  later fact repeats the same appointment.
+- A fact with no `appointmentId` (a walk-in, or a producer older than the field) links nothing and
+  removes nothing.
+- An `appointmentId` this module does not hold is logged and skipped, and the replica row still lands.
+- An appointment created with `sourceType: WORK_ORDER` does not get a row from that alone; only the
+  workorder's own fact writes one.
+
 ### Not yet replicated is `503`, not `404` (#1994)
 
 A replica row arrives by event, so an id with no row is either wrong or not here yet, and a `404`

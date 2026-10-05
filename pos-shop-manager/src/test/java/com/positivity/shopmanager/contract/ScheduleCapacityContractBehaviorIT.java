@@ -4,6 +4,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.domainevents.workorder.WorkorderUpdatedV1;
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.shopmanager.BaseContractIntegrationTest;
 import com.positivity.shopmanager.PosShopManagerApplication;
@@ -17,20 +18,29 @@ import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.ExtBayReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtLocationReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtWorkorderReplicaRepository;
+import com.positivity.shopmanager.internal.repository.ProcessedEventRepository;
 import com.positivity.shopmanager.internal.repository.WorkOrderAppointmentMappingRepository;
+import com.positivity.shopmanager.internal.service.WorkorderAppointmentLinkService;
+import com.positivity.shopmanager.internal.service.WorkorderEventsListener;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.PlatformTransactionManager;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Contract behavioral integration tests for issue #2023: {@code GET /v1/schedules/capacity}.
@@ -93,6 +103,18 @@ class ScheduleCapacityContractBehaviorIT extends BaseContractIntegrationTest {
 
     @Autowired
     private ExtWorkorderReplicaRepository extWorkorderReplicaRepository;
+
+    @Autowired
+    private ProcessedEventRepository processedEventRepository;
+
+    @Autowired
+    private WorkorderAppointmentLinkService workorderAppointmentLinkService;
+
+    @Autowired
+    private ApplicationEventPublisher applicationEventPublisher;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     // Mocked to prevent context-startup failures; not invoked by capacity operations.
     @MockitoBean
@@ -307,5 +329,88 @@ class ScheduleCapacityContractBehaviorIT extends BaseContractIntegrationTest {
                 .andExpect(jsonPath("$.days[0].bays[0].carryOverIn[0].workorderId")
                         .value(mapping.getWorkOrderId().toString()))
                 .andExpect(jsonPath("$.days[0].bays[0].carryOverIn[0].bayHours").value(3.0));
+    }
+
+    // ─── SC9: the same carry-over, with the link written by the owner's fact (#2531) ──
+
+    @Test
+    @DisplayName("SC9: a workorder fact naming its source appointment is all it takes for the appointment's "
+            + "actual window to reach the capacity read — no mapping row is inserted (#2531 AC3, AC5)")
+    @SuppressWarnings("unchecked")
+    void should_return_200_with_carry_over_when_the_link_comes_from_the_workorder_fact() throws Exception {
+        UUID bayId = UUIDv7Generator.generate();
+        extBayReplicaRepository.save(ExtBayReplica.builder()
+                .bayId(bayId)
+                .locationId(LOCATION_ID)
+                .name("Bay 1")
+                .active(true)
+                .aggregateVersion(1)
+                .updatedAt(Instant.now())
+                .build());
+        // Planned Monday 15:00-17:00, as in SC8.
+        Appointment appointment = appointmentRepository.save(Appointment.builder()
+                .status(AppointmentStatus.SCHEDULED)
+                .locationId(LOCATION_ID)
+                .resourceId(bayId.toString())
+                .crmCustomerId(CUSTOMER_ID)
+                .crmVehicleId(VEHICLE_ID)
+                .startAt(Instant.parse("2026-10-05T15:00:00Z"))
+                .endAt(Instant.parse("2026-10-05T17:00:00Z"))
+                .build());
+
+        // SC8 inserts the mapping and the replica row itself. Here both come from the one thing
+        // pos-workorder actually sends: a workorder.workorder.updated fact, through the real
+        // listener. Before #2531 nothing in production wrote the mapping, so SC8 passed while a
+        // running system never produced a carry-over at all.
+        UUID workorderId = UUIDv7Generator.generate();
+        String eventId = UUIDv7Generator.generate().toString();
+        new WorkorderEventsListener(
+                        Clock.systemUTC(),
+                        new ObjectMapper(),
+                        processedEventRepository,
+                        extWorkorderReplicaRepository,
+                        workorderAppointmentLinkService,
+                        applicationEventPublisher,
+                        Mockito.mock(ObjectProvider.class),
+                        transactionManager)
+                .onWorkorderEvent("""
+                        {"eventId":"%s","eventType":"%s","aggregateVersion":1,"payload":{
+                          "workorderId":"%s","workorderNumber":"WO-2531-9","status":"COMPLETED",
+                          "shopId":"%s","customerId":null,"vehicleId":null,"invoiceId":null,"parts":[],
+                          "services":[],"createdAt":null,"updatedAt":null,"locationId":"%s",
+                          "resourceId":"%s","resourceType":"BAY","mechanicIds":[],"promisedAt":null,
+                          "scheduledDate":null,"workStartedAt":"2026-10-05T15:00:00Z",
+                          "completedAt":"2026-10-06T11:00:00Z","expectedEndAt":null,
+                          "appointmentId":"%s"}}""".formatted(
+                                eventId,
+                                WorkorderUpdatedV1.EVENT_TYPE,
+                                workorderId,
+                                LOCATION_ID,
+                                LOCATION_ID,
+                                bayId,
+                                appointment.getAppointmentId()));
+
+        try {
+            mockMvc.perform(withGatewayAuth(get("/v1/schedules/capacity")
+                            .param("locationId", LOCATION_ID.toString())
+                            .param("from", TUESDAY_DATE)
+                            .param("to", TUESDAY_DATE)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.days[0].status").value("OK"))
+                    // Tuesday 08:00-11:00 is held by Monday's overrun, exactly as in SC8.
+                    .andExpect(jsonPath("$.days[0].bays[0].occupiedMinutes").value(180))
+                    .andExpect(
+                            jsonPath("$.days[0].bays[0].carryOverIn.length()").value(1))
+                    .andExpect(jsonPath("$.days[0].bays[0].carryOverIn[0].fromDate")
+                            .value(MONDAY_DATE))
+                    .andExpect(jsonPath("$.days[0].bays[0].carryOverIn[0].appointmentId")
+                            .value(appointment.getAppointmentId().toString()))
+                    .andExpect(jsonPath("$.days[0].bays[0].carryOverIn[0].workorderId")
+                            .value(workorderId.toString()))
+                    .andExpect(jsonPath("$.days[0].bays[0].carryOverIn[0].bayHours")
+                            .value(3.0));
+        } finally {
+            processedEventRepository.deleteById(eventId);
+        }
     }
 }

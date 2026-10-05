@@ -72,6 +72,9 @@ class WorkorderStatusSyncIsolationTest {
     private ExtWorkorderReplicaRepository extWorkorderReplicaRepository;
 
     @Autowired
+    private WorkorderAppointmentLinkService workorderAppointmentLinkService;
+
+    @Autowired
     private PlatformTransactionManager transactionManager;
 
     @AfterEach
@@ -108,6 +111,7 @@ class WorkorderStatusSyncIsolationTest {
                 new ObjectMapper(),
                 processedEventRepository,
                 extWorkorderReplicaRepository,
+                workorderAppointmentLinkService,
                 applicationEventPublisher,
                 Mockito.mock(ObjectProvider.class),
                 transactionManager);

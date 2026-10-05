@@ -55,6 +55,11 @@ import tools.jackson.databind.ObjectMapper;
  * {@code processed_events} row from landing. Handling it inline would have done both at once, and
  * a failed dedup insert means the same record is redelivered indefinitely.
  *
+ * <p>It is also the only writer of {@code work_order_appointment_mapping} (#2531). A fact names the
+ * appointment its workorder was booked as, and the link is written in the same transaction as the
+ * replica row, <em>before</em> the status notification below is delivered — which is what lets that
+ * notification find the appointment instead of logging an orphaned workorder.
+ *
  * <p>Staleness is expected and fail-open by design: the dashboard is a read model over an
  * at-least-once feed with retry and backoff, so an assignment made a moment ago may not be visible
  * yet. The endpoint's OpenAPI description says so.
@@ -77,6 +82,7 @@ public class WorkorderEventsListener {
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
     private final ExtWorkorderReplicaRepository extWorkorderReplicaRepository;
+    private final WorkorderAppointmentLinkService workorderAppointmentLinkService;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final Counter payloadRejectedCounter;
 
@@ -88,6 +94,7 @@ public class WorkorderEventsListener {
             ObjectMapper objectMapper,
             ProcessedEventRepository processedEventRepository,
             ExtWorkorderReplicaRepository extWorkorderReplicaRepository,
+            WorkorderAppointmentLinkService workorderAppointmentLinkService,
             ApplicationEventPublisher applicationEventPublisher,
             ObjectProvider<MeterRegistry> meterRegistry,
             PlatformTransactionManager transactionManager) {
@@ -95,6 +102,7 @@ public class WorkorderEventsListener {
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.extWorkorderReplicaRepository = extWorkorderReplicaRepository;
+        this.workorderAppointmentLinkService = workorderAppointmentLinkService;
         this.applicationEventPublisher = applicationEventPublisher;
         this.handlerTransaction = new TransactionTemplate(transactionManager);
         this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -221,6 +229,13 @@ public class WorkorderEventsListener {
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());
+
+        // #2531: an absent or null appointmentId says nothing (a walk-in, or a pre-#2531 producer),
+        // so an existing link is never removed from here.
+        UUID appointmentId = payload.appointmentId();
+        if (appointmentId != null) {
+            workorderAppointmentLinkService.link(payload.workorderId(), appointmentId);
+        }
 
         UUID notificationId = parseEventId(eventId);
         if (notificationId != null && payload.status() != null && !Objects.equals(previousStatus, payload.status())) {
