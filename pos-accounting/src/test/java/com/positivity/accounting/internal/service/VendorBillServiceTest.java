@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.accounting.internal.dto.GoodsReceivedEvent;
 import com.positivity.accounting.internal.dto.VendorBillResponse;
 import com.positivity.accounting.internal.dto.VendorInvoiceReceivedEvent;
+import com.positivity.accounting.internal.entity.AccountingSequence;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.entity.VendorBillLine;
 import com.positivity.accounting.internal.entity.VendorBillMatchCandidate;
@@ -85,6 +86,10 @@ class VendorBillServiceTest {
     /** The goods-receipt create runs in a TransactionTemplate (#2501); a mock manager just runs it. */
     @Mock
     private PlatformTransactionManager transactionManager;
+
+    /** The per-tenant counter goods-receipt bill numbers are drawn from (ADR-0062 section 9). */
+    @Mock
+    private AccountingSequenceLocker sequenceLocker;
 
     @InjectMocks
     private VendorBillServiceImpl vendorBillService;
@@ -163,7 +168,6 @@ class VendorBillServiceTest {
 
             when(billRepository.findByVendorIdAndStatus(testVendorId, VendorBillStatus.PENDING_RECEIPT_MATCH))
                     .thenReturn(List.of(bill));
-            when(billRepository.getNextBillSequence()).thenReturn(1L);
             when(billRepository.save(any(VendorBill.class))).thenAnswer(inv -> inv.getArgument(0));
 
             // Scoring: return matching bill lines (for Jaccard=1.0 → 30 pts)
@@ -196,7 +200,6 @@ class VendorBillServiceTest {
 
             when(billRepository.findByVendorIdAndStatus(testVendorId, VendorBillStatus.PENDING_RECEIPT_MATCH))
                     .thenReturn(List.of(bill));
-            when(billRepository.getNextBillSequence()).thenReturn(1L);
             when(billRepository.save(any(VendorBill.class))).thenAnswer(inv -> inv.getArgument(0));
 
             VendorBillLine line1 =
@@ -228,7 +231,6 @@ class VendorBillServiceTest {
 
             when(billRepository.findByVendorIdAndStatus(testVendorId, VendorBillStatus.PENDING_RECEIPT_MATCH))
                     .thenReturn(List.of(bill));
-            when(billRepository.getNextBillSequence()).thenReturn(1L);
             when(billRepository.save(any(VendorBill.class))).thenAnswer(inv -> inv.getArgument(0));
 
             VendorBillLine line1 =
@@ -264,7 +266,6 @@ class VendorBillServiceTest {
 
             when(billRepository.findByVendorIdAndStatus(testVendorId, VendorBillStatus.PENDING_RECEIPT_MATCH))
                     .thenReturn(List.of(bill1, bill2));
-            when(billRepository.getNextBillSequence()).thenReturn(1L);
             when(billRepository.save(any(VendorBill.class))).thenAnswer(inv -> inv.getArgument(0));
             when(matchCandidateRepository.save(any(VendorBillMatchCandidate.class)))
                     .thenAnswer(inv -> inv.getArgument(0));
@@ -638,6 +639,7 @@ class VendorBillServiceTest {
                     eventPublisher,
                     vendorDirectoryService,
                     new VendorBillDuplicateGuard(billRepository, noMeters),
+                    sequenceLocker,
                     transactionManager);
             when(billRepository.findLiveDuplicate(any(), any(), any(), any(), any()))
                     .thenReturn(Optional.empty());
@@ -653,12 +655,21 @@ class VendorBillServiceTest {
         /** The number the service generates for the test vendor on the fixed clock's date with sequence 7. */
         private static final String GENERATED = "BILL_00000000_20260115_0000007";
 
+        /** The tenant's counter for the fixed clock's month, about to hand out {@code next}. */
+        private AccountingSequence counterAt(long next) {
+            AccountingSequence counter = new AccountingSequence();
+            counter.setScopeKey("BILL-202601");
+            counter.setNextValue(next);
+            when(sequenceLocker.lockOrProvision("BILL-202601")).thenReturn(counter);
+            return counter;
+        }
+
         @Test
         @DisplayName("criterion 4: a goods-receipt bill that repeats a live bill's vendor, key and date is refused")
         void goodsReceiptDuplicateIsRefusedBeforeAnythingIsWritten() {
             UUID eventId = UUID.fromString("00000000-0000-0000-0000-000000000032");
             when(billRepository.findByOriginEventId(eventId)).thenReturn(Optional.empty());
-            when(billRepository.getNextBillSequence()).thenReturn(7L);
+            AccountingSequence counter = counterAt(7);
             VendorBill live = original(GENERATED, BILL_DATE_CLOSE.withHour(9), VendorBillStatus.APPROVED);
             when(billRepository.findLiveDuplicate(
                             testVendorId,
@@ -684,6 +695,9 @@ class VendorBillServiceTest {
             verify(billLineRepository, never()).save(any());
             verify(eventPublisher, never()).publishEvent(any(Object.class));
             verify(vendorDirectoryService, never()).recordVendor(any(), any());
+            // The number was drawn from the tenant's counter in the same transaction as the refused
+            // bill; that transaction rolls back, and the increment with it (Postgres IT).
+            assertThat(counter.getNextValue()).isEqualTo(8L);
         }
 
         @Test
@@ -701,7 +715,7 @@ class VendorBillServiceTest {
         void goodsReceiptThatLosesTheRaceIsRefusedWithTheOriginal() {
             UUID eventId = UUID.fromString("00000000-0000-0000-0000-000000000033");
             when(billRepository.findByOriginEventId(eventId)).thenReturn(Optional.empty());
-            when(billRepository.getNextBillSequence()).thenReturn(7L);
+            AccountingSequence counter = counterAt(7);
             VendorBill live = original(GENERATED, BILL_DATE_CLOSE, VendorBillStatus.PENDING_RECEIPT_MATCH);
             // The pre-check sees nothing; the competing writer commits; the read after the collision sees it.
             when(billRepository.findLiveDuplicate(any(), any(), any(), any(), any()))
@@ -726,7 +740,7 @@ class VendorBillServiceTest {
         void anotherIntegrityViolationIsNotADuplicate() {
             UUID eventId = UUID.fromString("00000000-0000-0000-0000-000000000034");
             when(billRepository.findByOriginEventId(eventId)).thenReturn(Optional.empty());
-            when(billRepository.getNextBillSequence()).thenReturn(7L);
+            AccountingSequence counter = counterAt(7);
             when(billRepository.saveAndFlush(any(VendorBill.class)))
                     .thenThrow(new DataIntegrityViolationException("value too long for type character varying(50)"));
 

@@ -2,7 +2,6 @@ package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
-import com.positivity.tenancy.TenantAudited;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -248,23 +247,4 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
      * @return Optional containing the bill if found
      */
     Optional<VendorBill> findByOriginEventId(UUID originEventId);
-
-    /**
-     * Get the next bill sequence number from PostgreSQL sequence.
-     * Guarantees unique, monotonically increasing bill numbers across service
-     * restarts
-     * and multi-instance deployments.
-     *
-     * The sequence 'bill_number_seq' is created by V4__vendor_bill_duplicate_rule.sql (#2501):
-     * CREATE SEQUENCE IF NOT EXISTS bill_number_seq
-     * START WITH 1
-     * INCREMENT BY 1
-     * NO CYCLE;
-     *
-     * @return Next sequence value for bill number generation
-     */
-    @TenantAudited(
-            reason = "reads a sequence, not a table: bill numbers are unique platform-wide and carry no tenant data")
-    @Query(value = "SELECT nextval('bill_number_seq')", nativeQuery = true)
-    long getNextBillSequence();
 }

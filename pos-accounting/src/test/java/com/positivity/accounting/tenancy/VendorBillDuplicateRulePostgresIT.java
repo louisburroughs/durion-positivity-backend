@@ -17,11 +17,13 @@ import com.positivity.accounting.internal.entity.VendorBillNumbers;
 import com.positivity.accounting.internal.entity.VendorBillNumbersTest;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.VendorBillDuplicateException;
+import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.accounting.internal.repository.VendorBillLineRepository;
 import com.positivity.accounting.internal.repository.VendorBillMatchCandidateRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.accounting.internal.repository.VendorRepository;
+import com.positivity.accounting.internal.service.AccountingSequenceLocker;
 import com.positivity.accounting.internal.service.KafkaFactIngestionRecorder;
 import com.positivity.accounting.internal.service.SupplierInvoiceEventsListener;
 import com.positivity.accounting.internal.service.VendorBillDuplicateGuard;
@@ -41,6 +43,11 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
@@ -134,6 +141,12 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
     @Autowired
     private VendorDirectoryService vendorDirectoryService;
 
+    @Autowired
+    private AccountingSequenceLocker sequenceLocker;
+
+    @Autowired
+    private AccountingSequenceRepository sequences;
+
     private SupplierInvoiceEventsListener listener;
 
     /** A vendor of this test's own, so nothing here meets another test's bills. */
@@ -141,9 +154,14 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
 
     private final List<String> eventIds = new ArrayList<>();
 
+    /** Every vendor a test wrote bills for, so that all of them are removed afterwards. */
+    private final List<UUID> vendors = new ArrayList<>();
+
     @BeforeEach
     void setUp() {
         vendor = UUID.randomUUID();
+        vendors.add(vendor);
+        clearBillCounters();
         listener = new SupplierInvoiceEventsListener(
                 clock,
                 objectMapper,
@@ -158,20 +176,29 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
 
     @AfterEach
     void cleanUp() {
-        owner.update(
-                "DELETE FROM accounting_event WHERE domain_key_id IN"
-                        + " (SELECT vendor_bill_id::text FROM vendor_bill WHERE vendor_id = ?)",
-                vendor);
-        owner.update(
-                "DELETE FROM vendor_bill_line WHERE vendor_bill_id IN"
-                        + " (SELECT vendor_bill_id FROM vendor_bill WHERE vendor_id = ?)",
-                vendor);
-        owner.update("DELETE FROM vendor_bill WHERE vendor_id = ?", vendor);
-        owner.update("DELETE FROM ap_vendor WHERE vendor_id = ?", vendor);
+        for (UUID written : vendors) {
+            owner.update(
+                    "DELETE FROM accounting_event WHERE domain_key_id IN"
+                            + " (SELECT vendor_bill_id::text FROM vendor_bill WHERE vendor_id = ?)",
+                    written);
+            owner.update(
+                    "DELETE FROM vendor_bill_line WHERE vendor_bill_id IN"
+                            + " (SELECT vendor_bill_id FROM vendor_bill WHERE vendor_id = ?)",
+                    written);
+            owner.update("DELETE FROM vendor_bill WHERE vendor_id = ?", written);
+            owner.update("DELETE FROM ap_vendor WHERE vendor_id = ?", written);
+        }
+        vendors.clear();
         for (String eventId : eventIds) {
             owner.update("DELETE FROM processed_events WHERE event_id = ?", eventId);
         }
         eventIds.clear();
+        clearBillCounters();
+    }
+
+    /** Only this class numbers bills on the shared database, so its counters start from nothing each time. */
+    private void clearBillCounters() {
+        owner.update("DELETE FROM accounting_sequence WHERE scope_key LIKE 'BILL-%'");
     }
 
     // ---- criterion 1: the backfill expression is the Java normaliser's twin ----------------------
@@ -347,25 +374,27 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
 
     @Test
     @DisplayName(
-            "criteria 14, 5, 4: Flyway alone gives the sequence; a replay returns the bill; a repeated number is refused")
-    void goodsReceiptDrawsFromTheSequenceAndRefusesARepeatedNumber() {
+            "criteria 14, 5, 4: Flyway alone is enough to number a bill; a replay returns the bill; a repeated number is refused")
+    void goodsReceiptIsNumberedOnAFlywayOnlyDatabaseAndRefusesARepeatedNumber() {
         GoodsReceivedEvent first = goodsReceived(UUID.randomUUID());
 
         // One enclosing transaction, rolled back: the goods-receipt path also posts to the ledger, and
         // none of that belongs in the database the other tests share.
         rolledBack(TENANT_A, () -> {
             VendorBillResponse created = vendorBillService.handleGoodsReceivedEvent(first);
-            // Criterion 14: no migration created bill_number_seq before V4, so this was a 500.
-            Matcher number = Pattern.compile("BILL_[0-9A-F]{8}_\\d{8}_(\\d{7})").matcher(created.getBillNumber());
-            assertThat(number.matches()).as(created.getBillNumber()).isTrue();
+            // Criterion 14: this was a 500 while the number came from a database sequence that no
+            // migration created. It is the tenant's first number of the month, from a counter row
+            // nothing provisioned.
+            assertThat(sequenceOf(created.getBillNumber())).isEqualTo(1L);
 
             // Criterion 5 (BR-8): the same eventId again is the same bill, never a duplicate.
             assertThat(vendorBillService.handleGoodsReceivedEvent(first).getVendorBillId())
                     .isEqualTo(created.getVendorBillId());
 
-            // Criterion 4: the sequence set so the generated number repeats.
-            owner.queryForObject(
-                    "SELECT setval('bill_number_seq', ?, false)", Long.class, Long.parseLong(number.group(1)));
+            // Criterion 4: the tenant's counter set back so the generated number repeats. Done in
+            // this transaction, which holds the counter row's lock.
+            sequences.findByScopeKey(billScope()).orElseThrow().setNextValue(1L);
+            sequences.flush();
             assertThatThrownBy(() -> vendorBillService.handleGoodsReceivedEvent(goodsReceived(UUID.randomUUID())))
                     .isInstanceOfSatisfying(VendorBillDuplicateException.class, refused -> {
                         assertThat(refused.getOriginalBillId()).isEqualTo(created.getVendorBillId());
@@ -427,9 +456,14 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
     @ValueSource(booleans = {false, true})
     @DisplayName("criterion 4: a goods-receipt insert refused by the index is answered with the committed original")
     void goodsReceiptThatLosesTheRaceIsRefusedWithTheCommittedOriginal(boolean insideCallersTransaction) {
-        // The number the service generates next: the sequence is read and set back to the same value.
-        Long next = owner.queryForObject("SELECT nextval('bill_number_seq')", Long.class);
-        owner.queryForObject("SELECT setval('bill_number_seq', ?, false)", Long.class, next);
+        // Two bills have been numbered, so the counter row exists and the next number is 3: the one
+        // the competing writer's bill already holds.
+        VendorBillService numbering = committingService();
+        UUID earlierVendor = anotherVendor();
+        create(numbering, TENANT_A, earlierVendor);
+        create(numbering, TENANT_A, earlierVendor);
+        long next = nextBillSequence(TENANT_A);
+        assertThat(next).isEqualTo(3L);
         String number = String.format(
                 "BILL_%s_%s_%07d",
                 vendor.toString().substring(0, 8).toUpperCase(Locale.ROOT),
@@ -465,6 +499,11 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
         assertThat(owner.queryForObject("SELECT count(*) FROM ap_vendor WHERE vendor_id = ?", Long.class, vendor))
                 .as("no vendor-directory row for a refused bill")
                 .isZero();
+        // The refused attempt's increment rolled back with it: the number is not consumed, and the
+        // counter row's lock is released, so the next bill (another vendor's) takes that number.
+        assertThat(nextBillSequence(TENANT_A)).isEqualTo(next);
+        assertThat(sequenceOf(create(numbering, TENANT_A, earlierVendor))).isEqualTo(next);
+        assertThat(nextBillSequence(TENANT_A)).isEqualTo(next + 1);
     }
 
     @Test
@@ -536,6 +575,7 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
                 eventPublisher,
                 vendorDirectoryService,
                 racing,
+                sequenceLocker,
                 transactionManager);
     }
 
@@ -574,6 +614,120 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
                 UUID vendorId, String billNumber, LocalDateTime billDate) {
             return real.findOriginalAfterCollision(vendorId, billNumber, billDate);
         }
+    }
+
+    // ---- goods-receipt numbering: one counter per tenant (ADR-0062 section 9) --------------------
+    //
+    // These cases commit, because what they prove is what survives a commit. They build the service
+    // with a publisher that drops the GL posting event, so the bills are the only thing they leave in
+    // the database the other tests share; criterion 14 above keeps the full wiring.
+
+    @Test
+    @DisplayName("each tenant draws its own gap-free numbers: tenant B starts at 1 whatever tenant A has drawn")
+    void goodsReceiptNumbersArePerTenantAndGapFree() {
+        VendorBillService service = committingService();
+        UUID tenantBVendor = anotherVendor();
+
+        long a1 = sequenceOf(create(service, TENANT_A, vendor));
+        long a2 = sequenceOf(create(service, TENANT_A, vendor));
+        long a3 = sequenceOf(create(service, TENANT_A, vendor));
+        long b1 = sequenceOf(create(service, TENANT_B, tenantBVendor));
+        long a4 = sequenceOf(create(service, TENANT_A, vendor));
+        long b2 = sequenceOf(create(service, TENANT_B, tenantBVendor));
+
+        assertThat(List.of(a1, a2, a3, a4)).containsExactly(1L, 2L, 3L, 4L);
+        assertThat(List.of(b1, b2)).containsExactly(1L, 2L);
+        assertThat(nextBillSequence(TENANT_A)).isEqualTo(5L);
+        assertThat(nextBillSequence(TENANT_B)).isEqualTo(3L);
+        assertThat(owner.queryForObject(
+                        "SELECT count(*) FROM pg_class WHERE relkind = 'S' AND relname = 'bill_number_seq'",
+                        Long.class))
+                .as("no shared database sequence numbers bills")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("concurrent creates in one tenant never draw the same number, and leave no gap")
+    void concurrentCreatesInOneTenantNeverShareANumber() throws Exception {
+        VendorBillService service = committingService();
+        int writers = 6;
+        int billsEach = 2;
+        ExecutorService pool = Executors.newFixedThreadPool(writers);
+        CountDownLatch start = new CountDownLatch(1);
+        try {
+            List<Future<List<String>>> drawn = new ArrayList<>();
+            for (int writer = 0; writer < writers; writer++) {
+                drawn.add(pool.submit(() -> {
+                    start.await();
+                    List<String> numbers = new ArrayList<>();
+                    for (int bill = 0; bill < billsEach; bill++) {
+                        numbers.add(create(service, TENANT_A, vendor));
+                    }
+                    return numbers;
+                }));
+            }
+            start.countDown();
+            List<String> numbers = new ArrayList<>();
+            for (Future<List<String>> writer : drawn) {
+                numbers.addAll(writer.get(60, TimeUnit.SECONDS));
+            }
+
+            assertThat(numbers).hasSize(writers * billsEach).doesNotHaveDuplicates();
+            assertThat(numbers.stream().map(this::sequenceOf))
+                    .containsExactlyInAnyOrder(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L, 11L, 12L);
+            assertThat(nextBillSequence(TENANT_A)).isEqualTo(13L);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    /** The production service, wired by hand so that it commits without posting to the ledger. */
+    private VendorBillService committingService() {
+        ApplicationEventPublisher noGlPosting = event -> {};
+        return new VendorBillServiceImpl(
+                clock,
+                bills,
+                billLines,
+                matchCandidates,
+                noGlPosting,
+                vendorDirectoryService,
+                guard,
+                sequenceLocker,
+                transactionManager);
+    }
+
+    private String create(VendorBillService service, UUID tenant, UUID vendorId) {
+        return asTenant(
+                tenant,
+                () -> service.handleGoodsReceivedEvent(goodsReceived(UUID.randomUUID(), vendorId))
+                        .getBillNumber());
+    }
+
+    private long sequenceOf(String billNumber) {
+        Matcher number = Pattern.compile("BILL_[0-9A-F]{8}_\\d{8}_(\\d{7})").matcher(billNumber);
+        assertThat(number.matches()).as(billNumber).isTrue();
+        return Long.parseLong(number.group(1));
+    }
+
+    /** The scope the service numbers this month's goods-receipt bills under. */
+    private String billScope() {
+        return "BILL-" + LocalDate.now(clock).format(DateTimeFormatter.ofPattern("yyyyMM"));
+    }
+
+    /** The next number the tenant's counter would hand out; 1 while the tenant has no counter row yet. */
+    private long nextBillSequence(UUID tenant) {
+        List<Long> next = owner.queryForList(
+                "SELECT next_value FROM accounting_sequence WHERE tenant_id = ? AND scope_key = ?",
+                Long.class,
+                tenant,
+                billScope());
+        return next.isEmpty() ? 1L : next.get(0);
+    }
+
+    private UUID anotherVendor() {
+        UUID another = UUID.randomUUID();
+        vendors.add(another);
+        return another;
     }
 
     // ---- criterion 15: tenants -------------------------------------------------------------------
@@ -640,10 +794,6 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
                         INDEX))
                 .isZero();
         assertThat(jdbc.queryForObject(
-                        "SELECT count(*) FROM pg_class WHERE relkind = 'S' AND relname = 'bill_number_seq'",
-                        Long.class))
-                .isZero();
-        assertThat(jdbc.queryForObject(
                         "SELECT count(*) FROM flyway_schema_history WHERE version = '4' AND success", Long.class))
                 .isZero();
 
@@ -656,8 +806,11 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
                 .containsOnly("INV00123");
         assertThat(jdbc.queryForObject("SELECT status FROM vendor_bill WHERE vendor_bill_id = ?", String.class, first))
                 .isEqualTo("APPROVED");
-        assertThat(jdbc.queryForObject("SELECT nextval('bill_number_seq')", Long.class))
-                .isEqualTo(1L);
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM pg_class WHERE relkind = 'S' AND relname = 'bill_number_seq'",
+                        Long.class))
+                .as("V4 creates no shared sequence: bills are numbered per tenant (ADR-0062 section 9)")
+                .isZero();
     }
 
     // ---- fixtures --------------------------------------------------------------------------------
@@ -726,11 +879,15 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
     }
 
     private GoodsReceivedEvent goodsReceived(UUID eventId) {
+        return goodsReceived(eventId, vendor);
+    }
+
+    private GoodsReceivedEvent goodsReceived(UUID eventId, UUID vendorId) {
         return GoodsReceivedEvent.builder()
                 .eventId(eventId)
                 .organizationId(UUID.randomUUID())
                 .purchaseOrderId(UUID.randomUUID())
-                .vendorId(vendor)
+                .vendorId(vendorId)
                 .vendorName("Acme Tire")
                 .receivedDate(OCT_1_MORNING)
                 .lineItems(List.of(GoodsReceivedEvent.ReceivedLineItem.builder()

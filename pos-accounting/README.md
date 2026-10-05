@@ -378,8 +378,17 @@ counts, `PAID` and `CURRENCY_HOLD` included.
   more in a new transaction and takes the duplicate path; a second collision propagates for retry, unmarked.
 - **Migration guard**: V4 backfills the key, then stops with an error naming the count and the first ten
   groups if existing rows break the rule. It never edits a bill; void the extra bill (or reset a
-  pre-production database) and run it again. The same migration creates `bill_number_seq`, which the
-  goods-receipt path draws its generated numbers from and no earlier migration created.
+  pre-production database) and run it again.
+- **Goods-receipt bill numbers** (`BILL_<vendor prefix>_<yyyyMMdd>_<7-digit sequence>`): the sequence is
+  the tenant's own, never a shared database sequence (ADR-0062 §9; platform-owner ruling of 2026-10-05). It
+  is the `accounting_sequence` counter under scope `BILL-<yyyyMM>` (the month the bill is recorded in),
+  drawn through `AccountingSequenceLocker` exactly as journal-entry numbers (`JE-<yyyyMM>`) and credit memo
+  references (`CM-<yyyyMM>`) are. Each tenant starts every month at 1. The counter row is locked and
+  incremented in the bill's own transaction, so concurrent creates in a tenant take consecutive, distinct
+  numbers, and a create that rolls back (a refused duplicate included) does not consume its number. A
+  tenant's row is created on first use; nothing provisions it. Before this, the number came from a
+  database sequence `bill_number_seq` that no migration created, so the create failed on every Postgres
+  database.
 - **Observability**: one `accounting.vendor_bill.duplicate` increment per event, tagged `channel`
   (`goods_receipt`, `match`, `edi`) and `outcome` (`refused`, `flagged`, `ignored`, `retried`), and one log
   line: WARN for a refusal or a flag, DEBUG for an ignored duplicate (overlapping fetch windows republish by

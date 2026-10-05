@@ -4,11 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.dto.GoodsReceivedEvent;
 import com.positivity.accounting.internal.dto.VendorBillGLPostingEvent;
+import com.positivity.accounting.internal.entity.AccountingSequence;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.repository.VendorBillLineRepository;
@@ -65,6 +67,13 @@ class VendorBillServiceGLPostingTest {
     @Mock
     private PlatformTransactionManager transactionManager;
 
+    /** The per-tenant counter goods-receipt bill numbers are drawn from (ADR-0062 section 9). */
+    @Mock
+    private AccountingSequenceLocker sequenceLocker;
+
+    /** The tenant's counter for the fixed clock's month, 2024-01, about to hand out 42. */
+    private final AccountingSequence billCounter = new AccountingSequence();
+
     @InjectMocks
     private VendorBillServiceImpl vendorBillService;
 
@@ -76,6 +85,10 @@ class VendorBillServiceGLPostingTest {
 
     @BeforeEach
     void setUp() {
+        billCounter.setScopeKey("BILL-202401");
+        billCounter.setNextValue(42L);
+        // Lenient: the replayed-event test returns the existing bill before any number is drawn.
+        lenient().when(sequenceLocker.lockOrProvision("BILL-202401")).thenReturn(billCounter);
         testVendorId = UUID.fromString("00000000-0000-0000-0000-000000000003");
         testPoId = UUID.fromString("00000000-0000-0000-0000-000000000009");
         testProductId1 = UUID.fromString("00000000-0000-0000-0000-000000000011");
@@ -104,6 +117,27 @@ class VendorBillServiceGLPostingTest {
                                 .isInventoryItem(false)
                                 .build()))
                 .build();
+    }
+
+    @Test
+    @DisplayName(
+            "The bill number's sequence is drawn from the tenant's own counter for the month, which moves on by one")
+    void billNumberIsDrawnFromTheTenantsCounter() {
+        when(billRepository.findByOriginEventId(testEvent.getEventId())).thenReturn(Optional.empty());
+        when(billRepository.saveAndFlush(any(VendorBill.class))).thenAnswer(saved -> {
+            VendorBill persisted = saved.getArgument(0);
+            persisted.setVendorBillId(UUID.fromString("00000000-0000-0000-0000-000000000051"));
+            return persisted;
+        });
+
+        vendorBillService.handleGoodsReceivedEvent(testEvent);
+
+        ArgumentCaptor<VendorBill> saved = ArgumentCaptor.forClass(VendorBill.class);
+        verify(billRepository).saveAndFlush(saved.capture());
+        // Vendor prefix, the day the bill is recorded (the fixed clock's), the counter's value.
+        assertThat(saved.getValue().getBillNumber()).isEqualTo("BILL_00000000_20240101_0000042");
+        assertThat(billCounter.getNextValue()).isEqualTo(43L);
+        verify(sequenceLocker).lockOrProvision("BILL-202401");
     }
 
     @Test
