@@ -213,8 +213,8 @@ public class ReceivingController {
                     with an OVERAGE variance.
                     Idempotency: send an Idempotency-Key header (or the idempotencyKey body field; the header wins, \
                     and both present and different is a 400); a retry with the same key and payload posts and \
-                    publishes nothing and returns the original response, the same key with a different payload is \
-                    409 IDEMPOTENCY_CONFLICT, and without a key a retry is not recognised.
+                    publishes nothing and returns the original response; the same key with a different payload is \
+                    409 IDEMPOTENCY_CONFLICT; without a key a retry is not recognised.
                     Returns 404 when the receiving session does not exist, 400 when a quantity is missing or not a \
                     whole number, 409 on an idempotency-key conflict, and 422 when the receipt is an over-receipt \
                     without the override, a documentUom has no conversion path, a LOT-tracked line omits \
