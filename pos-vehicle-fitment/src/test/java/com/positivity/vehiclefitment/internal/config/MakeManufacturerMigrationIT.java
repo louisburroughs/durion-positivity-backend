@@ -73,6 +73,15 @@ class MakeManufacturerMigrationIT {
         vehicleType(L2_SEDAN, "sedan", L2);
         vehicleType(L2_COUPE, "Coupe", L2);
 
+        // unnamed rows must be moved, never merged with each other
+        model(id(25), null, L1);
+        model(id(26), null, L2);
+        model(id(27), null, L2);
+        vehicleType(id(34), null, L1);
+        vehicleType(id(35), null, L2);
+        vehicleType(id(36), null, L2);
+        fitment(id(47), M2, L2, id(26), id(35));
+
         fitment(id(41), M1, L1, L1_COROLLA, L1_SEDAN);
         fitment(id(42), M2, L2, L2_COROLLA, L2_SEDAN);
         fitment(id(43), M2, L2, L2_ONLY, L2_COUPE);
@@ -106,17 +115,26 @@ class MakeManufacturerMigrationIT {
 
     @Test
     void collidingModelsAndVehicleTypesAreMergedAndNoFitmentIsLost() {
-        assertThat(jdbc.queryForList("SELECT id FROM model ORDER BY id", UUID.class))
+        assertThat(jdbc.queryForList("SELECT id FROM model WHERE name IS NOT NULL ORDER BY id", UUID.class))
                 .containsExactly(L1_COROLLA, L1_ONLY, L2_ONLY);
-        assertThat(jdbc.queryForList("SELECT id FROM model WHERE make_id = ? ORDER BY id", UUID.class, L1))
+        assertThat(jdbc.queryForList(
+                        "SELECT id FROM model WHERE make_id = ? AND name IS NOT NULL ORDER BY id", UUID.class, L1))
                 .containsExactly(L1_COROLLA, L1_ONLY, L2_ONLY);
-        assertThat(jdbc.queryForList("SELECT id FROM vehicle_type ORDER BY id", UUID.class))
+        assertThat(jdbc.queryForList(
+                        "SELECT id FROM vehicle_type WHERE vehicle_type_name IS NOT NULL ORDER BY id", UUID.class))
                 .containsExactly(L1_SEDAN, L2_COUPE);
         assertThat(jdbc.queryForList("SELECT DISTINCT make_id FROM vehicle_type", UUID.class))
                 .containsExactly(L1);
 
+        assertThat(jdbc.queryForList("SELECT make_id FROM model WHERE name IS NULL", UUID.class))
+                .containsExactly(L1, L1, L1);
+        assertThat(jdbc.queryForList("SELECT make_id FROM vehicle_type WHERE vehicle_type_name IS NULL", UUID.class))
+                .containsExactly(L1, L1, L1);
+        assertThat(byIdFitment(id(47)))
+                .containsEntry("vehicle_model_id", id(26))
+                .containsEntry("vehicle_type_id", id(35));
         assertThat(jdbc.queryForObject("SELECT count(*) FROM part_fitment_entity", Integer.class))
-                .isEqualTo(6);
+                .isEqualTo(7);
         Map<UUID, Map<String, Object>> byId = new java.util.HashMap<>();
         jdbc.queryForList("SELECT * FROM part_fitment_entity").forEach(r -> byId.put((UUID) r.get("id"), r));
         assertThat(byId.get(id(41))).containsEntry("vehicle_make_id", L1).containsEntry("vehicle_model_id", L1_COROLLA);
@@ -149,6 +167,10 @@ class MakeManufacturerMigrationIT {
         List<String> indexes =
                 jdbc.queryForList("SELECT indexname FROM pg_indexes WHERE tablename = 'make'", String.class);
         assertThat(indexes).contains("ux_make_nhtsa_id", "ux_make_name_lower_no_nhtsa_id");
+    }
+
+    private static Map<String, Object> byIdFitment(UUID id) {
+        return jdbc.queryForMap("SELECT * FROM part_fitment_entity WHERE id = ?", id);
     }
 
     private static UUID id(int n) {

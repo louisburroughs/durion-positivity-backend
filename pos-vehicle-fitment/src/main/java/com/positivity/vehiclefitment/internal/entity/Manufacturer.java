@@ -35,6 +35,14 @@ public class Manufacturer {
     private String name;
     private LocalDateTime cacheTimestamp;
 
+    /**
+     * When this manufacturer's make list was last refreshed from vPIC (#2453). Per manufacturer, not read from
+     * the makes' own {@code cacheTimestamp}: a make shared with another manufacturer is refreshed by either, and
+     * would make the other's list look fresh.
+     */
+    @Column(name = "makes_refreshed_at")
+    private LocalDateTime makesRefreshedAt;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

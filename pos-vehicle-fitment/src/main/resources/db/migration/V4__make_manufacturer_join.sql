@@ -17,6 +17,11 @@ CREATE TABLE public.make_manufacturer (
     CONSTRAINT fk_make_manufacturer_manufacturer FOREIGN KEY (manufacturer_id) REFERENCES public.manufacturer(id)
 );
 
+-- When this manufacturer's make list was last refreshed from vPIC. Per manufacturer: a make shared with
+-- another manufacturer carries one cache_timestamp, so either's refresh would make the other look fresh.
+-- NULL until the next refresh, which is one vPIC call per manufacturer.
+ALTER TABLE public.manufacturer ADD COLUMN makes_refreshed_at timestamp without time zone;
+
 CREATE INDEX idx_make_manufacturer_manufacturer_id ON public.make_manufacturer USING btree (manufacturer_id);
 
 -- Makes that did not come from vPIC were unique per manufacturer, so the same name can exist under several
@@ -62,7 +67,7 @@ FROM (
            (array_agg(x.id) OVER (PARTITION BY COALESCE(f.keep_id, x.make_id), lower(x.name) ORDER BY x.id))[1] AS keep_id
     FROM public.model x
     LEFT JOIN make_fold f ON f.dup_id = x.make_id
-    WHERE x.make_id IS NOT NULL
+    WHERE x.make_id IS NOT NULL AND x.name IS NOT NULL
 ) g
 WHERE g.id <> g.keep_id;
 UPDATE public.part_fitment_entity p SET vehicle_model_id = f.keep_id FROM model_fold f WHERE p.vehicle_model_id = f.dup_id;
@@ -76,7 +81,7 @@ FROM (
            (array_agg(x.id) OVER (PARTITION BY COALESCE(f.keep_id, x.make_id), lower(x.vehicle_type_name) ORDER BY x.id))[1] AS keep_id
     FROM public.vehicle_type x
     LEFT JOIN make_fold f ON f.dup_id = x.make_id
-    WHERE x.make_id IS NOT NULL
+    WHERE x.make_id IS NOT NULL AND x.vehicle_type_name IS NOT NULL
 ) g
 WHERE g.id <> g.keep_id;
 UPDATE public.part_fitment_entity p SET vehicle_type_id = f.keep_id FROM vehicle_type_fold f WHERE p.vehicle_type_id = f.dup_id;

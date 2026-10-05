@@ -56,6 +56,12 @@ class VpicReferenceRefreshIT extends PostgresTenancyTestBase {
     @Autowired
     private VehicleFitmentService service;
 
+    @Autowired
+    private com.positivity.vehiclefitment.internal.repository.MakeRepository makeRepository;
+
+    @Autowired
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
+
     private final Map<String, String> vpic = new HashMap<>();
     private JdbcTemplate owner;
 
@@ -192,6 +198,71 @@ class VpicReferenceRefreshIT extends PostgresTenancyTestBase {
                         gamma,
                         shared))
                 .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void refreshingOneManufacturersMakes_doesNotMakeASharingManufacturersListLookFresh() {
+        UUID alpha = derived("manufacturer-1001");
+        UUID beta = derived("manufacturer-1002");
+        vpic.put(
+                MANUFACTURERS_URL,
+                manufacturers(
+                        "{\"Mfr_CommonName\":\"Alpha Motors\",\"Mfr_ID\":1001,\"Mfr_Name\":\"ALPHA\"}",
+                        "{\"Mfr_CommonName\":\"Beta Motors\",\"Mfr_ID\":1002,\"Mfr_Name\":\"BETA\"}"));
+        String sharedMake = "{\"Make_ID\":482,\"Make_Name\":\"SHARED\"}";
+        vpic.put(VPIC + "/GetMakeForManufacturer/1001?format=json", makes(sharedMake));
+        // Beta also has a make Alpha does not; only a vPIC call for Beta can return it
+        vpic.put(
+                VPIC + "/GetMakeForManufacturer/1002?format=json",
+                makes(sharedMake, "{\"Make_ID\":483,\"Make_Name\":\"BETA ONLY\"}"));
+        assertThat(service.getManufacturers()).hasSize(2);
+
+        assertThat(service.getMakesByManufacturer(alpha)).hasSize(1);
+        // the shared make now carries a fresh cache_timestamp, but Beta's own list was never fetched
+        assertThat(service.getMakesByManufacturer(beta))
+                .extracting(MakeResponse::getName)
+                .containsExactlyInAnyOrder("SHARED", "BETA ONLY");
+    }
+
+    @Test
+    void makeInsertThatHitsAConflict_doesNotPoisonTheOuterTransaction() {
+        UUID manufacturer = UUID.randomUUID();
+        owner.update(
+                "INSERT INTO manufacturer (id, name, created_at, updated_at) VALUES (?, 'Raced Motors', now(), now())",
+                manufacturer);
+        owner.update(
+                "INSERT INTO make (id, name, created_at, updated_at) VALUES (?, 'Raced', now(), now())",
+                UUID.randomUUID());
+
+        var template = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        Integer outcome = template.execute(status -> {
+            java.time.Instant now = java.time.Instant.now();
+            int duplicate = makeRepository.insertIgnoringConflict(UUID.randomUUID(), "raced", now);
+            UUID existing =
+                    makeRepository.findAllByNameIgnoreCase("Raced").getFirst().getId();
+            int link = makeRepository.insertLinkIgnoringConflict(existing, manufacturer);
+            int linkAgain = makeRepository.insertLinkIgnoringConflict(existing, manufacturer);
+            assertThat(status.isRollbackOnly()).isFalse();
+            return duplicate * 100 + link * 10 + linkAgain;
+        });
+
+        // the outer transaction committed: the conflicting insert was a no-op and the link landed once
+        assertThat(outcome).isEqualTo(10);
+        assertThat(owner.queryForObject("SELECT count(*) FROM make WHERE lower(name) = 'raced'", Integer.class))
+                .isEqualTo(1);
+        assertThat(owner.queryForObject(
+                        "SELECT count(*) FROM make_manufacturer WHERE manufacturer_id = ?",
+                        Integer.class,
+                        manufacturer))
+                .isEqualTo(1);
+
+        // and createFitment over the same make commits and links through the same path
+        var request = new com.positivity.vehiclefitment.internal.service.dto.CreatePartFitmentRequest(1L);
+        request.setManufacturerName("Raced Motors");
+        request.setMakeName("Raced");
+        service.createFitment(request);
+        assertThat(owner.queryForObject("SELECT count(*) FROM part_fitment_entity", Integer.class))
+                .isEqualTo(1);
     }
 
     @Test
@@ -433,6 +504,7 @@ class VpicReferenceRefreshIT extends PostgresTenancyTestBase {
         for (String table : List.of("manufacturer", "make", "model", "vehicle_type")) {
             owner.update("UPDATE " + table + " SET cache_timestamp = cache_timestamp - interval '25 hours'");
         }
+        owner.update("UPDATE manufacturer SET makes_refreshed_at = makes_refreshed_at - interval '25 hours'");
     }
 
     private static UUID derived(String name) {

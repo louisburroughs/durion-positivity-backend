@@ -1,5 +1,6 @@
 package com.positivity.vehiclefitment.internal.service;
 
+import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.vehiclefitment.internal.dto.MakeResponse;
 import com.positivity.vehiclefitment.internal.dto.ManufacturerResponse;
 import com.positivity.vehiclefitment.internal.dto.ModelResponse;
@@ -143,18 +144,12 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
         if (found.isPresent()) {
             return linked(found.get(), manufacturer);
         }
-        Make entity = new Make();
-        entity.setName(normalized);
-        if (manufacturer != null) {
-            entity.linkManufacturer(manufacturer);
-        }
-        try {
-            return makeRepository.saveAndFlush(entity);
-        } catch (DataIntegrityViolationException _) {
-            return findMakeByName(normalized, manufacturer)
-                    .map(existing -> linked(existing, manufacturer))
-                    .orElseThrow(() -> new VehicleFitmentException("Concurrent insert race on make: " + normalized));
-        }
+        // Atomic insert: a concurrent insert of the same name is a no-op here, not an exception that would mark
+        // this transaction rollback-only. Then read the row back, whoever inserted it.
+        makeRepository.insertIgnoringConflict(UUIDv7Generator.generate(), normalized, clock.instant());
+        Make created = findMakeByName(normalized, manufacturer)
+                .orElseThrow(() -> new VehicleFitmentException("Make vanished after insert: " + normalized));
+        return linked(created, manufacturer);
     }
 
     private Optional<Make> findMakeByName(String name, Manufacturer manufacturer) {
@@ -173,12 +168,18 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
                 .min(Comparator.comparing((Make m) -> m.getNhtsaId() == null).thenComparing(Make::getId));
     }
 
-    /** Links the make to the manufacturer when it is not yet, flushing so a fitment row can reference the pair. */
+    /**
+     * Links the make to the manufacturer when it is not yet, atomically, so a fitment row can reference the
+     * pair. Returns the make as stored, with the links as they now stand.
+     */
     private Make linked(Make make, Manufacturer manufacturer) {
-        if (manufacturer != null && make.linkManufacturer(manufacturer)) {
-            makeRepository.saveAndFlush(make);
+        boolean alreadyLinked = manufacturer == null
+                || make.getManufacturers().stream().anyMatch(m -> m.getId().equals(manufacturer.getId()));
+        if (alreadyLinked) {
+            return make;
         }
-        return make;
+        makeRepository.insertLinkIgnoringConflict(make.getId(), manufacturer.getId());
+        return makeRepository.findById(make.getId()).orElse(make);
     }
 
     private Model resolveModel(String name, Make make) {
@@ -356,7 +357,7 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
                 .findById(manufacturerId)
                 .orElseThrow(() -> new IllegalArgumentException("Manufacturer not found with ID: " + manufacturerId));
         List<Make> cached = makeRepository.findByManufacturersId(manufacturerId);
-        if (isCacheFresh(lastRefreshed(cached, Make::getCacheTimestamp))) {
+        if (isCacheFresh(manufacturer.getMakesRefreshedAt())) {
             return cached;
         }
         Long vpicManufacturerId = manufacturer.getNhtsaId();
@@ -391,6 +392,10 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
                 make.setCacheTimestamp(LocalDateTime.now(clock));
                 makeRepository.save(make);
             }
+            manufacturerRepository.findById(manufacturerId).ifPresent(m -> {
+                m.setMakesRefreshedAt(LocalDateTime.now(clock));
+                manufacturerRepository.save(m);
+            });
         });
         return makeRepository.findByManufacturersId(manufacturerId);
     }

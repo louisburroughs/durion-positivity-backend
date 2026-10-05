@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -675,7 +676,7 @@ class VehicleFitmentServiceTest {
 
     @Test
     void getMakesByManufacturer_staleCache_refetchesFromVpicOnce() {
-        when(manufacturerRepository.findById(MANUFACTURER_ID)).thenReturn(Optional.of(manufacturer(hourOld())));
+        when(manufacturerRepository.findById(MANUFACTURER_ID)).thenReturn(Optional.of(manufacturer(dayOld())));
         when(makeRepository.findByManufacturersId(MANUFACTURER_ID)).thenReturn(List.of(make(dayOld())));
         when(responseSpec.body(String.class))
                 .thenReturn("{\"Results\":[{\"Make_ID\":" + MAKE_VPIC_ID + ",\"Make_Name\":\"Toyota\"}]}");
@@ -763,7 +764,7 @@ class VehicleFitmentServiceTest {
 
     @Test
     void getMakesByManufacturer_requestsByVpicIdAndKeepsIntegerMakeId() {
-        when(manufacturerRepository.findById(MANUFACTURER_ID)).thenReturn(Optional.of(manufacturer(hourOld())));
+        when(manufacturerRepository.findById(MANUFACTURER_ID)).thenReturn(Optional.of(manufacturer(dayOld())));
         when(makeRepository.findByManufacturersId(MANUFACTURER_ID)).thenReturn(List.of());
         when(responseSpec.body(String.class))
                 .thenReturn("{\"Count\":1,\"Message\":\"Results returned successfully\",\"SearchCriteria\":"
@@ -832,7 +833,7 @@ class VehicleFitmentServiceTest {
 
     @Test
     void getMakesByManufacturer_manufacturerWithoutVpicId_servesCacheWithoutCallingVpic() {
-        Manufacturer local = manufacturer(hourOld());
+        Manufacturer local = manufacturer(dayOld());
         local.setNhtsaId(null);
         when(manufacturerRepository.findById(MANUFACTURER_ID)).thenReturn(Optional.of(local));
         when(makeRepository.findByManufacturersId(MANUFACTURER_ID)).thenReturn(List.of(make(dayOld())));
@@ -952,7 +953,7 @@ class VehicleFitmentServiceTest {
         existing.setId(derived("make-441"));
         Make other = make(dayOld());
         other.setId(UUID.randomUUID());
-        when(manufacturerRepository.findById(MANUFACTURER_ID)).thenReturn(Optional.of(manufacturer(hourOld())));
+        when(manufacturerRepository.findById(MANUFACTURER_ID)).thenReturn(Optional.of(manufacturer(dayOld())));
         when(makeRepository.findByManufacturersId(MANUFACTURER_ID)).thenReturn(List.of(existing));
         when(makeRepository.findById(derived("make-441"))).thenReturn(Optional.of(existing));
         when(makeRepository.findByManufacturersIdAndNameIgnoreCase(MANUFACTURER_ID, "TESLA"))
@@ -1050,7 +1051,7 @@ class VehicleFitmentServiceTest {
 
     @Test
     void getMakesByManufacturer_nonIntegerMakeId_throws() {
-        when(manufacturerRepository.findById(MANUFACTURER_ID)).thenReturn(Optional.of(manufacturer(hourOld())));
+        when(manufacturerRepository.findById(MANUFACTURER_ID)).thenReturn(Optional.of(manufacturer(dayOld())));
         when(makeRepository.findByManufacturersId(MANUFACTURER_ID)).thenReturn(List.of());
         when(responseSpec.body(String.class))
                 .thenReturn("{\"Results\":[{\"Make_ID\":\"441\",\"Make_Name\":\"TESLA\"}]}");
@@ -1137,7 +1138,7 @@ class VehicleFitmentServiceTest {
 
     @Test
     void getMakesByManufacturer_validRowThenInvalidId_savesNothing() {
-        when(manufacturerRepository.findById(MANUFACTURER_ID)).thenReturn(Optional.of(manufacturer(hourOld())));
+        when(manufacturerRepository.findById(MANUFACTURER_ID)).thenReturn(Optional.of(manufacturer(dayOld())));
         when(makeRepository.findByManufacturersId(MANUFACTURER_ID)).thenReturn(List.of());
         when(responseSpec.body(String.class))
                 .thenReturn("{\"Results\":[{\"Make_ID\":441,\"Make_Name\":\"TESLA\"}," + "{\"Make_Name\":\"NO ID\"}]}");
@@ -1219,6 +1220,7 @@ class VehicleFitmentServiceTest {
         manufacturer.setNhtsaId(MFR_VPIC_ID);
         manufacturer.setName("Toyota");
         manufacturer.setCacheTimestamp(cachedAt);
+        manufacturer.setMakesRefreshedAt(cachedAt);
         return manufacturer;
     }
 
@@ -1266,7 +1268,7 @@ class VehicleFitmentServiceTest {
         when(manufacturerRepository.findAllByNameIgnoreCase("Toyota")).thenReturn(List.of(manufacturer));
         when(makeRepository.findByManufacturersIdAndNameIgnoreCase(MANUFACTURER_ID, "Camry"))
                 .thenReturn(List.of());
-        when(makeRepository.saveAndFlush(any(Make.class))).thenReturn(savedMake);
+        when(makeRepository.findAllByNameIgnoreCase("Camry")).thenReturn(List.of(), List.of(savedMake));
         when(partFitmentRepository.save(any(PartFitmentEntity.class))).thenReturn(savedEntity);
 
         CreatePartFitmentRequest request = new CreatePartFitmentRequest(1L);
@@ -1275,8 +1277,9 @@ class VehicleFitmentServiceTest {
 
         PartFitmentResponse response = service.createFitment(request);
 
-        verify(makeRepository).findByManufacturersIdAndNameIgnoreCase(MANUFACTURER_ID, "Camry");
-        verify(makeRepository).saveAndFlush(any(Make.class));
+        verify(makeRepository, times(2)).findByManufacturersIdAndNameIgnoreCase(MANUFACTURER_ID, "Camry");
+        verify(makeRepository).insertIgnoringConflict(any(UUID.class), eq("Camry"), any(Instant.class));
+        verify(makeRepository).insertLinkIgnoringConflict(MAKE_ID, MANUFACTURER_ID);
         assertThat(response.getMakeName()).isEqualTo("Camry");
     }
 
@@ -1416,8 +1419,7 @@ class VehicleFitmentServiceTest {
         savedEntity.setId(UUID.randomUUID());
         savedEntity.setPartNumberId(1L);
 
-        when(makeRepository.findAllByNameIgnoreCase("Generic")).thenReturn(List.of());
-        when(makeRepository.saveAndFlush(any(Make.class))).thenReturn(savedMake);
+        when(makeRepository.findAllByNameIgnoreCase("Generic")).thenReturn(List.of(), List.of(savedMake));
         when(partFitmentRepository.save(any(PartFitmentEntity.class))).thenReturn(savedEntity);
 
         CreatePartFitmentRequest request = new CreatePartFitmentRequest(1L);
@@ -1426,7 +1428,9 @@ class VehicleFitmentServiceTest {
 
         PartFitmentResponse response = service.createFitment(request);
 
-        verify(makeRepository).findAllByNameIgnoreCase("Generic");
+        verify(makeRepository, times(2)).findAllByNameIgnoreCase("Generic");
+        verify(makeRepository).insertIgnoringConflict(any(UUID.class), eq("Generic"), any(Instant.class));
+        verify(makeRepository, never()).insertLinkIgnoringConflict(any(), any());
         verify(makeRepository, never()).findByManufacturersIdAndNameIgnoreCase(any(), any());
         assertThat(response.getMakeName()).isEqualTo("Generic");
     }
@@ -1460,20 +1464,21 @@ class VehicleFitmentServiceTest {
         request.setMakeName("Camry");
         service.createFitment(request);
 
-        // the vPIC row wins over a local one of the same name, and gains the link
-        verify(makeRepository).saveAndFlush(shared);
-        assertThat(shared.getManufacturers()).extracting(Manufacturer::getId).containsExactly(MANUFACTURER_ID);
-        verify(makeRepository, never()).saveAndFlush(local);
+        // the vPIC row wins over a local one of the same name, and gains the link atomically
+        verify(makeRepository).insertLinkIgnoringConflict(MAKE_ID, MANUFACTURER_ID);
+        verify(makeRepository, never()).insertIgnoringConflict(any(), any(), any());
     }
 
     @Test
-    void createFitment_newMake_isCreatedLinkedToManufacturer() {
+    void createFitment_makeAlreadyLinked_insertsNothing() {
         Manufacturer manufacturer = namedManufacturer(MANUFACTURER_ID, "Toyota");
+        Make linkedMake = new Make();
+        linkedMake.setId(MAKE_ID);
+        linkedMake.setName("Camry");
+        linkedMake.linkManufacturer(manufacturer);
         when(manufacturerRepository.findAllByNameIgnoreCase("Toyota")).thenReturn(List.of(manufacturer));
         when(makeRepository.findByManufacturersIdAndNameIgnoreCase(MANUFACTURER_ID, "Camry"))
-                .thenReturn(List.of());
-        when(makeRepository.findAllByNameIgnoreCase("Camry")).thenReturn(List.of());
-        when(makeRepository.saveAndFlush(any(Make.class))).thenAnswer(invocation -> invocation.getArgument(0));
+                .thenReturn(List.of(linkedMake));
         when(partFitmentRepository.save(any(PartFitmentEntity.class))).thenReturn(new PartFitmentEntity());
 
         CreatePartFitmentRequest request = new CreatePartFitmentRequest(1L);
@@ -1481,15 +1486,12 @@ class VehicleFitmentServiceTest {
         request.setMakeName("Camry");
         service.createFitment(request);
 
-        ArgumentCaptor<Make> created = ArgumentCaptor.forClass(Make.class);
-        verify(makeRepository).saveAndFlush(created.capture());
-        assertThat(created.getValue().getManufacturers())
-                .extracting(Manufacturer::getId)
-                .containsExactly(MANUFACTURER_ID);
+        verify(makeRepository, never()).insertLinkIgnoringConflict(any(), any());
+        verify(makeRepository, never()).insertIgnoringConflict(any(), any(), any());
     }
 
     @Test
-    void createFitment_makeInsertRace_reusesTheWinnerAndLinksIt() {
+    void createFitment_makeInsertLosesRace_readsTheWinnerBackAndLinksIt() {
         Manufacturer manufacturer = namedManufacturer(MANUFACTURER_ID, "Toyota");
         Make winner = new Make();
         winner.setId(MAKE_ID);
@@ -1498,9 +1500,8 @@ class VehicleFitmentServiceTest {
         when(makeRepository.findByManufacturersIdAndNameIgnoreCase(MANUFACTURER_ID, "Camry"))
                 .thenReturn(List.of());
         when(makeRepository.findAllByNameIgnoreCase("Camry")).thenReturn(List.of(), List.of(winner));
-        when(makeRepository.saveAndFlush(any(Make.class)))
-                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("dup"))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(makeRepository.insertIgnoringConflict(any(UUID.class), eq("Camry"), any(Instant.class)))
+                .thenReturn(0);
         when(partFitmentRepository.save(any(PartFitmentEntity.class))).thenReturn(new PartFitmentEntity());
 
         CreatePartFitmentRequest request = new CreatePartFitmentRequest(1L);
@@ -1508,21 +1509,19 @@ class VehicleFitmentServiceTest {
         request.setMakeName("Camry");
         service.createFitment(request);
 
-        assertThat(winner.getManufacturers()).extracting(Manufacturer::getId).containsExactly(MANUFACTURER_ID);
+        verify(makeRepository).insertLinkIgnoringConflict(MAKE_ID, MANUFACTURER_ID);
     }
 
     @Test
-    void createFitment_makeInsertRaceWithNoWinner_throws() {
+    void createFitment_makeMissingAfterInsert_throws() {
         when(makeRepository.findAllByNameIgnoreCase("Generic")).thenReturn(List.of());
-        when(makeRepository.saveAndFlush(any(Make.class)))
-                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("dup"));
 
         CreatePartFitmentRequest request = new CreatePartFitmentRequest(1L);
         request.setMakeName("Generic");
 
         assertThatThrownBy(() -> service.createFitment(request))
                 .isInstanceOf(VehicleFitmentException.class)
-                .hasMessageContaining("Concurrent insert race on make");
+                .hasMessageContaining("Make vanished after insert");
     }
 
     @Test
@@ -1531,7 +1530,7 @@ class VehicleFitmentServiceTest {
         Make shared = make(dayOld());
         shared.setId(derived("make-482"));
         shared.linkManufacturer(namedManufacturer(otherManufacturer, "Other"));
-        when(manufacturerRepository.findById(MANUFACTURER_ID)).thenReturn(Optional.of(manufacturer(hourOld())));
+        when(manufacturerRepository.findById(MANUFACTURER_ID)).thenReturn(Optional.of(manufacturer(dayOld())));
         when(makeRepository.findByManufacturersId(MANUFACTURER_ID)).thenReturn(List.of());
         when(makeRepository.findById(derived("make-482"))).thenReturn(Optional.of(shared));
         when(makeRepository.findByManufacturersIdAndNameIgnoreCase(MANUFACTURER_ID, "SHARED"))
