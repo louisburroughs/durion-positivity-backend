@@ -1,6 +1,7 @@
 package com.positivity.supplier.internal.workorderauth.service;
 
 import com.positivity.domainevents.workorder.WorkorderServiceCompletedV1;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.supplier.internal.entity.ProcessedEvent;
 import com.positivity.supplier.internal.repository.ProcessedEventRepository;
 import com.positivity.tenancy.kafka.RetryableConsumerFailures;
@@ -8,7 +9,6 @@ import java.time.Clock;
 import java.time.Instant;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -52,7 +52,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "pos.supplier.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class WorkorderCompletionEventsListener {
 
     private static final String OWNER = "supplier-workorderauth";

@@ -276,16 +276,13 @@ pos:
       # unapproved completion is work already performed that the fleet has not agreed to pay for.
       approval-max-attempts: ${SUPPLIER_WORKORDERAUTH_APPROVAL_MAX_ATTEMPTS:6}
     kafka:
-      # Off by default so a deployment without a broker starts cleanly; the outbox still records
-      # events, and they drain once this is enabled. It also gates the catalog product-code
-      # consumer, so a deployment with Kafka off cannot match PRICAT lines at all — by design: an
-      # empty replica is reported as unavailable rather than as a catalog full of misses.
-      #
-      # Deployment status (#1450): pos-supplier is deliberately NOT in
-      # deployment/alpha/docker-compose.prod.yml. When it is added there, set
-      # SUPPLIER_KAFKA_ENABLED=true and KAFKA_BOOTSTRAP_SERVERS together and verify the outbox
-      # drains (supplier_event_outbox.published_at set, attempts not climbing).
-      enabled: ${SUPPLIER_KAFKA_ENABLED:false}
+      # Kafka is tier-1 (ADR-0044 §4, #2463): the listeners, outbox publisher and health contributor are
+      # @KafkaRails beans, present in every profile except the broker-less dev/test/pg ones. The outbox
+      # still records events when the broker is down and drains once it is back. The catalog
+      # product-code consumer feeds the ext_product_code replica; until it has consumed anything,
+      # matching reports CATALOG_UNAVAILABLE rather than a catalog full of misses. pos-supplier is in the
+      # alpha compose (deployment/alpha/docker-compose.prod.yml); KAFKA_BOOTSTRAP_SERVERS comes from
+      # docker-compose.yml.
       catalog-events-topic: ${SUPPLIER_CATALOG_EVENTS_TOPIC:catalog.events.v1}
       catalog-events-consumer-group: ${SUPPLIER_CATALOG_EVENTS_CONSUMER_GROUP:pos-supplier-catalog-events}
       # Workorder completions, which queue the fleet sign-off (CAP-323). Its own consumer group:
@@ -293,9 +290,9 @@ pos:
       workorder-events-topic: ${SUPPLIER_WORKORDER_EVENTS_TOPIC:workorder.events.v1}
       workorder-events-consumer-group: ${SUPPLIER_WORKORDER_EVENTS_CONSUMER_GROUP:pos-supplier-workorder-events}
       # Inbound commands (ADR-0049 §3): purchase-order transmission requests from pos-order and
-      # PRICAT re-publication requests from pos-catalog. Also gated by `enabled` above: with Kafka
-      # off nothing is consumed and no order is transmitted, which is the safe direction — the
-      # alternative would be orders placed by a deployment that cannot report the results.
+      # PRICAT re-publication requests from pos-catalog. A @KafkaRails listener: in the broker-less
+      # dev/test/pg profiles nothing is consumed and no order is transmitted, which is the safe
+      # direction — the alternative would be orders placed by a deployment that cannot report the results.
       #
       # ONE group for the whole topic, deliberately. processed_events is keyed by event id alone, so
       # a second consumer group here would record ids the first group still had to act on and the

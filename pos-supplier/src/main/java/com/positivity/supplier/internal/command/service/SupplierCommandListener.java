@@ -3,6 +3,7 @@ package com.positivity.supplier.internal.command.service;
 import com.positivity.domainevents.supplier.SupplierCatalogRepublishRequestedV1;
 import com.positivity.domainevents.supplier.SupplierOrderRequestedV1;
 import com.positivity.domainevents.supplier.SupplierPriceCatalogRepublishRequestedV1;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.supplier.internal.entity.ProcessedEvent;
 import com.positivity.supplier.internal.mktcat.service.MktCatRepublisher;
 import com.positivity.supplier.internal.order.service.OrderNotDispatchedPublisher;
@@ -15,7 +16,6 @@ import java.time.Instant;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
@@ -78,7 +78,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "pos.supplier.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class SupplierCommandListener {
 
     /** Producing domain of a purchase-order command, per the repo-wide {@code processed_events} convention. */

@@ -69,8 +69,7 @@ import tools.jackson.databind.ObjectMapper;
             "spring.autoconfigure.exclude=org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration",
             "spring.cloud.discovery.enabled=false",
             "spring.boot.admin.client.enabled=false",
-            "eureka.client.enabled=false",
-            "pos.supplier.kafka.enabled=false"
+            "eureka.client.enabled=false"
         })
 @ActiveProfiles("dev")
 @DisplayName("SupplierCommandListener transaction shape")
