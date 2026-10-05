@@ -18,9 +18,9 @@ import org.springframework.context.annotation.Configuration;
  * {@code /actuator/health} plus the {@code supplier.outbox.pending} and
  * {@code supplier.outbox.oldest.age.seconds} gauges that the domain-events Grafana alerts fire on.
  *
- * <p>Gated on this module's own Kafka flag: a service with eventing deliberately off has no drain
- * to report and gains no health surface — and because the contributor never reports DOWN, enabling
- * it cannot restart-loop a container either way. See {@link OutboxHealthContributor} for the
+ * <p>A {@link KafkaRails} bean: absent in the broker-less dev/test/pg profiles, which have no drain
+ * to report and gain no health surface — and because the contributor never reports DOWN, it cannot
+ * restart-loop a container either way. See {@link OutboxHealthContributor} for the
  * always-UP rationale and the drain-state semantics.
  */
 @Configuration

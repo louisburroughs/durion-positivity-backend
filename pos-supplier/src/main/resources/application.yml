@@ -290,9 +290,9 @@ pos:
       workorder-events-topic: ${SUPPLIER_WORKORDER_EVENTS_TOPIC:workorder.events.v1}
       workorder-events-consumer-group: ${SUPPLIER_WORKORDER_EVENTS_CONSUMER_GROUP:pos-supplier-workorder-events}
       # Inbound commands (ADR-0049 §3): purchase-order transmission requests from pos-order and
-      # PRICAT re-publication requests from pos-catalog. Also gated by `enabled` above: with Kafka
-      # off nothing is consumed and no order is transmitted, which is the safe direction — the
-      # alternative would be orders placed by a deployment that cannot report the results.
+      # PRICAT re-publication requests from pos-catalog. A @KafkaRails listener: in the broker-less
+      # dev/test/pg profiles nothing is consumed and no order is transmitted, which is the safe
+      # direction — the alternative would be orders placed by a deployment that cannot report the results.
       #
       # ONE group for the whole topic, deliberately. processed_events is keyed by event id alone, so
       # a second consumer group here would record ids the first group still had to act on and the
