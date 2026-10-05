@@ -7303,9 +7303,11 @@ components:
           example: 550e8400-e29b-41d4-a716-446655440050
           type: string
         technicianName:
-          description: Technician display name
+          description: Technician display name (first and last name only); null when the name has not replicated yet
           example: John Smith
-          type: string
+          type:
+          - string
+          - 'null'
         unassignedAt:
           description: When the technician was unassigned (null for current assignment)
           example: '2024-01-27T16:00:00'
@@ -9678,9 +9680,11 @@ components:
           example: 550e8400-e29b-41d4-a716-446655440049
           type: string
         previousTechnicianName:
-          description: Previous technician name if this was a reassignment
+          description: Previous technician name if this was a reassignment; null otherwise or when the name has not replicated yet
           example: Jane Doe
-          type: string
+          type:
+          - string
+          - 'null'
         reassignedAt:
           description: When technician was reassigned
           example: '2024-01-27T15:30:00'
@@ -9711,9 +9715,11 @@ components:
           example: 550e8400-e29b-41d4-a716-446655440050
           type: string
         technicianName:
-          description: Technician display name
+          description: Technician display name (first and last name only); null when the name has not replicated yet
           example: John Smith
-          type: string
+          type:
+          - string
+          - 'null'
         workorderId:
           description: Work order ID
           example: 550e8400-e29b-41d4-a716-446655440001
@@ -10256,6 +10262,12 @@ components:
           example: 550e8400-e29b-41d4-a716-446655440004
           format: uuid
           type: string
+        assignedTechnicianName:
+          description: Display name of the assigned technician (first and last name only, no contact details), resolved from the people replica so TECHNICIAN and SERVICE_ADVISOR callers can show it without a people permission. Null when nobody is assigned or the name has not replicated yet.
+          example: John Smith
+          type:
+          - string
+          - 'null'
         capabilities:
           $ref: '#/components/schemas/WorkorderCapabilities'
         createdAt:
