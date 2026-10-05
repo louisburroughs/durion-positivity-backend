@@ -1,5 +1,6 @@
 package com.positivity.warranty.internal.config;
 
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.PlatformScoped;
 import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import com.positivity.warranty.internal.entity.OutboxEvent;
@@ -13,7 +14,6 @@ import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -30,7 +30,7 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "pos.warranty.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class OutboxPublisher {
 
     private final OutboxEventRepository outboxEventRepository;

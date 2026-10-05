@@ -1,6 +1,7 @@
 package com.positivity.warranty.internal.service;
 
 import com.positivity.domainevents.vehicle.VehicleUpdatedV1;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import com.positivity.warranty.internal.entity.ExtVehicleReplica;
 import com.positivity.warranty.internal.entity.ProcessedEvent;
@@ -13,7 +14,6 @@ import java.time.Instant;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -43,7 +43,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "pos.warranty.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class VehicleEventsListener {
 
     /** Producing domain, per the repo-wide processed_events convention (manifest scans key on it). */

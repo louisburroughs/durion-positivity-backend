@@ -203,7 +203,7 @@ class WorkorderInvoiceServiceTest {
                 .satisfies(
                         e -> org.assertj.core.api.Assertions.assertThat(((ResponseStatusException) e).getStatusCode())
                                 .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE))
-                .hasMessageContaining("workorder.kafka.enabled");
+                .hasMessageContaining("Kafka rails are not active");
     }
 
     @Test

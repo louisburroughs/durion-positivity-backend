@@ -39,7 +39,7 @@ import tools.jackson.databind.json.JsonMapper;
  * OutboxReplayServiceImplIntegrationTest}'s platform fan-out tests: the page publisher commits its
  * own transaction independently of any test-managed one, which is exactly the behaviour under test.
  */
-@DataJpaTest(properties = {"workorder.kafka.enabled=true", "spring.flyway.enabled=false"})
+@DataJpaTest(properties = {"spring.flyway.enabled=false"})
 @Import({OutboxEventWriter.class, WorkorderFactPublisher.class, WorkorderFactBackfillPagePublisher.class})
 class WorkorderFactBackfillPagePublisherTest {
 

@@ -33,9 +33,8 @@ import org.springframework.stereotype.Component;
  * <p>Must be called inside the mutating business transaction, alongside (never instead of) the
  * granular money-lifecycle emissions: the outbox write shares the caller's transaction
  * ({@code MANDATORY} on {@link OutboxEventWriter#publish}), so a snapshot exists if and only if
- * the mutation committed. Degrades to a no-op when Kafka is disabled, same as the existing
- * emitters ({@code ObjectProvider} — the writer bean only exists when
- * {@code pos.warranty.kafka.enabled=true}).
+ * the mutation committed. Degrades to a no-op in the broker-less dev/test profiles, same as the existing
+ * emitters ({@code ObjectProvider} — the writer is a {@code @KafkaRails} bean).
  */
 @Slf4j
 @Component

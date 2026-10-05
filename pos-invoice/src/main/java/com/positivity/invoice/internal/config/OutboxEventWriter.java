@@ -3,13 +3,13 @@ package com.positivity.invoice.internal.config;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.invoice.internal.entity.OutboxEvent;
 import com.positivity.invoice.internal.repository.OutboxEventRepository;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.TenantResolver;
 import java.time.Clock;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,7 +25,7 @@ import tools.jackson.databind.ObjectMapper;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(prefix = "pos.invoice.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class OutboxEventWriter {
 
     private final Clock clock;

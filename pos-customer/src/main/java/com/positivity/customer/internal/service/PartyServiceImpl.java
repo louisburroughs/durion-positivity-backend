@@ -90,7 +90,7 @@ public class PartyServiceImpl implements PartyService {
     private final PersonDirectoryService personDirectoryService;
     private final ExtVehicleRepository extVehicleRepository;
 
-    /** Present only when pos.customer.kafka.enabled=true (ADR-0044 producer, issue #842). */
+    /** Absent in the broker-less dev/test profiles (@KafkaRails) (ADR-0044 producer, issue #842). */
     private final org.springframework.beans.factory.ObjectProvider<OutboxEventWriter> outboxEventWriter;
 
     private final CustomerFactPublisher customerFactPublisher;

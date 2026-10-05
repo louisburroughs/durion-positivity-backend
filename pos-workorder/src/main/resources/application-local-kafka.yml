@@ -27,7 +27,3 @@ management:
 eureka:
   client:
     enabled: false
-
-workorder:
-  kafka:
-    enabled: true

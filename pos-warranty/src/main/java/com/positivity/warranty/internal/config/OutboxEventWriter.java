@@ -1,6 +1,7 @@
 package com.positivity.warranty.internal.config;
 
 import com.positivity.domainevents.DomainEventEnvelope;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.TenantResolver;
 import com.positivity.warranty.internal.entity.OutboxEvent;
 import com.positivity.warranty.internal.repository.OutboxEventRepository;
@@ -9,7 +10,6 @@ import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,12 +22,12 @@ import tools.jackson.databind.ObjectMapper;
  * transaction, so an event exists if and only if the business state change committed.
  * {@link OutboxPublisher} drains the table to Kafka with at-least-once delivery. Domain code
  * should inject this bean via {@code ObjectProvider<OutboxEventWriter>} because it only exists
- * when {@code pos.warranty.kafka.enabled=true}.
+ * outside the broker-less dev/test profiles ({@code @KafkaRails}).
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(prefix = "pos.warranty.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class OutboxEventWriter {
 
     private final Clock clock;

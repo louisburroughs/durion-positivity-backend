@@ -47,9 +47,6 @@ pos:
   tenancy:
     # strict: nothing binds a tenant unless the test does
     default-tenant-id:
-  customer:
-    kafka:
-      enabled: false
   people:
     allow-local-fallback: true
 

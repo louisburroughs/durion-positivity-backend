@@ -1,12 +1,6 @@
 {
   "properties": [
     {
-      "name": "workorder.kafka.enabled",
-      "type": "java.lang.Boolean",
-      "description": "Enable Kafka-based workorder event publishing and command consumption.",
-      "defaultValue": false
-    },
-    {
       "name": "workorder.kafka.events-topic",
       "type": "java.lang.String",
       "description": "Kafka topic used for workorder outbound events.",

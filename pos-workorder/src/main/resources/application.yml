@@ -102,7 +102,6 @@ workorder:
     resource-release-interval-ms: ${WORKORDER_FLEETAUTH_RESOURCE_RELEASE_INTERVAL_MS:900000}
     resource-release-batch-size: ${WORKORDER_FLEETAUTH_RESOURCE_RELEASE_BATCH_SIZE:50}
   kafka:
-    enabled: ${WORKORDER_KAFKA_ENABLED:false}
     # Fleet payment authorization (#1346): decisions from pos-supplier, vehicle identity from
     # pos-vehicle-inventory (ADR-0044 R3), and the delayed release of resources held by a job
     # blocked on an unresolved authorization.

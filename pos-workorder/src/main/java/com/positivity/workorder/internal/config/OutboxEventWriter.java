@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.config;
 
 import com.positivity.domainevents.DomainEventEnvelope;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.TenantResolver;
 import com.positivity.workorder.internal.entity.OutboxEvent;
 import com.positivity.workorder.internal.repository.OutboxEventRepository;
@@ -11,7 +12,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,7 +46,7 @@ import tools.jackson.databind.ObjectMapper;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(prefix = "workorder.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class OutboxEventWriter {
     private static final String SOURCE_SERVICE = "pos-workorder";
 

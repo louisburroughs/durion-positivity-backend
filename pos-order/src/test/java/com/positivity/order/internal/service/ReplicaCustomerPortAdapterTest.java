@@ -20,7 +20,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * Unit tests for {@link ReplicaCustomerPortAdapter} (ADR-0044 domain wall, PR
@@ -59,11 +58,6 @@ class ReplicaCustomerPortAdapterTest {
     @BeforeEach
     void setUp() {
         adapter = new ReplicaCustomerPortAdapter(extCustomerRepository, extVehicleRepository);
-        eventFeed(true);
-    }
-
-    private void eventFeed(boolean enabled) {
-        ReflectionTestUtils.setField(adapter, "eventFeedEnabled", enabled);
     }
 
     private static ExtVehicle vehicle(UUID accountId, boolean active) {
@@ -72,16 +66,6 @@ class ReplicaCustomerPortAdapterTest {
         vehicle.setAccountId(accountId);
         vehicle.setActive(active);
         return vehicle;
-    }
-
-    @Test
-    @DisplayName("reports UNAVAILABLE while the event feed is switched off")
-    void feedDisabledIsUnavailable() {
-        eventFeed(false);
-        when(extCustomerRepository.count()).thenReturn(500L);
-
-        assertThat(adapter.lookupCustomer(CUSTOMER_ID)).isEqualTo(CustomerLookupResult.UNAVAILABLE);
-        assertThat(adapter.lookupVehicle(CUSTOMER_ID, VEHICLE_ID)).isEqualTo(CustomerLookupResult.UNAVAILABLE);
     }
 
     @Test

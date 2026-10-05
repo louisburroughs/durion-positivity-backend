@@ -6,6 +6,7 @@ import com.positivity.invoice.internal.entity.ExtCustomerPartyReplica;
 import com.positivity.invoice.internal.entity.ProcessedEvent;
 import com.positivity.invoice.internal.repository.ExtCustomerPartyReplicaRepository;
 import com.positivity.invoice.internal.repository.ProcessedEventRepository;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -14,7 +15,6 @@ import java.time.Instant;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -40,7 +40,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "pos.invoice.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class CustomerEventsListener {
 
     static final String OWNER = "customer";

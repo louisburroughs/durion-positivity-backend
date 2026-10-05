@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.service;
 
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
@@ -14,7 +15,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
@@ -52,7 +52,7 @@ import tools.jackson.databind.node.ObjectNode;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(prefix = "workorder.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class KafkaCommandListener {
 
     private static final String PAYLOAD = "payload";

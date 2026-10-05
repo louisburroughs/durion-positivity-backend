@@ -77,7 +77,7 @@ posts to the ledger itself — the flow is event-only (ADR-0044 §6, #1843):
    logged and skipped — pos-accounting reverses the entry when it sees that fact and answers
    with a `REVERSED` fact, which changes nothing in pos-invoice.
 
-Requires `pos.invoice.kafka.enabled=true`; topic and consumer group are
+Active on the Kafka rails (any profile but `dev`/`test`/`pg`, or `local-kafka`); topic and consumer group are
 `POS_INVOICE_ACCOUNTING_EVENTS_TOPIC` (`accounting.events.v1`) and
 `POS_INVOICE_ACCOUNTING_EVENTS_CONSUMER_GROUP` (`pos-invoice-accounting-events`).
 
@@ -103,7 +103,7 @@ denied for scoped callers; pos-location is never called per request.
 
 ## Payment settlement events
 
-When `pos.invoice.kafka.enabled` is on, per-payment settlement facts are published on
+On the Kafka rails (outside dev/test), per-payment settlement facts are published on
 `payment.events.v1`: `payment.payment.settled` when a PaymentIntent captures (sale-capture or
 manual capture) and `payment.payment.reversed` on voids and refunds (gateway and standalone).
 pos-order's completion handshake is the first consumer (order parity story C3).

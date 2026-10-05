@@ -26,8 +26,8 @@ import org.springframework.stereotype.Component;
  * Emits {@code invoice.invoice.updated} to the invoice outbox after document mutations
  * (ADR-0044, #842).
  *
- * <p>No-op when the Kafka feature flag ({@code pos.invoice.kafka.enabled}) is off — the
- * {@link OutboxEventWriter} bean is conditional, so this publisher degrades gracefully. Must be
+ * <p>No-op when the Kafka rails are off (dev/test profiles) — the
+ * {@link OutboxEventWriter} bean is a {@code @KafkaRails} bean, so this publisher degrades gracefully. Must be
  * called inside the mutating transaction (the writer requires {@code MANDATORY} propagation).
  */
 @Slf4j

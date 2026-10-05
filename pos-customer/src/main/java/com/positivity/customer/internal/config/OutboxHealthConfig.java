@@ -2,12 +2,12 @@ package com.positivity.customer.internal.config;
 
 import com.positivity.customer.internal.repository.OutboxEventRepository;
 import com.positivity.events.outbox.OutboxHealthContributor;
+import com.positivity.kafka.common.KafkaRails;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -22,7 +22,7 @@ import org.springframework.context.annotation.Configuration;
  * always-UP rationale and the drain-state semantics.
  */
 @Configuration
-@ConditionalOnProperty(prefix = "pos.customer.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class OutboxHealthConfig {
 
     @Bean

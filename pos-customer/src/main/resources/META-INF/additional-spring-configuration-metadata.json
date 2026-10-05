@@ -1,12 +1,6 @@
 {
   "properties": [
     {
-      "name": "pos.customer.kafka.enabled",
-      "type": "java.lang.Boolean",
-      "description": "Enable or disable Kafka event consumption in pos-customer.",
-      "defaultValue": false
-    },
-    {
       "name": "pos.people.service-id",
       "type": "java.lang.String",
       "description": "Eureka service-id for the pos-people service.",

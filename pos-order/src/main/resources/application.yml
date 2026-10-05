@@ -68,9 +68,7 @@ pos:
     default-tenant-id: ${POS_TENANCY_DEFAULT_TENANT_ID:01900000-0000-7000-8000-000000000001}
   order:
     kafka:
-      # Domain-event publishing + replica feeds (ADR-0044, parity stories D1/I2). Off until the
-      # broker is provisioned; flip POS_ORDER_KAFKA_ENABLED per environment.
-      enabled: ${POS_ORDER_KAFKA_ENABLED:false}
+      # Domain-event publishing + replica feeds (ADR-0044, parity stories D1/I2): tier-1 rails, no flag.
       # CRM replica feeds (ADR-0044 §6): ext_customer / ext_vehicle
       customer-events-topic: ${POS_ORDER_CUSTOMER_EVENTS_TOPIC:customer.events.v1}
       customer-events-consumer-group: ${POS_ORDER_CUSTOMER_EVENTS_CONSUMER_GROUP:pos-order-customer-events}

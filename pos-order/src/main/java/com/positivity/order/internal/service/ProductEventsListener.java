@@ -2,6 +2,7 @@ package com.positivity.order.internal.service;
 
 import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.catalog.ProductUpdatedV1;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.order.internal.entity.ExtProduct;
 import com.positivity.order.internal.entity.ExtProductCode;
 import com.positivity.order.internal.entity.ExtProductUomReplica;
@@ -16,7 +17,6 @@ import java.time.Instant;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -47,7 +47,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "pos.order.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class ProductEventsListener {
 
     static final String OWNER = "catalog";

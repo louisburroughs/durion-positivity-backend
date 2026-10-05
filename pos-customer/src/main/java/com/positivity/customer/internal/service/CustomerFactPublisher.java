@@ -41,7 +41,7 @@ import org.springframework.util.StringUtils;
  *
  * <p>Every party mutation site calls {@link #partyChanged}/{@link #partyDeleted} inside its
  * business transaction; commercial-relationship mutations call {@link #personIdentityChanged}.
- * When Kafka publishing is disabled ({@code pos.customer.kafka.enabled=false}) the outbox writer
+ * In the broker-less dev/test profiles (no {@code @KafkaRails} beans) the outbox writer
  * bean is absent and every method is a no-op, so callers never need their own guard.
  *
  * <p>{@code AbstractParty} carries a JPA {@code @Version} (#1486), and {@code customer.party.updated}

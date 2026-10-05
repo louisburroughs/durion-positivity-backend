@@ -46,16 +46,11 @@ class KafkaEnabledFlagArchitectureTest {
      * 3 delete entries; the end state is an empty set).
      */
     static final Set<String> NOT_YET_CONVERTED = Set.of(
-            "com.positivity.workorder",
-            "com.positivity.order",
-            "com.positivity.invoice",
             "com.positivity.location",
-            "com.positivity.customer",
             "com.positivity.catalog",
             "com.positivity.shopmanager",
             "com.positivity.people",
             "com.positivity.securityservice",
-            "com.positivity.warranty",
             "com.positivity.platformsender",
             "com.positivity.marketing",
             "com.positivity.vehicle",

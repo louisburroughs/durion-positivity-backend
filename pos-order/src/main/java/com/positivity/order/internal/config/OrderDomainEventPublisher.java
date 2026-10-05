@@ -28,8 +28,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * Emits order domain facts to the outbox (ADR-0044, plan stories D1/D2/D3). No-op while the Kafka
- * feature flag ({@code pos.order.kafka.enabled}) is off — the {@link OutboxEventWriter} bean is
- * conditional, so callers degrade gracefully. Must be called inside the mutating transaction.
+ * rails are off (dev/test profiles) — the {@link OutboxEventWriter} bean is a
+ * {@code @KafkaRails} bean, so callers degrade gracefully. Must be called inside the mutating transaction.
  */
 @Slf4j
 @Component

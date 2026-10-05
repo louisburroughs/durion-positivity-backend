@@ -432,7 +432,7 @@ class WorkorderPickFacadeServiceImplTest {
         // than leaving an operator to guess from a bare 503.
         assertThatThrownBy(() -> service.confirmPickLine(WORKORDER_ID, TASK_ID, TASK_ID, confirm(5)))
                 .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("workorder.kafka.enabled")
+                .hasMessageContaining("Kafka rails are not active")
                 .extracting(e -> ((ResponseStatusException) e).getStatusCode())
                 .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
     }

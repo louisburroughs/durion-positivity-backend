@@ -19,8 +19,8 @@ import org.springframework.stereotype.Component;
  * ({@code payment.events.v1}); provider configuration goes to the compacted config topic
  * ({@code payment.settlement-config.v1}) keyed for last-writer-wins per provider (decision D-9).
  *
- * <p>No-op when the invoice Kafka feature flag ({@code pos.invoice.kafka.enabled}) is off — the
- * {@link OutboxEventWriter} bean is conditional, so this publisher degrades gracefully. Must be
+ * <p>No-op when the Kafka rails are off (dev/test profiles) — the
+ * {@link OutboxEventWriter} bean is a {@code @KafkaRails} bean, so this publisher degrades gracefully. Must be
  * called inside the mutating transaction (the writer requires {@code MANDATORY} propagation).
  *
  * <p>The {@link DomainEventEnvelope} record key is a UUID; the settlement id and provider code are

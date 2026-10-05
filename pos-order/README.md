@@ -83,8 +83,7 @@ settlement flows back asynchronously: a `payment.events.v1` consumer applies
 ledger, maintains `amountPaid`/`balanceDue`, and transitions
 `PENDING_PAYMENT → COMPLETED` exactly at zero balance, emitting `order.order.completed`.
 Over-settlement raises `order.payment.integrity-alert`. Applied price overrides emit
-`order.line.commission-impact`. All Kafka paths are gated by `pos.order.kafka.enabled`
-(default `false`).
+`order.line.commission-impact`. All Kafka paths are tier-1 `@KafkaRails` beans: always on outside the broker-less dev/test profiles, no flag.
 
 ## Purchase order transmission timeline (issue #1638)
 

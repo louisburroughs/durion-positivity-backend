@@ -190,7 +190,7 @@ which permission and location it denied.
 flag per part line (resolved order-spec Q6 — set at settlement time, never inferred). A new
 `EstimateFactPublisher` emits `workorder.estimate.updated` snapshots (header + full item set
 with approval status) on every estimate mutation, feeding pos-order's source-document import
-replicas. Both are gated by `workorder.kafka.enabled`.
+replicas. Both are `@KafkaRails` beans (tier-1, absent only in the broker-less dev/test profiles).
 
 ## Estimated labor hours and guide-time defaulting (#1569)
 
@@ -214,8 +214,8 @@ A note about the customer — something they said while the job was open, not a 
 is recorded through `POST /v1/workorders/{workorderId}/notes` and stored in `workorder_note`, which
 this module owns. `WorkorderNoteServiceImpl` publishes `workorder.note.added.v1` to the
 transactional outbox in the same transaction, so the note and its fact commit together;
-pos-customer projects it onto the party's CRM timeline. Gated by `workorder.kafka.enabled` like the
-other fact publishers: with Kafka off the note is still saved, it just is not published.
+pos-customer projects it onto the party's CRM timeline. A `@KafkaRails` bean like the
+other fact publishers: in the broker-less dev/test profiles the note is still saved, it just is not published.
 
 This is distinct from `workorder.completion_notes`, `workorder.approval_notes`, and
 `change_request.approval_note`, which describe the work or a decision about it and are
@@ -713,7 +713,7 @@ The pick-list `503` has no upper bound. The gate is a predicate on the workorder
 (a servicing site and a pickable part line), not evidence that the generate command was ever
 queued: `InventoryCommandPublisher` sends `inventory.commands.v1` straight through Kafka, and
 nothing in this module records the request. So a workorder whose generate command never left
-answers `503` with `Retry-After` indefinitely: `workorder.kafka.enabled` was off when it was
+answers `503` with `Retry-After` indefinitely: the Kafka rails were off (dev/test profile) when it was
 promoted, the send failed (`PromotedWorkorderDemandPublisher` logs the failure and moves on), or
 its part lines were added after promotion (no command is sent for those). An operator who sees
 the `503` outlast a few `Retry-After` intervals should check that log line and re-promote, or ask
@@ -735,7 +735,6 @@ not replicated as `taxPending` and never blocks the estimate; the part-quantity 
 | `pos.vehicle.base-url`         | `http://pos-vehicle:8088`  | Vehicle service URL              |
 | `pos.tax.base-url`             | `http://pos-tax:8091`      | Tax service URL                  |
 | `pos.location.base-url`        | `http://pos-location:8080` | Location service URL             |
-| `workorder.kafka.enabled`      | `false`                    | Enable Kafka event emission      |
 | `workorder.kafka.events-topic` | `workorder.events.v1`      | Kafka topic for workorder events |
 | `workorder.kafka.catalog-events-topic` | `catalog.events.v1` | Catalog fact topic feeding the `ext_product_uom` replica |
 | `workorder.kafka.catalog-events-consumer-group` | `pos-workorder-catalog-events` | Consumer group for the catalog fact topic |

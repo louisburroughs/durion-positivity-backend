@@ -4,6 +4,7 @@ import com.positivity.domainevents.inventory.GoodsReceiptLine;
 import com.positivity.domainevents.inventory.GoodsReceiptRecordedV1;
 import com.positivity.domainevents.inventory.InventoryAvailabilityUpdatedV1;
 import com.positivity.domainevents.inventory.ReservationOutcomeV1;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.order.internal.entity.ExtInventoryAvailability;
 import com.positivity.order.internal.entity.FulfillmentStatus;
 import com.positivity.order.internal.entity.ProcessedEvent;
@@ -25,7 +26,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -89,7 +89,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "pos.order.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class InventoryEventsListener {
     private static final String PAYLOAD = "payload";
 

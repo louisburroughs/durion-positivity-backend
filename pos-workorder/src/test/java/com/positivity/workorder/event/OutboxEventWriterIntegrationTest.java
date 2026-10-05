@@ -29,7 +29,7 @@ import tools.jackson.databind.json.JsonMapper;
  * Proves the ADR-0044 outbox guarantee: an event row exists if and only if the business
  * transaction commits, and writing outside a transaction fails fast (MANDATORY propagation).
  */
-@DataJpaTest(properties = {"workorder.kafka.enabled=true", "spring.flyway.enabled=false"})
+@DataJpaTest(properties = {"spring.flyway.enabled=false"})
 @Import(OutboxEventWriter.class)
 class OutboxEventWriterIntegrationTest {
 
