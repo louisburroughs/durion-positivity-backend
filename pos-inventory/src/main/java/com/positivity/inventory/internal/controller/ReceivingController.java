@@ -204,8 +204,7 @@ public class ReceivingController {
                     products.
                     Emits an INVENTORY_RECEIVING_SESSION_COMPLETE event, marks each line RECEIVED, RECEIVED_SHORT \
                     or RECEIVED_OVER, and moves the session to COMPLETED when every line is settled or IN_PROGRESS \
-                    otherwise.
-                    Receiving is cumulative: each call adds to the line's receivedQuantity, and every call that \
+                    otherwise; receiving is cumulative: each call adds to the line's receivedQuantity, and every call that \
                     receives against a purchase order is recorded as one goods receipt (linked to the session and \
                     its lines), visible through getGoodsReceipt, and publishes goodsreceipt.recorded from it.
                     Over-receipt: a line whose cumulative received quantity would pass its expected quantity is \
@@ -213,9 +212,9 @@ public class ReceivingController {
                     holds inventory:goods_receipt:override; with the override it is accepted as RECEIVED_OVER \
                     with an OVERAGE variance.
                     Idempotency: send an Idempotency-Key header (or the idempotencyKey body field; the header wins, \
-                    and both present and different is a 400). A retry with the same key and payload posts and \
-                    publishes nothing and returns the original response; the same key with a different payload is \
-                    409 IDEMPOTENCY_CONFLICT. Without a key a retry is not recognised.
+                    and both present and different is a 400); a retry with the same key and payload posts and \
+                    publishes nothing and returns the original response, the same key with a different payload is \
+                    409 IDEMPOTENCY_CONFLICT, and without a key a retry is not recognised.
                     Returns 404 when the receiving session does not exist, 400 when a quantity is missing or not a \
                     whole number, 409 on an idempotency-key conflict, and 422 when the receipt is an over-receipt \
                     without the override, a documentUom has no conversion path, a LOT-tracked line omits \
