@@ -183,12 +183,18 @@ class VpicReferenceRefreshIT extends PostgresTenancyTestBase {
         // Refreshed A, B, A.
         assertThat(service.getMakesByManufacturer(a)).extracting(Make::getId).contains(shared);
         assertThat(service.getMakesByManufacturer(b)).extracting(Make::getId).containsExactly(shared);
-        ageCache();
+        // Stale only A, so B stays fresh and is served from the join table without calling vPIC.
+        owner.update(
+                "UPDATE manufacturer SET makes_refreshed_at = makes_refreshed_at - interval '25 hours' WHERE id = ?",
+                a);
         requested.clear();
         assertThat(service.getMakesByManufacturer(a)).extracting(Make::getId).contains(shared);
+        assertThat(requested).containsExactly(makesA);
 
-        // B's list was not touched by A's second refresh and still includes the shared make.
+        // B's list was not touched by A's second refresh: no vPIC call, link survived, shared make still listed.
+        requested.clear();
         assertThat(service.getMakesByManufacturer(b)).extracting(Make::getId).containsExactly(shared);
+        assertThat(requested).isEmpty();
         assertThat(owner.queryForObject("SELECT count(*) FROM make WHERE nhtsa_id = 482", Integer.class))
                 .isEqualTo(1);
         assertThat(owner.queryForList(
