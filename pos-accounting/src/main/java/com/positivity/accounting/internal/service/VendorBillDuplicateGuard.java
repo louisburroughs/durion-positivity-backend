@@ -14,6 +14,7 @@ import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.event.Level;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -89,8 +90,11 @@ public class VendorBillDuplicateGuard {
     /**
      * {@link #findOriginal} in a read-only transaction of its own, for a writer whose insert has just
      * broken {@value #INDEX_NAME}. Postgres resolves a unique check only after the competing
-     * transaction has committed, so the original is visible to a new transaction; the writer's own
-     * transaction is aborted and can read nothing.
+     * transaction has committed, so the original is visible to a new transaction. The writer's own
+     * transaction can read nothing more: Postgres has aborted it, whether Spring has already rolled
+     * it back or, when it belongs to a caller further up, only marked it rollback-only. {@code
+     * REQUIRES_NEW} is what makes the read correct in both cases: it suspends whatever is left of
+     * that transaction and reads on a connection of its own.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
     public @NonNull Optional<VendorBill> findOriginalAfterCollision(
@@ -135,8 +139,13 @@ public class VendorBillDuplicateGuard {
     }
 
     /**
-     * One WARN line and one {@value #COUNTER_NAME} increment per refusal, flag, ignored duplicate or
-     * retry. Ids, the key and the date only: no vendor name and no amount.
+     * One {@value #COUNTER_NAME} increment per refusal, flag, ignored duplicate or retry, and one log
+     * line: WARN for a refusal or a flag, the two outcomes a person may have to act on; DEBUG for an
+     * ignored duplicate, which overlapping fetch windows produce by design; INFO for a retry. Ids,
+     * the key and the date only: no vendor name and no amount.
+     *
+     * <p>The increment is not tied to the caller's transaction: a run that rolls back afterwards and
+     * is redelivered counts again.
      *
      * @param originalBillId the live original, or null when it has not been read yet (a retry)
      */
@@ -149,14 +158,15 @@ public class VendorBillDuplicateGuard {
             @Nullable UUID originalBillId) {
         String channelTag = channel.name().toLowerCase(Locale.ROOT);
         String outcomeTag = outcome.name().toLowerCase(Locale.ROOT);
-        log.warn(
-                "Vendor bill duplicate | channel={} | outcome={} | vendorId={} | key={} | billDate={} | originalBillId={}",
-                channelTag,
-                outcomeTag,
-                vendorId,
-                VendorBillNumbers.normalise(billNumber),
-                billDate.toLocalDate(),
-                originalBillId);
+        log.atLevel(levelOf(outcome))
+                .log(
+                        "Vendor bill duplicate | channel={} | outcome={} | vendorId={} | key={} | billDate={} | originalBillId={}",
+                        channelTag,
+                        outcomeTag,
+                        vendorId,
+                        VendorBillNumbers.normalise(billNumber),
+                        billDate.toLocalDate(),
+                        originalBillId);
         if (meterRegistry == null) {
             return;
         }
@@ -166,6 +176,14 @@ public class VendorBillDuplicateGuard {
                 .tag("outcome", outcomeTag)
                 .register(meterRegistry)
                 .increment();
+    }
+
+    private static Level levelOf(Outcome outcome) {
+        return switch (outcome) {
+            case REFUSED, FLAGGED -> Level.WARN;
+            case RETRIED -> Level.INFO;
+            case IGNORED -> Level.DEBUG;
+        };
     }
 
     /**

@@ -10936,6 +10936,8 @@ paths:
 
         Returns 409 AP_BILL_DUPLICATE when the matched bill would take an invoiceReference that another live bill (any status except VOIDED or REJECTED) of the same vendor already holds on the same bill date, compared ignoring case, spacing, punctuation and leading zeros; referenceId is that bill''s vendorBillId and the match changes nothing.
 
+        A match that loses a concurrent race for the same number between that check and its commit answers the generic 409 DUPLICATE_RESOURCE instead, with no referenceId; the match is rolled back and no second bill holds the number.
+
         '
       operationId: matchVendorInvoice
       requestBody:
@@ -10978,7 +10980,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'AP_BILL_DUPLICATE: another live bill of this vendor already holds this invoice reference on the same bill date; referenceId is that bill''s vendorBillId'
+          description: 'AP_BILL_DUPLICATE: another live bill of this vendor already holds this invoice reference on the same bill date; referenceId is that bill''s vendorBillId. DUPLICATE_RESOURCE, with no referenceId, when a concurrent writer takes the number between the check and the commit'
       security:
       - bearerAuth:
         - accounting:ap:pay

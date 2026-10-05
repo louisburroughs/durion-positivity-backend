@@ -127,14 +127,6 @@ class AccountingExceptionHandlerTest {
          * Uses a standalone handler instance so this factory method can stay static, as required
          * by {@code @MethodSource} outside a {@code PER_CLASS} test instance lifecycle.
          */
-        private static VendorBillDuplicateException vendorBillDuplicate() {
-            VendorBill original = new VendorBill(UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"));
-            original.setBillNumber("INV-00123");
-            original.setBillDate(LocalDateTime.of(2026, 10, 1, 9, 30));
-            original.setStatus(VendorBillStatus.APPROVED);
-            return new VendorBillDuplicateException(original);
-        }
-
         private static Stream<Named<HandlerInvocation>> handlerInvocations() {
             AccountingExceptionHandler handler = new AccountingExceptionHandler(TEST_CLOCK);
 
@@ -295,6 +287,14 @@ class AccountingExceptionHandlerTest {
                             new ObjectOptimisticLockingFailureException(Object.class, "id"), request)),
                     Named.of("handleResponseStatus", (HandlerInvocation) request -> handler.handleResponseStatus(
                             new ResponseStatusException(HttpStatus.BAD_GATEWAY, "bad gateway"), request)));
+        }
+
+        private static VendorBillDuplicateException vendorBillDuplicate() {
+            VendorBill original = new VendorBill(UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"));
+            original.setBillNumber("INV-00123");
+            original.setBillDate(LocalDateTime.of(2026, 10, 1, 9, 30));
+            original.setStatus(VendorBillStatus.APPROVED);
+            return new VendorBillDuplicateException(original);
         }
 
         @ParameterizedTest

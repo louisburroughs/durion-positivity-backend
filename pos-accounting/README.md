@@ -467,6 +467,10 @@ counts, `PAID` and `CURRENCY_HOLD` included.
   no id; `referenceId` is the original's `vendorBillId`; `nextAction` is `Open the existing bill.` Nothing is
   written: no bill, no GL posting event, no vendor-directory entry, and a refused match leaves the
   goods-receipt bill as it was. A replayed goods-received `eventId` still returns the existing bill with 201.
+  A match that loses a concurrent race for the same number between the rule's check and its commit is
+  stopped by the index and answers the generic 409 `DUPLICATE_RESOURCE` instead, with no `referenceId`:
+  the index violation is translated to `AP_BILL_DUPLICATE` on the create and listener paths only. The
+  match is rolled back, so no second debt is recorded either way.
 - **EDI** (`supplier.invoice.received`): the listener asks the same rule with the invoice date. A live
   original is flagged `MATCH_EXCEPTION` when the amount or currency differs (unchanged from #2309) or recorded
   `PROCESSED / DUPLICATE_IGNORED` when identical; nothing is thrown and no second bill is created. With no
@@ -474,10 +478,22 @@ counts, `PAID` and `CURRENCY_HOLD` included.
   more in a new transaction and takes the duplicate path; a second collision propagates for retry, unmarked.
 - **Migration guard**: V4 backfills the key, then stops with an error naming the count and the first ten
   groups if existing rows break the rule. It never edits a bill; void the extra bill (or reset a
-  pre-production database) and run it again. The same migration creates `bill_number_seq`, which the
-  goods-receipt path draws its generated numbers from and no earlier migration created.
-- **Observability**: one WARN line and one `accounting.vendor_bill.duplicate` increment per event, tagged
-  `channel` (`goods_receipt`, `match`, `edi`) and `outcome` (`refused`, `flagged`, `ignored`, `retried`).
+  pre-production database) and run it again.
+- **Goods-receipt bill numbers** (`BILL_<vendor prefix>_<yyyyMMdd>_<7-digit sequence>`): the sequence is
+  the tenant's own, never a shared database sequence (ADR-0062 §9; platform-owner ruling of 2026-10-05). It
+  is the `accounting_sequence` counter under scope `BILL-<yyyyMM>` (the month the bill is recorded in),
+  drawn through `AccountingSequenceLocker` exactly as journal-entry numbers (`JE-<yyyyMM>`) and credit memo
+  references (`CM-<yyyyMM>`) are. Each tenant starts every month at 1. The counter row is locked and
+  incremented in the bill's own transaction, so concurrent creates in a tenant take consecutive, distinct
+  numbers, and a create that rolls back (a refused duplicate included) does not consume its number. A
+  tenant's row is created on first use; nothing provisions it. Before this, the number came from a
+  database sequence `bill_number_seq` that no migration created, so the create failed on every Postgres
+  database.
+- **Observability**: one `accounting.vendor_bill.duplicate` increment per event, tagged `channel`
+  (`goods_receipt`, `match`, `edi`) and `outcome` (`refused`, `flagged`, `ignored`, `retried`), and one log
+  line: WARN for a refusal or a flag, DEBUG for an ignored duplicate (overlapping fetch windows republish by
+  design), INFO for a retry. The counter is not tied to the transaction: a run that rolls back and is
+  redelivered counts again.
 - **Limits**: the rule compares `vendor_id` as stored, so the same vendor under two ids is not detected
   (one vendor key arrives with the vendor copies). The SQL backfill and the Java normaliser agree on every
   example above; a number with letters outside ASCII depends on the database's character classification

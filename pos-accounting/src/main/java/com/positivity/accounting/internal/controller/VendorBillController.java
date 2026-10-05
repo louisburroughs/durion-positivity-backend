@@ -185,6 +185,9 @@ public class VendorBillController {
                     another live bill (any status except VOIDED or REJECTED) of the same vendor already \
                     holds on the same bill date, compared ignoring case, spacing, punctuation and leading \
                     zeros; referenceId is that bill's vendorBillId and the match changes nothing.
+                    A match that loses a concurrent race for the same number between that check and its \
+                    commit answers the generic 409 DUPLICATE_RESOURCE instead, with no referenceId; the \
+                    match is rolled back and no second bill holds the number.
                     """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
@@ -198,7 +201,8 @@ public class VendorBillController {
     @ApiResponse(
             responseCode = "409",
             description = "AP_BILL_DUPLICATE: another live bill of this vendor already holds this invoice reference "
-                    + "on the same bill date; referenceId is that bill's vendorBillId",
+                    + "on the same bill date; referenceId is that bill's vendorBillId. DUPLICATE_RESOURCE, with no "
+                    + "referenceId, when a concurrent writer takes the number between the check and the commit",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<VendorBillResponse> matchVendorInvoice(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
