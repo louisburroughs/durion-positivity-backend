@@ -56,6 +56,17 @@ class HouseAccountProvisionerTest {
     }
 
     @Test
+    @DisplayName("registers one counter per outcome up front, so a failed series exists before the first failure")
+    void registersEveryOutcomeSeriesAtConstruction() {
+        provisioner();
+
+        assertThat(meters.find(HouseAccountProvisioner.METRIC).counters())
+                .extracting(counter -> counter.getId().getTag("outcome"))
+                .containsExactlyInAnyOrder("created", "existing", "failed");
+        assertThat(count("created") + count("existing") + count("failed")).isZero();
+    }
+
+    @Test
     @DisplayName("creates the account for every active tenant, each with its own tenant bound")
     void createsForEveryTenant() {
         List<UUID> boundTenants = new CopyOnWriteArrayList<>();

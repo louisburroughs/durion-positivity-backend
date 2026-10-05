@@ -3,7 +3,9 @@ package com.positivity.customer.internal.service;
 import com.positivity.tenancy.TenantIterator;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.util.EnumMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
@@ -59,8 +61,8 @@ public class HouseAccountProvisioner implements ApplicationRunner {
     private final TenantIterator tenantIterator;
     private final HouseAccountProvisioningService provisioningService;
 
-    /** Absent in contexts without a metrics registry; provisioning must not depend on it. */
-    private final @Nullable MeterRegistry meterRegistry;
+    /** Empty in contexts without a metrics registry; provisioning must not depend on one. */
+    private final Map<Outcome, Counter> outcomeCounters;
 
     public HouseAccountProvisioner(
             TenantIterator tenantIterator,
@@ -68,7 +70,7 @@ public class HouseAccountProvisioner implements ApplicationRunner {
             ObjectProvider<MeterRegistry> meterRegistry) {
         this.tenantIterator = tenantIterator;
         this.provisioningService = provisioningService;
-        this.meterRegistry = meterRegistry.getIfAvailable();
+        this.outcomeCounters = registerCounters(meterRegistry.getIfAvailable());
     }
 
     /** Startup pass. Logs and swallows any failure: provisioning never blocks startup. */
@@ -158,12 +160,30 @@ public class HouseAccountProvisioner implements ApplicationRunner {
     }
 
     private void count(Outcome outcome) {
-        if (meterRegistry != null) {
-            Counter.builder(METRIC)
-                    .description("CASH house account provisioning attempts per tenant, by outcome")
-                    .tag("outcome", outcome.name().toLowerCase(Locale.ROOT))
-                    .register(meterRegistry)
-                    .increment();
+        Counter counter = outcomeCounters.get(outcome);
+        if (counter != null) {
+            counter.increment();
         }
+    }
+
+    /**
+     * One counter per outcome, registered once. Registering them up front also means the
+     * {@code failed} series exists at zero from startup, so an alert on it has something to watch
+     * before the first failure.
+     */
+    private static Map<Outcome, Counter> registerCounters(@Nullable MeterRegistry meterRegistry) {
+        Map<Outcome, Counter> counters = new EnumMap<>(Outcome.class);
+        if (meterRegistry == null) {
+            return counters;
+        }
+        for (Outcome outcome : Outcome.values()) {
+            counters.put(
+                    outcome,
+                    Counter.builder(METRIC)
+                            .description("CASH house account provisioning attempts per tenant, by outcome")
+                            .tag("outcome", outcome.name().toLowerCase(Locale.ROOT))
+                            .register(meterRegistry));
+        }
+        return counters;
     }
 }

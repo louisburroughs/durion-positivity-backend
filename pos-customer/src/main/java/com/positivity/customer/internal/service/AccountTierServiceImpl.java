@@ -109,7 +109,8 @@ public class AccountTierServiceImpl implements AccountTierService {
         if (party.getHouseAccount() != null) {
             // A house account is never re-tiered (#2505): answer the stored tier without running
             // the calculation, whatever the request asks to apply or force.
-            log.info("Skipping tier resolution for house account {}", request.getAccountId());
+            // DEBUG: the request itself is already logged above, and this is the expected answer.
+            log.debug("Skipping tier resolution for house account {}", request.getAccountId());
             return ResolveAccountTierResponse.builder()
                     .accountId(request.getAccountId())
                     .currentTier(currentTier)
