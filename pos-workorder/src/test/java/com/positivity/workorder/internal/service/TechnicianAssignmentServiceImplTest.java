@@ -978,4 +978,42 @@ class TechnicianAssignmentServiceImplTest {
             return lower.contains("override") || lower.contains("force") || lower.contains("bypass");
         }
     }
+
+    @Test
+    @DisplayName("resolveTechnicianNames: one lookup; trims names, omits blank and missing rows (#2481)")
+    void resolveTechnicianNames_oneLookup_omitsBlankAndMissing() {
+        UUID named = UUID.randomUUID();
+        UUID blank = UUID.randomUUID();
+        UUID firstOnly = UUID.randomUUID();
+        UUID missing = UUID.randomUUID();
+        when(extPersonReplicaRepository.findByPersonIdIn(any()))
+                .thenReturn(List.of(
+                        com.positivity.workorder.internal.entity.ExtPersonReplica.builder()
+                                .personId(named)
+                                .firstName(" Jane ")
+                                .lastName("Doe ")
+                                .build(),
+                        com.positivity.workorder.internal.entity.ExtPersonReplica.builder()
+                                .personId(blank)
+                                .firstName(" ")
+                                .lastName(null)
+                                .build(),
+                        com.positivity.workorder.internal.entity.ExtPersonReplica.builder()
+                                .personId(firstOnly)
+                                .firstName("Cher")
+                                .build()));
+
+        java.util.Map<UUID, String> names = service.resolveTechnicianNames(List.of(named, blank, firstOnly, missing));
+
+        assertThat(names).containsOnlyKeys(named, firstOnly);
+        assertThat(names).containsEntry(named, "Jane Doe").containsEntry(firstOnly, "Cher");
+        verify(extPersonReplicaRepository, org.mockito.Mockito.times(1)).findByPersonIdIn(any());
+    }
+
+    @Test
+    @DisplayName("resolveTechnicianNames: empty input skips the lookup")
+    void resolveTechnicianNames_empty_skipsLookup() {
+        assertThat(service.resolveTechnicianNames(List.of())).isEmpty();
+        verify(extPersonReplicaRepository, never()).findByPersonIdIn(any());
+    }
 }

@@ -4,6 +4,7 @@ import com.positivity.domainevents.AggregateTouch;
 import com.positivity.web.common.ReplicationPendingException;
 import com.positivity.workorder.internal.dto.TechnicianAssignmentRecord;
 import com.positivity.workorder.internal.entity.ExtMobileUnitReplica;
+import com.positivity.workorder.internal.entity.ExtPersonReplica;
 import com.positivity.workorder.internal.entity.TechnicianAssignment;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.ResourceType;
@@ -22,8 +23,13 @@ import com.positivity.workorder.internal.repository.WorkorderRepository;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -340,6 +346,24 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
         return assignmentRepository.findByWorkorder_IdOrderByAssignedAtDesc(workorderId).stream()
                 .map(TechnicianAssignmentRecord::fromEntity)
                 .toList();
+    }
+
+    @Override
+    @NonNull
+    @Transactional(readOnly = true)
+    public Map<UUID, String> resolveTechnicianNames(@NonNull Collection<UUID> technicianIds) {
+        Set<UUID> ids = new HashSet<>(technicianIds);
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, String> names = new HashMap<>();
+        for (ExtPersonReplica person : extPersonReplicaRepository.findByPersonIdIn(ids)) {
+            String name = ReplicaDisplayNames.personName(person);
+            if (name != null) {
+                names.put(person.getPersonId(), name);
+            }
+        }
+        return names;
     }
 
     /**

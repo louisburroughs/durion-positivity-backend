@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.service;
 
 import com.positivity.workorder.internal.entity.ExtCustomerPartyReplica;
+import com.positivity.workorder.internal.entity.ExtPersonReplica;
 import com.positivity.workorder.internal.entity.ExtVehicleReplica;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -32,6 +33,21 @@ final class ReplicaDisplayNames {
                 .map(String::strip)
                 .collect(Collectors.joining(" · "));
         return description.isEmpty() ? null : description;
+    }
+
+    /**
+     * A person's display name, "First Last" with blanks dropped and trimmed. Name only, no contact
+     * fields (#2481). {@code null} when the person is not replicated or both names are blank.
+     */
+    static @Nullable String personName(@Nullable ExtPersonReplica person) {
+        if (person == null) {
+            return null;
+        }
+        String name = Stream.of(person.getFirstName(), person.getLastName())
+                .filter(part -> part != null && !part.isBlank())
+                .map(String::strip)
+                .collect(Collectors.joining(" "));
+        return name.isEmpty() ? null : name;
     }
 
     /**

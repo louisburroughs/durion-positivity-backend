@@ -5,12 +5,15 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.workorder.internal.dto.WorkorderDetailResponse;
 import com.positivity.workorder.internal.entity.ExtCustomerPartyReplica;
+import com.positivity.workorder.internal.entity.ExtPersonReplica;
 import com.positivity.workorder.internal.entity.ExtVehicleReplica;
+import com.positivity.workorder.internal.entity.TechnicianAssignment;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.ExtCustomerPartyReplicaRepository;
+import com.positivity.workorder.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtVehicleReplicaRepository;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
@@ -51,6 +54,9 @@ class WorkorderDetailServiceImplTest {
 
     @Mock
     private ExtCustomerPartyReplicaRepository extCustomerPartyReplicaRepository;
+
+    @Mock
+    private ExtPersonReplicaRepository extPersonReplicaRepository;
 
     @InjectMocks
     private WorkorderDetailServiceImpl service;
@@ -321,5 +327,70 @@ class WorkorderDetailServiceImplTest {
         assertThat(response.getActualLaborHours()).isEqualByComparingTo("1.5");
         assertThat(response.getLaborVarianceHours()).isNull();
         assertThat(response.getLaborVariancePct()).isNull();
+    }
+
+    private WorkorderDetailResponse detailWithTechnician(UUID technicianId, Optional<ExtPersonReplica> person) {
+        UUID workorderId = UUID.randomUUID();
+        Workorder workorder = Workorder.builder()
+                .id(workorderId)
+                .customerId(UUID.randomUUID())
+                .vehicleId(UUID.randomUUID())
+                .shopId(UUID.randomUUID())
+                .status(WorkorderStatus.APPROVED)
+                .updatedAt(Instant.parse("2026-04-18T12:00:00Z"))
+                .services(java.util.List.of())
+                .build();
+        TechnicianAssignment assignment = TechnicianAssignment.builder()
+                .workorder(workorder)
+                .technicianId(technicianId)
+                .assignedAt(java.time.LocalDateTime.of(2026, 4, 18, 8, 0))
+                .assignedBy("advisor")
+                .build();
+        when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
+        when(technicianAssignmentRepository.findByWorkorder_IdAndCurrentTrue(workorderId))
+                .thenReturn(Optional.of(assignment));
+        when(extPersonReplicaRepository.findById(technicianId)).thenReturn(person);
+        return service.getWorkorderDetail(workorderId, Set.of("workorder:workorder:view"));
+    }
+
+    @Test
+    @DisplayName("getWorkorderDetail: assigned technician name comes from the people replica (#2481)")
+    void getWorkorderDetail_technicianName_fromReplica() {
+        UUID techId = UUID.randomUUID();
+        WorkorderDetailResponse response = detailWithTechnician(
+                techId,
+                Optional.of(ExtPersonReplica.builder()
+                        .personId(techId)
+                        .firstName("Jane")
+                        .lastName(" Doe")
+                        .build()));
+
+        assertThat(response.getAssignedTechnicianId()).isEqualTo(techId);
+        assertThat(response.getAssignedTechnicianName()).isEqualTo("Jane Doe");
+    }
+
+    @Test
+    @DisplayName("getWorkorderDetail: missing replica row leaves technician name null without failing")
+    void getWorkorderDetail_technicianName_replicaMissing() {
+        UUID techId = UUID.randomUUID();
+        WorkorderDetailResponse response = detailWithTechnician(techId, Optional.empty());
+
+        assertThat(response.getAssignedTechnicianId()).isEqualTo(techId);
+        assertThat(response.getAssignedTechnicianName()).isNull();
+    }
+
+    @Test
+    @DisplayName("getWorkorderDetail: blank names leave technician name null")
+    void getWorkorderDetail_technicianName_blankNames() {
+        UUID techId = UUID.randomUUID();
+        WorkorderDetailResponse response = detailWithTechnician(
+                techId,
+                Optional.of(ExtPersonReplica.builder()
+                        .personId(techId)
+                        .firstName(" ")
+                        .lastName("")
+                        .build()));
+
+        assertThat(response.getAssignedTechnicianName()).isNull();
     }
 }

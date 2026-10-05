@@ -2,6 +2,7 @@ package com.positivity.workorder.internal.dto;
 
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 
@@ -21,9 +22,10 @@ public final class TechnicianAssignmentMapper {
             @NonNull TechnicianAssignmentRecord assignment,
             @NonNull WorkorderStatus workorderStatus,
             String previousTechnicianId,
-            @NonNull String message) {
+            @NonNull String message,
+            @NonNull Map<UUID, String> technicianNames) {
         return TechnicianAssignmentResponse.fromAssignment(
-                assignment, workorderStatus.name(), previousTechnicianId, message);
+                assignment, workorderStatus.name(), previousTechnicianId, message, technicianNames);
     }
 
     /**
@@ -32,8 +34,10 @@ public final class TechnicianAssignmentMapper {
     public static TechnicianAssignmentResponse toResponseWithHistory(
             @NonNull TechnicianAssignmentRecord currentAssignment,
             @NonNull List<TechnicianAssignmentRecord> history,
-            @NonNull WorkorderStatus workorderStatus) {
-        return TechnicianAssignmentResponse.withHistory(currentAssignment, history, workorderStatus.name());
+            @NonNull WorkorderStatus workorderStatus,
+            @NonNull Map<UUID, String> technicianNames) {
+        return TechnicianAssignmentResponse.withHistory(
+                currentAssignment, history, workorderStatus.name(), technicianNames);
     }
 
     /**
@@ -44,13 +48,16 @@ public final class TechnicianAssignmentMapper {
             UUID previousTechnicianId,
             @NonNull WorkorderStatus workorderStatus,
             @NonNull String reason,
-            @NonNull String reassignedBy) {
+            @NonNull String reassignedBy,
+            @NonNull Map<UUID, String> technicianNames) {
         return TechnicianAssignmentResponse.builder()
                 .workorderId(newAssignment.workorderId().toString())
                 .technicianId(newAssignment.technicianId().toString())
+                .technicianName(technicianNames.get(newAssignment.technicianId()))
                 .assignedAt(newAssignment.assignedAt())
                 .assignedBy(newAssignment.assignedBy())
                 .previousTechnicianId(previousTechnicianId != null ? previousTechnicianId.toString() : null)
+                .previousTechnicianName(previousTechnicianId != null ? technicianNames.get(previousTechnicianId) : null)
                 .status(workorderStatus.name())
                 .reassignmentReason(reason)
                 .reassignedAt(newAssignment.assignedAt())

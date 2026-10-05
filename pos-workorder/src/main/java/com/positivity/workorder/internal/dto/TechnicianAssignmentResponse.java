@@ -5,6 +5,8 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIR
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -111,11 +113,12 @@ public class TechnicianAssignmentResponse {
             @NonNull TechnicianAssignmentRecord assignment,
             @NonNull String workorderStatus,
             @Nullable String previousTechId,
-            @Nullable String message) {
+            @Nullable String message,
+            @NonNull Map<UUID, String> technicianNames) {
         return TechnicianAssignmentResponse.builder()
                 .workorderId(assignment.workorderId().toString())
                 .technicianId(assignment.technicianId().toString())
-                .technicianName(null) // To be populated by controller if needed
+                .technicianName(technicianNames.get(assignment.technicianId()))
                 .assignedAt(assignment.assignedAt())
                 .assignedBy(assignment.assignedBy())
                 .previousTechnicianId(previousTechId)
@@ -177,10 +180,11 @@ public class TechnicianAssignmentResponse {
          * Convert entity to history entry DTO.
          */
         @NonNull
-        public static AssignmentHistoryEntry fromEntity(@NonNull TechnicianAssignmentRecord assignment) {
+        public static AssignmentHistoryEntry fromEntity(
+                @NonNull TechnicianAssignmentRecord assignment, @NonNull Map<UUID, String> technicianNames) {
             return AssignmentHistoryEntry.builder()
                     .technicianId(assignment.technicianId().toString())
-                    .technicianName(null) // To be populated if needed
+                    .technicianName(technicianNames.get(assignment.technicianId()))
                     .assignedAt(assignment.assignedAt())
                     .assignedBy(assignment.assignedBy())
                     .unassignedAt(assignment.unassignedAt())
@@ -197,13 +201,16 @@ public class TechnicianAssignmentResponse {
     public static TechnicianAssignmentResponse withHistory(
             @NonNull TechnicianAssignmentRecord currentAssignment,
             @NonNull List<TechnicianAssignmentRecord> history,
-            @NonNull String currentWorkorderStatus) {
-        List<AssignmentHistoryEntry> historyEntries =
-                history.stream().map(AssignmentHistoryEntry::fromEntity).toList();
+            @NonNull String currentWorkorderStatus,
+            @NonNull Map<UUID, String> technicianNames) {
+        List<AssignmentHistoryEntry> historyEntries = history.stream()
+                .map(entry -> AssignmentHistoryEntry.fromEntity(entry, technicianNames))
+                .toList();
 
         return TechnicianAssignmentResponse.builder()
                 .workorderId(currentAssignment.workorderId().toString())
                 .technicianId(currentAssignment.technicianId().toString())
+                .technicianName(technicianNames.get(currentAssignment.technicianId()))
                 .assignedAt(currentAssignment.assignedAt())
                 .assignedBy(currentAssignment.assignedBy())
                 .currentStatus(currentWorkorderStatus)
