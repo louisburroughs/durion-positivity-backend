@@ -14,6 +14,7 @@ import com.positivity.accounting.internal.enums.IdempotencyOutcome;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.EventIngestionService;
 import com.positivity.events.EmitEvent;
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -341,15 +342,16 @@ public class EventIngestionController {
             summary = "Reprocess Suspended Event",
             description = """
                     Reprocesses a SUSPENDED accounting event after a mapping or rule correction, recording an \
-                    audited reprocessing attempt with the triggering user.
+                    audited reprocessing attempt with the authenticated caller as the triggering user.
                     Use this tool once the underlying mapping gap is fixed; do not use retryAccountingEvent, \
                     which is the unaudited retry for transient failures.
                     Preconditions: the event must exist and be SUSPENDED; an event already PROCESSED is \
                     rejected to preserve idempotency. A fact held for its currency (failureReasonCode \
                     CURRENCY_NOT_SUPPORTED, ADR-0067 PC-9) is released here too; while its currency is still \
                     not the ledger's it stays SUSPENDED with that reason and nothing is posted.
-                    Required inputs: eventId (UUID) as a path parameter and triggeredByUserId in the body; \
-                    mappingVersionToUse and reprocessingNotes are optional.
+                    Required inputs: eventId (UUID) as a path parameter; the body is optional and may carry mappingVersionToUse \
+                    (a UUID) and reprocessingNotes. The triggering user is the authenticated caller; any user field \
+                    in the body is ignored.
                     Emits an ACCOUNTING_EVENT_REPROCESS event; a successful synchronous outcome returns 200 \
                     with status PROCESSED while 202 means processing continues.
                     Returns 404 EVENT_NOT_FOUND when the event does not exist, 409 when it is already \
@@ -373,20 +375,24 @@ public class EventIngestionController {
     public ResponseEntity<AccountingEventResponse> reprocessSuspendedEvent(
             @Parameter(description = "Event identifier") @PathVariable UUID eventId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description = "Audited reprocessing trigger with optional mapping version pin and notes.",
-                            required = true,
+                            description =
+                                    "Audited reprocessing trigger with optional mapping version pin and notes. May be omitted.",
+                            required = false,
                             content =
                                     @Content(
                                             mediaType = "application/json",
                                             examples =
                                                     @ExampleObject(name = "Reprocess after mapping fix", value = """
-                                                                    {"triggeredByUserId":"jdoe",
+                                                                    {"mappingVersionToUse":"0198a1b2-7c3d-7e4f-8a9b-0c1d2e3f4a5c",
                                                                      "reprocessingNotes":"Default mapping added for CASH_SALE"}
                                                                     """)))
                     @Valid
-                    @RequestBody
+                    @RequestBody(required = false)
                     ReprocessEventRequest request) {
-        AccountingEventResponse response = eventIngestionService.reprocessEvent(eventId, request);
+        AccountingEventResponse response = eventIngestionService.reprocessEvent(
+                eventId,
+                request != null ? request : new ReprocessEventRequest(),
+                SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM"));
         HttpStatus status =
                 AccountingEventStatus.PROCESSED.equals(response.getStatus()) ? HttpStatus.OK : HttpStatus.ACCEPTED;
         return ResponseEntity.status(status).body(response);

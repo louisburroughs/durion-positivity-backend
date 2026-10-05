@@ -162,7 +162,7 @@
         "intent_type": "ACTION",
         "risk_level": "HIGH",
         "tool_id": "accounting_reprocesssuspendedevent",
-        "required_args": ["eventId", "triggeredByUserId"]
+        "required_args": ["eventId"]
       },
       "assertions": {
         "no_execute_before_confirm": true,

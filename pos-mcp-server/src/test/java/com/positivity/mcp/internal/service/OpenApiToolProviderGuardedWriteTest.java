@@ -335,7 +335,7 @@ class OpenApiToolProviderGuardedWriteTest {
         ToolCallback reprocess =
                 named(provider.resolveToolCallbacks("reprocess it"), AccountingEventWriteGuard.REPROCESS_TOOL);
         String input = "{\"pathParams\":{\"eventId\":\"" + EVENT_A + "\"},\"body\":"
-                + objectMapperWrite(Map.of("triggeredByUserId", "controller")) + "}";
+                + objectMapperWrite(Map.of("reprocessingNotes", "controller")) + "}";
 
         reprocess.call(input);
 
