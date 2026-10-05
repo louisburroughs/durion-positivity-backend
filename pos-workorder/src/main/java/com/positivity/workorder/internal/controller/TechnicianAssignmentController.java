@@ -323,12 +323,12 @@ public class TechnicianAssignmentController {
         String reassignedBy = resolveAssignedByUsername();
 
         try {
-            // Get previous technician ID via service method
-            UUID previousTechId =
-                    assignmentService.getPreviousTechnicianId(workorderId).orElse(null);
-
             var newAssignment = assignmentService.reassignTechnician(
                     workorderId, request.getNewTechnicianId(), reassignedBy, request.getReason(), request.getNotes());
+
+            // Read after the reassignment: the replaced assignment is now the second-newest row.
+            UUID previousTechId =
+                    assignmentService.getPreviousTechnicianId(workorderId).orElse(null);
 
             var workorderStatus = assignmentService.getWorkorderStatus(workorderId);
 
