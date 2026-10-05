@@ -338,7 +338,7 @@ class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest {
     void testReprocessIgnoresBodyUser() throws Exception {
         // The module does not fail on unknown JSON properties (Spring Boot default), so the old field is dropped.
         AccountingEventSubmitRequest submitRequest = new AccountingEventSubmitRequest();
-        submitRequest.setEventType(REPROCESS_FAILURE_EVENT_TYPE);
+        submitRequest.setEventType(REPROCESS_SUCCESS_EVENT_TYPE);
         submitRequest.setOrganizationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         submitRequest.setSourceSystem("TEST_SYSTEM");
         submitRequest.setTransactionDate(LocalDateTime.now(TEST_CLOCK));
@@ -349,19 +349,44 @@ class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest {
                 .andExpect(status().isAccepted())
                 .andReturn();
         String eventId = extractEventIdFromResponse(submitResult);
-        markEventAsSuspended(UUID.fromString(eventId), "Test setup: suspended for body-user check");
+        markEventAsSuspendedForSuccessPath(UUID.fromString(eventId), "Test setup: suspended for body-user check");
 
         mockMvc.perform(withAuth(post(API_V1 + "/{eventId}/reprocess", eventId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"triggeredByUserId\":\"spoofed-user\",\"reprocessingNotes\":\"x\"}"))
-                .andExpect(status().isAccepted());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PROCESSED"));
 
         mockMvc.perform(withAuth(get(API_V1 + "/{eventId}/reprocessing-history", eventId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].triggeredByUserId").value(TEST_USER));
         AccountingEvent after =
                 accountingEventRepository.findById(UUID.fromString(eventId)).orElseThrow();
-        org.assertj.core.api.Assertions.assertThat(after.getResolvedByUserId()).isNotEqualTo("spoofed-user");
+        org.assertj.core.api.Assertions.assertThat(after.getResolvedByUserId()).isEqualTo(TEST_USER);
+    }
+
+    @Test
+    @DisplayName("Reprocess with no request body is accepted and records the authenticated caller")
+    void testReprocessWithoutBody() throws Exception {
+        AccountingEventSubmitRequest submitRequest = new AccountingEventSubmitRequest();
+        submitRequest.setEventType(REPROCESS_SUCCESS_EVENT_TYPE);
+        submitRequest.setOrganizationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        submitRequest.setSourceSystem("TEST_SYSTEM");
+        submitRequest.setTransactionDate(LocalDateTime.now(TEST_CLOCK));
+        submitRequest.setPayload(Map.of("invoiceId", "INV-NO-BODY", "amount", 200.00, "description", "no body"));
+        MvcResult submitResult = mockMvc.perform(withAuth(post(API_V1))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(submitRequest)))
+                .andExpect(status().isAccepted())
+                .andReturn();
+        String eventId = extractEventIdFromResponse(submitResult);
+        markEventAsSuspendedForSuccessPath(UUID.fromString(eventId), "Test setup: suspended for no-body check");
+
+        mockMvc.perform(withAuth(post(API_V1 + "/{eventId}/reprocess", eventId)))
+                .andExpect(status().is2xxSuccessful());
+
+        mockMvc.perform(withAuth(get(API_V1 + "/{eventId}/reprocessing-history", eventId)))
+                .andExpect(jsonPath("$[0].triggeredByUserId").value(TEST_USER));
     }
 
     // ===============================================

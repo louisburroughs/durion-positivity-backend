@@ -375,8 +375,9 @@ public class EventIngestionController {
     public ResponseEntity<AccountingEventResponse> reprocessSuspendedEvent(
             @Parameter(description = "Event identifier") @PathVariable UUID eventId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description = "Audited reprocessing trigger with optional mapping version pin and notes.",
-                            required = true,
+                            description =
+                                    "Audited reprocessing trigger with optional mapping version pin and notes. May be omitted.",
+                            required = false,
                             content =
                                     @Content(
                                             mediaType = "application/json",
@@ -386,10 +387,12 @@ public class EventIngestionController {
                                                                      "reprocessingNotes":"Default mapping added for CASH_SALE"}
                                                                     """)))
                     @Valid
-                    @RequestBody
+                    @RequestBody(required = false)
                     ReprocessEventRequest request) {
         AccountingEventResponse response = eventIngestionService.reprocessEvent(
-                eventId, request, SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM"));
+                eventId,
+                request != null ? request : new ReprocessEventRequest(),
+                SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM"));
         HttpStatus status =
                 AccountingEventStatus.PROCESSED.equals(response.getStatus()) ? HttpStatus.OK : HttpStatus.ACCEPTED;
         return ResponseEntity.status(status).body(response);
