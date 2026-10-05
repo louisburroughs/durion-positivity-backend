@@ -3,6 +3,7 @@ package com.positivity.nhtsa.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -195,7 +196,12 @@ class VehicleReferenceServiceTest {
     @DisplayName("derives a stable UUID from the vPIC id so a refetch updates rather than duplicates")
     void nhtsaIdsHashToStableUuids() {
         when(manufacturerRepository.findById(MANUFACTURER_ID)).thenReturn(Optional.of(manufacturer(fresh())));
-        when(makeRepository.findByManufacturerId(MANUFACTURER_ID)).thenReturn(List.of());
+        when(makeRepository.findByManufacturersId(MANUFACTURER_ID)).thenReturn(List.of());
+        // Absent before the insert, present after it (the read-back of the native insert).
+        UUID makeId = UUID.nameUUIDFromBytes("make-440".getBytes());
+        Make inserted = make(null);
+        inserted.setId(makeId);
+        when(makeRepository.findById(makeId)).thenReturn(Optional.empty(), Optional.of(inserted));
         server.expect(requestTo(BASE + "/GetMakeForManufacturer/955?format=json"))
                 .andRespond(withSuccess("""
                         {"Results":[{"Make_ID":440,"Make_Name":"TOYOTA"}]}""", MediaType.APPLICATION_JSON));
@@ -203,6 +209,11 @@ class VehicleReferenceServiceTest {
         service.getMakesByManufacturer(MANUFACTURER_ID);
 
         org.mockito.ArgumentCaptor<Make> captor = org.mockito.ArgumentCaptor.forClass(Make.class);
+        verify(makeRepository)
+                .insertIgnoringConflict(
+                        eq(UUID.nameUUIDFromBytes("make-440".getBytes())), eq(440L), eq("TOYOTA"), any());
+        verify(makeRepository)
+                .insertLinkIgnoringConflict(UUID.nameUUIDFromBytes("make-440".getBytes()), MANUFACTURER_ID);
         verify(makeRepository).save(captor.capture());
         // The key is a hash of the vPIC id, not a random UUID: the same record must land on
         // the same row every refresh, or every refetch would double the table.
@@ -211,6 +222,25 @@ class VehicleReferenceServiceTest {
         assertThat(captor.getValue().getCacheTimestamp()).isEqualTo(LocalDateTime.ofInstant(NOW, ZoneOffset.UTC));
         // Confirms the expectation above was actually consumed — without this the test would
         // still pass if the service returned early on some other cache path.
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("freshness of a make list is the manufacturer's own makesRefreshedAt, not the makes' timestamps")
+    void makeFreshnessIsPerManufacturer() {
+        Manufacturer m = manufacturer(fresh());
+        m.setMakesRefreshedAt(fresh());
+        when(manufacturerRepository.findById(MANUFACTURER_ID)).thenReturn(Optional.of(m));
+        // A shared make refreshed seconds ago by another manufacturer must not make this list look fresh.
+        when(makeRepository.findByManufacturersId(MANUFACTURER_ID)).thenReturn(List.of(make(fresh())));
+        assertThat(service.getMakesByManufacturer(MANUFACTURER_ID)).hasSize(1);
+        server.verify();
+
+        m.setMakesRefreshedAt(stale());
+        server.expect(requestTo(BASE + "/GetMakeForManufacturer/955?format=json"))
+                .andRespond(withSuccess("""
+                        {"Results":[]}""", MediaType.APPLICATION_JSON));
+        service.getMakesByManufacturer(MANUFACTURER_ID);
         server.verify();
     }
 
@@ -415,7 +445,7 @@ class VehicleReferenceServiceTest {
         VehicleVariable noIdVariable = new VehicleVariable();
         noIdVariable.setId(UUID.randomUUID());
         when(manufacturerRepository.findById(MANUFACTURER_ID)).thenReturn(Optional.of(noId));
-        when(makeRepository.findByManufacturerId(MANUFACTURER_ID)).thenReturn(List.of(make(stale())));
+        when(makeRepository.findByManufacturersId(MANUFACTURER_ID)).thenReturn(List.of(make(stale())));
         when(makeRepository.findById(MAKE_ID)).thenReturn(Optional.of(makeNoId));
         when(modelRepository.findByMakeId(MAKE_ID)).thenReturn(List.of(cachedModel));
         when(vehicleTypeRepository.findByMakeId(MAKE_ID)).thenReturn(List.of(cachedType));

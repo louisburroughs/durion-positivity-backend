@@ -39,7 +39,9 @@ class VehicleReferenceMapperTest {
         Make make = new Make();
         make.setId(ID);
         make.setName("Toyota");
-        make.setManufacturer(parent);
+        if (parent != null) {
+            make.getManufacturers().add(parent);
+        }
         return make;
     }
 
@@ -64,7 +66,20 @@ class VehicleReferenceMapperTest {
             assertThat(response.getId()).isEqualTo(ID);
             assertThat(response.getName()).isEqualTo("Toyota");
             // The association is flattened to an id, not embedded — the response contract is flat.
-            assertThat(response.getManufacturerId()).isEqualTo(PARENT_ID);
+            assertThat(response.getManufacturerIds()).containsExactly(PARENT_ID);
+        }
+
+        @Test
+        @DisplayName("lists every manufacturer a shared make is linked to, sorted")
+        void sharedMakeResponse() {
+            Manufacturer other = manufacturer();
+            other.setId(UUID.fromString("00000000-0000-0000-0000-0000000000a0"));
+            Make make = make(manufacturer());
+            make.getManufacturers().add(other);
+
+            MakeResponse response = VehicleReferenceMapper.toMakeResponse(make);
+
+            assertThat(response.getManufacturerIds()).containsExactly(other.getId(), PARENT_ID);
         }
 
         @Test
@@ -109,7 +124,7 @@ class VehicleReferenceMapperTest {
             MakeResponse response = VehicleReferenceMapper.toMakeResponse(make(null));
 
             assertThat(response.getName()).isEqualTo("Toyota");
-            assertThat(response.getManufacturerId()).isNull();
+            assertThat(response.getManufacturerIds()).isEmpty();
         }
 
         @Test

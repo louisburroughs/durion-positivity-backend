@@ -138,8 +138,8 @@ public class VehicleReferenceService {
         Manufacturer manufacturer = manufacturerRepository
                 .findById(manufacturerId)
                 .orElseThrow(() -> new IllegalArgumentException("Manufacturer not found with ID: " + manufacturerId));
-        List<Make> cached = makeRepository.findByManufacturerId(manufacturerId);
-        if (isCacheFresh(lastRefreshed(cached, Make::getCacheTimestamp))) {
+        List<Make> cached = makeRepository.findByManufacturersId(manufacturerId);
+        if (isCacheFresh(manufacturer.getMakesRefreshedAt())) {
             return cached;
         }
         Long vpicManufacturerId = manufacturer.getNhtsaId();
@@ -153,16 +153,35 @@ public class VehicleReferenceService {
         transactionTemplate.executeWithoutResult(_ -> {
             for (VpicRow row : rows) {
                 UUID id = localId("make-", row.vpicId());
-                Make make = makeRepository.findById(id).orElseGet(Make::new);
-                make.setId(id);
+                String name = row.name() == null ? "" : row.name();
+                LocalDateTime now = LocalDateTime.now(clock);
+                Make make = findMake(id, row.vpicId()).orElse(null);
+                if (make == null) {
+                    // Atomic insert: a concurrent refresh of another manufacturer sharing this Make_ID is a no-op
+                    // here, not an exception that would mark this transaction rollback-only. Read the row back.
+                    makeRepository.insertIgnoringConflict(id, row.vpicId(), name, now);
+                    make = findMake(id, row.vpicId())
+                            .orElseThrow(
+                                    () -> new IllegalStateException("Make vanished after insert: " + row.vpicId()));
+                }
                 make.setNhtsaId(row.vpicId());
-                make.setName(row.name() == null ? "" : row.name());
-                make.setManufacturer(manufacturer);
-                make.setCacheTimestamp(LocalDateTime.now(clock));
+                make.setName(name);
+                make.setCacheTimestamp(now);
                 makeRepository.save(make);
+                // Add this manufacturer's link; never remove another manufacturer's (#2471).
+                makeRepository.insertLinkIgnoringConflict(make.getId(), manufacturerId);
             }
+            manufacturerRepository.findById(manufacturerId).ifPresent(m -> {
+                m.setMakesRefreshedAt(LocalDateTime.now(clock));
+                manufacturerRepository.save(m);
+            });
         });
-        return makeRepository.findByManufacturerId(manufacturerId);
+        return makeRepository.findByManufacturersId(manufacturerId);
+    }
+
+    /** The row for a vPIC make: by derived id, else by Make_ID (a row stored under another id). */
+    private java.util.Optional<Make> findMake(UUID id, long vpicId) {
+        return makeRepository.findById(id).or(() -> makeRepository.findByNhtsaId(vpicId));
     }
 
     public List<Model> getModelsByMake(UUID makeId) {
