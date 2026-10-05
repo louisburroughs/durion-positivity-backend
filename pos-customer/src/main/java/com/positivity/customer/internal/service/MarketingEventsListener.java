@@ -7,13 +7,13 @@ import com.positivity.customer.internal.enums.InteractionType;
 import com.positivity.customer.internal.enums.MarketingChannel;
 import com.positivity.customer.internal.repository.ProcessedEventRepository;
 import com.positivity.domainevents.marketing.MarketingCampaignSentV1;
+import com.positivity.kafka.common.KafkaRails;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,7 +34,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "pos.customer.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class MarketingEventsListener {
 
     private static final String OWNER = "pos-marketing";

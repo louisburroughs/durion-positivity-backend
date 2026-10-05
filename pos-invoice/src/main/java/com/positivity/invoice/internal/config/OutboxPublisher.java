@@ -2,6 +2,7 @@ package com.positivity.invoice.internal.config;
 
 import com.positivity.invoice.internal.entity.OutboxEvent;
 import com.positivity.invoice.internal.repository.OutboxEventRepository;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.PlatformScoped;
 import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import io.micrometer.core.instrument.Counter;
@@ -13,7 +14,6 @@ import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -30,7 +30,7 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "pos.invoice.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class OutboxPublisher {
 
     private final OutboxEventRepository outboxEventRepository;

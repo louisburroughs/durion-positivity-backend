@@ -30,10 +30,6 @@ pos:
     # strict: nothing binds a tenant unless the test does
     default-tenant-id:
 
-workorder:
-  kafka:
-    enabled: false
-
 # Disable security for tests
 security:
   enabled: false

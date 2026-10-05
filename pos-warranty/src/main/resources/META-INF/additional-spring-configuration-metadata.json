@@ -24,12 +24,6 @@
       "defaultValue": true
     },
     {
-      "name": "pos.warranty.kafka.enabled",
-      "type": "java.lang.Boolean",
-      "description": "Enable domain-event publishing via the transactional outbox to Kafka (ADR-0044).",
-      "defaultValue": false
-    },
-    {
       "name": "pos.warranty.outbox.poll-interval-ms",
       "type": "java.lang.Long",
       "description": "Delay between outbox drain polls in milliseconds.",

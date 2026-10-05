@@ -1140,8 +1140,9 @@ canonical ADR-0044 (`durion/docs/adr/0044-platform-event-only-domain-walls.adr.m
 
 `docker-compose up -d kafka` starts a single-node KRaft broker (`apache/kafka`). Services reach it
 at `kafka:29092` inside the compose network (host tools at `localhost:9092`). Kafka features remain
-opt-in per module (e.g. `WORKORDER_KAFKA_ENABLED=true`, `pos.customer.kafka.enabled=true`,
-`POS_INVOICE_KAFKA_ENABLED=true`) until each module's Phase 0.4 tier-1 flip (ADR-0044 §4).
+opt-in per module until each module's Phase 0.4 tier-1 flip (ADR-0044 §4). Flipped so far:
+pos-accounting, pos-inventory (#2195) and pos-customer, pos-invoice, pos-workorder, pos-order,
+pos-warranty (#2463) — none of these has a Kafka enable flag any more.
 
 **pos-accounting and pos-inventory have flipped (#2195).** They have no Kafka enable flag: their
 consumers, transactional outbox writer/publisher and command/manifest publishers are always active
@@ -1156,12 +1157,10 @@ incident, not a configuration to start into.
 
 ### Warranty events rollout (#927)
 
-The warranty fact feed (`warranty.events.v1`) and its two consumers are live. Required flags per
-environment (already defaulted `true` in the root `docker-compose.yml` and set in
-`deployment/alpha/docker-compose.prod.yml`; export explicitly anywhere else). pos-accounting and
-pos-inventory no longer have a flag (#2195): their consumers are always on in deployed profiles.
+The warranty fact feed (`warranty.events.v1`) and its two consumers are live. No flags: pos-accounting, pos-inventory
+(#2195) and pos-warranty (#2463) run their rails in every deployed profile.
 
-- `POS_WARRANTY_KAFKA_ENABLED=true` — pos-warranty publishes all six `warranty.*` facts.
+- pos-warranty (always on) publishes all six `warranty.*` facts.
 - pos-accounting (always on) materializes
   `warranty.reimbursement.submitted/.resolved` into `warranty_reimbursement_expectation`
   (consumer group `pos-accounting-warranty-events`).
@@ -1271,7 +1270,7 @@ on the command's header.
 
 pos-customer publishes party identity as `customer.party.updated`. Seeding a replica of it is one
 paged, resumable call — pass the previous response's `nextAfterId` until it comes back
-`complete: true` — which **refuses with 409** when `pos.customer.kafka.enabled` is off, rather than
+`complete: true` — which **refuses with 409** when the Kafka rails are not active (dev/test profiles), rather than
 reporting a page of facts nobody received.
 
 ```bash
@@ -1679,8 +1678,8 @@ Operational signals:
   `PT5M` — how long after a window closes before its manifest publishes; raise it if consumer lag
   causes false-positive drift), `workorder.manifest.poll-interval-ms`.
 
-Manual drift drill (compose stack, both `WORKORDER_KAFKA_ENABLED=true` and
-`pos.customer.kafka.enabled=true`):
+Manual drift drill (compose stack, both workorder and customer on a
+deployed profile, i.e. Kafka rails active):
 
 1. Create/update a workorder so an event lands in `event_outbox` and the customer replica.
 2. Corrupt the consumer: `DELETE FROM processed_events WHERE event_id = '<eventId>'` (and the

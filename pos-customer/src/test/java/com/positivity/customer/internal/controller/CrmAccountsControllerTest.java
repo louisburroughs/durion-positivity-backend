@@ -430,7 +430,7 @@ class CrmAccountsControllerTest {
         when(partyFactReplayService.replayPage(any(), any(), org.mockito.ArgumentMatchers.anyInt()))
                 .thenThrow(
                         new CrmConflictException(
-                                "Fact publication is disabled (pos.customer.kafka.enabled=false); a replay would emit nothing"));
+                                "Fact publication is disabled (the Kafka rails are not active in this profile); a replay would emit nothing"));
 
         mockMvc.perform(post("/v1/crm/accounts/facts/replay"))
                 .andExpect(status().isConflict())

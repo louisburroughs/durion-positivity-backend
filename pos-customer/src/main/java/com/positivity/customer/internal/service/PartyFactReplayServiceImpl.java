@@ -82,7 +82,7 @@ public class PartyFactReplayServiceImpl implements PartyFactReplayService {
         // operator a replica was seeded when the outbox never saw a row.
         if (!factPublisher.publicationEnabled()) {
             throw new CrmConflictException(
-                    "Fact publication is disabled (pos.customer.kafka.enabled=false); a replay would emit nothing");
+                    "Fact publication is disabled (the Kafka rails are not active in this profile); a replay would emit nothing");
         }
         int pageSize = Math.min(Math.max(limit, 1), MAX_LIMIT);
         Instant startedAt = Instant.now(clock);

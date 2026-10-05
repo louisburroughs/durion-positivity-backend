@@ -1,9 +1,6 @@
 package com.positivity.order.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
@@ -64,11 +61,11 @@ class CatalogPricePricingAdapterTest {
 
     private MockRestServiceServer server;
 
-    private CatalogPricePricingAdapter adapter(boolean eventFeedEnabled) {
+    private CatalogPricePricingAdapter adapter() {
         RestClient.Builder builder = RestClient.builder().baseUrl("http://price");
         server = MockRestServiceServer.bindTo(builder).build();
         return new CatalogPricePricingAdapter(
-                extProductRepository, builder.build(), Clock.fixed(NOW, ZoneOffset.UTC), eventFeedEnabled, TIER_ID);
+                extProductRepository, builder.build(), Clock.fixed(NOW, ZoneOffset.UTC), TIER_ID);
     }
 
     private static ExtProduct product(String name) {
@@ -90,7 +87,7 @@ class CatalogPricePricingAdapterTest {
     @Test
     @DisplayName("quotes a known SKU and carries the rule breakdown for line-level audit")
     void quotesKnownSku() {
-        CatalogPricePricingAdapter adapter = adapter(true);
+        CatalogPricePricingAdapter adapter = adapter();
         replicaHas(product("Brake pad"));
         server.expect(requestTo("http://price/v1/price/quotes"))
                 .andExpect(method(HttpMethod.POST))
@@ -119,7 +116,7 @@ class CatalogPricePricingAdapterTest {
     @Test
     @DisplayName("substitutes a nil location when the cart has none, since the quote API requires one")
     void nilLocationIsSubstituted() {
-        CatalogPricePricingAdapter adapter = adapter(true);
+        CatalogPricePricingAdapter adapter = adapter();
         replicaHas(product("Brake pad"));
         server.expect(requestTo("http://price/v1/price/quotes"))
                 .andExpect(jsonPath("$.locationId").value(new UUID(0L, 0L).toString()))
@@ -132,7 +129,7 @@ class CatalogPricePricingAdapterTest {
     @Test
     @DisplayName("falls back to the SKU when the replica row carries no product name")
     void namelessProductFallsBackToSku() {
-        CatalogPricePricingAdapter adapter = adapter(true);
+        CatalogPricePricingAdapter adapter = adapter();
         replicaHas(product(null));
         server.expect(requestTo("http://price/v1/price/quotes"))
                 .andRespond(withSuccess("{\"unitPrice\":{\"amount\":10.00}}", MediaType.APPLICATION_JSON));
@@ -145,23 +142,9 @@ class CatalogPricePricingAdapterTest {
     }
 
     @Test
-    @DisplayName("reports UNAVAILABLE while the event feed is off, without calling pos-price")
-    void coldReplicaByFlag() {
-        CatalogPricePricingAdapter adapter = adapter(false);
-        when(extProductRepository.count()).thenReturn(25L);
-
-        assertThat(adapter.quoteForSku("BRK-100", 1, LOCATION_ID, null).status())
-                .isEqualTo(PricingQuote.Status.UNAVAILABLE);
-
-        // Cold means "cannot distinguish unknown from unsynced", so no lookup and no quote call.
-        verify(extProductRepository, never()).findFirstBySkuIgnoreCaseAndActiveTrue(any());
-        server.verify();
-    }
-
-    @Test
     @DisplayName("reports UNAVAILABLE on an empty replica rather than calling the SKU unknown")
     void coldReplicaByEmptyTable() {
-        CatalogPricePricingAdapter adapter = adapter(true);
+        CatalogPricePricingAdapter adapter = adapter();
         when(extProductRepository.count()).thenReturn(0L);
 
         assertThat(adapter.quoteForSku("BRK-100", 1, LOCATION_ID, null).status())
@@ -171,7 +154,7 @@ class CatalogPricePricingAdapterTest {
     @Test
     @DisplayName("reports UNKNOWN_SKU when the replica has no active product for it")
     void unknownSku() {
-        CatalogPricePricingAdapter adapter = adapter(true);
+        CatalogPricePricingAdapter adapter = adapter();
         replicaHas(null);
 
         assertThat(adapter.quoteForSku("BRK-100", 1, LOCATION_ID, null).status())
@@ -181,7 +164,7 @@ class CatalogPricePricingAdapterTest {
     @Test
     @DisplayName("maps a 404 from pos-price to UNKNOWN_SKU so a catalog gap is visible")
     void notPricedIsUnknownSku() {
-        CatalogPricePricingAdapter adapter = adapter(true);
+        CatalogPricePricingAdapter adapter = adapter();
         replicaHas(product("Brake pad"));
         server.expect(requestTo("http://price/v1/price/quotes")).andRespond(withResourceNotFound());
 
@@ -193,14 +176,14 @@ class CatalogPricePricingAdapterTest {
     @Test
     @DisplayName("reports UNAVAILABLE when pos-price errors or answers without a unit price")
     void unpricedOrUnreachableIsUnavailable() {
-        CatalogPricePricingAdapter adapter = adapter(true);
+        CatalogPricePricingAdapter adapter = adapter();
         replicaHas(product("Brake pad"));
         server.expect(requestTo("http://price/v1/price/quotes")).andRespond(withServerError());
 
         assertThat(adapter.quoteForSku("BRK-100", 1, LOCATION_ID, null).status())
                 .isEqualTo(PricingQuote.Status.UNAVAILABLE);
 
-        CatalogPricePricingAdapter second = adapter(true);
+        CatalogPricePricingAdapter second = adapter();
         replicaHas(product("Brake pad"));
         server.expect(requestTo("http://price/v1/price/quotes"))
                 .andRespond(withSuccess("{\"currency\":\"USD\"}", MediaType.APPLICATION_JSON));

@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.config;
 
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.shared.dto.InvoiceCreationRequest;
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.tenancy.TenantResolver;
@@ -12,7 +13,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
@@ -34,7 +34,7 @@ import tools.jackson.databind.ObjectMapper;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(prefix = "workorder.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class InvoiceCommandPublisher {
 
     public static final String GENERATION_COMMAND_TYPE = "invoice.generation-requested";

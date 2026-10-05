@@ -85,9 +85,7 @@ pos:
     default-tenant-id: ${POS_TENANCY_DEFAULT_TENANT_ID:01900000-0000-7000-8000-000000000001}
   invoice:
     kafka:
-      # Domain-event publishing (ADR-0044, #842). Off until the broker is provisioned;
-      # flip POS_INVOICE_KAFKA_ENABLED per environment.
-      enabled: ${POS_INVOICE_KAFKA_ENABLED:false}
+      # Domain-event publishing (ADR-0044, #842): tier-1 rails, no enable flag (@KafkaRails).
       # Employment replica feed + reconciliation (ADR-0044 §6, #877; manifest listener #1537)
       people-events-topic: ${POS_INVOICE_PEOPLE_EVENTS_TOPIC:people.events.v1}
       people-events-consumer-group: ${POS_INVOICE_PEOPLE_EVENTS_CONSUMER_GROUP:pos-invoice-people-events}

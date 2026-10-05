@@ -319,7 +319,7 @@ public class WorkorderPickFacadeServiceImpl implements WorkorderPickFacadeServic
             throw new ResponseStatusException(
                     HttpStatus.SERVICE_UNAVAILABLE,
                     "The pick workflow is asynchronous (ADR-0044 #901) and requires the Kafka event feed;"
-                            + " enable workorder.kafka.enabled");
+                            + " the Kafka rails are not active in this profile (dev/test)");
         }
         return publisher;
     }

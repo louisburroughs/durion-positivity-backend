@@ -1,10 +1,10 @@
 package com.positivity.invoice.internal.config;
 
+import com.positivity.kafka.common.KafkaRails;
 import java.util.function.BiFunction;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -28,7 +28,7 @@ import org.springframework.util.backoff.ExponentialBackOff;
  */
 @Slf4j
 @Configuration
-@ConditionalOnProperty(prefix = "pos.invoice.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class KafkaErrorHandlingConfig {
 
     /** Route to {@code {topic}.dlq}; partition -1 lets the producer choose. */

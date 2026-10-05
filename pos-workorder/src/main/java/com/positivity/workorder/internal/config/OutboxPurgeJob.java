@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.config;
 
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.PlatformScoped;
 import com.positivity.workorder.internal.repository.OutboxEventRepository;
 import java.time.Clock;
@@ -8,7 +9,6 @@ import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,7 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(prefix = "workorder.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class OutboxPurgeJob {
 
     private final OutboxEventRepository outboxEventRepository;

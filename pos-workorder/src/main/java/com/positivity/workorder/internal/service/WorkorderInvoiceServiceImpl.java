@@ -74,7 +74,7 @@ public class WorkorderInvoiceServiceImpl implements WorkorderInvoiceService {
             throw new ResponseStatusException(
                     HttpStatus.SERVICE_UNAVAILABLE,
                     "Invoice generation is asynchronous (ADR-0044 #900) and requires the Kafka event feed;"
-                            + " enable workorder.kafka.enabled");
+                            + " the Kafka rails are not active in this profile (dev/test)");
         }
 
         InvoiceCreationRequest request = InvoiceCreationRequest.builder()

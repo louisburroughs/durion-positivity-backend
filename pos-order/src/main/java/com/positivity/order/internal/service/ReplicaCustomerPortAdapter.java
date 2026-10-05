@@ -10,7 +10,6 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
@@ -19,8 +18,8 @@ import org.springframework.stereotype.Component;
  * fed by {@code customer.events.v1}/{@code vehicle.events.v1} — no synchronous REST toward domain
  * modules.
  *
- * <p>Cold-replica semantics (resolved Q8 shape): while the event feed is disabled
- * ({@code pos.order.kafka.enabled=false}) or a replica table has never been populated, lookups
+ * <p>Cold-replica semantics (resolved Q8 shape): while a replica table has never been populated
+ * (including the broker-less dev/test profiles, where the feed is off), lookups
  * return {@code UNAVAILABLE} so carts proceed as {@code VALIDATION_PENDING} rather than
  * hard-failing on data the module cannot yet know.
  */
@@ -31,9 +30,6 @@ public class ReplicaCustomerPortAdapter implements CustomerPort {
 
     private final ExtCustomerRepository extCustomerRepository;
     private final ExtVehicleRepository extVehicleRepository;
-
-    @Value("${pos.order.kafka.enabled:false}")
-    private boolean eventFeedEnabled;
 
     @Override
     public @NonNull CustomerLookupResult lookupCustomer(@NonNull UUID customerId) {
@@ -66,6 +62,6 @@ public class ReplicaCustomerPortAdapter implements CustomerPort {
     }
 
     private boolean replicaCold(long rowCount) {
-        return !eventFeedEnabled || rowCount == 0;
+        return rowCount == 0;
     }
 }

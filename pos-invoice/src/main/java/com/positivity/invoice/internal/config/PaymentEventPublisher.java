@@ -26,8 +26,8 @@ import org.springframework.stereotype.Component;
  * {@code payment.payment.reversed} on voids and refunds. pos-order's completion handshake is the
  * first consumer.
  *
- * <p>No-op when the Kafka feature flag ({@code pos.invoice.kafka.enabled}) is off — the
- * {@link OutboxEventWriter} bean is conditional, so this publisher degrades gracefully. Must be
+ * <p>No-op when the Kafka rails are off (dev/test profiles) — the
+ * {@link OutboxEventWriter} bean is a {@code @KafkaRails} bean, so this publisher degrades gracefully. Must be
  * called inside the mutating transaction (the writer requires {@code MANDATORY} propagation).
  */
 @Slf4j

@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.config;
 
 import com.positivity.domainevents.workorder.JobTimeRecordedV1;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.workorder.internal.domain.TravelSegmentStartedEvent;
 import com.positivity.workorder.internal.domain.TravelSegmentStoppedEvent;
 import com.positivity.workorder.internal.domain.WorkSessionStartedEvent;
@@ -9,7 +10,6 @@ import com.positivity.workorder.internal.event.EstimateCreatedEvent;
 import com.positivity.workorder.internal.event.EstimateRevisedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -24,7 +24,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(prefix = "workorder.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class KafkaEventRelay {
 
     private final OutboxEventWriter producer;

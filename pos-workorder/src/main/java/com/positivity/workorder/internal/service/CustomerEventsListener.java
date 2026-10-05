@@ -2,6 +2,7 @@ package com.positivity.workorder.internal.service;
 
 import com.positivity.domainevents.customer.CustomerPartyDeletedV1;
 import com.positivity.domainevents.customer.CustomerPartyUpdatedV1;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import com.positivity.workorder.internal.entity.ExtCustomerPartyReplica;
 import com.positivity.workorder.internal.entity.ProcessedEvent;
@@ -14,7 +15,6 @@ import java.time.Instant;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -38,7 +38,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "workorder.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class CustomerEventsListener {
 
     static final String OWNER = "customer";

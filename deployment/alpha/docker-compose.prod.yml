@@ -113,9 +113,7 @@ services:
     image: ${ECR_REGISTRY}/durion/pos-customer:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
-    # #838 second deploy: broker verified healthy, flag flipped on.
-    environment:
-      POS_CUSTOMER_KAFKA_ENABLED: "true"
+    # No Kafka flag: pos-customer's consumers and outbox are tier-1, always on (ADR-0044 §4, #2463).
 
   pos-event-receiver:
     image: ${ECR_REGISTRY}/durion/pos-event-receiver:${BACKEND_TAG}
@@ -137,9 +135,7 @@ services:
     image: ${ECR_REGISTRY}/durion/pos-invoice:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
-    # #838 second deploy: broker verified healthy, flag flipped on.
-    environment:
-      POS_INVOICE_KAFKA_ENABLED: "true"
+    # No Kafka flag: pos-invoice's consumers and outbox are tier-1, always on (ADR-0044 §4, #2463).
 
   pos-location:
     image: ${ECR_REGISTRY}/durion/pos-location:${BACKEND_TAG}
@@ -181,11 +177,8 @@ services:
     image: ${ECR_REGISTRY}/durion/pos-order:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
-    # First deployment of this service (#1461 follow-up / SDK Suite D). Kafka on from
-    # the start: pos-inventory builds its ext_purchase_order replicas from
-    # order.events.v1, so receiving against a PO is impossible with the flag off.
-    environment:
-      POS_ORDER_KAFKA_ENABLED: "true"
+    # No Kafka flag: pos-order's consumers and outbox are tier-1, always on (ADR-0044 §4, #2463).
+    # pos-inventory builds its ext_purchase_order replicas from order.events.v1.
 
   pos-people:
     image: ${ECR_REGISTRY}/durion/pos-people:${BACKEND_TAG}
@@ -279,18 +272,13 @@ services:
     image: ${ECR_REGISTRY}/durion/pos-warranty:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
-    # Warranty events rollout (#927): publish warranty.events.v1 for the
-    # pos-accounting / pos-inventory consumers.
-    environment:
-      POS_WARRANTY_KAFKA_ENABLED: "true"
+    # No Kafka flag: pos-warranty's consumers and outbox are tier-1, always on (ADR-0044 §4, #2463).
 
   pos-workorder:
     image: ${ECR_REGISTRY}/durion/pos-workorder:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
-    # #838 second deploy: broker verified healthy, flag flipped on.
-    environment:
-      WORKORDER_KAFKA_ENABLED: "true"
+    # No Kafka flag: pos-workorder's consumers and outbox are tier-1, always on (ADR-0044 §4, #2463).
 
   # ── Frontend ───────────────────────────────────────────────────────────────
 

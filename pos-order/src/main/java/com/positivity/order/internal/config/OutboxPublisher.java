@@ -1,5 +1,6 @@
 package com.positivity.order.internal.config;
 
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.order.internal.entity.OutboxEvent;
 import com.positivity.order.internal.repository.OutboxEventRepository;
 import com.positivity.tenancy.PlatformScoped;
@@ -11,7 +12,6 @@ import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -25,7 +25,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(prefix = "pos.order.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class OutboxPublisher {
 
     private final OutboxEventRepository outboxEventRepository;

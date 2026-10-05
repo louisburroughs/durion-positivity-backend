@@ -3,6 +3,7 @@ package com.positivity.warranty.internal.service;
 import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.location.LocationDeletedV1;
 import com.positivity.domainevents.location.LocationUpdatedV1;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import com.positivity.warranty.internal.entity.ExtLocationParentReplica;
 import com.positivity.warranty.internal.entity.ExtLocationReplica;
@@ -18,7 +19,6 @@ import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -57,7 +57,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "pos.warranty.kafka", name = "enabled", havingValue = "true")
+@KafkaRails
 public class LocationEventsListener {
 
     /** Producing domain, per the repo-wide processed_events convention (manifest scans key on it). */

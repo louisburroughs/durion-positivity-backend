@@ -39,27 +39,24 @@ public class CatalogPricePricingAdapter implements PricingPort {
     private final ExtProductRepository extProductRepository;
     private final RestClient priceServiceRestClient;
     private final Clock clock;
-    private final boolean eventFeedEnabled;
     private final UUID defaultCustomerTierId;
 
     public CatalogPricePricingAdapter(
             ExtProductRepository extProductRepository,
             @Qualifier("priceServiceRestClient") RestClient priceServiceRestClient,
             Clock clock,
-            @Value("${pos.order.kafka.enabled:false}") boolean eventFeedEnabled,
             @Value("${pos.order.pricing.default-customer-tier-id:00000000-0000-0000-0000-000000000000}")
                     UUID defaultCustomerTierId) {
         this.extProductRepository = extProductRepository;
         this.priceServiceRestClient = priceServiceRestClient;
         this.clock = clock;
-        this.eventFeedEnabled = eventFeedEnabled;
         this.defaultCustomerTierId = defaultCustomerTierId;
     }
 
     @Override
     public @NonNull PricingQuote quoteForSku(
             @NonNull String sku, int quantity, @Nullable UUID locationId, @Nullable UUID customerId) {
-        if (!eventFeedEnabled || extProductRepository.count() == 0) {
+        if (extProductRepository.count() == 0) {
             // Cold replica: the module cannot yet distinguish unknown from unsynced SKUs; degrade
             // to the permissioned manual-price path instead of guessing.
             log.warn("Product replica cold; pricing unavailable for sku {}", sku);
