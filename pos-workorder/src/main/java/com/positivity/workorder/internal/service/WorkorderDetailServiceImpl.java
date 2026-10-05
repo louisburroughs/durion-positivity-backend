@@ -11,6 +11,7 @@ import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.repository.ExtCustomerPartyReplicaRepository;
+import com.positivity.workorder.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtVehicleReplicaRepository;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
@@ -47,6 +48,7 @@ public class WorkorderDetailServiceImpl implements WorkorderDetailService {
     private final EstimatedLaborService estimatedLaborService;
     private final ExtVehicleReplicaRepository extVehicleReplicaRepository;
     private final ExtCustomerPartyReplicaRepository extCustomerPartyReplicaRepository;
+    private final ExtPersonReplicaRepository extPersonReplicaRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -98,9 +100,11 @@ public class WorkorderDetailServiceImpl implements WorkorderDetailService {
                 .isInProgress(isInProgress)
                 .isCompleted(isCompleted)
                 .startedAt(null) // Will be populated from state transitions if available
-                // The technician's display name lives in the People domain; the workorder only
-                // stores the id. Callers resolve the name by id rather than denormalizing it here.
+                // The assignment stores the technician's person id; the display name (name only, no
+                // PII) comes from the people replica so no people permission is needed (#2481).
                 .assignedTechnicianId(currentAssignment != null ? currentAssignment.getTechnicianId() : null)
+                .assignedTechnicianName(
+                        currentAssignment != null ? lookupTechnicianName(currentAssignment.getTechnicianId()) : null)
                 .services(serviceResponses)
                 .parts(partResponses)
                 .capabilities(capabilities);
@@ -283,6 +287,21 @@ public class WorkorderDetailServiceImpl implements WorkorderDetailService {
         return extVehicleReplicaRepository
                 .findById(vehicleId)
                 .map(ReplicaDisplayNames::vehicleDescription)
+                .orElse(null);
+    }
+
+    /**
+     * The assigned technician's display name from the {@code ext_people_contact_person} replica
+     * (#2481). The assignment's technician id is a person id. {@code null} when the person is not
+     * replicated or has no usable name; the read never fails on a missing row.
+     */
+    private String lookupTechnicianName(UUID technicianId) {
+        if (technicianId == null) {
+            return null;
+        }
+        return extPersonReplicaRepository
+                .findById(technicianId)
+                .map(ReplicaDisplayNames::personName)
                 .orElse(null);
     }
 }

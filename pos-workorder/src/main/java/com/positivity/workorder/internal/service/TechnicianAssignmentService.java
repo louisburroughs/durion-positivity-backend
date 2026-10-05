@@ -2,7 +2,9 @@ package com.positivity.workorder.internal.service;
 
 import com.positivity.workorder.internal.dto.TechnicianAssignmentRecord;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -39,6 +41,14 @@ public interface TechnicianAssignmentService {
 
     @NonNull
     List<TechnicianAssignmentRecord> getAssignmentHistory(@NonNull UUID workorderId);
+
+    /**
+     * Display names for technicians, resolved from the people replica in one lookup (#2481). A
+     * technician id is a person id. Ids with no replica row or no usable name are absent from the
+     * result; a missing replica never fails the read.
+     */
+    @NonNull
+    Map<UUID, String> resolveTechnicianNames(@NonNull Collection<UUID> technicianIds);
 
     @NonNull
     Optional<UUID> getPreviousTechnicianId(@NonNull UUID workorderId);

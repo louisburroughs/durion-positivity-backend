@@ -18,11 +18,14 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.HashSet;
 import java.util.NoSuchElementException;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -172,7 +175,9 @@ public class TechnicianAssignmentController {
                     assignment,
                     workorderStatus,
                     previousTechId.map(UUID::toString).orElse(null),
-                    "Technician assigned successfully");
+                    "Technician assigned successfully",
+                    assignmentService.resolveTechnicianNames(
+                            namesToResolve(assignment.technicianId(), previousTechId.orElse(null))));
 
             log.info(
                     "Technician {} assigned to workorder {} by user {}",
@@ -191,6 +196,16 @@ public class TechnicianAssignmentController {
             // it instead of an empty 400.
             return ResponseEntity.badRequest().body(errorResponse(workorderId, e.getMessage()));
         }
+    }
+
+    /** The technician ids whose names one response needs; the previous one is absent on a first assignment. */
+    private static Set<UUID> namesToResolve(UUID technicianId, @Nullable UUID previousTechnicianId) {
+        Set<UUID> ids = new HashSet<>();
+        ids.add(technicianId);
+        if (previousTechnicianId != null) {
+            ids.add(previousTechnicianId);
+        }
+        return ids;
     }
 
     /** Build a minimal response carrying just the failure reason for error status codes. */
@@ -318,7 +333,13 @@ public class TechnicianAssignmentController {
             var workorderStatus = assignmentService.getWorkorderStatus(workorderId);
 
             TechnicianAssignmentResponse response = TechnicianAssignmentMapper.toReassignmentResponse(
-                    newAssignment, previousTechId, workorderStatus, request.getReason(), reassignedBy);
+                    newAssignment,
+                    previousTechId,
+                    workorderStatus,
+                    request.getReason(),
+                    reassignedBy,
+                    assignmentService.resolveTechnicianNames(
+                            namesToResolve(newAssignment.technicianId(), previousTechId)));
 
             log.info(
                     "Workorder {} reassigned from technician {} to {} by user {}",
@@ -392,8 +413,15 @@ public class TechnicianAssignmentController {
 
             var history = assignmentService.getAssignmentHistory(workorderId);
 
-            TechnicianAssignmentResponse response =
-                    TechnicianAssignmentMapper.toResponseWithHistory(currentAssignment.get(), history, workorderStatus);
+            Set<UUID> technicianIds = new HashSet<>();
+            technicianIds.add(currentAssignment.get().technicianId());
+            history.forEach(entry -> technicianIds.add(entry.technicianId()));
+
+            TechnicianAssignmentResponse response = TechnicianAssignmentMapper.toResponseWithHistory(
+                    currentAssignment.get(),
+                    history,
+                    workorderStatus,
+                    assignmentService.resolveTechnicianNames(technicianIds));
 
             return ResponseEntity.ok(response);
 
