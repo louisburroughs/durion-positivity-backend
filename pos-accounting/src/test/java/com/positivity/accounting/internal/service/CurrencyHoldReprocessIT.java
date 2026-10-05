@@ -137,8 +137,7 @@ class CurrencyHoldReprocessIT {
         UUID eventId = onlyHeldRecord().getEventId();
 
         ReprocessEventRequest request = new ReprocessEventRequest();
-        request.setTriggeredByUserId("ops-user-2334");
-        AccountingEventResponse response = eventIngestionService.reprocessEvent(eventId, request);
+        AccountingEventResponse response = eventIngestionService.reprocessEvent(eventId, request, "ops-user-2334");
 
         assertThat(response.getStatus()).isEqualTo(AccountingEventStatus.SUSPENDED);
         AccountingEvent after = onlyHeldRecord();

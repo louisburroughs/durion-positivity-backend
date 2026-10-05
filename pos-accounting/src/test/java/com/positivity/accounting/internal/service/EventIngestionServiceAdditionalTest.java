@@ -221,9 +221,9 @@ class EventIngestionServiceAdditionalTest {
     void reprocessEvent_EventNotFound() {
         when(accountingEventRepository.findById(testEventId)).thenReturn(Optional.empty());
 
-        ReprocessEventRequest request = buildReprocessRequest("test-user", null);
+        ReprocessEventRequest request = buildReprocessRequest(null);
 
-        assertThatThrownBy(() -> service.reprocessEvent(testEventId, request))
+        assertThatThrownBy(() -> service.reprocessEvent(testEventId, request, "test-user"))
                 .isInstanceOf(EventNotFoundException.class)
                 .hasMessageContaining("Event not found");
     }
@@ -234,9 +234,9 @@ class EventIngestionServiceAdditionalTest {
         AccountingEvent event = buildEvent(testEventId, AccountingEventStatus.PROCESSED);
         when(accountingEventRepository.findById(testEventId)).thenReturn(Optional.of(event));
 
-        ReprocessEventRequest request = buildReprocessRequest("test-user", null);
+        ReprocessEventRequest request = buildReprocessRequest(null);
 
-        assertThatThrownBy(() -> service.reprocessEvent(testEventId, request))
+        assertThatThrownBy(() -> service.reprocessEvent(testEventId, request, "test-user"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("already PROCESSED");
     }
@@ -247,9 +247,9 @@ class EventIngestionServiceAdditionalTest {
         AccountingEvent event = buildEvent(testEventId, AccountingEventStatus.RECEIVED);
         when(accountingEventRepository.findById(testEventId)).thenReturn(Optional.of(event));
 
-        ReprocessEventRequest request = buildReprocessRequest("test-user", null);
+        ReprocessEventRequest request = buildReprocessRequest(null);
 
-        assertThatThrownBy(() -> service.reprocessEvent(testEventId, request))
+        assertThatThrownBy(() -> service.reprocessEvent(testEventId, request, "test-user"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("cannot be reprocessed");
     }
@@ -264,7 +264,7 @@ class EventIngestionServiceAdditionalTest {
         when(accountingEventRepository.findById(testEventId)).thenReturn(Optional.of(event));
         when(accountingEventRepository.save(any(AccountingEvent.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        AccountingEventResponse result = service.reprocessEvent(testEventId, buildReprocessRequest("ops-user", null));
+        AccountingEventResponse result = service.reprocessEvent(testEventId, buildReprocessRequest(null), "ops-user");
 
         assertThat(result.getStatus()).isEqualTo(AccountingEventStatus.RECEIVED);
         assertThat(event.getResolvedByUserId()).isEqualTo("ops-user");
@@ -279,9 +279,9 @@ class EventIngestionServiceAdditionalTest {
         when(accountingEventRepository.findById(testEventId)).thenReturn(Optional.of(suspendedEvent));
         when(accountingEventRepository.save(any(AccountingEvent.class))).thenReturn(processingEvent);
 
-        ReprocessEventRequest request = buildReprocessRequest("test-user", "not-a-valid-uuid");
+        ReprocessEventRequest request = buildReprocessRequest("not-a-valid-uuid");
 
-        assertThatThrownBy(() -> service.reprocessEvent(testEventId, request))
+        assertThatThrownBy(() -> service.reprocessEvent(testEventId, request, "test-user"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Failed to reprocess event");
     }
@@ -300,9 +300,9 @@ class EventIngestionServiceAdditionalTest {
         when(postingEngineOrchestrator.processEvent(any(), any(), anyString(), eq(true)))
                 .thenReturn(successResult);
 
-        ReprocessEventRequest request = buildReprocessRequest("test-user", null);
+        ReprocessEventRequest request = buildReprocessRequest(null);
 
-        AccountingEventResponse response = service.reprocessEvent(testEventId, request);
+        AccountingEventResponse response = service.reprocessEvent(testEventId, request, "test-user");
 
         assertThat(response).isNotNull();
         assertThat(response.getStatus()).isEqualTo(AccountingEventStatus.PROCESSED);
@@ -328,8 +328,8 @@ class EventIngestionServiceAdditionalTest {
         when(postingEngineOrchestrator.processEvent(any(), any(), anyString(), eq(true)))
                 .thenReturn(failedResult);
 
-        ReprocessEventRequest request = buildReprocessRequest("test-user", null);
-        AccountingEventResponse response = service.reprocessEvent(testEventId, request);
+        ReprocessEventRequest request = buildReprocessRequest(null);
+        AccountingEventResponse response = service.reprocessEvent(testEventId, request, "test-user");
 
         assertThat(response).isNotNull();
         assertThat(response.getStatus()).isEqualTo(AccountingEventStatus.FAILED);
@@ -343,9 +343,9 @@ class EventIngestionServiceAdditionalTest {
         when(accountingEventRepository.save(any(AccountingEvent.class)))
                 .thenThrow(new OptimisticLockingFailureException("Concurrent modification"));
 
-        ReprocessEventRequest request = buildReprocessRequest("test-user", null);
+        ReprocessEventRequest request = buildReprocessRequest(null);
 
-        assertThatThrownBy(() -> service.reprocessEvent(testEventId, request))
+        assertThatThrownBy(() -> service.reprocessEvent(testEventId, request, "test-user"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Concurrent reprocessing detected");
     }
@@ -360,9 +360,9 @@ class EventIngestionServiceAdditionalTest {
         when(postingEngineOrchestrator.processEvent(any(), any(), anyString(), eq(true)))
                 .thenThrow(new RuntimeException("Unexpected DB error"));
 
-        ReprocessEventRequest request = buildReprocessRequest("test-user", null);
+        ReprocessEventRequest request = buildReprocessRequest(null);
 
-        assertThatThrownBy(() -> service.reprocessEvent(testEventId, request))
+        assertThatThrownBy(() -> service.reprocessEvent(testEventId, request, "test-user"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Failed to reprocess event");
     }
@@ -382,9 +382,9 @@ class EventIngestionServiceAdditionalTest {
         when(postingEngineOrchestrator.processEvent(any(), eq(mappingVersion), anyString(), eq(true)))
                 .thenReturn(successResult);
 
-        ReprocessEventRequest request = buildReprocessRequest("test-user", mappingVersion.toString());
+        ReprocessEventRequest request = buildReprocessRequest(mappingVersion.toString());
 
-        AccountingEventResponse response = service.reprocessEvent(testEventId, request);
+        AccountingEventResponse response = service.reprocessEvent(testEventId, request, "test-user");
         assertThat(response).isNotNull();
         verify(postingEngineOrchestrator).processEvent(any(), eq(mappingVersion), anyString(), eq(true));
     }
@@ -490,7 +490,7 @@ class EventIngestionServiceAdditionalTest {
         when(accountingEventRepository.findById(testEventId)).thenReturn(Optional.of(event));
         when(accountingEventRepository.save(any(AccountingEvent.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        service.reprocessEvent(testEventId, buildReprocessRequest("SYSTEM_RETRY_JOB", null));
+        service.reprocessEvent(testEventId, buildReprocessRequest(null), "SYSTEM_RETRY_JOB");
 
         ArgumentCaptor<ReprocessingAttemptHistory> history = ArgumentCaptor.forClass(ReprocessingAttemptHistory.class);
         verify(reprocessingAttemptHistoryRepository).save(history.capture());
@@ -651,9 +651,8 @@ class EventIngestionServiceAdditionalTest {
         return event;
     }
 
-    private ReprocessEventRequest buildReprocessRequest(String userId, String mappingVersion) {
+    private ReprocessEventRequest buildReprocessRequest(String mappingVersion) {
         ReprocessEventRequest request = new ReprocessEventRequest();
-        request.setTriggeredByUserId(userId);
         request.setMappingVersionToUse(mappingVersion);
         return request;
     }

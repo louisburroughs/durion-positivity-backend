@@ -17,6 +17,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -50,6 +51,7 @@ class WorkorderManifestListenerTest {
 
     @BeforeEach
     void setUp() {
+        when(kafkaTemplate.send(any(ProducerRecord.class))).thenReturn(CompletableFuture.completedFuture(null));
         when(meterRegistryProvider.getIfAvailable()).thenReturn(meterRegistry);
         listener = new WorkorderManifestListener(repository, kafkaTemplate, objectMapper, meterRegistryProvider);
         ReflectionTestUtils.setField(listener, "workorderCommandsTopic", "workorder.commands.v1");
