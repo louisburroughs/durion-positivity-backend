@@ -3,7 +3,6 @@ package com.positivity.inventory.internal.service;
 import com.positivity.domainevents.location.LocationDeletedV1;
 import com.positivity.domainevents.location.LocationUpdatedV1;
 import com.positivity.domainevents.location.StorageLocationUpdatedV1;
-import com.positivity.inventory.internal.config.KafkaRails;
 import com.positivity.inventory.internal.entity.ExtLocationParentReplica;
 import com.positivity.inventory.internal.entity.ExtStorageLocationReplica;
 import com.positivity.inventory.internal.entity.LocationRefEntity;
@@ -12,6 +11,7 @@ import com.positivity.inventory.internal.repository.ExtLocationParentReplicaRepo
 import com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRepository;
 import com.positivity.inventory.internal.repository.LocationRefRepository;
 import com.positivity.inventory.internal.repository.ProcessedEventRepository;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;

@@ -5,6 +5,7 @@ import com.positivity.inventory.internal.dto.consumption.ConsumeItemsRequest;
 import com.positivity.inventory.internal.dto.picklist.GeneratePickListRequest;
 import com.positivity.inventory.internal.entity.ProcessedEvent;
 import com.positivity.inventory.internal.repository.ProcessedEventRepository;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import java.math.BigDecimal;
 import java.math.RoundingMode;

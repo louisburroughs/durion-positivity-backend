@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.config;
 import com.positivity.accounting.internal.entity.KafkaOutboxEvent;
 import com.positivity.accounting.internal.repository.KafkaOutboxEventRepository;
 import com.positivity.domainevents.DomainEventEnvelope;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.TenantResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

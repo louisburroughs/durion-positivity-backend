@@ -1,4 +1,4 @@
-package com.positivity.accounting.internal.config;
+package com.positivity.kafka.common;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

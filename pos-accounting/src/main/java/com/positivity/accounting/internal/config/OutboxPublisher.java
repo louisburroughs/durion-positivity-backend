@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.config;
 
 import com.positivity.accounting.internal.entity.KafkaOutboxEvent;
 import com.positivity.accounting.internal.repository.KafkaOutboxEventRepository;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.PlatformScoped;
 import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import io.micrometer.core.instrument.Counter;

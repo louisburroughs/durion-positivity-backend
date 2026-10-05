@@ -3,7 +3,6 @@ package com.positivity.inventory.internal.service;
 import com.positivity.domainevents.inventory.ExpectedSupplyDroppedV1;
 import com.positivity.domainevents.order.PurchaseOrderLine;
 import com.positivity.domainevents.order.PurchaseOrderUpdatedV1;
-import com.positivity.inventory.internal.config.KafkaRails;
 import com.positivity.inventory.internal.entity.ExtPurchaseOrderLineReplica;
 import com.positivity.inventory.internal.entity.ExtPurchaseOrderReceipt;
 import com.positivity.inventory.internal.entity.ExtPurchaseOrderReplica;
@@ -12,6 +11,7 @@ import com.positivity.inventory.internal.repository.ExtPurchaseOrderLineReposito
 import com.positivity.inventory.internal.repository.ExtPurchaseOrderReceiptRepository;
 import com.positivity.inventory.internal.repository.ExtPurchaseOrderRepository;
 import com.positivity.inventory.internal.repository.ProcessedEventRepository;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import java.math.BigDecimal;
 import java.time.Clock;

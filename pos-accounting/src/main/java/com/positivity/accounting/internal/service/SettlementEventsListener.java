@@ -1,7 +1,6 @@
 package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.config.AccountingEventTypeRegistry;
-import com.positivity.accounting.internal.config.KafkaRails;
 import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.entity.ExtInvoiceDepositCreditApplication;
 import com.positivity.accounting.internal.entity.ExtInvoicePaymentReversal;
@@ -13,6 +12,7 @@ import com.positivity.domainevents.payment.DepositCreditAppliedV1;
 import com.positivity.domainevents.payment.PaymentReversedV1;
 import com.positivity.domainevents.payment.PaymentSettledV1;
 import com.positivity.domainevents.payment.SettlementReportedV1;
+import com.positivity.kafka.common.KafkaRails;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;

@@ -1,6 +1,5 @@
 package com.positivity.accounting.internal.service;
 
-import com.positivity.accounting.internal.config.KafkaRails;
 import com.positivity.accounting.internal.entity.ExtCustomerBillingRules;
 import com.positivity.accounting.internal.entity.ExtCustomerParty;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
@@ -11,6 +10,7 @@ import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.customer.BillingRulesUpdatedV1;
 import com.positivity.domainevents.customer.CustomerPartyDeletedV1;
 import com.positivity.domainevents.customer.CustomerPartyUpdatedV1;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;

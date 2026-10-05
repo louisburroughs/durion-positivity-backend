@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.config;
 
+import com.positivity.kafka.common.KafkaRails;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.annotation.EnableKafka;
 

@@ -2,7 +2,6 @@ package com.positivity.inventory.internal.service;
 
 import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.catalog.ProductUpdatedV1;
-import com.positivity.inventory.internal.config.KafkaRails;
 import com.positivity.inventory.internal.entity.ExtProductCodeReplica;
 import com.positivity.inventory.internal.entity.ExtProductReplica;
 import com.positivity.inventory.internal.entity.ExtProductSubstitutionReplica;
@@ -13,6 +12,7 @@ import com.positivity.inventory.internal.repository.ExtProductReplicaRepository;
 import com.positivity.inventory.internal.repository.ExtProductSubstitutionReplicaRepository;
 import com.positivity.inventory.internal.repository.ExtProductUomReplicaRepository;
 import com.positivity.inventory.internal.repository.ProcessedEventRepository;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;

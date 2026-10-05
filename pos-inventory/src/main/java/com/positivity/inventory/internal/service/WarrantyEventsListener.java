@@ -2,11 +2,11 @@ package com.positivity.inventory.internal.service;
 
 import com.positivity.domainevents.warranty.WarrantyPartReturnRequestedV1;
 import com.positivity.domainevents.warranty.WarrantyPartReturnShippedV1;
-import com.positivity.inventory.internal.config.KafkaRails;
 import com.positivity.inventory.internal.entity.ProcessedEvent;
 import com.positivity.inventory.internal.entity.WarrantyPartReturnHold;
 import com.positivity.inventory.internal.repository.ProcessedEventRepository;
 import com.positivity.inventory.internal.repository.WarrantyPartReturnHoldRepository;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;

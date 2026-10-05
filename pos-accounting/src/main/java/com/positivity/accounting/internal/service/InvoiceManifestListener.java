@@ -1,9 +1,9 @@
 package com.positivity.accounting.internal.service;
 
-import com.positivity.accounting.internal.config.KafkaRails;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.domainevents.ReconciliationManifestV1;
 import com.positivity.domainevents.UuidV7Timestamps;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;

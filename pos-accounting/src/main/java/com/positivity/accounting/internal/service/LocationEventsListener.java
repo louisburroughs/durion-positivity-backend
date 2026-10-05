@@ -1,6 +1,5 @@
 package com.positivity.accounting.internal.service;
 
-import com.positivity.accounting.internal.config.KafkaRails;
 import com.positivity.accounting.internal.entity.ExtLocationParentReplica;
 import com.positivity.accounting.internal.entity.ExtLocationReplica;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
@@ -10,6 +9,7 @@ import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.location.LocationDeletedV1;
 import com.positivity.domainevents.location.LocationUpdatedV1;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;

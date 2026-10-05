@@ -1,7 +1,6 @@
 package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.config.AccountingEventTypeRegistry;
-import com.positivity.accounting.internal.config.KafkaRails;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
 import com.positivity.accounting.internal.entity.WarrantyReimbursementExpectation;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
@@ -9,6 +8,7 @@ import com.positivity.accounting.internal.repository.WarrantyReimbursementExpect
 import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.warranty.WarrantyReimbursementResolvedV1;
 import com.positivity.domainevents.warranty.WarrantyReimbursementSubmittedV1;
+import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
