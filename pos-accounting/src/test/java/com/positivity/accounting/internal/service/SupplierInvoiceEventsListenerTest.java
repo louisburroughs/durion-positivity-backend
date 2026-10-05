@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -17,9 +18,11 @@ import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.accounting.internal.repository.VendorRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
@@ -33,6 +36,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -80,6 +84,7 @@ class SupplierInvoiceEventsListenerTest {
 
     @BeforeEach
     void setUp() {
+        ObjectProvider<MeterRegistry> noMeters = mock();
         listener = new SupplierInvoiceEventsListener(
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 new ObjectMapper(),
@@ -88,9 +93,12 @@ class SupplierInvoiceEventsListenerTest {
                 vendorRepository,
                 new LedgerCurrency("USD"),
                 ingestionRecorder,
+                // The real guard over the mocked repository: the listener's lookup is the rule's query.
+                new VendorBillDuplicateGuard(vendorBillRepository, noMeters),
                 mock(PlatformTransactionManager.class));
         when(processedEventRepository.existsById(any())).thenReturn(false);
-        when(vendorBillRepository.findByVendorIdAndBillNumber(any(), any())).thenReturn(Optional.empty());
+        when(vendorBillRepository.findLiveDuplicate(any(), any(), any(), any(), any()))
+                .thenReturn(Optional.empty());
         when(vendorRepository.existsById(any())).thenReturn(false);
     }
 
@@ -99,20 +107,33 @@ class SupplierInvoiceEventsListenerTest {
     }
 
     private static String event(String eventId, String number, String type, String total, String currency) {
+        return event(eventId, number, type, total, currency, "2026-08-14");
+    }
+
+    private static String event(
+            String eventId, String number, String type, String total, String currency, String invoiceDate) {
         return """
             {"eventId":"%s","eventType":"supplier.invoice.received","payload":{
               "vendorProfileId":"%s","supplierRef":"michelin-de","vendorInvoiceNumber":"%s",
-              "invoiceDate":"2026-08-14","type":"%s","currency":"%s",
+              "invoiceDate":"%s","type":"%s","currency":"%s",
               "totalNetAmount":240.00,"totalTaxAmount":48.00,"totalGrossAmount":%s,
               "vendorOrderReference":"PO-778","occurredAt":"2026-08-16T08:00:00Z","lines":[]}}
-            """.formatted(eventId, PROFILE, number, type, currency, total);
+            """.formatted(eventId, PROFILE, number, invoiceDate, type, currency, total);
+    }
+
+    /** The rule's window for the default invoice date, 2026-08-14. */
+    private static final LocalDateTime DAY = LocalDateTime.of(2026, 8, 14, 0, 0);
+
+    private void liveOriginal(String key, VendorBill original) {
+        when(vendorBillRepository.findLiveDuplicate(PROFILE, key, DAY, DAY.plusDays(1), null))
+                .thenReturn(Optional.of(original));
     }
 
     private static final String EVENT_9 = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f7b09";
 
     private VendorBill captured() {
         ArgumentCaptor<VendorBill> captor = ArgumentCaptor.forClass(VendorBill.class);
-        verify(vendorBillRepository).save(captor.capture());
+        verify(vendorBillRepository).saveAndFlush(captor.capture());
         return captor.getValue();
     }
 
@@ -194,13 +215,14 @@ class SupplierInvoiceEventsListenerTest {
     void refetchDoesNotDuplicateTheDebt() {
         VendorBill existing = new VendorBill();
         existing.setTotalAmount(new BigDecimal("288.00"));
-        when(vendorBillRepository.findByVendorIdAndBillNumber(PROFILE, "INV-1")).thenReturn(Optional.of(existing));
+        liveOriginal("INV1", existing);
 
         listener.onSupplierEvent(event(EVENT_6, "INV-1", "INVOICE", "288.00"));
 
         // A re-fetch carries a new event id, so the event guard would not catch it. This is the
         // guard that stops the business being billed twice.
         verify(vendorBillRepository, never()).save(any());
+        verify(vendorBillRepository, never()).saveAndFlush(any());
         // #2433: the identity guard is a duplicate key, recorded DUPLICATE_IGNORED with no entry.
         verify(ingestionRecorder)
                 .record(
@@ -219,7 +241,7 @@ class SupplierInvoiceEventsListenerTest {
         VendorBill existing = new VendorBill();
         existing.setTotalAmount(new BigDecimal("288.00"));
         existing.setStatus(VendorBillStatus.PENDING_RECEIPT_MATCH);
-        when(vendorBillRepository.findByVendorIdAndBillNumber(PROFILE, "INV-1")).thenReturn(Optional.of(existing));
+        liveOriginal("INV1", existing);
 
         listener.onSupplierEvent(event(EVENT_7, "INV-1", "INVOICE", "412.00"));
 
@@ -239,6 +261,7 @@ class SupplierInvoiceEventsListenerTest {
         listener.onSupplierEvent(event(EVENT_1, "INV-1", "INVOICE", "288.00"));
 
         verify(vendorBillRepository, never()).save(any());
+        verify(vendorBillRepository, never()).saveAndFlush(any());
         verify(processedEventRepository, never()).save(any());
         verifyNoInteractions(ingestionRecorder);
     }
@@ -246,7 +269,7 @@ class SupplierInvoiceEventsListenerTest {
     @Test
     @DisplayName("transient database trouble is retried, not swallowed")
     void transientFailureIsRethrown() {
-        when(vendorBillRepository.save(any())).thenThrow(new QueryTimeoutException("statement timed out"));
+        when(vendorBillRepository.saveAndFlush(any())).thenThrow(new QueryTimeoutException("statement timed out"));
 
         assertThatThrownBy(() -> listener.onSupplierEvent(event(EVENT_8, "INV-8", "INVOICE", "288.00")))
                 .isInstanceOf(QueryTimeoutException.class);
@@ -259,7 +282,8 @@ class SupplierInvoiceEventsListenerTest {
     @Test
     @DisplayName("lost-connection database trouble is retried, not swallowed")
     void lostConnectionFailureIsRethrown() {
-        when(vendorBillRepository.save(any())).thenThrow(new DataAccessResourceFailureException("connection reset"));
+        when(vendorBillRepository.saveAndFlush(any()))
+                .thenThrow(new DataAccessResourceFailureException("connection reset"));
 
         assertThatThrownBy(() -> listener.onSupplierEvent(event(EVENT_8, "INV-8", "INVOICE", "288.00")))
                 .isInstanceOf(DataAccessResourceFailureException.class);
@@ -274,7 +298,7 @@ class SupplierInvoiceEventsListenerTest {
     void transactionFailureIsRethrownBeforeTheMark() {
         // Not a DataAccessException, so the catch above the mark does not see it: before #2355 it
         // fell into the "malformed" path and the event was recorded as processed.
-        when(vendorBillRepository.save(any())).thenThrow(new TransactionSystemException("could not commit"));
+        when(vendorBillRepository.saveAndFlush(any())).thenThrow(new TransactionSystemException("could not commit"));
 
         assertThatThrownBy(() -> listener.onSupplierEvent(event(EVENT_8, "INV-8", "INVOICE", "288.00")))
                 .isInstanceOf(TransactionSystemException.class);
@@ -304,7 +328,7 @@ class SupplierInvoiceEventsListenerTest {
     @Test
     @DisplayName("a non-transient database failure is retried, not acknowledged")
     void nonTransientDatabaseFailureIsRethrown() {
-        when(vendorBillRepository.save(any()))
+        when(vendorBillRepository.saveAndFlush(any()))
                 .thenThrow(new org.springframework.dao.DataIntegrityViolationException("value too long"));
 
         assertThatThrownBy(() -> listener.onSupplierEvent(event(EVENT_2, "INV-2", "INVOICE", "288.00")))
@@ -346,6 +370,167 @@ class SupplierInvoiceEventsListenerTest {
     }
 
     @Nested
+    @DisplayName("#2501: one duplicate rule (vendor, normalised invoice number, invoice date)")
+    class DuplicateRule {
+
+        private static final UUID ORIGINAL_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f7c01");
+
+        private static final String INDEX_VIOLATION = "could not execute statement [ERROR: duplicate key value"
+                + " violates unique constraint \"uq_vendor_bill_duplicate_rule\"]";
+
+        private VendorBill held(String amount, VendorBillStatus status) {
+            VendorBill bill = new VendorBill(ORIGINAL_ID);
+            bill.setVendorId(PROFILE);
+            bill.setBillNumber("INV-1");
+            bill.setBillDate(DAY);
+            bill.setTotalAmount(new BigDecimal(amount));
+            bill.setCurrency("USD");
+            bill.setStatus(status);
+            return bill;
+        }
+
+        @Test
+        @DisplayName("criterion 8: the same invoice, written differently, is recorded as ignored against the original")
+        void identicalDuplicateIsIgnoredAgainstTheOriginal() {
+            VendorBill original = held("100.00", VendorBillStatus.APPROVED);
+            liveOriginal("INV1", original);
+
+            listener.onSupplierEvent(event(EVENT_1, "inv-1", "INVOICE", "100.00"));
+
+            verify(vendorBillRepository, never()).saveAndFlush(any());
+            verify(vendorBillRepository, never()).save(any());
+            assertThat(original.getStatus()).isEqualTo(VendorBillStatus.APPROVED);
+            verify(ingestionRecorder)
+                    .record(
+                            eq("pos-supplier"),
+                            eq("supplier.invoice.received"),
+                            eq(EVENT_1),
+                            eq(ORIGINAL_ID),
+                            any(),
+                            any(),
+                            eq(new FactPostingOutcome.AlreadyPosted(null, null)));
+            verify(processedEventRepository).save(any());
+        }
+
+        @Test
+        @DisplayName("criterion 9: a duplicate at another amount flags the original and names both amounts")
+        void changedDuplicateFlagsTheOriginal() {
+            VendorBill original = held("100.00", VendorBillStatus.PENDING_RECEIPT_MATCH);
+            liveOriginal("INV1", original);
+
+            listener.onSupplierEvent(event(EVENT_1, "inv-1", "INVOICE", "120.00"));
+
+            assertThat(original.getStatus()).isEqualTo(VendorBillStatus.MATCH_EXCEPTION);
+            // "120.0": the fact's amount as the envelope tree carries it; the flagging text is unchanged.
+            assertThat(original.getRejectionReason()).contains("120.0 USD").contains("100.00 USD");
+            assertThat(original.getTotalAmount()).isEqualByComparingTo("100.00");
+            verify(vendorBillRepository, never()).saveAndFlush(any());
+            verify(ingestionRecorder)
+                    .record(
+                            any(),
+                            any(),
+                            eq(EVENT_1),
+                            eq(ORIGINAL_ID),
+                            any(),
+                            any(),
+                            eq(new FactPostingOutcome.NothingToPost()));
+            verify(processedEventRepository).save(any());
+        }
+
+        @Test
+        @DisplayName("criterion 10: when the rule finds no live original, a re-issue becomes a new bill")
+        void reissueAfterAVoidBecomesANewBill() {
+            // The rule's query does not return a VOIDED or REJECTED bill (pinned on Postgres by
+            // VendorBillDuplicateRulePostgresIT), so the listener is told there is no original.
+            VendorBill voided = held("100.00", VendorBillStatus.VOIDED);
+            voided.setRejectionReason("Match exception voided: wrong vendor");
+
+            listener.onSupplierEvent(event(EVENT_1, "INV-1", "INVOICE", "100.00"));
+
+            VendorBill created = captured();
+            assertThat(created).isNotSameAs(voided);
+            assertThat(created.getStatus()).isEqualTo(VendorBillStatus.PENDING_RECEIPT_MATCH);
+            assertThat(created.getBillNumberKey()).isEqualTo("INV1");
+            assertThat(voided.getStatus()).isEqualTo(VendorBillStatus.VOIDED);
+            assertThat(voided.getRejectionReason()).isEqualTo("Match exception voided: wrong vendor");
+            verify(vendorBillRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("criterion 11 (BR-3): the same number on another date is asked of that date, and is a new bill")
+        void sameNumberOnAnotherDateIsANewBill() {
+            // Last year's bill is live, on its own date; the rule is asked about this invoice's date.
+            VendorBill lastYear = held("100.00", VendorBillStatus.PAID);
+            LocalDateTime lastYearDay = LocalDateTime.of(2025, 10, 1, 0, 0);
+            when(vendorBillRepository.findLiveDuplicate(PROFILE, "INV1", lastYearDay, lastYearDay.plusDays(1), null))
+                    .thenReturn(Optional.of(lastYear));
+
+            listener.onSupplierEvent(event(EVENT_1, "INV-1", "INVOICE", "100.00", "USD", "2026-10-01"));
+
+            LocalDateTime thisYearDay = LocalDateTime.of(2026, 10, 1, 0, 0);
+            verify(vendorBillRepository).findLiveDuplicate(PROFILE, "INV1", thisYearDay, thisYearDay.plusDays(1), null);
+            assertThat(captured().getBillDate()).isEqualTo(thisYearDay);
+            assertThat(lastYear.getStatus()).isEqualTo(VendorBillStatus.PAID);
+        }
+
+        @Test
+        @DisplayName("criterion 12: an insert that loses the race runs the handler once more and records the duplicate")
+        void collisionRunsTheHandlerOnceMore() {
+            VendorBill original = held("100.00", VendorBillStatus.PENDING_RECEIPT_MATCH);
+            // The check sees nothing, the competing writer commits, the second run's check sees its bill.
+            when(vendorBillRepository.findLiveDuplicate(PROFILE, "INV1", DAY, DAY.plusDays(1), null))
+                    .thenReturn(Optional.empty())
+                    .thenReturn(Optional.of(original));
+            when(vendorBillRepository.saveAndFlush(any()))
+                    .thenThrow(new org.springframework.dao.DataIntegrityViolationException(INDEX_VIOLATION));
+
+            listener.onSupplierEvent(event(EVENT_1, "INV-1", "INVOICE", "100.00"));
+
+            verify(vendorBillRepository, times(1)).saveAndFlush(any());
+            verify(vendorBillRepository, times(2)).findLiveDuplicate(PROFILE, "INV1", DAY, DAY.plusDays(1), null);
+            verify(ingestionRecorder)
+                    .record(
+                            any(),
+                            any(),
+                            eq(EVENT_1),
+                            eq(ORIGINAL_ID),
+                            any(),
+                            any(),
+                            eq(new FactPostingOutcome.AlreadyPosted(null, null)));
+            verify(processedEventRepository, times(1)).save(any());
+        }
+
+        @Test
+        @DisplayName("criterion 12: a second collision is rethrown for retry, unmarked")
+        void secondCollisionIsRethrownUnmarked() {
+            when(vendorBillRepository.saveAndFlush(any()))
+                    .thenThrow(new org.springframework.dao.DataIntegrityViolationException(INDEX_VIOLATION));
+
+            assertThatThrownBy(() -> listener.onSupplierEvent(event(EVENT_1, "INV-1", "INVOICE", "100.00")))
+                    .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class)
+                    .hasMessageContaining("uq_vendor_bill_duplicate_rule");
+
+            verify(vendorBillRepository, times(2)).saveAndFlush(any());
+            verify(processedEventRepository, never()).save(any());
+            verifyNoInteractions(ingestionRecorder);
+        }
+
+        @Test
+        @DisplayName("criterion 12: any other integrity violation is rethrown at once, unmarked, with no second run")
+        void anotherIntegrityViolationIsNotRunAgain() {
+            when(vendorBillRepository.saveAndFlush(any()))
+                    .thenThrow(new org.springframework.dao.DataIntegrityViolationException(
+                            "duplicate key value violates unique constraint \"vendor_bill_pkey\""));
+
+            assertThatThrownBy(() -> listener.onSupplierEvent(event(EVENT_1, "INV-1", "INVOICE", "100.00")))
+                    .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+
+            verify(vendorBillRepository, times(1)).saveAndFlush(any());
+            verify(processedEventRepository, never()).save(any());
+        }
+    }
+
+    @Nested
     @DisplayName("the invoice's currency (ADR-0067 DF-1, #2309)")
     class Currency {
 
@@ -380,8 +565,7 @@ class SupplierInvoiceEventsListenerTest {
             existing.setTotalAmount(new BigDecimal("288.00"));
             existing.setCurrency("USD");
             existing.setStatus(VendorBillStatus.PENDING_RECEIPT_MATCH);
-            when(vendorBillRepository.findByVendorIdAndBillNumber(PROFILE, "INV-1"))
-                    .thenReturn(Optional.of(existing));
+            liveOriginal("INV1", existing);
 
             listener.onSupplierEvent(event(EVENT_7, "INV-1", "INVOICE", "288.00", "CAD"));
 
@@ -397,8 +581,7 @@ class SupplierInvoiceEventsListenerTest {
             existing.setTotalAmount(new BigDecimal("288.00"));
             existing.setCurrency("EUR");
             existing.setStatus(VendorBillStatus.CURRENCY_HOLD);
-            when(vendorBillRepository.findByVendorIdAndBillNumber(PROFILE, "INV-1"))
-                    .thenReturn(Optional.of(existing));
+            liveOriginal("INV1", existing);
 
             listener.onSupplierEvent(event(EVENT_7, "INV-1", "INVOICE", "412.00", "EUR"));
 
@@ -419,8 +602,7 @@ class SupplierInvoiceEventsListenerTest {
             existing.setTotalAmount(new BigDecimal("288.00"));
             existing.setCurrency("EUR");
             existing.setStatus(VendorBillStatus.CURRENCY_HOLD);
-            when(vendorBillRepository.findByVendorIdAndBillNumber(PROFILE, "INV-1"))
-                    .thenReturn(Optional.of(existing));
+            liveOriginal("INV1", existing);
 
             listener.onSupplierEvent(event(EVENT_7, "INV-1", "INVOICE", "288.00", "CAD"));
 

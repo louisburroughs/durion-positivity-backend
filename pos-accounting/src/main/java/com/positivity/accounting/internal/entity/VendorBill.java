@@ -20,6 +20,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.UUID;
+import lombok.AccessLevel;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -73,8 +74,19 @@ public class VendorBill extends TenantScopedEntity {
     @Column(name = "vendor_name", length = 200)
     private String vendorName;
 
+    @Setter(AccessLevel.NONE)
     @Column(name = "bill_number", length = 50, nullable = false)
     private String billNumber;
+
+    /**
+     * {@link VendorBillNumbers#normalise} of {@link #billNumber}: the stored half of the duplicate
+     * rule (#2501, ADR-0070 Decision 4). Written only by {@link #setBillNumber}, so no writer of a
+     * bill number can leave it stale; the partial unique index {@code uq_vendor_bill_duplicate_rule}
+     * reads it.
+     */
+    @Setter(AccessLevel.NONE)
+    @Column(name = "bill_number_key", length = VendorBillNumbers.MAX_KEY_LENGTH, nullable = false)
+    private String billNumberKey;
 
     @Column(name = "bill_date", nullable = false)
     private LocalDateTime billDate;
@@ -160,6 +172,16 @@ public class VendorBill extends TenantScopedEntity {
 
     public VendorBill(UUID vendorBillId) {
         this.vendorBillId = vendorBillId;
+    }
+
+    /**
+     * Sets the bill number and, with it, the duplicate-rule key.
+     *
+     * @param billNumber the number as the vendor or the generator wrote it
+     */
+    public void setBillNumber(String billNumber) {
+        this.billNumber = billNumber;
+        this.billNumberKey = billNumber == null ? null : VendorBillNumbers.normalise(billNumber);
     }
 
     // Scalar compatibility accessors for journalEntryId

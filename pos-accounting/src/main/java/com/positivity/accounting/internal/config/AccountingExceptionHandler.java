@@ -46,6 +46,7 @@ import com.positivity.accounting.internal.exception.TaxSnapshotConflictException
 import com.positivity.accounting.internal.exception.TaxSnapshotNotFoundException;
 import com.positivity.accounting.internal.exception.TaxSnapshotPeriodNotClosedException;
 import com.positivity.accounting.internal.exception.UnbalancedRulesException;
+import com.positivity.accounting.internal.exception.VendorBillDuplicateException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.EntityNotFoundException;
@@ -229,6 +230,33 @@ public class AccountingExceptionHandler {
     public ResponseEntity<ApiError> handleDuplicateAccountCode(
             DuplicateAccountCodeException ex, HttpServletRequest request) {
         return build(HttpStatus.CONFLICT, "DUPLICATE_ACCOUNT_CODE", ex.getMessage(), request);
+    }
+
+    /**
+     * A vendor bill refused by the duplicate rule (#2501; ADR-0070 Decision 4): a live bill already
+     * holds the same vendor, normalised bill number and bill date. 409 {@code AP_BILL_DUPLICATE}. The
+     * message names the original by number, vendor and date and carries no id (ADR-0064); the
+     * original's {@code vendorBillId} is the {@code referenceId}, the key for the client's link to
+     * the existing bill.
+     */
+    @ExceptionHandler(VendorBillDuplicateException.class)
+    public ResponseEntity<ApiError> handleVendorBillDuplicate(
+            VendorBillDuplicateException ex, HttpServletRequest request) {
+        String correlationId = resolveCorrelationId(request);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        return new ResponseEntity<>(
+                ApiError.guided(
+                        "AP_BILL_DUPLICATE",
+                        ex.getMessage(),
+                        HttpStatus.CONFLICT.value(),
+                        Instant.now(clock).toString(),
+                        correlationId,
+                        ex.getOriginalBillId().toString(),
+                        "Open the existing bill.",
+                        null),
+                headers,
+                HttpStatus.CONFLICT);
     }
 
     /**

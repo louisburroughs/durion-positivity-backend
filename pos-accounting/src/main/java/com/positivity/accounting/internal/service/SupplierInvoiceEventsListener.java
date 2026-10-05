@@ -23,6 +23,7 @@ import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -70,6 +71,19 @@ import tools.jackson.databind.ObjectMapper;
  * Only the second would survive a rebuilt supplier database, and it is the one that stops a debt
  * being recorded twice.
  *
+ * <p>The identity is the platform's one duplicate rule (#2501; ADR-0070 Decision 4), asked of {@link
+ * VendorBillDuplicateGuard}: the vendor, the normalised invoice number and the invoice date, among
+ * bills that are not {@code VOIDED} or {@code REJECTED}. So a number reused on another date is a new
+ * bill, and so is a re-issue after the original was voided or rejected; the old bill is left as it
+ * is. A duplicate is never thrown and never dropped: it is flagged on the original when it differs,
+ * or recorded as ignored when it is identical, because then the debt is already held.
+ *
+ * <p>The database enforces the same rule with a partial unique index, and the insert is flushed
+ * inside the handler transaction so that a concurrent writer of the same key surfaces there. That one
+ * violation is not retried by the container: the handler runs once more in a new transaction, finds
+ * the original the other writer committed, and takes the duplicate path. A second collision, like
+ * every other database failure, propagates unmarked.
+ *
  * <h2>Transaction shape (#2146)</h2>
  *
  * The bill and its processed mark commit together in a {@code REQUIRES_NEW} transaction of their
@@ -114,6 +128,7 @@ public class SupplierInvoiceEventsListener {
     private final VendorRepository vendorRepository;
     private final LedgerCurrency ledgerCurrency;
     private final KafkaFactIngestionRecorder ingestionRecorder;
+    private final VendorBillDuplicateGuard duplicateGuard;
 
     /** The handler plus its processed mark, or a failure's mark alone, per transaction; see the class doc. */
     private final TransactionTemplate handlerTransaction;
@@ -126,6 +141,7 @@ public class SupplierInvoiceEventsListener {
             VendorRepository vendorRepository,
             LedgerCurrency ledgerCurrency,
             KafkaFactIngestionRecorder ingestionRecorder,
+            VendorBillDuplicateGuard duplicateGuard,
             PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
@@ -134,6 +150,7 @@ public class SupplierInvoiceEventsListener {
         this.vendorRepository = vendorRepository;
         this.ledgerCurrency = ledgerCurrency;
         this.ingestionRecorder = ingestionRecorder;
+        this.duplicateGuard = duplicateGuard;
         this.handlerTransaction = new TransactionTemplate(transactionManager);
         this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -158,7 +175,17 @@ public class SupplierInvoiceEventsListener {
         if (processedEventRepository.existsById(eventId)) {
             return;
         }
+        handle(envelope, eventType, eventId, true);
+    }
 
+    /**
+     * The handler and its processed mark in one {@code REQUIRES_NEW} transaction, and what becomes of
+     * each failure.
+     *
+     * @param mayRunOnceMore whether a collision under the duplicate rule's unique index may be
+     *     answered by one more run; false on that second run, whose collision propagates
+     */
+    private void handle(JsonNode envelope, String eventType, String eventId, boolean mayRunOnceMore) {
         try {
             handlerTransaction.executeWithoutResult(_ -> {
                 if (SupplierInvoiceReceivedV1.EVENT_TYPE.equals(eventType)) {
@@ -169,6 +196,23 @@ public class SupplierInvoiceEventsListener {
                 markProcessed(eventId);
             });
         } catch (IngestionRecordFailure e) {
+            throw e.getCause();
+        } catch (DuplicateRuleCollision e) {
+            if (mayRunOnceMore) {
+                // A concurrent writer committed the same (vendor, number, date) between this
+                // handler's check and its insert (#2501). Redelivery would find that bill too, but
+                // only after the container's backoff; the transaction above has rolled back, so the
+                // handler runs once more now and takes the duplicate path against the committed bill.
+                duplicateGuard.record(
+                        VendorBillDuplicateGuard.Channel.EDI,
+                        VendorBillDuplicateGuard.Outcome.RETRIED,
+                        e.vendorId,
+                        e.billNumber,
+                        e.billDate,
+                        null);
+                handle(envelope, eventType, eventId, false);
+                return;
+            }
             throw e.getCause();
         } catch (DataAccessException e) {
             // Every database failure is rethrown, not only the transient ones. A column-length
@@ -204,10 +248,20 @@ public class SupplierInvoiceEventsListener {
 
         UUID vendorId = fact.vendorProfileId();
         String billNumber = fact.vendorInvoiceNumber();
+        LocalDateTime billDate = fact.invoiceDate().atStartOfDay();
 
-        Optional<VendorBill> existing = vendorBillRepository.findByVendorIdAndBillNumber(vendorId, billNumber);
+        // The duplicate rule (#2501): a live bill of this vendor with this number, normalised, on
+        // this date. A voided or rejected bill is not one, so its re-issue becomes a new bill below.
+        Optional<VendorBill> existing = duplicateGuard.findOriginal(vendorId, billNumber, billDate, null);
         if (existing.isPresent()) {
             boolean flagged = flagReissue(existing.get(), fact, billNumber);
+            duplicateGuard.record(
+                    VendorBillDuplicateGuard.Channel.EDI,
+                    flagged ? VendorBillDuplicateGuard.Outcome.FLAGGED : VendorBillDuplicateGuard.Outcome.IGNORED,
+                    vendorId,
+                    billNumber,
+                    billDate,
+                    existing.get().getVendorBillId());
             record(
                     eventId,
                     existing.get(),
@@ -224,7 +278,7 @@ public class SupplierInvoiceEventsListener {
         // The vendor's own number, not one we mint. It is what an AP clerk quotes back to the
         // vendor, and a number of our own would be meaningless in that conversation.
         bill.setBillNumber(billNumber);
-        bill.setBillDate(fact.invoiceDate().atStartOfDay());
+        bill.setBillDate(billDate);
         bill.setTotalAmount(signedTotal(fact));
         // The figure is only a sum of money with its currency, so the bill keeps the one the vendor
         // stated (ADR-0067 DF-1).
@@ -252,7 +306,16 @@ public class SupplierInvoiceEventsListener {
         bill.setModifiedBy(OWNER);
 
         // A new bill (no id yet) is persisted, not merged, so the id is assigned on this instance.
-        vendorBillRepository.save(bill);
+        // Flushed so the duplicate rule's unique index answers here, inside the handler transaction,
+        // where onSupplierEvent can tell it from every other database failure.
+        try {
+            vendorBillRepository.saveAndFlush(bill);
+        } catch (DataIntegrityViolationException e) {
+            if (VendorBillDuplicateGuard.isDuplicateRuleViolation(e)) {
+                throw new DuplicateRuleCollision(vendorId, billNumber, billDate, e);
+            }
+            throw e;
+        }
         record(eventId, bill, fact, FactPostingOutcome.nothingToPost());
         log.info(
                 "Created vendor bill from supplier invoice {} ({} {}) for vendor {}",
@@ -299,6 +362,37 @@ public class SupplierInvoiceEventsListener {
         @Override
         public synchronized @NonNull RuntimeException getCause() {
             return (RuntimeException) super.getCause();
+        }
+    }
+
+    /**
+     * The bill insert refused by the duplicate rule's unique index: a concurrent writer committed the
+     * same key after this handler's check. Carried out of the handler transaction, which rolls back,
+     * so {@link #handle} can run the handler once more; a second one is rethrown as its cause.
+     */
+    private static final class DuplicateRuleCollision extends RuntimeException {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        private final UUID vendorId;
+        private final String billNumber;
+        private final LocalDateTime billDate;
+
+        DuplicateRuleCollision(
+                @NonNull UUID vendorId,
+                @NonNull String billNumber,
+                @NonNull LocalDateTime billDate,
+                @NonNull DataIntegrityViolationException cause) {
+            super(cause);
+            this.vendorId = vendorId;
+            this.billNumber = billNumber;
+            this.billDate = billDate;
+        }
+
+        @Override
+        public synchronized @NonNull DataIntegrityViolationException getCause() {
+            return (DataIntegrityViolationException) super.getCause();
         }
     }
 

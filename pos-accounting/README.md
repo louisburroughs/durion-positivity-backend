@@ -344,6 +344,45 @@ on an inbound fact means the ledger currency until producers stamp one (E-3).
   in the ledger currency; a payment in another currency is refused with 422 `CURRENCY_NOT_SUPPORTED`
   (ADR-0067 PC-9 (a), ADR-0017 §2; #2334) before any application, credit or journal entry is written.
 
+## Vendor bill duplicate rule (#2501, ADR-0070 Decision 4)
+
+One rule decides whether a vendor bill already exists, for every path that writes a bill number. Two bills
+are duplicates when they have the same tenant, the same `vendor_id` as stored, the same normalised bill
+number and the same calendar date of `bill_date`, and neither is `VOIDED` or `REJECTED`. Every other status
+counts, `PAID` and `CURRENCY_HOLD` included.
+
+- **Normalisation** (`VendorBillNumbers.normalise`): Unicode NFKC, upper case, letters and digits only,
+  leading zeros removed while more than one character remains, at most 255 characters. `INV-00123`,
+  `inv 00123`, `INV/00123` and the full-width `ＩＮＶ－００１２３` share the key `INV00123`; `INV-123` does not
+  (zeros inside the key are kept); `000123` and `12-3` share `123`. A number with no letter or digit has the
+  empty key, which is legal. The key is stored in `vendor_bill.bill_number_key` by `VendorBill.setBillNumber`,
+  so no writer can leave it stale; `bill_number` itself is unchanged.
+- **Enforcement**: the partial unique index `uq_vendor_bill_duplicate_rule` on
+  `(tenant_id, vendor_id, bill_number_key, (bill_date)::date)` where the status is not `VOIDED` or `REJECTED`
+  (`V4__vendor_bill_duplicate_rule.sql`). The database is the authority; `VendorBillDuplicateGuard` reads the
+  same key first so the answer can name the original. Voiding or rejecting a bill releases its key, so a
+  re-issue goes through. The same number on another date is a different bill.
+- **REST** (`POST /v1/accounting/vendor-bills`, `POST /v1/accounting/vendor-bills/match`): a duplicate is
+  refused with 409 `AP_BILL_DUPLICATE`. `message` names the original by number, vendor and date and carries
+  no id; `referenceId` is the original's `vendorBillId`; `nextAction` is `Open the existing bill.` Nothing is
+  written: no bill, no GL posting event, no vendor-directory entry, and a refused match leaves the
+  goods-receipt bill as it was. A replayed goods-received `eventId` still returns the existing bill with 201.
+- **EDI** (`supplier.invoice.received`): the listener asks the same rule with the invoice date. A live
+  original is flagged `MATCH_EXCEPTION` when the amount or currency differs (unchanged from #2309) or recorded
+  `PROCESSED / DUPLICATE_IGNORED` when identical; nothing is thrown and no second bill is created. With no
+  live original the invoice becomes a bill. If the insert loses a race under the index, the handler runs once
+  more in a new transaction and takes the duplicate path; a second collision propagates for retry, unmarked.
+- **Migration guard**: V4 backfills the key, then stops with an error naming the count and the first ten
+  groups if existing rows break the rule. It never edits a bill; void the extra bill (or reset a
+  pre-production database) and run it again. The same migration creates `bill_number_seq`, which the
+  goods-receipt path draws its generated numbers from and no earlier migration created.
+- **Observability**: one WARN line and one `accounting.vendor_bill.duplicate` increment per event, tagged
+  `channel` (`goods_receipt`, `match`, `edi`) and `outcome` (`refused`, `flagged`, `ignored`, `retried`).
+- **Limits**: the rule compares `vendor_id` as stored, so the same vendor under two ids is not detected
+  (one vendor key arrives with the vendor copies). The SQL backfill and the Java normaliser agree on every
+  example above; a number with letters outside ASCII depends on the database's character classification
+  in the backfill only, since Java is the key's sole producer afterwards.
+
 ## Error codes
 
 Every non-2xx response carries the platform `ApiError` envelope. Field semantics, payload examples,
@@ -381,6 +420,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `IDEMPOTENCY_CONFLICT` | 409 | An AP payment idempotency key was reused with a different payload |
 | `GL_POSTING_FAILED` | 409 | General ledger posting failed |
 | `DUPLICATE_ACCOUNT_CODE` | 409 | Chart of accounts code already exists |
+| `AP_BILL_DUPLICATE` | 409 | A live vendor bill (any status except `VOIDED` or `REJECTED`) already has the same vendor, normalised bill number and bill date; `referenceId` is that bill's `vendorBillId` and `nextAction` is `Open the existing bill.` Raised by vendor-bill create and match (#2501) |
 | `ACCOUNT_NOT_ZERO_BALANCE` | 409 | GL account cannot be deactivated because its posted balance is not zero |
 | `ACCOUNT_NOT_INACTIVE` | 409 | GL account cannot be archived because it is not currently INACTIVE |
 | `ENTRY_ALREADY_POSTED` | 409 | Posting a journal entry that is already POSTED or REVERSED |
@@ -561,7 +601,7 @@ transaction as the posting and the `processed_events` mark:
 | `InventoryEventsListener` | `inventory.scrap.posted`, `inventory.adjustment.posted`, `inventory.product-value.changed` | `pos-inventory` | scrap / adjustment / revaluation id | see Inventory Posting Facts above |
 | `InvoiceEventsListener` | `invoice.invoice.updated` | `pos-invoice` | invoice id | `PROCESSED / NEW` + `journalEntryId` when revenue (or its reversal) posts; `PROCESSED / DUPLICATE_IGNORED` + the earlier entry when the cycle was already posted (the `POSTED` fact after every `FINALIZED` one); `PROCESSED / NEW`, no entry, for a zero total or a revert with nothing open; `SKIPPED / NOT_POSTABLE` for a stale fact, a deposit-take invoice, no `finalizedAt`, or a status that neither recognizes nor reverses (`ERROR`) |
 | `OrderEventsListener` | `order.session.closed` | `pos-order` | session id | `PROCESSED / NEW` + entry; `PROCESSED / NEW`, no entry, for a zero variance; `PROCESSED / DUPLICATE_IGNORED` when the session key was already posted; a foreign-currency hold is the `SUSPENDED / CURRENCY_NOT_SUPPORTED` row (Ledger currency above) |
-| `SupplierInvoiceEventsListener` | `supplier.invoice.received` | `pos-supplier` | vendor bill id | `PROCESSED / NEW`, no entry (nothing posts on ingest); `PROCESSED / DUPLICATE_IGNORED` for a re-fetch identical to the bill held |
+| `SupplierInvoiceEventsListener` | `supplier.invoice.received` | `pos-supplier` | vendor bill id | `PROCESSED / NEW`, no entry (nothing posts on ingest), for a new bill and for a duplicate flagged on the live original; `PROCESSED / DUPLICATE_IGNORED` for a duplicate identical to the live bill held, under the duplicate rule above (#2501) |
 | `WarrantyEventsListener` | `warranty.reimbursement.submitted`, `warranty.reimbursement.resolved` | `pos-warranty` | reimbursement id | `PROCESSED / NEW`, no entry; `SKIPPED / NOT_POSTABLE` for a stale fact |
 
 - `domainKeyId` is not unique: every fact about the same document (an invoice finalized, posted, then

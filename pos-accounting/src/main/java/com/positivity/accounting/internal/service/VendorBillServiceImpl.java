@@ -13,6 +13,7 @@ import com.positivity.accounting.internal.entity.VendorBillMatchCandidate;
 import com.positivity.accounting.internal.enums.MatchConfidence;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.InvalidDateRangeException;
+import com.positivity.accounting.internal.exception.VendorBillDuplicateException;
 import com.positivity.accounting.internal.exception.VendorBillMatchNotFoundException;
 import com.positivity.accounting.internal.exception.VendorBillOperatorActionException;
 import com.positivity.accounting.internal.repository.VendorBillLineRepository;
@@ -20,6 +21,7 @@ import com.positivity.accounting.internal.repository.VendorBillMatchCandidateRep
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
+import java.io.Serial;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -30,20 +32,23 @@ import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Implementation of Vendor Bill lifecycle management (Issue #130).
@@ -64,7 +69,6 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class VendorBillServiceImpl implements VendorBillService {
     private final Clock clock;
 
@@ -75,6 +79,33 @@ public class VendorBillServiceImpl implements VendorBillService {
     private final VendorBillMatchCandidateRepository matchCandidateRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final VendorDirectoryService vendorDirectoryService;
+    private final VendorBillDuplicateGuard duplicateGuard;
+
+    /**
+     * The goods-receipt create, in a transaction this class can see the end of: the original of a
+     * bill that lost a race under {@code uq_vendor_bill_duplicate_rule} is read only after that
+     * transaction has rolled back (#2501).
+     */
+    private final TransactionTemplate goodsReceiptTransaction;
+
+    public VendorBillServiceImpl(
+            Clock clock,
+            VendorBillRepository billRepository,
+            VendorBillLineRepository billLineRepository,
+            VendorBillMatchCandidateRepository matchCandidateRepository,
+            ApplicationEventPublisher eventPublisher,
+            VendorDirectoryService vendorDirectoryService,
+            VendorBillDuplicateGuard duplicateGuard,
+            PlatformTransactionManager transactionManager) {
+        this.clock = clock;
+        this.billRepository = billRepository;
+        this.billLineRepository = billLineRepository;
+        this.matchCandidateRepository = matchCandidateRepository;
+        this.eventPublisher = eventPublisher;
+        this.vendorDirectoryService = vendorDirectoryService;
+        this.duplicateGuard = duplicateGuard;
+        this.goodsReceiptTransaction = new TransactionTemplate(transactionManager);
+    }
 
     private String getCurrentUser() {
         return SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_USER);
@@ -97,9 +128,58 @@ public class VendorBillServiceImpl implements VendorBillService {
      */
     private static final int MAX_LIST_PAGE_SIZE = 100;
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Not {@code @Transactional}: the work runs in {@link #goodsReceiptTransaction}, which joins a
+     * caller's transaction when there is one. A bill that would duplicate a live one (#2501; same
+     * vendor, normalised number and bill date) is refused with {@link VendorBillDuplicateException}
+     * before anything is saved. When a concurrent writer commits the same key between that check and
+     * the insert, the unique index refuses the insert instead, and the original is read once this
+     * transaction has rolled back, so both paths give the same answer.
+     */
     @Override
-    @Transactional
     public @NonNull VendorBillResponse handleGoodsReceivedEvent(@NonNull GoodsReceivedEvent event) {
+        try {
+            return Objects.requireNonNull(goodsReceiptTransaction.execute(_ -> createFromGoodsReceipt(event)));
+        } catch (LostDuplicateRace lost) {
+            VendorBill original = duplicateGuard
+                    .findOriginalAfterCollision(event.getVendorId(), lost.billNumber, lost.billDate)
+                    .orElseThrow(lost::getCause);
+            throw duplicateGuard.refusal(
+                    VendorBillDuplicateGuard.Channel.GOODS_RECEIPT,
+                    event.getVendorId(),
+                    lost.billNumber,
+                    lost.billDate,
+                    original);
+        }
+    }
+
+    /**
+     * An insert refused by {@code uq_vendor_bill_duplicate_rule}: carries what is needed to find the
+     * original out of the failed transaction.
+     */
+    private static final class LostDuplicateRace extends RuntimeException {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        private final String billNumber;
+        private final LocalDateTime billDate;
+
+        LostDuplicateRace(String billNumber, LocalDateTime billDate, DataIntegrityViolationException cause) {
+            super(cause);
+            this.billNumber = billNumber;
+            this.billDate = billDate;
+        }
+
+        @Override
+        public synchronized @NonNull DataIntegrityViolationException getCause() {
+            return (DataIntegrityViolationException) super.getCause();
+        }
+    }
+
+    private @NonNull VendorBillResponse createFromGoodsReceipt(@NonNull GoodsReceivedEvent event) {
         log.info(
                 "Processing GoodsReceivedEvent | eventId={} | vendorId={} | poId={}",
                 event.getEventId(),
@@ -134,8 +214,23 @@ public class VendorBillServiceImpl implements VendorBillService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         bill.setTotalAmount(totalAmount);
 
-        // Step 4: Save bill
-        VendorBill savedBill = billRepository.save(bill);
+        // Step 4: The duplicate rule (#2501), then the insert. Flushed here so the unique index
+        // answers before the vendor directory, the lines or the GL posting event see the bill.
+        duplicateGuard.refuseIfDuplicate(
+                VendorBillDuplicateGuard.Channel.GOODS_RECEIPT,
+                bill.getVendorId(),
+                bill.getBillNumber(),
+                bill.getBillDate(),
+                null);
+        VendorBill savedBill;
+        try {
+            savedBill = billRepository.saveAndFlush(bill);
+        } catch (DataIntegrityViolationException e) {
+            if (VendorBillDuplicateGuard.isDuplicateRuleViolation(e)) {
+                throw new LostDuplicateRace(bill.getBillNumber(), bill.getBillDate(), e);
+            }
+            throw e;
+        }
 
         // Keep the AP vendor directory (name typeahead) in sync (Issue #816).
         // Best-effort: runs in its own transaction, and a failure (e.g. a
@@ -283,6 +378,15 @@ public class VendorBillServiceImpl implements VendorBillService {
 
             return toResponse(bill);
         }
+
+        // The bill is about to take the vendor's invoice reference as its number: the duplicate rule
+        // (#2501) is checked first, the bill itself excluded, so a refusal leaves it untouched.
+        duplicateGuard.refuseIfDuplicate(
+                VendorBillDuplicateGuard.Channel.MATCH,
+                bill.getVendorId(),
+                event.getInvoiceReference(),
+                bill.getBillDate(),
+                bill.getVendorBillId());
 
         // Step 3: Auto-approve based on confidence
         if (matchResult.getConfidence() == MatchConfidence.HIGH_CONFIDENCE) {

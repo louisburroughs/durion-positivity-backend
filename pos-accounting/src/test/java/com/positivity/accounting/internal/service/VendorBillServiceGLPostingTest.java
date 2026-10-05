@@ -29,6 +29,7 @@ import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.transaction.PlatformTransactionManager;
 
 /**
  * Unit tests for GL posting event emission in VendorBillServiceImpl.
@@ -55,6 +56,14 @@ class VendorBillServiceGLPostingTest {
 
     @Mock
     private VendorDirectoryService vendorDirectoryService;
+
+    /** A mock answers "no duplicate": these tests are about the GL posting event, not the rule (#2501). */
+    @Mock
+    private VendorBillDuplicateGuard duplicateGuard;
+
+    /** The goods-receipt create runs in a TransactionTemplate (#2501); a mock manager just runs it. */
+    @Mock
+    private PlatformTransactionManager transactionManager;
 
     @InjectMocks
     private VendorBillServiceImpl vendorBillService;
@@ -101,7 +110,7 @@ class VendorBillServiceGLPostingTest {
     @DisplayName("Should record vendor in directory when bill is created")
     void shouldRecordVendorInDirectory() {
         when(billRepository.findByOriginEventId(testEvent.getEventId())).thenReturn(Optional.empty());
-        when(billRepository.save(any(VendorBill.class))).thenReturn(createSavedBill());
+        when(billRepository.saveAndFlush(any(VendorBill.class))).thenReturn(createSavedBill());
 
         vendorBillService.handleGoodsReceivedEvent(testEvent);
 
@@ -112,7 +121,7 @@ class VendorBillServiceGLPostingTest {
     @DisplayName("Should not fail bill creation when vendor directory sync fails")
     void shouldNotFailBillCreationWhenDirectorySyncFails() {
         when(billRepository.findByOriginEventId(testEvent.getEventId())).thenReturn(Optional.empty());
-        when(billRepository.save(any(VendorBill.class))).thenReturn(createSavedBill());
+        when(billRepository.saveAndFlush(any(VendorBill.class))).thenReturn(createSavedBill());
         doThrow(new RuntimeException("duplicate key"))
                 .when(vendorDirectoryService)
                 .recordVendor(any(), any());
@@ -128,7 +137,7 @@ class VendorBillServiceGLPostingTest {
         when(billRepository.findByOriginEventId(testEvent.getEventId())).thenReturn(Optional.empty());
 
         VendorBill savedBill = createSavedBill();
-        when(billRepository.save(any(VendorBill.class))).thenReturn(savedBill);
+        when(billRepository.saveAndFlush(any(VendorBill.class))).thenReturn(savedBill);
 
         // When: Processing goods received event
         vendorBillService.handleGoodsReceivedEvent(testEvent);
@@ -156,7 +165,7 @@ class VendorBillServiceGLPostingTest {
         when(billRepository.findByOriginEventId(testEvent.getEventId())).thenReturn(Optional.empty());
 
         VendorBill savedBill = createSavedBill();
-        when(billRepository.save(any(VendorBill.class))).thenReturn(savedBill);
+        when(billRepository.saveAndFlush(any(VendorBill.class))).thenReturn(savedBill);
 
         // When: Processing goods received event
         vendorBillService.handleGoodsReceivedEvent(testEvent);
@@ -187,7 +196,7 @@ class VendorBillServiceGLPostingTest {
         when(billRepository.findByOriginEventId(testEvent.getEventId())).thenReturn(Optional.empty());
 
         VendorBill savedBill = createSavedBill();
-        when(billRepository.save(any(VendorBill.class))).thenReturn(savedBill);
+        when(billRepository.saveAndFlush(any(VendorBill.class))).thenReturn(savedBill);
 
         // When: Processing goods received event
         vendorBillService.handleGoodsReceivedEvent(testEvent);
@@ -208,7 +217,7 @@ class VendorBillServiceGLPostingTest {
         when(billRepository.findByOriginEventId(testEvent.getEventId())).thenReturn(Optional.empty());
 
         VendorBill savedBill = createSavedBill();
-        when(billRepository.save(any(VendorBill.class))).thenReturn(savedBill);
+        when(billRepository.saveAndFlush(any(VendorBill.class))).thenReturn(savedBill);
 
         // When: Processing goods received event
         vendorBillService.handleGoodsReceivedEvent(testEvent);
