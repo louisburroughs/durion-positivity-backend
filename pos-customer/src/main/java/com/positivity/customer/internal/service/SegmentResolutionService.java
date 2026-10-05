@@ -173,7 +173,11 @@ public class SegmentResolutionService {
     }
 
     private List<PartyAttributes> loadCommercialCandidates() {
+        // House accounts are never a candidate (#2505): no dynamic segment, marketing audience,
+        // preview or segment fact can contain the tenant's CASH walk-in account. loadAttributes
+        // reads through here, so a known party set is filtered the same way.
         List<CommercialParty> accounts = commercialPartyRepository.findAll().stream()
+                .filter(account -> account.getHouseAccount() == null)
                 .limit(MAX_CANDIDATES)
                 .toList();
         List<UUID> ids = accounts.stream().map(CommercialParty::getPartyId).toList();
@@ -391,6 +395,8 @@ public class SegmentResolutionService {
         }
         return audienceType == AudienceType.COMMERCIAL
                 ? commercialPartyRepository.findAllById(candidateIds).stream()
+                        // Never a static member either (#2505); addMembers already refuses one.
+                        .filter(account -> account.getHouseAccount() == null)
                         .map(CommercialParty::getPartyId)
                         .collect(Collectors.toSet())
                 : personPartyRepository.findAllById(candidateIds).stream()

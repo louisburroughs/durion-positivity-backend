@@ -85,7 +85,11 @@ class PartyTagServiceImplTest {
     @BeforeEach
     void setUp() {
         sut = new PartyTagServiceImpl(
-                Clock.fixed(NOW, ZoneOffset.UTC), tagRepository, assignmentRepository, factPublisher);
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                tagRepository,
+                assignmentRepository,
+                factPublisher,
+                org.mockito.Mockito.mock(HouseAccountGuard.class));
     }
 
     private static PartyTag tag(boolean active) {

@@ -369,6 +369,7 @@ public class CustomerFactPublisher {
         UUID personId = null;
         UUID parentPartyId = null;
         Boolean creditHold = null;
+        String houseAccount = null;
         String partyType;
 
         if (party instanceof CommercialParty commercial) {
@@ -382,6 +383,10 @@ public class CustomerFactPublisher {
                     : null;
             creditHold = commercial.getBillingRules() != null
                     ? commercial.getBillingRules().getCreditHold()
+                    : null;
+            // CASH_SALE for the tenant's house account, null for every other party (#2505).
+            houseAccount = commercial.getHouseAccount() != null
+                    ? commercial.getHouseAccount().name()
                     : null;
         } else if (party instanceof PersonParty person) {
             partyType = "PERSON";
@@ -402,7 +407,8 @@ public class CustomerFactPublisher {
                 party.getTier() != null ? party.getTier().name() : null,
                 CustomerRequirementsService.requirementsMet(party),
                 creditHold,
-                parentPartyId);
+                parentPartyId,
+                houseAccount);
         publish(
                 writer,
                 CustomerPartyUpdatedV1.EVENT_TYPE,

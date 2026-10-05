@@ -72,7 +72,10 @@ class CustomerInteractionServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        sut = new CustomerInteractionServiceImpl(Clock.fixed(NOW, ZoneOffset.UTC), interactionRepository);
+        sut = new CustomerInteractionServiceImpl(
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                interactionRepository,
+                org.mockito.Mockito.mock(HouseAccountGuard.class));
     }
 
     private static RecordInteractionRequest request(InteractionDirection direction, Instant occurredAt) {

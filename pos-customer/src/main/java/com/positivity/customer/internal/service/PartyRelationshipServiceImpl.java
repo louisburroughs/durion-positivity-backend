@@ -56,6 +56,7 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
     private final PersonDirectoryService personDirectoryService;
     private final Clock clock;
     private final CustomerFactPublisher customerFactPublisher;
+    private final HouseAccountGuard houseAccountGuard;
 
     /**
      * Creates a new party relationship between a commercial account and an
@@ -83,6 +84,9 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
                 partyId,
                 request.getPersonId(),
                 request.getRoles());
+
+        // A house account has no contacts (#2505).
+        houseAccountGuard.requireNotHouseAccount(partyId);
 
         // Validate party exists
         CommercialParty party = partyRepository
@@ -263,12 +267,17 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
      */
     @Override
     @Transactional
-    public void deactivateRelationship(@NonNull UUID relationshipId, UUID userId) {
+    public void deactivateRelationship(@NonNull UUID partyId, @NonNull UUID relationshipId, UUID userId) {
         log.info("Deactivating relationship: {}", relationshipId);
+        // The account named in the path is refused first, so the route answers 409 for the house
+        // account whatever relationship id rides along (#2505).
+        houseAccountGuard.requireNotHouseAccount(partyId);
 
         PartyRelationship relationship = partyRelationshipRepository
                 .findById(relationshipId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Relationship not found"));
+        // And the account the relationship actually belongs to, which the path does not pin.
+        houseAccountGuard.requireNotHouseAccount(relationship.getFromParty().getPartyId());
 
         LocalDate today = LocalDate.now(clock);
         relationship.deactivate(today);
@@ -296,6 +305,7 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
     public void designatePrimaryBillingContact(@NonNull UUID partyId, @NonNull UUID relationshipId, UUID userId) {
 
         log.info("Designating primary billing contact: partyId={}, relationshipId={}", partyId, relationshipId);
+        houseAccountGuard.requireNotHouseAccount(partyId);
 
         PartyRelationship relationship = partyRelationshipRepository
                 .findById(relationshipId)

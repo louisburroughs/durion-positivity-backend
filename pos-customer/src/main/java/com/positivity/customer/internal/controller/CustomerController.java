@@ -179,12 +179,19 @@ public class CustomerController {
                     customerType; only fields present in the DTO mapping are applied.
                     Emits a CUSTOMER_CUSTOMER_UPDATE event and publishes a party-changed customer fact.
                     Returns 404 when no party of the selected type exists for the supplied id.
+                    Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant's system house account \
+                    (the CASH walk-in account), which no request can change.
                     """)
     @ApiResponse(responseCode = "200", description = "Customer updated successfully.")
     @ApiResponse(
             responseCode = "404",
             description = "Customer not found.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description =
+                    "HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant's system house account (the CASH walk-in account), which no request can change",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @PutMapping("/{id}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -228,12 +235,19 @@ public class CustomerController {
                     Required inputs: id (UUID) as a path parameter; there is no request body.
                     Emits a CUSTOMER_CUSTOMER_DELETE event and publishes a party-deleted customer fact.
                     Returns 404 when neither store holds a party for the supplied id.
+                    Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant's system house account \
+                    (the CASH walk-in account), which no request can change.
                     """)
     @ApiResponse(responseCode = "204", description = "Customer deleted successfully.")
     @ApiResponse(
             responseCode = "404",
             description = "Customer not found.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description =
+                    "HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant's system house account (the CASH walk-in account), which no request can change",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @DeleteMapping("/{id}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",

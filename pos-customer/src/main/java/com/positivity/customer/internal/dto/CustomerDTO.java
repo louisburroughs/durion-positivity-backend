@@ -1,5 +1,6 @@
 package com.positivity.customer.internal.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Size;
 import java.util.List;
@@ -81,4 +82,16 @@ public class CustomerDTO {
             example = "retail",
             requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String customerType;
+
+    @Schema(
+            description = "House-account kind when this customer is a system house account (CASH_SALE is the"
+                    + " tenant's walk-in CASH account, which no request can change); null for every ordinary"
+                    + " customer. Read-only: a value sent on create or update is ignored.",
+            example = "CASH_SALE",
+            allowableValues = "CASH_SALE",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED,
+            accessMode = Schema.AccessMode.READ_ONLY,
+            nullable = true)
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    private String houseAccount;
 }

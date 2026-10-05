@@ -44,10 +44,11 @@ public interface PartyRelationshipService {
     /**
      * Deactivates a party relationship by setting the effective end date to today.
      *
+     * @param partyId        the commercial account named in the request path
      * @param relationshipId the relationship ID
      * @param userId         the ID of the user deactivating the relationship
      */
-    void deactivateRelationship(UUID relationshipId, UUID userId);
+    void deactivateRelationship(UUID partyId, UUID relationshipId, UUID userId);
 
     /**
      * Designates a new primary billing contact for a commercial account.

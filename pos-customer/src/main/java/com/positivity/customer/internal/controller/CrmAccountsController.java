@@ -514,6 +514,8 @@ public class CrmAccountsController {
                     Returns 404 when either party cannot be found, and 400 when losingPartyId or \
                     justification is missing, losingPartyId is not a valid UUID, or both ids refer to the \
                     same party.
+                    Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant's system house account \
+                    (the CASH walk-in account), which no request can change.
                     """)
     @ApiResponses(
             value = {
@@ -538,6 +540,14 @@ public class CrmAccountsController {
                 @ApiResponse(
                         responseCode = "403",
                         description = "Forbidden - insufficient permissions",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "409",
+                        description =
+                                "HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant's system house account (the CASH walk-in account), which no request can change",
                         content =
                                 @Content(
                                         mediaType = "application/json",
@@ -635,6 +645,8 @@ public class CrmAccountsController {
                     written.
                     Returns 404 when no commercial party exists for the supplied partyId, and 400 when the \
                     request body is missing.
+                    Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant's system house account \
+                    (the CASH walk-in account), which no request can change.
                     """)
     @ApiResponses(
             value = {
@@ -664,6 +676,14 @@ public class CrmAccountsController {
                 @ApiResponse(
                         responseCode = "403",
                         description = "Forbidden - insufficient permissions",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "409",
+                        description =
+                                "HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant's system house account (the CASH walk-in account), which no request can change",
                         content =
                                 @Content(
                                         mediaType = "application/json",
@@ -712,6 +732,8 @@ public class CrmAccountsController {
                     Emits a CUSTOMER_VEHICLE_CREATE event and republishes the party-changed customer fact.
                     Returns 404 when the party does not exist, 409 when the VIN is already associated with \
                     the party, and 400 when vinNumber is missing or blank.
+                    Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant's system house account \
+                    (the CASH walk-in account), which no request can change.
                     """)
     @ApiResponses(
             value = {
@@ -736,6 +758,14 @@ public class CrmAccountsController {
                 @ApiResponse(
                         responseCode = "403",
                         description = "Forbidden - insufficient permissions",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "409",
+                        description =
+                                "Conflict - the VIN is already associated with this party; or HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant's system house account (the CASH walk-in account), which no request can change",
                         content =
                                 @Content(
                                         mediaType = "application/json",
@@ -838,6 +868,8 @@ public class CrmAccountsController {
                     Emits a CUSTOMER_BILLING_RULES_UPSERT event; the rules are stored on the party record \
                     itself.
                     Returns 404 when no commercial party exists for the supplied partyId.
+                    Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant's system house account \
+                    (the CASH walk-in account), which no request can change.
                     """)
     @ApiResponses(
             value = {
@@ -862,6 +894,14 @@ public class CrmAccountsController {
                 @ApiResponse(
                         responseCode = "404",
                         description = "Party not found",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "409",
+                        description =
+                                "HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant's system house account (the CASH walk-in account), which no request can change",
                         content =
                                 @Content(
                                         mediaType = "application/json",

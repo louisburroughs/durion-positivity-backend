@@ -77,7 +77,11 @@ class ContactRoleServiceImplTest {
     @BeforeEach
     void setUp() {
         sut = new ContactRoleServiceImpl(
-                roleAssignmentRepository, partyRepository, personRepository, personDirectoryService);
+                roleAssignmentRepository,
+                partyRepository,
+                personRepository,
+                personDirectoryService,
+                org.mockito.Mockito.mock(HouseAccountGuard.class));
     }
 
     private static ContactRoleAssignment assignment(UUID contactId, ContactRole role, boolean primary) {

@@ -330,6 +330,8 @@ public class CrmSegmentController {
                     up to 5000 UUIDs; duplicates in the list are collapsed.
                     Emits a CRM_SEGMENT_MEMBERS_ADD event; only new membership rows are written.
                     Returns 404 when the segment does not exist, and 422 when the segment is DYNAMIC.
+                    Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant's system house account \
+                    (the CASH walk-in account), which no request can change.
                     """)
     @ApiResponses({
         @ApiResponse(
@@ -347,6 +349,11 @@ public class CrmSegmentController {
         @ApiResponse(
                 responseCode = "403",
                 description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "409",
+                description =
+                        "HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant's system house account (the CASH walk-in account), which no request can change",
                 content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PostMapping("/{segmentId}/members")
@@ -382,13 +389,20 @@ public class CrmSegmentController {
                     Required inputs: segmentId and partyId (UUIDs) as path parameters; there is no request \
                     body.
                     Emits a CRM_SEGMENT_MEMBER_REMOVE event; at most one membership row is deleted.
-                    Returns 204 in every authorized call, including when nothing was actually removed.
+                    Returns 204 in every other authorized call, including when nothing was actually removed.
+                    Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant's system house account \
+                    (the CASH walk-in account), which no request can change.
                     """)
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "Member removed", content = @Content),
         @ApiResponse(
                 responseCode = "403",
                 description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "409",
+                description =
+                        "HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant's system house account (the CASH walk-in account), which no request can change",
                 content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @DeleteMapping("/{segmentId}/members/{partyId}")

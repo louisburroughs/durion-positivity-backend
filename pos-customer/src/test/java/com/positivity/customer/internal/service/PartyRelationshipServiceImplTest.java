@@ -81,7 +81,8 @@ class PartyRelationshipServiceImplTest {
                 personRepository,
                 personDirectoryService,
                 Clock.fixed(Instant.parse("2026-03-01T12:00:00Z"), ZoneOffset.UTC),
-                customerFactPublisher);
+                customerFactPublisher,
+                org.mockito.Mockito.mock(HouseAccountGuard.class));
         when(partyRepository.findById(PARTY_ID)).thenReturn(Optional.of(commercialParty()));
         when(personRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(personParty()));
         when(partyRelationshipRepository.findOverlappingRelationships(any(), any(), any(), any()))
@@ -374,7 +375,7 @@ class PartyRelationshipServiceImplTest {
             PartyRelationship existing = relationship(Set.of(PartyRelationshipRole.BILLING), null);
             when(partyRelationshipRepository.findById(RELATIONSHIP_ID)).thenReturn(Optional.of(existing));
 
-            service.deactivateRelationship(RELATIONSHIP_ID, USER_ID);
+            service.deactivateRelationship(PARTY_ID, RELATIONSHIP_ID, USER_ID);
 
             assertThat(existing.getEffectiveEndDate()).isEqualTo(TODAY);
             assertThat(existing.getUpdatedBy()).isEqualTo(USER_ID);
@@ -386,7 +387,7 @@ class PartyRelationshipServiceImplTest {
         void failsForAnUnknownRelationship() {
             when(partyRelationshipRepository.findById(RELATIONSHIP_ID)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> service.deactivateRelationship(RELATIONSHIP_ID, USER_ID))
+            assertThatThrownBy(() -> service.deactivateRelationship(PARTY_ID, RELATIONSHIP_ID, USER_ID))
                     .isInstanceOf(ResponseStatusException.class)
                     .hasMessageContaining("Relationship not found");
         }

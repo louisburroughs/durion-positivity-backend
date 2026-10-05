@@ -97,6 +97,7 @@ public class PartyServiceImpl implements PartyService {
     private final MarketingConsentService marketingConsentService;
     private final CustomerInteractionService customerInteractionService;
     private final EntityManager entityManager;
+    private final HouseAccountGuard houseAccountGuard;
 
     private static final DateTimeFormatter ISO_FORMATTER = DateTimeFormatter.ISO_INSTANT.withLocale(Locale.US);
 
@@ -176,6 +177,7 @@ public class PartyServiceImpl implements PartyService {
                     .taxId(party.getTaxId())
                     .status(party.getStatus().toString())
                     .billingTermsId(party.getBillingTermsId())
+                    .houseAccount(houseAccountName(party))
                     .createdAt(party.getCreatedAt() != null ? ISO_FORMATTER.format(party.getCreatedAt()) : null)
                     .modifiedAt(party.getModifiedAt() != null ? ISO_FORMATTER.format(party.getModifiedAt()) : null)
                     .build();
@@ -532,6 +534,9 @@ public class PartyServiceImpl implements PartyService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "justification is required");
         }
 
+        // A house account is never merged, as survivor or as loser (#2505). Each side is refused
+        // before it is loaded, so no relationship moves and no fact is queued.
+        houseAccountGuard.requireNotHouseAccount(survivorPartyId);
         CommercialParty survivor = findPartyOrThrow(survivorPartyId);
         UUID losingPartyId;
         try {
@@ -539,6 +544,7 @@ public class PartyServiceImpl implements PartyService {
         } catch (IllegalArgumentException _) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid UUID format");
         }
+        houseAccountGuard.requireNotHouseAccount(losingPartyId);
         CommercialParty loser = findPartyOrThrow(losingPartyId);
 
         if (survivor.getPartyId().equals(loser.getPartyId())) {
@@ -597,6 +603,7 @@ public class PartyServiceImpl implements PartyService {
     public UpsertCommunicationPreferencesResponse upsertCommunicationPreferences(
             UUID partyId, UpsertCommunicationPreferencesRequest request) {
         log.debug("Upserting communication preferences for party: {}", partyId);
+        houseAccountGuard.requireNotHouseAccount(partyId);
         CommercialParty party = findPartyOrThrow(partyId);
 
         if (request == null) {
@@ -622,6 +629,7 @@ public class PartyServiceImpl implements PartyService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "vinNumber is required");
         }
 
+        houseAccountGuard.requireNotHouseAccount(partyId);
         CommercialParty party = findPartyOrThrow(partyId);
 
         if (party.getVehicleVins().contains(request.getVinNumber())) {
@@ -700,10 +708,16 @@ public class PartyServiceImpl implements PartyService {
                 .partyType(party.getPartyType().toString())
                 .customerNumber(party.getCustomerNumber())
                 .status(party.getStatus().toString())
+                .houseAccount(houseAccountName(party))
                 .createdAt(party.getCreatedAt() != null ? ISO_FORMATTER.format(party.getCreatedAt()) : null)
                 .primaryContact(resolvePrimaryContact(party))
                 .vehicleCount(vehicleCount(party))
                 .build();
+    }
+
+    /** The house-account kind name for a read response; null for every ordinary party. */
+    private static @Nullable String houseAccountName(CommercialParty party) {
+        return party.getHouseAccount() != null ? party.getHouseAccount().name() : null;
     }
 
     /** Vehicle count for a party; 0 when none. */
@@ -877,7 +891,11 @@ public class PartyServiceImpl implements PartyService {
             throw new CrmValidationException("legalName must contain at least 2 non-whitespace characters");
         }
 
-        List<CommercialParty> matches = partyRepository.findByLegalNameContaining(requestedLegalName);
+        // The house account is never offered as a match (#2505): its identity is the flag, not the
+        // name, so an ordinary account may share its name and nobody is ever steered into it.
+        List<CommercialParty> matches = partyRepository.findByLegalNameContaining(requestedLegalName).stream()
+                .filter(match -> match.getHouseAccount() == null)
+                .toList();
         String exactMatchPartyId = matches.stream()
                 .filter(match -> requestedLegalName.equalsIgnoreCase(match.getLegalName()))
                 .map(match -> match.getPartyId().toString())
@@ -908,6 +926,8 @@ public class PartyServiceImpl implements PartyService {
     public @NonNull BillingRuleRef upsertBillingRulesForParty(
             @NonNull UUID partyId, @NonNull UpsertBillingRulesRequest request) {
         log.info("Upserting billing rules for partyId={}", partyId);
+        // No billing rules on a house account, so on-account terms can never exist for it (#2505).
+        houseAccountGuard.requireNotHouseAccount(partyId);
         CommercialParty party = findPartyByIdInternal(partyId);
         if (party == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Party not found: " + partyId);

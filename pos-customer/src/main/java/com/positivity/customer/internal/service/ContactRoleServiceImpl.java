@@ -49,12 +49,15 @@ public class ContactRoleServiceImpl implements ContactRoleService {
     private final CommercialPartyRepository partyRepository;
     private final PersonPartyRepository personRepository;
     private final PersonDirectoryService personDirectoryService;
+    private final HouseAccountGuard houseAccountGuard;
 
     ContactRoleServiceImpl(
             ContactRoleAssignmentRepository roleAssignmentRepository,
             CommercialPartyRepository partyRepository,
             PersonPartyRepository personRepository,
-            PersonDirectoryService personDirectoryService) {
+            PersonDirectoryService personDirectoryService,
+            HouseAccountGuard houseAccountGuard) {
+        this.houseAccountGuard = houseAccountGuard;
         this.roleAssignmentRepository = roleAssignmentRepository;
         this.partyRepository = partyRepository;
         this.personRepository = personRepository;
@@ -185,6 +188,8 @@ public class ContactRoleServiceImpl implements ContactRoleService {
     @Transactional
     public UpdateContactRolesResponse updateContactRoles(
             @NonNull UUID partyId, @NonNull UUID contactId, @NonNull UpdateContactRolesRequest request) {
+
+        houseAccountGuard.requireNotHouseAccount(partyId);
 
         // Verify party exists
         partyRepository

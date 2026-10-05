@@ -100,6 +100,8 @@ class SegmentServiceImplTest {
 
     private SegmentServiceImpl sut;
 
+    private final HouseAccountGuard houseAccountGuard = org.mockito.Mockito.mock(HouseAccountGuard.class);
+
     @BeforeEach
     void setUp() {
         sut = new SegmentServiceImpl(
@@ -109,7 +111,8 @@ class SegmentServiceImplTest {
                 segmentMemberRepository,
                 resolutionService,
                 marketingConsentService,
-                factPublisher);
+                factPublisher,
+                houseAccountGuard);
     }
 
     private static SegmentPredicate predicate() {
@@ -447,6 +450,20 @@ class SegmentServiceImplTest {
             assertThat(added.getValue()).extracting(SegmentMember::getPartyId).containsExactly(first, second);
             assertThat(added.getValue())
                     .allSatisfy(member -> assertThat(member.getAddedAt()).isEqualTo(NOW));
+        }
+
+        @Test
+        @DisplayName("checks the whole request for house accounts in one guard call, not one per party (#2505)")
+        void addMembers_checksHouseAccountsOnce() {
+            when(segmentRepository.findById(SEGMENT_ID)).thenReturn(Optional.of(segment(SegmentType.STATIC, null)));
+            when(segmentMemberRepository.findBySegmentIdAndPartyId(any(), any()))
+                    .thenReturn(Optional.empty());
+            List<UUID> partyIds = List.of(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
+
+            sut.addMembers(SEGMENT_ID, new SegmentMembersRequest(partyIds));
+
+            verify(houseAccountGuard).requireNoHouseAccount(partyIds);
+            verify(houseAccountGuard, org.mockito.Mockito.never()).requireNotHouseAccount(any());
         }
 
         @Test

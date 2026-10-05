@@ -90,6 +90,18 @@ public class GetPartyResponse {
     private String billingTermsId;
 
     /**
+     * House-account kind (CAP:550 S7): set only for a system house account.
+     */
+    @Schema(
+            description =
+                    "House-account kind when this party is a system house account (CASH_SALE is the tenant's walk-in CASH account, which no request can change); null or absent for every ordinary party. Recognise a house account from this value only, never from a name or customer number.",
+            example = "CASH_SALE",
+            allowableValues = "CASH_SALE",
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
+    private String houseAccount;
+
+    /**
      * Party creation timestamp (ISO 8601)
      */
     @Schema(

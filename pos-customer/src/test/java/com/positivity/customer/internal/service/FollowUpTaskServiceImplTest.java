@@ -48,7 +48,12 @@ class FollowUpTaskServiceImplTest {
     private PersonPartyRepository personPartyRepository;
 
     private FollowUpTaskServiceImpl service() {
-        return new FollowUpTaskServiceImpl(clock, taskRepository, commercialPartyRepository, personPartyRepository);
+        return new FollowUpTaskServiceImpl(
+                clock,
+                taskRepository,
+                commercialPartyRepository,
+                personPartyRepository,
+                org.mockito.Mockito.mock(HouseAccountGuard.class));
     }
 
     private static FollowUpTask openTask() {

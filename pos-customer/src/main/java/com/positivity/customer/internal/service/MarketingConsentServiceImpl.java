@@ -48,6 +48,7 @@ public class MarketingConsentServiceImpl implements MarketingConsentService {
     private final PersonPartyRepository personPartyRepository;
     private final ConsentEventRepository consentEventRepository;
     private final CustomerFactPublisher factPublisher;
+    private final HouseAccountGuard houseAccountGuard;
 
     @Override
     @Transactional(readOnly = true)
@@ -81,6 +82,7 @@ public class MarketingConsentServiceImpl implements MarketingConsentService {
     @Transactional
     public @NonNull MarketingConsentSummaryResponse updateConsent(
             @NonNull UUID partyId, @NonNull UpdateMarketingConsentRequest request) {
+        houseAccountGuard.requireNotHouseAccount(partyId);
         assertPartyExists(partyId);
         CommunicationPreference preference = preferenceRepository
                 .findByPartyId(partyId)
@@ -157,6 +159,8 @@ public class MarketingConsentServiceImpl implements MarketingConsentService {
     @Override
     @Transactional
     public @NonNull MarketingConsentSummaryResponse setAccountMarketingOptOut(@NonNull UUID partyId, boolean optOut) {
+        // The house account's marketing gate is provisioned shut and stays shut (#2505).
+        houseAccountGuard.requireNotHouseAccount(partyId);
         CommercialParty account = commercialPartyRepository
                 .findById(partyId)
                 .orElseThrow(() -> new CrmResourceNotFoundException("Commercial party", partyId));

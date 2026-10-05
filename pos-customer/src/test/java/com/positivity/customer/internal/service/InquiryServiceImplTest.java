@@ -56,7 +56,13 @@ class InquiryServiceImplTest {
 
     private InquiryServiceImpl service() {
         return new InquiryServiceImpl(
-                clock, inquiryRepository, commercialPartyRepository, personPartyRepository, partyService, 5);
+                clock,
+                inquiryRepository,
+                commercialPartyRepository,
+                personPartyRepository,
+                partyService,
+                org.mockito.Mockito.mock(HouseAccountGuard.class),
+                5);
     }
 
     private static SubmitInquiryRequest request(AudienceType audienceType, String email, String phone) {
