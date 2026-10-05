@@ -377,8 +377,9 @@ public class ReceivingServiceImpl implements ReceivingService {
             @NonNull UUID lineId,
             @NonNull CrossDockRequest request,
             @NonNull String actorUserId) {
+        // Locked first, before the idempotency lookup and the guard (#2455).
         ReceivingSession session = receivingSessionRepository
-                .findById(sessionId)
+                .findByIdForUpdate(sessionId)
                 .orElseThrow(() -> new ReceivingSessionNotFoundException("Receiving session not found: " + sessionId));
         ReceivingLine line = requireLine(session, lineId);
 
@@ -702,7 +703,8 @@ public class ReceivingServiceImpl implements ReceivingService {
     }
 
     private ReceivingSession resolveSessionForReceive(UUID sessionId) {
-        var sessionOptional = receivingSessionRepository.findById(sessionId);
+        // Locked: concurrent receives on one session serialise (#2455).
+        var sessionOptional = receivingSessionRepository.findByIdForUpdate(sessionId);
         if (sessionOptional.isPresent()) {
             return sessionOptional.get();
         }
