@@ -81,6 +81,14 @@ Requires `pos.invoice.kafka.enabled=true`; topic and consumer group are
 `POS_INVOICE_ACCOUNTING_EVENTS_TOPIC` (`accounting.events.v1`) and
 `POS_INVOICE_ACCOUNTING_EVENTS_CONSUMER_GROUP` (`pos-invoice-accounting-events`).
 
+## Kafka error handling and dead-lettering (ADR-0044 §4, #2483)
+
+With `pos.invoice.kafka.enabled=true`, `KafkaErrorHandlingConfig` installs a `DefaultErrorHandler` on
+every pos-invoice listener container: exponential backoff (1s, x2, capped at 30s, 5 retries), then a
+`DeadLetterPublishingRecoverer` publishes the record to `{topic}.dlq`. Listeners rethrow retryable
+failures (`RetryableConsumerFailures`) so they reach this handler; a record whose retries are
+exhausted is dead-lettered rather than logged and skipped.
+
 ## Location scope (ADR-0061, #1872)
 
 `@PreAuthorize` answers "may this caller manage invoices"; the caller's `LocationScope` (decoded
