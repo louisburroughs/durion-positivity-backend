@@ -335,6 +335,9 @@ those claims.
 - `GET /v1/users/{id}` — retrieve a user
 - `POST /v1/users/{id}/unlock` — admin: unlock account
 - `POST /v1/users/{id}/enable` / `disable` — admin: enable/disable account
+- `POST /v1/audit/exports` — request an asynchronous, tenant-scoped audit export (CSV or JSON, `DOWNLOAD` only; auth: `security:audit:export`); answers 202 with a `PENDING` job
+- `GET /v1/audit/exports/{jobId}` — poll a job: `PENDING` → `IN_PROGRESS` → `COMPLETED` (with `downloadUrl`) or `FAILED` (with `errorMessage`)
+- `GET /v1/audit/exports/{jobId}/download` — the completed job's file as an attachment; 409 `AUDIT_EXPORT_NOT_READY` until `COMPLETED`
 - `GET /v1/users/authorization/person-decision` — off-session check whether the user linked to a personId has a permission
 
 ## Error Responses
@@ -357,6 +360,7 @@ row in the same pull request as the controller or advice that mints the code.
 | Code | Status | Description |
 |------|--------|-------------|
 | `VALIDATION_ERROR` | 400 | This module's own field/reference validation failure (`SecurityValidationException`): a blank required field, a malformed permission key or bitset, an unsupported `perm_ver`. A role or user reference that does not resolve is `ROLE_NOT_FOUND` / `USER_NOT_FOUND` (404) since #1802. Aligned onto the fleet-wide spelling in #1730; it answered `INVALID_REQUEST` between #1694 and #1730 |
+| `AUDIT_EXPORT_WEBHOOK_UNSUPPORTED` | 400 | `POST /v1/audit/exports` with `deliveryMode: WEBHOOK`: no per-tenant webhook destination is designed yet, so only `DOWNLOAD` is accepted (#2408) |
 | `INVALID_REQUEST` | 400 | Request-binding failure raised by the framework before the controller runs — an unreadable body, a missing query parameter, a bean-validation rejection. A pre-existing code with consumers, so #1730 deliberately did **not** rename it. Clients that switch on validation codes should handle both this and `VALIDATION_ERROR` |
 | `INVALID_STATE` | 400 | An `IllegalStateException` from a service other than a role-assignment overlap |
 | `INVALID_CREDENTIALS` | 401 | Username or password is incorrect; also the code for a hidden unknown-user login and for any other authentication failure the entry point cannot name |
@@ -391,6 +395,7 @@ row in the same pull request as the controller or advice that mints the code.
 | `ROLE_TEMPLATE_IMMUTABLE` | 409 | Platform template roles cannot be deleted (ADR-0062) |
 | `USER_NOT_AWAITING_ACTIVATION` | 409 | Activation was attempted for a user who is not awaiting it |
 | `TENANT_NOT_IMPERSONABLE` | 409 | The tenant cannot be impersonated in its current state |
+| `AUDIT_EXPORT_NOT_READY` | 409 | `GET /v1/audit/exports/{jobId}/download` for a job that is not `COMPLETED` (still `PENDING`/`IN_PROGRESS`, or `FAILED`) (#2408) |
 | `TOKEN_USER_ID_MISSING` | 422 | `GET /v1/auth/user-id`: the token passed full validation but carries neither a `uid` nor a legacy `userId` claim (#1803). Not 401 — the token is genuine — and not 400 — it parsed; ADR-0017 §2 question 3 |
 | `INTERNAL_ERROR` | 500 | `JwtAuthenticationFilter`'s fail-closed catch-all for an unexpected failure while resolving the token (ADR-0056 §1) |
 
@@ -536,6 +541,8 @@ committed spec against the controllers' declarations and fails on drift in eithe
 | `pos.security-service.kafka.people-manifest-topic` | `people.manifest.v1` | Per-tenant reconciliation manifests for that read model; drift (compared against that tenant's `processed_events` rows) requests a replay on `people-commands-topic` under the manifest's tenant header |
 | `pos.security-service.location-scope.assigned-node-cap` | `8` | Assigned-node count above which `security.location-scope.assigned-nodes.cap-exceeded` fires (WARN + metric, never truncated) |
 | `pos.security-service.kafka.tenant-events-topic` | `tenant.events.v1` | Tenant registry facts (pos-tenant, ADR-0062 §7) feeding the `ext_tenant` replica |
+| `pos.security.audit-export.max-rows` (`POS_SECURITY_AUDIT_EXPORT_MAX_ROWS`) | `100000` | Most audit events one export may contain; a job whose filters match more ends `FAILED` asking for narrower filters (#2408) |
+| `pos.security.audit-export.stale-after` (`POS_SECURITY_AUDIT_EXPORT_STALE_AFTER`) | `PT30M` | A job still `PENDING`/`IN_PROGRESS` this long after it was requested is marked `FAILED` (interrupted) on its next read (#2408) |
 | `pos.tenancy.default-tenant-id` | alpha default tenant | Transitional binding for unbound requests and pre-WS2b tokens without `tid`; empty means strict |
 | `pos.tenancy.unenforced-paths` | `/v1/auth/` | Paths that run unbound even in strict mode (login resolves the tenant itself) |
 

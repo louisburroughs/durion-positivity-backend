@@ -9,9 +9,7 @@ import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
 import com.positivity.securityservice.internal.entity.AuditLogEvent;
 import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.repository.AuditLogEventRepository;
-import jakarta.persistence.criteria.Predicate;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -99,40 +97,8 @@ public class AuditEventServiceImpl implements AuditEventService {
     @Transactional(readOnly = true)
     public Page<AuditLogEventDto> searchEventsFiltered(
             @NonNull AuditEventSearchFilter filter, @NonNull Pageable pageable) {
-        if (filter.getFromDate() != null
-                && filter.getToDate() != null
-                && !filter.getFromDate().isBefore(filter.getToDate())) {
-            throw new SecurityValidationException("fromDate must be before toDate");
-        }
-
-        Specification<AuditLogEvent> specification = (root, query, cb) -> {
-            List<Predicate> predicates = new ArrayList<>();
-            if (filter.getFromDate() != null) {
-                predicates.add(cb.greaterThanOrEqualTo(root.get("timestamp"), filter.getFromDate()));
-            }
-            if (filter.getToDate() != null) {
-                predicates.add(cb.lessThan(root.get("timestamp"), filter.getToDate()));
-            }
-            if (!isBlank(filter.getEventType())) {
-                predicates.add(cb.equal(root.get("eventType"), filter.getEventType()));
-            }
-            if (!isBlank(filter.getActorId())) {
-                predicates.add(cb.equal(root.get("actorId"), filter.getActorId()));
-            }
-            if (!isBlank(filter.getAggregateId())) {
-                predicates.add(cb.equal(root.get("entityId"), filter.getAggregateId()));
-            }
-
-            // TODO(B-3): workorderId filter - column 'workorder_id' not yet indexed on
-            // audit_log_event; planned for follow-on story
-            // TODO(B-3): movementId filter - column not yet present on audit_log_event
-            // TODO(B-3): productId filter - column not yet present
-            // TODO(B-3): sku filter - column not yet present
-            // TODO(B-3): correlationId filter - column not yet present
-            // TODO(B-3): reasonCode filter - column not yet present
-            // TODO(B-3): locationIds filter - column not yet present
-            return cb.and(predicates.toArray(Predicate[]::new));
-        };
+        AuditEventQueries.validate(filter);
+        Specification<AuditLogEvent> specification = AuditEventQueries.specification(filter);
         return auditLogEventRepository.findAll(specification, pageable).map(this::toDto);
     }
 
@@ -171,17 +137,7 @@ public class AuditEventServiceImpl implements AuditEventService {
     }
 
     private AuditLogEventDto toDto(AuditLogEvent event) {
-        return AuditLogEventDto.builder()
-                .eventId(event.getEventId())
-                .timestamp(event.getTimestamp())
-                .eventType(event.getEventType())
-                .actorId(event.getActorId())
-                .entityId(event.getEntityId())
-                .entityType(event.getEntityType())
-                .oldValue(event.getOldValue())
-                .newValue(event.getNewValue())
-                .context(event.getContext())
-                .build();
+        return AuditEventQueries.toDto(event);
     }
 
     private boolean isBlank(String value) {

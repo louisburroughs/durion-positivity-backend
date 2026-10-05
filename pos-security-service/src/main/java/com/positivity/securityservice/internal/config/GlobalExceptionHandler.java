@@ -2,6 +2,8 @@ package com.positivity.securityservice.internal.config;
 
 import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
 import com.positivity.securityservice.internal.exception.ActivationTokenInvalidException;
+import com.positivity.securityservice.internal.exception.AuditExportNotReadyException;
+import com.positivity.securityservice.internal.exception.AuditExportWebhookUnsupportedException;
 import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
 import com.positivity.securityservice.internal.exception.DuplicateUsernameException;
 import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
@@ -519,6 +521,39 @@ public class GlobalExceptionHandler {
         log.warn("Template role delete refused (correlationId={}): {}", correlationId, ex.getMessage());
 
         return respond(HttpStatus.CONFLICT, "ROLE_TEMPLATE_IMMUTABLE", ex.getMessage(), correlationId);
+    }
+
+    /**
+     * Handles AuditExportWebhookUnsupportedException (#2408): WEBHOOK delivery has no designed,
+     * per-tenant destination yet, so the request is refused rather than queued.
+     *
+     * **HTTP Status:** 400 Bad Request
+     */
+    @ExceptionHandler(AuditExportWebhookUnsupportedException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ResponseEntity<ApiError> handleAuditExportWebhookUnsupportedException(
+            AuditExportWebhookUnsupportedException ex, WebRequest request) {
+
+        String correlationId = extractCorrelationId(request);
+        log.warn("Audit export WEBHOOK refused (correlationId={}): {}", correlationId, ex.getMessage());
+
+        return respond(HttpStatus.BAD_REQUEST, "AUDIT_EXPORT_WEBHOOK_UNSUPPORTED", ex.getMessage(), correlationId);
+    }
+
+    /**
+     * Handles AuditExportNotReadyException (#2408): the export job has no file yet, or failed.
+     *
+     * **HTTP Status:** 409 Conflict
+     */
+    @ExceptionHandler(AuditExportNotReadyException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ResponseEntity<ApiError> handleAuditExportNotReadyException(
+            AuditExportNotReadyException ex, WebRequest request) {
+
+        String correlationId = extractCorrelationId(request);
+        log.warn("Audit export download refused (correlationId={}): {}", correlationId, ex.getMessage());
+
+        return respond(HttpStatus.CONFLICT, "AUDIT_EXPORT_NOT_READY", ex.getMessage(), correlationId);
     }
 
     /**

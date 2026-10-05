@@ -10,6 +10,9 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.positivity.securityservice.internal.enums.AuditExportStatus;
+import com.positivity.securityservice.internal.exception.AuditExportNotReadyException;
+import com.positivity.securityservice.internal.exception.AuditExportWebhookUnsupportedException;
 import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
 import com.positivity.securityservice.internal.exception.DuplicateUsernameException;
 import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
@@ -725,6 +728,41 @@ class GlobalExceptionHandlerTest {
     }
 
     // ---------------------------------------------------------------
+    // audit export handlers (#2408)
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("audit export handlers")
+    class HandleAuditExportExceptions {
+
+        @Test
+        @DisplayName("WEBHOOK delivery returns 400 AUDIT_EXPORT_WEBHOOK_UNSUPPORTED")
+        void webhookReturns400() {
+            ResponseEntity<ApiError> response = sut.handleAuditExportWebhookUnsupportedException(
+                    new AuditExportWebhookUnsupportedException(), requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("AUDIT_EXPORT_WEBHOOK_UNSUPPORTED");
+        }
+
+        @Test
+        @DisplayName("a download before COMPLETED returns 409 AUDIT_EXPORT_NOT_READY")
+        void notReadyReturns409() {
+            ResponseEntity<ApiError> response = sut.handleAuditExportNotReadyException(
+                    new AuditExportNotReadyException(
+                            java.util.UUID.fromString("01960000-0000-7000-8000-000000000001"),
+                            AuditExportStatus.IN_PROGRESS),
+                    requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("AUDIT_EXPORT_NOT_READY");
+            assertThat(response.getBody().message()).contains("IN_PROGRESS");
+        }
+    }
+
+    // ---------------------------------------------------------------
     // handleTemplateRoleImmutableException (ADR-0062 section 6)
     // ---------------------------------------------------------------
 
@@ -1060,6 +1098,15 @@ class GlobalExceptionHandlerTest {
                     Named.of("handleDuplicateRoleNameException", (HandlerInvocation)
                             request -> handler.handleDuplicateRoleNameException(
                                     new DuplicateRoleNameException("Role 'ADMIN' already exists"), request)),
+                    Named.of("handleAuditExportWebhookUnsupportedException", (HandlerInvocation)
+                            request -> handler.handleAuditExportWebhookUnsupportedException(
+                                    new AuditExportWebhookUnsupportedException(), request)),
+                    Named.of("handleAuditExportNotReadyException", (HandlerInvocation)
+                            request -> handler.handleAuditExportNotReadyException(
+                                    new AuditExportNotReadyException(
+                                            java.util.UUID.fromString("01960000-0000-7000-8000-000000000001"),
+                                            AuditExportStatus.PENDING),
+                                    request)),
                     Named.of("handleTemplateRoleImmutableException", (HandlerInvocation)
                             request -> handler.handleTemplateRoleImmutableException(
                                     new TemplateRoleImmutableException("ADMIN", "ADMIN"), request)),
