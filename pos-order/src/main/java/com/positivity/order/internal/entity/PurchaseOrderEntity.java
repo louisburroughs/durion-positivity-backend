@@ -178,6 +178,14 @@ public class PurchaseOrderEntity extends TenantScopedEntity {
     @Column(name = "transmitted_version_number")
     private Integer transmittedVersionNumber;
 
+    /**
+     * {@link #transmittedVersionNumber} as it stood before the in-flight request overwrote it, so a
+     * request pos-supplier refuses to dispatch (#2492) can be undone without changing what the next
+     * send is classified as.
+     */
+    @Column(name = "prior_transmitted_version_number")
+    private Integer priorTransmittedVersionNumber;
+
     @OneToMany(mappedBy = "purchaseOrder", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
     private List<PurchaseOrderLineEntity> lines = new ArrayList<>();

@@ -14,6 +14,7 @@ import com.positivity.domainevents.supplier.SupplierCatalogRepublishRequestedV1;
 import com.positivity.domainevents.supplier.SupplierPriceCatalogRepublishRequestedV1;
 import com.positivity.supplier.internal.entity.ProcessedEvent;
 import com.positivity.supplier.internal.mktcat.service.MktCatRepublisher;
+import com.positivity.supplier.internal.order.service.OrderNotDispatchedPublisher;
 import com.positivity.supplier.internal.order.service.TransmissionIntentWriter;
 import com.positivity.supplier.internal.pricecatalog.service.PriceCatalogRepublisher;
 import com.positivity.supplier.internal.repository.ProcessedEventRepository;
@@ -57,6 +58,9 @@ class SupplierCommandListenerTest {
     @Mock
     private MktCatRepublisher mktCatRepublisher;
 
+    @Mock
+    private OrderNotDispatchedPublisher notDispatchedPublisher;
+
     private SupplierCommandListener listener;
 
     @BeforeEach
@@ -68,6 +72,7 @@ class SupplierCommandListenerTest {
                 intentWriter,
                 republisher,
                 mktCatRepublisher,
+                notDispatchedPublisher,
                 mock(PlatformTransactionManager.class));
     }
 
@@ -155,6 +160,63 @@ class SupplierCommandListenerTest {
         listener.onSupplierCommand(orderCommand("e-6"));
 
         assertThat(recorded().getOwner()).isEqualTo(SupplierCommandListener.ORDER_OWNER);
+    }
+
+    @Test
+    void answersAnUnconfiguredVendorWithNotDispatchedKeyedByThePurchaseOrder() {
+        UUID commandId = UUID.randomUUID();
+        when(intentWriter.mint(any(), anyString()))
+                .thenThrow(TransmissionIntentWriter.UnknownSupplierException.neverConfigured("michelin-eu"));
+
+        listener.onSupplierCommand(orderCommand(commandId.toString()));
+
+        verify(notDispatchedPublisher)
+                .publish(
+                        ORDER_ID,
+                        1,
+                        "michelin-eu",
+                        null,
+                        "no vendor profile for alias michelin-eu",
+                        commandId,
+                        "corr-1");
+        assertThat(recorded().getEventId()).isEqualTo(commandId.toString());
+    }
+
+    @Test
+    void answersADisabledVendorWithItsProfileId() {
+        UUID commandId = UUID.randomUUID();
+        when(intentWriter.mint(any(), anyString()))
+                .thenThrow(TransmissionIntentWriter.UnknownSupplierException.disabled("michelin-eu", PROFILE_ID));
+
+        listener.onSupplierCommand(orderCommand(commandId.toString()));
+
+        verify(notDispatchedPublisher)
+                .publish(
+                        ORDER_ID,
+                        1,
+                        "michelin-eu",
+                        PROFILE_ID,
+                        "vendor profile " + PROFILE_ID + " is disabled",
+                        commandId,
+                        "corr-1");
+    }
+
+    @Test
+    void recordsButDoesNotAnswerAnUnconfiguredVendorWhenTheCommandIdIsNotAUuid() {
+        when(intentWriter.mint(any(), anyString()))
+                .thenThrow(TransmissionIntentWriter.UnknownSupplierException.neverConfigured("michelin-eu"));
+
+        listener.onSupplierCommand(orderCommand("e-not-a-uuid"));
+
+        verifyNoInteractions(notDispatchedPublisher);
+        assertThat(recorded().getEventId()).isEqualTo("e-not-a-uuid");
+    }
+
+    @Test
+    void doesNotAnswerAnOrderThatMintedAnIntent() {
+        listener.onSupplierCommand(orderCommand(UUID.randomUUID().toString()));
+
+        verifyNoInteractions(notDispatchedPublisher);
     }
 
     @Test

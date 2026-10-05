@@ -305,6 +305,22 @@ is keyed by event id alone and every consumer records every event it sees, so a 
 topic would record ids the first group still had to act on — silently dropping purchase orders or
 recoveries depending on which group won the race.
 
+### Order commands for an unusable vendor — `supplier.order.notdispatched` (#2492)
+
+A `supplier.order.requested` command naming a vendor alias with no profile, or a disabled one, mints no
+transmission intent. `SupplierCommandListener` answers it with `supplier.order.notdispatched` v1 on
+`supplier.events.v1` (`SupplierOrderNotDispatchedV1`, reason `SUPPLIER_NOT_CONFIGURED`), written to the
+outbox in the **same transaction** as the command's `processed_events` mark, so a command is never
+recorded as consumed without pos-order being told. `vendorProfileId` is null when no profile exists and set
+when the profile is disabled; `detail` says which. The Kafka key and aggregate id are the purchase order id,
+the aggregate version is the requested revision, and `commandEventId` names the command answered.
+
+This is deliberately not `supplier.order.rejected`: no intent was minted, so there is no
+`transmissionIntentId` or document id and nothing the vendor refused. A never-dispatched PO gets **no**
+`supplier.orderstatus.changed` events, because there is no intent to poll. Nothing here re-sends;
+pos-order allows a manual re-send once the profile is configured or re-enabled. Deploy pos-order (which
+understands the event) before this producer.
+
 ### MKCAT re-publication on request (#2356)
 
 `supplier.catalog.republish.requested` on `supplier.commands.v1` (payload

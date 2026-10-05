@@ -369,4 +369,45 @@ class PurchaseOrderTransmissionServiceTest {
         assertThat(po.getTransmissionIntentId()).isNull();
         verify(purchaseOrderRepository).save(po);
     }
+
+    @Test
+    @DisplayName("re-sending a never-dispatched first send is INITIAL again (#2492)")
+    void resendAfterNotDispatchedFirstSendIsInitial() {
+        // State after SupplierOrderResultListener rolled the refused request back.
+        PurchaseOrderEntity po = order(PurchaseOrderStatus.APPROVED, TransmissionState.NOT_DISPATCHED);
+        po.setTransmissionCount(0);
+        po.setTransmittedVersionNumber(null);
+
+        service.requestTransmission(PO_ID, ACTOR);
+
+        assertThat(published().intentType()).isEqualTo(SupplierOrderRequestedV1.IntentType.INITIAL);
+        assertThat(po.getTransmissionState()).isEqualTo(TransmissionState.REQUESTED);
+    }
+
+    @Test
+    @DisplayName("re-sending a never-dispatched revision of a confirmed order is a REVISION again (#2492)")
+    void resendAfterNotDispatchedRevisionIsRevision() {
+        PurchaseOrderEntity po = order(PurchaseOrderStatus.APPROVED, TransmissionState.NOT_DISPATCHED);
+        po.setTransmissionCount(1);
+        po.setTransmittedVersionNumber(1);
+        po.setVersionNumber(2);
+
+        service.requestTransmission(PO_ID, ACTOR);
+
+        assertThat(published().intentType()).isEqualTo(SupplierOrderRequestedV1.IntentType.REVISION);
+    }
+
+    @Test
+    @DisplayName("the request remembers the previously transmitted version so a refusal can be undone (#2492)")
+    void requestCapturesThePriorTransmittedVersion() {
+        PurchaseOrderEntity po = order(PurchaseOrderStatus.APPROVED, TransmissionState.CONFIRMED);
+        po.setTransmissionCount(1);
+        po.setTransmittedVersionNumber(1);
+        po.setVersionNumber(2);
+
+        service.requestTransmission(PO_ID, ACTOR);
+
+        assertThat(po.getPriorTransmittedVersionNumber()).isEqualTo(1);
+        assertThat(po.getTransmittedVersionNumber()).isEqualTo(2);
+    }
 }

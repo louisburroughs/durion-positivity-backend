@@ -89,8 +89,8 @@ Over-settlement raises `order.payment.integrity-alert`. Applied price overrides 
 
 - `GET /v1/orders/purchase-orders/{poId}/transmission-events` (`listPurchaseOrderTransmissionEvents`,
   permission `order:purchase_order:view` — reused, not a new grant) returns a page of the purchase
-  order's append-only vendor observation timeline: every confirmation, rejection, status observation
-  and review escalation heard from pos-supplier about the order.
+  order's append-only vendor observation timeline: every confirmation, rejection, status observation,
+  not-dispatched notice and review escalation heard from pos-supplier about the order.
 - Ordering is the timeline's semantics, not a client choice: entries sort by the vendor's own clock
   (`observedAt` ascending), ties broken by platform receipt time (`recordedAt`), then by event id. The
   `sort` query parameter is accepted but ignored.
@@ -99,6 +99,28 @@ Over-settlement raises `order.payment.integrity-alert`. Applied price overrides 
   the vendor placed it, rather than silently reshuffling history.
 - An order that was never transmitted has an empty timeline (200), not a 404; a 404 means the purchase
   order itself does not exist.
+
+### Not dispatched (#2492)
+
+When the vendor is not set up for electronic ordering (no pos-supplier profile, or a disabled one),
+pos-supplier answers with `supplier.order.notdispatched` and `SupplierOrderResultListener` moves the order
+from `REQUESTED` to `TransmissionState.NOT_DISPATCHED`. Distinct from `REJECTED`: the vendor never saw the
+order, and a revised confirmed order still has its earlier version there.
+
+- Applied only while the order is `REQUESTED` **and** the event's `requestedRevision` equals the revision in
+  flight (`transmittedVersionNumber`); otherwise ignored and logged. The event is keyed by purchase order,
+  not intent, so it can arrive after a later request or answer.
+- The request's bookkeeping is rolled back: `transmissionCount` is decremented and
+  `transmittedVersionNumber` restored from `priorTransmittedVersionNumber` (captured at request time,
+  Flyway `V2__order_prior_transmitted_version.sql`). The next send is therefore `INITIAL` for a never-sent
+  order and `REVISION` for a revised confirmed one.
+- The timeline gets a `NOT_DISPATCHED` entry: `status` = `SUPPLIER_NOT_CONFIGURED`, `vendorReason` = "Not
+  sent: {supplierRef} is not set up for electronic ordering. The vendor has not received this order." plus
+  pos-supplier's detail (no profile for the alias vs profile disabled).
+- Next action: an administrator configures or re-enables the vendor profile, then the buyer sends the order
+  again (`transmit` is allowed from `NOT_DISPATCHED`) or orders outside the system. Nothing re-sends
+  automatically and there is no "mark as sent manually".
+- A never-dispatched PO gets no `supplier.orderstatus.changed` events.
 
 ## Error codes
 

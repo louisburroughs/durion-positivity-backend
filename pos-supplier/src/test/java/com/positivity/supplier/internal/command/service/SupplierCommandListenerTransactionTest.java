@@ -2,20 +2,27 @@ package com.positivity.supplier.internal.command.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.supplier.SupplierOrderRequestedV1;
+import com.positivity.supplier.internal.entity.SupplierOutboxEventEntity;
 import com.positivity.supplier.internal.entity.SupplierTransmissionIntentEntity;
 import com.positivity.supplier.internal.mktcat.service.MktCatRepublisher;
+import com.positivity.supplier.internal.order.service.OrderNotDispatchedPublisher;
 import com.positivity.supplier.internal.order.service.TransmissionIntentWriter;
 import com.positivity.supplier.internal.pricecatalog.service.PriceCatalogRepublisher;
 import com.positivity.supplier.internal.repository.ProcessedEventRepository;
 import com.positivity.supplier.internal.repository.SupplierAccountRepository;
+import com.positivity.supplier.internal.repository.SupplierOutboxEventRepository;
 import com.positivity.supplier.internal.repository.SupplierProfileRepository;
 import com.positivity.supplier.internal.repository.SupplierTransmissionIntentRepository;
 import com.positivity.supplier.internal.repository.SupplierTransmissionLineRepository;
+import com.positivity.supplier.internal.service.SupplierOutboxEventWriter;
 import com.positivity.tenancy.TenantContext;
 import com.positivity.tenancy.testing.TenantTestSupport;
 import java.time.Clock;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -29,6 +36,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
+import org.springframework.dao.QueryTimeoutException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
@@ -83,13 +91,21 @@ class SupplierCommandListenerTransactionTest {
     @Autowired
     private MktCatRepublisher mktCatRepublisher;
 
+    @Autowired
+    private SupplierOutboxEventRepository outboxRepository;
+
+    @Autowired
+    private OrderNotDispatchedPublisher notDispatchedPublisher;
+
     private SupplierCommandListener listener;
     private String eventId;
+    private UUID orderId;
 
     @BeforeEach
     void setUp() {
         TenantContext.bind(TenantTestSupport.TENANT_A);
         eventId = UUID.randomUUID().toString();
+        orderId = UUID.randomUUID();
         intentWriter.reset();
         listener = new SupplierCommandListener(
                 Clock.systemUTC(),
@@ -98,6 +114,7 @@ class SupplierCommandListenerTransactionTest {
                 intentWriter,
                 republisher,
                 mktCatRepublisher,
+                notDispatchedPublisher,
                 transactionManager);
     }
 
@@ -134,6 +151,56 @@ class SupplierCommandListenerTransactionTest {
         assertHandlerFailedInsideTransactionAndCommandWasRecorded();
     }
 
+    @Test
+    @DisplayName("An unconfigured vendor commits the not-dispatched outbox row together with the processed mark")
+    void unknownVendorWritesNotDispatchedOutboxRowAndProcessedMark() {
+        listener.onSupplierCommand(orderCommandForUnknownVendor());
+
+        assertThat(processedEventRepository.existsById(eventId)).isTrue();
+        List<SupplierOutboxEventEntity> rows = notDispatchedRows();
+        assertThat(rows).hasSize(1);
+        assertThat(rows.getFirst().getTopic()).isEqualTo("supplier.events.v1");
+        assertThat(rows.getFirst().getRecordKey()).isEqualTo(orderId.toString());
+        assertThat(rows.getFirst().getPayload())
+                .contains(eventId)
+                .contains("SUPPLIER_NOT_CONFIGURED")
+                .contains("no vendor profile for alias no-such-vendor");
+    }
+
+    @Test
+    @DisplayName("If the answer cannot be queued, the processed mark rolls back with it")
+    void failureWritingTheAnswerLeavesTheCommandUnprocessed() {
+        SupplierCommandListener failing = new SupplierCommandListener(
+                Clock.systemUTC(),
+                new ObjectMapper(),
+                processedEventRepository,
+                intentWriter,
+                republisher,
+                mktCatRepublisher,
+                new OrderNotDispatchedPublisher(
+                        new SupplierOutboxEventWriter(null, null, null) {
+                            @Override
+                            public void publish(@NonNull String topic, @NonNull DomainEventEnvelope<?> envelope) {
+                                throw new QueryTimeoutException("outbox down");
+                            }
+                        },
+                        Clock.systemUTC()),
+                transactionManager);
+
+        assertThatThrownBy(() -> failing.onSupplierCommand(orderCommandForUnknownVendor()))
+                .isInstanceOf(QueryTimeoutException.class);
+
+        assertThat(processedEventRepository.existsById(eventId)).isFalse();
+        assertThat(notDispatchedRows()).isEmpty();
+    }
+
+    private List<SupplierOutboxEventEntity> notDispatchedRows() {
+        return outboxRepository.findAll().stream()
+                .filter(row -> "supplier.order.notdispatched".equals(row.getEventType()))
+                .filter(row -> row.getPayload().contains(orderId.toString()))
+                .toList();
+    }
+
     private void assertHandlerFailedInsideTransactionAndCommandWasRecorded() {
         assertThat(intentWriter.sawActiveTransaction())
                 .as("the writer must have run inside a transaction for this test to prove anything")
@@ -144,7 +211,6 @@ class SupplierCommandListenerTransactionTest {
     }
 
     private String orderCommandForUnknownVendor() {
-        UUID orderId = UUID.randomUUID();
         return """
                 {"eventId":"%s","eventType":"supplier.order.requested","schemaVersion":1,
                  "aggregateId":"%s","aggregateVersion":0,"occurredAtUtc":"2026-08-14T11:59:00Z",

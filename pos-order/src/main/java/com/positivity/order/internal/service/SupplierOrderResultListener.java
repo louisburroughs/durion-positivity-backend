@@ -1,6 +1,7 @@
 package com.positivity.order.internal.service;
 
 import com.positivity.domainevents.supplier.SupplierOrderConfirmedV1;
+import com.positivity.domainevents.supplier.SupplierOrderNotDispatchedV1;
 import com.positivity.domainevents.supplier.SupplierOrderRejectedV1;
 import com.positivity.domainevents.supplier.SupplierOrderReviewRequiredV1;
 import com.positivity.domainevents.supplier.SupplierOrderStatusChangedV1;
@@ -131,6 +132,8 @@ public class SupplierOrderResultListener {
                     applyStatusChanged(envelope);
                 } else if (SupplierOrderReviewRequiredV1.EVENT_TYPE.equals(eventType)) {
                     applyReviewRequired(envelope);
+                } else if (SupplierOrderNotDispatchedV1.EVENT_TYPE.equals(eventType)) {
+                    applyNotDispatched(envelope);
                 } else {
                     log.debug("Ignoring supplier event type={} eventId={}", eventType, eventId);
                 }
@@ -243,8 +246,11 @@ public class SupplierOrderResultListener {
 
         // An order the vendor has already answered is not dragged back into limbo by a late
         // escalation about an earlier attempt.
+        // NOT_DISPATCHED is a newer, settled fact (#2492): an escalation can only be about an
+        // earlier intent, and would block the re-send the buyer is entitled to.
         if (order.getTransmissionState() == TransmissionState.CONFIRMED
-                || order.getTransmissionState() == TransmissionState.REJECTED) {
+                || order.getTransmissionState() == TransmissionState.REJECTED
+                || order.getTransmissionState() == TransmissionState.NOT_DISPATCHED) {
             log.debug("Ignoring review-required for {}: already answered", fact.purchaseOrderId());
             return;
         }
@@ -273,6 +279,87 @@ public class SupplierOrderResultListener {
                 fact.purchaseOrderId(),
                 fact.documentId(),
                 fact.detail());
+    }
+
+    /**
+     * pos-supplier refused to dispatch the request: the vendor is not set up for electronic
+     * ordering, so it has never seen this order (#2492).
+     *
+     * <p>Applied only while the order is {@code REQUESTED} <em>and</em> the requested revision is
+     * the one in flight. This event is keyed by purchase order, not by transmission intent, so it
+     * can arrive after the order has moved on: a later request, a vendor answer, or an escalation
+     * all make it stale, and acting on a stale one would undo a newer state.
+     *
+     * <p>Applying it undoes the request's bookkeeping, so the next send is classified exactly as
+     * this one was ({@code INITIAL} for a never-sent order, {@code REVISION} for a revised
+     * confirmed one) rather than as a re-order of something the vendor never received.
+     */
+    private void applyNotDispatched(JsonNode envelope) {
+        SupplierOrderNotDispatchedV1 fact =
+                objectMapper.treeToValue(envelope.path(PAYLOAD), SupplierOrderNotDispatchedV1.class);
+        PurchaseOrderEntity order = orderFor(fact.purchaseOrderId());
+        if (order == null) {
+            return;
+        }
+
+        if (order.getTransmissionState() != TransmissionState.REQUESTED) {
+            log.info(
+                    "Ignoring not-dispatched for {}: order is {}, not awaiting an answer",
+                    fact.purchaseOrderId(),
+                    order.getTransmissionState());
+            return;
+        }
+        int inFlightRevision =
+                order.getTransmittedVersionNumber() == null ? 0 : Math.max(0, order.getTransmittedVersionNumber());
+        if (inFlightRevision != fact.requestedRevision()) {
+            log.info(
+                    "Ignoring not-dispatched for {}: it answers revision {} but revision {} is in flight",
+                    fact.purchaseOrderId(),
+                    fact.requestedRevision(),
+                    inFlightRevision);
+            return;
+        }
+
+        int count = order.getTransmissionCount() == null ? 0 : order.getTransmissionCount();
+        order.setTransmissionCount(Math.max(0, count - 1));
+        order.setTransmittedVersionNumber(order.getPriorTransmittedVersionNumber());
+        order.setPriorTransmittedVersionNumber(null);
+
+        String message = notDispatchedMessage(fact);
+        String timelineText = truncate1024(message + " Detail: " + fact.detail());
+        order.setTransmissionState(TransmissionState.NOT_DISPATCHED);
+        order.setTransmissionRejectionReason(fact.reason().name());
+        order.setTransmissionVendorReason(message);
+        order.setTransmissionObservedAt(fact.occurredAt());
+        purchaseOrderRepository.save(order);
+
+        record(
+                fact.purchaseOrderId(),
+                null,
+                "NOT_DISPATCHED",
+                fact.reason().name(),
+                null,
+                null,
+                timelineText,
+                null,
+                null,
+                fact.occurredAt());
+
+        log.warn(
+                "Purchase order {} not dispatched to {}: {}",
+                fact.purchaseOrderId(),
+                fact.supplierRef(),
+                fact.detail());
+    }
+
+    /** The buyer-facing explanation; pos-supplier's detail goes on the timeline entry only. */
+    static String notDispatchedMessage(SupplierOrderNotDispatchedV1 fact) {
+        return truncate1024("Not sent: " + fact.supplierRef() + " is not set up for electronic ordering."
+                + " The vendor has not received this order.");
+    }
+
+    private static String truncate1024(String value) {
+        return value.length() <= 1024 ? value : value.substring(0, 1024);
     }
 
     private void applyStatusChanged(JsonNode envelope) {
@@ -307,8 +394,11 @@ public class SupplierOrderResultListener {
         }
         // An outcome already reached is not revisited by a poll. A vendor that has confirmed or
         // refused has decided, and a status observation is a weaker statement than a decision.
+        // NOT_DISPATCHED too (#2492): polling of an earlier confirmed intent continues, and its
+        // observations describe the earlier version, not this refused request.
         if (order.getTransmissionState() == TransmissionState.CONFIRMED
-                || order.getTransmissionState() == TransmissionState.REJECTED) {
+                || order.getTransmissionState() == TransmissionState.REJECTED
+                || order.getTransmissionState() == TransmissionState.NOT_DISPATCHED) {
             order.setTransmissionObservedAt(fact.observedAt());
             order.setSupplierOrderNumber(
                     fact.supplierOrderNumber() == null ? order.getSupplierOrderNumber() : fact.supplierOrderNumber());

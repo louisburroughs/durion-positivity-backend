@@ -543,7 +543,7 @@ public class PurchaseOrderController {
             summary = "List Purchase Order Transmission Events",
             description = """
                     Returns a page of the purchase order's append-only vendor transmission timeline: every \
-                    confirmation, rejection, status observation and review escalation heard about the order, \
+                    confirmation, rejection, status observation, not-dispatched notice and review escalation heard about the order, \
                     including the despatchDate and estimatedDeliveryDate a status observation may carry.
                     Use this tool when a buyer chasing an order needs what happened to it, not just where it \
                     stands; use getPurchaseOrder instead for the order's current transmission state, which this \

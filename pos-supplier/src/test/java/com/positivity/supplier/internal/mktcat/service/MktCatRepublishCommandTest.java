@@ -16,6 +16,7 @@ import com.positivity.supplier.internal.domain.model.MarketingVariant;
 import com.positivity.supplier.internal.domain.model.SupplierRef;
 import com.positivity.supplier.internal.entity.SupplierMktCatVariantEntity;
 import com.positivity.supplier.internal.entity.SupplierOutboxEventEntity;
+import com.positivity.supplier.internal.order.service.OrderNotDispatchedPublisher;
 import com.positivity.supplier.internal.order.service.TransmissionIntentWriter;
 import com.positivity.supplier.internal.pricecatalog.service.PriceCatalogRepublisher;
 import com.positivity.supplier.internal.repository.ProcessedEventRepository;
@@ -148,6 +149,7 @@ class MktCatRepublishCommandTest extends PostgresSliceTestBase {
                 mock(TransmissionIntentWriter.class),
                 mock(PriceCatalogRepublisher.class),
                 republisher,
+                mock(OrderNotDispatchedPublisher.class),
                 transactionManager);
     }
 

@@ -166,7 +166,10 @@ class TransmissionIntentWriterTest {
         when(profileRepository.findBySupplierRef("michelin-eu")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> writer.mint(command(SupplierOrderRequestedV1.IntentType.INITIAL, 0), "corr-1"))
-                .isInstanceOf(TransmissionIntentWriter.UnknownSupplierException.class);
+                .isInstanceOfSatisfying(TransmissionIntentWriter.UnknownSupplierException.class, e -> {
+                    assertThat(e.getVendorProfileId()).isNull();
+                    assertThat(e.getDetail()).isEqualTo("no vendor profile for alias michelin-eu");
+                });
     }
 
     @Test
@@ -178,6 +181,9 @@ class TransmissionIntentWriterTest {
         when(profileRepository.findBySupplierRef("michelin-eu")).thenReturn(Optional.of(disabled));
 
         assertThatThrownBy(() -> writer.mint(command(SupplierOrderRequestedV1.IntentType.INITIAL, 0), "corr-1"))
-                .isInstanceOf(TransmissionIntentWriter.UnknownSupplierException.class);
+                .isInstanceOfSatisfying(TransmissionIntentWriter.UnknownSupplierException.class, e -> {
+                    assertThat(e.getVendorProfileId()).isEqualTo(PROFILE_ID);
+                    assertThat(e.getDetail()).isEqualTo("vendor profile " + PROFILE_ID + " is disabled");
+                });
     }
 }
