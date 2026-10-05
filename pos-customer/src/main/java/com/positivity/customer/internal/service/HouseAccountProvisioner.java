@@ -31,6 +31,8 @@ import org.springframework.stereotype.Component;
  * provisioned tenant is a no-op, and when two instances race, the loser's insert is refused by the
  * partial unique index and counted as already provisioned, with no second fact. A tenant whose
  * transaction fails is logged at WARN and retried on the next sweep; the other tenants proceed.
+ * A sweep over an incomplete registry snapshot provisions the tenants it lists and says so at WARN:
+ * a tenant missing from the snapshot gets its account from the next sweep that sees it.
  *
  * <p>{@code pos.customer.house-account.enabled=false} removes the bean, which is how a test
  * context that must not see a house account switches it off.
@@ -87,7 +89,13 @@ public class HouseAccountProvisioner implements ApplicationRunner {
             fixedDelayString = "${pos.customer.house-account.sweep-interval-ms:3600000}",
             initialDelayString = "${pos.customer.house-account.sweep-interval-ms:3600000}")
     public void sweep() {
-        tenantIterator.forEachActiveTenant(this::provisionTenant);
+        TenantIterator.Sweep result = tenantIterator.sweep(this::provisionTenant);
+        if (!result.completeTenantList()) {
+            // The registry could not vouch for the whole fleet (pos-tenant unreachable, say). The
+            // tenants it did list were provisioned; any it is missing wait for a later sweep.
+            log.warn("The tenant registry snapshot was incomplete for this house account sweep; a tenant missing"
+                    + " from it has no CASH house account until the next sweep that sees it");
+        }
     }
 
     /**
@@ -119,13 +127,28 @@ public class HouseAccountProvisioner implements ApplicationRunner {
 
     /**
      * The insert was refused. If the tenant now has its account, another instance won the race on
-     * the unique index and theirs is ours; anything else is a real failure.
+     * the unique index and theirs is ours; anything else is a real failure. One such failure never
+     * heals by itself — an ordinary party already numbered {@code CASH} — so it is reported at ERROR
+     * with the tenant and that party, where the transient ones stay at WARN.
      */
     private Outcome afterRefusedInsert(UUID tenantId, DataIntegrityViolationException refused) {
         try {
             if (provisioningService.cashAccountExists()) {
                 log.debug("CASH house account for tenant {} was provisioned concurrently", tenantId);
                 return Outcome.EXISTING;
+            }
+            Optional<UUID> numberHolder = provisioningService.findCashCustomerNumberHolder();
+            if (numberHolder.isPresent()) {
+                // Not something a later sweep cures: customer numbers are unique per tenant, and
+                // an ordinary party already has the one the house account needs.
+                log.error(
+                        "House account provisioning is blocked for tenant {}: party {} already holds customer number"
+                                + " {}. Renumber that party; every sweep fails for this tenant until then",
+                        tenantId,
+                        numberHolder.get(),
+                        HouseAccountProvisioningService.CASH_CUSTOMER_NUMBER,
+                        refused);
+                return Outcome.FAILED;
             }
         } catch (RuntimeException e) {
             refused.addSuppressed(e);

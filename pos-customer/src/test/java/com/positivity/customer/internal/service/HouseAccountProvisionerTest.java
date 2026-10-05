@@ -7,6 +7,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
 import com.positivity.tenancy.TenantContext;
 import com.positivity.tenancy.TenantIterator;
 import com.positivity.tenancy.TenantRegistry;
@@ -129,6 +130,29 @@ class HouseAccountProvisionerTest {
     }
 
     @Test
+    @DisplayName("a party already numbered CASH blocks provisioning: ERROR naming the tenant and that party")
+    void customerNumberCollisionIsReportedAtError() {
+        UUID holder = UUID.fromString("01980a58-0000-7000-8000-0000000000c9");
+        when(provisioningService.createCashAccountIfMissing())
+                .thenThrow(new DataIntegrityViolationException("commercial_party_customer_number_key"));
+        when(provisioningService.cashAccountExists()).thenReturn(false);
+        when(provisioningService.findCashCustomerNumberHolder()).thenReturn(Optional.of(holder));
+
+        try (LogCapture logs = LogCapture.of(HouseAccountProvisioner.class)) {
+            assertThat(provisioner().provisionTenant(TENANT_A)).isEqualTo(HouseAccountProvisioner.Outcome.FAILED);
+
+            // Not a transient failure the next sweep cures: an operator has to renumber that party.
+            assertThat(logs.messagesAt(Level.ERROR))
+                    .singleElement()
+                    .asString()
+                    .contains(TENANT_A.toString())
+                    .contains(holder.toString())
+                    .contains("CASH");
+        }
+        assertThat(count("failed")).isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("one tenant's failure does not stop the others")
     void failureIsIsolatedPerTenant() {
         when(provisioningService.createCashAccountIfMissing())
@@ -140,6 +164,51 @@ class HouseAccountProvisionerTest {
         verify(provisioningService, times(2)).createCashAccountIfMissing();
         assertThat(count("failed")).isEqualTo(1);
         assertThat(count("created")).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("an incomplete tenant registry is reported at WARN; the tenants it does list are provisioned")
+    void incompleteRegistryIsReported() {
+        TenantRegistry incomplete = new TenantRegistry() {
+            @Override
+            public List<UUID> activeTenantIds() {
+                return List.of(TENANT_A);
+            }
+
+            @Override
+            public Snapshot snapshot() {
+                return new Snapshot(activeTenantIds(), false);
+            }
+        };
+        @SuppressWarnings("unchecked")
+        ObjectProvider<MeterRegistry> meterProvider = mock(ObjectProvider.class);
+        when(meterProvider.getIfAvailable()).thenReturn(meters);
+        when(provisioningService.createCashAccountIfMissing()).thenReturn(Optional.of(PARTY_ID));
+        HouseAccountProvisioner provisioner =
+                new HouseAccountProvisioner(new TenantIterator(incomplete), provisioningService, meterProvider);
+
+        try (LogCapture logs = LogCapture.of(HouseAccountProvisioner.class)) {
+            provisioner.sweep();
+
+            assertThat(count("created")).isEqualTo(1);
+            assertThat(logs.messagesAt(Level.WARN))
+                    .singleElement()
+                    .asString()
+                    .contains("incomplete")
+                    .contains("next sweep");
+        }
+    }
+
+    @Test
+    @DisplayName("a complete tenant registry raises no warning")
+    void completeRegistryIsQuiet() {
+        when(provisioningService.createCashAccountIfMissing()).thenReturn(Optional.of(PARTY_ID));
+
+        try (LogCapture logs = LogCapture.of(HouseAccountProvisioner.class)) {
+            provisioner().sweep();
+
+            assertThat(logs.messagesAt(Level.WARN)).isEmpty();
+        }
     }
 
     @Test

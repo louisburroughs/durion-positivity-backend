@@ -370,7 +370,7 @@ public class CrmPartyRelationshipController {
                 principal != null ? principal.getName() : ANONYMOUS);
 
         UUID userId = extractUserId(principal);
-        partyRelationshipService.deactivateRelationship(relationshipId, userId);
+        partyRelationshipService.deactivateRelationship(partyId, relationshipId, userId);
 
         return ResponseEntity.noContent().build();
     }

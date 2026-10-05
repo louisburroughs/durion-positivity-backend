@@ -93,6 +93,17 @@ tenant whose transaction fails is logged at WARN and retried on the next sweep. 
 pos-customer consumes `tenant.events.v1`. Provisioning only creates the account; no earlier sale, invoice or
 party is reassigned to it (AW13). Counter: `customer.house_account.provisioned{outcome=created|existing|failed}`.
 
+Three log lines call for an operator:
+
+- **ERROR `House account provisioning is blocked for tenant … party … already holds customer number CASH`.** The
+  number is unique per tenant and the legacy `POST /v1/crm` / `PUT /v1/crm/{id}` paths take a caller-supplied
+  number as given. Renumber the named party; every sweep fails for that tenant until then.
+- **WARN `… was created while fact publication is disabled`.** The account was created in a profile with no
+  outbox writer, so no `customer.party.updated` fact was queued and no sweep will queue one later. Once
+  publication is on, call `POST /v1/crm/accounts/facts/replay` so consumers learn of the account.
+- **WARN `The tenant registry snapshot was incomplete …`.** The tenants the registry listed were provisioned; one
+  it was missing (`pos-tenant` unreachable at that moment) gets its account from the next sweep that sees it.
+
 **Fact and reads.** `CustomerPartyUpdatedV1` carries `houseAccount` (`"CASH_SALE"` for the house account,
 `null` for every other party; additive within schema version 1, and fact replay re-emits it).
 `GetPartyResponse`, `SearchPartiesResponse.PartySummary` and `CustomerDTO` carry the same field. Browse and
@@ -109,12 +120,18 @@ of these writes, so every one answers `409 HOUSE_ACCOUNT_IMMUTABLE` when its tar
 - `PUT /v1/crm/parties/{partyId}/contacts/{contactId}/roles`
 - `POST /v1/crm/parties/{partyId}/follow-ups`, `POST /v1/crm/parties/{partyId}/interactions`
 - `POST /v1/crm/commercial-accounts/{partyId}/relationships`, `PUT …/relationships/{relationshipId}/primary-billing`,
-  `DELETE …/relationships/{relationshipId}`
+  `DELETE …/relationships/{relationshipId}` (the path party, and the account the relationship belongs to)
 - `POST /v1/crm/parties/{partyId}/tags`, `DELETE /v1/crm/parties/{partyId}/tags/{tagId}`
+- `POST /v1/crm/inquiries/{inquiryId}/convert` when `existingPartyId` names the house account (an inquiry carries
+  a person's contact details)
 - `POST /v1/crm/segments/{segmentId}/members` (any listed party), `DELETE /v1/crm/segments/{segmentId}/members/{partyId}`
 
 The guard's lookup runs under the bound tenant, so another tenant's house account id is simply not found
 (ADR-0062). A new write that takes a party id must call the guard too.
+
+Facts are not requests, so they are never refused: when a `vehicle.events.v1` fact names the house account as
+a vehicle's owner, `VehicleEventsListener` still writes the `ext_vehicle` replica row but skips the party
+association and logs a WARN, rather than failing the consumer.
 
 **Left out of pos-customer's own analytics.** Segment candidates, attribute previews and static membership
 (`SegmentResolutionService`), the duplicate check (`checkPartyDuplicates`), and tier resolution

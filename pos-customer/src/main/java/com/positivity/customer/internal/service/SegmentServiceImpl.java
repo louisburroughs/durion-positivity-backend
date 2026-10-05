@@ -147,8 +147,8 @@ public class SegmentServiceImpl implements SegmentService {
     public @NonNull SegmentResponse addMembers(@NonNull UUID segmentId, @NonNull SegmentMembersRequest request) {
         Segment segment = requireSegment(segmentId);
         // A house account is never a segment member (#2505): the whole request is refused before
-        // any member is pinned, rather than silently dropping the one id.
-        request.getPartyIds().forEach(houseAccountGuard::requireNotHouseAccount);
+        // any member is pinned, rather than silently dropping the one id. One lookup for the lot.
+        houseAccountGuard.requireNoHouseAccount(request.getPartyIds());
         if (segment.getType() != SegmentType.STATIC) {
             throw new CrmUnprocessableEntityException(
                     "Members can only be pinned on a STATIC segment; this segment is DYNAMIC");

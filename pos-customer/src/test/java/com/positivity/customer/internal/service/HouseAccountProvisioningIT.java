@@ -15,12 +15,14 @@ import com.positivity.customer.internal.dto.CreateCommercialAccountRequest;
 import com.positivity.customer.internal.dto.DuplicateCheckResponse;
 import com.positivity.customer.internal.dto.MergePartiesRequest;
 import com.positivity.customer.internal.dto.SearchPartiesResponse;
+import com.positivity.customer.internal.dto.SubmitInquiryRequest;
 import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.entity.Segment;
 import com.positivity.customer.internal.enums.AccountStatus;
 import com.positivity.customer.internal.enums.AccountTier;
 import com.positivity.customer.internal.enums.AudienceType;
 import com.positivity.customer.internal.enums.HouseAccountKind;
+import com.positivity.customer.internal.enums.InquiryChannel;
 import com.positivity.customer.internal.enums.LifecycleStage;
 import com.positivity.customer.internal.enums.SegmentOperator;
 import com.positivity.customer.internal.enums.SegmentType;
@@ -91,7 +93,10 @@ class HouseAccountProvisioningIT extends PostgresTenancyTestBase {
     /** A tenant no sweep ever visits; only the race test provisions it. */
     private static final UUID TENANT_RACE = UUID.fromString("01900000-0000-7000-8000-0000000000c4");
 
-    private static final List<UUID> TENANTS = List.of(TENANT_A, TENANT_B, TENANT_LATE, TENANT_RACE);
+    /** A tenant whose customer number {@code CASH} is already taken by an ordinary party. */
+    private static final UUID TENANT_COLLISION = UUID.fromString("01900000-0000-7000-8000-0000000000c5");
+
+    private static final List<UUID> TENANTS = List.of(TENANT_A, TENANT_B, TENANT_LATE, TENANT_RACE, TENANT_COLLISION);
 
     @TestConfiguration
     static class ProvisioningTestConfig {
@@ -149,6 +154,9 @@ class HouseAccountProvisioningIT extends PostgresTenancyTestBase {
     private PartyService partyService;
 
     @Autowired
+    private InquiryService inquiryService;
+
+    @Autowired
     private SegmentResolutionService segmentResolution;
 
     @Autowired
@@ -162,6 +170,8 @@ class HouseAccountProvisioningIT extends PostgresTenancyTestBase {
     /** Ordinary parties this class created, removed with everything else at the end. */
     private final List<UUID> createdParties = new CopyOnWriteArrayList<>();
 
+    private final List<UUID> createdInquiries = new CopyOnWriteArrayList<>();
+
     @AfterEach
     void unbind() {
         TenantContext.clear();
@@ -169,6 +179,7 @@ class HouseAccountProvisioningIT extends PostgresTenancyTestBase {
 
     @AfterAll
     void removeWhatThisClassCommitted() {
+        createdInquiries.forEach(inquiryId -> owner.update("DELETE FROM inquiry WHERE inquiry_id = ?", inquiryId));
         List<UUID> partyIds = new ArrayList<>(createdParties);
         for (UUID tenant : TENANTS) {
             partyIds.addAll(owner.queryForList(
@@ -296,7 +307,83 @@ class HouseAccountProvisioningIT extends PostgresTenancyTestBase {
                 .hasMessageContaining("commercial_party_house_account_chk");
     }
 
+    @Test
+    @DisplayName("a party already numbered CASH blocks provisioning for its tenant, and is named")
+    void aCustomerNumberCollisionFailsAndNamesTheHolder() {
+        // The legacy customer API stores a caller-supplied customer number as given.
+        UUID holder = asTenant(TENANT_COLLISION, () -> {
+            CommercialParty ordinary = new CommercialParty();
+            ordinary.setLegalName("Cash And Carry Ltd");
+            ordinary.setDisplayName("Cash And Carry");
+            ordinary.setCustomerNumber(HouseAccountProvisioningService.CASH_CUSTOMER_NUMBER);
+            return parties.saveAndFlush(ordinary).getPartyId();
+        });
+        createdParties.add(holder);
+
+        HouseAccountProvisioner.Outcome outcome =
+                asTenant(TENANT_COLLISION, () -> provisioner.provisionTenant(TENANT_COLLISION));
+
+        assertThat(outcome).isEqualTo(HouseAccountProvisioner.Outcome.FAILED);
+        assertThat(houseAccountRows(TENANT_COLLISION)).isEmpty();
+        assertThat(asTenant(TENANT_COLLISION, () -> provisioningService.findCashCustomerNumberHolder()))
+                .contains(holder);
+        // Another tenant's CASH number is its own: tenant A's house account is not a collision here.
+        assertThat(asTenant(TENANT_A, () -> provisioningService.findCashCustomerNumberHolder()))
+                .isEmpty();
+    }
+
     // ---- guards, end to end ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("an inquiry cannot be converted by linking it to the house account")
+    void inquiryConversionOntoTheHouseAccountIsRefused() {
+        UUID house = houseAccountId(TENANT_A);
+        UUID inquiryId = asTenant(
+                TENANT_A,
+                () -> inquiryService
+                        .capture(new SubmitInquiryRequest(
+                                InquiryChannel.WEB_FORM,
+                                AudienceType.INDIVIDUAL,
+                                "Jane Doe",
+                                null,
+                                "jane.doe@example.test",
+                                null,
+                                null,
+                                null,
+                                null,
+                                null))
+                        .inquiryId());
+        createdInquiries.add(inquiryId);
+
+        asTenant(
+                TENANT_A,
+                () -> assertThatThrownBy(() -> inquiryService.convert(inquiryId, house))
+                        .isInstanceOf(HouseAccountImmutableException.class));
+
+        Map<String, Object> inquiry =
+                owner.queryForMap("SELECT status, party_id FROM inquiry WHERE inquiry_id = ?", inquiryId);
+        assertThat(inquiry.get("status")).isEqualTo("NEW");
+        assertThat(inquiry.get("party_id")).isNull();
+    }
+
+    @Test
+    @DisplayName("static segment membership refuses a request naming the house account, in one lookup")
+    void theBatchGuardFindsTheHouseAccountAmongOrdinaryIds() {
+        UUID house = houseAccountId(TENANT_A);
+        UUID ordinary = createOrdinaryParty(TENANT_A, "Batch Guard " + UUID.randomUUID());
+
+        asTenant(TENANT_A, () -> {
+            assertThat(parties.findHouseAccountIdsIn(List.of(ordinary, house, UUID.randomUUID())))
+                    .containsExactly(house);
+            assertThatThrownBy(() -> guard.requireNoHouseAccount(List.of(ordinary, house)))
+                    .isInstanceOf(HouseAccountImmutableException.class);
+            assertThatCode(() -> guard.requireNoHouseAccount(List.of(ordinary))).doesNotThrowAnyException();
+        });
+        // Another tenant's house account is not a row here, so it is not found either.
+        asTenant(
+                TENANT_B,
+                () -> assertThat(parties.findHouseAccountIdsIn(List.of(house))).isEmpty());
+    }
 
     @Test
     @DisplayName("AC4: merging the house account as survivor or loser changes nothing and queues no fact")

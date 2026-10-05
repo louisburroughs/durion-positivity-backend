@@ -4,6 +4,7 @@ import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.enums.HouseAccountKind;
 import com.positivity.tenancy.TenantAudited;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -41,6 +42,19 @@ public interface CommercialPartyRepository
      * row this tenant can see, so it answers false (ADR-0062).
      */
     boolean existsByPartyIdAndHouseAccountIsNotNull(@NonNull UUID partyId);
+
+    /**
+     * Which of the given parties are house accounts of the bound tenant — one query for a whole
+     * request's worth of ids (static segment membership), instead of one lookup per id.
+     */
+    @Query("SELECT p.partyId FROM CommercialParty p WHERE p.houseAccount IS NOT NULL AND p.partyId IN :partyIds")
+    List<UUID> findHouseAccountIdsIn(@Param("partyIds") @NonNull Collection<UUID> partyIds);
+
+    /**
+     * A commercial party of the bound tenant holding exactly this customer number. Used to name the
+     * party that blocks provisioning when something else already took the house account's number.
+     */
+    Optional<CommercialParty> findFirstByCustomerNumber(@NonNull String customerNumber);
 
     /** The bound tenant's house account of the given kind, if it has been provisioned. */
     Optional<CommercialParty> findByHouseAccount(@NonNull HouseAccountKind houseAccount);

@@ -2,6 +2,8 @@ package com.positivity.customer.internal.service;
 
 import com.positivity.customer.internal.exception.HouseAccountImmutableException;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
+import java.util.Collection;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
@@ -34,6 +36,22 @@ public class HouseAccountGuard {
     public void requireNotHouseAccount(@NonNull UUID partyId) {
         if (commercialPartyRepository.existsByPartyIdAndHouseAccountIsNotNull(partyId)) {
             throw new HouseAccountImmutableException(partyId);
+        }
+    }
+
+    /**
+     * Refuse the write when any of {@code partyIds} is a house account of the bound tenant — the
+     * whole request, not just that id. One lookup however many ids the request carries.
+     *
+     * @throws HouseAccountImmutableException naming the first house account found
+     */
+    public void requireNoHouseAccount(@NonNull Collection<UUID> partyIds) {
+        if (partyIds.isEmpty()) {
+            return;
+        }
+        List<UUID> houseAccounts = commercialPartyRepository.findHouseAccountIdsIn(partyIds);
+        if (!houseAccounts.isEmpty()) {
+            throw new HouseAccountImmutableException(houseAccounts.getFirst());
         }
     }
 }

@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
 import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.enums.AccountStatus;
 import com.positivity.customer.internal.enums.AccountTier;
@@ -79,6 +80,67 @@ class HouseAccountProvisioningServiceTest {
         InOrder order = inOrder(repository, factPublisher);
         order.verify(repository).saveAndFlush(account);
         order.verify(factPublisher).partyChanged(account);
+    }
+
+    @Test
+    @DisplayName("warns that consumers need a fact replay when the account is created with publication off")
+    void warnsWhenCreatedWithoutFactPublication() {
+        when(repository.findByHouseAccount(HouseAccountKind.CASH_SALE)).thenReturn(Optional.empty());
+        when(repository.saveAndFlush(any(CommercialParty.class))).thenAnswer(invocation -> {
+            CommercialParty saved = invocation.getArgument(0);
+            saved.setPartyId(PARTY_ID);
+            return saved;
+        });
+        when(factPublisher.publicationEnabled()).thenReturn(false);
+
+        try (LogCapture logs = LogCapture.of(HouseAccountProvisioningService.class)) {
+            assertThat(service.createCashAccountIfMissing()).contains(PARTY_ID);
+
+            assertThat(logs.messagesAt(Level.WARN))
+                    .singleElement()
+                    .asString()
+                    .contains(PARTY_ID.toString())
+                    .contains("facts/replay");
+        }
+    }
+
+    @Test
+    @DisplayName("says nothing about a replay when the fact was queued")
+    void noReplayWarningWhenPublicationIsOn() {
+        when(repository.findByHouseAccount(HouseAccountKind.CASH_SALE)).thenReturn(Optional.empty());
+        when(repository.saveAndFlush(any(CommercialParty.class))).thenAnswer(invocation -> {
+            CommercialParty saved = invocation.getArgument(0);
+            saved.setPartyId(PARTY_ID);
+            return saved;
+        });
+        when(factPublisher.publicationEnabled()).thenReturn(true);
+
+        try (LogCapture logs = LogCapture.of(HouseAccountProvisioningService.class)) {
+            service.createCashAccountIfMissing();
+
+            assertThat(logs.messagesAt(Level.WARN)).isEmpty();
+        }
+    }
+
+    @Test
+    @DisplayName("names the ordinary party that already holds customer number CASH")
+    void findsTheCustomerNumberHolder() {
+        CommercialParty holder = new CommercialParty();
+        holder.setPartyId(PARTY_ID);
+        when(repository.findFirstByCustomerNumber("CASH")).thenReturn(Optional.of(holder));
+
+        assertThat(service.findCashCustomerNumberHolder()).contains(PARTY_ID);
+    }
+
+    @Test
+    @DisplayName("the house account itself is not a collision")
+    void theHouseAccountIsNotItsOwnCollision() {
+        CommercialParty house = new CommercialParty();
+        house.setPartyId(PARTY_ID);
+        house.setHouseAccount(HouseAccountKind.CASH_SALE);
+        when(repository.findFirstByCustomerNumber("CASH")).thenReturn(Optional.of(house));
+
+        assertThat(service.findCashCustomerNumberHolder()).isEmpty();
     }
 
     @Test

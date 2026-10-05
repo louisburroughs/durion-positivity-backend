@@ -87,8 +87,8 @@ public class CrmInteractionController {
                     Use this tool when logging a manual customer touch; do not use listPartyInteractions, \
                     which reads the timeline, and note that campaign and workorder interactions are ingested \
                     from events rather than through this endpoint.
-                    Preconditions: none are checked against the party; the interaction is stored against the \
-                    supplied partyId as-is.
+                    Preconditions: the party must not be the tenant's system house account; otherwise the \
+                    party is not checked, and the interaction is stored against the supplied partyId as-is.
                     Required inputs: partyId (UUID) as a path parameter and type (CAMPAIGN_SEND, EMAIL, SMS, \
                     CALL, FOLLOW_UP, NOTE, or WORKORDER_NOTE) in the body; direction defaults to OUTBOUND, \
                     occurredAt defaults to now, and channel accepts EMAIL or SMS.

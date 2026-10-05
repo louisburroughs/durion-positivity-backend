@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
  * consents or communication preferences, and marketing is gated off at the account level.
  * Go-live only (AW13): provisioning creates the account and reassigns nothing to it.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class HouseAccountProvisioningService {
@@ -83,7 +85,28 @@ public class HouseAccountProvisioningService {
         // from the repository, before any fact is queued.
         CommercialParty saved = commercialPartyRepository.saveAndFlush(account);
         customerFactPublisher.partyChanged(saved);
+        if (!customerFactPublisher.publicationEnabled()) {
+            // No outbox writer in this profile, so partyChanged queued nothing and no sweep ever
+            // will: the account exists from here on and is never re-announced on its own.
+            log.warn(
+                    "CASH house account {} was created while fact publication is disabled; consumers will only"
+                            + " learn of it through POST /v1/crm/accounts/facts/replay once publication is enabled",
+                    saved.getPartyId());
+        }
         return Optional.of(saved.getPartyId());
+    }
+
+    /**
+     * The ordinary party of the bound tenant that already holds customer number {@code CASH}, if
+     * any. Such a party makes provisioning impossible until an operator renumbers it: the number is
+     * unique per tenant, and the legacy customer API accepts a caller-supplied number verbatim.
+     */
+    @Transactional(readOnly = true)
+    public @NonNull Optional<UUID> findCashCustomerNumberHolder() {
+        return commercialPartyRepository
+                .findFirstByCustomerNumber(CASH_CUSTOMER_NUMBER)
+                .filter(party -> party.getHouseAccount() == null)
+                .map(CommercialParty::getPartyId);
     }
 
     /** Whether the bound tenant already has its CASH house account. */

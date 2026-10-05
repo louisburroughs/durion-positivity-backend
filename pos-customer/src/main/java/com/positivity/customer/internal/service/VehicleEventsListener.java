@@ -288,6 +288,18 @@ public class VehicleEventsListener {
         findParty(payload.accountId())
                 .ifPresentOrElse(
                         owner -> {
+                            if (isHouseAccount(owner)) {
+                                // The CASH house account never holds a vehicle (#2505). This is the
+                                // vehicle owner's fact, not a request, so there is nobody to refuse:
+                                // skip the association and keep consuming — throwing here would
+                                // poison the partition. The replica row above is still written.
+                                log.warn(
+                                        "Vehicle {} names house account {} as its owner; no vehicle is attached to a"
+                                                + " house account, association skipped",
+                                        payload.vehicleId(),
+                                        owner.getPartyId());
+                                return;
+                            }
                             owner.addVehicleVin(vin);
                             saveParty(owner);
                         },
@@ -297,6 +309,10 @@ public class VehicleEventsListener {
                                 "No CRM party {} for vehicle {}; association skipped",
                                 payload.accountId(),
                                 payload.vehicleId()));
+    }
+
+    private static boolean isHouseAccount(AbstractParty party) {
+        return party instanceof CommercialParty commercial && commercial.getHouseAccount() != null;
     }
 
     private java.util.Optional<AbstractParty> findParty(UUID partyId) {

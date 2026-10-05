@@ -2,6 +2,7 @@ package com.positivity.customer.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockingDetails;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -22,8 +23,10 @@ import com.positivity.customer.internal.dto.UpdateMarketingConsentRequest;
 import com.positivity.customer.internal.dto.UpsertBillingRulesRequest;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesRequest;
 import com.positivity.customer.internal.entity.CommercialParty;
+import com.positivity.customer.internal.entity.Inquiry;
 import com.positivity.customer.internal.entity.PartyRelationship;
 import com.positivity.customer.internal.entity.Segment;
+import com.positivity.customer.internal.enums.InquiryStatus;
 import com.positivity.customer.internal.exception.HouseAccountImmutableException;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.CommunicationPreferenceRepository;
@@ -32,6 +35,7 @@ import com.positivity.customer.internal.repository.ContactRoleAssignmentReposito
 import com.positivity.customer.internal.repository.CustomerInteractionRepository;
 import com.positivity.customer.internal.repository.ExtVehicleRepository;
 import com.positivity.customer.internal.repository.FollowUpTaskRepository;
+import com.positivity.customer.internal.repository.InquiryRepository;
 import com.positivity.customer.internal.repository.PartyRelationshipRepository;
 import com.positivity.customer.internal.repository.PartyTagAssignmentRepository;
 import com.positivity.customer.internal.repository.PartyTagRepository;
@@ -72,6 +76,8 @@ class HouseAccountGuardedWritesTest {
     private static final UUID OTHER_ID = UUID.fromString("01980a58-0000-7000-8000-0000000000c3");
     private static final UUID RELATIONSHIP_ID = UUID.fromString("01980a58-0000-7000-8000-0000000000c4");
     private static final UUID SEGMENT_ID = UUID.fromString("01980a58-0000-7000-8000-0000000000c5");
+    private static final UUID RELATIONSHIP_OF_ORDINARY = UUID.fromString("01980a58-0000-7000-8000-0000000000c6");
+    private static final UUID INQUIRY_ID = UUID.fromString("01980a58-0000-7000-8000-0000000000c7");
 
     /** Every service a guarded endpoint delegates to, built over mocks and the real guard. */
     static final class Fixture {
@@ -88,6 +94,7 @@ class HouseAccountGuardedWritesTest {
         final PartyTagAssignmentRepository tagAssignments = mock(PartyTagAssignmentRepository.class);
         final SegmentRepository segments = mock(SegmentRepository.class);
         final SegmentMemberRepository segmentMembers = mock(SegmentMemberRepository.class);
+        final InquiryRepository inquiries = mock(InquiryRepository.class);
         final CustomerFactPublisher factPublisher = mock(CustomerFactPublisher.class);
 
         @SuppressWarnings("unchecked")
@@ -144,6 +151,8 @@ class HouseAccountGuardedWritesTest {
                 mock(MarketingConsentService.class),
                 factPublisher,
                 guard);
+        final InquiryServiceImpl inquiry = new InquiryServiceImpl(
+                clock, inquiries, commercialParties, personParties, mock(PartyService.class), guard, 5);
 
         Fixture() {
             when(commercialParties.existsByPartyIdAndHouseAccountIsNotNull(HOUSE))
@@ -158,7 +167,21 @@ class HouseAccountGuardedWritesTest {
             PartyRelationship ofHouseAccount = mock(PartyRelationship.class);
             when(ofHouseAccount.getFromParty()).thenReturn(houseAccount);
             when(relationships.findById(RELATIONSHIP_ID)).thenReturn(Optional.of(ofHouseAccount));
+            // A relationship of an ordinary account, reached through the house account's path.
+            PartyRelationship ofOrdinary = mock(PartyRelationship.class);
+            when(ofOrdinary.getFromParty()).thenReturn(ordinary);
+            when(relationships.findById(RELATIONSHIP_OF_ORDINARY)).thenReturn(Optional.of(ofOrdinary));
             when(segments.findById(SEGMENT_ID)).thenReturn(Optional.of(mock(Segment.class)));
+            when(commercialParties.findHouseAccountIdsIn(argThat(ids -> ids != null && ids.contains(HOUSE))))
+                    .thenReturn(List.of(HOUSE));
+            // An open inquiry, with the contact details that must never reach the house account.
+            Inquiry open = new Inquiry();
+            open.setInquiryId(INQUIRY_ID);
+            open.setStatus(InquiryStatus.NEW);
+            open.setContactName("Jane Doe");
+            open.setEmail("jane@example.test");
+            when(inquiries.findById(INQUIRY_ID)).thenReturn(Optional.of(open));
+            when(commercialParties.existsById(HOUSE)).thenReturn(true);
         }
 
         List<Object> repositories() {
@@ -174,7 +197,8 @@ class HouseAccountGuardedWritesTest {
                     tags,
                     tagAssignments,
                     segments,
-                    segmentMembers);
+                    segmentMembers,
+                    inquiries);
         }
     }
 
@@ -236,8 +260,15 @@ class HouseAccountGuardedWritesTest {
                         "PUT /v1/crm/commercial-accounts/{partyId}/relationships/{relationshipId}/primary-billing",
                         f -> f.relationship.designatePrimaryBillingContact(HOUSE, RELATIONSHIP_ID, OTHER_ID)),
                 path(
-                        "DELETE /v1/crm/commercial-accounts/{partyId}/relationships/{relationshipId}",
-                        f -> f.relationship.deactivateRelationship(RELATIONSHIP_ID, OTHER_ID)),
+                        "DELETE /v1/crm/commercial-accounts/{partyId}/relationships/{relationshipId} (path party)",
+                        f -> f.relationship.deactivateRelationship(HOUSE, RELATIONSHIP_OF_ORDINARY, OTHER_ID)),
+                path(
+                        "DELETE /v1/crm/commercial-accounts/{partyId}/relationships/{relationshipId} (relationship's"
+                                + " own account)",
+                        f -> f.relationship.deactivateRelationship(ORDINARY, RELATIONSHIP_ID, OTHER_ID)),
+                path(
+                        "POST /v1/crm/inquiries/{inquiryId}/convert with existingPartyId",
+                        f -> f.inquiry.convert(INQUIRY_ID, HOUSE)),
                 path("POST /v1/crm/parties/{partyId}/tags", f -> f.tag.assignTag(HOUSE, new AssignPartyTagRequest())),
                 path("DELETE /v1/crm/parties/{partyId}/tags/{tagId}", f -> f.tag.removeTag(HOUSE, OTHER_ID)),
                 path(

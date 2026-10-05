@@ -265,6 +265,8 @@ public class CrmInquiryController {
                     Returns 404 when the inquiry or the supplied existingPartyId cannot be found, and 422 \
                     when the inquiry is already CONVERTED or CLOSED, or when an individual inquiry has no \
                     party to link.
+                    Returns 409 HOUSE_ACCOUNT_IMMUTABLE when existingPartyId is the tenant's system house account \
+                    (the CASH walk-in account), which no inquiry can be linked to.
                     """)
     @ApiResponses({
         @ApiResponse(
@@ -278,6 +280,11 @@ public class CrmInquiryController {
         @ApiResponse(
                 responseCode = "422",
                 description = "Illegal transition, or an individual inquiry with no party to link",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "409",
+                description =
+                        "HOUSE_ACCOUNT_IMMUTABLE: existingPartyId is the tenant's system house account (the CASH walk-in account), which no inquiry can be linked to",
                 content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
         @ApiResponse(
                 responseCode = "403",

@@ -375,7 +375,7 @@ class PartyRelationshipServiceImplTest {
             PartyRelationship existing = relationship(Set.of(PartyRelationshipRole.BILLING), null);
             when(partyRelationshipRepository.findById(RELATIONSHIP_ID)).thenReturn(Optional.of(existing));
 
-            service.deactivateRelationship(RELATIONSHIP_ID, USER_ID);
+            service.deactivateRelationship(PARTY_ID, RELATIONSHIP_ID, USER_ID);
 
             assertThat(existing.getEffectiveEndDate()).isEqualTo(TODAY);
             assertThat(existing.getUpdatedBy()).isEqualTo(USER_ID);
@@ -387,7 +387,7 @@ class PartyRelationshipServiceImplTest {
         void failsForAnUnknownRelationship() {
             when(partyRelationshipRepository.findById(RELATIONSHIP_ID)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> service.deactivateRelationship(RELATIONSHIP_ID, USER_ID))
+            assertThatThrownBy(() -> service.deactivateRelationship(PARTY_ID, RELATIONSHIP_ID, USER_ID))
                     .isInstanceOf(ResponseStatusException.class)
                     .hasMessageContaining("Relationship not found");
         }

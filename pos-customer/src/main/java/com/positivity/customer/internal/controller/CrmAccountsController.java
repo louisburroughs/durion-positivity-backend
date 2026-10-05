@@ -765,7 +765,7 @@ public class CrmAccountsController {
                 @ApiResponse(
                         responseCode = "409",
                         description =
-                                "HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant's system house account (the CASH walk-in account), which no request can change",
+                                "Conflict - the VIN is already associated with this party; or HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant's system house account (the CASH walk-in account), which no request can change",
                         content =
                                 @Content(
                                         mediaType = "application/json",

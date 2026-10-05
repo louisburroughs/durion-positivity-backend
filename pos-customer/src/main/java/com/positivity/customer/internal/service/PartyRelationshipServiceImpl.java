@@ -267,13 +267,16 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
      */
     @Override
     @Transactional
-    public void deactivateRelationship(@NonNull UUID relationshipId, UUID userId) {
+    public void deactivateRelationship(@NonNull UUID partyId, @NonNull UUID relationshipId, UUID userId) {
         log.info("Deactivating relationship: {}", relationshipId);
+        // The account named in the path is refused first, so the route answers 409 for the house
+        // account whatever relationship id rides along (#2505).
+        houseAccountGuard.requireNotHouseAccount(partyId);
 
         PartyRelationship relationship = partyRelationshipRepository
                 .findById(relationshipId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Relationship not found"));
-        // This method takes no party id; the account the relationship belongs to is the target.
+        // And the account the relationship actually belongs to, which the path does not pin.
         houseAccountGuard.requireNotHouseAccount(relationship.getFromParty().getPartyId());
 
         LocalDate today = LocalDate.now(clock);
