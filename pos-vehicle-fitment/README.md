@@ -22,7 +22,7 @@ Vehicle fitment and part applicability service for the Durion Positivity ETSMS p
 
 - `POST /v1/fitments` — create a part fitment
 - `GET /v1/fitments/product/{productId}` — fitments for a product
-- `GET /v1/fitments/makes/{manufacturerId}` — makes for a manufacturer
+- `GET /v1/fitments/makes/{manufacturerId}` — makes linked to a manufacturer (a make is one row per vPIC Make_ID, linked many-to-many to manufacturers through `make_manufacturer`; `MakeResponse.manufacturerIds` lists them all)
 - `GET /v1/fitments/manufacturers` — list all manufacturers
 - `GET /v1/fitments/models/{makeId}` — models for a make
 - `GET /v1/fitments/vehicle-types/{makeId}` — vehicle types for a make
