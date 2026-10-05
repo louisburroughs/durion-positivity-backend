@@ -4,6 +4,8 @@ import com.positivity.vehiclefitment.internal.entity.Make;
 import com.positivity.vehiclefitment.internal.entity.Manufacturer;
 import com.positivity.vehiclefitment.internal.entity.Model;
 import com.positivity.vehiclefitment.internal.entity.VehicleType;
+import java.util.Comparator;
+import java.util.UUID;
 
 public final class VehicleFitmentMapper {
     private VehicleFitmentMapper() {}
@@ -19,10 +21,10 @@ public final class VehicleFitmentMapper {
         return MakeResponse.builder()
                 .id(make.getId())
                 .name(make.getName())
-                .manufacturerId(
-                        make.getManufacturer() == null
-                                ? null
-                                : make.getManufacturer().getId())
+                .manufacturerIds(make.getManufacturers().stream()
+                        .map(Manufacturer::getId)
+                        .sorted(Comparator.comparing(UUID::toString))
+                        .toList())
                 .build();
     }
 

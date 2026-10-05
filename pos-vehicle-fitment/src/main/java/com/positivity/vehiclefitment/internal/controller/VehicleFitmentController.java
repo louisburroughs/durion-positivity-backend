@@ -55,8 +55,8 @@ public class VehicleFitmentController {
     }
 
     @Operation(operationId = "listMakesByManufacturer", summary = "List Makes for a Manufacturer", description = """
-                    Returns all vehicle makes recorded for one manufacturer, served from a local cache of the NHTSA \
-                    vPIC registry.
+                    Returns all vehicle makes linked to one manufacturer (a make shared by several manufacturers is \
+                    listed under each, with the same id), served from a local cache of the NHTSA vPIC registry.
                     Use this tool after picking a manufacturer from listManufacturers; do not use listModelsByMake, \
                     which descends one level further and needs a makeId taken from this response.
                     Preconditions: the manufacturer must already exist in the local cache under the supplied id; ids \

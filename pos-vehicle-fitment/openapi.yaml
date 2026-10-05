@@ -388,7 +388,7 @@ paths:
       - vehicle-fitment:hint:update
   /v1/vehicle-fitment/makes/{manufacturerId}:
     get:
-      description: 'Returns all vehicle makes recorded for one manufacturer, served from a local cache of the NHTSA vPIC registry.
+      description: 'Returns all vehicle makes linked to one manufacturer (a make shared by several manufacturers is listed under each, with the same id), served from a local cache of the NHTSA vPIC registry.
 
         Use this tool after picking a manufacturer from listManufacturers; do not use listModelsByMake, which descends one level further and needs a makeId taken from this response.
 
@@ -904,17 +904,20 @@ components:
           example: 550e8400-e29b-41d4-a716-446655440010
           format: uuid
           type: string
-        manufacturerId:
-          description: Manufacturer identifier for this make
-          example: 550e8400-e29b-41d4-a716-446655440001
-          format: uuid
-          type: string
+        manufacturerIds:
+          description: Identifiers of every manufacturer this make is linked to, sorted. A make is a brand and one vPIC make can be built by several manufacturers, so it appears under each of them with this same id.
+          example: '["550e8400-e29b-41d4-a716-446655440001"]'
+          items:
+            format: uuid
+            type: string
+          type: array
         name:
           description: Make name
           example: Camry
           type: string
       required:
       - id
+      - manufacturerIds
       - name
       type: object
     ManufacturerResponse:

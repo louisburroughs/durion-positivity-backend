@@ -81,6 +81,14 @@ Active on the Kafka rails (any profile but `dev`/`test`/`pg`, or `local-kafka`);
 `POS_INVOICE_ACCOUNTING_EVENTS_TOPIC` (`accounting.events.v1`) and
 `POS_INVOICE_ACCOUNTING_EVENTS_CONSUMER_GROUP` (`pos-invoice-accounting-events`).
 
+## Kafka error handling and dead-lettering (ADR-0044 §4, #2483)
+
+With `pos.invoice.kafka.enabled=true`, `KafkaErrorHandlingConfig` installs a `DefaultErrorHandler` on
+every pos-invoice listener container: exponential backoff (1s, x2, capped at 30s, 5 retries), then a
+`DeadLetterPublishingRecoverer` publishes the record to `{topic}.dlq`. Listeners rethrow retryable
+failures (`RetryableConsumerFailures`) so they reach this handler; a record whose retries are
+exhausted is dead-lettered rather than logged and skipped.
+
 ## Location scope (ADR-0061, #1872)
 
 `@PreAuthorize` answers "may this caller manage invoices"; the caller's `LocationScope` (decoded
@@ -224,7 +232,7 @@ Uses Flyway with PostgreSQL. Migrations at `src/main/resources/db/migration`.
 
 A manifest listener that finds drift sends the owner's `outbox.replay-requested` command through
 `OutboxReplayRequests`, which waits up to 30s for the broker's acknowledgement. A request that cannot
-be handed to Kafka, that the broker rejects, or that is not acknowledged in time propagates to the container's error handler. This module declares no `KafkaErrorHandlingConfig` yet, so Spring Kafka's default handler retries and then logs and skips the record; a backoff and `{topic}.dlq` handler is still to be added (#2483).
+be handed to Kafka, that the broker rejects, or that is not acknowledged in time propagates to the container's error handler. `KafkaErrorHandlingConfig` retries the record with backoff and then dead-letters it to `{topic}.dlq` (#2483).
 Swallowing it would lose the repair for good, because each owner publishes a window's manifest once
 and no later manifest covers that window again. Redelivery is safe: a manifest writes nothing, the
 comparison only reads, and the replay command is keyed by window start. A manifest that does not parse

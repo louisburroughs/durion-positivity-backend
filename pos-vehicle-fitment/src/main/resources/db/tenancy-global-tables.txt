@@ -3,6 +3,7 @@
 # TenancySchemaConformanceIT (plan WS1) reads this file.
 fitment_tags  # fitment reference data (ADR-0062 section 5)
 make  # fitment reference data (ADR-0062 section 5)
+make_manufacturer  # fitment reference data (ADR-0062 section 5)
 manufacturer  # fitment reference data (ADR-0062 section 5)
 model  # fitment reference data (ADR-0062 section 5)
 part_fitment_entity  # fitment reference data (ADR-0062 section 5)
