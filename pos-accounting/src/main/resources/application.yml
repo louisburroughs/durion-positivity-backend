@@ -110,6 +110,18 @@ pos:
       # answer the ADR-0061 location-scope check on the Labor & Overhead report (#1885)
       location-events-topic: ${POS_ACCOUNTING_KAFKA_LOCATION_EVENTS_TOPIC:location.events.v1}
       location-events-consumer-group: ${POS_ACCOUNTING_KAFKA_LOCATION_EVENTS_CONSUMER_GROUP:pos-accounting-location-events}
+      # Tenant lifecycle facts: tenant.created provisions the new tenant's chart of accounts, GL mapping
+      # defaults, statement lines and policy defaults from the accounting template (#2526). The group
+      # reads from the earliest offset, so facts retained from before this consumer existed are processed once.
+      tenant-events-topic: ${POS_ACCOUNTING_KAFKA_TENANT_EVENTS_TOPIC:tenant.events.v1}
+      tenant-events-consumer-group: ${POS_ACCOUNTING_KAFKA_TENANT_EVENTS_CONSUMER_GROUP:pos-accounting-tenant-events}
+    # The accounting template held in the platform tenant (#2526; ADR-0062 section 6).
+    tenant-template:
+      startup-sweep:
+        # At each start, apply the template to every registry tenant: it provisions the alpha default
+        # tenant (which has no tenant.created fact) and carries template additions to tenants
+        # provisioned earlier. Never blocks startup.
+        enabled: ${POS_ACCOUNTING_TENANT_TEMPLATE_STARTUP_SWEEP_ENABLED:true}
 
 # Payment Gateway Configuration
 payment:

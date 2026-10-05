@@ -34,6 +34,8 @@ tags:
   name: Location Cost Reporting
 - description: Accounts Payable vendor payment operations
   name: AP Payments
+- description: The chart of accounts and mapping defaults a tenant receives
+  name: Accounting Tenant Template
 - description: 'Bank transactions as the bank reported them: reads, duplicate review, exclude and restore.'
   name: Bank Transactions
 - description: Endpoints for vendor bill creation, matching, retrieval, and exception resolution
@@ -10612,6 +10614,107 @@ paths:
       - Settlement Reconciliation
       x-required-permissions:
       - accounting:reconciliation:view
+  /v1/accounting/tenant-template/add-ons/retread-plant:
+    put:
+      description: 'Turns the retread-plant add-on on for the caller''s tenant: the GL accounts only a shop that runs a retread plant needs (curing consumables, MRT equipment depreciation and leases, inventory charge, scrapped casings, production adjustments, rubber dust sales) and their Labor & Overhead report lines.
+
+        Use this tool once, at tenant setup, when the shop runs a retread plant; do not use createGLAccount, which adds one account without its report line and leaves the tenant''s choice unrecorded.
+
+        Preconditions: caller holds accounting:coa:create. There is no switching off: nothing the template provisioned is ever removed. Idempotent: a replayed requestId, or a call for a tenant that already has the add-on, changes nothing and returns the current state.
+
+        Required inputs: justification (at least 10 characters) and requestId. The tenant is the caller''s own, taken from the token.
+
+        Emits an ACCOUNTING_TENANT_TEMPLATE_ADD_ON_ENABLE event, writes one audit row naming the caller, and returns 200 with the tenant''s template status after the accounts and lines were added; an account the tenant already holds under one of the add-on''s codes is adopted when it is the same account and reported under attention when it is not.
+
+        '
+      operationId: enableRetreadPlantAddOn
+      requestBody:
+        content:
+          application/json:
+            examples:
+              A shop with a retread plant:
+                description: A shop with a retread plant
+                value:
+                  justification: We run a retread plant at the Tulsa shop
+                  requestId: 019a0000-0000-7000-8000-000000000009
+            schema:
+              $ref: '#/components/schemas/EnableTemplateAddOnRequest'
+        description: Why the tenant needs the add-on, and the id naming this request.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantTemplateStatusResponse'
+          description: The add-on is on; the tenant's standing against the template
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Missing or short justification, or missing requestId (VALIDATION_ERROR)
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No tenant on the request (TENANT_REQUIRED)
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:coa:create
+      security:
+      - bearerAuth:
+        - accounting:coa:create
+      summary: Enable Retread Plant Accounting Add-On
+      tags:
+      - Accounting Tenant Template
+      x-required-permissions:
+      - accounting:coa:create
+  /v1/accounting/tenant-template/status:
+    get:
+      description: 'Reports where the caller''s tenant stands against the accounting template every tenant receives: the reference chart of accounts, posting categories, mapping keys, GL mappings, default GL mappings and statement lines.
+
+        Use this tool to check that a new tenant was provisioned before its first invoice or payment posts, or to find out why a posting failed with GL_MAPPING_NOT_CONFIGURED; do not use listGLAccounts or resolveGLMapping, which show what the tenant holds but not what the template expected or why an entry was not created.
+
+        Preconditions: caller holds accounting:coa:view. Read-only and idempotent; it never applies the template.
+
+        Required inputs: none. The tenant is the caller''s own, taken from the token.
+
+        Emits an ACCOUNTING_TENANT_TEMPLATE_STATUS_VIEW event and returns 200 with state (NOT_PROVISIONED, UP_TO_DATE, PENDING, NEEDS_ATTENTION), lastAppliedAt, counts by outcome, whether the retread-plant add-on is on, and attention: each entry in conflict or withheld with its reason and the template''s and the tenant''s values in business words.
+
+        '
+      operationId: getTenantTemplateStatus
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantTemplateStatusResponse'
+          description: The tenant's standing against the template
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No tenant on the request (TENANT_REQUIRED)
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:coa:view
+      security:
+      - bearerAuth:
+        - accounting:coa:view
+      summary: Get Tenant Accounting Template Status
+      tags:
+      - Accounting Tenant Template
+      x-required-permissions:
+      - accounting:coa:view
   /v1/accounting/vendor-bills:
     get:
       description: 'Lists vendor bills whose due date falls in [dueFrom, dueTo], optionally filtered by status, ordered by due date ascending.
@@ -15191,6 +15294,24 @@ components:
       required:
       - decision
       - justification
+      type: object
+    EnableTemplateAddOnRequest:
+      description: Turn an accounting template add-on on for the caller's tenant
+      properties:
+        justification:
+          description: Why the tenant needs the add-on (at least 10 characters); kept in the audit log
+          example: We run a retread plant at the Tulsa shop
+          maxLength: 1000
+          minLength: 10
+          type: string
+        requestId:
+          description: Caller-generated UUIDv7 naming this request; a replay changes nothing and returns the current state
+          example: 019a0000-0000-7000-8000-000000000009
+          format: uuid
+          type: string
+      required:
+      - justification
+      - requestId
       type: object
     EntryNumberGapCheck:
       description: Entry-number gap-check result for one monthly sequence scope; absent gaps mean a clean ledger
@@ -19880,6 +20001,120 @@ components:
       - snapshotContentHash
       - snapshotId
       - verifiedAt
+      type: object
+    TenantTemplateAttentionItem:
+      description: One template entry that waits for the tenant to resolve a clash
+      properties:
+        entryKey:
+          description: 'The entry''s natural key: its kind and what identifies it within the kind'
+          example: ACCOUNT:6295
+          type: string
+        kind:
+          description: The kind of entry
+          enum:
+          - ACCOUNT
+          - CATEGORY
+          - MAPPING_KEY
+          - GL_MAPPING
+          - DEFAULT_GL_MAPPING
+          - STATEMENT_LINE
+          example: ACCOUNT
+          type: string
+        reason:
+          description: 'ACCOUNT_DIFFERS: the tenant''s account under this code has another name or type. ACCOUNT_INACTIVE: it matches but is not active. ACCOUNT_MISSING: the entry refers to an account code the tenant does not hold. DEPENDS_ON_CONFLICT: the entry refers to an account that is in conflict'
+          enum:
+          - ACCOUNT_DIFFERS
+          - ACCOUNT_INACTIVE
+          - ACCOUNT_MISSING
+          - DEPENDS_ON_CONFLICT
+          example: ACCOUNT_DIFFERS
+          type: string
+        templateValue:
+          description: What the template holds, in business words
+          example: 6295 Staff Meals & Refreshments, expense
+          type: string
+        tenantValue:
+          description: What the tenant holds in its place, in business words; absent when the tenant holds nothing
+          example: 6295 Tire disposal, expense
+          type:
+          - string
+          - 'null'
+      required:
+      - entryKey
+      - kind
+      - reason
+      - templateValue
+      type: object
+    TenantTemplateCounts:
+      description: How many template entries ended in each outcome for this tenant
+      properties:
+        adopted:
+          description: Rows the tenant already held, left exactly as they were
+          example: 0
+          format: int32
+          type: integer
+        conflict:
+          description: Accounts the tenant holds under a template code that are not the template's account
+          example: 0
+          format: int32
+          type: integer
+        created:
+          description: Rows the template created
+          example: 184
+          format: int32
+          type: integer
+        refreshed:
+          description: Untouched statement lines that took the template's new line code, description and display order
+          example: 0
+          format: int32
+          type: integer
+        withheld:
+          description: Entries not created because an account they refer to is in conflict or missing
+          example: 0
+          format: int32
+          type: integer
+      required:
+      - adopted
+      - conflict
+      - created
+      - refreshed
+      - withheld
+      type: object
+    TenantTemplateStatusResponse:
+      description: Where the caller's tenant stands against the accounting template every tenant receives
+      properties:
+        attention:
+          description: The entries that wait for someone to resolve a clash, in business words; empty unless state is NEEDS_ATTENTION
+          items:
+            $ref: '#/components/schemas/TenantTemplateAttentionItem'
+          type: array
+        counts:
+          $ref: '#/components/schemas/TenantTemplateCounts'
+        lastAppliedAt:
+          description: When the template was last applied to this tenant; absent when never
+          example: '2026-10-05T14:03:22Z'
+          format: date-time
+          type:
+          - string
+          - 'null'
+        retreadPlantAddOn:
+          description: True when this tenant has chosen the retread-plant add-on
+          example: false
+          type: boolean
+        state:
+          description: 'NOT_PROVISIONED: the template has never been applied. UP_TO_DATE: everything is created or adopted. PENDING: the template is newer than the last apply and the next service start brings it in. NEEDS_ATTENTION: at least one entry is in conflict or withheld; see attention'
+          enum:
+          - NOT_PROVISIONED
+          - UP_TO_DATE
+          - PENDING
+          - NEEDS_ATTENTION
+          example: UP_TO_DATE
+          type: string
+      required:
+      - attention
+      - counts
+      - retreadPlantAddOn
+      - state
       type: object
     TraceabilityIdDescriptor:
       description: An identifier usable to trace an accounting event across the ingestion pipeline

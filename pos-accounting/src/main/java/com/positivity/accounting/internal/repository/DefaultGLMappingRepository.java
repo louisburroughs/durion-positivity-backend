@@ -56,4 +56,10 @@ public interface DefaultGLMappingRepository extends JpaRepository<DefaultGLMappi
      */
     @Query("SELECT m FROM DefaultGLMapping m WHERE m.organizationId IS NULL AND m.active = true")
     List<DefaultGLMapping> findAllGlobalDefaults();
+
+    /**
+     * Every default mapping of an event type, active or not. The tenant template applier (#2526)
+     * adopts an event type the tenant already maps, whatever state that mapping is in.
+     */
+    List<DefaultGLMapping> findByEventType(@NonNull String eventType);
 }

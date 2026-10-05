@@ -99,4 +99,10 @@ public interface GLMappingRepository extends JpaRepository<GLMapping, UUID> {
     @Query("SELECT COUNT(glm) FROM GLMapping glm " + "WHERE glm.mappingKey.mappingKeyId = :mappingKeyId "
             + "AND (glm.effectiveEndDate IS NULL OR glm.effectiveEndDate > CURRENT_TIMESTAMP)")
     long countByMappingKeyIdAndDeactivatedAtIsNull(UUID mappingKeyId);
+
+    /**
+     * Every mapping of a mapping key, whatever its dates or dimensions. The tenant template applier
+     * (#2526) uses it to tell whether a tenant already maps the key.
+     */
+    List<GLMapping> findByMappingKey_MappingKeyId(UUID mappingKeyId);
 }
