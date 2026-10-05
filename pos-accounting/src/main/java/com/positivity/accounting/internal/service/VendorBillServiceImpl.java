@@ -82,9 +82,10 @@ public class VendorBillServiceImpl implements VendorBillService {
     private final VendorBillDuplicateGuard duplicateGuard;
 
     /**
-     * The goods-receipt create, in a transaction this class can see the end of: the original of a
-     * bill that lost a race under {@code uq_vendor_bill_duplicate_rule} is read only after that
-     * transaction has rolled back (#2501).
+     * The goods-receipt create, in a transaction this class can see the end of (#2501): the original
+     * of a bill that lost a race under {@code uq_vendor_bill_duplicate_rule} is read after this
+     * template has returned. By then the failed transaction has rolled back when this class began it,
+     * and is marked rollback-only when it joined a caller's.
      */
     private final TransactionTemplate goodsReceiptTransaction;
 
@@ -135,8 +136,12 @@ public class VendorBillServiceImpl implements VendorBillService {
      * caller's transaction when there is one. A bill that would duplicate a live one (#2501; same
      * vendor, normalised number and bill date) is refused with {@link VendorBillDuplicateException}
      * before anything is saved. When a concurrent writer commits the same key between that check and
-     * the insert, the unique index refuses the insert instead, and the original is read once this
-     * transaction has rolled back, so both paths give the same answer.
+     * the insert, the unique index refuses the insert instead and Postgres aborts the transaction. If
+     * this method began it, it has rolled back by the time the original is read; if it joined a
+     * caller's, it is only marked rollback-only and the caller rolls it back. In both cases the
+     * original is read by {@link VendorBillDuplicateGuard#findOriginalAfterCollision} in a {@code
+     * REQUIRES_NEW} transaction of its own, which is what makes the read possible, so both paths
+     * give the same answer.
      */
     @Override
     public @NonNull VendorBillResponse handleGoodsReceivedEvent(@NonNull GoodsReceivedEvent event) {

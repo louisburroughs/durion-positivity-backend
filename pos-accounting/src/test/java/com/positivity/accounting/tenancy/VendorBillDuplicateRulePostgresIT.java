@@ -10,33 +10,44 @@ import com.positivity.accounting.AccountingPostgresContainer;
 import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.dto.GoodsReceivedEvent;
 import com.positivity.accounting.internal.dto.VendorBillResponse;
+import com.positivity.accounting.internal.dto.VendorInvoiceReceivedEvent;
 import com.positivity.accounting.internal.entity.VendorBill;
+import com.positivity.accounting.internal.entity.VendorBillLine;
 import com.positivity.accounting.internal.entity.VendorBillNumbers;
 import com.positivity.accounting.internal.entity.VendorBillNumbersTest;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.VendorBillDuplicateException;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
+import com.positivity.accounting.internal.repository.VendorBillLineRepository;
+import com.positivity.accounting.internal.repository.VendorBillMatchCandidateRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.accounting.internal.repository.VendorRepository;
 import com.positivity.accounting.internal.service.KafkaFactIngestionRecorder;
 import com.positivity.accounting.internal.service.SupplierInvoiceEventsListener;
 import com.positivity.accounting.internal.service.VendorBillDuplicateGuard;
 import com.positivity.accounting.internal.service.VendorBillService;
+import com.positivity.accounting.internal.service.VendorBillServiceImpl;
+import com.positivity.accounting.internal.service.VendorDirectoryService;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import javax.sql.DataSource;
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.FlywayException;
 import org.junit.jupiter.api.AfterEach;
@@ -47,7 +58,10 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
@@ -107,6 +121,18 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
 
     @Autowired
     private PlatformTransactionManager transactionManager;
+
+    @Autowired
+    private VendorBillLineRepository billLines;
+
+    @Autowired
+    private VendorBillMatchCandidateRepository matchCandidates;
+
+    @Autowired
+    private ApplicationEventPublisher eventPublisher;
+
+    @Autowired
+    private VendorDirectoryService vendorDirectoryService;
 
     private SupplierInvoiceEventsListener listener;
 
@@ -350,6 +376,204 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
         });
 
         assertThat(billCount(vendor)).as("rolled back").isZero();
+    }
+
+    // ---- criteria 12 and 4 on Postgres: the writer that loses the race ---------------------------
+    //
+    // A mock transaction manager cannot see what happens to a transaction Postgres has aborted. These
+    // cases run the production paths against a bill another writer has already committed, with a guard
+    // whose first look misses it (RaceLosingGuard), so the insert is refused by the index itself.
+
+    @Test
+    @DisplayName(
+            "criterion 12: a listener insert refused by the index rolls back, runs once more and records the duplicate")
+    void listenerThatLosesTheRaceRunsOnceMoreAgainstTheCommittedBill() {
+        UUID original = insertBill(TENANT_A, vendor, "INV-1", OCT_1_MORNING, "APPROVED");
+        RaceLosingGuard racing = new RaceLosingGuard(guard, bills);
+        listener = new SupplierInvoiceEventsListener(
+                clock,
+                objectMapper,
+                processedEventRepository,
+                bills,
+                vendorRepository,
+                ledgerCurrency,
+                ingestionRecorder,
+                racing,
+                transactionManager);
+
+        String eventId = deliver(TENANT_A, "inv-1", "2026-10-01", "100.00");
+
+        assertThat(racing.looks())
+                .as("the blind first run, then the run that sees the committed bill")
+                .isEqualTo(2);
+        assertThat(billCount(vendor)).isEqualTo(1);
+        assertThat(status(original)).isEqualTo("APPROVED");
+        assertThat(owner.queryForObject(
+                        "SELECT count(*) FROM processed_events WHERE event_id = ?", Long.class, eventId))
+                .isEqualTo(1);
+        // One record, against the original: the first run's record rolled back with its bill.
+        assertThat(owner.queryForMap(
+                        "SELECT status, idempotency_outcome FROM accounting_event WHERE domain_key_id = ?",
+                        original.toString()))
+                .containsEntry("status", "PROCESSED")
+                .containsEntry("idempotency_outcome", "DUPLICATE_IGNORED");
+        // The first run wrote the vendor-directory row before its bill; the duplicate path writes none.
+        assertThat(owner.queryForObject("SELECT count(*) FROM ap_vendor WHERE vendor_id = ?", Long.class, vendor))
+                .as("the first run rolled back as a whole")
+                .isZero();
+    }
+
+    @ParameterizedTest(name = "inside a caller's transaction: {0}")
+    @ValueSource(booleans = {false, true})
+    @DisplayName("criterion 4: a goods-receipt insert refused by the index is answered with the committed original")
+    void goodsReceiptThatLosesTheRaceIsRefusedWithTheCommittedOriginal(boolean insideCallersTransaction) {
+        // The number the service generates next: the sequence is read and set back to the same value.
+        Long next = owner.queryForObject("SELECT nextval('bill_number_seq')", Long.class);
+        owner.queryForObject("SELECT setval('bill_number_seq', ?, false)", Long.class, next);
+        String number = String.format(
+                "BILL_%s_%s_%07d",
+                vendor.toString().substring(0, 8).toUpperCase(Locale.ROOT),
+                LocalDate.now(clock).format(DateTimeFormatter.BASIC_ISO_DATE),
+                next);
+        UUID original = insertBill(TENANT_A, vendor, number, OCT_1_EVENING, "APPROVED");
+        RaceLosingGuard racing = new RaceLosingGuard(guard, bills);
+        VendorBillService service = raceLosingService(racing);
+        GoodsReceivedEvent event = goodsReceived(UUID.randomUUID());
+
+        // Alone, the service's own transaction has rolled back before the original is read. Inside a
+        // caller's transaction (VendorBillEventHandler.onGoodsReceived is @Transactional) it is only
+        // marked rollback-only and Postgres has aborted it: the read works because it is REQUIRES_NEW.
+        ThrowingCallable call = insideCallersTransaction
+                ? () -> inTenant(TENANT_A, () -> service.handleGoodsReceivedEvent(event))
+                : () -> asTenant(TENANT_A, () -> service.handleGoodsReceivedEvent(event));
+
+        assertThatThrownBy(call).isInstanceOfSatisfying(VendorBillDuplicateException.class, refused -> {
+            assertThat(refused.getOriginalBillId()).isEqualTo(original);
+            assertThat(refused.getMessage())
+                    .isEqualTo("Bill " + number + " from Acme Tire dated 2026-10-01 already exists (APPROVED)");
+        });
+        assertThat(racing.looks())
+                .as("the blind pre-check only; the original is read after the collision")
+                .isEqualTo(1);
+        assertThat(billCount(vendor)).isEqualTo(1);
+        assertThat(owner.queryForObject(
+                        "SELECT count(*) FROM vendor_bill_line WHERE vendor_bill_id IN"
+                                + " (SELECT vendor_bill_id FROM vendor_bill WHERE vendor_id = ?)",
+                        Long.class,
+                        vendor))
+                .isZero();
+        assertThat(owner.queryForObject("SELECT count(*) FROM ap_vendor WHERE vendor_id = ?", Long.class, vendor))
+                .as("no vendor-directory row for a refused bill")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName(
+            "a match that loses the race is stopped by the index: the goods-receipt bill is unchanged, one bill holds the number")
+    void matchThatLosesTheRaceIsStoppedByTheIndex() {
+        UUID product = UUID.randomUUID();
+        UUID goodsReceiptBill = inTenant(TENANT_A, () -> {
+            VendorBill bill = bills.saveAndFlush(newBill("BILL_GR_1", OCT_1_MORNING));
+            VendorBillLine line = new VendorBillLine();
+            line.setVendorBill(bill);
+            line.setLineNumber(1);
+            line.setProductId(product);
+            line.setDescription("Brake pads");
+            line.setQuantity(new BigDecimal("10"));
+            line.setUnitPrice(new BigDecimal("10.00"));
+            line.setLineTotal(new BigDecimal("100.00"));
+            billLines.saveAndFlush(line);
+            return bill.getVendorBillId();
+        });
+        UUID other = insertBill(TENANT_A, vendor, "INV-77", OCT_1_EVENING, "APPROVED");
+        RaceLosingGuard racing = new RaceLosingGuard(guard, bills);
+        VendorBillService service = raceLosingService(racing);
+        VendorInvoiceReceivedEvent invoice = VendorInvoiceReceivedEvent.builder()
+                .eventId(UUID.randomUUID())
+                .organizationId(UUID.randomUUID())
+                .vendorId(vendor)
+                .invoiceReference("inv 77")
+                .invoiceDate(OCT_1_MORNING)
+                .dueDate(OCT_1_MORNING.plusDays(30))
+                .lineItems(List.of(VendorInvoiceReceivedEvent.InvoiceLineItem.builder()
+                        .productId(product)
+                        .description("Brake pads")
+                        .quantity(new BigDecimal("10"))
+                        .unitPrice(new BigDecimal("10.00"))
+                        .build()))
+                .build();
+
+        // The enclosing transaction stands in for the service's @Transactional proxy. The rename is
+        // flushed at its commit, where the index refuses it: this is the violation the platform's
+        // handler answers as the generic 409 DUPLICATE_RESOURCE. The match path does not translate it.
+        assertThatThrownBy(() -> inTenant(TENANT_A, () -> service.handleVendorInvoiceReceivedEvent(invoice)))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .matches(VendorBillDuplicateGuard::isDuplicateRuleViolation, "names " + INDEX);
+
+        assertThat(racing.looks()).isEqualTo(1);
+        assertThat(owner.queryForMap(
+                        "SELECT bill_number, bill_number_key, status, approved_by, due_date FROM vendor_bill"
+                                + " WHERE vendor_bill_id = ?",
+                        goodsReceiptBill))
+                .containsEntry("bill_number", "BILL_GR_1")
+                .containsEntry("bill_number_key", "BILLGR1")
+                .containsEntry("status", "PENDING_RECEIPT_MATCH")
+                .containsEntry("approved_by", null)
+                .containsEntry("due_date", null);
+        assertThat(owner.queryForList(
+                        "SELECT vendor_bill_id FROM vendor_bill WHERE vendor_id = ? AND bill_number_key = 'INV77'",
+                        UUID.class,
+                        vendor))
+                .containsExactly(other);
+    }
+
+    private VendorBillService raceLosingService(VendorBillDuplicateGuard racing) {
+        return new VendorBillServiceImpl(
+                clock,
+                bills,
+                billLines,
+                matchCandidates,
+                eventPublisher,
+                vendorDirectoryService,
+                racing,
+                transactionManager);
+    }
+
+    /**
+     * The guard of a writer that loses the race: its first look sees no original, as a pre-check does
+     * when the competing writer commits a moment later. Every other look, and the read after the
+     * collision, is the real Spring-proxied guard, so that read runs in its own {@code REQUIRES_NEW}
+     * transaction as {@code pos_app} under row-level security, exactly as in production.
+     */
+    private static final class RaceLosingGuard extends VendorBillDuplicateGuard {
+
+        private final VendorBillDuplicateGuard real;
+        private final AtomicInteger looks = new AtomicInteger();
+
+        @SuppressWarnings("unchecked")
+        RaceLosingGuard(VendorBillDuplicateGuard real, VendorBillRepository bills) {
+            super(bills, org.mockito.Mockito.mock(ObjectProvider.class));
+            this.real = real;
+        }
+
+        int looks() {
+            return looks.get();
+        }
+
+        @Override
+        public Optional<VendorBill> findOriginal(
+                UUID vendorId, String billNumber, LocalDateTime billDate, UUID excludeBillId) {
+            if (looks.getAndIncrement() == 0) {
+                return Optional.empty();
+            }
+            return real.findOriginal(vendorId, billNumber, billDate, excludeBillId);
+        }
+
+        @Override
+        public Optional<VendorBill> findOriginalAfterCollision(
+                UUID vendorId, String billNumber, LocalDateTime billDate) {
+            return real.findOriginalAfterCollision(vendorId, billNumber, billDate);
+        }
     }
 
     // ---- criterion 15: tenants -------------------------------------------------------------------

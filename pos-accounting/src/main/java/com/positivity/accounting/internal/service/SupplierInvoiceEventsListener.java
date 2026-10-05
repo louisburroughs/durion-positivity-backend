@@ -423,7 +423,8 @@ public class SupplierInvoiceEventsListener {
             bill.setRejectionReason(change);
         }
         vendorBillRepository.save(bill);
-        log.warn(
+        // INFO: the one WARN for a flag is the duplicate guard's, which names the original (#2501).
+        log.info(
                 "Vendor invoice {} re-issued at {} {} against a bill of {} {}; flagged for review",
                 billNumber,
                 incoming,

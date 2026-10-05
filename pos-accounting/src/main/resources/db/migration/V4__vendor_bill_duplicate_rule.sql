@@ -12,6 +12,13 @@
 -- bound tenant's rows and step 4 would then fail on the rest, loudly, rather than index half a table.
 -- modified_at is left alone: the key is derived from bill_number, it is not an edit of the bill (and
 -- ADR-0024 forbids SQL-clock writes).
+--
+-- Recorded limit of the backfill in step 3: the SQL expression and the Java normaliser
+-- (VendorBillNumbers.normalise) agree for every bill number whose NFKC form is ASCII. For a non-ASCII
+-- number the one-time backfill may give a different key than Java would: upper() may leave a
+-- character such as 'ß' alone where Java writes 'SS', and [[:alnum:]] classifies non-ASCII characters
+-- by the database's locale. Accepted because alpha held 0 vendor_bill rows when checked on 2026-10-05. A
+-- database that holds non-ASCII bill numbers before V4 runs must have them reviewed first.
 
 -- 1. The sequence the goods-receipt path draws bill numbers from. The flattened baseline never
 --    created it, so POST /v1/accounting/vendor-bills failed at nextval on every Postgres database.

@@ -11,6 +11,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.entity.Vendor;
 import com.positivity.accounting.internal.entity.VendorBill;
@@ -36,6 +40,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
@@ -438,22 +443,52 @@ class SupplierInvoiceEventsListenerTest {
         }
 
         @Test
-        @DisplayName("criterion 10: when the rule finds no live original, a re-issue becomes a new bill")
-        void reissueAfterAVoidBecomesANewBill() {
-            // The rule's query does not return a VOIDED or REJECTED bill (pinned on Postgres by
-            // VendorBillDuplicateRulePostgresIT), so the listener is told there is no original.
-            VendorBill voided = held("100.00", VendorBillStatus.VOIDED);
-            voided.setRejectionReason("Match exception voided: wrong vendor");
-
+        @DisplayName(
+                "criterion 10: when the rule answers that no live bill holds the number, the fact becomes a new bill")
+        void factWithNoLiveOriginalBecomesANewBill() {
+            // Which bills count as live (not VOIDED, not REJECTED) is the query's business, pinned on
+            // Postgres by VendorBillDuplicateRulePostgresIT#reissueAfterAVoidOrRejectionBecomesANewBill.
+            // What the listener owes is to ask the rule and, on "none", to create and touch nothing else.
             listener.onSupplierEvent(event(EVENT_1, "INV-1", "INVOICE", "100.00"));
 
+            verify(vendorBillRepository).findLiveDuplicate(PROFILE, "INV1", DAY, DAY.plusDays(1), null);
             VendorBill created = captured();
-            assertThat(created).isNotSameAs(voided);
             assertThat(created.getStatus()).isEqualTo(VendorBillStatus.PENDING_RECEIPT_MATCH);
             assertThat(created.getBillNumberKey()).isEqualTo("INV1");
-            assertThat(voided.getStatus()).isEqualTo(VendorBillStatus.VOIDED);
-            assertThat(voided.getRejectionReason()).isEqualTo("Match exception voided: wrong vendor");
+            // save() is the flagging path's write to an existing bill: no existing bill was written.
             verify(vendorBillRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("a flagged duplicate logs one WARN, an ignored one none (#2501: one WARN per refusal or flag)")
+        void flaggedDuplicateWarnsOnceAndIgnoredDuplicateNotAtAll() {
+            Logger serviceLoggers = (Logger) LoggerFactory.getLogger("com.positivity.accounting.internal.service");
+            ListAppender<ILoggingEvent> captured = new ListAppender<>();
+            captured.start();
+            serviceLoggers.addAppender(captured);
+            try {
+                liveOriginal("INV1", held("100.00", VendorBillStatus.PENDING_RECEIPT_MATCH));
+                listener.onSupplierEvent(event(EVENT_1, "inv-1", "INVOICE", "120.00"));
+
+                assertThat(captured.list)
+                        .filteredOn(logged -> logged.getLevel() == Level.WARN)
+                        .singleElement()
+                        .satisfies(warned -> assertThat(warned.getFormattedMessage())
+                                .contains("channel=edi")
+                                .contains("outcome=flagged")
+                                .contains("key=INV1")
+                                .contains(ORIGINAL_ID.toString()));
+
+                captured.list.clear();
+                liveOriginal("INV1", held("100.00", VendorBillStatus.APPROVED));
+                listener.onSupplierEvent(event(EVENT_2, "inv-1", "INVOICE", "100.00"));
+
+                assertThat(captured.list)
+                        .as("overlapping fetch windows republish by design")
+                        .noneMatch(logged -> logged.getLevel().isGreaterOrEqual(Level.WARN));
+            } finally {
+                serviceLoggers.detachAppender(captured);
+            }
         }
 
         @Test
