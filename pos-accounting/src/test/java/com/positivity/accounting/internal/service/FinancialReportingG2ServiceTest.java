@@ -388,7 +388,6 @@ class FinancialReportingG2ServiceTest {
         ExtInvoice first = arInvoice(lower, new BigDecimal("10.00"), AS_OF.minusDays(10), AS_OF.minusDays(5));
         ExtInvoice second = arInvoice(upper, new BigDecimal("20.00"), AS_OF.minusDays(10), AS_OF.minusDays(5));
         when(extInvoiceRepository.findByStatusIn(any())).thenReturn(List.of(first, second));
-        when(invoiceBalanceCalculator.isArEligible(any())).thenReturn(true);
         when(invoiceBalanceCalculator.balanceDue(first)).thenReturn(first.getTotal());
         when(invoiceBalanceCalculator.balanceDue(second)).thenReturn(second.getTotal());
         when(displayReferenceResolver.resolve(eq(DisplayReferenceType.CUSTOMER), any()))

@@ -421,6 +421,13 @@ public class PaymentApplicationServiceImpl
                 .findById(paymentId)
                 .orElseThrow(() -> new PaymentNotFoundException(PAYMENT_NOT_FOUND + paymentId));
         if (payment.getStatus() != ReceivablePaymentStatus.AVAILABLE) {
+            // A concurrent request with the same requestId may have credited the remainder and committed
+            // between the lookup above and this read (READ COMMITTED): the payment and its credit commit
+            // together, so a second lookup now sees that credit, and the request replays it (AD-010).
+            Optional<CustomerCredit> twin = customerCreditRepository.findByRequestId(creditRequestId);
+            if (twin.isPresent() && paymentId.equals(twin.get().getSourcePaymentId())) {
+                return toRemainderResponse(twin.get(), request.getRequestId());
+            }
             throw new PaymentNotAvailableException(
                     "Payment " + paymentId + " is not available (status: " + payment.getStatus() + ")");
         }

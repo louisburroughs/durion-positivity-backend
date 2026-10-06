@@ -279,6 +279,44 @@ class PaymentApplicationServiceTest {
     }
 
     @Test
+    @DisplayName("#2524 AC9 race: a request that finds the payment already credited by its concurrent twin returns"
+            + " the twin's credit instead of PAYMENT_NOT_AVAILABLE")
+    void creditPaymentRemainder_lostRaceToSameRequestId_returnsWinnersCredit() {
+        CustomerCredit winner = new CustomerCredit();
+        winner.setCreditId(UUID.fromString("00000000-0000-0000-0000-0000000c2526"));
+        winner.setAmount(new BigDecimal("12.50"));
+        winner.setCurrency("USD");
+        winner.setRequestId("REMAINDER:remainder-1");
+        winner.setSourcePaymentId(testPaymentId);
+        winner.setCreatedAt(Instant.now(TEST_CLOCK));
+        // The twin commits between this request's idempotency lookup and its read of the payment.
+        when(customerCreditRepository.findByRequestId("REMAINDER:remainder-1"))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(winner));
+        testPayment.setStatus(ReceivablePaymentStatus.FULLY_APPLIED);
+        testPayment.setUnappliedAmount(BigDecimal.ZERO);
+        when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+
+        RemainderCreditResponse response =
+                service.creditPaymentRemainder(testPaymentId, remainder("remainder-1", "12.50"));
+
+        assertThat(response.getCreditId()).isEqualTo(winner.getCreditId());
+        verify(customerCreditRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("#2524: a payment that is not AVAILABLE and was credited by no request with this id is still refused")
+    void creditPaymentRemainder_notAvailableWithoutTwin_stillRefused() {
+        when(customerCreditRepository.findByRequestId("REMAINDER:remainder-1")).thenReturn(Optional.empty());
+        testPayment.setStatus(ReceivablePaymentStatus.FULLY_APPLIED);
+        testPayment.setUnappliedAmount(BigDecimal.ZERO);
+        when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+
+        assertThatThrownBy(() -> service.creditPaymentRemainder(testPaymentId, remainder("remainder-1", "12.50")))
+                .isInstanceOf(PaymentNotAvailableException.class);
+    }
+
+    @Test
     @DisplayName("#2524 AC9: the same requestId on another payment is IDEMPOTENCY_CONFLICT")
     void creditPaymentRemainder_requestIdOnAnotherPayment_conflicts() {
         CustomerCredit existing = new CustomerCredit();
