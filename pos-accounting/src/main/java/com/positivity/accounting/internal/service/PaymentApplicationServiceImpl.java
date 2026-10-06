@@ -26,6 +26,7 @@ import com.positivity.accounting.internal.exception.PaymentNotAvailableException
 import com.positivity.accounting.internal.exception.PaymentNotFoundException;
 import com.positivity.accounting.internal.exception.PaymentRemainderChangedException;
 import com.positivity.accounting.internal.repository.CustomerCreditRepository;
+import com.positivity.accounting.internal.repository.ExtInvoicePaymentReversalRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
@@ -104,6 +105,8 @@ public class PaymentApplicationServiceImpl
     private final OutboxService outboxService;
     private final LedgerCurrency ledgerCurrency;
     private final WalkInOverpaymentAlert walkInOverpaymentAlert;
+    private final ExtInvoicePaymentReversalRepository refundReplicaRepository;
+    private final RefundReleaseAlert refundReleaseAlert;
 
     /**
      * Handle PaymentCleared event from Payment domain.
@@ -492,25 +495,59 @@ public class PaymentApplicationServiceImpl
             @NonNull UUID paymentId, @NonNull BigDecimal refundedAmount, @NonNull UUID refundId) {
         Optional<ReceivablePayment> recorded = receivablePaymentRepository.findById(paymentId);
         if (recorded.isEmpty()) {
+            // The refund fact came first (#2556): its row is stored, and the settlement that records the
+            // payment releases it (releaseRefundsRecordedBeforeSettlement).
+            refundReleaseAlert.paymentNotRecorded(paymentId, refundedAmount, refundId);
             return BigDecimal.ZERO;
         }
-        ReceivablePayment payment = recorded.get();
+        return releaseUpToRemainder(recorded.get(), refundedAmount, "refund " + refundId);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public @NonNull BigDecimal releaseRefundsRecordedBeforeSettlement(
+            @NonNull UUID paymentId, @NonNull UUID settlementEventId) {
+        Optional<ReceivablePayment> recorded = receivablePaymentRepository.findById(paymentId);
+        // Only the settlement that recorded the payment: a payment recorded by an earlier fact was there when
+        // any later refund arrived, and that refund released itself. A redelivery of the recording fact never
+        // gets here (processed_events, committed with the payment); one under a new event id fails this check.
+        if (recorded.isEmpty() || !settlementEventId.equals(recorded.get().getSourceEventId())) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal refunded = refundReplicaRepository.sumAmountByPaymentIntentId(paymentId);
+        if (refunded.signum() <= 0) {
+            return BigDecimal.ZERO;
+        }
+        return releaseUpToRemainder(
+                recorded.get(), refunded, "refunds recorded before settlement event " + settlementEventId);
+    }
+
+    /**
+     * Take up to {@code refunded} off the payment's unapplied remainder, never below zero; {@code
+     * FULLY_APPLIED} at zero. The applied part of the payment stays applied (its refund, if any, is a
+     * person's reversal of the application), so any excess over the remainder is raised, not taken.
+     */
+    private BigDecimal releaseUpToRemainder(ReceivablePayment payment, BigDecimal refunded, String source) {
+        if (refunded.signum() <= 0) {
+            return BigDecimal.ZERO;
+        }
         BigDecimal unapplied = payment.getUnappliedAmount();
-        if (unapplied == null || unapplied.signum() <= 0 || refundedAmount.signum() <= 0) {
+        BigDecimal released = unapplied == null || unapplied.signum() <= 0 ? BigDecimal.ZERO : refunded.min(unapplied);
+        if (released.compareTo(refunded) < 0) {
+            refundReleaseAlert.exceedsRemainder(payment.getPaymentId(), refunded, released, source);
+        }
+        if (released.signum() == 0) {
             return BigDecimal.ZERO;
         }
-        // Up to the remainder only: the applied part of the payment stays applied (its refund, if any, is a
-        // person's reversal of the application).
-        BigDecimal released = refundedAmount.min(unapplied);
         payment.applyAmount(released);
         payment.setUpdatedAt(Instant.now(clock));
         payment.setModifiedBy(SYSTEM_ACTOR);
         receivablePaymentRepository.save(payment);
         log.info(
-                "Refund {} took {} off the unapplied remainder of payment {}; {} left (status {})",
-                refundId,
+                "{} took {} off the unapplied remainder of payment {}; {} left (status {})",
+                source,
                 released,
-                paymentId,
+                payment.getPaymentId(),
                 payment.getUnappliedAmount(),
                 payment.getStatus());
         return released;

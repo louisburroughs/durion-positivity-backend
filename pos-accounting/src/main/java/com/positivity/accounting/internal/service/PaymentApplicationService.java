@@ -118,8 +118,9 @@ public interface PaymentApplicationService {
      * This is how a CASH walk-in excess, refunded through pos-invoice, leaves the unpaid walk-in sales read.
      *
      * <p>Runs in the caller's transaction (the refund replica's handler, whose {@code refundId} key makes
-     * it once per refund). A payment accounting never recorded, or one with nothing unapplied, is left as
-     * it is.
+     * it once per refund). A payment accounting has not recorded yet is left to its settlement ({@link
+     * #releaseRefundsRecordedBeforeSettlement}) and raised at WARN; a refund above the unapplied remainder
+     * releases the remainder only and is raised at WARN ({@code RefundReleaseAlert}, #2556).
      *
      * @param paymentId      the refunded payment ({@code paymentIntentId})
      * @param refundedAmount the refunded amount, above zero
@@ -129,6 +130,24 @@ public interface PaymentApplicationService {
     @NonNull
     BigDecimal releaseRefundedRemainder(
             @NonNull UUID paymentId, @NonNull BigDecimal refundedAmount, @NonNull UUID refundId);
+
+    /**
+     * The other half of {@link #releaseRefundedRemainder} for a refund processed before its settlement fact
+     * (#2556): when the settlement records the payment, the refunds already stored for it come off what the
+     * automatic application left unapplied, never below zero, with any excess raised at WARN. Called after
+     * the automatic application in the settlement's transaction, so the outcome is the one the settlement
+     * then refund order gives.
+     *
+     * <p>Only the settlement that recorded the payment releases anything ({@code sourceEventId} equals
+     * {@code settlementEventId}): a payment recorded earlier was there for every later refund, which
+     * released itself, and a settlement replayed under a new event id changes nothing.
+     *
+     * @param paymentId         the settled payment ({@code paymentIntentId})
+     * @param settlementEventId the settlement fact's event id
+     * @return the amount taken off the unapplied remainder; zero when none was
+     */
+    @NonNull
+    BigDecimal releaseRefundsRecordedBeforeSettlement(@NonNull UUID paymentId, @NonNull UUID settlementEventId);
 
     void voidPayment(@NonNull UUID paymentId);
 

@@ -349,8 +349,11 @@ public class SettlementEventsListener {
         }
 
         // Record the payment, then apply it to the invoice it was taken against when the rules allow
-        // (#2503, AW14): the payment, its application or outcome row, and the processed mark commit
-        // together, so a failure anywhere rolls all three back and the record is redelivered.
+        // (#2503, AW14), then take off the unapplied remainder any refund stored for it before this fact
+        // arrived (#2556). The order is the one settlement-then-refund gives, so either arrival order ends
+        // the same: the application is decided on the whole payment, and a refund only ever releases what
+        // the application left. The payment, its application or outcome row, the release and the processed
+        // mark commit together, so a failure anywhere rolls all of them back and the record is redelivered.
         handlerTransaction.executeWithoutResult(_ -> {
             ReceivablePayment payment = paymentApplicationService.handlePaymentCleared(
                     payload.paymentIntentId(),
@@ -362,6 +365,7 @@ public class SettlementEventsListener {
                     payload.invoiceId(),
                     payload.methodType());
             automaticPaymentApplicationService.applySettled(payment, payload, eventId);
+            paymentApplicationService.releaseRefundsRecordedBeforeSettlement(payment.getPaymentId(), eventUuid);
             markProcessed(eventId);
         });
     }
@@ -496,7 +500,8 @@ public class SettlementEventsListener {
                     .sourceEventId(eventUuid)
                     .build());
             // The refunded money is no longer there to apply (#2508): a refunded CASH walk-in excess leaves
-            // the unpaid walk-in sales read. Once per refund: the refundId guard above skips a replay.
+            // the unpaid walk-in sales read. Once per refund: the refundId guard above skips a replay. A
+            // refund before its payment is raised and released by the settlement that records it (#2556).
             if (payload.paymentIntentId() != null) {
                 paymentApplicationService.releaseRefundedRemainder(
                         payload.paymentIntentId(), payload.amount(), payload.refundId());

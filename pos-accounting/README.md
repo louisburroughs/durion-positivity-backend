@@ -555,6 +555,16 @@ refund replica row and once per `refundId` (a replay is skipped). A payment left
 `FULLY_APPLIED`, leaves `unappliedPayments` and cannot be applied again. This holds for every customer's
 payment, not only CASH.
 
+A refund processed before its settlement fact (#2556) finds no payment yet: its row is stored, and the
+`payment.payment.settled` that records the payment releases it in the same transaction, in this order —
+record the payment, apply it automatically (S2), then take the stored refunds for that `paymentIntentId` off
+what the application left. That is the outcome the settlement-then-refund order gives. Only the settlement
+that recorded the payment releases (a replay under a new event id changes nothing). Both gaps are raised at
+WARN with the counter `accounting.refund.unreleased`: `reason=payment_not_recorded` (the refund came first;
+a payment that never arrives, e.g. held for its currency, is for a person) and `reason=exceeds_remainder`
+(the refund is more than the unapplied remainder: the applied part stays applied and the invoice still shows
+paid until a person reverses the application).
+
 **Excluded from customer views and measures** (§4.4 item 2; ADR-0057): aged receivables; collections (E2)
 `invoiced`, and applications to CASH invoices and their reversals out of `collected` /
 `applicationReversals` (the deposit-take exclusion pattern); payment-lag cohorts. Both analytics reads run in

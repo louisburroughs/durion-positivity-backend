@@ -305,6 +305,27 @@ class SettlementEventsListenerPaymentSettledTest {
         }
 
         @Test
+        @DisplayName("#2556: refunds stored before the settlement are released after the automatic application,"
+                + " under this settlement's event id, before the processed mark")
+        void storedRefundsAreReleasedAfterTheApplicationBeforeTheMark() {
+            ReceivablePayment recorded = new ReceivablePayment();
+            recorded.setPaymentId(PAYMENT_INTENT_ID);
+            when(paymentApplicationService.handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any()))
+                    .thenReturn(recorded);
+
+            listener().onPaymentEvent(envelope(EVENT_ID, settled(PARTY_UUID.toString())));
+
+            org.mockito.InOrder order = org.mockito.Mockito.inOrder(
+                    paymentApplicationService, automaticPaymentApplicationService, processedEventRepository);
+            order.verify(paymentApplicationService)
+                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
+            order.verify(automaticPaymentApplicationService).applySettled(any(), any(), any());
+            order.verify(paymentApplicationService)
+                    .releaseRefundsRecordedBeforeSettlement(PAYMENT_INTENT_ID, UUID.fromString(EVENT_ID));
+            order.verify(processedEventRepository).save(any(ProcessedEvent.class));
+        }
+
+        @Test
         @DisplayName("#2503: an automatic-application failure propagates unmarked, for container retry/DLQ")
         void automaticApplicationFailurePropagatesUnmarked() {
             when(paymentApplicationService.handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any()))
@@ -501,7 +522,9 @@ class SettlementEventsListenerPaymentSettledTest {
                     invoiceBalanceCalculator,
                     outboxService,
                     new LedgerCurrency("USD"),
-                    new WalkInOverpaymentAlert(mock(ObjectProvider.class)));
+                    new WalkInOverpaymentAlert(mock(ObjectProvider.class)),
+                    extInvoicePaymentReversalRepository,
+                    new RefundReleaseAlert(mock(ObjectProvider.class)));
             when(processedEventRepository.existsById(anyString())).thenReturn(false);
         }
 

@@ -149,6 +149,9 @@ class UnpaidWalkInSalesPostgresIT extends PostgresCommittingTestBase {
     private UnpaidWalkInSalesService unpaidWalkInSalesService;
 
     @Autowired
+    private ReceivablesWorklistService receivablesWorklistService;
+
+    @Autowired
     private FinancialReportingService financialReportingService;
 
     @Autowired
@@ -452,6 +455,81 @@ class UnpaidWalkInSalesPostgresIT extends PostgresCommittingTestBase {
         assertThat(receivablePaymentRepository.findById(intent).orElseThrow().getUnappliedAmount())
                 .isEqualByComparingTo("0.00");
         assertThat(extInvoicePaymentReversalRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("#2556: a 5.00 refund processed before its settlement comes off when the settlement records the"
+            + " payment: FULLY_APPLIED at 0.00, gone from both unapplied lists, and replays of either fact change"
+            + " nothing")
+    void refundBeforeSettlementLeavesNothingUnapplied() {
+        seedInvoice("45.00");
+        UUID intent = nextUuid();
+        UUID refundId = nextUuid();
+        double notRecordedBefore = unreleasedRefunds("payment_not_recorded");
+        double exceedsBefore = unreleasedRefunds("exceeds_remainder");
+
+        consumeRefund(nextUuid(), refundId, intent, "5.00");
+        assertThat(receivablePaymentRepository.findById(intent)).isEmpty();
+        assertThat(extInvoicePaymentReversalRepository.count()).isEqualTo(1);
+        assertThat(unreleasedRefunds("payment_not_recorded") - notRecordedBefore)
+                .isEqualTo(1.0);
+
+        UUID settlementEventId = nextUuid();
+        consume(settlementEventId, fact(intent, "50.00"));
+
+        assertRefundedSettlement(intent);
+        assertThat(unreleasedRefunds("exceeds_remainder") - exceedsBefore).isZero();
+
+        // The settlement redelivered, and re-published under a new event id; the refund re-published.
+        consume(settlementEventId, fact(intent, "50.00"));
+        consume(nextUuid(), fact(intent, "50.00"));
+        consumeRefund(nextUuid(), refundId, intent, "5.00");
+
+        assertRefundedSettlement(intent);
+        assertThat(extInvoicePaymentReversalRepository.count()).isEqualTo(1);
+        assertThat(unreleasedRefunds("payment_not_recorded") - notRecordedBefore)
+                .isEqualTo(1.0);
+        assertThat(unreleasedRefunds("exceeds_remainder") - exceedsBefore).isZero();
+    }
+
+    @Test
+    @DisplayName("#2556: a refund before its settlement that is more than the application leaves releases the"
+            + " remainder only; the 45.00 application stands, the invoice still shows paid, and it is raised")
+    void refundBeforeSettlementAboveTheRemainderIsRaised() {
+        seedInvoice("45.00");
+        UUID intent = nextUuid();
+        double exceedsBefore = unreleasedRefunds("exceeds_remainder");
+
+        consumeRefund(nextUuid(), nextUuid(), intent, "50.00");
+        consume(nextUuid(), fact(intent, "50.00"));
+
+        assertRefundedSettlement(intent);
+        assertThat(unpaidWalkInSalesService.read().getBalance()).isEqualByComparingTo("0.00");
+        assertThat(unreleasedRefunds("exceeds_remainder") - exceedsBefore).isEqualTo(1.0);
+    }
+
+    /** The 50.00 payment applied 45.00 to INV-W1 and has nothing left: in neither unapplied list. */
+    private void assertRefundedSettlement(UUID intent) {
+        ReceivablePayment payment = receivablePaymentRepository.findById(intent).orElseThrow();
+        assertThat(payment.getUnappliedAmount()).isEqualByComparingTo("0.00");
+        assertThat(payment.getStatus()).isEqualTo(ReceivablePaymentStatus.FULLY_APPLIED);
+        assertThat(paymentApplicationRepository.findAll()).singleElement().satisfies(application -> {
+            assertThat(application.getApplicationSource()).isEqualTo(ApplicationSource.PAYMENT_SETTLED);
+            assertThat(application.getAppliedAmount()).isEqualByComparingTo("45.00");
+        });
+        assertThat(customerCreditRepository.count()).isZero();
+        assertThat(unpaidWalkInSalesService.read().getUnappliedPayments()).isEmpty();
+        assertThat(receivablesWorklistService.listUnappliedPayments(null, 0, 50).getItems())
+                .noneSatisfy(row -> assertThat(row.getPaymentId()).isEqualTo(intent));
+    }
+
+    private double unreleasedRefunds(String reason) {
+        Counter counter = meterRegistry
+                .getObject()
+                .find("accounting.refund.unreleased")
+                .tag("reason", reason)
+                .counter();
+        return counter == null ? 0.0 : counter.count();
     }
 
     private void consumeRefund(UUID eventId, UUID refundId, UUID intent, String amount) {
