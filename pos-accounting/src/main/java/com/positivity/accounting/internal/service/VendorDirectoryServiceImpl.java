@@ -55,34 +55,6 @@ public class VendorDirectoryServiceImpl implements VendorDirectoryService {
         return vendorRepository.findById(vendorId).map(VendorDirectoryServiceImpl::toResponse);
     }
 
-    // REQUIRES_NEW isolates the upsert from the caller's transaction: a
-    // concurrent insert of the same vendorId can still fail this write with a
-    // duplicate-key violation, but only this transaction rolls back — the
-    // upstream bill/payment flow is unaffected (callers treat directory sync
-    // as best-effort and the concurrent writer already stored the same data).
-    @Override
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void recordVendor(@NonNull UUID vendorId, @Nullable String vendorName) {
-        if (vendorName == null || vendorName.isBlank()) {
-            return;
-        }
-        String name = vendorName.trim();
-
-        Optional<Vendor> existing = vendorRepository.findById(vendorId);
-        if (existing.isPresent()) {
-            Vendor vendor = existing.get();
-            if (!name.equals(vendor.getName())) {
-                log.info("Refreshing vendor directory name | vendorId={}", vendorId);
-                vendor.setName(name);
-                vendorRepository.save(vendor);
-            }
-            return;
-        }
-
-        log.info("Adding vendor to directory | vendorId={}", vendorId);
-        vendorRepository.save(new Vendor(vendorId, name));
-    }
-
     /**
      * {@inheritDoc}
      *

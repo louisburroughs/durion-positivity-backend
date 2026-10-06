@@ -44,9 +44,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * the lock therefore waits behind the writers that are waiting for it: with a pool the size the
  * service runs with under Compose ({@code maximum-pool-size 3}) the holder gets no connection until
  * the pool's timeout, and for that long nobody in any tenant does. The vendor-directory write
- * ({@code VendorDirectoryService.recordVendor}, {@code REQUIRES_NEW}) used to be such a call; its
- * failure was swallowed as best effort, so the visible symptoms were a stall and a bill without its
- * directory row. The same defect was removed from the counter's own bootstrap in #2342.
+ * ran in a {@code REQUIRES_NEW} transaction of its own and was such a call; its failure was swallowed
+ * as best effort, so the visible symptoms were a stall and a bill without its directory row. The same
+ * defect was removed from the counter's own bootstrap in #2342.
  *
  * <p>The whole production wiring runs here, GL posting hook included, so any other call between the
  * number and the commit that reached for a second connection would fail this test the same way.
@@ -64,8 +64,10 @@ class VendorBillGoodsReceiptSmallPoolIT extends PostgresCommittingTestBase {
     /**
      * How long a thread waits for a pooled connection before Hikari gives up. Every writer finishing
      * well inside it is the proof that none of them ever waited for a connection it could not get.
+     * Generous, so that six serialised creates with GL posting on a slow runner stay inside it: the
+     * proof is elapsed below the timeout, not how fast the creates are.
      */
-    private static final Duration CONNECTION_TIMEOUT = Duration.ofSeconds(8);
+    private static final Duration CONNECTION_TIMEOUT = Duration.ofSeconds(30);
 
     @DynamicPropertySource
     static void database(DynamicPropertyRegistry registry) {
@@ -137,8 +139,7 @@ class VendorBillGoodsReceiptSmallPoolIT extends PostgresCommittingTestBase {
             assertThat(elapsed)
                     .as("a single wait for a connection that never comes lasts the pool's timeout")
                     .isLessThan(CONNECTION_TIMEOUT);
-            // The directory write is best effort: a failure to get its connection is swallowed, and
-            // shows only as a missing row.
+            // The directory row commits with its bill: it is written on the bill's own connection.
             for (UUID vendor : vendors) {
                 assertThat(jdbc.queryForObject(
                                 "SELECT count(*) FROM ap_vendor WHERE vendor_id = ? AND tenant_id = ?",

@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -150,9 +149,8 @@ class VendorBillServiceGLPostingTest {
         vendorBillService.handleGoodsReceivedEvent(testEvent);
 
         // On the bill's own connection (#2501): the counter row lock is held, so no second
-        // connection may be requested; the former REQUIRES_NEW recordVendor is not called.
+        // connection may be requested.
         verify(vendorDirectoryService).recordVendorInCurrentTransaction(testVendorId, "Test Vendor Inc");
-        verify(vendorDirectoryService, never()).recordVendor(any(), any());
     }
 
     @Test

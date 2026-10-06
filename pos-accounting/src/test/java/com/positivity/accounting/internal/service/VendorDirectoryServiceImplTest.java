@@ -148,47 +148,6 @@ class VendorDirectoryServiceImplTest {
     }
 
     @Nested
-    @DisplayName("recordVendor")
-    class RecordVendor {
-
-        @Test
-        @DisplayName("Should insert a new vendor when not present")
-        void shouldInsertNewVendor() {
-            when(vendorRepository.findById(VENDOR_ID)).thenReturn(Optional.empty());
-
-            service.recordVendor(VENDOR_ID, "Acme Auto Parts");
-
-            ArgumentCaptor<Vendor> captor = ArgumentCaptor.forClass(Vendor.class);
-            verify(vendorRepository).save(captor.capture());
-            assertThat(captor.getValue().getVendorId()).isEqualTo(VENDOR_ID);
-            assertThat(captor.getValue().getName()).isEqualTo("Acme Auto Parts");
-            assertThat(captor.getValue().getStatus()).isEqualTo(VendorStatus.ACTIVE);
-        }
-
-        @Test
-        @DisplayName("Should refresh the stored name when it changed")
-        void shouldRefreshChangedName() {
-            when(vendorRepository.findById(VENDOR_ID)).thenReturn(Optional.of(vendor(VENDOR_ID, "Old Name")));
-
-            service.recordVendor(VENDOR_ID, "New Name");
-
-            ArgumentCaptor<Vendor> captor = ArgumentCaptor.forClass(Vendor.class);
-            verify(vendorRepository).save(captor.capture());
-            assertThat(captor.getValue().getName()).isEqualTo("New Name");
-        }
-
-        @Test
-        @DisplayName("Should not save when the name is unchanged")
-        void shouldSkipUnchangedName() {
-            when(vendorRepository.findById(VENDOR_ID)).thenReturn(Optional.of(vendor(VENDOR_ID, "Acme Auto Parts")));
-
-            service.recordVendor(VENDOR_ID, "Acme Auto Parts");
-
-            verify(vendorRepository, never()).save(any());
-        }
-    }
-
-    @Nested
     @DisplayName("recordVendorInCurrentTransaction (#2501: on the caller's connection)")
     class RecordVendorInCurrentTransaction {
 
@@ -234,21 +193,12 @@ class VendorDirectoryServiceImplTest {
         }
 
         @Test
-        @DisplayName("a blank name is a no-op")
+        @DisplayName("a null or blank name is a no-op")
         void blankNameIsANoOp() {
+            service.recordVendorInCurrentTransaction(VENDOR_ID, null);
             service.recordVendorInCurrentTransaction(VENDOR_ID, "   ");
 
             verify(vendorRepository, never()).insertIfAbsent(any(), any(), any(), any());
-            verify(vendorRepository, never()).save(any());
-        }
-
-        @Test
-        @DisplayName("Should ignore null or blank names")
-        void shouldIgnoreBlankNames() {
-            service.recordVendor(VENDOR_ID, null);
-            service.recordVendor(VENDOR_ID, "   ");
-
-            verify(vendorRepository, never()).findById(any());
             verify(vendorRepository, never()).save(any());
         }
     }
