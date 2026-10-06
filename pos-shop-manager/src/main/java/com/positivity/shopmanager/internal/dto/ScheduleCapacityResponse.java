@@ -4,6 +4,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIR
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import com.positivity.shopmanager.internal.enums.ScheduleCapacityDayStatus;
+import com.positivity.shopmanager.internal.enums.ScheduleCapacityStaffingStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -57,6 +58,16 @@ public class ScheduleCapacityResponse {
             requiredMode = REQUIRED)
     private Instant viewGeneratedAt;
 
+    @Schema(
+            description = "Whether the staffing-assignment replica holds any ACTIVE assignment at this "
+                    + "location (#2527). AVAILABLE: each OK day's technicians list is that date's real "
+                    + "roster, and an empty list means nobody in a technician role is rostered. "
+                    + "UNAVAILABLE: rostering is unknown, every technicians list is empty, and that must "
+                    + "not be read as nobody on duty.",
+            example = "AVAILABLE",
+            requiredMode = REQUIRED)
+    private ScheduleCapacityStaffingStatus staffingStatus;
+
     @Schema(description = "One entry per date in [from, to], in order; never omits a date", requiredMode = REQUIRED)
     private List<DayCapacityView> days;
 
@@ -97,6 +108,56 @@ public class ScheduleCapacityResponse {
                         + "occupiedMinutes 0 (AC9).",
                 requiredMode = REQUIRED)
         private List<BayCapacityView> bays;
+
+        @Schema(
+                description = "Every person with an ACTIVE technician-role staffing assignment at the "
+                        + "location covering this date, including those with nothing assigned "
+                        + "(assignedMinutes 0), ordered by mechanicPersonId (#2527). Empty unless status is "
+                        + "OK and staffingStatus is AVAILABLE. Publishes who is on duty and who is busy, "
+                        + "not who is competent for a given job: certification stays with the client "
+                        + "(technician roster credentials) and with GET /v1/schedules/openings.",
+                requiredMode = REQUIRED)
+        private List<TechnicianCapacityView> technicians = new ArrayList<>();
+    }
+
+    @Data
+    @Schema(description = "One technician's duty and assignment load on one date (#2527)")
+    public static class TechnicianCapacityView {
+
+        @Schema(
+                description = "People-domain person id of the technician — the same id the location "
+                        + "technician roster returns as mechanicPersonId",
+                example = "01960003-0000-7000-8000-000000000010",
+                requiredMode = REQUIRED)
+        private UUID mechanicPersonId;
+
+        @Schema(
+                description = "One slot per hour of the day's window, aligned slot for slot with every "
+                        + "BayCapacityView.occupancy on the same date; 1 when the technician is on duty in "
+                        + "that hour, else 0. Duty comes from the staffing-assignment replica at the "
+                        + "granularity it holds, which is a whole day today, so every slot of a listed "
+                        + "technician currently reads 1. PTO is not modeled; a future off-duty hour reads 0.",
+                example = "[1,1,1,1,1,1,1,1,1]",
+                requiredMode = REQUIRED)
+        private List<Integer> onDuty;
+
+        @Schema(
+                description = "One slot per hour of the day's window, aligned with onDuty; each value is "
+                        + "the count of non-cancelled appointments whose planned window overlaps that hour "
+                        + "and to which the technician is assigned — through an assignment (cancelled "
+                        + "assignments excluded) or by being the appointment's own booked resource. An "
+                        + "appointment reached both ways counts once.",
+                example = "[0,0,1,1,0,0,0,0,0]",
+                requiredMode = REQUIRED)
+        private List<Integer> assigned;
+
+        @Schema(
+                description = "Total minutes of the day's window covered by those appointments' planned "
+                        + "windows (the real overlap, summed per appointment, so two overlapping "
+                        + "appointments both count)",
+                example = "120",
+                requiredMode = REQUIRED)
+        private int assignedMinutes;
     }
 
     @Data

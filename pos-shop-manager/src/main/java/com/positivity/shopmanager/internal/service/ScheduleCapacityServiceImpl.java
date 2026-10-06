@@ -4,13 +4,18 @@ import com.positivity.shopmanager.internal.dto.ScheduleCapacityResponse;
 import com.positivity.shopmanager.internal.entity.Appointment;
 import com.positivity.shopmanager.internal.entity.ExtBayReplica;
 import com.positivity.shopmanager.internal.entity.ExtLocationReplica;
+import com.positivity.shopmanager.internal.entity.ExtStaffingAssignmentReplica;
 import com.positivity.shopmanager.internal.entity.ExtWorkorderPositionReplica;
 import com.positivity.shopmanager.internal.enums.ScheduleCapacityDayStatus;
+import com.positivity.shopmanager.internal.enums.ScheduleCapacityStaffingStatus;
 import com.positivity.shopmanager.internal.exception.ScheduleCapacityRangeExceededException;
 import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
+import com.positivity.shopmanager.internal.repository.AssignmentMechanicRepository;
+import com.positivity.shopmanager.internal.repository.AssignmentMechanicRepository.MechanicAppointmentWindow;
 import com.positivity.shopmanager.internal.repository.ExtBayReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtLocationReplicaRepository;
+import com.positivity.shopmanager.internal.repository.ExtStaffingAssignmentReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtWorkorderPositionReplicaRepository;
 import com.positivity.shopmanager.internal.repository.WorkOrderAppointmentMappingRepository;
 import com.positivity.shopmanager.internal.repository.WorkorderActuals;
@@ -35,6 +40,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -70,7 +76,12 @@ import org.springframework.transaction.annotation.Transactional;
  *       the location during the assembly window (#2530), appointment or not — always issued, so a
  *       location with nothing booked and nothing held costs 4;
  *   <li>one batch lookup of which of those workorders are linked to an appointment — issued only
- *       when (5) returned at least one row.
+ *       when (5) returned at least one row;
+ *   <li>the ACTIVE staffing assignments at the location (#2527) — always issued, so a location with
+ *       nothing booked, nothing held and nobody rostered costs 5;
+ *   <li>one query for every mechanic assigned, through {@code assignment_mechanic}, to an appointment
+ *       at the location over the requested range (#2527) — issued only when the timezone resolves and
+ *       (7) named at least one technician.
  * </ol>
  *
  * <p>Building the per-day, per-bay occupancy — and now the carry-over overflow between days — from
@@ -279,6 +290,20 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>Each bay's {@code carryOverIn} is ordered by {@code (fromDate, appointmentId)}. Under the
  * widened rule a bay-day routinely holds several views, and the source ordering — a {@code HashMap}
  * iteration over a query with no {@code ORDER BY} — was never deterministic.
+ *
+ * <h2>Technicians (#2527)</h2>
+ *
+ * Each {@code OK} day also lists every person with an ACTIVE technician-role staffing assignment
+ * covering that date, with two hour-slot arrays aligned with the bays' {@code occupancy}: {@code
+ * onDuty}, from the staffing replica at its own day granularity (so every slot of a listed
+ * technician reads 1; PTO is not modeled), and {@code assigned}, the count of non-cancelled
+ * appointments overlapping the hour that the technician is assigned to — through {@code
+ * assignment_mechanic}, or by being the appointment's own booked resource. Both routes are keyed by
+ * appointment, so one reached both ways counts once. These use the <em>planned</em> window: a
+ * technician's assignment is a booking of their time, which is what a capacity grid needs, and none
+ * of the bay rules above (actuals, carry-over, the past-date booking rule) apply to it. The read
+ * stays job-agnostic — who is competent for a given job is the client's and {@code
+ * /v1/schedules/openings}' question, not this one's.
  */
 @Slf4j
 @Service
@@ -344,6 +369,8 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
     private final ExtLocationReplicaRepository extLocationReplicaRepository;
     private final ExtBayReplicaRepository extBayReplicaRepository;
     private final AppointmentRepository appointmentRepository;
+    private final AssignmentMechanicRepository assignmentMechanicRepository;
+    private final ExtStaffingAssignmentReplicaRepository staffingAssignmentRepository;
     private final WorkOrderAppointmentMappingRepository workOrderAppointmentMappingRepository;
     private final ExtWorkorderPositionReplicaRepository extWorkorderPositionReplicaRepository;
     private final LocationHoursParser locationHoursParser;
@@ -389,15 +416,14 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
         // running when the requested range began is fetched however old its planned window is, and
         // that arm is the same for every request containing the date (see the repository javadoc).
         Set<UUID> activeBayIds = bays.stream().map(ExtBayReplica::getBayId).collect(Collectors.toSet());
-        Map<UUID, List<Appointment>> appointmentsByBay = zoneId == null
-                ? Map.of()
-                : groupByBay(
-                        appointmentRepository.findAppointmentsForCapacity(
-                                locationId,
-                                to.plusDays(1).atStartOfDay(zoneId).toInstant(),
-                                assemblyFrom.atStartOfDay(zoneId).toInstant(),
-                                from.atStartOfDay(zoneId).toInstant()),
-                        activeBayIds);
+        List<Appointment> appointments = zoneId == null
+                ? List.of()
+                : appointmentRepository.findAppointmentsForCapacity(
+                        locationId,
+                        to.plusDays(1).atStartOfDay(zoneId).toInstant(),
+                        assemblyFrom.atStartOfDay(zoneId).toInstant(),
+                        from.atStartOfDay(zoneId).toInstant());
+        Map<UUID, List<Appointment>> appointmentsByBay = groupByBay(appointments, activeBayIds);
 
         // One more query (#2021), only when there is something to resolve: the workorder
         // actual-time block for every appointment (3) fetched — including the lookback ones, whose
@@ -430,12 +456,31 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
         List<ScheduleCapacityResponse.DayCapacityView> dayViews =
                 assembleDayViews(assemblies, from, today, bays, holds, jobContexts);
 
+        // Queries (7) and (8) (#2527): who is rostered, and what each technician is assigned to.
+        List<ExtStaffingAssignmentReplica> staffing = staffingAssignmentRepository.findByLocationIdAndStatus(
+                locationId, SkillRequirementResolver.STAFFING_ACTIVE);
+        ScheduleCapacityStaffingStatus staffingStatus = staffing.isEmpty()
+                ? ScheduleCapacityStaffingStatus.UNAVAILABLE
+                : ScheduleCapacityStaffingStatus.AVAILABLE;
+        List<ExtStaffingAssignmentReplica> technicians =
+                staffing.stream().filter(SkillRequirementResolver::isTechnician).toList();
+        if (zoneId != null && !technicians.isEmpty()) {
+            Map<UUID, Map<UUID, PlannedWindow>> windowsByTechnician = technicianWindows(
+                    locationId,
+                    technicians,
+                    appointments,
+                    from.atStartOfDay(zoneId).toInstant(),
+                    to.plusDays(1).atStartOfDay(zoneId).toInstant());
+            attachTechnicians(dayViews, technicians, windowsByTechnician);
+        }
+
         ScheduleCapacityResponse response = new ScheduleCapacityResponse();
         response.setLocationId(locationId);
         response.setFrom(from);
         response.setTo(to);
         response.setTimezone(zoneId == null ? null : zoneId.getId());
         response.setViewGeneratedAt(now);
+        response.setStaffingStatus(staffingStatus);
         response.setDays(dayViews);
         return response;
     }
@@ -522,7 +567,7 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
     private Map<UUID, List<Appointment>> groupByBay(List<Appointment> appointments, Set<UUID> activeBayIds) {
         Map<UUID, List<Appointment>> byBay = new HashMap<>();
         for (Appointment appointment : appointments) {
-            UUID bayId = parseBayId(appointment.getResourceId());
+            UUID bayId = parseResourceId(appointment.getResourceId());
             if (bayId == null || !activeBayIds.contains(bayId)) {
                 continue;
             }
@@ -531,8 +576,8 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
         return byBay;
     }
 
-    /** Null for a blank/non-UUID {@code resourceId} (unassigned or a technician lane), not an error. */
-    private @Nullable UUID parseBayId(@Nullable String resourceId) {
+    /** Null for a blank/non-UUID {@code resourceId} (unassigned), not an error; a bay or a technician. */
+    private @Nullable UUID parseResourceId(@Nullable String resourceId) {
         if (resourceId == null || resourceId.isBlank()) {
             return null;
         }
@@ -904,6 +949,94 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
         return view;
     }
 
+    /**
+     * Every rostered technician's planned appointment windows over {@code [rangeStart, rangeEnd)},
+     * keyed by appointment so an appointment reached through {@code assignment_mechanic} and by being
+     * booked directly on the technician counts once (#2527). The direct route is resolved in memory
+     * from the appointments query (3) already fetched — its {@code resourceId} naming the
+     * technician's person id, the same key {@code OpeningSearchServiceImpl} reads a technician's
+     * bookings by — so only the assignment route costs a statement.
+     */
+    private Map<UUID, Map<UUID, PlannedWindow>> technicianWindows(
+            UUID locationId,
+            List<ExtStaffingAssignmentReplica> technicians,
+            List<Appointment> appointments,
+            Instant rangeStart,
+            Instant rangeEnd) {
+        Set<UUID> technicianIds = technicians.stream()
+                .map(ExtStaffingAssignmentReplica::getPersonId)
+                .collect(Collectors.toSet());
+        Map<UUID, Map<UUID, PlannedWindow>> windows = new HashMap<>();
+        for (MechanicAppointmentWindow window :
+                assignmentMechanicRepository.findMechanicWindowsAtLocation(locationId, rangeStart, rangeEnd)) {
+            if (technicianIds.contains(window.getMechanicPersonId())) {
+                windows.computeIfAbsent(window.getMechanicPersonId(), ignored -> new HashMap<>())
+                        .putIfAbsent(
+                                window.getAppointmentId(), new PlannedWindow(window.getStartAt(), window.getEndAt()));
+            }
+        }
+        for (Appointment appointment : appointments) {
+            UUID personId = parseResourceId(appointment.getResourceId());
+            if (personId != null && technicianIds.contains(personId)) {
+                windows.computeIfAbsent(personId, ignored -> new HashMap<>())
+                        .putIfAbsent(
+                                appointment.getAppointmentId(),
+                                new PlannedWindow(appointment.getStartAt(), appointment.getEndAt()));
+            }
+        }
+        return windows;
+    }
+
+    /**
+     * Fills each {@code OK} day's {@code technicians} (#2527): every technician whose staffing
+     * assignment covers the date, ordered by person id, with {@code onDuty}/{@code assigned} slotted
+     * exactly as the same day's bay {@code occupancy} is.
+     */
+    private void attachTechnicians(
+            List<ScheduleCapacityResponse.DayCapacityView> dayViews,
+            List<ExtStaffingAssignmentReplica> technicians,
+            Map<UUID, Map<UUID, PlannedWindow>> windowsByTechnician) {
+        for (ScheduleCapacityResponse.DayCapacityView day : dayViews) {
+            if (day.getStatus() != ScheduleCapacityDayStatus.OK) {
+                continue;
+            }
+            LocalDate date = day.getDate();
+            Map<String, UUID> rostered = new TreeMap<>();
+            for (ExtStaffingAssignmentReplica assignment : technicians) {
+                if (SkillRequirementResolver.covers(assignment, date)) {
+                    rostered.put(assignment.getPersonId().toString(), assignment.getPersonId());
+                }
+            }
+            int slotCount = computeSlotCount(day.getDayStartAt(), day.getDayEndAt());
+            List<ScheduleCapacityResponse.TechnicianCapacityView> views = new ArrayList<>(rostered.size());
+            for (UUID personId : rostered.values()) {
+                int[] onDuty = new int[slotCount];
+                Arrays.fill(onDuty, 1);
+                int[] assigned = new int[slotCount];
+                long assignedMinutes = 0;
+                for (PlannedWindow window :
+                        windowsByTechnician.getOrDefault(personId, Map.of()).values()) {
+                    Instant overlapStart = maxInstant(window.start(), day.getDayStartAt());
+                    Instant overlapEnd = minInstant(window.end(), day.getDayEndAt());
+                    if (!overlapStart.isBefore(overlapEnd)) {
+                        continue;
+                    }
+                    assignedMinutes +=
+                            Duration.between(overlapStart, overlapEnd).toMinutes();
+                    markSlots(assigned, day.getDayStartAt(), overlapStart, overlapEnd);
+                }
+                ScheduleCapacityResponse.TechnicianCapacityView view =
+                        new ScheduleCapacityResponse.TechnicianCapacityView();
+                view.setMechanicPersonId(personId);
+                view.setOnDuty(Arrays.stream(onDuty).boxed().toList());
+                view.setAssigned(Arrays.stream(assigned).boxed().toList());
+                view.setAssignedMinutes((int) assignedMinutes);
+                views.add(view);
+            }
+            day.setTechnicians(views);
+        }
+    }
+
     /** Actual start when the linked workorder has one, else the appointment's own planned start. */
     private Instant effectiveStart(Appointment appointment, @Nullable WorkorderActuals actuals) {
         return actuals != null && actuals.workStartedAt() != null ? actuals.workStartedAt() : appointment.getStartAt();
@@ -1096,6 +1229,9 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
      * itself be a pre-range day, which is exactly how a job planned entirely before {@code from}
      * reaches the requested range (#2050).
      */
+    /** An appointment's planned window, as a technician's assignment books it (#2527). */
+    private record PlannedWindow(Instant start, Instant end) {}
+
     private record OverrunTracker(DayAssembly lastOverlapDay, ExtBayReplica bay, Instant effectiveEnd) {}
 
     /**
