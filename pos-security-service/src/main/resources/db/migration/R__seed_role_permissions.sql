@@ -14,7 +14,8 @@ SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', 
 -- POLICY
 -- * SCOPE (#1613 D8): this file now grants only to the roles Flyway still creates — the ADMIN /
 --   SYSTEM_ADMINISTRATOR bootstrap floor plus the checksum-frozen DISPATCHER, SHOP_MANAGER,
---   SELF_SERVICE_CUSTOMER and CONTROLLER. Grants for every other role moved to
+--   SELF_SERVICE_CUSTOMER and CONTROLLER, plus the template floor roles SUPPORT, ACCOUNTING_CLERK
+--   and GENERAL_MANAGER (R__seed_reference_security.sql). Grants for every other role moved to
 --   scripts/fixtures/seed/alpha/security/role-permissions.csv, applied by the
 --   SECURITY_ROLE_PERMISSION loader after the platform is up. That ordering is a correctness gain:
 --   permissions are registered code-first by each module at startup, so this seed — which runs
@@ -303,6 +304,33 @@ SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', 
 --   mixed case included: people:timeAdjustment:view and people-contact:userLink:view
 --   are reads like any other. Widening SUPPORT is
 --   a product decision; a write permission here is a defect.
+-- * CAP:550 S3 (#2504, SPEC-accounting-workspace AW4/AW6/AW7, Security sign-off OI-5 2026-10-05):
+--   ACCOUNTING_CLERK replaces the retired alpha fixture role, the accounting associate (renamed in
+--   place by V10__retire_accounting_associate.sql) and GENERAL_MANAGER is promoted from the fixture to a
+--   floor and template role, so both are granted here, the assistant baseline included.
+--   - ACCOUNTING_CLERK holds the associate's former set WITHOUT accounting:ap:pay (clerks never pay
+--     bills, §4.3 / AW6; V10 revokes the grant from a renamed role), plus accounting:payment:apply
+--     (matches customer payments, §7.3) and accounting:reconciliation:adjust (prepares the bank
+--     check-up, §2.3; the preparer grant of SPEC-manual-bank-reconciliation §6.2 — CONTROLLER
+--     keeps accounting:reconciliation:approve, so RECONCILIATION_SELF_APPROVAL still separates
+--     the two). Undo of automatic matches (accounting:payment:reverse) and credit refunds
+--     (accounting:customer-credit:refund) are deliberately NOT granted to clerks: §2.3 names
+--     neither and the sign-off left both open.
+--   - CONTROLLER gains accounting:payment:apply (G13: controllers match payments).
+--   - GENERAL_MANAGER holds the fixture's former set plus accounting:payment:apply,
+--     accounting:ap:pay (AW7: general managers pay bills) and accounting:ap:view (paying reads
+--     the bills, GET /v1/accounting/ap/bills).
+--   - accounting:payment:assign-customer (bit 548) is registered by pos-accounting but granted to
+--     no role until its endpoint exists (AD-004, OI-8); audit-rbac.py reports it as
+--     registered_unrequired / catalog_dead, both informational.
+--   Holder sets after this change, pinned by RolePermissionBaselineTest:
+--     accounting:payment:apply -> ACCOUNT_MANAGER, ACCOUNTING_CLERK, ADMIN, CONTROLLER, GENERAL_MANAGER
+--     accounting:ap:pay        -> ADMIN, CONTROLLER, GENERAL_MANAGER
+--     accounting:ap:view       -> ACCOUNTING_CLERK, ADMIN, CONTROLLER, GENERAL_MANAGER, SUPPORT
+--     accounting:reconciliation:adjust -> ACCOUNTING_CLERK, ADMIN, CONTROLLER
+--   Side effect: void and reverse of a receivable payment are gated by accounting:ap:pay
+--   (PaymentApplicationController), so a clerk can no longer use them; this story does not regate
+--   them.
 --
 -- IDEMPOTENCY
 -- Every statement below is ON CONFLICT DO NOTHING, and role/permission ids are
@@ -882,6 +910,32 @@ ON CONFLICT DO NOTHING;
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id
 FROM (VALUES
+    ('ACCOUNTING_CLERK', 'accounting:ap:view'),
+    ('ACCOUNTING_CLERK', 'accounting:coa:view'),
+    ('ACCOUNTING_CLERK', 'accounting:customer-credit:view'),
+    ('ACCOUNTING_CLERK', 'accounting:events:view'),
+    ('ACCOUNTING_CLERK', 'accounting:export:view'),
+    ('ACCOUNTING_CLERK', 'accounting:je:view'),
+    ('ACCOUNTING_CLERK', 'accounting:payment:apply'),
+    ('ACCOUNTING_CLERK', 'accounting:period:view'),
+    ('ACCOUNTING_CLERK', 'accounting:posting_rules:view'),
+    ('ACCOUNTING_CLERK', 'accounting:reconciliation:adjust'),
+    ('ACCOUNTING_CLERK', 'accounting:reconciliation:view'),
+    ('ACCOUNTING_CLERK', 'catalog:product:view'),
+    ('ACCOUNTING_CLERK', 'crm:party:view'),
+    ('ACCOUNTING_CLERK', 'inventory:availability:read'),
+    ('ACCOUNTING_CLERK', 'invoice:invoice:view'),
+    ('ACCOUNTING_CLERK', 'location:read'),
+    ('ACCOUNTING_CLERK', 'mcp:chat:execute'),
+    ('ACCOUNTING_CLERK', 'mcp:chat:stream'),
+    ('ACCOUNTING_CLERK', 'nlti:request:read'),
+    ('ACCOUNTING_CLERK', 'nlti:request:submit'),
+    ('ACCOUNTING_CLERK', 'order:order:view'),
+    ('ACCOUNTING_CLERK', 'people:employee:view'),
+    ('ACCOUNTING_CLERK', 'people:self:view'),
+    ('ACCOUNTING_CLERK', 'reporting:view:financial-statements'),
+    ('ACCOUNTING_CLERK', 'vehicle-inventory:registry:view'),
+    ('ACCOUNTING_CLERK', 'workorder:workorder:view'),
     ('ADMIN', 'accounting:analytics:view'),
     ('ADMIN', 'accounting:ap:pay'),
     ('ADMIN', 'accounting:ap:view'),
@@ -1378,6 +1432,7 @@ FROM (VALUES
     ('CONTROLLER', 'accounting:mapping-key:deactivate'),
     ('CONTROLLER', 'accounting:mapping-key:edit'),
     ('CONTROLLER', 'accounting:mapping-key:view'),
+    ('CONTROLLER', 'accounting:payment:apply'),
     ('CONTROLLER', 'accounting:payment:reverse'),
     ('CONTROLLER', 'accounting:period:close'),
     ('CONTROLLER', 'accounting:period:hard_lock'),
@@ -1425,6 +1480,84 @@ FROM (VALUES
     ('DISPATCHER', 'workorder:position:assign'),
     ('DISPATCHER', 'workorder:workorder:assign-technician'),
     ('DISPATCHER', 'workorder:workorder:view'),
+    ('GENERAL_MANAGER', 'accounting:ap:pay'),
+    ('GENERAL_MANAGER', 'accounting:ap:view'),
+    ('GENERAL_MANAGER', 'accounting:customer-credit:refund'),
+    ('GENERAL_MANAGER', 'accounting:payment:apply'),
+    ('GENERAL_MANAGER', 'appointments:reschedule:approve'),
+    ('GENERAL_MANAGER', 'catalog:product:view'),
+    ('GENERAL_MANAGER', 'catalog:service_requirement:manage'),
+    ('GENERAL_MANAGER', 'catalog:service_type:view'),
+    ('GENERAL_MANAGER', 'crm:consent:manage'),
+    ('GENERAL_MANAGER', 'crm:party:view'),
+    ('GENERAL_MANAGER', 'crm:segment:view'),
+    ('GENERAL_MANAGER', 'crm:suppression:view'),
+    ('GENERAL_MANAGER', 'crm:tag:assign'),
+    ('GENERAL_MANAGER', 'crm:tag:manage'),
+    ('GENERAL_MANAGER', 'crm:tag:view'),
+    ('GENERAL_MANAGER', 'inventory:availability:read'),
+    ('GENERAL_MANAGER', 'invoice:finalize:override'),
+    ('GENERAL_MANAGER', 'invoice:invoice:view'),
+    ('GENERAL_MANAGER', 'invoice:payment:capture'),
+    ('GENERAL_MANAGER', 'invoice:payment:flow_select'),
+    ('GENERAL_MANAGER', 'invoice:payment:limit_override'),
+    ('GENERAL_MANAGER', 'invoice:payment:override'),
+    ('GENERAL_MANAGER', 'invoice:payment:process'),
+    ('GENERAL_MANAGER', 'invoice:payment:refund'),
+    ('GENERAL_MANAGER', 'invoice:payment:void'),
+    ('GENERAL_MANAGER', 'invoice:receipt:generate'),
+    ('GENERAL_MANAGER', 'invoice:receipt:reprint_override'),
+    ('GENERAL_MANAGER', 'invoice:refund:issue_manual'),
+    ('GENERAL_MANAGER', 'location:bay:manage'),
+    ('GENERAL_MANAGER', 'location:bay:read'),
+    ('GENERAL_MANAGER', 'location:read'),
+    ('GENERAL_MANAGER', 'location:write'),
+    ('GENERAL_MANAGER', 'mcp:chat:execute'),
+    ('GENERAL_MANAGER', 'mcp:chat:stream'),
+    ('GENERAL_MANAGER', 'nlti:request:read'),
+    ('GENERAL_MANAGER', 'nlti:request:submit'),
+    ('GENERAL_MANAGER', 'order:order:charge_on_account'),
+    ('GENERAL_MANAGER', 'order:order:view'),
+    ('GENERAL_MANAGER', 'order:order:void'),
+    ('GENERAL_MANAGER', 'order:return:approve'),
+    ('GENERAL_MANAGER', 'order:session:approve_variance'),
+    ('GENERAL_MANAGER', 'people-contact:organization:edit'),
+    ('GENERAL_MANAGER', 'people-contact:organization:view'),
+    ('GENERAL_MANAGER', 'people:employee:view'),
+    ('GENERAL_MANAGER', 'people:employee_pii:view'),
+    ('GENERAL_MANAGER', 'people:self:view'),
+    ('GENERAL_MANAGER', 'people:skill:view'),
+    ('GENERAL_MANAGER', 'people:timePeriod:create'),
+    ('GENERAL_MANAGER', 'people:timePeriod:transition'),
+    ('GENERAL_MANAGER', 'people:timekeeping:approve'),
+    ('GENERAL_MANAGER', 'people:timekeeping:reject'),
+    ('GENERAL_MANAGER', 'people:timekeeping:view'),
+    ('GENERAL_MANAGER', 'pricing:promotion:apply'),
+    ('GENERAL_MANAGER', 'pricing:promotion:manage'),
+    ('GENERAL_MANAGER', 'pricing:promotion:view'),
+    ('GENERAL_MANAGER', 'pricing:restrictions:view'),
+    ('GENERAL_MANAGER', 'pricing:rule:view'),
+    ('GENERAL_MANAGER', 'reporting:view:financial-statements'),
+    ('GENERAL_MANAGER', 'security:permission:view'),
+    ('GENERAL_MANAGER', 'security:role:assign'),
+    ('GENERAL_MANAGER', 'security:role:view'),
+    ('GENERAL_MANAGER', 'shop:conflict:override'),
+    ('GENERAL_MANAGER', 'vehicle-fitment:catalog:view'),
+    ('GENERAL_MANAGER', 'vehicle-fitment:hint:view'),
+    ('GENERAL_MANAGER', 'vehicle-inventory:registry:view'),
+    ('GENERAL_MANAGER', 'warranty:claim:cancel'),
+    ('GENERAL_MANAGER', 'warranty:claim:close'),
+    ('GENERAL_MANAGER', 'warranty:claim:decide'),
+    ('GENERAL_MANAGER', 'warranty:part-return:manage'),
+    ('GENERAL_MANAGER', 'warranty:part-return:view'),
+    ('GENERAL_MANAGER', 'warranty:policy:manage'),
+    ('GENERAL_MANAGER', 'warranty:provider:manage'),
+    ('GENERAL_MANAGER', 'warranty:reimbursement:view'),
+    ('GENERAL_MANAGER', 'workorder:financials:view'),
+    ('GENERAL_MANAGER', 'workorder:fleet_auth:resolve'),
+    ('GENERAL_MANAGER', 'workorder:labor:add_on_behalf'),
+    ('GENERAL_MANAGER', 'workorder:workorder:delete'),
+    ('GENERAL_MANAGER', 'workorder:workorder:view'),
     ('SELF_SERVICE_CUSTOMER', 'mcp:chat:execute'),
     ('SELF_SERVICE_CUSTOMER', 'mcp:chat:stream'),
     ('SELF_SERVICE_CUSTOMER', 'nlti:request:read'),
@@ -1665,9 +1798,11 @@ BEGIN
     SELECT string_agg(DISTINCT g.role_name, ', ' ORDER BY g.role_name)
       INTO missing_roles
       FROM (VALUES
+        ('ACCOUNTING_CLERK'),
         ('ADMIN'),
         ('CONTROLLER'),
         ('DISPATCHER'),
+        ('GENERAL_MANAGER'),
         ('SELF_SERVICE_CUSTOMER'),
         ('SHOP_MANAGER'),
         ('SUPPORT'),

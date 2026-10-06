@@ -118,7 +118,7 @@
       "fixture_id": "q14-ar-balance-and-dso-by-month",
       "utterance": "What was our accounts receivable balance and DSO at each month-end for the last 12 months?",
       "actor": {
-        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "role": "ROLE_ACCOUNTING_CLERK",
         "permission_codes": [
           "accounting:coa:view",
           "reporting:view:financial-statements"
@@ -265,7 +265,7 @@
       "fixture_id": "q15-top-vendors-six-month-year-over-year",
       "utterance": "Who were our largest vendors by spend over the last six months compared with the same six months last year?",
       "actor": {
-        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "role": "ROLE_ACCOUNTING_CLERK",
         "permission_codes": [
           "accounting:coa:view",
           "reporting:view:financial-statements"
@@ -288,7 +288,7 @@
       "fixture_id": "q17-vendors-average-bill-increase-yoy",
       "utterance": "Which vendors have increased their average bill amount by more than 10% year over year?",
       "actor": {
-        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "role": "ROLE_ACCOUNTING_CLERK",
         "permission_codes": [
           "accounting:coa:view",
           "accounting:ap:view",
@@ -312,7 +312,7 @@
       "fixture_id": "q21-vendors-owed-with-open-purchase-orders",
       "utterance": "Which vendors do we still owe money to, and do any of them have purchase orders still open with us?",
       "actor": {
-        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "role": "ROLE_ACCOUNTING_CLERK",
         "permission_codes": [
           "accounting:coa:view",
           "reporting:view:financial-statements"
@@ -338,7 +338,7 @@
       "fixture_id": "q22-revenue-share-of-top-five-customers",
       "utterance": "What share of our revenue came from our top five customers?",
       "actor": {
-        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "role": "ROLE_ACCOUNTING_CLERK",
         "permission_codes": [
           "accounting:coa:view",
           "reporting:view:financial-statements"
@@ -364,7 +364,7 @@
       "fixture_id": "q23-most-ordered-skus",
       "utterance": "Across purchase orders that were approved or received, which three SKUs did we order the most units of, and how many units of each?",
       "actor": {
-        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "role": "ROLE_ACCOUNTING_CLERK",
         "permission_codes": [
           "accounting:coa:view",
           "reporting:view:financial-statements"
@@ -390,7 +390,7 @@
       "fixture_id": "q24-units-on-order-not-received",
       "utterance": "How many units are still on order but not yet received?",
       "actor": {
-        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "role": "ROLE_ACCOUNTING_CLERK",
         "permission_codes": [
           "accounting:coa:view",
           "reporting:view:financial-statements"
@@ -416,7 +416,7 @@
       "fixture_id": "q25-replenishment-policy-coverage",
       "utterance": "How many of our stocked product-locations have an active replenishment policy, and which SKU is it?",
       "actor": {
-        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "role": "ROLE_ACCOUNTING_CLERK",
         "permission_codes": [
           "accounting:coa:view",
           "reporting:view:financial-statements"
@@ -442,7 +442,7 @@
       "fixture_id": "q26-open-workorders-with-unpaid-invoices",
       "utterance": "Which customers have an open work order and also owe us money, and how much do they owe?",
       "actor": {
-        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "role": "ROLE_ACCOUNTING_CLERK",
         "permission_codes": [
           "accounting:coa:view",
           "reporting:view:financial-statements",

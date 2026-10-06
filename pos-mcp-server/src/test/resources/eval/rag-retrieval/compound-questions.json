@@ -6,7 +6,7 @@
       "fixture_id": "compound-invoice-number-format-and-permission",
       "query": "what does an invoice number look like and what permission is needed to read an invoice",
       "actor": {
-        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "role": "ROLE_ACCOUNTING_CLERK",
         "permission_codes": ["security:role:view", "security:permission:view"]
       },
       "expected": { "doc_ids": ["glossary.identifiers", "security.role-permission-matrix"], "k": 5 },

@@ -79,8 +79,10 @@ those start with no grants and are outside this baseline.
 | --- | --- |
 | `ADMIN` | All domains. The intentional blast-radius role. |
 | `SYSTEM_ADMINISTRATOR` | **Security and MCP administration only** — `security:*`, plus MCP administration (`mcp:system_prompt:*`, `mcp:llm_api:*`, `mcp:tool:view`, `mcp:tool:manage`, `mcp:document:ingest`), NLTI audit visibility (`nlti:audit:read`) and the assistant entrypoints. Deliberately *not* a superuser: it holds no accounting, catalog, workorder, inventory, or shop authority, and it does **not** auto-acquire newly registered permissions. Widening it is an explicit edit to the seed. |
-| `LOCATION_MANAGER`, `SERVICE_ADVISOR`, `TECHNICIAN`, `DISPATCHER`, `ACCOUNTING_ASSOCIATE`, `ACCOUNT_MANAGER`, `MANAGER`, `GENERAL_MANAGER` | Least privilege, scoped to the role's job function. |
-| `ACCOUNTANT`, `AP_CLERK`, `CONTROLLER`, `CSR`, `FLEET_MANAGER`, `GL_ANALYST` | **Not granted, and not created.** The retired hardcoded switch expanded these, but no migration or initializer creates the role, and `role_assignments` is foreign-keyed to `roles(id)` — so no user could ever hold one. They were unreachable branches, documentation personas rather than security roles. To make one real, create the role first, then grant it. |
+| `LOCATION_MANAGER`, `SERVICE_ADVISOR`, `TECHNICIAN`, `DISPATCHER`, `ACCOUNT_MANAGER`, `MANAGER` | Least privilege, scoped to the role's job function. |
+| `ACCOUNTING_CLERK` | The accounting-workspace clerk (CAP:550 S3, `SPEC-accounting-workspace` §2.3, AW4, AW6). Replaces the retired alpha fixture role "accounting associate" (`V10__retire_accounting_associate.sql` renames it in place, keeping id, assignments and grants). Holds the associate's former set **without** `accounting:ap:pay` — clerks never pay bills — plus `accounting:payment:apply` (matches customer payments) and `accounting:reconciliation:adjust` (prepares the bank check-up; `CONTROLLER` approves it). A floor and template role: every tenant receives it. Not granted: `accounting:payment:reverse` and `accounting:customer-credit:refund` (open questions on the OI-5 sign-off). Side effect: void/reverse of a receivable payment are gated by `accounting:ap:pay`, so a clerk cannot use them. |
+| `GENERAL_MANAGER` | Promoted from the alpha fixture to a floor and template role (CAP:550 S3, AW7). Its former fixture grants plus `accounting:payment:apply`, `accounting:ap:pay` (general managers pay bills) and `accounting:ap:view` (paying reads the bills). |
+| `ACCOUNTANT`, `AP_CLERK`, `CSR`, `FLEET_MANAGER`, `GL_ANALYST` | **Not granted, and not created.** The retired hardcoded switch expanded these, but no migration or initializer creates the role, and `role_assignments` is foreign-keyed to `roles(id)` — so no user could ever hold one. They were unreachable branches, documentation personas rather than security roles. To make one real, create the role first, then grant it. |
 | `INVENTORY_LEAD` | The parts-receiving persona (#1439): the receiving surface (`inventory:asn:*`, `inventory:receiving:*`, `inventory:goods_receipt:create/view`, `inventory:issue:parts`, `inventory:putaway:claim/execute/generate/view`, `inventory:shortage:*`, `inventory:on_hand:*`) and purchase-order entry (`order:purchase_order:create/view/availability_view`), plus adjustment requests (`inventory:adjustment:create`, `inventory:adjustment:view`) — it raises adjustments, it does not approve them — and the read-only catalog/order/pricing views and assistant entrypoints. The elevated escape hatches (`inventory:goods_receipt:override`, putaway capacity/compatibility overrides) are deliberately not granted. |
 | `INVENTORY_MANAGER`, `INVENTORY_CONTROLLER` | Create, approve, and view inventory adjustments. **Permission-identical on the adjustment surface on purpose**: the "location-scoped" vs "global" distinction is a property of the role's `location_scope` (`INVENTORY_MANAGER` is `LOCATION`, `INVENTORY_CONTROLLER` is `ALL`; see [Role location scope](#role-location-scope)), not of `role_permissions`, so it cannot be expressed by granting different rows. `INVENTORY_CONTROLLER` additionally holds `inventory:adjustment:override`, the negative-stock escape hatch — only a globally scoped approver should drive on-hand below zero. `INVENTORY_MANAGER` (with `LOCATION_MANAGER`) is also a PO-approver persona (#1438): `order:purchase_order:approve/transmit/view/availability_view`. |
 | `SHOP_MANAGER` | The shop surface its role description names — `shop:location:view`, `shop:bay:view`, `shop:bay:assign`, `shop:schedule:view`, `shop:schedule:edit`, `shop:technician:view` — plus `invoice:finalize:override` (#1374). No audit grant: the shop domain defines no audit permission, so "audit review" in the V3 description has nothing to map to. |
@@ -108,8 +110,8 @@ Seeded values (`R__seed_role_location_scope.sql`, formerly V37, pinned by `RoleL
 | `INVENTORY_MANAGER`, `LOCATION_MANAGER`, `SHOP_MANAGER`, `MANAGER`, `SERVICE_ADVISOR`, `TECHNICIAN`, `DISPATCHER` | `LOCATION` | `OTHER` |
 
 `INVENTORY_CONTROLLER` is an inventory role, not an accounting one — it is `OTHER`, and must never
-be classified by a name match on "CONTROLLER". `ACCOUNTING_ASSOCIATE`, `INVENTORY_LEAD` and
-`CUSTOMER` are not named by the ADR and keep the defaults.
+be classified by a name match on "CONTROLLER". `ACCOUNTING_CLERK` (the renamed associate fixture role, V10),
+`INVENTORY_LEAD` and `CUSTOMER` are not named by the ADR and keep the defaults.
 
 Two things about provisioning:
 
@@ -718,9 +720,16 @@ Flyway on the owner credential (`SPRING_FLYWAY_USER` / `SPRING_FLYWAY_PASSWORD`)
   (`TenantContext.callAs` / `runAs`) around a `@Transactional` bean, and each transaction opens its own session
   under the binding in force.
 - **Role template and platform tenant** (`R__seed_tenant_template.sql`, tier 1). The six Flyway floor roles
-  (`ADMIN`, `SYSTEM_ADMINISTRATOR`, `DISPATCHER`, `SHOP_MANAGER`, `SELF_SERVICE_CUSTOMER`, `CONTROLLER`) and
-  `SUPPORT`, the read-only role an impersonation token carries (WS2b-4), carry `template_key` in alpha and are
-  copied, grants and scope included, into the platform tenant as the template.
+  (`ADMIN`, `SYSTEM_ADMINISTRATOR`, `DISPATCHER`, `SHOP_MANAGER`, `SELF_SERVICE_CUSTOMER`, `CONTROLLER`),
+  `SUPPORT`, the read-only role an impersonation token carries (WS2b-4), and the two accounting-workspace
+  roles `ACCOUNTING_CLERK` and `GENERAL_MANAGER` (CAP:550 S3, #2504) carry `template_key` in alpha and are
+  copied, grants and scope included, into the platform tenant as the template. The template is therefore
+  exactly those nine roles (`TenantProvisioningIT`, `RoleBaselineDriftTest.TEMPLATE_FLOOR`).
+  **After deploying CAP:550 S3** a platform operator runs `reconcile-template` (below) once for every
+  existing tenant other than alpha (alpha's floor *is* the template's source): each gains `ACCOUNTING_CLERK`
+  and `GENERAL_MANAGER` (or `template_key` on a `GENERAL_MANAGER` it already holds) and `CONTROLLER`'s new
+  `accounting:payment:apply`. Until it runs, that tenant's users lack the new grants (403); sessions started
+  before the deployment keep their token's `perm_bits` until the next sign-in or refresh.
   A template role rejects delete for the life of its tenant (409 `ROLE_TEMPLATE_IMMUTABLE`); its grants may
   change and custom roles (`template_key` null) are unrestricted.
 - **Bulk-loaded template roles (WS8, decided 2026-09-10).** `POST /v1/roles/bulk-ingest` called under the

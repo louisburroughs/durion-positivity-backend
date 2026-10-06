@@ -77,6 +77,38 @@ VALUES ('ad025890-d2da-5f34-8dfc-5ef19bf73b42'::uuid, 'SUPPORT',
         NOW(), 'seed-generator', false, 'ALL', 'OTHER')
 ON CONFLICT (tenant_id, name) DO NOTHING;
 
+-- ACCOUNTING_CLERK and GENERAL_MANAGER (CAP:550 S3, #2504; SPEC-accounting-workspace AW4, AW6,
+-- AW7): the two accounting-workspace roles every tenant receives from the platform role template
+-- (R__seed_tenant_template.sql), so they are floor roles here, as SUPPORT is. Grants live in
+-- R__seed_role_permissions.sql; location scope in R__seed_role_location_scope.sql.
+--
+-- ACCOUNTING_CLERK replaces the retired alpha fixture role (the "accounting associate"):
+-- V10__retire_accounting_associate.sql renames an existing associate in place (same id, assignments and grants, minus accounting:ap:pay),
+-- so on such a database this INSERT is a no-op (ON CONFLICT) and the renamed row keeps its original
+-- id. GENERAL_MANAGER was bulk-loaded from roles.csv until this change; a database that already holds
+-- it keeps its loaded id the same way. On a fresh database both ids are UUIDv5 of
+-- "durion-positivity://roles/<NAME>" (NAMESPACE_URL), the SUPPORT and #1440 convention.
+-- Persona slots carried on the INSERT for the reason given above for ADMIN (#1613).
+INSERT INTO roles (id, name, description, created_at, created_by,
+                   persona_title, persona_focus, persona_tone, mcp_persona_rank)
+VALUES ('c5f3061d-d95e-5e45-bba5-0ce65e7eaad8'::uuid, 'ACCOUNTING_CLERK',
+        'Accounting clerk: clears the accounting to-do list, matches customer payments, checks bills and prepares the bank check-up; never pays bills',
+        NOW(), 'seed-generator',
+        'accounting clerk',
+        'ledger-facing context, reconciliation, and financial accuracy',
+        'audit-aware, posting-precise, and careful with financial claims',
+        50)
+ON CONFLICT (tenant_id, name) DO NOTHING;
+INSERT INTO roles (id, name, description, created_at, created_by,
+                   persona_title, persona_focus, persona_tone, mcp_persona_rank)
+VALUES ('6eb78aab-29c8-5dfe-9a59-3175c4d13777'::uuid, 'GENERAL_MANAGER',
+        'General manager with broad organizational access', NOW(), 'seed-generator',
+        'general manager',
+        'cross-department performance, staffing, and escalations across the organization',
+        'decisive, big-picture, and focused on the trade-off in front of them',
+        25)
+ON CONFLICT (tenant_id, name) DO NOTHING;
+
 -- Users
 -- person_id mirrors the authoritative pos-people user_person_links row (ADR-0043);
 -- required so admin.alpha's JWT carries a personId claim (ADR-0022) and is not a

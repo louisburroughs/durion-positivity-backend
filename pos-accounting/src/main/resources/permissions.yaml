@@ -72,6 +72,8 @@ permissions:
     description: "View mapping key"
   - name: "accounting:payment:apply"
     description: "Apply payment"
+  - name: "accounting:payment:assign-customer"
+    description: "Assign a customer, once and with a justification, to a payment received without one (AD-004)"
   - name: "accounting:payment:reverse"
     description: "Reverse payment"
   - name: "accounting:period:close"

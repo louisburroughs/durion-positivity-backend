@@ -13,7 +13,7 @@
     {
       "fixture_id": "misspelling-recievables",
       "query": "how do recievables get reconcilled",
-      "actor": { "role": "ROLE_ACCOUNTING_ASSOCIATE", "permission_codes": ["accounting:je:view"] },
+      "actor": { "role": "ROLE_ACCOUNTING_CLERK", "permission_codes": ["accounting:je:view"] },
       "expected": { "doc_ids": ["accounting.de-bookkeeping"], "k": 5 },
       "rag_scope": "accounting",
       "tags": ["misspelling"],

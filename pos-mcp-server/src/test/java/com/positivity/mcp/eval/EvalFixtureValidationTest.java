@@ -37,7 +37,7 @@ class EvalFixtureValidationTest {
             "ROLE_ADMIN",
             "ROLE_LOCATION_MANAGER",
             "ROLE_ACCOUNT_MANAGER",
-            "ROLE_ACCOUNTING_ASSOCIATE",
+            "ROLE_ACCOUNTING_CLERK",
             "ROLE_SERVICE_ADVISOR",
             "ROLE_DISPATCHER",
             "ROLE_TECHNICIAN",

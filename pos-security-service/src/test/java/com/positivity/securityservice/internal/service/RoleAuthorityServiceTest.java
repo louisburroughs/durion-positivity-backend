@@ -56,18 +56,15 @@ class RoleAuthorityServiceTest {
         when(roleRepository.findPermissionNamesByRoleNames(anyCollection()))
                 .thenReturn(Set.of("accounting:je:view", "workorder:workorder:view"));
 
-        Set<String> authorities = service().expandRolesToAuthorities(Set.of("ACCOUNTING_ASSOCIATE", "TECHNICIAN"));
+        Set<String> authorities = service().expandRolesToAuthorities(Set.of("ACCOUNTING_CLERK", "TECHNICIAN"));
 
         assertThat(authorities)
                 .containsExactlyInAnyOrder(
-                        "ROLE_ACCOUNTING_ASSOCIATE",
-                        "ROLE_TECHNICIAN",
-                        "accounting:je:view",
-                        "workorder:workorder:view");
+                        "ROLE_ACCOUNTING_CLERK", "ROLE_TECHNICIAN", "accounting:je:view", "workorder:workorder:view");
 
         ArgumentCaptor<Collection<String>> captor = ArgumentCaptor.captor();
         verify(roleRepository).findPermissionNamesByRoleNames(captor.capture());
-        assertThat(captor.getValue()).containsExactlyInAnyOrder("ACCOUNTING_ASSOCIATE", "TECHNICIAN");
+        assertThat(captor.getValue()).containsExactlyInAnyOrder("ACCOUNTING_CLERK", "TECHNICIAN");
     }
 
     @Test

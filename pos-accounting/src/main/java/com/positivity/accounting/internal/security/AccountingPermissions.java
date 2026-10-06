@@ -122,6 +122,12 @@ public final class AccountingPermissions {
     /** Apply payment. */
     public static final String PAYMENT_APPLY = "accounting:payment:apply";
 
+    /**
+     * Assign a customer, once and with a justification, to a payment received without one (AD-004).
+     * Registered ahead of its endpoint (CAP:550 S3); no role holds it until that endpoint enforces it.
+     */
+    public static final String PAYMENT_ASSIGN_CUSTOMER = "accounting:payment:assign-customer";
+
     /** Reverse payment. */
     public static final String PAYMENT_REVERSE = "accounting:payment:reverse";
 
@@ -130,6 +136,9 @@ public final class AccountingPermissions {
 
     /** Set the accounting hard-lock date. */
     public static final String PERIOD_HARD_LOCK = "accounting:period:hard_lock";
+
+    /** Post into a closed accounting period with justification. */
+    public static final String PERIOD_OVERRIDE = "accounting:period:override";
 
     /** Reopen a closed accounting period. */
     public static final String PERIOD_REOPEN = "accounting:period:reopen";

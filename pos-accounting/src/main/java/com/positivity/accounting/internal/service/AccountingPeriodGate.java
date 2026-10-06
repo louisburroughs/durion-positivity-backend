@@ -6,6 +6,7 @@ import com.positivity.accounting.internal.exception.AccountingPeriodClosedExcept
 import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.AccountingPeriodRepository;
+import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.security.common.SecurityContextHelper;
 import java.time.LocalDate;
 import java.time.YearMonth;
@@ -65,9 +66,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AccountingPeriodGate {
 
-    /** Permission that allows posting into a CLOSED (not hard-locked) period. */
-    public static final String OVERRIDE_AUTHORITY = "accounting:period:override";
-
     static final String AUDIT_OPERATION_PERIOD_OVERRIDE_POST = "PERIOD_OVERRIDE_POST";
 
     private static final String SYSTEM = "SYSTEM";
@@ -87,7 +85,7 @@ public class AccountingPeriodGate {
      *                              override audit row
      * @param overrideJustification optional justification for posting into a
      *                              CLOSED period; only honored when the
-     *                              caller holds {@link #OVERRIDE_AUTHORITY}
+     *                              caller holds {@link AccountingPermissions#PERIOD_OVERRIDE}
      * @throws AccountingPeriodHardLockedException if the date is strictly
      *         before the hard-lock date (422: PERIOD_HARD_LOCKED, no
      *         override)
@@ -118,14 +116,15 @@ public class AccountingPeriodGate {
             throw new AccountingPeriodClosedException(
                     periodCode,
                     "Transaction date " + transactionDate + " falls in CLOSED accounting period " + periodCode
-                            + "; supply an override justification with the " + OVERRIDE_AUTHORITY
+                            + "; supply an override justification with the " + AccountingPermissions.PERIOD_OVERRIDE
                             + " permission to post anyway");
         }
         if (!hasOverrideAuthority()) {
             throw new AccountingPeriodClosedException(
                     periodCode,
                     "Transaction date " + transactionDate + " falls in CLOSED accounting period " + periodCode
-                            + "; caller lacks the " + OVERRIDE_AUTHORITY + " permission required to override");
+                            + "; caller lacks the " + AccountingPermissions.PERIOD_OVERRIDE
+                            + " permission required to override");
         }
 
         recordOverrideAudit(periodCode, journalEntryId, overrideJustification);
@@ -187,7 +186,8 @@ public class AccountingPeriodGate {
     }
 
     private static boolean hasOverrideAuthority() {
-        return SecurityContextHelper.isAuthenticated() && SecurityContextHelper.hasAuthority(OVERRIDE_AUTHORITY);
+        return SecurityContextHelper.isAuthenticated()
+                && SecurityContextHelper.hasAuthority(AccountingPermissions.PERIOD_OVERRIDE);
     }
 
     private static String currentActor() {

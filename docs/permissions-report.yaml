@@ -1,9 +1,9 @@
-generatedAt: "2026-10-05T17:13:54.223559+00:00"
+generatedAt: "2026-10-06T04:04:46.630191+00:00"
 root: "."
 summary:
   manifestCount: 24
-  permissionCount: 512
-  uniquePermissionCount: 512
+  permissionCount: 513
+  uniquePermissionCount: 513
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -12,7 +12,7 @@ manifests:
     domain: "accounting"
     serviceName: "pos-accounting"
     version: "1.0"
-    permissionCount: 55
+    permissionCount: 56
     permissions:
       - name: "accounting:analytics:view"
         description: "View Wave 2 read-only accounting analytics (invoiced-vs-collected, payment-lag cohorts)"
@@ -84,6 +84,8 @@ manifests:
         description: "View mapping key"
       - name: "accounting:payment:apply"
         description: "Apply payment"
+      - name: "accounting:payment:assign-customer"
+        description: "Assign a customer, once and with a justification, to a payment received without one (AD-004)"
       - name: "accounting:payment:reverse"
         description: "Reverse payment"
       - name: "accounting:period:close"
@@ -1406,6 +1408,12 @@ permissions:
     source: "pos-accounting/src/main/resources/permissions.yaml"
   - name: "accounting:payment:apply"
     description: "Apply payment"
+    domain: "accounting"
+    serviceName: "pos-accounting"
+    module: "pos-accounting"
+    source: "pos-accounting/src/main/resources/permissions.yaml"
+  - name: "accounting:payment:assign-customer"
+    description: "Assign a customer, once and with a justification, to a payment received without one (AD-004)"
     domain: "accounting"
     serviceName: "pos-accounting"
     module: "pos-accounting"

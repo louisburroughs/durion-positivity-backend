@@ -46,7 +46,6 @@ import com.positivity.accounting.internal.exception.PeriodBankReconciliationInco
 import com.positivity.accounting.internal.exception.PeriodBankReconciliationIncompleteException.UnreconciledAccount;
 import com.positivity.accounting.internal.exception.PeriodCloseExceptionNotPermittedException;
 import com.positivity.accounting.internal.security.AccountingPermissions;
-import com.positivity.accounting.internal.service.AccountingPeriodGate;
 import com.positivity.security.common.SecurityContextHelper;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -227,9 +226,9 @@ public class BankReconciliationCloseReadiness {
             throw new PeriodBankReconciliationIncompleteException(
                     readiness.periodCode(), unreconciled, "not permitted by policy " + BankRecClosePolicy.REQUIRED);
         }
-        if (!holds(AccountingPermissions.PERIOD_CLOSE) || !holds(AccountingPeriodGate.OVERRIDE_AUTHORITY)) {
+        if (!holds(AccountingPermissions.PERIOD_CLOSE) || !holds(AccountingPermissions.PERIOD_OVERRIDE)) {
             throw new PeriodCloseExceptionNotPermittedException("A bank reconciliation close exception needs both "
-                    + AccountingPermissions.PERIOD_CLOSE + " and " + AccountingPeriodGate.OVERRIDE_AUTHORITY);
+                    + AccountingPermissions.PERIOD_CLOSE + " and " + AccountingPermissions.PERIOD_OVERRIDE);
         }
         String justification =
                 Justification.required(exception.getJustification(), "bankReconciliationException.justification");

@@ -446,7 +446,7 @@
     {
       "fixture_id": "accountant-show-journal-entry",
       "utterance": "Show me journal entry JE-4000.",
-      "actor": { "role": "ROLE_ACCOUNTING_ASSOCIATE", "permission_codes": ["accounting:coa:view", "accounting:je:view", "reporting:view:financial-statements", "invoice:manage", "tax:calculate"] },
+      "actor": { "role": "ROLE_ACCOUNTING_CLERK", "permission_codes": ["accounting:coa:view", "accounting:je:view", "reporting:view:financial-statements", "invoice:manage", "tax:calculate"] },
       "expected": { "outcome": "realistic-response", "tool_ids": ["AccountingFacadeTool"] },
       "gap_hypothesis": "n/a",
       "tags": ["accountant", "accounting"],
@@ -455,7 +455,7 @@
     {
       "fixture_id": "accountant-ar-balance",
       "utterance": "What's the outstanding accounts receivable balance?",
-      "actor": { "role": "ROLE_ACCOUNTING_ASSOCIATE", "permission_codes": ["accounting:coa:view", "accounting:je:view", "reporting:view:financial-statements", "invoice:manage", "tax:calculate"] },
+      "actor": { "role": "ROLE_ACCOUNTING_CLERK", "permission_codes": ["accounting:coa:view", "accounting:je:view", "reporting:view:financial-statements", "invoice:manage", "tax:calculate"] },
       "expected": { "outcome": "realistic-response", "tool_ids": ["AccountingFacadeTool"] },
       "gap_hypothesis": "n/a",
       "tags": ["accountant", "accounting"],
@@ -464,7 +464,7 @@
     {
       "fixture_id": "accountant-pnl-last-quarter",
       "utterance": "Run a profit and loss for last quarter.",
-      "actor": { "role": "ROLE_ACCOUNTING_ASSOCIATE", "permission_codes": ["accounting:coa:view", "accounting:je:view", "reporting:view:financial-statements", "invoice:manage", "tax:calculate"] },
+      "actor": { "role": "ROLE_ACCOUNTING_CLERK", "permission_codes": ["accounting:coa:view", "accounting:je:view", "reporting:view:financial-statements", "invoice:manage", "tax:calculate"] },
       "expected": { "outcome": "realistic-response", "tool_ids": ["AccountingFacadeTool", "ReportingFacadeTool"] },
       "gap_hypothesis": "n/a",
       "tags": ["accountant", "reporting"],
@@ -473,7 +473,7 @@
     {
       "fixture_id": "accountant-reconcile-bank-deposit",
       "utterance": "Reconcile the bank deposit against yesterday's sales.",
-      "actor": { "role": "ROLE_ACCOUNTING_ASSOCIATE", "permission_codes": ["accounting:coa:view", "accounting:je:view", "reporting:view:financial-statements", "invoice:manage", "tax:calculate"] },
+      "actor": { "role": "ROLE_ACCOUNTING_CLERK", "permission_codes": ["accounting:coa:view", "accounting:je:view", "reporting:view:financial-statements", "invoice:manage", "tax:calculate"] },
       "expected": { "outcome": "no-tool-available" },
       "gap_hypothesis": "new-tool",
       "tags": ["accountant", "reconciliation", "mutation"],
@@ -482,7 +482,7 @@
     {
       "fixture_id": "accountant-overdue-invoices",
       "utterance": "Which invoices are more than 30 days overdue?",
-      "actor": { "role": "ROLE_ACCOUNTING_ASSOCIATE", "permission_codes": ["accounting:coa:view", "accounting:je:view", "reporting:view:financial-statements", "invoice:manage", "tax:calculate"] },
+      "actor": { "role": "ROLE_ACCOUNTING_CLERK", "permission_codes": ["accounting:coa:view", "accounting:je:view", "reporting:view:financial-statements", "invoice:manage", "tax:calculate"] },
       "expected": { "outcome": "realistic-response", "tool_ids": ["InvoiceFacadeTool"] },
       "gap_hypothesis": "n/a",
       "tags": ["accountant", "invoice"],
@@ -491,7 +491,7 @@
     {
       "fixture_id": "accountant-post-correcting-entry",
       "utterance": "Post a correcting entry to the parts COGS account.",
-      "actor": { "role": "ROLE_ACCOUNTING_ASSOCIATE", "permission_codes": ["accounting:coa:view", "accounting:je:view", "reporting:view:financial-statements", "invoice:manage", "tax:calculate"] },
+      "actor": { "role": "ROLE_ACCOUNTING_CLERK", "permission_codes": ["accounting:coa:view", "accounting:je:view", "reporting:view:financial-statements", "invoice:manage", "tax:calculate"] },
       "expected": { "outcome": "no-tool-available" },
       "gap_hypothesis": "new-tool",
       "tags": ["accountant", "accounting", "mutation"],
@@ -500,7 +500,7 @@
     {
       "fixture_id": "accountant-export-general-ledger",
       "utterance": "Export the general ledger for the auditor.",
-      "actor": { "role": "ROLE_ACCOUNTING_ASSOCIATE", "permission_codes": ["accounting:coa:view", "accounting:je:view", "reporting:view:financial-statements", "invoice:manage", "tax:calculate"] },
+      "actor": { "role": "ROLE_ACCOUNTING_CLERK", "permission_codes": ["accounting:coa:view", "accounting:je:view", "reporting:view:financial-statements", "invoice:manage", "tax:calculate"] },
       "expected": { "outcome": "no-tool-available" },
       "gap_hypothesis": "new-tool",
       "tags": ["accountant", "export"],
@@ -509,7 +509,7 @@
     {
       "fixture_id": "accountant-sales-tax-owed",
       "utterance": "What sales tax do we owe the state this period?",
-      "actor": { "role": "ROLE_ACCOUNTING_ASSOCIATE", "permission_codes": ["accounting:coa:view", "accounting:je:view", "reporting:view:financial-statements", "invoice:manage", "tax:calculate"] },
+      "actor": { "role": "ROLE_ACCOUNTING_CLERK", "permission_codes": ["accounting:coa:view", "accounting:je:view", "reporting:view:financial-statements", "invoice:manage", "tax:calculate"] },
       "expected": { "outcome": "realistic-response", "tool_ids": ["TaxFacadeTool"] },
       "gap_hypothesis": "n/a",
       "tags": ["accountant", "tax"],
@@ -788,7 +788,7 @@
     {
       "fixture_id": "compliance-labor-tax-rate",
       "utterance": "What tax rate applies to labor in this jurisdiction?",
-      "actor": { "role": "ROLE_ACCOUNTING_ASSOCIATE", "permission_codes": ["tax:calculate", "reporting:view:financial-statements"] },
+      "actor": { "role": "ROLE_ACCOUNTING_CLERK", "permission_codes": ["tax:calculate", "reporting:view:financial-statements"] },
       "expected": { "outcome": "realistic-response", "tool_ids": ["TaxFacadeTool"] },
       "gap_hypothesis": "n/a",
       "tags": ["compliance-tax", "tax"],
@@ -797,7 +797,7 @@
     {
       "fixture_id": "compliance-part-taxable-state",
       "utterance": "Is this part taxable in the customer's state?",
-      "actor": { "role": "ROLE_ACCOUNTING_ASSOCIATE", "permission_codes": ["tax:calculate", "reporting:view:financial-statements"] },
+      "actor": { "role": "ROLE_ACCOUNTING_CLERK", "permission_codes": ["tax:calculate", "reporting:view:financial-statements"] },
       "expected": { "outcome": "realistic-response", "tool_ids": ["TaxFacadeTool"] },
       "gap_hypothesis": "n/a",
       "tags": ["compliance-tax", "tax"],
@@ -806,7 +806,7 @@
     {
       "fixture_id": "compliance-sales-tax-filing-june",
       "utterance": "Generate the sales tax filing report for June.",
-      "actor": { "role": "ROLE_ACCOUNTING_ASSOCIATE", "permission_codes": ["tax:calculate", "reporting:view:financial-statements"] },
+      "actor": { "role": "ROLE_ACCOUNTING_CLERK", "permission_codes": ["tax:calculate", "reporting:view:financial-statements"] },
       "expected": { "outcome": "realistic-response", "tool_ids": ["TaxFacadeTool"] },
       "gap_hypothesis": "n/a",
       "tags": ["compliance-tax", "tax"],
@@ -815,7 +815,7 @@
     {
       "fixture_id": "compliance-missing-tax-code",
       "utterance": "Show me any transactions missing a tax code.",
-      "actor": { "role": "ROLE_ACCOUNTING_ASSOCIATE", "permission_codes": ["tax:calculate", "reporting:view:financial-statements"] },
+      "actor": { "role": "ROLE_ACCOUNTING_CLERK", "permission_codes": ["tax:calculate", "reporting:view:financial-statements"] },
       "expected": { "outcome": "no-tool-available" },
       "gap_hypothesis": "new-tool",
       "tags": ["compliance-tax", "exception-report"],
@@ -824,7 +824,7 @@
     {
       "fixture_id": "compliance-tax-exempt-fleet-total",
       "utterance": "What's our tax-exempt sales total this quarter for fleet accounts?",
-      "actor": { "role": "ROLE_ACCOUNTING_ASSOCIATE", "permission_codes": ["tax:calculate", "reporting:view:financial-statements"] },
+      "actor": { "role": "ROLE_ACCOUNTING_CLERK", "permission_codes": ["tax:calculate", "reporting:view:financial-statements"] },
       "expected": { "outcome": "no-tool-available" },
       "gap_hypothesis": "description-gap",
       "tags": ["compliance-tax", "tax"],

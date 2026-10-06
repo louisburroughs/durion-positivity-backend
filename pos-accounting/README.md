@@ -303,6 +303,34 @@ the lock effectively irreversible.
 
 Permission catalog note: catalog v23 adds bits 382 (`accounting:period:hard_lock`) and 383
 (`accounting:period:override`); the `CATALOG_VERSION` 22 → 23 bump requires a fleet-coordinated deploy.
+The override permission is the constant `AccountingPermissions.PERIOD_OVERRIDE` (CAP:550 S3 moved it off
+the former `AccountingPeriodGate.OVERRIDE_AUTHORITY`; the code and bit are unchanged).
+
+## Permissions and the accounting roles (CAP:550 S3, #2504)
+
+Every permission this module enforces is a constant in `internal/security/AccountingPermissions.java` and
+registered in `src/main/resources/permissions.yaml` (ADR-0025). Who holds what is decided in
+`pos-security-service` (`R__seed_role_permissions.sql`, the platform role template); applications gate on
+permission codes, never on role names (`SPEC-accounting-workspace` §8.2). After S3 the accounting-workspace
+holder sets are:
+
+| Permission | Held by exactly |
+| --- | --- |
+| `accounting:payment:apply` | `ACCOUNT_MANAGER`, `ACCOUNTING_CLERK`, `ADMIN`, `CONTROLLER`, `GENERAL_MANAGER` |
+| `accounting:ap:pay` | `ADMIN`, `CONTROLLER`, `GENERAL_MANAGER` — clerks never pay bills (AW6) |
+| `accounting:ap:view` | `ACCOUNTING_CLERK`, `ADMIN`, `CONTROLLER`, `GENERAL_MANAGER`, `SUPPORT` |
+| `accounting:reconciliation:adjust` | `ACCOUNTING_CLERK`, `ADMIN`, `CONTROLLER` (the preparer; `CONTROLLER` alone approves) |
+| `accounting:payment:assign-customer` | no role yet |
+
+`accounting:payment:assign-customer` (catalog v97, bit 548; `AccountingPermissions.PAYMENT_ASSIGN_CUSTOMER`)
+is registered ahead of its endpoint — assigning a customer, once and with a justification, to a payment
+received without one (AD-004, depends on OI-8). No `@PreAuthorize` names it and no role holds it until that
+endpoint lands; `scripts/audit-rbac.py` reports it as `registered_unrequired` / `catalog_dead`, both
+informational.
+
+Side effect of the S3 grants: `POST /v1/accounting/payments/{paymentId}/void` and `/reverse` are gated by
+`accounting:ap:pay`, so an `ACCOUNTING_CLERK` cannot void or reverse a receivable payment. S3 does not
+regate them.
 
 ## Posting Rules
 
