@@ -37,7 +37,7 @@ public class ArchitectureTest {
             new DescribedPredicate<>("call Clock.getZone() or ZoneId.systemDefault()") {
                 @Override
                 public boolean test(JavaCall<?> input) {
-                    return (input.getTargetOwner().isAssignableTo(Clock.class) && "getZone".equals(input.getName()))
+                    return (input.getTargetOwner().isEquivalentTo(Clock.class) && "getZone".equals(input.getName()))
                             || (input.getTargetOwner().isEquivalentTo(ZoneId.class)
                                     && "systemDefault".equals(input.getName()));
                 }
