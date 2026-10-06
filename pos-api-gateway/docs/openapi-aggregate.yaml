@@ -1077,6 +1077,8 @@ paths:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1carts~1{orderId}~1cancel
   /v1/orders/carts/{orderId}/cancel/retry:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1carts~1{orderId}~1cancel~1retry
+  /v1/orders/carts/{orderId}/customer:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1carts~1{orderId}~1customer
   /v1/orders/carts/{orderId}/discount:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1carts~1{orderId}~1discount
   /v1/orders/carts/{orderId}/items:
