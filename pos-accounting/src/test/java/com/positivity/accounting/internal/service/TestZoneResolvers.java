@@ -51,4 +51,31 @@ public final class TestZoneResolvers {
         when(tenantResolver.require()).thenReturn(TENANT);
         return new AccountingCalendarZoneResolver(repository, tenantResolver, clock);
     }
+
+    /** 2026-01-31T23:30-06:00: the last evening of January in Chicago, already February in UTC. */
+    public static final java.time.Instant JAN_31_2330_CHICAGO = java.time.Instant.parse("2026-02-01T05:30:00Z");
+
+    /** The Chicago calendar the boundary tests use. */
+    public static final ZoneId CHICAGO = ZoneId.of("America/Chicago");
+
+    /**
+     * A copy of the record {@code fact} with every component equal to {@code from} replaced by {@code to}: a fact
+     * builder's business instant moved to a boundary without a second builder.
+     */
+    @SuppressWarnings("unchecked")
+    public static <R extends Record> R movedTo(R fact, java.time.Instant from, java.time.Instant to) {
+        try {
+            java.lang.reflect.RecordComponent[] components = fact.getClass().getRecordComponents();
+            Object[] values = new Object[components.length];
+            Class<?>[] types = new Class<?>[components.length];
+            for (int i = 0; i < components.length; i++) {
+                Object value = components[i].getAccessor().invoke(fact);
+                values[i] = from.equals(value) ? to : value;
+                types[i] = components[i].getType();
+            }
+            return (R) fact.getClass().getDeclaredConstructor(types).newInstance(values);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException(e);
+        }
+    }
 }

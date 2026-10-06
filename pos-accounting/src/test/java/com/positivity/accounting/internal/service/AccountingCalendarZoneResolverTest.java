@@ -95,8 +95,8 @@ class AccountingCalendarZoneResolverTest {
     }
 
     @Test
-    @DisplayName("caches the zone per tenant until evicted; a missing row is never cached")
-    void cachesUntilEvicted() {
+    @DisplayName("reads the row on every call: a change made on another instance takes effect at once")
+    void neverCaches() {
         when(repository.findByConfigKey(AccountingCalendarZoneResolver.CONFIG_KEY))
                 .thenReturn(Optional.empty());
         assertThatThrownBy(resolver::zone).isInstanceOf(AccountingTimeZoneUnsetException.class);
@@ -104,9 +104,6 @@ class AccountingCalendarZoneResolverTest {
         stored("America/Chicago");
         assertThat(resolver.zone()).isEqualTo(CHICAGO);
         stored("UTC");
-        assertThat(resolver.zone()).as("cached").isEqualTo(CHICAGO);
-
-        resolver.evict(TENANT);
         assertThat(resolver.zone()).isEqualTo(ZoneId.of("UTC"));
         verify(repository, times(3)).findByConfigKey(AccountingCalendarZoneResolver.CONFIG_KEY);
     }

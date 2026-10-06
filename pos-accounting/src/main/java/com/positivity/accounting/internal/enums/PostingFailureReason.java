@@ -101,8 +101,10 @@ public enum PostingFailureReason {
     /**
      * The tenant has no accounting-calendar zone ({@code ACCOUNTING_TIME_ZONE}, #2558), so the fact's
      * instant has no posting date and no period gate can decide it. There is no default zone: the
-     * fact is held {@code SUSPENDED} until an administrator sets the zone, then reprocessed by a
-     * person. The scheduled auto-retry loop skips it: the remedy is an operator action.
+     * fact is held {@code SUSPENDED}. The scheduled auto-retry loop picks it up again (sharing the
+     * module's attempt cap): a tenant's zone row is seeded by provisioning, which can land after the
+     * first facts (the startup sweep), so the hold clears by itself once the row exists. After the cap
+     * it is reprocessed by a person.
      */
     ACCOUNTING_TIME_ZONE_UNSET;
 
@@ -124,7 +126,6 @@ public enum PostingFailureReason {
     public boolean isExcludedFromAutoRetry() {
         return this == PERIOD_CLOSED
                 || this == CURRENCY_NOT_SUPPORTED
-                || this == ACCOUNTING_TIME_ZONE_UNSET
                 // The payload never changes, so a retry fails the same way.
                 || this == VALIDATION_ERROR
                 || this == MISSING_AMOUNT;

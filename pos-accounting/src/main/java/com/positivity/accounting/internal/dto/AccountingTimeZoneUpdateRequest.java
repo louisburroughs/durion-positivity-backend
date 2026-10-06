@@ -19,7 +19,7 @@ import lombok.NoArgsConstructor;
 public class AccountingTimeZoneUpdateRequest {
 
     @NotBlank(message = "timeZone is required")
-    @Size(max = 64, message = "timeZone must not exceed 64 characters")
+    @Size(min = 1, max = 64, message = "timeZone must be 1 to 64 characters")
     @Schema(
             description = "IANA region id of the tenant's accounting calendar, such as America/Chicago. Every"
                     + " settlement, application and posting is dated, and every period is cut, in this zone."

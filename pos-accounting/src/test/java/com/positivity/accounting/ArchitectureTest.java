@@ -14,11 +14,12 @@ import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
-import java.time.Clock;
-import java.time.ZoneId;
+import java.util.Set;
 import java.util.UUID;
 
-@AnalyzeClasses(packages = "com.positivity.accounting", importOptions = ImportOption.DoNotIncludeTests.class)
+@AnalyzeClasses(
+        packages = "com.positivity.accounting",
+        importOptions = {ImportOption.DoNotIncludeTests.class, ImportOption.DoNotIncludeJars.class})
 public class ArchitectureTest {
 
     private static final DescribedPredicate<JavaCall<?>> UUID_RANDOM_UUID_CALL =
@@ -29,26 +30,49 @@ public class ArchitectureTest {
                 }
             };
 
+    /** The date-time types whose {@code now()} / {@code now(Clock)} reads a zone implicitly. */
+    private static final Set<String> ZONED_NOW_TYPES = Set.of(
+            "java.time.LocalDate",
+            "java.time.LocalDateTime",
+            "java.time.LocalTime",
+            "java.time.YearMonth",
+            "java.time.Year",
+            "java.time.MonthDay",
+            "java.time.ZonedDateTime",
+            "java.time.OffsetDateTime",
+            "java.time.OffsetTime");
+
     /**
-     * A call that reads a zone the tenant never chose (#2558): {@code Clock.getZone()} (the clock bean is UTC) or
-     * {@code ZoneId.systemDefault()} (the JVM's). A business date comes from {@code AccountingCalendarZoneResolver}.
+     * A call that reads a zone the tenant never chose (#2558): {@code Clock.getZone()} (the clock bean is UTC),
+     * {@code Clock.systemDefaultZone()}, {@code ZoneId/ZoneOffset.systemDefault()} and {@code TimeZone.getDefault()}
+     * (the JVM's), and {@code now()} / {@code now(Clock)} on a date-time type, which reads the clock's or the JVM's
+     * zone implicitly. A business date comes from {@code AccountingCalendarZoneResolver}; a technical UTC value is
+     * written {@code LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC)}. Matched by owner name only, so the rule
+     * never resolves a call target's class hierarchy (the CI test fork has 1 GiB).
      */
     static final DescribedPredicate<JavaCall<?>> GUESSED_ZONE_CALL =
-            new DescribedPredicate<>("call Clock.getZone() or ZoneId.systemDefault()") {
+            new DescribedPredicate<>("read the clock's or the JVM's time zone") {
                 @Override
                 public boolean test(JavaCall<?> input) {
-                    return (input.getTargetOwner().isEquivalentTo(Clock.class) && "getZone".equals(input.getName()))
-                            || (input.getTargetOwner().isEquivalentTo(ZoneId.class)
-                                    && "systemDefault".equals(input.getName()));
+                    String owner = input.getTargetOwner().getName();
+                    String name = input.getName();
+                    return switch (owner) {
+                        case "java.time.Clock" -> "getZone".equals(name) || "systemDefaultZone".equals(name);
+                        case "java.time.ZoneId", "java.time.ZoneOffset" -> "systemDefault".equals(name);
+                        case "java.util.TimeZone" -> "getDefault".equals(name);
+                        default -> ZONED_NOW_TYPES.contains(owner) && "now".equals(name);
+                    };
                 }
             };
+
+    /** The one class that turns the clock into a date: in the tenant's zone, {@code now(clock.withZone(zone))}. */
+    static final String ZONE_RESOLVER = "com.positivity.accounting.internal.service.AccountingCalendarZoneResolver";
 
     /**
      * The settlement, automatic-application, application-GL and customer-credit flows and the period service (#2558
      * PR A). The remaining posting flows join in the follow-up PR, which widens the rule to the whole module.
      */
     static final String[] ACCOUNTING_CALENDAR_CLASSES = {
-        "com.positivity.accounting.internal.service.AccountingCalendarZoneResolver",
         "com.positivity.accounting.internal.service.AccountingConfigurationServiceImpl",
         "com.positivity.accounting.internal.service.AccountingPeriodServiceImpl",
         "com.positivity.accounting.internal.service.AutomaticPaymentApplicationService",
@@ -319,8 +343,6 @@ public class ArchitectureTest {
             .haveFullyQualifiedName(ACCOUNTING_CALENDAR_CLASSES[4])
             .or()
             .haveFullyQualifiedName(ACCOUNTING_CALENDAR_CLASSES[5])
-            .or()
-            .haveFullyQualifiedName(ACCOUNTING_CALENDAR_CLASSES[6])
             .should()
             .callMethodWhere(GUESSED_ZONE_CALL)
             .because("#2558: a posting date and a period are cut in the tenant's accounting-calendar zone"

@@ -77,7 +77,7 @@ class AccountingTimeZoneConfigurationTest extends PostgresIntegrationTestBase {
                 .as("the provisioning seed survives the rolled-back test")
                 .isEqualTo("UTC");
         assertThat(zoneResolver.zone())
-                .as("the change's cache entry is evicted when its transaction ends")
+                .as("a rolled-back change is never read: nothing is cached")
                 .isEqualTo(ZoneId.of("UTC"));
     }
 
@@ -127,7 +127,8 @@ class AccountingTimeZoneConfigurationTest extends PostgresIntegrationTestBase {
                 "Mars/Olympus",
                 " "
             })
-    @DisplayName("an unknown id, a fixed offset or a SystemV id is refused with 400 and nothing is written")
+    @DisplayName("an unknown id, a fixed offset (UTC aliases included) or a SystemV id is refused with 400; nothing is"
+            + " written")
     void invalidZoneIsRefused(String zone) {
         assertThatThrownBy(() -> configurationService.setAccountingTimeZone(zone))
                 .isInstanceOf(InvalidAccountingTimeZoneException.class);

@@ -298,10 +298,6 @@ public class AccountingExceptionHandler {
         return build(HttpStatus.UNPROCESSABLE_CONTENT, "PERIOD_HARD_LOCKED", ex.getMessage(), request);
     }
 
-    /**
-     * Hard-lock date update that would move the date backward (story B2,
-     * issue #944): the hard lock is monotonic-forward-only.
-     */
     /** The requested accounting time zone is not an IANA region id (#2558). */
     @ExceptionHandler(InvalidAccountingTimeZoneException.class)
     public ResponseEntity<ApiError> handleInvalidAccountingTimeZone(
@@ -323,6 +319,10 @@ public class AccountingExceptionHandler {
         return build(HttpStatus.UNPROCESSABLE_CONTENT, "ACCOUNTING_TIME_ZONE_UNSET", ex.getMessage(), request);
     }
 
+    /**
+     * Hard-lock date update that would move the date backward (story B2,
+     * issue #944): the hard lock is monotonic-forward-only.
+     */
     @ExceptionHandler(HardLockDateRegressionException.class)
     public ResponseEntity<ApiError> handleHardLockDateRegression(
             HardLockDateRegressionException ex, HttpServletRequest request) {

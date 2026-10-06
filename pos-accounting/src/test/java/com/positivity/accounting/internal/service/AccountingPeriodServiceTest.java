@@ -22,6 +22,7 @@ import com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetExcep
 import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.exception.PeriodBankReconciliationIncompleteException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
+import com.positivity.accounting.internal.repository.AccountingConfigurationRepository;
 import com.positivity.accounting.internal.repository.AccountingPeriodRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.tenancy.TenantResolver;
@@ -76,6 +77,9 @@ class AccountingPeriodServiceTest {
 
     @Mock
     private BankReconciliationCloseReadiness closeReadiness;
+
+    @Mock
+    private AccountingConfigurationRepository configurationRepository;
 
     /** The tenant's accounting calendar in this class's arrangements: the zone its instants are built in. */
     @Spy
@@ -377,7 +381,8 @@ class AccountingPeriodServiceTest {
                 journalEntryRepository,
                 auditLogRepository,
                 closeReadiness,
-                TestZoneResolvers.fixed(ZoneId.of("America/Chicago"), utcClock));
+                TestZoneResolvers.fixed(ZoneId.of("America/Chicago"), utcClock),
+                configurationRepository);
     }
 
     @Test
@@ -410,11 +415,25 @@ class AccountingPeriodServiceTest {
                 journalEntryRepository,
                 auditLogRepository,
                 closeReadiness,
-                TestZoneResolvers.unset(utc));
+                TestZoneResolvers.unset(utc),
+                configurationRepository);
 
         assertThatThrownBy(unset::getCurrentPeriodId).isInstanceOf(AccountingTimeZoneUnsetException.class);
         assertThatThrownBy(() -> unset.getPeriodIdForDate(JAN_31_2330_CHICAGO))
                 .isInstanceOf(AccountingTimeZoneUnsetException.class);
+    }
+
+    @Test
+    @DisplayName(
+            "#2558: a close takes the calendar lock (the ACCOUNTING_TIME_ZONE row FOR UPDATE) before the period row")
+    void closeTakesTheCalendarLockFirst() {
+        when(periodRepository.findWithLockByPeriodCode("2024-02")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.closePeriod("2024-02")).isInstanceOf(AccountingPeriodNotFoundException.class);
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(configurationRepository, periodRepository);
+        order.verify(configurationRepository).findWithLockByConfigKey(AccountingCalendarZoneResolver.CONFIG_KEY);
+        order.verify(periodRepository).findWithLockByPeriodCode("2024-02");
     }
 
     // ===== LIFECYCLE INPUT VALIDATION TESTS =====

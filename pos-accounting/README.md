@@ -295,22 +295,30 @@ Every posting date and every period boundary is cut in the **tenant's accounting
 the JVM zone is never read: `AccountingCalendarZoneResolver` is the only place an instant becomes a business
 date (period service `getPeriodIdForDate` / `getCurrentPeriodId`, the settlement listener, automatic
 application, the payment-application and customer-credit GL handlers, customer-credit draw-downs). An
-ArchUnit rule (`posting_dates_use_the_accounting_calendar_zone`) fails on `Clock.getZone()` or
-`ZoneId.systemDefault()` in those classes.
+ArchUnit rule (`posting_dates_use_the_accounting_calendar_zone`) fails in those classes on anything that reads
+the clock's or the JVM's zone: `Clock.getZone()`, `Clock.systemDefaultZone()`, `ZoneId`/`ZoneOffset.systemDefault()`,
+`TimeZone.getDefault()`, and `now()` / `now(Clock)` on `LocalDate`, `LocalDateTime`, `LocalTime`, `YearMonth`,
+`Year`, `MonthDay`, `ZonedDateTime`, `OffsetDateTime` and `OffsetTime`.
 
 - **Seed.** V10 gives every existing tenant `UTC` (what the UTC clock dated everything in, so nothing is
   re-cut); tenant provisioning (`DataInitializationServiceImpl`) gives every new tenant `UTC`. An
   administrator sets the legal entity's zone before the first close.
 - **No default.** A tenant without the row posts nothing: a settled payment is held
-  `SUSPENDED / ACCOUNTING_TIME_ZONE_UNSET` (never auto-retried; reprocess after setting the zone), a GL work
-  item fails and retries, and a request answers `422 ACCOUNTING_TIME_ZONE_UNSET`.
+  `SUSPENDED / ACCOUNTING_TIME_ZONE_UNSET`, which the failed-event retry job releases by itself once the row
+  exists (sharing the module's attempt cap; after it, `POST /v1/accounting/events/{eventId}/reprocess`), a GL
+  work item fails and retries, and a request answers `422 ACCOUNTING_TIME_ZONE_UNSET`.
+- **No cache.** Every date reads the row by its unique index, so a change is seen by every instance at once.
 - **Changing it.** `PUT /v1/accounting/configuration/time-zone` `{"timeZone":"America/Chicago"}` (permission
   `accounting:period:hard_lock`, the authority over the hard-lock date). Only IANA region ids:
-  `400 INVALID_ACCOUNTING_TIME_ZONE` for an unknown id, a fixed offset (`+05:00`, `UTC+05:00`, `Etc/GMT+5`) or
-  a `SystemV/*` id; `UTC` is accepted. Once the tenant has closed a period (even one reopened since) or set a
-  hard-lock date the zone is fixed: `409 ACCOUNTING_TIME_ZONE_LOCKED`. Each change is audited
+  `400 INVALID_ACCOUNTING_TIME_ZONE` for an unknown id, a fixed offset (`+05:00`, `UTC+05:00`, `Etc/GMT+5`, and
+  the UTC aliases `GMT`, `Etc/UTC`, `Etc/GMT`) or a `SystemV/*` id; only `UTC` itself, the seed, is
+  accepted. Once the tenant has closed a period (even one reopened since) or set a hard-lock date the zone is
+  fixed: `409 ACCOUNTING_TIME_ZONE_LOCKED`. Each change is audited
   (`ACCOUNTING_TIME_ZONE_SET`, old and new zone, actor). A change never re-cuts history: posted entries keep
   their dates and periods.
+- **Calendar lock.** A zone change, a period close and a hard-lock change each take the tenant's
+  `ACCOUNTING_TIME_ZONE` row `FOR UPDATE` first, so a close or hard lock that commits first is seen by the
+  zone change's checks (409), and a zone change that commits first is what the close then cuts in.
 
 ### Bank reconciliation close readiness and policy (#2305)
 
@@ -509,7 +517,7 @@ result; neither writes a row.
 | b. invoice not in `ext_invoice` | not applied; the retry job tries again, sharing the module retry cap (`pos.accounting.failed-event-retry.max-retries`, default 3 passes, about 45 minutes at the default 15-minute poll). After that the row stays `SUSPENDED` and needs a manual `POST /v1/accounting/events/{eventId}/reprocess` once the invoice arrives | `SUSPENDED / INVOICE_NOT_FOUND` |
 | c. invoice not `FINALIZED` / `POSTED` | not applied; retried up to the attempt cap | `FAILED / INVOICE_NOT_ELIGIBLE` |
 | d. invoice party (UUID) missing or not the payment's customer | not applied | `SKIPPED / NOT_POSTABLE` "customer differs from invoice INV-…" |
-| e0. the tenant has no accounting time zone (#2558) | not applied; reprocess by hand after setting the zone | `SUSPENDED / ACCOUNTING_TIME_ZONE_UNSET` |
+| e0. the tenant has no accounting time zone (#2558) | not applied; the retry job applies it once the zone exists (shared attempt cap) | `SUSPENDED / ACCOUNTING_TIME_ZONE_UNSET` |
 | e. settlement date (in the tenant's accounting-calendar zone) in a closed or hard-locked period | not applied; reprocess by hand after reopening (a hard-locked date cannot be reopened: the detail says to match or credit the payment by hand) | `SUSPENDED / PERIOD_CLOSED` |
 | f. payment has nothing unapplied (another path applied it) | nothing | none |
 | g. invoice has no open balance | not applied, not credited, left for a person (most likely a duplicate charge; confirmed by the Accounting Domain, 2026-10-06) | `SKIPPED / NOT_POSTABLE` |
