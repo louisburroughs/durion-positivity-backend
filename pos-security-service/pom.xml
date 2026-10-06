@@ -13,12 +13,12 @@
     <description>POS Security Service Module for IAM and JWT management</description>
 
     <properties>
-        <!-- Coverage ratchet: measured 81.3% line / 73.0% branch by the gate's own
+        <!-- Coverage ratchet: measured 85.4% line / 76.1% branch by the gate's own
              command, `verify -DskipITs` (../durion/docs/architecture/TEST_COVERAGE_POLICY.md §6.1).
              Floors sit 3 points under. Re-derive them ONLY from a -DskipITs run — an
              IT-inclusive measurement describes coverage the gate cannot see. -->
-        <jacoco.line.min>0.78</jacoco.line.min>
-        <jacoco.branch.min>0.72</jacoco.branch.min>
+        <jacoco.line.min>0.82</jacoco.line.min>
+        <jacoco.branch.min>0.73</jacoco.branch.min>
     </properties>
     <packaging>jar</packaging>
 
