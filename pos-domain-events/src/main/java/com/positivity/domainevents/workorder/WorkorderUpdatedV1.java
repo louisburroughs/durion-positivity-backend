@@ -49,6 +49,9 @@ import org.jspecify.annotations.Nullable;
  * @param appointmentId the pos-shop-manager appointment this workorder's work was booked as — the
  *     {@code appointmentId} of the estimate the workorder was promoted from; null for a walk-in,
  *     or any workorder whose estimate did not come from an appointment
+ * @param positions every service position the workorder has held, oldest first — the owner's
+ *     position history as a full replacement set on every fact, including the placement it holds
+ *     now (the one with a null {@code releasedAt}); empty for a workorder never placed
  *
  * <p>{@code vehicleId} and the {@code services} list plus the extended {@code PartLine} fields
  * (description, unitPrice, lineTotal, photoEvidenceUrl) are additive within schema v1
@@ -92,6 +95,14 @@ import org.jspecify.annotations.Nullable;
  * read built on that link (status sync, actual-versus-planned, carry-over) stayed inert. It never
  * changes for a workorder, and a consumer must treat an absent field (a pre-#2531 producer) as "not
  * stated", never as "unlinked".
+ *
+ * <p>{@code positions} is additive within schema v1 (ADR-0044 §3, #2530). {@code resourceId} and
+ * {@code resourceType} above say only where the workorder is <em>now</em>, and the owner clears both
+ * when the workorder closes, so a completed job's fact no longer names the bay it was done in. The
+ * history is the durable record of that, and it is what lets pos-shop-manager's capacity read answer
+ * "how busy was this bay" for work that had no appointment, and charge a job that moved to each bay
+ * for its own interval. Like {@code parts} and {@code services} it is the whole set, not a delta. A
+ * consumer must treat an absent field (a pre-#2530 producer) as "not stated" and keep what it holds.
  */
 public record WorkorderUpdatedV1(
         @NonNull UUID workorderId,
@@ -114,10 +125,29 @@ public record WorkorderUpdatedV1(
         @Nullable Instant workStartedAt,
         @Nullable Instant completedAt,
         @Nullable Instant expectedEndAt,
-        @Nullable UUID appointmentId) {
+        @Nullable UUID appointmentId,
+        @Nullable List<PositionInterval> positions) {
 
     public static final String EVENT_TYPE = "workorder.workorder.updated";
     public static final int SCHEMA_VERSION = 1;
+
+    /**
+     * One interval a workorder held a service position for (#2530).
+     *
+     * @param resourceType what {@code resourceId} points at — the owner's enum name: {@code BAY},
+     *     {@code MOBILE_UNIT} or {@code HOLD}
+     * @param resourceId the bay, mobile unit or (for {@code HOLD}) site held
+     * @param locationId the site the placement happened at (null on history written before the owner
+     *     recorded it)
+     * @param assignedAt when the workorder took the position
+     * @param releasedAt when it gave the position up; null while it still holds it
+     */
+    public record PositionInterval(
+            @NonNull String resourceType,
+            @NonNull UUID resourceId,
+            @Nullable UUID locationId,
+            @NonNull Instant assignedAt,
+            @Nullable Instant releasedAt) {}
 
     /**
      * One workorder part line.
@@ -269,6 +299,7 @@ public record WorkorderUpdatedV1(
                 null,
                 null,
                 null,
+                null,
                 null);
     }
 
@@ -309,6 +340,7 @@ public record WorkorderUpdatedV1(
                 mechanicIds,
                 promisedAt,
                 scheduledDate,
+                null,
                 null,
                 null,
                 null,
@@ -358,6 +390,55 @@ public record WorkorderUpdatedV1(
                 workStartedAt,
                 completedAt,
                 expectedEndAt,
+                null,
+                null);
+    }
+
+    /** Pre-#2530 arity (no position history). */
+    public WorkorderUpdatedV1(
+            @NonNull UUID workorderId,
+            @Nullable String workorderNumber,
+            @Nullable String status,
+            @Nullable UUID shopId,
+            @Nullable UUID customerId,
+            @Nullable UUID vehicleId,
+            @Nullable UUID invoiceId,
+            @Nullable List<PartLine> parts,
+            @Nullable List<ServiceLine> services,
+            @Nullable Instant createdAt,
+            @Nullable Instant updatedAt,
+            @Nullable UUID locationId,
+            @Nullable UUID resourceId,
+            @Nullable String resourceType,
+            @Nullable List<UUID> mechanicIds,
+            @Nullable Instant promisedAt,
+            @Nullable LocalDate scheduledDate,
+            @Nullable Instant workStartedAt,
+            @Nullable Instant completedAt,
+            @Nullable Instant expectedEndAt,
+            @Nullable UUID appointmentId) {
+        this(
+                workorderId,
+                workorderNumber,
+                status,
+                shopId,
+                customerId,
+                vehicleId,
+                invoiceId,
+                parts,
+                services,
+                createdAt,
+                updatedAt,
+                locationId,
+                resourceId,
+                resourceType,
+                mechanicIds,
+                promisedAt,
+                scheduledDate,
+                workStartedAt,
+                completedAt,
+                expectedEndAt,
+                appointmentId,
                 null);
     }
 }

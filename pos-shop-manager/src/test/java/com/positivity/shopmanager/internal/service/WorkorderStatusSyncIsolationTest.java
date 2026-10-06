@@ -7,6 +7,7 @@ import com.positivity.domainevents.workorder.WorkorderUpdatedV1;
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.shopmanager.internal.dto.WorkorderStatusChangedEvent;
 import com.positivity.shopmanager.internal.entity.ExtWorkorderReplica;
+import com.positivity.shopmanager.internal.repository.ExtWorkorderPositionReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtWorkorderReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ProcessedEventRepository;
 import java.time.Clock;
@@ -72,6 +73,9 @@ class WorkorderStatusSyncIsolationTest {
     private ExtWorkorderReplicaRepository extWorkorderReplicaRepository;
 
     @Autowired
+    private ExtWorkorderPositionReplicaRepository extWorkorderPositionReplicaRepository;
+
+    @Autowired
     private WorkorderAppointmentLinkService workorderAppointmentLinkService;
 
     @Autowired
@@ -111,6 +115,7 @@ class WorkorderStatusSyncIsolationTest {
                 new ObjectMapper(),
                 processedEventRepository,
                 extWorkorderReplicaRepository,
+                extWorkorderPositionReplicaRepository,
                 workorderAppointmentLinkService,
                 applicationEventPublisher,
                 Mockito.mock(ObjectProvider.class),

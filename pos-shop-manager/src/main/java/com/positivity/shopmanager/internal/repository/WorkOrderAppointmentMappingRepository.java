@@ -44,4 +44,20 @@ public interface WorkOrderAppointmentMappingRepository extends JpaRepository<Wor
     @NonNull
     List<WorkorderActuals> findActualsByAppointmentIds(
             @Param("appointmentIds") @NonNull Collection<UUID> appointmentIds);
+
+    /** The appointment a workorder is linked to, as ids only. */
+    interface LinkedAppointment {
+        UUID getWorkOrderId();
+
+        UUID getAppointmentId();
+    }
+
+    /**
+     * Which of the listed workorders are linked to an appointment, and to which (#2530) — one query
+     * for the whole set, so the capacity read can tell a walk-in's bay history from a linked job's.
+     */
+    @Query("SELECT m.workOrderId AS workOrderId, m.appointment.appointmentId AS appointmentId"
+            + " FROM WorkOrderAppointmentMapping m WHERE m.workOrderId IN :workOrderIds")
+    @NonNull
+    List<LinkedAppointment> findLinkedAppointments(@Param("workOrderIds") @NonNull Collection<UUID> workOrderIds);
 }

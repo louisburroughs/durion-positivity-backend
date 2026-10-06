@@ -563,6 +563,24 @@ completed, the `workorder.fact-backfill.requested` command above re-emits a fact
 which now carries `appointmentId`, so one backfill run links them. A workorder that never started is
 outside that command's selection and is linked the next time it changes.
 
+## Published workorder fact: position history (#2530)
+
+`WorkorderUpdatedV1` also carries `positions`, additive within schema v1: every service position the
+workorder has held, oldest first, as a replacement set on every fact (like `parts` and `services`).
+Each entry has `resourceType`, `resourceId`, `locationId`, `assignedAt` and `releasedAt` (null while
+still held). It is read from `service_position_assignment` in one query for the whole commit
+(`ServicePositionAssignmentRepository.findHistory`) and published as instants in the platform clock's
+zone, which is the zone the rows were stamped in.
+
+`resourceId` on the fact says only where the job is now, and `releaseOnClose` clears it on COMPLETED
+and CANCELLED, so without the history a completed job's fact no longer says which bay it was done in.
+pos-shop-manager's capacity read needs that to answer "how busy was this bay" for work that had no
+appointment. A fact without the field (a producer older than #2530) tells a consumer nothing; an empty
+list says "never placed".
+
+Existing workorders publish their history on their next fact; the `workorder.fact-backfill.requested`
+command above re-emits facts for started or completed workorders, so one run backfills it.
+
 ## Pick facade (ADR-0044 §4/§6, #901; scan-by-code #2217; location scope #2204)
 
 `WorkorderPickFacadeController` / `WorkorderPickedItemsController` (`WorkorderPickFacadeServiceImpl`)
