@@ -87,6 +87,8 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1customer-credits~1{creditId}~1applications
   /v1/accounting/customer-credits/{creditId}/refunds:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1customer-credits~1{creditId}~1refunds
+  /v1/accounting/customers/{customerId}/open-invoices:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1customers~1{customerId}~1open-invoices
   /v1/accounting/default-mappings:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1default-mappings
   /v1/accounting/default-mappings/global:
@@ -205,6 +207,8 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1posting-rules~1{postingRuleSetId}~1publish
   /v1/accounting/posting-rules/{postingRuleSetId}/versions:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1posting-rules~1{postingRuleSetId}~1versions
+  /v1/accounting/receivable-payments:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1receivable-payments
   /v1/accounting/reconciliations:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations
   /v1/accounting/reconciliations/adjustment-types:
