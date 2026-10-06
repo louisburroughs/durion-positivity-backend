@@ -247,11 +247,28 @@ ON CONFLICT (tenant_id, mapping_id) DO UPDATE SET
     modified_at = NOW(),
     modified_by = 'seed-generator';
 
--- Statement lines: the income statement.
+-- Statement lines: the balance sheet and the income statement (CAP:550 S35, #2524; SPEC-accounting-
+-- workspace §5.4, AW9). Stable line codes with plain-language descriptions; a code may carry more
+-- than one account. An account with a posted balance and no line here lands on a computed line
+-- (BS_OTHER_ASSETS, BS_OTHER_LIABILITIES, BS_OTHER_EQUITY, BS_PROFIT_NOT_YET_CLOSED, IS_OTHER_INCOME,
+-- IS_OTHER_EXPENSES; a BANK_CASH account on BS_IN_THE_BANK), so no balance is left off a statement.
+-- The line for 4000 used to be REVENUE; a tenant whose line is untouched since adoption follows the
+-- recode to IS_SALES (S37's statement-line refresh). BS_KEPT_IN_DRAWERS (1080), BS_OWNER_EQUITY (3000)
+-- and BS_OPENING_BALANCE_EQUITY (3900) are S15's; 1250 and 1260 are S32's.
 INSERT INTO statement_line_mappings (mapping_id, gl_account_id, account_name, statement_type, statement_line_code, parent_line_code, line_description, display_order, operation)
 SELECT md5('accounting-template:01900000-0000-7000-8000-000000000000:STATEMENT_LINE:' || t.statement_type || ':' || t.code)::uuid, md5('accounting-template:01900000-0000-7000-8000-000000000000:ACCOUNT:' || t.code)::uuid, t.code, t.statement_type, t.line_code, t.parent_line_code, t.line_description, t.display_order, t.operation
 FROM (VALUES
-    ('INCOME_STATEMENT', '4000', 'REVENUE', NULL::text, 'REVENUE', 1, 'SUM')
+    ('BALANCE_SHEET', '1000', 'BS_IN_THE_BANK', NULL::text, 'In the bank', 1, 'SUM'),
+    ('BALANCE_SHEET', '1090', 'BS_WAITING_TO_BE_DEPOSITED', NULL::text, 'Waiting to be deposited', 2, 'SUM'),
+    ('BALANCE_SHEET', '1095', 'BS_WAITING_TO_BE_DEPOSITED', NULL::text, 'Waiting to be deposited', 2, 'SUM'),
+    ('BALANCE_SHEET', '1200', 'BS_CUSTOMERS_OWE_YOU', NULL::text, 'Money customers owe you', 3, 'SUM'),
+    ('BALANCE_SHEET', '1300', 'BS_INVENTORY', NULL::text, 'Tires and parts on your shelves', 4, 'SUM'),
+    ('BALANCE_SHEET', '2000', 'BS_BILLS_FROM_VENDORS', NULL::text, 'Bills from vendors', 5, 'SUM'),
+    ('BALANCE_SHEET', '2200', 'BS_SALES_TAX_COLLECTED', NULL::text, 'Sales tax collected, not yet paid', 6, 'SUM'),
+    ('BALANCE_SHEET', '2300', 'BS_CUSTOMER_CREDITS', NULL::text, 'Credits customers can still use', 7, 'SUM'),
+    ('INCOME_STATEMENT', '4000', 'IS_SALES', NULL::text, 'Sales', 1, 'SUM'),
+    ('INCOME_STATEMENT', '5000', 'IS_COST_OF_PARTS_SOLD', NULL::text, 'Cost of tires and parts sold', 2, 'SUM'),
+    ('INCOME_STATEMENT', '6000', 'IS_CARD_PROCESSING_FEES', NULL::text, 'Card processing fees', 3, 'SUM')
 ) AS t(statement_type, code, line_code, parent_line_code, line_description, display_order, operation)
 ON CONFLICT (tenant_id, mapping_id) DO UPDATE SET
     gl_account_id = EXCLUDED.gl_account_id,

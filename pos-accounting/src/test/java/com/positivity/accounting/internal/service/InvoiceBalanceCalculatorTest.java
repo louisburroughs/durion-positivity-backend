@@ -239,6 +239,9 @@ class InvoiceBalanceCalculatorTest {
         @Mock
         private DatabaseDialectSupport databaseDialectSupport;
 
+        @Mock
+        private DisplayReferenceResolver displayReferenceResolver;
+
         private FinancialReportingServiceImpl service;
 
         @BeforeEach
@@ -263,6 +266,7 @@ class InvoiceBalanceCalculatorTest {
                     apPaymentAllocationRepository,
                     realCalculator,
                     databaseDialectSupport,
+                    displayReferenceResolver,
                     Clock.fixed(FIXED_NOW, ZoneOffset.UTC),
                     new com.positivity.accounting.internal.config.LedgerCurrency("USD"));
         }
@@ -297,7 +301,8 @@ class InvoiceBalanceCalculatorTest {
 
             // Pre-#1652 this would have reported 1000.00 (2500 - 1500, deposit ignored).
             assertThat(report.getTotals().getTotalOutstanding()).isEqualByComparingTo("500.00");
-            assertThat(report.getTotals().getCurrent()).isEqualByComparingTo("500.00");
+            assertThat(report.getTotals().getNotYetDue().add(report.getTotals().getOverdue()))
+                    .isEqualByComparingTo("500.00");
             assertThat(report.getRows()).hasSize(1);
             assertThat(report.getRows().get(0).getCustomerId()).isEqualTo(customerId);
             assertThat(report.getRows().get(0).getTotalOutstanding()).isEqualByComparingTo("500.00");

@@ -64,8 +64,8 @@ class IncomeStatementSeedRevenueIT {
         registry.add("spring.flyway.enabled", () -> "true");
     }
 
-    /** The statement line the seed maps account 4000 Service Revenue to. */
-    private static final String SEEDED_REVENUE_LINE = "REVENUE";
+    /** The statement line the seed maps account 4000 Service Revenue to (CAP:550 S35, #2524). */
+    private static final String SEEDED_REVENUE_LINE = "IS_SALES";
 
     private static final BigDecimal TAX = new BigDecimal("80.00");
     private static final BigDecimal TOTAL = new BigDecimal("1080.00");
@@ -110,8 +110,12 @@ class IncomeStatementSeedRevenueIT {
 
         IncomeStatementReport report = financialReportingService.generateIncomeStatement(day, day);
 
-        // The seed maps exactly one income statement line, and nothing here adds another.
-        assertThat(report.getLineItems()).containsOnlyKeys(SEEDED_REVENUE_LINE);
+        // The seed's named income-statement lines are all present; the two without activity read zero,
+        // and no computed line appears because every posted account has a named line or belongs to
+        // the balance sheet (#2524).
+        assertThat(report.getLineItems())
+                .containsOnlyKeys(SEEDED_REVENUE_LINE, "IS_COST_OF_PARTS_SOLD", "IS_CARD_PROCESSING_FEES");
+        assertThat(report.getLineItems().get("IS_COST_OF_PARTS_SOLD")).isEqualByComparingTo("0");
         assertThat(report.getLineItems().get(SEEDED_REVENUE_LINE))
                 .as("seeded revenue line, net of tax")
                 .isEqualByComparingTo(REVENUE);

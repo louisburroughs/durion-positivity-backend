@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.repository;
 import com.positivity.accounting.internal.entity.CustomerCredit;
 import com.positivity.accounting.internal.enums.CustomerCreditStatus;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -14,6 +15,15 @@ import org.springframework.data.jpa.repository.Query;
  * Supports customer credit balance queries and history.
  */
 public interface CustomerCreditRepository extends JpaRepository<CustomerCredit, UUID> {
+
+    /**
+     * The credit issued by a command, by its namespaced request id (CAP:550 S35, #2524): a replay of
+     * the issuing command returns this credit instead of issuing another.
+     *
+     * @param requestId namespaced command id ({@code APPLY:…}, {@code REMAINDER:…}, …)
+     * @return the credit that command issued, if any
+     */
+    Optional<CustomerCredit> findByRequestId(String requestId);
 
     /**
      * Find all credits for a customer.

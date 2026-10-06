@@ -220,8 +220,7 @@ class TaxLiabilityReportContractBehaviorIT extends BaseContractIntegrationTest {
                   "format": "CSV",
                   "reportType": "JOURNAL_LINES",
                   "startDate": "2026-06-01",
-                  "endDate": "2026-06-30",
-                  "organizationId": "d10217f9-3ec6-46b9-9c87-e7066c100c24"
+                  "endDate": "2026-06-30"
                 }
                 """;
         mockMvc.perform(withAuth(post("/v1/accounting/reports/export"), "accounting:report:export")
@@ -241,8 +240,7 @@ class TaxLiabilityReportContractBehaviorIT extends BaseContractIntegrationTest {
                   "format": "%s",
                   "reportType": "TAX_LIABILITY",
                   "startDate": "2026-06-01",
-                  "endDate": "2026-06-30",
-                  "organizationId": "d10217f9-3ec6-46b9-9c87-e7066c100c24"
+                  "endDate": "2026-06-30"
                 }
                 """.formatted(format);
         return mockMvc.perform(withAuth(post("/v1/accounting/reports/export"), "accounting:report:export")

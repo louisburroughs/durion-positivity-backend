@@ -16,7 +16,10 @@ import org.jspecify.annotations.NonNull;
  *
  * Lines are ordered by transaction date then entry number. {@code runningBalance}
  * is the account's cumulative signed balance (debit positive) up to and
- * including this line, seeded by the section's opening balance.
+ * including this line, seeded by the section's opening balance;
+ * {@code normalRunningBalance} is the same figure on the account's normal side and
+ * {@code direction} says whether the line moved the account up or down on that side
+ * (CAP:550 S35, #2524; AW3).
  */
 @Data
 @Builder
@@ -81,8 +84,36 @@ public class GeneralLedgerLine {
     private BigDecimal runningBalance;
 
     /**
+     * Whether this line increased or decreased the account on its normal side.
+     */
+    @Schema(
+            description = "INCREASE when the line moved the account up on its normal side, DECREASE otherwise",
+            example = "INCREASE",
+            requiredMode = REQUIRED)
+    @NonNull
+    private Direction direction;
+
+    /**
+     * Cumulative balance through this line on the account's normal side: positive when the account
+     * holds its usual balance.
+     */
+    @Schema(
+            description = "Cumulative balance through this line on the account's normal side (positive when the"
+                    + " account holds its usual balance)",
+            example = "80000.00",
+            requiredMode = REQUIRED)
+    @NonNull
+    private BigDecimal normalRunningBalance;
+
+    /**
      * Source event type that triggered this journal entry.
      */
     @Schema(description = "Source event type", example = "INVOICE_POSTED", requiredMode = NOT_REQUIRED)
     private String sourceEventType;
+
+    /** The way a line moved its account on the account's normal side. */
+    public enum Direction {
+        INCREASE,
+        DECREASE
+    }
 }

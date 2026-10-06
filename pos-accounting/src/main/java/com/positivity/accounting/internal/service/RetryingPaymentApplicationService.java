@@ -3,6 +3,8 @@ package com.positivity.accounting.internal.service;
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.dto.PaymentApplicationResponse;
 import com.positivity.accounting.internal.dto.PaymentApplicationReversalResponse;
+import com.positivity.accounting.internal.dto.RemainderCreditRequest;
+import com.positivity.accounting.internal.dto.RemainderCreditResponse;
 import com.positivity.accounting.internal.entity.ReceivablePayment;
 import jakarta.persistence.OptimisticLockException;
 import java.math.BigDecimal;
@@ -97,6 +99,40 @@ public class RetryingPaymentApplicationService implements PaymentApplicationServ
     public PaymentApplicationResponse.@Nullable CustomerCreditInfo creditUnappliedPayment(
             @NonNull UUID paymentId, @NonNull String creditRequestId) {
         return delegate.creditUnappliedPayment(paymentId, creditRequestId);
+    }
+
+    /**
+     * Same one-retry rule as {@link #applyPaymentToInvoices} (CAP:550 S35, #2524): the retry re-runs
+     * the idempotency lookup, so a replayed request that lost a race returns the credit the winner
+     * issued; a second conflict is 409 OPTIMISTIC_LOCK.
+     */
+    @Override
+    @NonNull
+    public RemainderCreditResponse creditPaymentRemainder(
+            @NonNull UUID paymentId, @NonNull RemainderCreditRequest request) {
+        try {
+            return delegate.creditPaymentRemainder(paymentId, request);
+        } catch (RuntimeException firstFailure) {
+            if (!isOptimisticLockConflict(firstFailure)) {
+                throw firstFailure;
+            }
+            log.warn(
+                    "Optimistic lock conflict crediting the remainder of payment {} (request {}); retrying once",
+                    paymentId,
+                    request.getRequestId(),
+                    firstFailure);
+            try {
+                return delegate.creditPaymentRemainder(paymentId, request);
+            } catch (RuntimeException secondFailure) {
+                if (!isOptimisticLockConflict(secondFailure)) {
+                    throw secondFailure;
+                }
+                // 409 OPTIMISTIC_LOCK (AccountingExceptionHandler#handleOptimisticLock), the code the
+                // story names; the apply path keeps its older REQUEST_FAILED envelope.
+                throw new OptimisticLockingFailureException(
+                        "Payment " + paymentId + " was modified concurrently; please retry the request", secondFailure);
+            }
+        }
     }
 
     @Override

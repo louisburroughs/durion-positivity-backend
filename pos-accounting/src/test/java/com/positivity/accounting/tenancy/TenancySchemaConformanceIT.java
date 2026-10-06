@@ -141,6 +141,23 @@ class TenancySchemaConformanceIT extends PostgresTenancyTestBase {
                 .isEqualTo("UNIQUE (tenant_id, entry_key)");
     }
 
+    /**
+     * The customer-credit request-id index of #2524 (V6): unique per tenant, led by {@code tenant_id},
+     * partial so credits issued before the column existed (NULL) never collide.
+     */
+    @Test
+    void theCustomerCreditRequestIdIndexLeadsWithTenantId() {
+        JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
+        String definition = owner.queryForObject(
+                "SELECT indexdef FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'uq_customer_credit_request_id'",
+                String.class);
+        assertThat(definition)
+                .as("unique, led by tenant_id, partial on a present request id")
+                .startsWith("CREATE UNIQUE INDEX uq_customer_credit_request_id ON public.customer_credit USING btree"
+                        + " (tenant_id, request_id)")
+                .endsWith("WHERE (request_id IS NOT NULL)");
+    }
+
     @Test
     void theApplicationConnectsAsANonOwnerRoleWithNoBypass() {
         JdbcTemplate app = new JdbcTemplate(applicationDataSource);

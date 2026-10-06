@@ -15,6 +15,7 @@ import com.positivity.accounting.internal.dto.GeneralLedgerLine;
 import com.positivity.accounting.internal.dto.GeneralLedgerReport;
 import com.positivity.accounting.internal.dto.IncomeStatementReport;
 import com.positivity.accounting.internal.dto.JournalLineDrilldownResponse;
+import com.positivity.accounting.internal.dto.ResolvedDisplayReference;
 import com.positivity.accounting.internal.dto.TaxLiabilityReconciliation;
 import com.positivity.accounting.internal.dto.TaxLiabilityReport;
 import com.positivity.accounting.internal.dto.TaxLiabilityRow;
@@ -31,8 +32,11 @@ import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.internal.entity.StatementLineMapping;
 import com.positivity.accounting.internal.entity.VendorBill;
+import com.positivity.accounting.internal.enums.AccountSubtype;
 import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
+import com.positivity.accounting.internal.enums.DisplayReferenceType;
+import com.positivity.accounting.internal.enums.NormalSide;
 import com.positivity.accounting.internal.enums.OperationType;
 import com.positivity.accounting.internal.enums.StatementType;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
@@ -57,8 +61,10 @@ import java.time.LocalTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -77,7 +83,9 @@ import org.springframework.transaction.annotation.Transactional;
  * Service implementation for financial reporting (Income Statement, Balance
  * Sheet).
  * Aggregates posted journal entries using configurable Chart of Accounts
- * mappings.
+ * mappings; an account with a posted balance and no mapping for a statement lands
+ * on one of the computed lines below, so no balance is left off a statement
+ * (CAP:550 S35, #2524; SPEC-accounting-workspace §5.4, §9.5).
  *
  * @author Louis Burroughs
  * @since 2025-01-01
@@ -89,6 +97,42 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
     private static final Logger log = LoggerFactory.getLogger(FinancialReportingServiceImpl.class);
 
     private static final BigDecimal BALANCE_TOLERANCE = new BigDecimal("0.01"); // 1 cent tolerance for rounding
+
+    // Statement line codes the service computes (CAP:550 S35, #2524). They are never seeded: each
+    // collects the accounts that have a posted balance and no mapping for the statement, by account
+    // type. BS_IN_THE_BANK is also a named line (1000): any further BANK_CASH account joins it (AW9).
+    static final String BS_IN_THE_BANK = "BS_IN_THE_BANK";
+    static final String BS_OTHER_ASSETS = "BS_OTHER_ASSETS";
+    static final String BS_OTHER_LIABILITIES = "BS_OTHER_LIABILITIES";
+    static final String BS_OTHER_EQUITY = "BS_OTHER_EQUITY";
+    static final String BS_PROFIT_NOT_YET_CLOSED = "BS_PROFIT_NOT_YET_CLOSED";
+    static final String IS_OTHER_INCOME = "IS_OTHER_INCOME";
+    static final String IS_OTHER_EXPENSES = "IS_OTHER_EXPENSES";
+
+    /** The statement each computed line belongs to, in the order the lines are appended. */
+    private static final Map<String, StatementType> COMPUTED_LINES;
+
+    static {
+        Map<String, StatementType> computed = new LinkedHashMap<>();
+        computed.put(BS_IN_THE_BANK, StatementType.BALANCE_SHEET);
+        computed.put(BS_OTHER_ASSETS, StatementType.BALANCE_SHEET);
+        computed.put(BS_OTHER_LIABILITIES, StatementType.BALANCE_SHEET);
+        computed.put(BS_OTHER_EQUITY, StatementType.BALANCE_SHEET);
+        computed.put(BS_PROFIT_NOT_YET_CLOSED, StatementType.BALANCE_SHEET);
+        computed.put(IS_OTHER_INCOME, StatementType.INCOME_STATEMENT);
+        computed.put(IS_OTHER_EXPENSES, StatementType.INCOME_STATEMENT);
+        COMPUTED_LINES = Map.copyOf(computed);
+    }
+
+    /** Append order of the computed lines after the named ones. */
+    private static final List<String> COMPUTED_LINE_ORDER = List.of(
+            BS_IN_THE_BANK,
+            BS_OTHER_ASSETS,
+            BS_OTHER_LIABILITIES,
+            BS_OTHER_EQUITY,
+            BS_PROFIT_NOT_YET_CLOSED,
+            IS_OTHER_INCOME,
+            IS_OTHER_EXPENSES);
 
     /**
      * Prefix of journal-entry monthly sequence scopes ({@code JE-{YYYYMM}}),
@@ -104,13 +148,16 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
     private static final Set<String> AR_ELIGIBLE_STATUSES = Set.of("FINALIZED", "POSTED");
 
     /**
-     * Vendor-bill statuses that represent an open (unsettled) payable obligation
-     * for the Aged Payables report: everything except settled ({@code PAID}),
-     * voided ({@code VOIDED}), rejected ({@code REJECTED}) and currency-held
-     * ({@code CURRENCY_HOLD}, not a ledger-currency payable, #2309) bills.
+     * Vendor-bill statuses the Aged Payables report loads: approved bills, which are aged, and the
+     * bills not yet approved, which are reported beside the buckets and never aged (AW11; CAP:550
+     * S35, #2524). Settled ({@code PAID}), voided, rejected and currency-held ({@code CURRENCY_HOLD},
+     * not a ledger-currency payable, #2309) bills stay out.
      */
     private static final Set<VendorBillStatus> OPEN_PAYABLE_STATUSES =
             Set.of(VendorBillStatus.PENDING_RECEIPT_MATCH, VendorBillStatus.MATCH_EXCEPTION, VendorBillStatus.APPROVED);
+
+    /** The one status whose open bills are aged; every other loaded status is unapproved. */
+    private static final Set<VendorBillStatus> APPROVED_PAYABLE_STATUSES = Set.of(VendorBillStatus.APPROVED);
 
     /**
      * Chart-of-accounts code of the single Sales-Tax Payable account (D-4: one GL
@@ -134,6 +181,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
     private final APPaymentAllocationRepository apPaymentAllocationRepository;
     private final InvoiceBalanceCalculator invoiceBalanceCalculator;
     private final DatabaseDialectSupport databaseDialectSupport;
+    private final DisplayReferenceResolver displayReferenceResolver;
     private final Clock clock;
     private final LedgerCurrency ledgerCurrency;
 
@@ -150,6 +198,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
             APPaymentAllocationRepository apPaymentAllocationRepository,
             InvoiceBalanceCalculator invoiceBalanceCalculator,
             DatabaseDialectSupport databaseDialectSupport,
+            DisplayReferenceResolver displayReferenceResolver,
             Clock clock,
             LedgerCurrency ledgerCurrency) {
         this.journalEntryRepository = journalEntryRepository;
@@ -164,6 +213,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         this.apPaymentAllocationRepository = apPaymentAllocationRepository;
         this.invoiceBalanceCalculator = invoiceBalanceCalculator;
         this.databaseDialectSupport = databaseDialectSupport;
+        this.displayReferenceResolver = displayReferenceResolver;
         this.clock = clock;
         this.ledgerCurrency = ledgerCurrency;
     }
@@ -181,63 +231,31 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         LocalDateTime startDateTime = startDate.atStartOfDay();
         LocalDateTime endDateTime = endDate.atTime(LocalTime.MAX);
 
-        // Load all income statement mappings (ordered by display order)
         List<StatementLineMapping> mappings =
                 statementLineMappingRepository.findByStatementTypeOrderByDisplayOrderAscStatementLineCodeAsc(
                         StatementType.INCOME_STATEMENT);
+        StatementFigures figures = computeStatement(
+                StatementType.INCOME_STATEMENT,
+                mappings,
+                statementAccounts(StatementType.INCOME_STATEMENT, startDateTime, endDateTime));
 
-        if (mappings.isEmpty()) {
-            log.warn("No statement line mappings configured for INCOME_STATEMENT");
-            return IncomeStatementReport.builder()
-                    .startDate(startDate)
-                    .endDate(endDate)
-                    .lineItems(Map.of())
-                    .totalRevenue(BigDecimal.ZERO)
-                    .totalExpenses(BigDecimal.ZERO)
-                    .netIncome(BigDecimal.ZERO)
-                    .generatedAt(Instant.now(clock))
-                    .build();
-        }
-
-        // Aggregate balances by statement line
-        Map<String, BigDecimal> lineItems = new LinkedHashMap<>();
-        BigDecimal totalRevenue = BigDecimal.ZERO;
-        BigDecimal totalExpenses = BigDecimal.ZERO;
-
-        // Precompute balances per distinct account to avoid N+1 queries
-        Map<UUID, BigDecimal> accountBalancesById = mappings.stream()
-                .map(StatementLineMapping::getGlAccountId)
-                .distinct()
-                .collect(Collectors.toMap(
-                        glAccountId -> glAccountId,
-                        glAccountId -> journalEntryRepository.sumPostedBalanceForAccount(
-                                glAccountId, startDateTime, endDateTime)));
-        Map<UUID, AccountType> accountTypesById = accountTypesById(mappings);
-
-        for (StatementLineMapping mapping : mappings) {
-            BigDecimal contribution = statementContribution(
-                    accountBalancesById.get(mapping.getGlAccountId()),
-                    accountTypesById.get(mapping.getGlAccountId()),
-                    mapping.getOperation());
-            lineItems.merge(mapping.getStatementLineCode(), contribution, BigDecimal::add);
-        }
-
-        // Totals follow the account's type, never the line code (issue #2394): each mapped
-        // account counts once, on its own normal side, whatever line it sits on and whatever
+        // Totals follow the account's type, never the line code (issue #2394): each account on the
+        // statement counts once, on its own normal side, whatever line it sits on and whatever
         // operation presents it there. A line that mixes revenue and expense accounts therefore
         // still splits correctly between the two totals.
-        for (Map.Entry<UUID, BigDecimal> account : accountBalancesById.entrySet()) {
-            AccountType accountType = accountTypesById.get(account.getKey());
-            if (accountType == AccountType.REVENUE) {
-                totalRevenue = totalRevenue.add(account.getValue().negate());
-            } else if (accountType == AccountType.EXPENSE) {
-                totalExpenses = totalExpenses.add(account.getValue());
+        BigDecimal totalRevenue = BigDecimal.ZERO;
+        BigDecimal totalExpenses = BigDecimal.ZERO;
+        for (StatementAccount account : figures.accountsOnStatement()) {
+            if (account.type() == AccountType.REVENUE) {
+                totalRevenue = totalRevenue.add(account.debitsMinusCredits().negate());
+            } else if (account.type() == AccountType.EXPENSE) {
+                totalExpenses = totalExpenses.add(account.debitsMinusCredits());
             } else {
                 log.warn(
                         "Income statement maps account {} of type {}; it is shown on its line but counted"
                                 + " in neither total",
-                        account.getKey(),
-                        accountType);
+                        account.id(),
+                        account.type());
             }
         }
 
@@ -252,7 +270,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         return IncomeStatementReport.builder()
                 .startDate(startDate)
                 .endDate(endDate)
-                .lineItems(lineItems)
+                .lineItems(figures.lineItems())
                 .totalRevenue(totalRevenue)
                 .totalExpenses(totalExpenses)
                 .netIncome(netIncome)
@@ -267,66 +285,37 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
 
         LocalDateTime asOfDateTime = asOfDate.atTime(LocalTime.MAX);
 
-        // Load all balance sheet mappings (ordered by display order)
         List<StatementLineMapping> mappings =
                 statementLineMappingRepository.findByStatementTypeOrderByDisplayOrderAscStatementLineCodeAsc(
                         StatementType.BALANCE_SHEET);
+        StatementFigures figures = computeStatement(
+                StatementType.BALANCE_SHEET,
+                mappings,
+                statementAccounts(StatementType.BALANCE_SHEET, null, asOfDateTime));
 
-        if (mappings.isEmpty()) {
-            log.warn("No statement line mappings configured for BALANCE_SHEET");
-            return BalanceSheetReport.builder()
-                    .asOfDate(asOfDate)
-                    .lineItems(Map.of())
-                    .totalAssets(BigDecimal.ZERO)
-                    .totalLiabilities(BigDecimal.ZERO)
-                    .totalEquity(BigDecimal.ZERO)
-                    .balanced(true)
-                    .generatedAt(Instant.now(clock))
-                    .build();
-        }
-
-        // Aggregate balances by statement line
-        Map<String, BigDecimal> lineItems = new LinkedHashMap<>();
+        // Totals follow the account's type, never the line code (issue #2394): each account on the
+        // statement counts once, on the side of the equation it belongs to, whatever operation
+        // presents it on its line. Revenue and expense accounts are earnings not yet closed to equity
+        // (mapped, or collected on BS_PROFIT_NOT_YET_CLOSED), so they count toward equity as credits
+        // minus debits. Every account with a balance is on some line, so the equation covers them all.
         BigDecimal totalAssets = BigDecimal.ZERO;
         BigDecimal totalLiabilities = BigDecimal.ZERO;
         BigDecimal totalEquity = BigDecimal.ZERO;
-
-        // Precompute balances per distinct account to avoid N+1 queries
-        Map<UUID, BigDecimal> accountBalancesById = mappings.stream()
-                .map(StatementLineMapping::getGlAccountId)
-                .distinct()
-                .collect(Collectors.toMap(
-                        glAccountId -> glAccountId,
-                        glAccountId -> journalEntryRepository.sumPostedBalanceAsOf(glAccountId, asOfDateTime)));
-        Map<UUID, AccountType> accountTypesById = accountTypesById(mappings);
-
-        for (StatementLineMapping mapping : mappings) {
-            BigDecimal contribution = statementContribution(
-                    accountBalancesById.get(mapping.getGlAccountId()),
-                    accountTypesById.get(mapping.getGlAccountId()),
-                    mapping.getOperation());
-            lineItems.merge(mapping.getStatementLineCode(), contribution, BigDecimal::add);
-        }
-
-        // Totals follow the account's type, never the line code (issue #2394): each mapped
-        // account counts once, on the side of the equation it belongs to, whatever operation
-        // presents it on its line. Revenue and expense accounts mapped onto the balance sheet are
-        // earnings not yet closed to equity, so they count toward equity as credits minus debits.
-        for (Map.Entry<UUID, BigDecimal> account : accountBalancesById.entrySet()) {
-            AccountType accountType = accountTypesById.get(account.getKey());
-            if (accountType == null) {
+        for (StatementAccount account : figures.accountsOnStatement()) {
+            if (account.type() == null) {
                 log.warn(
                         "Balance sheet maps account {} whose type is unknown; it is shown on its line but"
                                 + " counted in no total",
-                        account.getKey());
+                        account.id());
                 continue;
             }
-            switch (accountType) {
-                case ASSET -> totalAssets = totalAssets.add(account.getValue());
+            switch (account.type()) {
+                case ASSET -> totalAssets = totalAssets.add(account.debitsMinusCredits());
                 case LIABILITY ->
-                    totalLiabilities = totalLiabilities.add(account.getValue().negate());
+                    totalLiabilities =
+                            totalLiabilities.add(account.debitsMinusCredits().negate());
                 case EQUITY, REVENUE, EXPENSE ->
-                    totalEquity = totalEquity.add(account.getValue().negate());
+                    totalEquity = totalEquity.add(account.debitsMinusCredits().negate());
             }
         }
 
@@ -353,7 +342,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
 
         return BalanceSheetReport.builder()
                 .asOfDate(asOfDate)
-                .lineItems(lineItems)
+                .lineItems(figures.lineItems())
                 .totalAssets(totalAssets)
                 .totalLiabilities(totalLiabilities)
                 .totalEquity(totalEquity)
@@ -482,34 +471,83 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         LocalDateTime startDateTime = startDate.atStartOfDay();
         LocalDateTime endDateTime = endDate.atTime(LocalTime.MAX);
 
-        // Find all accounts mapped to this statement line
-        List<StatementLineMapping> mappings = statementLineMappingRepository.findByStatementLineCode(statementLineCode);
-
-        if (mappings.isEmpty()) {
+        // The accounts mapped to this line, and the statement the line belongs to: a named line's
+        // statement comes from its mappings, a computed line's from the table above.
+        List<StatementLineMapping> lineMappings =
+                statementLineMappingRepository.findByStatementLineCode(statementLineCode);
+        StatementType statementType = lineMappings.isEmpty()
+                ? COMPUTED_LINES.get(statementLineCode)
+                : lineMappings.get(0).getStatementType();
+        if (statementType == null) {
             log.warn("No account mappings found for statement line: {}", statementLineCode);
             return List.of();
         }
 
-        Map<UUID, AccountType> accountTypesById = accountTypesById(mappings);
+        // A balance-sheet line reports as-of balances at endDate; the others period movement, so
+        // in either case the rows add up to the line they expand.
+        List<StatementAccount> withActivity = statementAccounts(
+                statementType, statementType == StatementType.BALANCE_SHEET ? null : startDateTime, endDateTime);
+        Map<UUID, StatementAccount> activityById = new HashMap<>();
+        for (StatementAccount account : withActivity) {
+            activityById.put(account.id(), account);
+        }
 
-        // Calculate balance for each account
-        return mappings.stream()
-                .map(mapping -> {
-                    BigDecimal accountBalance = journalEntryRepository.sumPostedBalanceForAccount(
-                            mapping.getGlAccountId(), startDateTime, endDateTime);
-                    // The amount this account contributes to the line, so the drill-down rows add
-                    // up to the statement line they expand.
-                    BigDecimal displayBalance = statementContribution(
-                            accountBalance, accountTypesById.get(mapping.getGlAccountId()), mapping.getOperation());
+        List<AccountDrilldownResponse> rows = new ArrayList<>();
 
-                    return AccountDrilldownResponse.builder()
-                            .accountId(mapping.getGlAccountId().toString())
-                            .accountName(mapping.getAccountName())
-                            .balance(displayBalance)
+        // Named: every mapped account, with the GL account's own name, code and type; an account
+        // without activity shows a zero row.
+        Set<UUID> mappedIds =
+                lineMappings.stream().map(StatementLineMapping::getGlAccountId).collect(Collectors.toSet());
+        Map<UUID, GLAccount> mappedAccounts = mappedIds.isEmpty()
+                ? Map.of()
+                : glAccountRepository.findAllById(mappedIds).stream()
+                        .collect(Collectors.toMap(GLAccount::getGlAccountId, account -> account));
+        for (StatementLineMapping mapping : lineMappings) {
+            GLAccount account = mappedAccounts.get(mapping.getGlAccountId());
+            StatementAccount activity = activityById.get(mapping.getGlAccountId());
+            BigDecimal balance = activity != null ? activity.debitsMinusCredits() : BigDecimal.ZERO;
+            AccountType accountType = account != null ? account.getAccountType() : null;
+            rows.add(AccountDrilldownResponse.builder()
+                    .accountId(mapping.getGlAccountId().toString())
+                    .accountCode(account != null ? account.getAccountCode() : mapping.getAccountName())
+                    .accountName(account != null ? account.getAccountName() : mapping.getAccountName())
+                    .accountType(accountType)
+                    .balance(statementContribution(balance, accountType, mapping.getOperation()))
+                    .statementLineCode(statementLineCode)
+                    .build());
+        }
+
+        // Computed: the accounts with a balance, no mapping for the statement, that this line
+        // collects (BS_IN_THE_BANK collects further BANK_CASH accounts beside its named one).
+        if (COMPUTED_LINES.containsKey(statementLineCode)) {
+            Set<UUID> mappedForStatement =
+                    statementLineMappingRepository
+                            .findByStatementTypeOrderByDisplayOrderAscStatementLineCodeAsc(statementType)
+                            .stream()
+                            .map(StatementLineMapping::getGlAccountId)
+                            .collect(Collectors.toSet());
+            for (StatementAccount account : withActivity) {
+                if (mappedForStatement.contains(account.id())
+                        || account.debitsMinusCredits().signum() == 0) {
+                    continue;
+                }
+                if (statementLineCode.equals(computedLineFor(statementType, account.type(), account.subtype()))) {
+                    rows.add(AccountDrilldownResponse.builder()
+                            .accountId(account.id().toString())
+                            .accountCode(account.code())
+                            .accountName(account.name())
+                            .accountType(account.type())
+                            .balance(computedContribution(statementLineCode, account))
                             .statementLineCode(statementLineCode)
-                            .build();
-                })
-                .toList();
+                            .build());
+                }
+            }
+        }
+
+        if (rows.isEmpty()) {
+            log.warn("No account mappings found for statement line: {}", statementLineCode);
+        }
+        return rows;
     }
 
     @Override
@@ -570,10 +608,9 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         LocalDateTime startDateTime = startDate.atStartOfDay();
         LocalDateTime endDateTime = endDate.atTime(LocalTime.MAX);
 
-        // Collect in-period POSTED lines grouped by account. Ordering within a
-        // section is applied later; only POSTED entries are queried, so REVERSED
-        // originals drop out while POSTED reversing entries remain (net-zero pairs)
-        // with no reversal-linkage special-casing.
+        // Collect in-period ledger lines (POSTED and REVERSED entries, never DRAFT; #2308) grouped
+        // by account. Ordering within a section is applied later; a reversed original stays beside
+        // its POSTED reversal and the pair nets to zero with no reversal-linkage special-casing.
         Map<UUID, List<JournalEntryLine>> linesByAccount = new LinkedHashMap<>();
         if (accountId != null) {
             UUID glAccountId = parseAccountId(accountId);
@@ -646,18 +683,13 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
 
         // As-of semantics (finding 10): an item whose DOCUMENT (invoice) date is after asOfDate
         // did not exist yet and is excluded; everything that did exist is bucketed on asOfDate,
-        // including not-yet-due items (they land in `current`). Aging basis is the due date,
+        // not-yet-due items in `notYetDue`. Aging basis is the due date,
         // falling back to the document date — the same rule generateAgedPayables uses.
-        // KNOWN LIMITATION: the
-        // open balance is
-        // the invoice's CURRENT balance (InvoiceBalanceCalculator derives it from all
-        // payment
-        // applications/reversals/credit-memos to date), not a balance reconstructed
-        // as-of asOfDate, so
-        // a back-dated asOfDate reflects today's balances against historical aging
-        // dates. A true
-        // historical-balance reconstruction is deferred (needs point-in-time
-        // application replay).
+        // KNOWN LIMITATION: the open balance is the invoice's CURRENT balance
+        // (InvoiceBalanceCalculator derives it from all payment applications/reversals/credit-memos
+        // to date), not a balance reconstructed as-of asOfDate, so a back-dated asOfDate reflects
+        // today's balances against historical aging dates. A true historical-balance
+        // reconstruction is deferred (needs point-in-time application replay).
         // AR-eligible invoices; open balance is derived from accounting-owned
         // facts (payment applications, reversals, credit memos) via the shared
         // InvoiceBalanceCalculator — never fetched from another service.
@@ -684,27 +716,35 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
             }
             LocalDate agingDate = receivableAgingDate(invoice);
             long daysPastDue = ChronoUnit.DAYS.between(agingDate, asOfDate);
-            // A negative daysPastDue (not yet due) is kept deliberately: it satisfies
-            // AgingBuckets' `<= 30` test and so lands in `current`, which is exactly what
-            // AgedReceivablesRow.current documents ("includes not-yet-due").
             byCustomer.computeIfAbsent(customerId, key -> new AgingBuckets()).add(daysPastDue, openBalance);
         }
+
+        // Names and customer numbers from accounting's own replica (ADR-0044 R3), one query for the
+        // whole report; a party the replica has not seen gets null, never its id (P8).
+        Map<UUID, ResolvedDisplayReference> customers =
+                displayReferenceResolver.resolve(DisplayReferenceType.CUSTOMER, byCustomer.keySet());
 
         List<AgedReceivablesRow> rows = byCustomer.entrySet().stream()
                 .map(entry -> {
                     AgingBuckets buckets = entry.getValue();
+                    ResolvedDisplayReference customer =
+                            customers.getOrDefault(entry.getKey(), ResolvedDisplayReference.EMPTY);
                     return AgedReceivablesRow.builder()
                             .customerId(entry.getKey())
-                            .customerName(null) // no directory lookup in this slice
-                            .current(buckets.current)
+                            .customerName(customer.displayName())
+                            .customerReference(customer.displayReference())
+                            .notYetDue(buckets.notYetDue)
+                            .days1To30(buckets.days1To30)
                             .days31To60(buckets.days31To60)
                             .days61To90(buckets.days61To90)
                             .days90Plus(buckets.days90Plus)
+                            .overdue(buckets.overdue())
                             .totalOutstanding(buckets.total())
                             .build();
                 })
-                // customerName is null in this slice, so order deterministically by id
-                .sorted(Comparator.comparing(AgedReceivablesRow::getCustomerId))
+                .sorted(Comparator.comparing(
+                                AgedReceivablesRow::getCustomerName, Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(AgedReceivablesRow::getCustomerId))
                 .toList();
 
         AgingSummary totals = grandTotals(byCustomer.values());
@@ -730,13 +770,12 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
 
         // As-of semantics (finding 10): an item whose DOCUMENT (bill) date is after asOfDate
         // did not exist yet and is excluded; everything that did exist is bucketed on asOfDate,
-        // including not-yet-due items (they land in `current`). Aging basis is the due date,
-        // falling back to the document date — the same rule generateAgedReceivables uses.
-        // KNOWN LIMITATION: the
-        // open balance is
-        // the bill's CURRENT balance (total minus all allocations to date), not a
-        // balance reconstructed
-        // as-of asOfDate. A true historical-balance reconstruction is deferred.
+        // not-yet-due items in `notYetDue`. Aging basis is the due date, falling back to the
+        // document date — the same rule generateAgedReceivables uses. Only APPROVED bills are aged
+        // (AW11): a bill not yet approved is reported beside the buckets, unaged.
+        // KNOWN LIMITATION: the open balance is the bill's CURRENT balance (total minus all
+        // allocations to date), not a balance reconstructed as-of asOfDate. A true
+        // historical-balance reconstruction is deferred.
         List<VendorBill> bills = vendorBillRepository.findByStatusIn(OPEN_PAYABLE_STATUSES);
 
         // Batch every bill's allocated total in one query to avoid a per-bill N+1
@@ -767,27 +806,36 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
                 // not-yet-due bill already exists and must still be reported.
                 continue;
             }
-            LocalDate agingDate = payableAgingDate(bill);
-            long daysPastDue = ChronoUnit.DAYS.between(agingDate, asOfDate);
-            // A negative daysPastDue (not yet due) is kept deliberately: it satisfies
-            // AgingBuckets' `<= 30` test and so lands in `current`, which is exactly what
-            // AgedPayablesRow.current documents ("includes not-yet-due").
             VendorAging aging =
                     byVendor.computeIfAbsent(bill.getVendorId(), key -> new VendorAging(bill.getVendorName()));
+            if (!APPROVED_PAYABLE_STATUSES.contains(bill.getStatus())) {
+                // Not yet approved: counted beside the buckets, never in one (AW11, §4.2).
+                aging.unapproved = aging.unapproved.add(openBalance);
+                aging.unapprovedBillCount++;
+                continue;
+            }
+            LocalDate agingDate = payableAgingDate(bill);
+            long daysPastDue = ChronoUnit.DAYS.between(agingDate, asOfDate);
             aging.buckets.add(daysPastDue, openBalance);
         }
 
         List<AgedPayablesRow> rows = byVendor.entrySet().stream()
                 .map(entry -> {
                     VendorAging aging = entry.getValue();
+                    BigDecimal totalOutstanding = aging.buckets.total();
                     return AgedPayablesRow.builder()
                             .vendorId(entry.getKey())
                             .vendorName(aging.vendorName)
-                            .current(aging.buckets.current)
+                            .notYetDue(aging.buckets.notYetDue)
+                            .days1To30(aging.buckets.days1To30)
                             .days31To60(aging.buckets.days31To60)
                             .days61To90(aging.buckets.days61To90)
                             .days90Plus(aging.buckets.days90Plus)
-                            .totalOutstanding(aging.buckets.total())
+                            .overdue(aging.buckets.overdue())
+                            .totalOutstanding(totalOutstanding)
+                            .unapproved(aging.unapproved)
+                            .unapprovedBillCount(aging.unapprovedBillCount)
+                            .totalIncludingUnapproved(totalOutstanding.add(aging.unapproved))
                             .build();
                 })
                 .sorted(Comparator.comparing(
@@ -797,18 +845,27 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
 
         AgingSummary totals = grandTotals(
                 byVendor.values().stream().map(aging -> aging.buckets).toList());
+        BigDecimal unapproved =
+                byVendor.values().stream().map(aging -> aging.unapproved).reduce(BigDecimal.ZERO, BigDecimal::add);
+        int unapprovedBillCount = byVendor.values().stream()
+                .mapToInt(aging -> aging.unapprovedBillCount)
+                .sum();
 
         log.info(
-                "Aged payables generated as of {}: vendors={}, totalOutstanding={}",
+                "Aged payables generated as of {}: vendors={}, totalOutstanding={}, unapprovedBills={}",
                 asOfDate,
                 rows.size(),
-                totals.getTotalOutstanding());
+                totals.getTotalOutstanding(),
+                unapprovedBillCount);
 
         return AgedPayablesReport.builder()
                 .asOfDate(asOfDate)
                 .generatedAt(Instant.now(clock))
                 .rows(rows)
                 .totals(totals)
+                .unapproved(unapproved)
+                .unapprovedBillCount(unapprovedBillCount)
+                .totalIncludingUnapproved(totals.getTotalOutstanding().add(unapproved))
                 .build();
     }
 
@@ -1307,6 +1364,11 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
                 .thenComparing(line -> line.getJournalEntry().getJournalEntryId())
                 .thenComparing(JournalEntryLine::getLineNumber, Comparator.nullsLast(Comparator.naturalOrder())));
 
+        // Signed figures are debit positive; the normal-side figures put them on the account's
+        // usual side so a reader can say "went up" or "went down" (#2524, AW3).
+        AccountType accountType = account != null ? account.getAccountType() : null;
+        NormalSide normalSide = NormalSide.of(accountType);
+
         BigDecimal running = openingBalance;
         BigDecimal totalDebit = BigDecimal.ZERO;
         BigDecimal totalCredit = BigDecimal.ZERO;
@@ -1316,7 +1378,8 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
             JournalEntry entry = line.getJournalEntry();
             BigDecimal debit = nullSafe(line.getDebitAmount());
             BigDecimal credit = nullSafe(line.getCreditAmount());
-            running = running.add(debit).subtract(credit);
+            BigDecimal movement = debit.subtract(credit);
+            running = running.add(movement);
             totalDebit = totalDebit.add(debit);
             totalCredit = totalCredit.add(credit);
 
@@ -1328,6 +1391,11 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
                     .debitAmount(debit.signum() != 0 ? debit : null)
                     .creditAmount(credit.signum() != 0 ? credit : null)
                     .runningBalance(running)
+                    .direction(
+                            normalSide.normalBalance(movement).signum() >= 0
+                                    ? GeneralLedgerLine.Direction.INCREASE
+                                    : GeneralLedgerLine.Direction.DECREASE)
+                    .normalRunningBalance(normalSide.normalBalance(running))
                     .sourceEventType(entry.getSourceEventType())
                     .build());
         }
@@ -1341,11 +1409,15 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
                 .accountId(glAccountId.toString())
                 .accountNumber(accountNumber != null ? accountNumber : "")
                 .accountName(accountName != null ? accountName : "")
+                .accountType(accountType)
+                .normalSide(normalSide)
                 .openingBalance(openingBalance)
+                .normalOpeningBalance(normalSide.normalBalance(openingBalance))
                 .lines(glLines)
                 .totalDebit(totalDebit)
                 .totalCredit(totalCredit)
                 .closingBalance(running)
+                .normalClosingBalance(normalSide.normalBalance(running))
                 .build();
     }
 
@@ -1431,19 +1503,22 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         }
     }
 
-    private static AgingSummary grandTotals(java.util.Collection<AgingBuckets> allBuckets) {
+    private static AgingSummary grandTotals(Collection<AgingBuckets> allBuckets) {
         AgingBuckets grand = new AgingBuckets();
         for (AgingBuckets buckets : allBuckets) {
-            grand.current = grand.current.add(buckets.current);
+            grand.notYetDue = grand.notYetDue.add(buckets.notYetDue);
+            grand.days1To30 = grand.days1To30.add(buckets.days1To30);
             grand.days31To60 = grand.days31To60.add(buckets.days31To60);
             grand.days61To90 = grand.days61To90.add(buckets.days61To90);
             grand.days90Plus = grand.days90Plus.add(buckets.days90Plus);
         }
         return AgingSummary.builder()
-                .current(grand.current)
+                .notYetDue(grand.notYetDue)
+                .days1To30(grand.days1To30)
                 .days31To60(grand.days31To60)
                 .days61To90(grand.days61To90)
                 .days90Plus(grand.days90Plus)
+                .overdue(grand.overdue())
                 .totalOutstanding(grand.total())
                 .build();
     }
@@ -1455,21 +1530,24 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
     /**
      * Item-level aging accumulator: each item's full open balance lands in exactly
      * one bucket keyed on whole days past due ({@code asOfDate - agingDate}).
-     * Boundaries: {@code d <= 30} current, {@code 31..60}, {@code 61..90},
-     * {@code d >= 91} 90+. Not-yet-due items carry a negative {@code d} and land in
-     * {@code current} by that same {@code d <= 30} test. Callers exclude items that did
-     * not yet exist as of the report date by comparing the item's DOCUMENT date, before
-     * adding (finding 10).
+     * Boundaries (CAP:550 S35, #2524): {@code d <= 0} not yet due (due today is not
+     * overdue), {@code 1..30}, {@code 31..60}, {@code 61..90}, {@code d >= 91} 90+.
+     * {@code overdue} is the sum of the four late buckets and {@code total} is
+     * {@code notYetDue + overdue}. Callers exclude items that did not yet exist as of
+     * the report date by comparing the item's DOCUMENT date, before adding (finding 10).
      */
-    private static final class AgingBuckets {
-        private BigDecimal current = BigDecimal.ZERO;
+    static final class AgingBuckets {
+        private BigDecimal notYetDue = BigDecimal.ZERO;
+        private BigDecimal days1To30 = BigDecimal.ZERO;
         private BigDecimal days31To60 = BigDecimal.ZERO;
         private BigDecimal days61To90 = BigDecimal.ZERO;
         private BigDecimal days90Plus = BigDecimal.ZERO;
 
         void add(long daysPastDue, BigDecimal amount) {
-            if (daysPastDue <= 30) {
-                current = current.add(amount);
+            if (daysPastDue <= 0) {
+                notYetDue = notYetDue.add(amount);
+            } else if (daysPastDue <= 30) {
+                days1To30 = days1To30.add(amount);
             } else if (daysPastDue <= 60) {
                 days31To60 = days31To60.add(amount);
             } else if (daysPastDue <= 90) {
@@ -1479,15 +1557,24 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
             }
         }
 
+        BigDecimal overdue() {
+            return days1To30.add(days31To60).add(days61To90).add(days90Plus);
+        }
+
         BigDecimal total() {
-            return current.add(days31To60).add(days61To90).add(days90Plus);
+            return notYetDue.add(overdue());
         }
     }
 
-    /** Per-vendor aging accumulator carrying the vendor's display name. */
+    /**
+     * Per-vendor aging accumulator carrying the vendor's display name, the aged buckets of its
+     * approved bills and the unaged open amount of its bills not yet approved.
+     */
     private static final class VendorAging {
         private final String vendorName;
         private final AgingBuckets buckets = new AgingBuckets();
+        private BigDecimal unapproved = BigDecimal.ZERO;
+        private int unapprovedBillCount;
 
         VendorAging(String vendorName) {
             this.vendorName = vendorName;
@@ -1497,14 +1584,189 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
     // ========== Private Helper Methods ==========
 
     /**
-     * Types of the GL accounts behind a set of statement-line mappings, loaded in one query. An
-     * account the lookup does not return is simply absent from the map.
+     * One GL account with a posted balance on a statement window: its chart data and its ledger
+     * balance as debits minus credits (CAP:550 S35, #2524).
      */
-    private @NonNull Map<UUID, AccountType> accountTypesById(@NonNull List<StatementLineMapping> mappings) {
-        Set<UUID> accountIds =
+    record StatementAccount(
+            @NonNull UUID id,
+            @Nullable String code,
+            @Nullable String name,
+            @Nullable AccountType type,
+            @Nullable AccountSubtype subtype,
+            @NonNull BigDecimal debitsMinusCredits) {}
+
+    /**
+     * The lines of one statement and the accounts that landed on them.
+     *
+     * @param lineItems           line code to amount, named lines first in display order, then the
+     *                            computed lines that collected something
+     * @param accountsOnStatement every account on some line: mapped ones (zero when without
+     *                            activity) and the ones a computed line collected
+     */
+    record StatementFigures(
+            @NonNull Map<String, BigDecimal> lineItems,
+            @NonNull List<StatementAccount> accountsOnStatement) {}
+
+    /**
+     * Every account with ledger activity in the window, with its balance, in one grouped query:
+     * as of {@code endDateTime} when {@code startDateTime} is null (the balance sheet), else the
+     * period movement. Chart data comes from one further lookup; an account the lookup does not
+     * return keeps a null type and lands on no computed line.
+     */
+    private @NonNull List<StatementAccount> statementAccounts(
+            @NonNull StatementType statementType,
+            @Nullable LocalDateTime startDateTime,
+            @NonNull LocalDateTime endDateTime) {
+        List<TrialBalanceAccountTotal> totals = startDateTime == null
+                ? journalEntryRepository.sumPostedDebitsCreditsByAccountAsOf(endDateTime)
+                : journalEntryRepository.sumPostedDebitsCreditsByAccountInRange(startDateTime, endDateTime);
+        if (totals.isEmpty()) {
+            return List.of();
+        }
+        Set<UUID> ids =
+                totals.stream().map(TrialBalanceAccountTotal::glAccountId).collect(Collectors.toSet());
+        Map<UUID, GLAccount> accountsById = glAccountRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(GLAccount::getGlAccountId, account -> account));
+        List<StatementAccount> accounts = new ArrayList<>(totals.size());
+        for (TrialBalanceAccountTotal total : totals) {
+            GLAccount account = accountsById.get(total.glAccountId());
+            accounts.add(new StatementAccount(
+                    total.glAccountId(),
+                    account != null ? account.getAccountCode() : total.accountCode(),
+                    account != null ? account.getAccountName() : total.accountName(),
+                    account != null ? account.getAccountType() : null,
+                    account != null ? account.getAccountSubtype() : null,
+                    nullSafe(total.totalDebit()).subtract(nullSafe(total.totalCredit()))));
+        }
+        log.debug("Statement {} window has {} accounts with activity", statementType, accounts.size());
+        return accounts;
+    }
+
+    /**
+     * Lay the accounts out on the statement's lines: each mapping contributes its account's balance
+     * (on the account's normal side, after the mapping's operation) to its named line; an account
+     * with a non-zero balance and no mapping for the statement lands on the computed line for its
+     * type. Named lines appear whether or not they have activity; a computed line appears only when
+     * it collected something.
+     */
+    private @NonNull StatementFigures computeStatement(
+            @NonNull StatementType statementType,
+            @NonNull List<StatementLineMapping> mappings,
+            @NonNull List<StatementAccount> accountsWithActivity) {
+        Map<UUID, StatementAccount> activityById = new HashMap<>();
+        for (StatementAccount account : accountsWithActivity) {
+            activityById.put(account.id(), account);
+        }
+
+        Map<String, BigDecimal> lineItems = new LinkedHashMap<>();
+        Map<UUID, StatementAccount> onStatement = new LinkedHashMap<>();
+
+        // Named lines, in display order. A mapped account without activity is on the statement at
+        // zero; its type comes from the chart so the totals still know it.
+        Set<UUID> mappedIds =
                 mappings.stream().map(StatementLineMapping::getGlAccountId).collect(Collectors.toSet());
-        return glAccountRepository.findAllById(accountIds).stream()
-                .collect(Collectors.toMap(GLAccount::getGlAccountId, GLAccount::getAccountType));
+        Map<UUID, GLAccount> mappedWithoutActivity = new HashMap<>();
+        Set<UUID> missing = new HashSet<>(mappedIds);
+        missing.removeAll(activityById.keySet());
+        if (!missing.isEmpty()) {
+            for (GLAccount account : glAccountRepository.findAllById(missing)) {
+                mappedWithoutActivity.put(account.getGlAccountId(), account);
+            }
+        }
+        for (StatementLineMapping mapping : mappings) {
+            UUID accountId = mapping.getGlAccountId();
+            StatementAccount account = activityById.get(accountId);
+            if (account == null) {
+                GLAccount chart = mappedWithoutActivity.get(accountId);
+                account = new StatementAccount(
+                        accountId,
+                        chart != null ? chart.getAccountCode() : mapping.getAccountName(),
+                        chart != null ? chart.getAccountName() : mapping.getAccountName(),
+                        chart != null ? chart.getAccountType() : null,
+                        chart != null ? chart.getAccountSubtype() : null,
+                        BigDecimal.ZERO);
+            }
+            onStatement.putIfAbsent(accountId, account);
+            lineItems.merge(
+                    mapping.getStatementLineCode(),
+                    statementContribution(account.debitsMinusCredits(), account.type(), mapping.getOperation()),
+                    BigDecimal::add);
+        }
+
+        // Computed lines: whatever has a balance and no line yet, by type, appended in a fixed order.
+        Map<String, BigDecimal> computed = new HashMap<>();
+        List<String> computedCodes = new ArrayList<>();
+        for (StatementAccount account : accountsWithActivity) {
+            if (mappedIds.contains(account.id()) || account.debitsMinusCredits().signum() == 0) {
+                continue;
+            }
+            String lineCode = computedLineFor(statementType, account.type(), account.subtype());
+            if (lineCode == null) {
+                continue; // not this statement's kind of account (or an unknown type, logged by the totals)
+            }
+            onStatement.putIfAbsent(account.id(), account);
+            computed.merge(lineCode, computedContribution(lineCode, account), BigDecimal::add);
+            computedCodes.add(account.code());
+        }
+        for (String lineCode : COMPUTED_LINE_ORDER) {
+            BigDecimal amount = computed.get(lineCode);
+            if (amount != null) {
+                lineItems.merge(lineCode, amount, BigDecimal::add);
+            }
+        }
+        if (!computedCodes.isEmpty()) {
+            log.info(
+                    "{}: {} account(s) without a named line fell on computed lines: {}",
+                    statementType,
+                    computedCodes.size(),
+                    computedCodes);
+        }
+
+        return new StatementFigures(lineItems, new ArrayList<>(onStatement.values()));
+    }
+
+    /**
+     * The computed line an unmapped account lands on, by statement and account type (CAP:550 S35
+     * PROPOSED 2): on the balance sheet a {@code BANK_CASH} asset joins {@code BS_IN_THE_BANK}
+     * (AW9), other assets, liabilities and equity their "other" line, and revenue and expenses
+     * {@code BS_PROFIT_NOT_YET_CLOSED}; on the income statement revenue goes to
+     * {@code IS_OTHER_INCOME} and expenses to {@code IS_OTHER_EXPENSES}. Null when the account does
+     * not belong on the statement or its type is unknown.
+     */
+    static @Nullable String computedLineFor(
+            @NonNull StatementType statementType, @Nullable AccountType type, @Nullable AccountSubtype subtype) {
+        if (type == null) {
+            return null;
+        }
+        return switch (statementType) {
+            case BALANCE_SHEET ->
+                switch (type) {
+                    case ASSET -> subtype == AccountSubtype.BANK_CASH ? BS_IN_THE_BANK : BS_OTHER_ASSETS;
+                    case LIABILITY -> BS_OTHER_LIABILITIES;
+                    case EQUITY -> BS_OTHER_EQUITY;
+                    case REVENUE, EXPENSE -> BS_PROFIT_NOT_YET_CLOSED;
+                };
+            case INCOME_STATEMENT ->
+                switch (type) {
+                    case REVENUE -> IS_OTHER_INCOME;
+                    case EXPENSE -> IS_OTHER_EXPENSES;
+                    case ASSET, LIABILITY, EQUITY -> null;
+                };
+            case LABOR_OVERHEAD -> null;
+        };
+    }
+
+    /**
+     * What an account contributes to the computed line it fell on: revenue less expenses on
+     * {@code BS_PROFIT_NOT_YET_CLOSED} (credits minus debits for both), otherwise the balance on the
+     * account's normal side, as a {@code SUM} mapping would present it.
+     */
+    private static @NonNull BigDecimal computedContribution(
+            @NonNull String lineCode, @NonNull StatementAccount account) {
+        if (BS_PROFIT_NOT_YET_CLOSED.equals(lineCode)) {
+            return account.debitsMinusCredits().negate();
+        }
+        return statementContribution(account.debitsMinusCredits(), account.type(), OperationType.SUM);
     }
 
     /**
@@ -1537,19 +1799,12 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
             @Nullable AccountType accountType,
             @NonNull OperationType operation) {
         BigDecimal balance = debitsMinusCredits != null ? debitsMinusCredits : BigDecimal.ZERO;
-        BigDecimal normalSide = isCreditNormal(accountType) ? balance.negate() : balance;
+        BigDecimal normalSide = NormalSide.of(accountType).normalBalance(balance);
 
         return switch (operation) {
             case SUM -> normalSide;
             case SUBTRACT -> normalSide.negate();
             case NEGATE -> balance.negate();
         };
-    }
-
-    /** Liabilities, equity and revenue carry a credit balance; assets and expenses a debit one. */
-    private static boolean isCreditNormal(@Nullable AccountType accountType) {
-        return accountType == AccountType.LIABILITY
-                || accountType == AccountType.EQUITY
-                || accountType == AccountType.REVENUE;
     }
 }

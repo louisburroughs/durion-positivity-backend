@@ -7,6 +7,8 @@ import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.dto.PaymentApplicationResponse;
 import com.positivity.accounting.internal.dto.PaymentApplicationReversalGLPostingEvent;
 import com.positivity.accounting.internal.dto.PaymentApplicationReversalResponse;
+import com.positivity.accounting.internal.dto.RemainderCreditRequest;
+import com.positivity.accounting.internal.dto.RemainderCreditResponse;
 import com.positivity.accounting.internal.entity.CustomerCredit;
 import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.PaymentApplication;
@@ -16,7 +18,11 @@ import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePay
 import com.positivity.accounting.internal.enums.AllocationStrategy;
 import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.accounting.internal.exception.CurrencyNotSupportedException;
+import com.positivity.accounting.internal.exception.IdempotencyConflictException;
 import com.positivity.accounting.internal.exception.MultiApplicationReversalException;
+import com.positivity.accounting.internal.exception.PaymentNotAvailableException;
+import com.positivity.accounting.internal.exception.PaymentNotFoundException;
+import com.positivity.accounting.internal.exception.PaymentRemainderChangedException;
 import com.positivity.accounting.internal.repository.CustomerCreditRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
@@ -67,6 +73,16 @@ public class PaymentApplicationServiceImpl
     private static final String PAYMENT_APPLICATION_NOT_FOUND_PREFIX = "Payment application not found: ";
 
     private static final String PAYMENT_NOT_FOUND = "Payment not found: ";
+
+    /**
+     * Namespace of the request id a credit issued by {@link #applyPaymentToInvoices} records (CAP:550
+     * S35, #2524): {@code APPLY:<applicationRequestId>}. The same namespaced value keys the
+     * credit-issuance GL posting, so an apply key equal to a remainder-credit key never collides.
+     */
+    static final String APPLY_REQUEST_ID_PREFIX = "APPLY:";
+
+    /** Namespace of the request id a credit issued by {@link #creditPaymentRemainder} records. */
+    static final String REMAINDER_REQUEST_ID_PREFIX = "REMAINDER:";
 
     private final Clock clock;
     private final ReceivablePaymentRepository receivablePaymentRepository;
@@ -250,19 +266,21 @@ public class PaymentApplicationServiceImpl
             // (overpaymentAmount represents what couldn't be applied due to balance limits)
             BigDecimal unappliedAfterApplication = payment.getUnappliedAmount();
 
-            creditInfo = createCustomerCredit(payment, unappliedAfterApplication, applicationTimestamp);
+            String creditRequestId = APPLY_REQUEST_ID_PREFIX + request.getApplicationRequestId();
+            creditInfo =
+                    createCustomerCredit(payment, unappliedAfterApplication, applicationTimestamp, creditRequestId);
 
             // Enqueue the credit-issuance GL posting work item in the SAME
             // transaction as the CustomerCredit insert (transactional outbox,
             // issue #975). The async consumer posts Dr Undeposited Funds / Cr
             // Customer Credit Liability for the excess, so the overpayment cash
             // and the customer-credit liability both reach the ledger. Keyed on
-            // the application request id (namespaced for the credit leg), so a
-            // replay never double-posts; if this transaction rolls back, the work
-            // item rolls back with it.
+            // the credit's namespaced request id (APPLY:<applicationRequestId>, #2524), so a
+            // replay never double-posts and an equal remainder-credit key never collides; if this
+            // transaction rolls back, the work item rolls back with it.
             enqueueCustomerCreditIssuanceGLPostingWorkItem(
                     paymentId,
-                    request.getApplicationRequestId(),
+                    creditRequestId,
                     payment,
                     creditInfo.getCreditId(),
                     unappliedAfterApplication,
@@ -313,12 +331,21 @@ public class PaymentApplicationServiceImpl
     @Override
     public PaymentApplicationResponse.@Nullable CustomerCreditInfo creditUnappliedPayment(
             @NonNull UUID paymentId, @NonNull String creditRequestId) {
+        Optional<CustomerCredit> replayed = customerCreditRepository.findByRequestId(creditRequestId);
+        if (replayed.isPresent()) {
+            // The credit records the command that issued it (#2524): a replay returns it, writes nothing.
+            log.info(
+                    "Credit request {} already issued credit {}",
+                    creditRequestId,
+                    replayed.get().getCreditId());
+            return toCreditInfo(replayed.get());
+        }
         ReceivablePayment payment = receivablePaymentRepository
                 .findById(paymentId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, PAYMENT_NOT_FOUND + paymentId));
         BigDecimal unapplied = payment.getUnappliedAmount();
         if (unapplied == null || unapplied.compareTo(BigDecimal.ZERO) <= 0) {
-            // Already applied or credited in full: a replay changes nothing.
+            // Already applied or credited in full by another command: nothing to credit.
             log.info("Payment {} has no unapplied balance to credit (request {})", paymentId, creditRequestId);
             return null;
         }
@@ -329,18 +356,109 @@ public class PaymentApplicationServiceImpl
         }
         validateSameCurrency(payment);
 
+        return issueRemainderCredit(payment, unapplied, creditRequestId);
+    }
+
+    /**
+     * Keep a payment's whole unapplied remainder as a customer credit on request (AD-003; CAP:550
+     * S35, #2524): one transaction creates the credit, enqueues the Dr 1090 / Cr 2300 issuance under
+     * the namespaced key {@code REMAINDER:<requestId>} and moves the payment to {@code FULLY_APPLIED}.
+     *
+     * <p>Idempotent on the request id: a replay returns the credit the first request issued and
+     * writes nothing; the same request id on another payment is an {@link IdempotencyConflictException}
+     * (409). The payment must be {@code AVAILABLE} ({@link PaymentNotAvailableException}, 409), in the
+     * ledger currency ({@link CurrencyNotSupportedException}, 422) and still carry exactly
+     * {@code expectedAmount} unapplied ({@link PaymentRemainderChangedException}, 422: an apply
+     * intervened, the client re-reads). Nothing is written on any refusal.
+     */
+    @Override
+    public @NonNull RemainderCreditResponse creditPaymentRemainder(
+            @NonNull UUID paymentId, @NonNull RemainderCreditRequest request) {
+        String creditRequestId = REMAINDER_REQUEST_ID_PREFIX + request.getRequestId();
+        Optional<CustomerCredit> replayed = customerCreditRepository.findByRequestId(creditRequestId);
+        if (replayed.isPresent()) {
+            CustomerCredit credit = replayed.get();
+            if (!paymentId.equals(credit.getSourcePaymentId())) {
+                throw new IdempotencyConflictException("requestId " + request.getRequestId()
+                        + " already credited the remainder of payment " + credit.getSourcePaymentId()
+                        + "; it cannot be reused for payment " + paymentId);
+            }
+            log.info(
+                    "Remainder credit request {} already issued credit {} for payment {}; returning it",
+                    request.getRequestId(),
+                    credit.getCreditId(),
+                    paymentId);
+            return toRemainderResponse(credit, request.getRequestId());
+        }
+
+        ReceivablePayment payment = receivablePaymentRepository
+                .findById(paymentId)
+                .orElseThrow(() -> new PaymentNotFoundException(PAYMENT_NOT_FOUND + paymentId));
+        if (payment.getStatus() != ReceivablePaymentStatus.AVAILABLE) {
+            throw new PaymentNotAvailableException(
+                    "Payment " + paymentId + " is not available (status: " + payment.getStatus() + ")");
+        }
+        validateSameCurrency(payment);
+        BigDecimal unapplied = payment.getUnappliedAmount() != null ? payment.getUnappliedAmount() : BigDecimal.ZERO;
+        if (unapplied.compareTo(request.getExpectedAmount()) != 0) {
+            throw new PaymentRemainderChangedException("Payment " + paymentId + " has " + unapplied
+                    + " unapplied, not the expected " + request.getExpectedAmount()
+                    + "; re-read the payment before crediting its remainder");
+        }
+
+        PaymentApplicationResponse.CustomerCreditInfo creditInfo =
+                issueRemainderCredit(payment, unapplied, creditRequestId);
+        return RemainderCreditResponse.builder()
+                .paymentId(paymentId)
+                .requestId(request.getRequestId())
+                .creditId(creditInfo.getCreditId())
+                .amount(creditInfo.getAmount())
+                .currency(payment.getCurrency())
+                .remainingAmount(payment.getUnappliedAmount())
+                .createdAt(creditInfo.getCreatedAt())
+                .build();
+    }
+
+    /**
+     * The shared remainder path of {@link #creditUnappliedPayment} and {@link #creditPaymentRemainder}:
+     * credit the whole unapplied amount under {@code creditRequestId}, enqueue the issuance posting in
+     * the same transaction (transactional outbox, #975), and mark the payment fully applied.
+     */
+    private PaymentApplicationResponse.CustomerCreditInfo issueRemainderCredit(
+            ReceivablePayment payment, BigDecimal unapplied, String creditRequestId) {
         Instant timestamp = Instant.now(clock);
-        PaymentApplicationResponse.CustomerCreditInfo creditInfo = createCustomerCredit(payment, unapplied, timestamp);
+        PaymentApplicationResponse.CustomerCreditInfo creditInfo =
+                createCustomerCredit(payment, unapplied, timestamp, creditRequestId);
         // Same transaction as the CustomerCredit insert (transactional outbox, #975): the issuance
         // leg posts Dr Undeposited Funds / Cr Customer Credit Liability for the whole amount.
         enqueueCustomerCreditIssuanceGLPostingWorkItem(
-                paymentId, creditRequestId, payment, creditInfo.getCreditId(), unapplied, timestamp);
+                payment.getPaymentId(), creditRequestId, payment, creditInfo.getCreditId(), unapplied, timestamp);
 
         payment.applyAmount(unapplied);
         payment.setUpdatedAt(timestamp);
         payment.setModifiedBy(getCurrentUser());
         receivablePaymentRepository.save(payment);
         return creditInfo;
+    }
+
+    private static RemainderCreditResponse toRemainderResponse(CustomerCredit credit, String requestId) {
+        return RemainderCreditResponse.builder()
+                .paymentId(credit.getSourcePaymentId())
+                .requestId(requestId)
+                .creditId(credit.getCreditId())
+                .amount(credit.getAmount())
+                .currency(credit.getCurrency())
+                .remainingAmount(BigDecimal.ZERO)
+                .createdAt(credit.getCreatedAt())
+                .build();
+    }
+
+    private static PaymentApplicationResponse.CustomerCreditInfo toCreditInfo(CustomerCredit credit) {
+        return PaymentApplicationResponse.CustomerCreditInfo.builder()
+                .creditId(credit.getCreditId())
+                .amount(credit.getAmount())
+                .createdAt(credit.getCreatedAt())
+                .build();
     }
 
     /**
@@ -684,20 +802,20 @@ public class PaymentApplicationServiceImpl
      * transactional outbox (issue #975). Runs inside the surrounding application
      * transaction ({@code saveToOutbox} uses MANDATORY propagation), guaranteeing
      * the issuance ledger work item exists iff the {@code CustomerCredit}
-     * committed. The application request id travels on the event as the posting
-     * idempotency-key basis (namespaced for the credit leg); the credit id links
-     * the entry back to the subledger row it backs.
+     * committed. The credit's namespaced request id ({@code APPLY:…}, {@code REMAINDER:…} or the
+     * invoice-payment event's prefix; #2524) travels on the event as the posting idempotency-key
+     * basis; the credit id links the entry back to the subledger row it backs.
      */
     private void enqueueCustomerCreditIssuanceGLPostingWorkItem(
             @NonNull UUID paymentId,
-            @NonNull String applicationRequestId,
+            @NonNull String creditRequestId,
             @NonNull ReceivablePayment payment,
             @NonNull UUID creditId,
             @NonNull BigDecimal creditAmount,
             @NonNull Instant applicationTimestamp) {
         CustomerCreditIssuanceGLPostingEvent issuanceEvent = CustomerCreditIssuanceGLPostingEvent.builder()
                 .eventId(UUIDv7Generator.generate())
-                .applicationRequestId(applicationRequestId)
+                .applicationRequestId(creditRequestId)
                 .creditId(creditId)
                 .paymentId(paymentId)
                 .customerId(payment.getCustomerId())
@@ -714,9 +832,9 @@ public class PaymentApplicationServiceImpl
                 issuanceEvent);
 
         log.info(
-                "Customer credit issuance GL posting work item persisted to outbox | applicationRequestId={} "
+                "Customer credit issuance GL posting work item persisted to outbox | creditRequestId={} "
                         + "| eventId={} | creditId={} | creditAmount={}",
-                applicationRequestId,
+                creditRequestId,
                 issuanceEvent.getEventId(),
                 creditId,
                 creditAmount);
@@ -1047,13 +1165,14 @@ public class PaymentApplicationServiceImpl
     }
 
     private PaymentApplicationResponse.CustomerCreditInfo createCustomerCredit(
-            ReceivablePayment payment, BigDecimal amount, Instant timestamp) {
+            ReceivablePayment payment, BigDecimal amount, Instant timestamp, String creditRequestId) {
 
         CustomerCredit credit = new CustomerCredit();
         credit.setCustomerId(payment.getCustomerId());
         credit.setCurrency(payment.getCurrency());
         credit.setAmount(amount);
         credit.setSourcePaymentId(payment.getPaymentId());
+        credit.setRequestId(creditRequestId);
         credit.setCreatedAt(timestamp);
         credit.setCreatedBy(getCurrentUser());
 
@@ -1128,6 +1247,12 @@ public class PaymentApplicationServiceImpl
                 .map(app -> buildApplicationDetail(app, app.getInvoiceId()))
                 .toList();
 
+        // The credit the first run issued, if any, by its namespaced request id (#2524).
+        PaymentApplicationResponse.CustomerCreditInfo creditInfo = customerCreditRepository
+                .findByRequestId(APPLY_REQUEST_ID_PREFIX + applicationRequestId)
+                .map(PaymentApplicationServiceImpl::toCreditInfo)
+                .orElse(null);
+
         // Build response for idempotent retry
         return PaymentApplicationResponse.builder()
                 .paymentId(firstApp.getPaymentId())
@@ -1137,6 +1262,7 @@ public class PaymentApplicationServiceImpl
                 .appliedAmount(totalApplied)
                 .remainingAmount(payment.getUnappliedAmount())
                 .applications(applicationDetails)
+                .customerCredit(creditInfo)
                 .applicationTimestamp(firstApp.getApplicationTimestamp())
                 .applicationRequestId(applicationRequestId)
                 .build();

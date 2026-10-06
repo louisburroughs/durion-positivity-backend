@@ -185,6 +185,35 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
             LocalDateTime asOfDate);
 
     /**
+     * Aggregate ledger journal lines (POSTED and REVERSED entries, never DRAFT) with a transaction
+     * date inside the inclusive window into per-account debit/credit totals, ordered by
+     * chart-of-accounts code. The income statement's one grouped query (CAP:550 S35, #2524): every
+     * account with activity in the period comes back, mapped or not, so no posted balance is left
+     * off the statement.
+     *
+     * @param startDate period start (inclusive; pass start-of-day)
+     * @param endDate   period end (inclusive; pass end-of-day)
+     * @return one aggregate per account with activity in the window, ordered by account code
+     */
+    @Query("""
+                SELECT new com.positivity.accounting.internal.dto.TrialBalanceAccountTotal(
+                    jel.glAccount.glAccountId,
+                    jel.glAccount.accountCode,
+                    jel.glAccount.accountName,
+                    COALESCE(SUM(CASE WHEN jel.debitAmount IS NOT NULL THEN jel.debitAmount ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN jel.creditAmount IS NOT NULL THEN jel.creditAmount ELSE 0 END), 0))
+                FROM JournalEntry je
+                JOIN je.lines jel
+                WHERE je.status IN ('POSTED', 'REVERSED')
+                  AND je.transactionDate >= :startDate
+                  AND je.transactionDate <= :endDate
+                GROUP BY jel.glAccount.glAccountId, jel.glAccount.accountCode, jel.glAccount.accountName
+                ORDER BY jel.glAccount.accountCode
+            """)
+    List<com.positivity.accounting.internal.dto.TrialBalanceAccountTotal> sumPostedDebitsCreditsByAccountInRange(
+            LocalDateTime startDate, LocalDateTime endDate);
+
+    /**
      * Find all ledger journal entries (POSTED and REVERSED, never DRAFT; issue
      * #2308) with lines for a GL account within date range, so a reversed original
      * stays visible beside its reversal. Used for drilldown reporting.

@@ -357,10 +357,12 @@ class FinancialReportingControllerTest extends BaseIntegrationTest {
 
         private AgingSummary zeroTotals() {
             return AgingSummary.builder()
-                    .current(BigDecimal.ZERO)
+                    .notYetDue(BigDecimal.ZERO)
+                    .days1To30(BigDecimal.ZERO)
                     .days31To60(BigDecimal.ZERO)
                     .days61To90(BigDecimal.ZERO)
                     .days90Plus(BigDecimal.ZERO)
+                    .overdue(BigDecimal.ZERO)
                     .totalOutstanding(BigDecimal.ZERO)
                     .build();
         }
@@ -408,6 +410,9 @@ class FinancialReportingControllerTest extends BaseIntegrationTest {
                             .generatedAt(Instant.parse("2026-07-01T00:00:00Z"))
                             .rows(Collections.emptyList())
                             .totals(zeroTotals())
+                            .unapproved(BigDecimal.ZERO)
+                            .unapprovedBillCount(0)
+                            .totalIncludingUnapproved(BigDecimal.ZERO)
                             .build());
 
             mockMvc.perform(get("/v1/accounting/reports/financial/aged-payables")

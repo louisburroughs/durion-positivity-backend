@@ -6078,6 +6078,82 @@ paths:
       - Payment Applications
       x-required-permissions:
       - accounting:payment:apply
+  /v1/accounting/payments/{paymentId}/remainder-credit:
+    post:
+      description: 'Converts the whole unapplied remainder of a receivable payment into a customer credit in one transaction: the credit is created, the Dr Undeposited Funds / Cr Customer Credit Liability issuance is enqueued, and the payment becomes FULLY_APPLIED.
+
+        Use this tool after applyPayment when the customer keeps the leftover on account, or when the credit will be refunded next with refundCustomerCredit; do not use applyCustomerCredit, which draws down a credit that already exists.
+
+        Preconditions: the payment must be AVAILABLE, in the ledger currency, and still carry exactly expectedAmount unapplied; a replay with the same requestId returns the credit it issued and writes nothing.
+
+        Required inputs: paymentId (UUID) as a path parameter, requestId (max 100 chars, the idempotency key) and expectedAmount (the unapplied amount the caller read, min 0.01).
+
+        Emits an ACCOUNTING_PAYMENT_REMAINDER_CREDIT event; the credit''s creator and the issuance entry''s actor come from the security context.
+
+        Returns 201 with the credit, 404 PAYMENT_NOT_FOUND when the payment does not exist, 409 PAYMENT_NOT_AVAILABLE when it is already fully applied, 409 IDEMPOTENCY_CONFLICT when the requestId was used on another payment, 409 OPTIMISTIC_LOCK after a second concurrent update, 422 PAYMENT_REMAINDER_CHANGED when expectedAmount no longer matches (re-read the payment), and 422 CURRENCY_NOT_SUPPORTED for a payment in another currency.
+
+        '
+      operationId: creditPaymentRemainder
+      parameters:
+      - description: Payment identifier
+        in: path
+        name: paymentId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Keep 12.50 as credit:
+                description: Keep 12.50 as credit
+                value:
+                  expectedAmount: 12.5
+                  requestId: remainder-2026-10-06-017
+            schema:
+              $ref: '#/components/schemas/RemainderCreditRequest'
+        description: Idempotency key and the unapplied amount the caller expects to credit.
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RemainderCreditResponse'
+          description: Remainder credited; a replay returns the same credit
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VALIDATION_ERROR: requestId missing or too long, expectedAmount missing or below 0.01'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: PAYMENT_NOT_FOUND
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: PAYMENT_NOT_AVAILABLE, IDEMPOTENCY_CONFLICT or OPTIMISTIC_LOCK
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: PAYMENT_REMAINDER_CHANGED or CURRENCY_NOT_SUPPORTED; nothing is written
+      security:
+      - bearerAuth:
+        - accounting:payment:apply
+      summary: Keep Payment Remainder As Customer Credit
+      tags:
+      - Payment Applications
+      x-required-permissions:
+      - accounting:payment:apply
   /v1/accounting/payments/{paymentId}/reverse:
     post:
       description: 'Reverses every application of a receivable payment as new compensating records, restoring each invoice''s balance and the payment''s unapplied amount.
@@ -11391,16 +11467,30 @@ components:
     AccountDrilldownResponse:
       description: GL account contribution to a financial statement line
       properties:
+        accountCode:
+          description: Chart-of-accounts code of the GL account
+          example: '4000'
+          type: string
         accountId:
           description: Identifier of the GL account
-          example: '4000'
+          example: 01960003-0000-7000-8000-000000000001
           type: string
         accountName:
           description: Name of the GL account
-          example: Salaries and Wages
+          example: Service Revenue
+          type: string
+        accountType:
+          description: Type of the GL account
+          enum:
+          - ASSET
+          - LIABILITY
+          - EQUITY
+          - REVENUE
+          - EXPENSE
+          example: REVENUE
           type: string
         balance:
-          description: Account balance for the period (sum of POSTED journal lines within the date range)
+          description: The amount this account contributes to the line (as-of balance at endDate for a balance-sheet line, period movement for an income-statement line); rows add up to the line
           example: 1250.0
           type: number
         statementLineCode:
@@ -11408,6 +11498,7 @@ components:
           example: 1200-100
           type: string
       required:
+      - accountCode
       - accountId
       - accountName
       - balance
@@ -11743,20 +11834,36 @@ components:
           items:
             $ref: '#/components/schemas/AgedPayablesRow'
           type: array
+        totalIncludingUnapproved:
+          description: totals.totalOutstanding + unapproved
+          example: 800.0
+          type: number
         totals:
           $ref: '#/components/schemas/AgingSummary'
+        unapproved:
+          description: Open amount on bills not yet approved (PENDING_RECEIPT_MATCH, MATCH_EXCEPTION) across all vendors; never aged
+          example: 300.0
+          type: number
+        unapprovedBillCount:
+          description: Number of open bills not yet approved across all vendors
+          example: 2
+          format: int32
+          type: integer
       required:
       - asOfDate
       - generatedAt
       - rows
+      - totalIncludingUnapproved
       - totals
+      - unapproved
+      - unapprovedBillCount
       type: object
     AgedPayablesRow:
-      description: Per-vendor aged payables row with bucketed open vendor-bill balances. Age is measured from the bill due date, falling back to the bill date when no due date is recorded; not-yet-due bills are reported in the current bucket.
+      description: Per-vendor aged payables row with bucketed open vendor-bill balances. Age is measured from the bill due date, falling back to the bill date when no due date is recorded; only APPROVED bills are aged, unapproved bills are reported separately and unaged.
       properties:
-        current:
-          description: Outstanding 0-30 days past due (includes not-yet-due)
-          example: 3200.0
+        days1To30:
+          description: Approved bills outstanding 1-30 days past due
+          example: 700.0
           type: number
         days31To60:
           description: Outstanding 31-60 days past due
@@ -11770,10 +11877,31 @@ components:
           description: Outstanding more than 90 days past due
           example: 0.0
           type: number
+        notYetDue:
+          description: 'Approved bills outstanding not yet due: due today or later (due today is not overdue)'
+          example: 2500.0
+          type: number
+        overdue:
+          description: 'Overdue: the sum of days1To30, days31To60, days61To90 and days90Plus'
+          example: 1450.0
+          type: number
+        totalIncludingUnapproved:
+          description: totalOutstanding + unapproved
+          example: 4250.0
+          type: number
         totalOutstanding:
-          description: Total outstanding for the vendor across all buckets
+          description: 'Total outstanding on approved bills: notYetDue + overdue'
           example: 3950.0
           type: number
+        unapproved:
+          description: Open amount on bills not yet approved (PENDING_RECEIPT_MATCH, MATCH_EXCEPTION); never aged
+          example: 300.0
+          type: number
+        unapprovedBillCount:
+          description: Number of open bills not yet approved
+          example: 2
+          format: int32
+          type: integer
         vendorId:
           description: Vendor UUID
           example: d10217f9-3ec6-46b9-9c87-e7066c100c24
@@ -11784,11 +11912,16 @@ components:
           example: Global Parts Supply
           type: string
       required:
-      - current
+      - days1To30
       - days31To60
       - days61To90
       - days90Plus
+      - notYetDue
+      - overdue
+      - totalIncludingUnapproved
       - totalOutstanding
+      - unapproved
+      - unapprovedBillCount
       - vendorId
       type: object
     AgedReceivablesReport:
@@ -11818,20 +11951,25 @@ components:
       - totals
       type: object
     AgedReceivablesRow:
-      description: Per-customer aged receivables row with bucketed open invoice balances. Age is measured from the invoice due date, falling back to the invoice date when no due date is recorded; not-yet-due invoices are reported in the current bucket.
+      description: Per-customer aged receivables row with bucketed open invoice balances. Age is measured from the invoice due date, falling back to the invoice date when no due date is recorded; invoices due today or later are notYetDue, the four late buckets are overdue money.
       properties:
-        current:
-          description: Outstanding 0-30 days past due (includes not-yet-due)
-          example: 1250.0
-          type: number
         customerId:
           description: Customer (party) UUID
           example: d10217f9-3ec6-46b9-9c87-e7066c100c24
           format: uuid
           type: string
         customerName:
-          description: Customer display name. Always null on this report — no directory lookup is performed; resolve the name from the customer directory using customerId.
+          description: Customer display name from the customer replica; null when the party is not yet known
+          example: Acme Fleet Services
           type: string
+        customerReference:
+          description: Customer number from the customer replica; null when the party is not yet known
+          example: C-10042
+          type: string
+        days1To30:
+          description: Outstanding 1-30 days past due
+          example: 250.0
+          type: number
         days31To60:
           description: Outstanding 31-60 days past due
           example: 500.0
@@ -11844,24 +11982,34 @@ components:
           description: Outstanding more than 90 days past due
           example: 0.0
           type: number
+        notYetDue:
+          description: 'Outstanding not yet due: due today or later (due today is not overdue)'
+          example: 1000.0
+          type: number
+        overdue:
+          description: 'Overdue: the sum of days1To30, days31To60, days61To90 and days90Plus'
+          example: 750.0
+          type: number
         totalOutstanding:
-          description: Total outstanding for the customer across all buckets
+          description: 'Total outstanding for the customer: notYetDue + overdue'
           example: 1750.0
           type: number
       required:
-      - current
       - customerId
+      - days1To30
       - days31To60
       - days61To90
       - days90Plus
+      - notYetDue
+      - overdue
       - totalOutstanding
       type: object
     AgingSummary:
       description: Grand-total aging buckets across all rows of an aged AR/AP report
       properties:
-        current:
-          description: Total outstanding 0-30 days past due (includes not-yet-due items)
-          example: 12500.0
+        days1To30:
+          description: Total outstanding 1-30 days past due
+          example: 3500.0
           type: number
         days31To60:
           description: Total outstanding 31-60 days past due
@@ -11875,15 +12023,25 @@ components:
           description: Total outstanding more than 90 days past due
           example: 900.0
           type: number
+        notYetDue:
+          description: 'Total outstanding not yet due: due today or later (due today is not overdue)'
+          example: 9000.0
+          type: number
+        overdue:
+          description: 'Total overdue: the sum of days1To30, days31To60, days61To90 and days90Plus'
+          example: 10400.0
+          type: number
         totalOutstanding:
-          description: Grand total outstanding across all buckets
+          description: 'Grand total outstanding: notYetDue + overdue'
           example: 19400.0
           type: number
       required:
-      - current
+      - days1To30
       - days31To60
       - days61To90
       - days90Plus
+      - notYetDue
+      - overdue
       - totalOutstanding
       type: object
     AllocationLineRequest:
@@ -15780,24 +15938,48 @@ components:
           description: Account name of the GL account
           example: Service Revenue
           type: string
+        accountType:
+          description: Type of the GL account
+          enum:
+          - ASSET
+          - LIABILITY
+          - EQUITY
+          - REVENUE
+          - EXPENSE
+          example: REVENUE
+          type: string
         asOfDate:
           description: Point in time the balance is computed as of (ISO 8601)
           example: '2026-06-18T08:00:00Z'
           format: date-time
           type: string
         balance:
-          description: Balance of the account
-          example: 1250.0
+          description: Balance of the account, debits minus credits
+          example: -1250.0
           type: number
         glAccountId:
           description: Unique identifier of the GL account
           example: 01960003-0000-7000-8000-000000000001
           format: uuid
           type: string
+        normalBalance:
+          description: Balance on the account's normal side (positive when the account holds its usual balance)
+          example: 1250.0
+          type: number
+        normalSide:
+          description: 'Normal side of the account: DEBIT for assets and expenses, CREDIT for liabilities, equity and revenue'
+          enum:
+          - DEBIT
+          - CREDIT
+          example: CREDIT
+          type: string
       required:
+      - accountType
       - asOfDate
       - balance
       - glAccountId
+      - normalBalance
+      - normalSide
       type: object
     GLAccountCreateRequest:
       description: Request to create a new GL account
@@ -16199,6 +16381,16 @@ components:
           description: GL account number (chart-of-accounts code)
           example: '1000'
           type: string
+        accountType:
+          description: Type of the GL account
+          enum:
+          - ASSET
+          - LIABILITY
+          - EQUITY
+          - REVENUE
+          - EXPENSE
+          example: LIABILITY
+          type: string
         closingBalance:
           description: 'Signed closing balance (debit positive): opening balance plus in-period net activity'
           example: 80000.0
@@ -16208,6 +16400,21 @@ components:
           items:
             $ref: '#/components/schemas/GeneralLedgerLine'
           type: array
+        normalClosingBalance:
+          description: Closing balance on the account's normal side (positive when the account holds its usual balance)
+          example: 80000.0
+          type: number
+        normalOpeningBalance:
+          description: Opening balance on the account's normal side (positive when the account holds its usual balance)
+          example: 50000.0
+          type: number
+        normalSide:
+          description: 'Normal side of the account: DEBIT for assets and expenses, CREDIT for liabilities, equity and revenue'
+          enum:
+          - DEBIT
+          - CREDIT
+          example: CREDIT
+          type: string
         openingBalance:
           description: Signed opening balance (debit positive) from POSTED activity before the start date
           example: 50000.0
@@ -16226,6 +16433,9 @@ components:
       - accountNumber
       - closingBalance
       - lines
+      - normalClosingBalance
+      - normalOpeningBalance
+      - normalSide
       - openingBalance
       - totalCredit
       - totalDebit
@@ -16245,6 +16455,13 @@ components:
           description: Description/narrative for the journal line
           example: Recognize receivable
           type: string
+        direction:
+          description: INCREASE when the line moved the account up on its normal side, DECREASE otherwise
+          enum:
+          - INCREASE
+          - DECREASE
+          example: INCREASE
+          type: string
         entryNumber:
           description: Journal entry number
           example: JE-202606-0042
@@ -16254,6 +16471,10 @@ components:
           example: 01960003-0000-7000-8000-000000000001
           format: uuid
           type: string
+        normalRunningBalance:
+          description: Cumulative balance through this line on the account's normal side (positive when the account holds its usual balance)
+          example: 80000.0
+          type: number
         runningBalance:
           description: Cumulative signed account balance (debit positive) through this line
           example: 80000.0
@@ -16268,7 +16489,9 @@ components:
           format: date
           type: string
       required:
+      - direction
       - journalEntryId
+      - normalRunningBalance
       - runningBalance
       - transactionDate
       type: object
@@ -19262,6 +19485,67 @@ components:
       required:
       - workorderId
       type: object
+    RemainderCreditRequest:
+      description: Keep a payment's unapplied remainder as a customer credit
+      properties:
+        expectedAmount:
+          description: The payment's unapplied amount as the caller read it; must still match exactly
+          example: 12.5
+          minimum: 0.01
+          type: number
+        requestId:
+          description: Idempotency key for this command; a replay returns the credit it issued, the same key on another payment is refused with IDEMPOTENCY_CONFLICT
+          example: remainder-2026-10-06-017
+          maxLength: 100
+          minLength: 0
+          type: string
+      required:
+      - expectedAmount
+      - requestId
+      type: object
+    RemainderCreditResponse:
+      description: The customer credit issued for a payment's unapplied remainder
+      properties:
+        amount:
+          description: Amount of the credit (the whole remainder)
+          example: 12.5
+          type: number
+        createdAt:
+          description: When the credit was issued (ISO 8601)
+          example: '2026-10-06T08:00:00Z'
+          format: date-time
+          type: string
+        creditId:
+          description: Identifier of the customer credit issued
+          example: 01960003-0000-7000-8000-000000000020
+          format: uuid
+          type: string
+        currency:
+          description: Currency of the credit (ISO 4217)
+          example: USD
+          type: string
+        paymentId:
+          description: The payment whose remainder was credited
+          example: 01960003-0000-7000-8000-000000000010
+          format: uuid
+          type: string
+        remainingAmount:
+          description: The payment's unapplied amount after the credit; always 0
+          example: 0.0
+          type: number
+        requestId:
+          description: The request's idempotency key, as sent
+          example: remainder-2026-10-06-017
+          type: string
+      required:
+      - amount
+      - createdAt
+      - creditId
+      - currency
+      - paymentId
+      - remainingAmount
+      - requestId
+      type: object
     ReportExportRequest:
       description: Request payload for exporting a financial report
       properties:
@@ -19290,11 +19574,6 @@ components:
           - JSON
           example: CSV
           type: string
-        organizationId:
-          description: Organization UUID to scope the export
-          example: d10217f9-3ec6-46b9-9c87-e7066c100c24
-          format: uuid
-          type: string
         reportType:
           description: 'Report type key. Renderable types: TAX_LIABILITY, INCOME_STATEMENT, BALANCE_SHEET, TRIAL_BALANCE, GENERAL_LEDGER, AGED_RECEIVABLES, AGED_PAYABLES.'
           example: INCOME_STATEMENT
@@ -19309,7 +19588,6 @@ components:
       required:
       - endDate
       - format
-      - organizationId
       - reportType
       - startDate
       type: object

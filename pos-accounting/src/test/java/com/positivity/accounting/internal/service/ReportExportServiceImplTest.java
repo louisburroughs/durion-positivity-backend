@@ -109,7 +109,6 @@ class ReportExportServiceImplTest {
                 .format(format)
                 .startDate(START)
                 .endDate(END)
-                .organizationId(UUID.randomUUID())
                 .build();
     }
 

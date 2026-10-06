@@ -17,6 +17,8 @@ import com.positivity.accounting.internal.dto.PaymentApplicationGLPostingEvent;
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.dto.PaymentApplicationResponse;
 import com.positivity.accounting.internal.dto.PaymentApplicationReversalResponse;
+import com.positivity.accounting.internal.dto.RemainderCreditRequest;
+import com.positivity.accounting.internal.dto.RemainderCreditResponse;
 import com.positivity.accounting.internal.entity.CustomerCredit;
 import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.PaymentApplication;
@@ -26,7 +28,11 @@ import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePay
 import com.positivity.accounting.internal.enums.AllocationStrategy;
 import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.accounting.internal.exception.CurrencyNotSupportedException;
+import com.positivity.accounting.internal.exception.IdempotencyConflictException;
 import com.positivity.accounting.internal.exception.MultiApplicationReversalException;
+import com.positivity.accounting.internal.exception.PaymentNotAvailableException;
+import com.positivity.accounting.internal.exception.PaymentNotFoundException;
+import com.positivity.accounting.internal.exception.PaymentRemainderChangedException;
 import com.positivity.accounting.internal.repository.CustomerCreditRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
@@ -163,6 +169,162 @@ class PaymentApplicationServiceTest {
         assertThat(issuance.getApplicationRequestId()).isEqualTo("INVOICE_PAYMENT:req");
         assertThat(issuance.getCreditAmount()).isEqualByComparingTo("1000.00");
         assertThat(issuance.getCreditId()).isEqualTo(creditId);
+        // The credit records the command that issued it, under the event's own prefix (#2524).
+        ArgumentCaptor<CustomerCredit> creditCaptor = ArgumentCaptor.forClass(CustomerCredit.class);
+        verify(customerCreditRepository).save(creditCaptor.capture());
+        assertThat(creditCaptor.getValue().getRequestId()).isEqualTo("INVOICE_PAYMENT:req");
+    }
+
+    @Test
+    @DisplayName("creditUnappliedPayment replayed returns the credit it issued, without writing (#2524)")
+    void creditUnappliedPayment_replay_returnsExistingCredit() {
+        CustomerCredit existing = new CustomerCredit();
+        existing.setCreditId(UUID.fromString("00000000-0000-0000-0000-0000000c2436"));
+        existing.setAmount(new BigDecimal("1000.00"));
+        existing.setRequestId("INVOICE_PAYMENT:req");
+        existing.setSourcePaymentId(testPaymentId);
+        existing.setCreatedAt(Instant.now(TEST_CLOCK));
+        when(customerCreditRepository.findByRequestId("INVOICE_PAYMENT:req")).thenReturn(Optional.of(existing));
+
+        PaymentApplicationResponse.CustomerCreditInfo credit =
+                service.creditUnappliedPayment(testPaymentId, "INVOICE_PAYMENT:req");
+
+        assertThat(credit).isNotNull();
+        assertThat(credit.getCreditId()).isEqualTo(existing.getCreditId());
+        verify(customerCreditRepository, never()).save(any());
+        verify(outboxService, never()).saveToOutbox(any(), any(), any(), any(), any());
+        verify(receivablePaymentRepository, never()).save(any());
+    }
+
+    // ========================================
+    // creditPaymentRemainder() Tests (CAP:550 S35, #2524)
+    // ========================================
+
+    private static RemainderCreditRequest remainder(String requestId, String expectedAmount) {
+        return RemainderCreditRequest.builder()
+                .requestId(requestId)
+                .expectedAmount(new BigDecimal(expectedAmount))
+                .build();
+    }
+
+    @Test
+    @DisplayName("#2524 AC8: creditPaymentRemainder credits the whole remainder under REMAINDER:<requestId>, enqueues"
+            + " the issuance under the same key, and the payment becomes FULLY_APPLIED")
+    void creditPaymentRemainder_creditsRemainderAndMarksFullyApplied() {
+        UUID creditId = UUID.fromString("00000000-0000-0000-0000-0000000c2524");
+        testPayment.setUnappliedAmount(new BigDecimal("12.50"));
+        when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+        when(customerCreditRepository.save(any(CustomerCredit.class))).thenAnswer(invocation -> {
+            CustomerCredit credit = invocation.getArgument(0);
+            credit.setCreditId(creditId);
+            return credit;
+        });
+
+        RemainderCreditResponse response =
+                service.creditPaymentRemainder(testPaymentId, remainder("remainder-1", "12.50"));
+
+        assertThat(response.getPaymentId()).isEqualTo(testPaymentId);
+        assertThat(response.getRequestId()).isEqualTo("remainder-1");
+        assertThat(response.getCreditId()).isEqualTo(creditId);
+        assertThat(response.getAmount()).isEqualByComparingTo("12.50");
+        assertThat(response.getCurrency()).isEqualTo("USD");
+        assertThat(response.getRemainingAmount()).isEqualByComparingTo("0");
+        assertThat(response.getCreatedAt()).isEqualTo(Instant.now(TEST_CLOCK));
+        assertThat(testPayment.getStatus()).isEqualTo(ReceivablePaymentStatus.FULLY_APPLIED);
+        assertThat(testPayment.getUnappliedAmount()).isEqualByComparingTo("0");
+        verify(receivablePaymentRepository).save(testPayment);
+
+        ArgumentCaptor<CustomerCredit> creditCaptor = ArgumentCaptor.forClass(CustomerCredit.class);
+        verify(customerCreditRepository).save(creditCaptor.capture());
+        assertThat(creditCaptor.getValue().getRequestId()).isEqualTo("REMAINDER:remainder-1");
+        assertThat(creditCaptor.getValue().getSourcePaymentId()).isEqualTo(testPaymentId);
+        assertThat(creditCaptor.getValue().getAmount()).isEqualByComparingTo("12.50");
+
+        ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(outboxService)
+                .saveToOutbox(
+                        any(UUID.class),
+                        eq("CustomerCreditIssuance"),
+                        eq(testPaymentId),
+                        eq(CustomerCreditIssuanceGLPostingEvent.class.getName()),
+                        eventCaptor.capture());
+        CustomerCreditIssuanceGLPostingEvent issuance = (CustomerCreditIssuanceGLPostingEvent) eventCaptor.getValue();
+        assertThat(issuance.getApplicationRequestId()).isEqualTo("REMAINDER:remainder-1");
+        assertThat(issuance.getCreditAmount()).isEqualByComparingTo("12.50");
+    }
+
+    @Test
+    @DisplayName("#2524 AC9: a replay returns the first credit and writes nothing")
+    void creditPaymentRemainder_replay_returnsFirstCredit() {
+        CustomerCredit existing = new CustomerCredit();
+        existing.setCreditId(UUID.fromString("00000000-0000-0000-0000-0000000c2525"));
+        existing.setAmount(new BigDecimal("12.50"));
+        existing.setCurrency("USD");
+        existing.setRequestId("REMAINDER:remainder-1");
+        existing.setSourcePaymentId(testPaymentId);
+        existing.setCreatedAt(Instant.now(TEST_CLOCK));
+        when(customerCreditRepository.findByRequestId("REMAINDER:remainder-1")).thenReturn(Optional.of(existing));
+
+        RemainderCreditResponse response =
+                service.creditPaymentRemainder(testPaymentId, remainder("remainder-1", "12.50"));
+
+        assertThat(response.getCreditId()).isEqualTo(existing.getCreditId());
+        assertThat(response.getRemainingAmount()).isEqualByComparingTo("0");
+        verify(customerCreditRepository, never()).save(any());
+        verify(outboxService, never()).saveToOutbox(any(), any(), any(), any(), any());
+        verify(receivablePaymentRepository, never()).findById(any());
+    }
+
+    @Test
+    @DisplayName("#2524 AC9: the same requestId on another payment is IDEMPOTENCY_CONFLICT")
+    void creditPaymentRemainder_requestIdOnAnotherPayment_conflicts() {
+        CustomerCredit existing = new CustomerCredit();
+        existing.setCreditId(UUID.randomUUID());
+        existing.setRequestId("REMAINDER:remainder-1");
+        existing.setSourcePaymentId(UUID.fromString("00000000-0000-0000-0000-000000000099"));
+        when(customerCreditRepository.findByRequestId("REMAINDER:remainder-1")).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> service.creditPaymentRemainder(testPaymentId, remainder("remainder-1", "12.50")))
+                .isInstanceOf(IdempotencyConflictException.class);
+        verify(customerCreditRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("#2524 AC10: a stale expectedAmount is PAYMENT_REMAINDER_CHANGED and nothing is written")
+    void creditPaymentRemainder_staleExpectedAmount_refused() {
+        testPayment.setUnappliedAmount(new BigDecimal("12.50"));
+        when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+
+        assertThatThrownBy(() -> service.creditPaymentRemainder(testPaymentId, remainder("remainder-1", "10.00")))
+                .isInstanceOf(PaymentRemainderChangedException.class);
+        verify(customerCreditRepository, never()).save(any());
+        verify(outboxService, never()).saveToOutbox(any(), any(), any(), any(), any());
+        verify(receivablePaymentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("#2524 AC10: a FULLY_APPLIED payment is PAYMENT_NOT_AVAILABLE, a foreign-currency one"
+            + " CURRENCY_NOT_SUPPORTED, a missing one PAYMENT_NOT_FOUND")
+    void creditPaymentRemainder_notAvailableForeignOrMissing_refused() {
+        testPayment.setStatus(ReceivablePaymentStatus.FULLY_APPLIED);
+        testPayment.setUnappliedAmount(BigDecimal.ZERO);
+        when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+        assertThatThrownBy(() -> service.creditPaymentRemainder(testPaymentId, remainder("r1", "12.50")))
+                .isInstanceOf(PaymentNotAvailableException.class);
+
+        testPayment.setStatus(ReceivablePaymentStatus.AVAILABLE);
+        testPayment.setUnappliedAmount(new BigDecimal("12.50"));
+        testPayment.setCurrency("EUR");
+        assertThatThrownBy(() -> service.creditPaymentRemainder(testPaymentId, remainder("r2", "12.50")))
+                .isInstanceOf(CurrencyNotSupportedException.class);
+
+        UUID missing = UUID.fromString("00000000-0000-0000-0000-000000000404");
+        when(receivablePaymentRepository.findById(missing)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.creditPaymentRemainder(missing, remainder("r3", "12.50")))
+                .isInstanceOf(PaymentNotFoundException.class);
+
+        verify(customerCreditRepository, never()).save(any());
+        verify(outboxService, never()).saveToOutbox(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -464,6 +626,48 @@ class PaymentApplicationServiceTest {
     }
 
     @Test
+    @DisplayName("#2524 AC9: an apply replay returns the customerCredit the first run issued (looked up by"
+            + " APPLY:<applicationRequestId>)")
+    void testApplyPaymentToInvoices_IdempotentReplayReturnsCustomerCredit() {
+        PaymentApplication existingApplication = new PaymentApplication();
+        existingApplication.setPaymentApplicationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        existingApplication.setPayment(testPayment);
+        existingApplication.setCustomerId(testCustomerId);
+        existingApplication.setInvoiceId(testInvoiceId);
+        existingApplication.setAppliedAmount(new BigDecimal("400.00"));
+        existingApplication.setCurrency("USD");
+        existingApplication.setApplicationRequestId(testApplicationRequestId);
+        existingApplication.setApplicationTimestamp(Instant.now(TEST_CLOCK));
+        existingApplication.setInvoiceBalanceBefore(new BigDecimal("400.00"));
+        existingApplication.setInvoiceBalanceAfter(BigDecimal.ZERO);
+        existingApplication.setInvoiceStatus(InvoiceStatus.PAID_IN_FULL);
+        CustomerCredit issued = new CustomerCredit();
+        issued.setCreditId(UUID.fromString("00000000-0000-0000-0000-0000000c2527"));
+        issued.setAmount(new BigDecimal("600.00"));
+        issued.setRequestId("APPLY:" + testApplicationRequestId);
+        issued.setSourcePaymentId(testPaymentId);
+        issued.setCreatedAt(Instant.now(TEST_CLOCK));
+
+        when(paymentApplicationRepository.existsByApplicationRequestId(testApplicationRequestId))
+                .thenReturn(true);
+        when(paymentApplicationRepository.findAllByApplicationRequestId(testApplicationRequestId))
+                .thenReturn(List.of(existingApplication));
+        when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+        when(customerCreditRepository.findByRequestId("APPLY:" + testApplicationRequestId))
+                .thenReturn(Optional.of(issued));
+
+        PaymentApplicationResponse response = service.applyPaymentToInvoices(
+                testPaymentId,
+                createApplicationRequest(
+                        testApplicationRequestId, List.of(createInvoiceApplication(testInvoiceId, "1000.00"))));
+
+        assertThat(response.getCustomerCredit()).isNotNull();
+        assertThat(response.getCustomerCredit().getCreditId()).isEqualTo(issued.getCreditId());
+        assertThat(response.getCustomerCredit().getAmount()).isEqualByComparingTo("600.00");
+        verify(customerCreditRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("Should pre-generate the application ID and return it in the response")
     void testApplyPaymentToInvoices_PreGeneratedIdReturnedInResponse() {
         // Arrange
@@ -715,7 +919,8 @@ class PaymentApplicationServiceTest {
 
         CustomerCreditIssuanceGLPostingEvent issuance = (CustomerCreditIssuanceGLPostingEvent) eventCaptor.getValue();
         assertThat(issuance.getEventId()).isNotNull();
-        assertThat(issuance.getApplicationRequestId()).isEqualTo(testApplicationRequestId);
+        // Namespaced (#2524): the issuance key is the credit's request id, APPLY:<applicationRequestId>.
+        assertThat(issuance.getApplicationRequestId()).isEqualTo("APPLY:" + testApplicationRequestId);
         assertThat(issuance.getCreditId()).isEqualTo(creditId);
         assertThat(issuance.getPaymentId()).isEqualTo(testPaymentId);
         assertThat(issuance.getCustomerId()).isEqualTo(testCustomerId);

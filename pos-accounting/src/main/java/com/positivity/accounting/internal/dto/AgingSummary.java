@@ -11,8 +11,10 @@ import org.jspecify.annotations.NonNull;
  * Grand-total aging buckets across all rows of an aged AR or aged AP report.
  *
  * Bucket boundaries are computed from days-past-due (asOfDate minus the item's
- * due date). See the owning report DTO and the service javadoc for the exact
- * bucket edges. All amounts are non-negative outstanding balances.
+ * due date): {@code notYetDue} holds everything due today or later, the four
+ * late buckets hold overdue money, {@code overdue} is their sum and
+ * {@code totalOutstanding} = {@code notYetDue} + {@code overdue} (CAP:550 S35,
+ * #2524; the server sums, P7). All amounts are non-negative outstanding balances.
  */
 @Data
 @Builder
@@ -22,14 +24,21 @@ import org.jspecify.annotations.NonNull;
 public class AgingSummary {
 
     /**
-     * Total outstanding not more than 30 days past due (includes not-yet-due).
+     * Total outstanding not yet due: due today or later (due today is not overdue).
      */
     @Schema(
-            description = "Total outstanding 0-30 days past due (includes not-yet-due items)",
-            example = "12500.00",
+            description = "Total outstanding not yet due: due today or later (due today is not overdue)",
+            example = "9000.00",
             requiredMode = REQUIRED)
     @NonNull
-    private BigDecimal current;
+    private BigDecimal notYetDue;
+
+    /**
+     * Total outstanding 1-30 days past due.
+     */
+    @Schema(description = "Total outstanding 1-30 days past due", example = "3500.00", requiredMode = REQUIRED)
+    @NonNull
+    private BigDecimal days1To30;
 
     /**
      * Total outstanding 31-60 days past due.
@@ -53,9 +62,19 @@ public class AgingSummary {
     private BigDecimal days90Plus;
 
     /**
-     * Grand total outstanding across all buckets.
+     * Total overdue: the sum of the four late buckets (1-30, 31-60, 61-90, 90+).
      */
-    @Schema(description = "Grand total outstanding across all buckets", example = "19400.00", requiredMode = REQUIRED)
+    @Schema(
+            description = "Total overdue: the sum of days1To30, days31To60, days61To90 and days90Plus",
+            example = "10400.00",
+            requiredMode = REQUIRED)
+    @NonNull
+    private BigDecimal overdue;
+
+    /**
+     * Grand total outstanding: notYetDue + overdue.
+     */
+    @Schema(description = "Grand total outstanding: notYetDue + overdue", example = "19400.00", requiredMode = REQUIRED)
     @NonNull
     private BigDecimal totalOutstanding;
 }

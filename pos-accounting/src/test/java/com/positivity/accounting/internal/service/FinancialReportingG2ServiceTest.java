@@ -12,11 +12,15 @@ import com.positivity.accounting.internal.dto.AgedReceivablesReport;
 import com.positivity.accounting.internal.dto.GeneralLedgerAccountSection;
 import com.positivity.accounting.internal.dto.GeneralLedgerLine;
 import com.positivity.accounting.internal.dto.GeneralLedgerReport;
+import com.positivity.accounting.internal.dto.ResolvedDisplayReference;
 import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.internal.entity.VendorBill;
+import com.positivity.accounting.internal.enums.AccountType;
+import com.positivity.accounting.internal.enums.DisplayReferenceType;
+import com.positivity.accounting.internal.enums.NormalSide;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.repository.APPaymentAllocationRepository;
 import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
@@ -36,6 +40,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 import org.junit.jupiter.api.BeforeEach;
@@ -114,6 +119,9 @@ class FinancialReportingG2ServiceTest {
     @Mock
     private DatabaseDialectSupport databaseDialectSupport;
 
+    @Mock
+    private DisplayReferenceResolver displayReferenceResolver;
+
     private FinancialReportingServiceImpl service;
 
     @BeforeEach
@@ -131,6 +139,7 @@ class FinancialReportingG2ServiceTest {
                 apPaymentAllocationRepository,
                 invoiceBalanceCalculator,
                 databaseDialectSupport,
+                displayReferenceResolver,
                 Clock.fixed(FIXED_NOW, ZoneOffset.UTC),
                 new com.positivity.accounting.internal.config.LedgerCurrency("USD"));
     }
@@ -170,6 +179,43 @@ class FinancialReportingG2ServiceTest {
         assertThat(section.getClosingBalance()).isEqualByComparingTo("75000.00");
         assertThat(report.getTotalDebit()).isEqualByComparingTo("30000.00");
         assertThat(report.getTotalCredit()).isEqualByComparingTo("5000.00");
+    }
+
+    @Test
+    @DisplayName("GL: a liability section reads LIABILITY / CREDIT; a credit line is INCREASE with a positive"
+            + " normalRunningBalance while runningBalance stays negative (#2524 AC13)")
+    void generalLedgerCarriesNormalSide() {
+        GLAccount payable = glAccount(ACCT_REVENUE, "2000", "Accounts Payable");
+        payable.setAccountType(AccountType.LIABILITY);
+        JournalEntry bill = postedEntry("JE-202606-1", LocalDateTime.of(2026, 6, 5, 0, 0));
+        line(bill, payable, BigDecimal.ZERO, new BigDecimal("400.00"));
+        JournalEntry payment = postedEntry("JE-202606-2", LocalDateTime.of(2026, 6, 20, 0, 0));
+        line(payment, payable, new BigDecimal("150.00"), BigDecimal.ZERO);
+
+        when(journalEntryRepository.findPostedEntriesForAccount(eq(ACCT_REVENUE), any(), any()))
+                .thenReturn(List.of(bill, payment));
+        when(journalEntryRepository.sumPostedBalanceForAccountBefore(eq(ACCT_REVENUE), any()))
+                .thenReturn(new BigDecimal("-100.00"));
+        when(glAccountRepository.findAllById(any())).thenReturn(List.of(payable));
+
+        GeneralLedgerReport report = service.generateGeneralLedger(ACCT_REVENUE.toString(), START, END);
+
+        GeneralLedgerAccountSection section = report.getAccounts().get(0);
+        assertThat(section.getAccountType()).isEqualTo(AccountType.LIABILITY);
+        assertThat(section.getNormalSide()).isEqualTo(NormalSide.CREDIT);
+        assertThat(section.getOpeningBalance()).isEqualByComparingTo("-100.00");
+        assertThat(section.getNormalOpeningBalance()).isEqualByComparingTo("100.00");
+        assertThat(section.getClosingBalance()).isEqualByComparingTo("-350.00");
+        assertThat(section.getNormalClosingBalance()).isEqualByComparingTo("350.00");
+        assertThat(section.getLines())
+                .extracting(GeneralLedgerLine::getDirection)
+                .containsExactly(GeneralLedgerLine.Direction.INCREASE, GeneralLedgerLine.Direction.DECREASE);
+        assertThat(section.getLines())
+                .extracting(GeneralLedgerLine::getRunningBalance)
+                .containsExactly(new BigDecimal("-500.00"), new BigDecimal("-350.00"));
+        assertThat(section.getLines())
+                .extracting(GeneralLedgerLine::getNormalRunningBalance)
+                .containsExactly(new BigDecimal("500.00"), new BigDecimal("350.00"));
     }
 
     @Test
@@ -239,7 +285,7 @@ class FinancialReportingG2ServiceTest {
     @DisplayName("Aged AR: due date drives the bucket, not the invoice date (issue #1604)")
     void agedReceivablesAgesByDueDateNotInvoiceDate() {
         // Raised 45 days ago but not due for another 15 days: under the invoice-date basis this
-        // landed in days31To60; under the due-date basis it is not yet due, so it is `current`.
+        // landed in days31To60; under the due-date basis it is not yet due.
         ExtInvoice invoice = arInvoice(new BigDecimal("100.00"), AS_OF.minusDays(45), AS_OF.plusDays(15));
         when(extInvoiceRepository.findByStatusIn(any())).thenReturn(List.of(invoice));
         when(invoiceBalanceCalculator.isArEligible(any())).thenReturn(true);
@@ -247,26 +293,30 @@ class FinancialReportingG2ServiceTest {
 
         AgedReceivablesReport report = service.generateAgedReceivables(AS_OF);
 
-        assertThat(report.getTotals().getCurrent()).isEqualByComparingTo("100.00");
+        assertThat(report.getTotals().getNotYetDue()).isEqualByComparingTo("100.00");
         assertThat(report.getTotals().getDays31To60()).isEqualByComparingTo("0");
         assertThat(report.getTotals().getTotalOutstanding()).isEqualByComparingTo("100.00");
     }
 
     @Test
-    @DisplayName("Aged AR: bucket boundaries 30/31/60/61/90/91 measured from the due date; not-yet-due is current")
+    @DisplayName("Aged AR: bucket boundaries 0/1/30/31/60/61/90/91 measured from the due date; due today is not overdue"
+            + " (#2524 AC5)")
     void agedReceivablesBucketBoundaries() {
         // Every invoice is dated long before AS_OF (so all exist as of the report date); only the
         // due date varies, which is what the buckets must key on.
         LocalDate invoiceDate = AS_OF.minusDays(120);
-        ExtInvoice notYetDue = arInvoice(new BigDecimal("10.00"), invoiceDate, AS_OF.plusDays(5)); // d=-5 -> current
-        ExtInvoice d30 = arInvoice(new BigDecimal("30.00"), invoiceDate, AS_OF.minusDays(30)); // current
+        ExtInvoice dueTomorrow =
+                arInvoice(new BigDecimal("10.00"), invoiceDate, AS_OF.plusDays(1)); // d=-1 -> notYetDue
+        ExtInvoice dueToday = arInvoice(new BigDecimal("20.00"), invoiceDate, AS_OF); // d=0 -> notYetDue
+        ExtInvoice d1 = arInvoice(new BigDecimal("1.00"), invoiceDate, AS_OF.minusDays(1)); // 1-30
+        ExtInvoice d30 = arInvoice(new BigDecimal("30.00"), invoiceDate, AS_OF.minusDays(30)); // 1-30
         ExtInvoice d31 = arInvoice(new BigDecimal("31.00"), invoiceDate, AS_OF.minusDays(31)); // 31-60
         ExtInvoice d60 = arInvoice(new BigDecimal("60.00"), invoiceDate, AS_OF.minusDays(60)); // 31-60
         ExtInvoice d61 = arInvoice(new BigDecimal("61.00"), invoiceDate, AS_OF.minusDays(61)); // 61-90
         ExtInvoice d90 = arInvoice(new BigDecimal("90.00"), invoiceDate, AS_OF.minusDays(90)); // 61-90
         ExtInvoice d91 = arInvoice(new BigDecimal("91.00"), invoiceDate, AS_OF.minusDays(91)); // 90+
 
-        List<ExtInvoice> all = List.of(notYetDue, d30, d31, d60, d61, d90, d91);
+        List<ExtInvoice> all = List.of(dueTomorrow, dueToday, d1, d30, d31, d60, d61, d90, d91);
         when(extInvoiceRepository.findByStatusIn(any())).thenReturn(all);
         when(invoiceBalanceCalculator.isArEligible(any())).thenReturn(true);
         for (ExtInvoice invoice : all) {
@@ -275,11 +325,62 @@ class FinancialReportingG2ServiceTest {
 
         AgedReceivablesReport report = service.generateAgedReceivables(AS_OF);
 
-        assertThat(report.getTotals().getCurrent()).isEqualByComparingTo("40.00"); // 10 not-yet-due + 30
+        assertThat(report.getTotals().getNotYetDue()).isEqualByComparingTo("30.00"); // tomorrow + today
+        assertThat(report.getTotals().getDays1To30()).isEqualByComparingTo("31.00"); // 1 + 30
         assertThat(report.getTotals().getDays31To60()).isEqualByComparingTo("91.00"); // 31 + 60
         assertThat(report.getTotals().getDays61To90()).isEqualByComparingTo("151.00"); // 61 + 90
         assertThat(report.getTotals().getDays90Plus()).isEqualByComparingTo("91.00");
-        assertThat(report.getTotals().getTotalOutstanding()).isEqualByComparingTo("373.00");
+        assertThat(report.getTotals().getOverdue()).isEqualByComparingTo("364.00");
+        assertThat(report.getTotals().getTotalOutstanding()).isEqualByComparingTo("394.00");
+        // The invariants the server guarantees (P7): notYetDue + overdue = total; overdue = the four late buckets.
+        assertThat(report.getTotals().getNotYetDue().add(report.getTotals().getOverdue()))
+                .isEqualByComparingTo(report.getTotals().getTotalOutstanding());
+        for (var row : report.getRows()) {
+            assertThat(row.getOverdue())
+                    .isEqualByComparingTo(row.getDays1To30()
+                            .add(row.getDays31To60())
+                            .add(row.getDays61To90())
+                            .add(row.getDays90Plus()));
+            assertThat(row.getNotYetDue().add(row.getOverdue())).isEqualByComparingTo(row.getTotalOutstanding());
+        }
+    }
+
+    @Test
+    @DisplayName("Aged AR: rows carry the replica's name and customer number, null when unseen, from one resolver"
+            + " query, and order by name (nulls last) then id (#2524 AC6)")
+    void agedReceivablesCarriesCustomerNamesFromTheReplica() {
+        UUID known = UUID.fromString("c0000000-0000-7000-8000-000000000002");
+        UUID unseen = UUID.fromString("c0000000-0000-7000-8000-000000000001");
+        UUID alsoKnown = UUID.fromString("c0000000-0000-7000-8000-000000000003");
+        ExtInvoice first = arInvoice(known, new BigDecimal("100.00"), AS_OF.minusDays(10), AS_OF.minusDays(5));
+        ExtInvoice second = arInvoice(unseen, new BigDecimal("200.00"), AS_OF.minusDays(10), AS_OF.minusDays(5));
+        ExtInvoice third = arInvoice(alsoKnown, new BigDecimal("300.00"), AS_OF.minusDays(10), AS_OF.minusDays(5));
+        List<ExtInvoice> invoices = List.of(first, second, third);
+        when(extInvoiceRepository.findByStatusIn(any())).thenReturn(invoices);
+        when(invoiceBalanceCalculator.isArEligible(any())).thenReturn(true);
+        for (ExtInvoice invoice : invoices) {
+            when(invoiceBalanceCalculator.balanceDue(invoice)).thenReturn(invoice.getTotal());
+        }
+        when(displayReferenceResolver.resolve(eq(DisplayReferenceType.CUSTOMER), any()))
+                .thenReturn(Map.of(
+                        known, new ResolvedDisplayReference("Zeta Fleet", "C-2"),
+                        alsoKnown, new ResolvedDisplayReference("Acme Tires", "C-3")));
+
+        AgedReceivablesReport report = service.generateAgedReceivables(AS_OF);
+
+        verify(displayReferenceResolver, org.mockito.Mockito.times(1))
+                .resolve(eq(DisplayReferenceType.CUSTOMER), any());
+        assertThat(report.getRows()).extracting(row -> row.getCustomerId()).containsExactly(alsoKnown, known, unseen);
+        assertThat(report.getRows())
+                .extracting(row -> row.getCustomerName())
+                .containsExactly("Acme Tires", "Zeta Fleet", null);
+        assertThat(report.getRows())
+                .extracting(row -> row.getCustomerReference())
+                .containsExactly("C-3", "C-2", null);
+        // P8: a display field is a business value or null, never a UUID.
+        assertThat(report.getRows())
+                .noneMatch(row -> row.getCustomerId().toString().equals(row.getCustomerName())
+                        || row.getCustomerId().toString().equals(row.getCustomerReference()));
     }
 
     @Test
@@ -294,7 +395,7 @@ class FinancialReportingG2ServiceTest {
         AgedReceivablesReport report = service.generateAgedReceivables(AS_OF);
 
         assertThat(report.getTotals().getDays61To90()).isEqualByComparingTo("400.00");
-        assertThat(report.getTotals().getCurrent()).isEqualByComparingTo("0");
+        assertThat(report.getTotals().getNotYetDue()).isEqualByComparingTo("0");
     }
 
     @Test
@@ -340,7 +441,7 @@ class FinancialReportingG2ServiceTest {
         AgedReceivablesReport report = service.generateAgedReceivables(AS_OF);
 
         assertThat(report.getRows()).isEmpty();
-        assertThat(report.getTotals().getCurrent()).isEqualByComparingTo("0");
+        assertThat(report.getTotals().getNotYetDue()).isEqualByComparingTo("0");
         assertThat(report.getTotals().getTotalOutstanding()).isEqualByComparingTo("0");
     }
 
@@ -356,12 +457,12 @@ class FinancialReportingG2ServiceTest {
         AgedReceivablesReport report = service.generateAgedReceivables(AS_OF);
 
         assertThat(report.getRows()).isEmpty();
-        assertThat(report.getTotals().getCurrent()).isEqualByComparingTo("0");
+        assertThat(report.getTotals().getNotYetDue()).isEqualByComparingTo("0");
         assertThat(report.getTotals().getTotalOutstanding()).isEqualByComparingTo("0");
     }
 
     @Test
-    @DisplayName("Aged AR: not-yet-due invoice with a past document date is INCLUDED in current")
+    @DisplayName("Aged AR: not-yet-due invoice with a past document date is INCLUDED, in notYetDue")
     void agedReceivablesNotYetDueIsIncludedInCurrent() {
         // The converse of agedReceivablesExcludesFutureDated: the invoice exists (document date is
         // in the past) but is not yet due, so it must be reported rather than dropped.
@@ -373,8 +474,8 @@ class FinancialReportingG2ServiceTest {
         AgedReceivablesReport report = service.generateAgedReceivables(AS_OF);
 
         assertThat(report.getRows()).hasSize(1);
-        assertThat(report.getRows().get(0).getCurrent()).isEqualByComparingTo("100.00");
-        assertThat(report.getTotals().getCurrent()).isEqualByComparingTo("100.00");
+        assertThat(report.getRows().get(0).getNotYetDue()).isEqualByComparingTo("100.00");
+        assertThat(report.getTotals().getNotYetDue()).isEqualByComparingTo("100.00");
         assertThat(report.getTotals().getTotalOutstanding()).isEqualByComparingTo("100.00");
     }
 
@@ -450,9 +551,10 @@ class FinancialReportingG2ServiceTest {
         assertThat(allNotYetDue.getRows()).hasSameSizeAs(asDated.getRows());
 
         // ...and the bucket split is what moves, so the invariance above is not vacuous.
-        assertThat(asDated.getTotals().getCurrent()).isEqualByComparingTo("1200.00"); // 100 + 200 + 400 + 500
+        assertThat(asDated.getTotals().getNotYetDue()).isEqualByComparingTo("800.00"); // 100 + 200 + 500
+        assertThat(asDated.getTotals().getDays1To30()).isEqualByComparingTo("400.00"); // no due date: 5 days
         assertThat(asDated.getTotals().getDays90Plus()).isEqualByComparingTo("300.00");
-        assertThat(allNotYetDue.getTotals().getCurrent()).isEqualByComparingTo(expectedTotal);
+        assertThat(allNotYetDue.getTotals().getNotYetDue()).isEqualByComparingTo(expectedTotal);
         assertThat(allNotYetDue.getTotals().getDays90Plus()).isEqualByComparingTo("0");
 
         // The invoice dated after asOfDate is excluded outright — it is not merely bucketed early.
@@ -495,11 +597,11 @@ class FinancialReportingG2ServiceTest {
         // Bill dates are all well before AS_OF (so every bill exists as of the report date); only
         // the due date varies, which is what the buckets must key on.
         LocalDate billDate = AS_OF.minusDays(120);
-        VendorBill current = apBill(vendorId, "Acme", new BigDecimal("300.00"), billDate, AS_OF.minusDays(30));
+        VendorBill thirtyDays = apBill(vendorId, "Acme", new BigDecimal("300.00"), billDate, AS_OF.minusDays(30));
         VendorBill mid = apBill(vendorId, "Acme", new BigDecimal("400.00"), billDate, AS_OF.minusDays(61));
         VendorBill partiallyPaid = apBill(vendorId, "Acme", new BigDecimal("500.00"), billDate, AS_OF.minusDays(91));
 
-        when(vendorBillRepository.findByStatusIn(any())).thenReturn(List.of(current, mid, partiallyPaid));
+        when(vendorBillRepository.findByStatusIn(any())).thenReturn(List.of(thirtyDays, mid, partiallyPaid));
         // Batched allocation totals (finding 9): bills with no allocation are simply absent (treated 0);
         // only the partially-paid bill returns a row (200 allocated → open 300).
         when(apPaymentAllocationRepository.sumAllocatedAmountByVendorBillIdIn(any()))
@@ -509,10 +611,72 @@ class FinancialReportingG2ServiceTest {
 
         assertThat(report.getRows()).hasSize(1);
         assertThat(report.getRows().get(0).getVendorName()).isEqualTo("Acme");
-        assertThat(report.getTotals().getCurrent()).isEqualByComparingTo("300.00");
+        assertThat(report.getTotals().getDays1To30()).isEqualByComparingTo("300.00");
         assertThat(report.getTotals().getDays61To90()).isEqualByComparingTo("400.00");
         assertThat(report.getTotals().getDays90Plus()).isEqualByComparingTo("300.00"); // 500 - 200
         assertThat(report.getTotals().getTotalOutstanding()).isEqualByComparingTo("1000.00");
+    }
+
+    @Test
+    @DisplayName("Aged AP: only APPROVED bills are aged; unapproved bills are reported beside the buckets, unaged;"
+            + " held bills appear nowhere (#2524 AC7)")
+    void agedPayablesAgesApprovedBillsOnlyAndReportsUnapprovedSeparately() {
+        UUID vendorId = UUID.randomUUID();
+        LocalDate billDate = AS_OF.minusDays(40);
+        VendorBill approved = apBill(vendorId, "Acme", new BigDecimal("500.00"), billDate, AS_OF.minusDays(10));
+        VendorBill matchException = apBill(vendorId, "Acme", new BigDecimal("200.00"), billDate, AS_OF.minusDays(10));
+        matchException.setStatus(VendorBillStatus.MATCH_EXCEPTION);
+        VendorBill pendingMatch = apBill(vendorId, "Acme", new BigDecimal("100.00"), billDate, AS_OF.minusDays(10));
+        pendingMatch.setStatus(VendorBillStatus.PENDING_RECEIPT_MATCH);
+        // The repository never returns a held bill (the status set excludes it); listing it here checks the
+        // service drops one that escaped, as a foreign-currency bill is dropped.
+        VendorBill held = apBill(vendorId, "Acme", new BigDecimal("900.00"), billDate, AS_OF.minusDays(10));
+        held.setStatus(VendorBillStatus.CURRENCY_HOLD);
+        held.setCurrency("EUR");
+        when(vendorBillRepository.findByStatusIn(any()))
+                .thenReturn(List.of(approved, matchException, pendingMatch, held));
+        when(apPaymentAllocationRepository.sumAllocatedAmountByVendorBillIdIn(any()))
+                .thenReturn(List.of());
+
+        AgedPayablesReport report = service.generateAgedPayables(AS_OF);
+
+        assertThat(report.getRows()).hasSize(1);
+        var row = report.getRows().get(0);
+        assertThat(row.getDays1To30()).isEqualByComparingTo("500.00");
+        assertThat(row.getOverdue()).isEqualByComparingTo("500.00");
+        assertThat(row.getTotalOutstanding()).isEqualByComparingTo("500.00");
+        assertThat(row.getUnapproved()).isEqualByComparingTo("300.00");
+        assertThat(row.getUnapprovedBillCount()).isEqualTo(2);
+        assertThat(row.getTotalIncludingUnapproved()).isEqualByComparingTo("800.00");
+        assertThat(report.getTotals().getTotalOutstanding()).isEqualByComparingTo("500.00");
+        assertThat(report.getUnapproved()).isEqualByComparingTo("300.00");
+        assertThat(report.getUnapprovedBillCount()).isEqualTo(2);
+        assertThat(report.getTotalIncludingUnapproved()).isEqualByComparingTo("800.00");
+    }
+
+    @Test
+    @DisplayName("Aged AP: a vendor with only unapproved bills has a row with zero buckets (#2524)")
+    void agedPayablesVendorWithOnlyUnapprovedBillsHasZeroBuckets() {
+        UUID vendorId = UUID.randomUUID();
+        VendorBill pending =
+                apBill(vendorId, "Globex", new BigDecimal("150.00"), AS_OF.minusDays(3), AS_OF.plusDays(27));
+        pending.setStatus(VendorBillStatus.PENDING_RECEIPT_MATCH);
+        when(vendorBillRepository.findByStatusIn(any())).thenReturn(List.of(pending));
+        when(apPaymentAllocationRepository.sumAllocatedAmountByVendorBillIdIn(any()))
+                .thenReturn(List.of());
+
+        AgedPayablesReport report = service.generateAgedPayables(AS_OF);
+
+        assertThat(report.getRows()).hasSize(1);
+        var row = report.getRows().get(0);
+        assertThat(row.getNotYetDue()).isEqualByComparingTo("0");
+        assertThat(row.getOverdue()).isEqualByComparingTo("0");
+        assertThat(row.getTotalOutstanding()).isEqualByComparingTo("0");
+        assertThat(row.getUnapproved()).isEqualByComparingTo("150.00");
+        assertThat(row.getUnapprovedBillCount()).isEqualTo(1);
+        assertThat(row.getTotalIncludingUnapproved()).isEqualByComparingTo("150.00");
+        assertThat(report.getTotals().getTotalOutstanding()).isEqualByComparingTo("0");
+        assertThat(report.getTotalIncludingUnapproved()).isEqualByComparingTo("150.00");
     }
 
     @Test
@@ -590,12 +754,12 @@ class FinancialReportingG2ServiceTest {
         AgedPayablesReport report = service.generateAgedPayables(AS_OF);
 
         assertThat(report.getRows()).isEmpty();
-        assertThat(report.getTotals().getCurrent()).isEqualByComparingTo("0");
+        assertThat(report.getTotals().getNotYetDue()).isEqualByComparingTo("0");
         assertThat(report.getTotals().getTotalOutstanding()).isEqualByComparingTo("0");
     }
 
     @Test
-    @DisplayName("Aged AP: not-yet-due bill with a past bill date is INCLUDED in current (issue #1604)")
+    @DisplayName("Aged AP: not-yet-due bill with a past bill date is INCLUDED, in notYetDue (issue #1604)")
     void agedPayablesNotYetDueIsIncludedInCurrent() {
         // Previously dropped by the `daysPastDue < 0` guard, which understated totalOutstanding.
         UUID vendorId = UUID.randomUUID();
@@ -606,8 +770,8 @@ class FinancialReportingG2ServiceTest {
         AgedPayablesReport report = service.generateAgedPayables(AS_OF);
 
         assertThat(report.getRows()).hasSize(1);
-        assertThat(report.getRows().get(0).getCurrent()).isEqualByComparingTo("300.00");
-        assertThat(report.getTotals().getCurrent()).isEqualByComparingTo("300.00");
+        assertThat(report.getRows().get(0).getNotYetDue()).isEqualByComparingTo("300.00");
+        assertThat(report.getTotals().getNotYetDue()).isEqualByComparingTo("300.00");
         assertThat(report.getTotals().getTotalOutstanding()).isEqualByComparingTo("300.00");
     }
 
@@ -639,14 +803,16 @@ class FinancialReportingG2ServiceTest {
         AgedReceivablesReport ar = service.generateAgedReceivables(AS_OF);
         AgedPayablesReport ap = service.generateAgedPayables(AS_OF);
 
-        // not-yet-due -> current; 45 days past due -> 31-60; no due date -> aged from the
+        // not-yet-due -> notYetDue; 45 days past due -> 31-60; no due date -> aged from the
         // document date (75 days) -> 61-90.
-        assertThat(ar.getTotals().getCurrent()).isEqualByComparingTo("100.00");
+        assertThat(ar.getTotals().getNotYetDue()).isEqualByComparingTo("100.00");
         assertThat(ar.getTotals().getDays31To60()).isEqualByComparingTo("200.00");
         assertThat(ar.getTotals().getDays61To90()).isEqualByComparingTo("300.00");
 
-        assertThat(ap.getTotals().getCurrent())
-                .isEqualByComparingTo(ar.getTotals().getCurrent());
+        assertThat(ap.getTotals().getNotYetDue())
+                .isEqualByComparingTo(ar.getTotals().getNotYetDue());
+        assertThat(ap.getTotals().getDays1To30())
+                .isEqualByComparingTo(ar.getTotals().getDays1To30());
         assertThat(ap.getTotals().getDays31To60())
                 .isEqualByComparingTo(ar.getTotals().getDays31To60());
         assertThat(ap.getTotals().getDays61To90())

@@ -36,6 +36,9 @@ import com.positivity.accounting.internal.exception.JournalEntryNotFoundExceptio
 import com.positivity.accounting.internal.exception.JournalEntryNotReversibleException;
 import com.positivity.accounting.internal.exception.MatchAmountMismatchException;
 import com.positivity.accounting.internal.exception.MultiApplicationReversalException;
+import com.positivity.accounting.internal.exception.PaymentNotAvailableException;
+import com.positivity.accounting.internal.exception.PaymentNotFoundException;
+import com.positivity.accounting.internal.exception.PaymentRemainderChangedException;
 import com.positivity.accounting.internal.exception.PeriodBankReconciliationIncompleteException;
 import com.positivity.accounting.internal.exception.PeriodCloseBlockedException;
 import com.positivity.accounting.internal.exception.PeriodCloseExceptionNotPermittedException;
@@ -255,6 +258,14 @@ class AccountingExceptionHandlerTest {
                     Named.of("handleCurrencyNotSupported", (HandlerInvocation)
                             request -> handler.handleCurrencyNotSupported(
                                     new CurrencyNotSupportedException("payment EUR, invoice USD"), request)),
+                    Named.of("handlePaymentNotFound", (HandlerInvocation) request ->
+                            handler.handlePaymentNotFound(new PaymentNotFoundException("not found"), request)),
+                    Named.of("handlePaymentNotAvailable", (HandlerInvocation)
+                            request -> handler.handlePaymentNotAvailable(
+                                    new PaymentNotAvailableException("fully applied"), request)),
+                    Named.of("handlePaymentRemainderChanged", (HandlerInvocation)
+                            request -> handler.handlePaymentRemainderChanged(
+                                    new PaymentRemainderChangedException("remainder changed"), request)),
                     Named.of("handleAccountNotReconcilable", (HandlerInvocation)
                             request -> handler.handleAccountNotReconcilable(
                                     new AccountNotReconcilableException("not reconcilable"), request)),
@@ -482,5 +493,29 @@ class AccountingExceptionHandlerTest {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().code()).isEqualTo("CURRENCY_NOT_SUPPORTED");
         assertThat(response.getBody().status()).isEqualTo(422);
+    }
+
+    @Test
+    @DisplayName("Remainder-credit refusals map to PAYMENT_NOT_FOUND 404, PAYMENT_NOT_AVAILABLE 409 and "
+            + "PAYMENT_REMAINDER_CHANGED 422 (#2524)")
+    void remainderCreditCodes() {
+        AccountingExceptionHandler handler = new AccountingExceptionHandler(TEST_CLOCK);
+
+        ResponseEntity<ApiError> notFound =
+                handler.handlePaymentNotFound(new PaymentNotFoundException("missing"), requestWithoutHeader());
+        ResponseEntity<ApiError> notAvailable = handler.handlePaymentNotAvailable(
+                new PaymentNotAvailableException("fully applied"), requestWithoutHeader());
+        ResponseEntity<ApiError> changed = handler.handlePaymentRemainderChanged(
+                new PaymentRemainderChangedException("remainder changed"), requestWithoutHeader());
+
+        assertThat(notFound.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(notFound.getBody()).isNotNull();
+        assertThat(notFound.getBody().code()).isEqualTo("PAYMENT_NOT_FOUND");
+        assertThat(notAvailable.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(notAvailable.getBody()).isNotNull();
+        assertThat(notAvailable.getBody().code()).isEqualTo("PAYMENT_NOT_AVAILABLE");
+        assertThat(changed.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(changed.getBody()).isNotNull();
+        assertThat(changed.getBody().code()).isEqualTo("PAYMENT_REMAINDER_CHANGED");
     }
 }

@@ -165,6 +165,10 @@ public final class EventTypes {
                 // InvoicePaymentController / PaymentApplicationController - 3 events
                 EventTypeRegistration.write("ACCOUNTING_PAYMENT_APPLY", "Apply a payment to an invoice")
                         .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_PAYMENT_REMAINDER_CREDIT",
+                                "Keep a payment's unapplied remainder as a customer credit")
+                        .build(),
                 EventTypeRegistration.write("ACCOUNTING_PAYMENT_APPLICATION_REVERSE", "Reverse a payment application")
                         .build(),
                 EventTypeRegistration.write("ACCOUNTING_INVOICE_REGENERATE", "Regenerate invoice from workorder")

@@ -139,14 +139,12 @@ public interface FinancialReportingService {
      * account number.
      *
      * <p>
-     * <b>Line selection and status semantics (must match the trial-balance /
-     * drilldown queries — Story C2 note).</b> Only journal lines whose parent
-     * entry status is {@code POSTED} are included. An A3-REVERSED original entry
-     * (status {@code REVERSED}) is <em>excluded</em>, while its POSTED reversing
-     * entry <em>is</em> included; the reversing pair therefore nets to zero in
-     * both the running balance and the section totals. The domain slice MUST NOT
-     * special-case reversal linkage — filtering strictly on {@code POSTED} status
-     * yields the correct net-zero behavior for reversed/reversing pairs.
+     * <b>Line selection and status semantics (the same rule as the trial-balance /
+     * drilldown queries; issue #2308).</b> Journal lines of {@code POSTED} and
+     * {@code REVERSED} entries are included, each at its own transaction date, never
+     * {@code DRAFT}. A reversed original therefore stays visible beside its POSTED
+     * reversing entry, and the pair nets to zero in both the running balance and the
+     * section totals with no reversal-linkage special-casing.
      *
      * <p>
      * <b>Balances.</b> {@code openingBalance} is the signed net (debit positive)
