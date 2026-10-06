@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import static com.positivity.tenancy.testing.TenantTestSupport.asTenant;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -58,6 +59,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -113,6 +119,12 @@ class UnpaidWalkInSalesPostgresIT extends PostgresCommittingTestBase {
     private PlatformTransactionManager transactionManager;
 
     @Autowired
+    private PaymentIntentLock paymentIntentLock;
+
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+
+    @Autowired
     private Clock clock;
 
     @Autowired
@@ -147,6 +159,9 @@ class UnpaidWalkInSalesPostgresIT extends PostgresCommittingTestBase {
 
     @Autowired
     private UnpaidWalkInSalesService unpaidWalkInSalesService;
+
+    @Autowired
+    private ReceivablesWorklistService receivablesWorklistService;
 
     @Autowired
     private FinancialReportingService financialReportingService;
@@ -229,7 +244,8 @@ class UnpaidWalkInSalesPostgresIT extends PostgresCommittingTestBase {
                 ingestionRecorder,
                 automaticPaymentApplicationService,
                 meterRegistry,
-                transactionManager);
+                transactionManager,
+                paymentIntentLock);
         cashParty = nextUuid();
         locationId = nextUuid();
         invoiceId = nextUuid();
@@ -452,6 +468,218 @@ class UnpaidWalkInSalesPostgresIT extends PostgresCommittingTestBase {
         assertThat(receivablePaymentRepository.findById(intent).orElseThrow().getUnappliedAmount())
                 .isEqualByComparingTo("0.00");
         assertThat(extInvoicePaymentReversalRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("#2556: a 5.00 refund processed before its settlement comes off when the settlement records the"
+            + " payment: FULLY_APPLIED at 0.00, gone from both unapplied lists, and replays of either fact change"
+            + " nothing")
+    void refundBeforeSettlementLeavesNothingUnapplied() {
+        seedInvoice("45.00");
+        UUID intent = nextUuid();
+        UUID refundId = nextUuid();
+        double notRecordedBefore = unreleasedRefunds("payment_not_recorded");
+        double exceedsBefore = unreleasedRefunds("exceeds_remainder");
+
+        consumeRefund(nextUuid(), refundId, intent, "5.00");
+        assertThat(receivablePaymentRepository.findById(intent)).isEmpty();
+        assertThat(extInvoicePaymentReversalRepository.count()).isEqualTo(1);
+        assertThat(unreleasedRefunds("payment_not_recorded") - notRecordedBefore)
+                .isEqualTo(1.0);
+
+        UUID recordingEventId = nextUuid();
+        consume(recordingEventId, fact(intent, "50.00"));
+
+        assertRefundedSettlement(intent);
+        assertThat(unreleasedRefunds("exceeds_remainder") - exceedsBefore).isZero();
+
+        // The settlement redelivered, and re-published under a new event id; the refund re-published.
+        consume(recordingEventId, fact(intent, "50.00"));
+        consume(nextUuid(), fact(intent, "50.00"));
+        consumeRefund(nextUuid(), refundId, intent, "5.00");
+
+        assertRefundedSettlement(intent);
+        assertThat(extInvoicePaymentReversalRepository.count()).isEqualTo(1);
+        assertThat(unreleasedRefunds("payment_not_recorded") - notRecordedBefore)
+                .isEqualTo(1.0);
+        assertThat(unreleasedRefunds("exceeds_remainder") - exceedsBefore).isZero();
+    }
+
+    @Test
+    @DisplayName("#2556: a refund before its settlement that is more than the application leaves releases the"
+            + " remainder only; the 45.00 application stands, the invoice still shows paid, and it is raised")
+    void refundBeforeSettlementAboveTheRemainderIsRaised() {
+        seedInvoice("45.00");
+        UUID intent = nextUuid();
+        double exceedsBefore = unreleasedRefunds("exceeds_remainder");
+
+        consumeRefund(nextUuid(), nextUuid(), intent, "50.00");
+        consume(nextUuid(), fact(intent, "50.00"));
+
+        assertRefundedSettlement(intent);
+        assertThat(unpaidWalkInSalesService.read().getBalance()).isEqualByComparingTo("0.00");
+        assertThat(unreleasedRefunds("exceeds_remainder") - exceedsBefore).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("#2556 review: a refund before an INVOICE_PAYMENT that records the payment comes off then; the"
+            + " later settlement and replays of every fact change nothing")
+    void refundBeforeInvoicePaymentThenSettlement() {
+        seedInvoice("45.00");
+        UUID intent = nextUuid();
+        UUID refundId = nextUuid();
+
+        consumeRefund(nextUuid(), refundId, intent, "5.00");
+        submitInvoicePayment(intent, "50.00");
+        assertThat(drainer.drainBoundTenant()).isEqualTo(1);
+
+        assertRefundedPayment(intent, ApplicationSource.INVOICE_PAYMENT);
+
+        // The settlement of the same payment arrives afterwards; then every fact again.
+        UUID settlementEventId = nextUuid();
+        consume(settlementEventId, fact(intent, "50.00"));
+        consume(settlementEventId, fact(intent, "50.00"));
+        consume(nextUuid(), fact(intent, "50.00"));
+        consumeRefund(nextUuid(), refundId, intent, "5.00");
+        submitInvoicePayment(intent, "50.00");
+        assertThat(drainer.drainBoundTenant()).isEqualTo(1);
+        assertThat(drainer.drainBoundTenant()).isZero();
+
+        assertRefundedPayment(intent, ApplicationSource.INVOICE_PAYMENT);
+        assertThat(extInvoicePaymentReversalRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("#2556 review: a refund of a payment with nothing unapplied is counted as fully_applied, not raised"
+            + " as exceeding the remainder")
+    void refundOfAFullyAppliedPaymentIsCountedNotRaised() {
+        seedInvoice("50.00");
+        UUID intent = nextUuid();
+        consume(nextUuid(), fact(intent, "50.00"));
+        double exceedsBefore = unreleasedRefunds("exceeds_remainder");
+        double fullyAppliedBefore = unreleasedRefunds("fully_applied");
+
+        consumeRefund(nextUuid(), nextUuid(), intent, "10.00");
+
+        assertThat(unreleasedRefunds("fully_applied") - fullyAppliedBefore).isEqualTo(1.0);
+        assertThat(unreleasedRefunds("exceeds_remainder") - exceedsBefore).isZero();
+        assertThat(receivablePaymentRepository.findById(intent).orElseThrow().getStatus())
+                .isEqualTo(ReceivablePaymentStatus.FULLY_APPLIED);
+    }
+
+    @Test
+    @DisplayName("#2556 review: a refund and the settlement recording its payment, released together while the"
+            + " payment's lock is held, both wait on it and the refund is released")
+    void concurrentRefundAndSettlementSerializeOnThePaymentLock() throws Exception {
+        seedInvoice("45.00");
+        UUID intent = nextUuid();
+
+        raceOnThePaymentLock(
+                intent,
+                () -> consumeRefund(nextUuid(), nextUuid(), intent, "5.00"),
+                () -> consume(nextUuid(), fact(intent, "50.00")));
+
+        assertRefundedPayment(intent, ApplicationSource.PAYMENT_SETTLED);
+    }
+
+    @Test
+    @DisplayName("#2556 review: a refund and the INVOICE_PAYMENT recording its payment, released together while the"
+            + " payment's lock is held, both wait on it and the refund is released")
+    void concurrentRefundAndInvoicePaymentSerializeOnThePaymentLock() throws Exception {
+        seedInvoice("45.00");
+        UUID intent = nextUuid();
+        submitInvoicePayment(intent, "50.00");
+
+        raceOnThePaymentLock(
+                intent,
+                () -> consumeRefund(nextUuid(), nextUuid(), intent, "5.00"),
+                () -> assertThat(drainer.drainBoundTenant()).isEqualTo(1));
+
+        assertRefundedPayment(intent, ApplicationSource.INVOICE_PAYMENT);
+    }
+
+    /**
+     * Hold the payment's lock in a transaction of its own, start every racer on its own thread, wait until each
+     * is blocked on an advisory lock in Postgres, then let go: the racers run against each other with only the
+     * lock between them.
+     */
+    private void raceOnThePaymentLock(UUID intent, Runnable... racers) throws Exception {
+        CountDownLatch held = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(1 + racers.length);
+        try {
+            Future<?> holder = pool.submit(() -> asTenant(
+                    TENANT,
+                    () -> new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                        paymentIntentLock.lock(intent);
+                        held.countDown();
+                        awaitQuietly(release);
+                    })));
+            assertThat(held.await(30, TimeUnit.SECONDS)).isTrue();
+            List<Future<?>> raced = new ArrayList<>();
+            for (Runnable racer : racers) {
+                raced.add(pool.submit(() -> asTenant(TENANT, racer)));
+            }
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+            while (waitingOnAdvisoryLocks() < racers.length && System.nanoTime() < deadline) {
+                Thread.onSpinWait();
+            }
+            assertThat(waitingOnAdvisoryLocks())
+                    .as("every racer waits on the payment's lock")
+                    .isEqualTo(racers.length);
+            assertThat(raced).noneMatch(Future::isDone);
+            release.countDown();
+            holder.get(30, TimeUnit.SECONDS);
+            for (Future<?> racer : raced) {
+                racer.get(60, TimeUnit.SECONDS);
+            }
+        } finally {
+            release.countDown();
+            pool.shutdownNow();
+        }
+    }
+
+    private int waitingOnAdvisoryLocks() {
+        Integer waiting = jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND NOT granted", Integer.class);
+        return waiting == null ? 0 : waiting;
+    }
+
+    private static void awaitQuietly(CountDownLatch latch) {
+        try {
+            latch.await(60, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /** The 50.00 payment applied 45.00 to INV-W1 and has nothing left: in neither unapplied list. */
+    private void assertRefundedSettlement(UUID intent) {
+        assertRefundedPayment(intent, ApplicationSource.PAYMENT_SETTLED);
+    }
+
+    /** The 50.00 payment applied 45.00 to INV-W1 by {@code source} and has nothing left: in neither list. */
+    private void assertRefundedPayment(UUID intent, ApplicationSource source) {
+        ReceivablePayment payment = receivablePaymentRepository.findById(intent).orElseThrow();
+        assertThat(payment.getUnappliedAmount()).isEqualByComparingTo("0.00");
+        assertThat(payment.getStatus()).isEqualTo(ReceivablePaymentStatus.FULLY_APPLIED);
+        assertThat(paymentApplicationRepository.findAll()).singleElement().satisfies(application -> {
+            assertThat(application.getApplicationSource()).isEqualTo(source);
+            assertThat(application.getAppliedAmount()).isEqualByComparingTo("45.00");
+        });
+        assertThat(customerCreditRepository.count()).isZero();
+        assertThat(unpaidWalkInSalesService.read().getUnappliedPayments()).isEmpty();
+        assertThat(receivablesWorklistService.listUnappliedPayments(null, 0, 50).getItems())
+                .noneSatisfy(row -> assertThat(row.getPaymentId()).isEqualTo(intent));
+    }
+
+    private double unreleasedRefunds(String reason) {
+        Counter counter = meterRegistry
+                .getObject()
+                .find("accounting.refund.unreleased")
+                .tag("reason", reason)
+                .counter();
+        return counter == null ? 0.0 : counter.count();
     }
 
     private void consumeRefund(UUID eventId, UUID refundId, UUID intent, String amount) {

@@ -33,4 +33,17 @@ public interface ExtInvoicePaymentReversalRepository extends JpaRepository<ExtIn
     @Query("SELECT COALESCE(SUM(r.amount), 0) FROM ExtInvoicePaymentReversal r"
             + " WHERE r.reversedAt BETWEEN :start AND :end")
     BigDecimal sumAmountByReversedAtBetween(@Param("start") @NonNull Instant start, @Param("end") @NonNull Instant end);
+
+    /**
+     * Sum of the completed refunds stored for one payment ({@code paymentIntentId}). Used when a settled
+     * payment is first recorded (#2556): a refund processed before its settlement fact found no payment to
+     * release, so the settlement takes it off the unapplied remainder then.
+     *
+     * @param paymentIntentId the refunded payment
+     * @return total refunded for that payment; zero when there are none
+     */
+    @NonNull
+    @Query("SELECT COALESCE(SUM(r.amount), 0) FROM ExtInvoicePaymentReversal r"
+            + " WHERE r.paymentIntentId = :paymentIntentId")
+    BigDecimal sumAmountByPaymentIntentId(@Param("paymentIntentId") @NonNull UUID paymentIntentId);
 }

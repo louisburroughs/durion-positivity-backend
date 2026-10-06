@@ -37,6 +37,7 @@ import com.positivity.accounting.internal.exception.PaymentNotAvailableException
 import com.positivity.accounting.internal.exception.PaymentNotFoundException;
 import com.positivity.accounting.internal.exception.PaymentRemainderChangedException;
 import com.positivity.accounting.internal.repository.CustomerCreditRepository;
+import com.positivity.accounting.internal.repository.ExtInvoicePaymentReversalRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
@@ -109,6 +110,12 @@ class PaymentApplicationServiceTest {
 
     @Mock
     private WalkInOverpaymentAlert walkInOverpaymentAlert;
+
+    @Mock
+    private ExtInvoicePaymentReversalRepository refundReplicaRepository;
+
+    @Mock
+    private RefundReleaseAlert refundReleaseAlert;
 
     @InjectMocks
     private PaymentApplicationServiceImpl service;
@@ -320,6 +327,52 @@ class PaymentApplicationServiceTest {
             assertThat(testPayment.getUnappliedAmount()).isEqualByComparingTo("0.00");
             verify(paymentApplicationRepository, never()).save(any());
             verify(paymentApplicationReversalRepository, never()).save(any());
+            verify(refundReleaseAlert)
+                    .exceedsRemainder(
+                            eq(testPaymentId),
+                            argThat(amount -> amount.compareTo(new BigDecimal("50.00")) == 0),
+                            argThat(amount -> amount.compareTo(new BigDecimal("5.00")) == 0),
+                            eq("refund " + refundId));
+        }
+
+        @Test
+        @DisplayName("#2556: a refund within the remainder raises nothing")
+        void refundWithinTheRemainderRaisesNothing() {
+            testPayment.setUnappliedAmount(new BigDecimal("5.00"));
+            when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+
+            service.releaseRefundedRemainder(testPaymentId, new BigDecimal("5.00"), refundId);
+
+            verifyNoInteractions(refundReleaseAlert);
+        }
+
+        @Test
+        @DisplayName("#2556: a refund of a payment not recorded yet is raised as payment_not_recorded")
+        void refundBeforeItsPaymentIsRaised() {
+            when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.empty());
+
+            assertThat(service.releaseRefundedRemainder(testPaymentId, new BigDecimal("5.00"), refundId))
+                    .isEqualByComparingTo("0");
+
+            verify(refundReleaseAlert).paymentNotRecorded(testPaymentId, new BigDecimal("5.00"), refundId);
+            verify(refundReleaseAlert, never()).exceedsRemainder(any(), any(), any(), any());
+            verify(receivablePaymentRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("#2556 review: a refund of a payment with nothing unapplied is counted as fully_applied at INFO,"
+                + " never raised as exceeding the remainder")
+        void refundOfAFullyAppliedPaymentIsCountedNotRaised() {
+            testPayment.setUnappliedAmount(BigDecimal.ZERO);
+            testPayment.setStatus(ReceivablePaymentStatus.FULLY_APPLIED);
+            when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+
+            assertThat(service.releaseRefundedRemainder(testPaymentId, new BigDecimal("5.00"), refundId))
+                    .isEqualByComparingTo("0");
+
+            verify(refundReleaseAlert).fullyApplied(testPaymentId, new BigDecimal("5.00"), "refund " + refundId);
+            verify(refundReleaseAlert, never()).exceedsRemainder(any(), any(), any(), any());
+            verify(receivablePaymentRepository, never()).save(any());
         }
 
         @Test
@@ -336,6 +389,97 @@ class PaymentApplicationServiceTest {
             assertThat(service.releaseRefundedRemainder(unknown, new BigDecimal("5.00"), refundId))
                     .isEqualByComparingTo("0");
             verify(receivablePaymentRepository, never()).save(any());
+        }
+    }
+
+    // ========================================
+    // releaseRefundsRecordedBeforePayment() (#2556)
+    // ========================================
+
+    @Nested
+    @DisplayName("a refund stored before its settlement comes off when the settlement records the payment (#2556)")
+    class RefundsBeforeSettlement {
+
+        private final UUID recordingEventId = UUID.fromString("00000000-0000-0000-0000-0000000f2556");
+
+        @BeforeEach
+        void recordedByThisSettlement() {
+            testPayment.setSourceEventId(recordingEventId);
+            testPayment.setUnappliedAmount(new BigDecimal("5.00"));
+        }
+
+        @Test
+        @DisplayName("the stored 5.00 refund takes the 5.00 the application left: FULLY_APPLIED at zero")
+        void storedRefundReleasesTheRemainder() {
+            when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+            when(refundReplicaRepository.sumAmountByPaymentIntentId(testPaymentId))
+                    .thenReturn(new BigDecimal("5.00"));
+
+            BigDecimal released = service.releaseRefundsRecordedBeforePayment(testPaymentId, recordingEventId);
+
+            assertThat(released).isEqualByComparingTo("5.00");
+            assertThat(testPayment.getUnappliedAmount()).isEqualByComparingTo("0.00");
+            assertThat(testPayment.getStatus()).isEqualTo(ReceivablePaymentStatus.FULLY_APPLIED);
+            verify(receivablePaymentRepository).save(testPayment);
+            verifyNoInteractions(refundReleaseAlert);
+            verify(paymentApplicationRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("stored refunds above the remainder release the remainder and are raised")
+        void storedRefundsAboveTheRemainderAreRaised() {
+            when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+            when(refundReplicaRepository.sumAmountByPaymentIntentId(testPaymentId))
+                    .thenReturn(new BigDecimal("20.00"));
+
+            BigDecimal released = service.releaseRefundsRecordedBeforePayment(testPaymentId, recordingEventId);
+
+            assertThat(released).isEqualByComparingTo("5.00");
+            assertThat(testPayment.getStatus()).isEqualTo(ReceivablePaymentStatus.FULLY_APPLIED);
+            verify(refundReleaseAlert)
+                    .exceedsRemainder(
+                            eq(testPaymentId),
+                            argThat(amount -> amount.compareTo(new BigDecimal("20.00")) == 0),
+                            argThat(amount -> amount.compareTo(new BigDecimal("5.00")) == 0),
+                            eq("refunds recorded before payment event " + recordingEventId));
+        }
+
+        @Test
+        @DisplayName("no stored refund: nothing changes")
+        void noStoredRefund() {
+            when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+            when(refundReplicaRepository.sumAmountByPaymentIntentId(testPaymentId))
+                    .thenReturn(BigDecimal.ZERO);
+
+            assertThat(service.releaseRefundsRecordedBeforePayment(testPaymentId, recordingEventId))
+                    .isEqualByComparingTo("0");
+            assertThat(testPayment.getUnappliedAmount()).isEqualByComparingTo("5.00");
+            verify(receivablePaymentRepository, never()).save(any());
+            verifyNoInteractions(refundReleaseAlert);
+        }
+
+        @Test
+        @DisplayName("a payment recorded by another fact (a settlement replayed under a new event id): nothing"
+                + " changes, its refunds released themselves")
+        void recordedByAnotherFact() {
+            when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+
+            assertThat(service.releaseRefundsRecordedBeforePayment(
+                            testPaymentId, UUID.fromString("00000000-0000-0000-0000-0000000f2557")))
+                    .isEqualByComparingTo("0");
+            assertThat(testPayment.getUnappliedAmount()).isEqualByComparingTo("5.00");
+            verifyNoInteractions(refundReplicaRepository, refundReleaseAlert);
+            verify(receivablePaymentRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("a payment not recorded (held for its currency): nothing changes")
+        void paymentNotRecorded() {
+            when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.empty());
+
+            assertThat(service.releaseRefundsRecordedBeforePayment(testPaymentId, recordingEventId))
+                    .isEqualByComparingTo("0");
+            verifyNoInteractions(refundReplicaRepository, refundReleaseAlert);
         }
     }
 

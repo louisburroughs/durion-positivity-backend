@@ -155,7 +155,8 @@ class SettlementEventsListenerPaymentSettledTest {
                     ingestionRecorder,
                     automaticPaymentApplicationService,
                     provider,
-                    org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class));
+                    org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class),
+                    org.mockito.Mockito.mock(PaymentIntentLock.class));
         }
 
         private String versioned(int schemaVersion, PaymentSettledV1 payload) {
@@ -232,6 +233,9 @@ class SettlementEventsListenerPaymentSettledTest {
         @Mock
         private PaymentApplicationService paymentApplicationService;
 
+        @Mock
+        private PaymentIntentLock paymentIntentLock;
+
         private SettlementEventsListener listener() {
             return new SettlementEventsListener(
                     CLOCK,
@@ -245,7 +249,8 @@ class SettlementEventsListenerPaymentSettledTest {
                     ingestionRecorder,
                     automaticPaymentApplicationService,
                     mock(ObjectProvider.class),
-                    org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class));
+                    org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class),
+                    paymentIntentLock);
         }
 
         @BeforeEach
@@ -302,6 +307,32 @@ class SettlementEventsListenerPaymentSettledTest {
             order.verify(processedEventRepository).save(any(ProcessedEvent.class));
             assertThat(fact.getValue().paymentIntentId()).isEqualTo(PAYMENT_INTENT_ID);
             assertThat(fact.getValue().invoiceId()).isEqualTo(INVOICE_ID);
+        }
+
+        @Test
+        @DisplayName(
+                "#2556: the payment's lock first; refunds stored before the settlement are released after the automatic application,"
+                        + " under this settlement's event id, before the processed mark")
+        void storedRefundsAreReleasedAfterTheApplicationBeforeTheMark() {
+            ReceivablePayment recorded = new ReceivablePayment();
+            recorded.setPaymentId(PAYMENT_INTENT_ID);
+            when(paymentApplicationService.handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any()))
+                    .thenReturn(recorded);
+
+            listener().onPaymentEvent(envelope(EVENT_ID, settled(PARTY_UUID.toString())));
+
+            org.mockito.InOrder order = org.mockito.Mockito.inOrder(
+                    paymentIntentLock,
+                    paymentApplicationService,
+                    automaticPaymentApplicationService,
+                    processedEventRepository);
+            order.verify(paymentIntentLock).lock(PAYMENT_INTENT_ID);
+            order.verify(paymentApplicationService)
+                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
+            order.verify(automaticPaymentApplicationService).applySettled(any(), any(), any());
+            order.verify(paymentApplicationService)
+                    .releaseRefundsRecordedBeforePayment(PAYMENT_INTENT_ID, UUID.fromString(EVENT_ID));
+            order.verify(processedEventRepository).save(any(ProcessedEvent.class));
         }
 
         @Test
@@ -487,7 +518,8 @@ class SettlementEventsListenerPaymentSettledTest {
                     ingestionRecorder,
                     automaticPaymentApplicationService,
                     mock(ObjectProvider.class),
-                    org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class));
+                    org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class),
+                    org.mockito.Mockito.mock(PaymentIntentLock.class));
         }
 
         @BeforeEach
@@ -501,7 +533,9 @@ class SettlementEventsListenerPaymentSettledTest {
                     invoiceBalanceCalculator,
                     outboxService,
                     new LedgerCurrency("USD"),
-                    new WalkInOverpaymentAlert(mock(ObjectProvider.class)));
+                    new WalkInOverpaymentAlert(mock(ObjectProvider.class)),
+                    extInvoicePaymentReversalRepository,
+                    new RefundReleaseAlert(mock(ObjectProvider.class)));
             when(processedEventRepository.existsById(anyString())).thenReturn(false);
         }
 

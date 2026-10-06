@@ -120,6 +120,7 @@ public class SettlementEventsListener {
     private final LedgerCurrency ledgerCurrency;
     private final KafkaFactIngestionRecorder ingestionRecorder;
     private final AutomaticPaymentApplicationService automaticPaymentApplicationService;
+    private final PaymentIntentLock paymentIntentLock;
     private final Counter payloadRejectedCounter;
     private final Counter paymentSettledUnmappableCounter;
     private final Counter paymentSettledPartyMissingDefectCounter;
@@ -139,7 +140,8 @@ public class SettlementEventsListener {
             KafkaFactIngestionRecorder ingestionRecorder,
             AutomaticPaymentApplicationService automaticPaymentApplicationService,
             ObjectProvider<MeterRegistry> meterRegistry,
-            PlatformTransactionManager transactionManager) {
+            PlatformTransactionManager transactionManager,
+            PaymentIntentLock paymentIntentLock) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
@@ -150,6 +152,7 @@ public class SettlementEventsListener {
         this.ledgerCurrency = ledgerCurrency;
         this.ingestionRecorder = ingestionRecorder;
         this.automaticPaymentApplicationService = automaticPaymentApplicationService;
+        this.paymentIntentLock = paymentIntentLock;
         this.handlerTransaction = new TransactionTemplate(transactionManager);
         this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         MeterRegistry registry = meterRegistry.getIfAvailable();
@@ -349,9 +352,14 @@ public class SettlementEventsListener {
         }
 
         // Record the payment, then apply it to the invoice it was taken against when the rules allow
-        // (#2503, AW14): the payment, its application or outcome row, and the processed mark commit
-        // together, so a failure anywhere rolls all three back and the record is redelivered.
+        // (#2503, AW14), then take off the unapplied remainder any refund stored for it before this fact
+        // arrived (#2556). The order is the one settlement-then-refund gives, so either arrival order ends
+        // the same: the application is decided on the whole payment, and a refund only ever releases what
+        // the application left. The payment, its application or outcome row, the release and the processed
+        // mark commit together, so a failure anywhere rolls all of them back and the record is redelivered.
+        // The payment's lock first: a refund of it committing at the same time waits, and then sees the payment.
         handlerTransaction.executeWithoutResult(_ -> {
+            paymentIntentLock.lock(payload.paymentIntentId());
             ReceivablePayment payment = paymentApplicationService.handlePaymentCleared(
                     payload.paymentIntentId(),
                     customerId,
@@ -362,6 +370,7 @@ public class SettlementEventsListener {
                     payload.invoiceId(),
                     payload.methodType());
             automaticPaymentApplicationService.applySettled(payment, payload, eventId);
+            paymentApplicationService.releaseRefundsRecordedBeforePayment(payment.getPaymentId(), eventUuid);
             markProcessed(eventId);
         });
     }
@@ -484,6 +493,11 @@ public class SettlementEventsListener {
         }
 
         handlerTransaction.executeWithoutResult(_ -> {
+            // The payment's lock first (#2556): the fact recording the payment, committing at the same time,
+            // either sees this refund row or has committed the payment this release then finds.
+            if (payload.paymentIntentId() != null) {
+                paymentIntentLock.lock(payload.paymentIntentId());
+            }
             extInvoicePaymentReversalRepository.save(ExtInvoicePaymentReversal.builder()
                     .refundId(payload.refundId())
                     .paymentIntentId(payload.paymentIntentId())
@@ -496,7 +510,8 @@ public class SettlementEventsListener {
                     .sourceEventId(eventUuid)
                     .build());
             // The refunded money is no longer there to apply (#2508): a refunded CASH walk-in excess leaves
-            // the unpaid walk-in sales read. Once per refund: the refundId guard above skips a replay.
+            // the unpaid walk-in sales read. Once per refund: the refundId guard above skips a replay. A
+            // refund before its payment is raised and released by the settlement that records it (#2556).
             if (payload.paymentIntentId() != null) {
                 paymentApplicationService.releaseRefundedRemainder(
                         payload.paymentIntentId(), payload.amount(), payload.refundId());
