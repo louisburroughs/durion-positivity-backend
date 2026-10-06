@@ -20,6 +20,8 @@ import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
 import com.positivity.accounting.internal.enums.ApplicationSource;
 import com.positivity.accounting.internal.enums.PostingFailureReason;
+import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
+import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
 import com.positivity.accounting.internal.service.AutomaticPaymentApplicationService.Outcome;
 import com.positivity.accounting.internal.service.AutomaticPaymentApplicationService.Result;
@@ -80,6 +82,12 @@ class AutomaticPaymentApplicationServiceTest {
     @Mock
     private KafkaFactIngestionRecorder recorder;
 
+    @Mock
+    private PaymentApplicationRepository paymentApplicationRepository;
+
+    @Mock
+    private PaymentApplicationReversalRepository reversalRepository;
+
     private final ObjectMapper mapper = new ObjectMapper();
     private final MeterRegistry meters = new SimpleMeterRegistry();
     private AutomaticPaymentApplicationService service;
@@ -94,6 +102,8 @@ class AutomaticPaymentApplicationServiceTest {
         service = new AutomaticPaymentApplicationService(
                 paymentApplicationService,
                 receivablePaymentRepository,
+                paymentApplicationRepository,
+                reversalRepository,
                 invoiceBalanceCalculator,
                 periodGate,
                 recorder,
@@ -208,7 +218,7 @@ class AutomaticPaymentApplicationServiceTest {
         switch (expected.status()) {
             case SKIPPED ->
                 verify(recorder)
-                        .recordSkipped(
+                        .recordSkippedOnce(
                                 eq("pos-invoice"),
                                 eq(PaymentSettledV1.EVENT_TYPE),
                                 eq(EVENT_ID),
@@ -283,21 +293,48 @@ class AutomaticPaymentApplicationServiceTest {
     }
 
     @Test
-    @DisplayName("h after an undo: the recorded application is returned with money still unapplied, so nothing is"
-            + " applied again and it counts as already_applied (BR-8)")
-    void undoneApplicationIsNotRepeated() {
-        when(paymentApplicationService.applyAutomatically(any(), any(), any(), any(), any(), any()))
-                .thenReturn(PaymentApplicationResponse.builder()
-                        .appliedAmount(new BigDecimal("115.00"))
-                        .remainingAmount(new BigDecimal("115.00"))
-                        .build());
+    @DisplayName("0. an application under this settlement's request id decides first: a re-publish after the invoice"
+            + " left the replica or the period closed writes no row and applies nothing (review #2550)")
+    void ownRequestIdDecidesBeforeMutableRules() {
+        when(paymentApplicationRepository.existsByApplicationRequestId("PAYMENT_SETTLED:" + INTENT))
+                .thenReturn(true);
+        when(invoiceBalanceCalculator.findInvoice(INVOICE)).thenReturn(Optional.empty());
+        when(periodGate.isPostingBlocked(any())).thenReturn(true);
 
         Result result = service.applySettled(payment, fact("CARD"), EVENT_ID);
 
         assertThat(result.outcome()).isEqualTo(Outcome.ALREADY_APPLIED);
-        assertThat(result.detail()).contains("undone");
+        verify(paymentApplicationService, never()).applyAutomatically(any(), any(), any(), any(), any(), any());
         verifyNoInteractions(recorder);
         assertThat(count(Outcome.ALREADY_APPLIED)).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("0. a payment whose automatic application (either path) was undone is never applied again (BR-8)")
+    void undoneByAnyAutomaticPathIsNotRepeated() {
+        when(reversalRepository.existsReversedAutomaticApplication(INTENT)).thenReturn(true);
+
+        Result result = service.applySettled(payment, fact("CARD"), EVENT_ID);
+
+        assertThat(result.outcome()).isEqualTo(Outcome.ALREADY_APPLIED);
+        assertThat(result.detail()).contains("undone; not applied again");
+        verify(paymentApplicationService, never()).applyAutomatically(any(), any(), any(), any(), any(), any());
+        verifyNoInteractions(recorder);
+    }
+
+    @Test
+    @DisplayName("e. a hard-locked settlement date is held for a person, never told to reopen (review #2550)")
+    void hardLockIsNotReopenable() {
+        when(periodGate.isPostingBlocked(any())).thenReturn(true);
+        when(periodGate.isHardLocked(LocalDate.parse("2026-10-05"))).thenReturn(true);
+
+        Result result = service.applySettled(payment, fact("CARD"), EVENT_ID);
+
+        assertThat(result.outcome()).isEqualTo(Outcome.SUSPENDED_PERIOD);
+        assertThat(result.detail())
+                .contains("hard-lock")
+                .contains("cannot be reopened")
+                .doesNotContain("after reopening");
     }
 
     // ===== item 6: reprocess =====

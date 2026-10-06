@@ -446,17 +446,21 @@ public class EventIngestionServiceImpl implements EventIngestionService {
      * from its stored payload, in this transaction. The payment is never recorded again. An
      * application, or a payment another path already settled, makes the row {@code PROCESSED / NEW};
      * a party mismatch or a paid invoice makes it {@code SKIPPED / NOT_POSTABLE}; another hold keeps it
-     * held with the new reason. Every attempt counts and writes its history row.
+     * held with the new reason. Every attempt writes its history row; every attempt except one that
+     * finds the invoice still missing counts toward the retry cap.
      */
     private AccountingEventResponse reapplySettledPayment(
             @NonNull AccountingEvent event, @NonNull String triggeredByUserId) {
-        int attempts = (event.getAttemptCount() == null ? 0 : event.getAttemptCount()) + 1;
-        event.setAttemptCount(attempts);
         event.setResolvedByUserId(triggeredByUserId);
 
         AutomaticPaymentApplicationService.Result result =
                 automaticPaymentApplicationService.reapply(event.getPayload());
         AutomaticPaymentApplicationService.Outcome outcome = result.outcome();
+        // Case b has no attempt cap (review #2550): an invoice still not replicated spends no attempt, so
+        // the retry job keeps trying until it arrives. Every other outcome counts.
+        int attempts = event.getAttemptCount() == null ? 0 : event.getAttemptCount();
+        event.setAttemptCount(
+                outcome == AutomaticPaymentApplicationService.Outcome.SUSPENDED_INVOICE ? attempts : attempts + 1);
         event.setStatus(outcome.status());
         if (outcome.isSettled()) {
             event.setIdempotencyOutcome(IdempotencyOutcome.NEW.name());
@@ -837,11 +841,11 @@ public class EventIngestionServiceImpl implements EventIngestionService {
                         .postsJournalEntry(false)
                         .onDuplicate("An automatic application writes no row: the application record (source"
                                 + " PAYMENT_SETTLED) is the evidence, and a re-emitted fact finds it and applies"
-                                + " nothing again, even after an undo. A fact not applied writes one row: SKIPPED /"
+                                + " nothing again, and nothing is applied again after an undo of either automatic path. A fact not applied writes one row: SKIPPED /"
                                 + " NOT_POSTABLE (method not CASH or CARD, customer differs from the invoice, or the"
                                 + " invoice has no open balance), SUSPENDED / INVOICE_NOT_FOUND, SUSPENDED /"
                                 + " PERIOD_CLOSED, FAILED / INVOICE_NOT_ELIGIBLE, or SUSPENDED /"
-                                + " CURRENCY_NOT_SUPPORTED; a re-emitted fact already held for the same reason"
+                                + " CURRENCY_NOT_SUPPORTED; a re-emitted fact already skipped or held for the same reason"
                                 + " writes no second row, and reprocessing a held row re-runs the automatic"
                                 + " application instead of the posting engine.")
                         .build());

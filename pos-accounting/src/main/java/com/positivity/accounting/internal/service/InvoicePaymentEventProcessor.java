@@ -10,6 +10,7 @@ import com.positivity.accounting.internal.enums.ApplicationSource;
 import com.positivity.accounting.internal.enums.IdempotencyOutcome;
 import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.exception.AccountingEventRejectedException;
+import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -70,6 +71,7 @@ public class InvoicePaymentEventProcessor {
 
     private final PaymentApplicationService paymentApplicationService;
     private final ReceivablePaymentRepository receivablePaymentRepository;
+    private final PaymentApplicationReversalRepository reversalRepository;
     private final InvoiceBalanceCalculator invoiceBalanceCalculator;
     private final LedgerCurrency ledgerCurrency;
     private final Clock clock;
@@ -125,7 +127,10 @@ public class InvoicePaymentEventProcessor {
                 // it applies nothing). Apply what is still unapplied; when nothing is, the payment is
                 // already fully in the subledger and this event adds nothing.
                 BigDecimal unapplied = recorded.getUnappliedAmount();
-                if (recorded.getStatus() != ReceivablePayment.ReceivablePaymentStatus.AVAILABLE
+                // An automatic application of it that a person undid is never repeated by this path either
+                // (#2503, BR-8): the payment waits for that person.
+                if (reversalRepository.existsReversedAutomaticApplication(recorded.getPaymentId())
+                        || recorded.getStatus() != ReceivablePayment.ReceivablePaymentStatus.AVAILABLE
                         || unapplied == null
                         || unapplied.signum() <= 0) {
                     markProcessed(event, payment, IdempotencyOutcome.DUPLICATE_IGNORED);

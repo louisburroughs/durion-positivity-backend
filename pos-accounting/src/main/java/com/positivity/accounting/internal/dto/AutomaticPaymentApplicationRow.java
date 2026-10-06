@@ -52,6 +52,7 @@ public class AutomaticPaymentApplicationRow {
             description = "Path that made the application: PAYMENT_SETTLED (when the payment settled) or"
                     + " INVOICE_PAYMENT (the INVOICE_PAYMENT accounting event)",
             example = "PAYMENT_SETTLED",
+            allowableValues = {"PAYMENT_SETTLED", "INVOICE_PAYMENT"},
             requiredMode = REQUIRED)
     private ApplicationSource source;
 
@@ -61,7 +62,7 @@ public class AutomaticPaymentApplicationRow {
             requiredMode = REQUIRED)
     private Instant appliedAt;
 
-    @Schema(description = "Amount applied to the invoice", example = "115.00", requiredMode = REQUIRED)
+    @Schema(description = "Amount applied to the invoice", example = "114.75", requiredMode = REQUIRED)
     private BigDecimal appliedAmount;
 
     @Schema(description = "Currency (ISO 4217)", example = "USD", requiredMode = REQUIRED)
@@ -91,7 +92,7 @@ public class AutomaticPaymentApplicationRow {
     @Schema(
             description = "Customer credit the same application created for an amount beyond the invoice's"
                     + " balance; null when none",
-            example = "5.00",
+            example = "5.25",
             requiredMode = NOT_REQUIRED,
             nullable = true)
     private BigDecimal creditCreatedAmount;

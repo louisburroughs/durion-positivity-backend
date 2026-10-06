@@ -34,14 +34,16 @@ import tools.jackson.databind.ObjectMapper;
  * posting listener (inventory, invoice revenue, register over/short, supplier invoice, warranty
  * reimbursement, settlement currency holds) passes its producing module as {@code sourceSystem}.
  *
- * <p><b>Terminal states only.</b> A row is {@link AccountingEventStatus#PROCESSED} (posted, a fact
- * that legitimately posts nothing, or a fact whose posting key was already registered) or {@link
- * AccountingEventStatus#SKIPPED} (deliberately not posted, with a {@code failureReasonCode}). Never
- * {@code FAILED}, and {@code SUSPENDED} only for a currency hold (below), except a held settled
- * payment ({@link #recordSuspended}, #2503) whose reprocess is routed back to its own path: the REST
- * retry scheduler and {@code retryAccountingEvent} select those statuses and would otherwise run the
- * fact through posting rule sets that do not exist. Failures that propagate (closed period, missing mapping, transient) roll this
- * row back with the handler and are visible on the DLQ instead. A redelivery of the same Kafka
+ * <p><b>Terminal states, with two kinds of hold.</b> A row is {@link AccountingEventStatus#PROCESSED}
+ * (posted, a fact that legitimately posts nothing, or a fact whose posting key was already registered)
+ * or {@link AccountingEventStatus#SKIPPED} (deliberately not posted, with a {@code failureReasonCode}).
+ * The only non-terminal rows are a currency hold ({@code SUSPENDED}, below) and a settled payment its
+ * automatic application could not complete yet ({@link #recordSuspended}: {@code SUSPENDED} or {@code
+ * FAILED}, #2503), whose reprocess is routed back to that path. Any other path must not write {@code
+ * SUSPENDED} or {@code FAILED}: the retry scheduler and {@code retryAccountingEvent} select those
+ * statuses and would run the fact through posting rule sets that do not exist. Failures that propagate
+ * (closed period, missing mapping, transient) roll this row back with the handler and are visible on
+ * the DLQ instead. A redelivery of the same Kafka
  * envelope is short-circuited by {@code processed_events} before any posting and writes no row.
  *
  * <p>{@code eventReference} is the module's display reference {@code AE-{YYYYMM}-{seq}} (a
@@ -212,6 +214,35 @@ public class KafkaFactIngestionRecorder {
         event.setFailureReasonCode(reason.name());
         event.setErrorMessage(detail);
         save(event);
+    }
+
+    /**
+     * {@link #recordSkipped} once per fact (#2503): a fact already skipped for the same reason under the
+     * same event type and domain key — a re-publish under a new envelope id — writes no second row.
+     *
+     * @return whether a new skipped record was written
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean recordSkippedOnce(
+            @NonNull String sourceSystem,
+            @NonNull String eventType,
+            @NonNull String envelopeEventId,
+            @NonNull UUID domainKeyId,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull Object fact,
+            @NonNull PostingFailureReason reason,
+            @NonNull String detail) {
+        if (accountingEventRepository.existsByEventTypeAndDomainKeyIdAndFailureReasonCode(
+                eventType, domainKeyId.toString(), reason.name())) {
+            log.info(
+                    "Fact already skipped, not recorded again | eventType={} | domainKeyId={} | reason={}",
+                    eventType,
+                    domainKeyId,
+                    reason);
+            return false;
+        }
+        recordSkipped(sourceSystem, eventType, envelopeEventId, domainKeyId, transactionDate, fact, reason, detail);
+        return true;
     }
 
     /**

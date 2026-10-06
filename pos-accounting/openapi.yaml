@@ -12601,7 +12601,7 @@ components:
           type: array
         appliedAmount:
           description: Amount applied to the invoice
-          example: 115.0
+          example: 114.75
           type: number
         appliedAt:
           description: 'Application date: the settlement instant for PAYMENT_SETTLED'
@@ -12610,7 +12610,7 @@ components:
           type: string
         creditCreatedAmount:
           description: Customer credit the same application created for an amount beyond the invoice's balance; null when none
-          example: 5.0
+          example: 5.25
           type:
           - number
           - 'null'
@@ -12665,7 +12665,6 @@ components:
         source:
           description: 'Path that made the application: PAYMENT_SETTLED (when the payment settled) or INVOICE_PAYMENT (the INVOICE_PAYMENT accounting event)'
           enum:
-          - MANUAL
           - PAYMENT_SETTLED
           - INVOICE_PAYMENT
           example: PAYMENT_SETTLED

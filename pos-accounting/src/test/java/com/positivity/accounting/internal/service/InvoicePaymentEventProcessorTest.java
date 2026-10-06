@@ -16,6 +16,7 @@ import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.enums.ApplicationSource;
 import com.positivity.accounting.internal.exception.AccountingEventRejectedException;
+import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -51,6 +52,9 @@ class InvoicePaymentEventProcessorTest {
     @Mock
     private InvoiceBalanceCalculator invoiceBalanceCalculator;
 
+    @Mock
+    private PaymentApplicationReversalRepository reversalRepository;
+
     private InvoicePaymentEventProcessor processor;
     private ExtInvoice invoice;
 
@@ -59,6 +63,7 @@ class InvoicePaymentEventProcessorTest {
         processor = new InvoicePaymentEventProcessor(
                 paymentApplicationService,
                 receivablePaymentRepository,
+                reversalRepository,
                 invoiceBalanceCalculator,
                 new LedgerCurrency("USD"),
                 Clock.fixed(NOW, ZoneOffset.UTC));
@@ -157,6 +162,25 @@ class InvoicePaymentEventProcessorTest {
                 .applyAutomatically(eq(PAYMENT_ID), eq(INVOICE_ID), amount.capture(), any(), any(), any());
         assertThat(amount.getValue()).isEqualByComparingTo("60.00");
         assertThat(event.getIdempotencyOutcome()).isEqualTo("NEW");
+    }
+
+    @Test
+    @DisplayName("#2503 BR-8: a payment another path applied automatically and a clerk undid is DUPLICATE_IGNORED,"
+            + " never applied or credited again")
+    void undoneAutomaticApplicationElsewhere_duplicateIgnored() {
+        AccountingEvent event = event(validPayload());
+        stubEligibleInvoiceNoBalance();
+        ReceivablePayment recorded = recorded(new BigDecimal("100.00"), UUID.randomUUID());
+        recorded.setUnappliedAmount(new BigDecimal("100.00"));
+        when(receivablePaymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(recorded));
+        when(reversalRepository.existsReversedAutomaticApplication(PAYMENT_ID)).thenReturn(true);
+
+        processor.process(event);
+
+        verify(paymentApplicationService, never()).applyAutomatically(any(), any(), any(), any(), any(), any());
+        verify(paymentApplicationService, never()).creditUnappliedPayment(any(), anyString());
+        assertThat(event.getStatus()).isEqualTo(AccountingEventStatus.PROCESSED);
+        assertThat(event.getIdempotencyOutcome()).isEqualTo("DUPLICATE_IGNORED");
     }
 
     @Test

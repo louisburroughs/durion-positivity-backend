@@ -8,6 +8,8 @@ import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePay
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.enums.ApplicationSource;
 import com.positivity.accounting.internal.enums.PostingFailureReason;
+import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
+import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
 import com.positivity.domainevents.payment.PaymentSettledV1;
 import io.micrometer.core.instrument.Counter;
@@ -38,29 +40,33 @@ import tools.jackson.databind.ObjectMapper;
  * or a reprocess of the fact's held row — so the application, the outcome row and the processed mark
  * commit together.
  *
- * <p>The first rule that matches decides:
+ * <p>The first rule that matches decides. Before any rule that can change over time (review #2550), the
+ * payment's history decides: an automatic application of it — by this path or the {@code
+ * INVOICE_PAYMENT} processor — that a person undid means nothing is applied again (BR-8), and an
+ * application already under this settlement's request id is the recorded result; both write no row.
  *
  * <ol type="a">
  *   <li>the method is not {@code CASH} or {@code CARD}: not applied, {@code SKIPPED / NOT_POSTABLE};
- *   <li>the invoice is not in {@code ext_invoice}: {@code SUSPENDED / INVOICE_NOT_FOUND}, retried;
+ *   <li>the invoice is not in {@code ext_invoice}: {@code SUSPENDED / INVOICE_NOT_FOUND}, retried
+ *       without an attempt cap until it arrives;
  *   <li>the invoice is not {@code FINALIZED} or {@code POSTED}: {@code FAILED / INVOICE_NOT_ELIGIBLE},
  *       retried up to the attempt cap;
  *   <li>the invoice's party, as a UUID, is missing or is not the payment's customer (BR-2, §9.5a):
  *       {@code SKIPPED / NOT_POSTABLE};
  *   <li>the settlement date, in the clock's zone, is in a closed or hard-locked period (BR-5):
- *       {@code SUSPENDED / PERIOD_CLOSED}, reprocessed by a person after reopening;
+ *       {@code SUSPENDED / PERIOD_CLOSED}, reprocessed by a person after reopening (a hard-locked date
+ *       cannot be reopened: its detail says to handle the payment by hand);
  *   <li>the payment has nothing unapplied (another path applied or credited it): nothing, no row;
- *   <li>the invoice has no open balance: {@code SKIPPED / NOT_POSTABLE}, left for a person (the open
- *       point on #2503: a payment against a paid invoice is most often a double charge);
+ *   <li>the invoice has no open balance: {@code SKIPPED / NOT_POSTABLE}, left for a person (case g,
+ *       confirmed by the Accounting Domain 2026-10-06: most often a duplicate charge, where a refund
+ *       may be right);
  *   <li>otherwise the payment's whole unapplied amount is applied to that invoice only (BR-1), dated
  *       {@code settledAt}, keyed {@code PAYMENT_SETTLED:<paymentIntentId>} (BR-4), capped at the
  *       balance with any excess kept as a customer credit (AD-003).
  * </ol>
  *
  * <p>An application, or case f, writes no {@code accounting_event} row: the application record is the
- * evidence. A replay under the same request id — a redelivery, a re-publish, a reprocess, or a
- * settlement whose automatic application was undone — returns the recorded application and never
- * applies again (BR-8).
+ * evidence. A skipped fact re-published under a new event id writes no second row.
  */
 @Slf4j
 @Service
@@ -130,6 +136,8 @@ public class AutomaticPaymentApplicationService {
 
     private final PaymentApplicationService paymentApplicationService;
     private final ReceivablePaymentRepository receivablePaymentRepository;
+    private final PaymentApplicationRepository paymentApplicationRepository;
+    private final PaymentApplicationReversalRepository reversalRepository;
     private final InvoiceBalanceCalculator invoiceBalanceCalculator;
     private final AccountingPeriodGate periodGate;
     private final KafkaFactIngestionRecorder ingestionRecorder;
@@ -141,6 +149,8 @@ public class AutomaticPaymentApplicationService {
     public AutomaticPaymentApplicationService(
             PaymentApplicationService paymentApplicationService,
             ReceivablePaymentRepository receivablePaymentRepository,
+            PaymentApplicationRepository paymentApplicationRepository,
+            PaymentApplicationReversalRepository reversalRepository,
             InvoiceBalanceCalculator invoiceBalanceCalculator,
             AccountingPeriodGate periodGate,
             KafkaFactIngestionRecorder ingestionRecorder,
@@ -150,6 +160,8 @@ public class AutomaticPaymentApplicationService {
             ObjectProvider<MeterRegistry> meterRegistry) {
         this.paymentApplicationService = paymentApplicationService;
         this.receivablePaymentRepository = receivablePaymentRepository;
+        this.paymentApplicationRepository = paymentApplicationRepository;
+        this.reversalRepository = reversalRepository;
         this.invoiceBalanceCalculator = invoiceBalanceCalculator;
         this.periodGate = periodGate;
         this.ingestionRecorder = ingestionRecorder;
@@ -184,7 +196,7 @@ public class AutomaticPaymentApplicationService {
         Result result = decideAndApply(payment, fact);
         Outcome outcome = result.outcome();
         if (outcome.status() == AccountingEventStatus.SKIPPED) {
-            ingestionRecorder.recordSkipped(
+            ingestionRecorder.recordSkippedOnce(
                     SettlementEventsListener.PAYMENT_SETTLED_SOURCE_SYSTEM,
                     PaymentSettledV1.EVENT_TYPE,
                     envelopeEventId,
@@ -256,6 +268,18 @@ public class AutomaticPaymentApplicationService {
     }
 
     private Result decide(ReceivablePayment payment, PaymentSettledV1 fact) {
+        // 0. Already decided for this payment, before any rule that can change over time (review #2550): an
+        // undone automatic application by either path is never repeated (BR-8), and an application under
+        // this settlement's request id is the recorded result of a redelivery, re-publish or reprocess.
+        String requestId = REQUEST_ID_PREFIX + fact.paymentIntentId();
+        if (reversalRepository.existsReversedAutomaticApplication(payment.getPaymentId())) {
+            return new Result(
+                    Outcome.ALREADY_APPLIED, "an automatic application of this payment was undone; not applied again");
+        }
+        if (paymentApplicationRepository.existsByApplicationRequestId(requestId)) {
+            return new Result(Outcome.ALREADY_APPLIED, "applied earlier under " + requestId);
+        }
+
         // a. Only CASH and CARD are applied automatically.
         String method =
                 fact.methodType() == null ? null : fact.methodType().trim().toUpperCase(Locale.ROOT);
@@ -292,8 +316,11 @@ public class AutomaticPaymentApplicationService {
         if (periodGate.isPostingBlocked(settledOn)) {
             return new Result(
                     Outcome.SUSPENDED_PERIOD,
-                    "settlement date " + settledOn + " is in a closed or hard-locked period; reprocess after"
-                            + " reopening it");
+                    periodGate.isHardLocked(settledOn)
+                            ? "settlement date " + settledOn + " is before the hard-lock date, which cannot be"
+                                    + " reopened; match or credit the payment by hand"
+                            : "settlement date " + settledOn + " is in a closed period; reprocess after reopening"
+                                    + " it");
         }
 
         // f. Another path applied or credited it first: nothing to do, nothing to record.
@@ -314,18 +341,9 @@ public class AutomaticPaymentApplicationService {
                 payment.getPaymentId(),
                 invoiceId,
                 unapplied,
-                REQUEST_ID_PREFIX + fact.paymentIntentId(),
+                requestId,
                 fact.settledAt(),
                 ApplicationSource.PAYMENT_SETTLED);
-        // A fresh automatic application always leaves nothing unapplied (excess becomes credit); a
-        // payment still holding money is a replay of an application that was undone (BR-8).
-        if (response.getRemainingAmount() != null
-                && response.getRemainingAmount().signum() > 0) {
-            return new Result(
-                    Outcome.ALREADY_APPLIED,
-                    "applied earlier under " + REQUEST_ID_PREFIX + fact.paymentIntentId()
-                            + " and undone; not applied again");
-        }
         return new Result(
                 Outcome.APPLIED,
                 "applied " + response.getAppliedAmount() + " to invoice " + invoiceNumber

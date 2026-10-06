@@ -329,6 +329,13 @@ class AutomaticPaymentApplicationPostgresIT extends PostgresCommittingTestBase {
                 .satisfies(detail ->
                         assertThat(detail.getPaymentApplicationId()).isEqualTo(application.getPaymentApplicationId()));
         assertThat(paymentApplicationRepository.count()).isEqualTo(1);
+
+        // A re-publish after the period closed still finds the recorded application first (review #2550):
+        // no outcome row, nothing applied.
+        closedPeriod("2026-09");
+        consume(nextUuid(), fact);
+        assertThat(settledRows()).isEmpty();
+        assertThat(paymentApplicationRepository.count()).isEqualTo(1);
     }
 
     // ===== criterion 3 =====
@@ -379,7 +386,9 @@ class AutomaticPaymentApplicationPostgresIT extends PostgresCommittingTestBase {
         assertThat(customerCreditRepository.count()).isEqualTo(1);
         assertThat(credit.getAmount()).isEqualByComparingTo("5.00");
         assertThat(credit.getRequestId()).isEqualTo("APPLY:PAYMENT_SETTLED:" + intent);
-        // The credit row's created_at is its audit time; its ledger date is the issuance entry's, below.
+        // created_at is the audit time the row was written (ADR-0024), not settledAt; the credit's ledger
+        // date is its issuance entry's, asserted below.
+        assertThat(credit.getCreatedAt()).isAfter(SETTLED_AT);
         assertThat(receivablePaymentRepository.findById(intent).orElseThrow().getStatus())
                 .isEqualTo(ReceivablePaymentStatus.FULLY_APPLIED);
 
@@ -480,6 +489,17 @@ class AutomaticPaymentApplicationPostgresIT extends PostgresCommittingTestBase {
         assertThat(held.getStatus()).isEqualTo(AccountingEventStatus.SUSPENDED);
         assertThat(held.getFailureReasonCode()).isEqualTo("INVOICE_NOT_FOUND");
 
+        // Case b has no attempt cap (review #2550): more passes than max-retries (3) while the invoice is
+        // missing, and the pass after it arrives still applies the payment.
+        for (int pass = 0; pass < 4; pass++) {
+            assertThat(retryJob.retryBoundTenant()).as("pass %s", pass).isEqualTo(1);
+        }
+        assertThat(accountingEventRepository
+                        .findById(held.getEventId())
+                        .orElseThrow()
+                        .getAttemptCount())
+                .isZero();
+
         seedInvoice("115.00", customerId);
         assertThat(retryJob.retryBoundTenant()).isEqualTo(1);
 
@@ -532,6 +552,137 @@ class AutomaticPaymentApplicationPostgresIT extends PostgresCommittingTestBase {
         assertThat(after.isReversed()).isTrue();
         assertThat(after.getReversedAt()).isNotNull();
         assertThat(after.getActions()).isEmpty();
+    }
+
+    // ===== undo across paths (review #2550, BR-8) =====
+
+    @Test
+    @DisplayName("BR-8 across paths: settled payment applied automatically, undone, then a late INVOICE_PAYMENT for it"
+            + " is DUPLICATE_IGNORED and applies or credits nothing")
+    void undoSticks_settledThenInvoicePayment() {
+        seedInvoice("115.00", customerId);
+        UUID intent = nextUuid();
+        consume(nextUuid(), fact(intent, "CARD", "115.00"));
+        paymentApplicationService.reversePaymentApplication(
+                singleApplication().getPaymentApplicationId(), "Customer asked to keep it on account");
+
+        UUID eventId = submitInvoicePayment(intent, "115.00");
+        assertThat(drainer.drainBoundTenant()).isEqualTo(1);
+
+        AccountingEvent event = accountingEventRepository.findById(eventId).orElseThrow();
+        assertThat(event.getStatus()).isEqualTo(AccountingEventStatus.PROCESSED);
+        assertThat(event.getIdempotencyOutcome()).isEqualTo("DUPLICATE_IGNORED");
+        assertThat(paymentApplicationRepository.count()).isEqualTo(1);
+        assertThat(customerCreditRepository.count()).isZero();
+        assertThat(receivablePaymentRepository.findById(intent).orElseThrow().getStatus())
+                .isEqualTo(ReceivablePaymentStatus.AVAILABLE);
+    }
+
+    @Test
+    @DisplayName("BR-8 across paths: settled fact held in a closed period, INVOICE_PAYMENT applies it, a clerk undoes"
+            + " it; reprocessing the held row after reopening, or a re-publish, applies nothing")
+    void undoSticks_invoicePaymentThenSettledReprocess() {
+        seedInvoice("115.00", customerId);
+        AccountingPeriod september = closedPeriod("2026-09");
+        UUID intent = nextUuid();
+        consume(nextUuid(), fact(intent, "CARD", "115.00"));
+        AccountingEvent held = settledRows().getFirst();
+        assertThat(held.getFailureReasonCode()).isEqualTo("PERIOD_CLOSED");
+
+        submitInvoicePayment(intent, "115.00");
+        assertThat(drainer.drainBoundTenant()).isEqualTo(1);
+        PaymentApplication byInvoicePayment = singleApplication();
+        assertThat(byInvoicePayment.getApplicationSource()).isEqualTo(ApplicationSource.INVOICE_PAYMENT);
+        paymentApplicationService.reversePaymentApplication(
+                byInvoicePayment.getPaymentApplicationId(), "Applied to the wrong job, clerk will match it");
+
+        september.setStatus(AccountingPeriodStatus.OPEN);
+        periodRepository.save(september);
+        AccountingEventResponse reprocessed = inTransaction(
+                () -> eventIngestionService.reprocessEvent(held.getEventId(), new ReprocessEventRequest(), "ops-user"));
+        consume(nextUuid(), fact(intent, "CARD", "115.00"));
+
+        assertThat(reprocessed.getStatus()).isEqualTo(AccountingEventStatus.PROCESSED);
+        assertThat(paymentApplicationRepository.count()).isEqualTo(1);
+        assertThat(customerCreditRepository.count()).isZero();
+        assertThat(receivablePaymentRepository.findById(intent).orElseThrow().getStatus())
+                .isEqualTo(ReceivablePaymentStatus.AVAILABLE);
+        assertThat(settledRows()).hasSize(1);
+    }
+
+    // ===== case g (Accounting Domain ruling, merge condition) =====
+
+    @Test
+    @DisplayName("g: a settled payment against an invoice with no open balance applies nothing, credits nothing,"
+            + " posts nothing, stays AVAILABLE, and its row is SKIPPED / NOT_POSTABLE naming the invoice; a re-publish"
+            + " writes no second row")
+    void caseG_paidInvoiceLeftForAPerson() {
+        seedInvoice("115.00", customerId);
+        UUID first = nextUuid();
+        consume(nextUuid(), fact(first, "CARD", "115.00"));
+        drainOutbox();
+        assertThat(balanceDue()).isEqualByComparingTo("0.00");
+        long entriesBefore = journalEntryRepository.count();
+        long outboxBefore = outboxRepository.count();
+
+        UUID duplicate = nextUuid();
+        consume(nextUuid(), fact(duplicate, "CARD", "115.00"));
+        consume(nextUuid(), fact(duplicate, "CARD", "115.00")); // re-published under a new event id
+
+        assertThat(paymentApplicationRepository.findAll())
+                .extracting(PaymentApplication::getPaymentId)
+                .containsExactly(first);
+        assertThat(customerCreditRepository.count()).isZero();
+        assertThat(outboxRepository.count()).isEqualTo(outboxBefore);
+        drainOutbox();
+        assertThat(journalEntryRepository.count()).isEqualTo(entriesBefore);
+        assertThat(receivablePaymentRepository.findById(duplicate).orElseThrow().getStatus())
+                .isEqualTo(ReceivablePaymentStatus.AVAILABLE);
+        assertThat(settledRows()).singleElement().satisfies(row -> {
+            assertThat(row.getStatus()).isEqualTo(AccountingEventStatus.SKIPPED);
+            assertThat(row.getFailureReasonCode()).isEqualTo("NOT_POSTABLE");
+            assertThat(row.getErrorMessage()).isEqualTo("invoice INV-1 has no open balance; left for a person");
+            assertThat(row.getDomainKeyId()).isEqualTo(duplicate.toString());
+        });
+    }
+
+    // ===== criterion 9: unresolved references =====
+
+    @Test
+    @DisplayName("9: an application whose invoice and customer are in neither replica shows null display fields,"
+            + " never a UUID")
+    void criterion9_unresolvedDisplayFieldsAreNull() {
+        UUID stranger = nextUuid();
+        ReceivablePayment payment = new ReceivablePayment();
+        payment.setPaymentId(nextUuid());
+        payment.setCustomerId(stranger);
+        payment.setCurrency("USD");
+        payment.setTotalAmount(new BigDecimal("40.00"));
+        payment.setUnappliedAmount(BigDecimal.ZERO);
+        payment.setStatus(ReceivablePaymentStatus.FULLY_APPLIED);
+        payment.setClearedAt(SETTLED_AT);
+        payment.setSourceEventId(nextUuid());
+        payment.setCreatedBy("it");
+        ReceivablePayment saved = receivablePaymentRepository.save(payment);
+        PaymentApplication application = new PaymentApplication();
+        application.setPayment(saved);
+        application.setInvoiceId(nextUuid());
+        application.setCustomerId(stranger);
+        application.setCurrency("USD");
+        application.setAppliedAmount(new BigDecimal("40.00"));
+        application.setApplicationTimestamp(SETTLED_AT);
+        application.setApplicationRequestId("PAYMENT_SETTLED:" + saved.getPaymentId());
+        application.setApplicationSource(ApplicationSource.PAYMENT_SETTLED);
+        application.setCreatedAt(SETTLED_AT);
+        application.setCreatedBy("SYSTEM");
+        paymentApplicationRepository.save(application);
+
+        AutomaticPaymentApplicationRow row = onlyRow(true);
+
+        assertThat(row.getInvoiceNumber()).isNull();
+        assertThat(row.getCustomerDisplayName()).isNull();
+        assertThat(row.getCustomerReference()).isNull();
+        assertThat(row.getActions()).containsExactly("UNDO");
     }
 
     // ===== criteria 10 and 11 =====
@@ -661,7 +812,8 @@ class AutomaticPaymentApplicationPostgresIT extends PostgresCommittingTestBase {
     }
 
     private AccountingPeriod closedPeriod(String code) {
-        AccountingPeriod period = new AccountingPeriod();
+        // Posting provisions a period row on first use, so close the existing one when there is one.
+        AccountingPeriod period = periodRepository.findByPeriodCode(code).orElseGet(AccountingPeriod::new);
         period.setPeriodCode(code);
         period.setStartDate(LocalDate.parse(code + "-01"));
         period.setEndDate(LocalDate.parse(code + "-01").plusMonths(1).minusDays(1));

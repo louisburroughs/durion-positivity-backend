@@ -300,8 +300,7 @@ public class PaymentApplicationServiceImpl
             BigDecimal unappliedAfterApplication = payment.getUnappliedAmount();
 
             String creditRequestId = APPLY_REQUEST_ID_PREFIX + request.getApplicationRequestId();
-            creditInfo = createCustomerCredit(
-                    payment, unappliedAfterApplication, applicationTimestamp, creditRequestId, currentUser);
+            creditInfo = createCustomerCredit(payment, unappliedAfterApplication, creditRequestId, currentUser);
 
             // Enqueue the credit-issuance GL posting work item in the SAME
             // transaction as the CustomerCredit insert (transactional outbox,
@@ -468,7 +467,7 @@ public class PaymentApplicationServiceImpl
             ReceivablePayment payment, BigDecimal unapplied, String creditRequestId) {
         Instant timestamp = Instant.now(clock);
         PaymentApplicationResponse.CustomerCreditInfo creditInfo =
-                createCustomerCredit(payment, unapplied, timestamp, creditRequestId, getCurrentUser());
+                createCustomerCredit(payment, unapplied, creditRequestId, getCurrentUser());
         // Same transaction as the CustomerCredit insert (transactional outbox, #975): the issuance
         // leg posts Dr Undeposited Funds / Cr Customer Credit Liability for the whole amount.
         enqueueCustomerCreditIssuanceGLPostingWorkItem(
@@ -1144,7 +1143,8 @@ public class PaymentApplicationServiceImpl
         application.setApplicationTimestamp(input.applicationTimestamp());
         application.setApplicationRequestId(input.applicationRequestId());
         application.setApplicationSource(input.source());
-        application.setCreatedAt(input.applicationTimestamp());
+        // Audit time is when the row is written (ADR-0024 §2); applicationTimestamp is the business date.
+        application.setCreatedAt(Instant.now(clock));
         application.setCreatedBy(input.currentUser());
         return application;
     }
@@ -1198,7 +1198,7 @@ public class PaymentApplicationServiceImpl
     }
 
     private PaymentApplicationResponse.CustomerCreditInfo createCustomerCredit(
-            ReceivablePayment payment, BigDecimal amount, Instant timestamp, String creditRequestId, String actor) {
+            ReceivablePayment payment, BigDecimal amount, String creditRequestId, String actor) {
 
         CustomerCredit credit = new CustomerCredit();
         credit.setCustomerId(payment.getCustomerId());
@@ -1206,7 +1206,7 @@ public class PaymentApplicationServiceImpl
         credit.setAmount(amount);
         credit.setSourcePaymentId(payment.getPaymentId());
         credit.setRequestId(creditRequestId);
-        credit.setCreatedAt(timestamp);
+        credit.setCreatedAt(Instant.now(clock)); // audit time (ADR-0024 §2); the GL legs carry the date
         credit.setCreatedBy(actor);
 
         CustomerCredit saved = customerCreditRepository.save(credit);
@@ -1221,7 +1221,7 @@ public class PaymentApplicationServiceImpl
         return PaymentApplicationResponse.CustomerCreditInfo.builder()
                 .creditId(saved.getCreditId())
                 .amount(amount)
-                .createdAt(timestamp)
+                .createdAt(credit.getCreatedAt())
                 .build();
     }
 

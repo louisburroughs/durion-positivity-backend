@@ -471,24 +471,30 @@ the request id (`INVOICE_PAYMENT:` prefix → `INVOICE_PAYMENT`, else `MANUAL`).
 
 **Settled payments apply automatically** (CAP:550 S2, #2503; AW14). After `SettlementEventsListener`
 records a `payment.payment.settled` payment, `AutomaticPaymentApplicationService` decides in the same
-handler transaction — the first rule that matches wins:
+handler transaction — the first rule that matches wins. Before the rules, the payment's history decides:
+if a person undid an automatic application of it (by this path or the `INVOICE_PAYMENT` processor) nothing
+is applied again, and if an application already exists under this settlement's request id that is the
+result; neither writes a row.
 
 | Case | Outcome | `accounting_event` row |
 |---|---|---|
 | a. `methodType` not `CASH` / `CARD` | not applied | `SKIPPED / NOT_POSTABLE` |
-| b. invoice not in `ext_invoice` | not applied; the retry job tries again | `SUSPENDED / INVOICE_NOT_FOUND` |
+| b. invoice not in `ext_invoice` | not applied; the retry job tries again until it arrives (no attempt cap: a pass that still finds no invoice spends no attempt, though each pass writes its history row) | `SUSPENDED / INVOICE_NOT_FOUND` |
 | c. invoice not `FINALIZED` / `POSTED` | not applied; retried up to the attempt cap | `FAILED / INVOICE_NOT_ELIGIBLE` |
 | d. invoice party (UUID) missing or not the payment's customer | not applied | `SKIPPED / NOT_POSTABLE` "customer differs from invoice INV-…" |
-| e. settlement date in a closed or hard-locked period | not applied; reprocess by hand after reopening | `SUSPENDED / PERIOD_CLOSED` |
+| e. settlement date in a closed or hard-locked period | not applied; reprocess by hand after reopening (a hard-locked date cannot be reopened: the detail says to match or credit the payment by hand) | `SUSPENDED / PERIOD_CLOSED` |
 | f. payment has nothing unapplied (another path applied it) | nothing | none |
-| g. invoice has no open balance | not applied, left for a person (open point on #2503) | `SKIPPED / NOT_POSTABLE` |
+| g. invoice has no open balance | not applied, not credited, left for a person (most likely a duplicate charge; confirmed by the Accounting Domain, 2026-10-06) | `SKIPPED / NOT_POSTABLE` |
 | h. otherwise | the whole unapplied amount applied to **that invoice only**, capped at its balance, excess kept as a customer credit (AD-003) | none: the application is the evidence |
 
 The application, any credit and both GL work items (Dr 1090 / Cr 1200, and Dr 1090 / Cr 2300 for an excess)
 are dated `settledAt`, created by `SYSTEM`, keyed `PAYMENT_SETTLED:<paymentIntentId>`. That key makes it
 once per settlement: a redelivery, a re-publish under a new event id or a reprocess returns the recorded
-application, and an application undone through `reversePaymentApplication` is never repeated (the
-payment stays `AVAILABLE` for a person). A payment left unapplied stays `AVAILABLE` in
+application. An automatic application undone through `reversePaymentApplication` is never repeated by
+either automatic path: a later settled fact or reprocess applies nothing, and a later `INVOICE_PAYMENT`
+event for the payment is `PROCESSED / DUPLICATE_IGNORED` (the payment stays `AVAILABLE` for a person). The
+application's and credit's `created_at` is when they were written (ADR-0024); the business date is
+`application_timestamp` and the journal entries' date. A payment left unapplied stays `AVAILABLE` in
 `GET /v1/accounting/receivable-payments`. Counter `accounting.payment.settled.auto_apply`, tag `outcome`
 (`applied`, `skipped_method`, `skipped_party`, `skipped_paid`, `suspended_invoice`, `suspended_period`,
 `failed_ineligible`, `already_applied`). Reprocessing a held row (`POST /v1/accounting/events/{eventId}/reprocess`,
@@ -856,7 +862,7 @@ transaction as the posting and the `processed_events` mark:
 | `OrderEventsListener` | `order.session.closed` | `pos-order` | session id | `PROCESSED / NEW` + entry; `PROCESSED / NEW`, no entry, for a zero variance; `PROCESSED / DUPLICATE_IGNORED` when the session key was already posted; a foreign-currency hold is the `SUSPENDED / CURRENCY_NOT_SUPPORTED` row (Ledger currency above) |
 | `SupplierInvoiceEventsListener` | `supplier.invoice.received` | `pos-supplier` | vendor bill id | `PROCESSED / NEW`, no entry (nothing posts on ingest), for a new bill and for a duplicate flagged on the live original; `PROCESSED / DUPLICATE_IGNORED` for a duplicate identical to the live bill held, under the duplicate rule above (#2501) |
 | `WarrantyEventsListener` | `warranty.reimbursement.submitted`, `warranty.reimbursement.resolved` | `pos-warranty` | reimbursement id | `PROCESSED / NEW`, no entry; `SKIPPED / NOT_POSTABLE` for a stale fact |
-| `SettlementEventsListener` | `payment.payment.settled` | `pos-invoice` | `paymentIntentId` | no row when the payment is applied automatically or another path already applied it (the application is the evidence); otherwise one row per Payment Application above: `SKIPPED / NOT_POSTABLE`, `SUSPENDED / INVOICE_NOT_FOUND`, `SUSPENDED / PERIOD_CLOSED`, `FAILED / INVOICE_NOT_ELIGIBLE`, or the `SUSPENDED / CURRENCY_NOT_SUPPORTED` hold; a re-emitted fact already held for the same reason writes no second row (#2503) |
+| `SettlementEventsListener` | `payment.payment.settled` | `pos-invoice` | `paymentIntentId` | no row when the payment is applied automatically or another path already applied it (the application is the evidence); otherwise one row per Payment Application above: `SKIPPED / NOT_POSTABLE`, `SUSPENDED / INVOICE_NOT_FOUND`, `SUSPENDED / PERIOD_CLOSED`, `FAILED / INVOICE_NOT_ELIGIBLE`, or the `SUSPENDED / CURRENCY_NOT_SUPPORTED` hold; a re-emitted fact already skipped or held for the same reason writes no second row (#2503) |
 
 - `domainKeyId` is not unique: every fact about the same document (an invoice finalized, posted, then
   cancelled) writes its own row under the same key. `eventReference` (`AE-YYYYMM-n`) is the unique one.

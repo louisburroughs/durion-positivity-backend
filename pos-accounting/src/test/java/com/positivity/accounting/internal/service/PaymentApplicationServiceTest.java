@@ -972,6 +972,52 @@ class PaymentApplicationServiceTest {
     }
 
     @Test
+    @DisplayName("#2503 / ADR-0024: applyAutomatically dates the application, the credit and both GL legs at appliedAt,"
+            + " but stamps the audit createdAt with the clock's now")
+    void applyAutomatically_datesAtAppliedAt_auditsAtNow() {
+        Instant settledAt = Instant.parse("2023-11-15T14:31:07Z");
+        when(paymentApplicationRepository.existsByApplicationRequestId("PAYMENT_SETTLED:x"))
+                .thenReturn(false);
+        when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+        when(paymentApplicationRepository.save(any(PaymentApplication.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(receivablePaymentRepository.save(any(ReceivablePayment.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        ArgumentCaptor<CustomerCredit> credit = ArgumentCaptor.forClass(CustomerCredit.class);
+        when(customerCreditRepository.save(credit.capture())).thenAnswer(invocation -> {
+            CustomerCredit saved = invocation.getArgument(0);
+            saved.setCreditId(UUID.fromString("00000000-0000-0000-0000-0000000c2503"));
+            return saved;
+        });
+        stubInvoice(testInvoiceId, "400.00");
+
+        service.applyAutomatically(
+                testPaymentId,
+                testInvoiceId,
+                new BigDecimal("1000.00"),
+                "PAYMENT_SETTLED:x",
+                settledAt,
+                ApplicationSource.PAYMENT_SETTLED);
+
+        verify(paymentApplicationRepository).save(paymentApplicationCaptor.capture());
+        PaymentApplication application = paymentApplicationCaptor.getValue();
+        assertThat(application.getApplicationTimestamp()).isEqualTo(settledAt);
+        assertThat(application.getApplicationSource()).isEqualTo(ApplicationSource.PAYMENT_SETTLED);
+        assertThat(application.getCreatedBy()).isEqualTo("SYSTEM");
+        assertThat(application.getCreatedAt()).isEqualTo(Instant.now(TEST_CLOCK));
+        assertThat(credit.getValue().getCreatedAt()).isEqualTo(Instant.now(TEST_CLOCK));
+        assertThat(credit.getValue().getCreatedBy()).isEqualTo("SYSTEM");
+        ArgumentCaptor<Object> events = ArgumentCaptor.forClass(Object.class);
+        verify(outboxService, org.mockito.Mockito.times(2))
+                .saveToOutbox(any(UUID.class), any(), eq(testPaymentId), any(), events.capture());
+        assertThat(events.getAllValues())
+                .extracting(event -> event instanceof PaymentApplicationGLPostingEvent glEvent
+                        ? glEvent.getApplicationTimestamp()
+                        : ((CustomerCreditIssuanceGLPostingEvent) event).getApplicationTimestamp())
+                .containsOnly(settledAt);
+    }
+
+    @Test
     @DisplayName("Overpayment enqueues a CUSTOMER_CREDIT_ISSUANCE GL posting work item for the excess (Issue #975)")
     void testApplyPaymentToInvoices_Overpayment_EnqueuesCreditIssuanceGLPostingWorkItem() {
         // Arrange: payment 1000 applied against an invoice with only 400 due ->

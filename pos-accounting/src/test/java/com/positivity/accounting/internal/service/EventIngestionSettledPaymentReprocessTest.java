@@ -145,6 +145,21 @@ class EventIngestionSettledPaymentReprocessTest {
     }
 
     @Test
+    @DisplayName("an invoice still not replicated does not spend an attempt: case b has no cap (review #2550)")
+    void invoiceNotFoundAgainKeepsAttempts() {
+        event.setFailureReasonCode("INVOICE_NOT_FOUND");
+        when(automaticPaymentApplicationService.reapply(payload))
+                .thenReturn(new Result(Outcome.SUSPENDED_INVOICE, "invoice INV-1 is not in the invoice replica yet"));
+
+        AccountingEventResponse response = reprocess(FailedAccountingEventRetryJob.RETRY_USER);
+
+        assertThat(response.getStatus()).isEqualTo(AccountingEventStatus.SUSPENDED);
+        assertThat(event.getFailureReasonCode()).isEqualTo("INVOICE_NOT_FOUND");
+        assertThat(event.getAttemptCount()).isEqualTo(1);
+        assertThat(history().getOutcome()).isEqualTo(ReprocessingOutcome.FAILURE);
+    }
+
+    @Test
     @DisplayName("a currency-held settled payment keeps today's posting-engine path")
     void currencyHoldKeepsEnginePath() {
         event.setFailureReasonCode("CURRENCY_NOT_SUPPORTED");
