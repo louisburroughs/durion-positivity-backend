@@ -77,6 +77,8 @@ public final class EventTypes {
                     .build(),
             EventTypeRegistration.write("ORDER_LINK_SOURCE", "Source linked to sales order")
                     .build(),
+            EventTypeRegistration.write("ORDER_CART_CUSTOMER_SET", "Customer set or changed on a sales order cart")
+                    .build(),
             EventTypeRegistration.search("ORDER_CART_LIST", "List sales order carts for parking/resume")
                     .build(),
             EventTypeRegistration.write("ORDER_CART_QUOTE", "Cart converted to a counter quote")

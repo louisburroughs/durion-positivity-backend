@@ -75,6 +75,9 @@ class ReturnOrderServiceImplTest {
     @Mock
     private com.positivity.order.internal.config.OrderDomainEventPublisher domainEventPublisher;
 
+    private final com.positivity.order.internal.repository.ExtCustomerRepository extCustomerRepository =
+            org.mockito.Mockito.mock(com.positivity.order.internal.repository.ExtCustomerRepository.class);
+
     private ReturnOrderServiceImpl service;
 
     @BeforeEach
@@ -87,6 +90,7 @@ class ReturnOrderServiceImplTest {
                 paymentRecordRepository,
                 invoicingPort,
                 domainEventPublisher,
+                new com.positivity.order.internal.service.HouseAccountReplica(extCustomerRepository),
                 CLOCK);
         ReflectionTestUtils.setField(service, "approvalThreshold", new BigDecimal("250.00"));
     }
@@ -152,6 +156,79 @@ class ReturnOrderServiceImplTest {
         // 108.00 line total over 2 units -> 54.00 per unit
         assertThat(summary.lines().get(0).lineRefund()).isEqualByComparingTo("54.00");
         assertThat(summary.totalRefund()).isEqualByComparingTo("54.00");
+    }
+
+    private static final UUID HOUSE_ACCOUNT_ID = UUID.fromString("00000000-0000-0000-0000-0000000000c1");
+
+    /** The original order was sold to the tenant's CASH house account (CAP:550 S8). */
+    private void stubWalkInOrder(SalesOrderLine line) {
+        SalesOrder walkIn = completedOrder();
+        walkIn.setCustomerId(HOUSE_ACCOUNT_ID);
+        lenient().when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(walkIn));
+        lenient().when(salesOrderLineRepository.findByOrder_OrderId(ORDER_ID)).thenReturn(List.of(line));
+        lenient()
+                .when(salesOrderLineRepository.findByOrderLineIdForUpdate(LINE_ID))
+                .thenReturn(Optional.of(line));
+        lenient().when(returnOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(extCustomerRepository.findById(HOUSE_ACCOUNT_ID))
+                .thenReturn(Optional.of(com.positivity.order.internal.entity.ExtCustomer.builder()
+                        .partyId(HOUSE_ACCOUNT_ID)
+                        .status("ACTIVE")
+                        .displayName("Walk-in customer")
+                        .houseAccount(
+                                com.positivity.domainevents.customer.CustomerPartyUpdatedV1.HOUSE_ACCOUNT_CASH_SALE)
+                        .build()));
+    }
+
+    private CreateReturnCommand commandWithRefund(String refundMethod) {
+        return new CreateReturnCommand(
+                ORDER_ID, refundMethod, "DEFECT", List.of(new ReturnLineCommand(LINE_ID, 1, "RESTOCK", null)), null);
+    }
+
+    @Test
+    @DisplayName("ROS-W1 (CAP:550 S8 AC5): a walk-in sale is never refunded to store credit or account credit")
+    void createReturn_walkInSaleRefusesCreditRefunds() {
+        stubWalkInOrder(soldLine(2, "108.0000", null, null));
+
+        for (String refundMethod : List.of("STORE_CREDIT", "ON_ACCOUNT_CREDIT")) {
+            assertThatThrownBy(() -> service.createReturn(commandWithRefund(refundMethod)))
+                    .isInstanceOf(com.positivity.order.internal.exception.ReturnWalkInNotAllowedException.class)
+                    .hasMessageContaining(refundMethod);
+        }
+
+        // Refused at creation, before any return exists for the saga to pick up.
+        org.mockito.Mockito.verify(returnOrderRepository, org.mockito.Mockito.never())
+                .save(any());
+        org.mockito.Mockito.verifyNoInteractions(invoicingPort, domainEventPublisher);
+    }
+
+    @Test
+    @DisplayName("ROS-W2 (CAP:550 S8 AC5): a walk-in sale is still returned to its original tender")
+    void createReturn_walkInSaleAllowsOriginalTender() {
+        stubWalkInOrder(soldLine(2, "108.0000", null, null));
+        when(returnOrderLineRepository.sumReturnedQty(eq(LINE_ID), anyList())).thenReturn(0);
+
+        ReturnOrderSummary summary = service.createReturn(commandWithRefund("ORIGINAL_TENDER"));
+
+        assertThat(summary.status()).isEqualTo("RETURN_REQUESTED");
+        assertThat(summary.refundMethod()).isEqualTo("ORIGINAL_TENDER");
+    }
+
+    @Test
+    @DisplayName("ROS-W3: a registered customer's sale may still be refunded to store credit")
+    void createReturn_registeredCustomerMayTakeStoreCredit() {
+        stubWalkInOrder(soldLine(2, "108.0000", null, null));
+        // Same order, but its customer row carries no house-account flag.
+        when(extCustomerRepository.findById(HOUSE_ACCOUNT_ID))
+                .thenReturn(Optional.of(com.positivity.order.internal.entity.ExtCustomer.builder()
+                        .partyId(HOUSE_ACCOUNT_ID)
+                        .status("ACTIVE")
+                        .displayName("Walk-in customer")
+                        .build()));
+        when(returnOrderLineRepository.sumReturnedQty(eq(LINE_ID), anyList())).thenReturn(0);
+
+        assertThat(service.createReturn(commandWithRefund("STORE_CREDIT")).refundMethod())
+                .isEqualTo("STORE_CREDIT");
     }
 
     @Test

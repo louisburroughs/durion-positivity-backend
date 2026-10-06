@@ -105,6 +105,8 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
                 null,
                 null,
                 null,
+                false,
+                null,
                 List.of());
         SalesOrderLineSummary fakeLine = new SalesOrderLineSummary(
                 UUID.randomUUID().toString(),
@@ -426,6 +428,8 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
                 null,
                 null,
                 null,
+                false,
+                null,
                 List.of());
 
         when(salesOrderService.linkSource(any(UUID.class), anyString(), anyString()))
@@ -490,6 +494,8 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
                 null,
                 null,
                 null,
+                false,
+                null,
                 List.of());
     }
 
@@ -498,7 +504,7 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
     void checkout_whenValid_returns201WithInvoiceRef() throws Exception {
         UUID orderId = UUID.randomUUID();
         UUID invoiceId = UUID.randomUUID();
-        when(salesOrderService.checkout(any(UUID.class), anyString(), any()))
+        when(salesOrderService.checkout(any(UUID.class), anyString(), any(), any()))
                 .thenReturn(new com.positivity.order.internal.service.model.CheckoutResult(
                         checkedOutSummary(orderId, invoiceId), false));
 
@@ -517,7 +523,7 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
     void checkout_whenReplay_returns200() throws Exception {
         UUID orderId = UUID.randomUUID();
         UUID invoiceId = UUID.randomUUID();
-        when(salesOrderService.checkout(any(UUID.class), anyString(), any()))
+        when(salesOrderService.checkout(any(UUID.class), anyString(), any(), any()))
                 .thenReturn(new com.positivity.order.internal.service.model.CheckoutResult(
                         checkedOutSummary(orderId, invoiceId), true));
 

@@ -5,8 +5,9 @@ package com.positivity.order.internal.exception;
  * cart at quote or checkout, a SKU whose price cannot be resolved, a WORKORDER source link
  * without a customer on the cart, a quote attempted on a workorder-linked order, a
  * serial/lot-tracked line whose captured identifiers do not match its quantity, a new cart on a
- * terminal whose register session is mid-close, or a source document that does not resolve in
- * the replica (issue #1730). Maps to {@code ORDER_UNPROCESSABLE}.
+ * terminal whose register session is mid-close, a customer change on a cart whose linked
+ * WORKORDER source fixes its customer, or a source document that does not resolve in the replica
+ * (issue #1730). Maps to {@code ORDER_UNPROCESSABLE}.
  *
  * <p>ADR-0017 §2, as reworded on 2026-09-04, is what puts all of these at {@code 422} rather than
  * splitting them: its {@code 409} list is closed and covers only a collision with the *target*

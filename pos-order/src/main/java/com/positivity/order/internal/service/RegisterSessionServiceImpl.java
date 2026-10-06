@@ -10,6 +10,7 @@ import com.positivity.order.internal.entity.CashMovementType;
 import com.positivity.order.internal.entity.OrderPaymentRecord;
 import com.positivity.order.internal.entity.RegisterSession;
 import com.positivity.order.internal.entity.RegisterSessionStatus;
+import com.positivity.order.internal.entity.SalesOrder;
 import com.positivity.order.internal.entity.SalesOrderStatus;
 import com.positivity.order.internal.exception.RegisterSessionConflictException;
 import com.positivity.order.internal.exception.RegisterSessionNotFoundException;
@@ -31,6 +32,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -61,6 +63,7 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
     private final SalesOrderRepository salesOrderRepository;
     private final OrderPaymentRecordRepository paymentRecordRepository;
     private final OrderDomainEventPublisher domainEventPublisher;
+    private final HouseAccountReplica houseAccounts;
     private final Clock clock;
 
     /** Over/short beyond this absolute amount at close requires order:session:approve_variance. */
@@ -265,7 +268,8 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                 cashMovementRepository.findBySessionIdOrderByOccurredAtAsc(sessionId).stream()
                         .map(RegisterSessionServiceImpl::toMovementSummary)
                         .toList();
-        long orderCount = salesOrderRepository.findBySessionId(sessionId).size();
+        List<SalesOrder> sessionOrders = salesOrderRepository.findBySessionId(sessionId);
+        long orderCount = sessionOrders.size();
         return new SessionReport(
                 sessionId,
                 session.getTerminalId(),
@@ -280,9 +284,39 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                 counted,
                 overShort,
                 orderCount,
+                walkInByClerk(sessionOrders),
                 movements,
                 session.getOpenedAt(),
                 Instant.now(clock));
+    }
+
+    /**
+     * Walk-in share per cashier (CAP:550 S8, spec §4.4 item 2): over the session's orders that left
+     * DRAFT, how many each clerk sold to the tenant's CASH house account and for how much. A clerk
+     * with no walk-in orders is still listed, at zero, so the share reads against their whole
+     * count. Keyed on the order's {@code clerkId}, which cart creation takes from the request.
+     */
+    private List<SessionReport.ClerkWalkInShare> walkInByClerk(List<SalesOrder> sessionOrders) {
+        List<SalesOrder> leftDraft = sessionOrders.stream()
+                .filter(order -> order.getStatus() != SalesOrderStatus.DRAFT)
+                .toList();
+        Set<UUID> walkInCustomers = houseAccounts.cashSaleIdsAmong(
+                leftDraft.stream().map(SalesOrder::getCustomerId).toList());
+        Map<String, long[]> counts = new TreeMap<>();
+        Map<String, BigDecimal> totals = new TreeMap<>();
+        for (SalesOrder order : leftDraft) {
+            long[] count = counts.computeIfAbsent(order.getClerkId(), _ -> new long[2]);
+            count[0]++;
+            totals.putIfAbsent(order.getClerkId(), ZERO);
+            if (order.getCustomerId() != null && walkInCustomers.contains(order.getCustomerId())) {
+                count[1]++;
+                totals.merge(order.getClerkId(), order.getGrandTotal(), BigDecimal::add);
+            }
+        }
+        return counts.entrySet().stream()
+                .map(entry -> new SessionReport.ClerkWalkInShare(
+                        entry.getKey(), entry.getValue()[0], entry.getValue()[1], scale(totals.get(entry.getKey()))))
+                .toList();
     }
 
     private RegisterSession require(UUID sessionId) {

@@ -59,6 +59,20 @@ public class SalesOrderResponse {
     private String customerId;
 
     @Schema(
+            description = "True when the order's customer is the business's Walk-in customer (the CASH house "
+                    + "account): the sale must be paid in full at checkout",
+            example = "false",
+            requiredMode = NOT_REQUIRED)
+    private boolean walkIn;
+
+    @Schema(
+            description = "Display name of the order's customer; null when the order has no customer or the "
+                    + "customer is not known yet",
+            example = "Walk-in customer",
+            requiredMode = NOT_REQUIRED)
+    private String customerDisplayName;
+
+    @Schema(
             description = "Identifier of the vehicle associated with the order",
             example = "01960003-0000-7000-8000-000000000080",
             requiredMode = NOT_REQUIRED)

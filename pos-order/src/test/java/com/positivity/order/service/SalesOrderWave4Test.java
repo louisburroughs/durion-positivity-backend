@@ -136,6 +136,11 @@ class SalesOrderWave4Test {
             inventoryCommandPublisherProvider =
                     org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class);
 
+    /** CAP:550 S8: no meter registry in these unit tests; refusals are logged but not counted. */
+    @SuppressWarnings("unchecked")
+    private final org.springframework.beans.factory.ObjectProvider<io.micrometer.core.instrument.MeterRegistry>
+            meterRegistryProvider = org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class);
+
     @BeforeEach
     void setUp() {
         salesOrderService = new SalesOrderServiceImpl(
@@ -156,7 +161,9 @@ class SalesOrderWave4Test {
                 orderNumberService,
                 new OrderTotalsCalculator(),
                 orderTaxService,
+                new com.positivity.order.internal.service.HouseAccountReplica(extCustomerRepository),
                 inventoryCommandPublisherProvider,
+                meterRegistryProvider,
                 java.time.Clock.systemUTC());
         when(salesOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(salesOrderRepository.findByCheckoutIdempotencyKey(anyString())).thenReturn(Optional.empty());
@@ -188,6 +195,7 @@ class SalesOrderWave4Test {
     private SalesOrder orderWithLine(SalesOrderStatus status) {
         SalesOrder order = SalesOrder.builder()
                 .orderId(ORDER_ID)
+                .customerId(CUSTOMER_ID)
                 .clerkId("clerk-1")
                 .terminalId("terminal-1")
                 .status(status)
@@ -301,7 +309,7 @@ class SalesOrderWave4Test {
         SalesOrder order = validatedCommercialOrder();
         grantAuthorities("order:order:charge_on_account");
 
-        CheckoutResult result = salesOrderService.checkout(ORDER_ID, "chk-1", "ON_ACCOUNT");
+        CheckoutResult result = salesOrderService.checkout(ORDER_ID, "chk-1", "ON_ACCOUNT", null);
 
         assertThat(result.summary().status()).isEqualTo("COMPLETED");
         assertThat(order.getAmountPaid()).isEqualByComparingTo(order.getGrandTotal());
@@ -318,18 +326,30 @@ class SalesOrderWave4Test {
         validatedCommercialOrder();
         grantAuthorities("order:order:checkout");
 
-        assertThatThrownBy(() -> salesOrderService.checkout(ORDER_ID, "chk-1", "ON_ACCOUNT"))
+        assertThatThrownBy(() -> salesOrderService.checkout(ORDER_ID, "chk-1", "ON_ACCOUNT", null))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
     @Test
-    @DisplayName("ONACC-003: anonymous order → 422 invalid customer")
+    @DisplayName("ONACC-003: anonymous order → 422 customer required, before the on-account gate (CAP:550 S8)")
     void onAccount_anonymous_rejected() {
+        SalesOrder order = orderWithLine(SalesOrderStatus.DRAFT);
+        order.setCustomerId(null);
+        when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
+        grantAuthorities("order:order:charge_on_account");
+
+        assertThatThrownBy(() -> salesOrderService.checkout(ORDER_ID, "chk-1", "ON_ACCOUNT", null))
+                .isInstanceOf(com.positivity.order.internal.exception.OrderCustomerRequiredException.class);
+    }
+
+    @Test
+    @DisplayName("ONACC-003b: customer never validated → 422 invalid customer")
+    void onAccount_unvalidatedCustomer_rejected() {
         SalesOrder order = orderWithLine(SalesOrderStatus.DRAFT);
         when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
         grantAuthorities("order:order:charge_on_account");
 
-        assertThatThrownBy(() -> salesOrderService.checkout(ORDER_ID, "chk-1", "ON_ACCOUNT"))
+        assertThatThrownBy(() -> salesOrderService.checkout(ORDER_ID, "chk-1", "ON_ACCOUNT", null))
                 .isInstanceOf(InvalidCustomerException.class);
     }
 
@@ -348,7 +368,7 @@ class SalesOrderWave4Test {
                         .build()));
         grantAuthorities("order:order:charge_on_account");
 
-        assertThatThrownBy(() -> salesOrderService.checkout(ORDER_ID, "chk-1", "ON_ACCOUNT"))
+        assertThatThrownBy(() -> salesOrderService.checkout(ORDER_ID, "chk-1", "ON_ACCOUNT", null))
                 .isInstanceOf(InvalidCustomerException.class);
     }
 
@@ -359,7 +379,7 @@ class SalesOrderWave4Test {
         when(extBillingRulesRepository.findById(CUSTOMER_ID)).thenReturn(Optional.empty());
         grantAuthorities("order:order:charge_on_account");
 
-        assertThatThrownBy(() -> salesOrderService.checkout(ORDER_ID, "chk-1", "ON_ACCOUNT"))
+        assertThatThrownBy(() -> salesOrderService.checkout(ORDER_ID, "chk-1", "ON_ACCOUNT", null))
                 .isInstanceOf(InvalidCustomerException.class);
     }
 
@@ -377,7 +397,7 @@ class SalesOrderWave4Test {
                         .build()));
         grantAuthorities("order:order:charge_on_account");
 
-        assertThatThrownBy(() -> salesOrderService.checkout(ORDER_ID, "chk-1", "ON_ACCOUNT"))
+        assertThatThrownBy(() -> salesOrderService.checkout(ORDER_ID, "chk-1", "ON_ACCOUNT", null))
                 .isInstanceOf(InvalidCustomerException.class);
     }
 
