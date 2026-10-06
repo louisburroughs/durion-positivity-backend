@@ -46,6 +46,10 @@ import org.springframework.transaction.annotation.Transactional;
  * on the CASH walk-in account (#2508, §4.4 item 4), where it stays unapplied on the payment, is raised
  * as a walk-in overpayment and listed by the unpaid walk-in sales read; the event is still processed.
  *
+ * <p>Since #2556 the payment's {@link PaymentIntentLock} is taken before the payment is read, and when this
+ * event records the payment, the refunds stored for it before then come off what the application or credit
+ * left ({@link PaymentApplicationService#releaseRefundsRecordedBeforePayment}).
+ *
  * <p>Payload (the submitted event's {@code payload} object): {@code paymentId}, {@code invoiceId},
  * {@code amountPaid} (&gt; 0), {@code currency} (the ledger's) and {@code paidAt} (ISO-8601 instant)
  * are required; {@code customerId} is optional and, when present, must match the invoice's customer.
@@ -77,6 +81,7 @@ public class InvoicePaymentEventProcessor {
     private final InvoiceBalanceCalculator invoiceBalanceCalculator;
     private final LedgerCurrency ledgerCurrency;
     private final Clock clock;
+    private final PaymentIntentLock paymentIntentLock;
 
     /**
      * Record one received event in the subledger and mark it {@code PROCESSED}, inside the caller's
@@ -111,9 +116,14 @@ public class InvoicePaymentEventProcessor {
         }
         UUID customerId = invoiceCustomer(invoice, payment);
 
+        // The payment's lock before reading it (#2556): a refund of it committing at the same time either is
+        // seen by the release below or finds the payment this event records.
+        paymentIntentLock.lock(payment.paymentId());
+
         // What this event asks to apply: the whole payment when this event records it, or what is
         // still unapplied when another path recorded it first.
         BigDecimal toApply = payment.amountPaid();
+        boolean recordedHere = false;
         Optional<ReceivablePayment> existing = receivablePaymentRepository.findById(payment.paymentId());
         if (existing.isPresent()) {
             ReceivablePayment recorded = existing.get();
@@ -150,6 +160,7 @@ public class InvoicePaymentEventProcessor {
                     event.getEventId(),
                     payment.invoiceId(),
                     null);
+            recordedHere = true;
         }
 
         // Deterministic per event, so a replay never applies or credits twice (AD-010).
@@ -167,6 +178,11 @@ public class InvoicePaymentEventProcessor {
                     ApplicationSource.INVOICE_PAYMENT);
         } else {
             paymentApplicationService.creditUnappliedPayment(payment.paymentId(), requestId);
+        }
+        if (recordedHere) {
+            // A refund stored before this event recorded the payment comes off what the application left
+            // (#2556), as it would had it arrived after; the status mark below commits with it.
+            paymentApplicationService.releaseRefundsRecordedBeforePayment(payment.paymentId(), event.getEventId());
         }
         markProcessed(event, payment, IdempotencyOutcome.NEW);
     }

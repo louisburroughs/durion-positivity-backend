@@ -121,6 +121,9 @@ class AutomaticPaymentApplicationPostgresIT extends PostgresCommittingTestBase {
     private PlatformTransactionManager transactionManager;
 
     @Autowired
+    private PaymentIntentLock paymentIntentLock;
+
+    @Autowired
     private Clock clock;
 
     @Autowired
@@ -246,6 +249,7 @@ class AutomaticPaymentApplicationPostgresIT extends PostgresCommittingTestBase {
                 automaticPaymentApplicationService,
                 meterRegistry,
                 transactionManager,
+                paymentIntentLock,
                 zoneResolver);
         customerId = nextUuid();
         invoiceId = nextUuid();

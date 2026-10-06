@@ -106,6 +106,7 @@ class SettlementEventsListenerTransactionTest {
                 automatic,
                 meterRegistry,
                 transactionManager,
+                org.mockito.Mockito.mock(PaymentIntentLock.class),
                 TestZoneResolvers.utc(Clock.systemUTC()));
     }
 

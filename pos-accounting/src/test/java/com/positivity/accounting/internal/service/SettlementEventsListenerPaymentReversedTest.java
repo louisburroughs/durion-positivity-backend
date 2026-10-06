@@ -71,6 +71,9 @@ class SettlementEventsListenerPaymentReversedTest {
     @Mock
     private ExtInvoiceDepositCreditApplicationRepository extInvoiceDepositCreditApplicationRepository;
 
+    @Mock
+    private PaymentIntentLock paymentIntentLock;
+
     private SimpleMeterRegistry meterRegistry;
 
     @BeforeEach
@@ -96,6 +99,7 @@ class SettlementEventsListenerPaymentReversedTest {
                 org.mockito.Mockito.mock(AutomaticPaymentApplicationService.class),
                 provider,
                 org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class),
+                paymentIntentLock,
                 TestZoneResolvers.utc(CLOCK));
     }
 
@@ -121,6 +125,18 @@ class SettlementEventsListenerPaymentReversedTest {
                 "USD",
                 "customer_request",
                 Instant.parse("2026-08-27T00:00:00Z"));
+    }
+
+    @Test
+    @DisplayName("#2556: the payment's lock is taken before the refund row is saved and released")
+    void refundTakesThePaymentLockFirst() {
+        listener().onPaymentEvent(envelope(EVENT_ID, reversal("REFUND", PAYMENT_INTENT_ID, INVOICE_ID, PARTY_ID)));
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(
+                paymentIntentLock, extInvoicePaymentReversalRepository, paymentApplicationService);
+        order.verify(paymentIntentLock).lock(PAYMENT_INTENT_ID);
+        order.verify(extInvoicePaymentReversalRepository).save(any());
+        order.verify(paymentApplicationService).releaseRefundedRemainder(eq(PAYMENT_INTENT_ID), any(), eq(REFUND_ID));
     }
 
     @Test

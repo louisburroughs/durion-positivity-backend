@@ -582,15 +582,26 @@ refund replica row and once per `refundId` (a replay is skipped). A payment left
 `FULLY_APPLIED`, leaves `unappliedPayments` and cannot be applied again. This holds for every customer's
 payment, not only CASH.
 
-A refund processed before its settlement fact (#2556) finds no payment yet: its row is stored, and the
-`payment.payment.settled` that records the payment releases it in the same transaction, in this order —
-record the payment, apply it automatically (S2), then take the stored refunds for that `paymentIntentId` off
-what the application left. That is the outcome the settlement-then-refund order gives. Only the settlement
-that recorded the payment releases (a replay under a new event id changes nothing). Both gaps are raised at
-WARN with the counter `accounting.refund.unreleased`: `reason=payment_not_recorded` (the refund came first;
-a payment that never arrives, e.g. held for its currency, is for a person) and `reason=exceeds_remainder`
-(the refund is more than the unapplied remainder: the applied part stays applied and the invoice still shows
-paid until a person reverses the application).
+A refund processed before the fact that records its payment (#2556) finds no payment yet: its row is
+stored, and whichever fact records the payment releases it in the same transaction — a
+`payment.payment.settled` fact (record the payment, apply it automatically (S2), then release) or an
+`INVOICE_PAYMENT` event (record, apply or credit, then release). The stored refunds for that
+`paymentIntentId` come off what the application left, which is the outcome the record-then-refund order
+gives, so either arrival order ends the same on both paths. Only the event that recorded the payment
+releases (a fact re-published under a new event id changes nothing; a redelivery is skipped by its processed
+mark, which commits with the payment). The settlement handler, the refund handler and the `INVOICE_PAYMENT`
+processor each take a Postgres transaction-scoped advisory lock on the `paymentIntentId` first
+(`PaymentIntentLock`, `pg_advisory_xact_lock` on the transaction's own connection; skipped on H2), so a
+refund and the fact recording its payment that commit at the same time cannot miss each other.
+
+The counter `accounting.refund.unreleased` counts refunds that released less than they refunded, by
+`reason`:
+
+| `reason` | Log | Meaning |
+| --- | --- | --- |
+| `payment_not_recorded` | WARN | The refund came first; the fact that records the payment releases it. A payment that never arrives (held for its currency, party-less) is for a person. |
+| `exceeds_remainder` | WARN | The payment had something unapplied and the refund is more than that: the applied part stays applied and the invoice still shows paid until a person reverses the application. |
+| `fully_applied` | INFO | The payment had nothing unapplied (the ordinary refund of a paid invoice). Counted, not raised. |
 
 **Excluded from customer views and measures** (§4.4 item 2; ADR-0057): aged receivables; collections (E2)
 `invoiced`, and applications to CASH invoices and their reversals out of `collected` /

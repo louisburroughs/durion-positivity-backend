@@ -88,6 +88,7 @@ class SettlementListenersReliabilityTest {
                 org.mockito.Mockito.mock(AutomaticPaymentApplicationService.class),
                 org.mockito.Mockito.mock(ObjectProvider.class),
                 org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class),
+                org.mockito.Mockito.mock(PaymentIntentLock.class),
                 TestZoneResolvers.utc(CLOCK));
     }
 

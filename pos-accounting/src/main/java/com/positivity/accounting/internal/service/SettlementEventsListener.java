@@ -119,6 +119,7 @@ public class SettlementEventsListener {
     private final LedgerCurrency ledgerCurrency;
     private final KafkaFactIngestionRecorder ingestionRecorder;
     private final AutomaticPaymentApplicationService automaticPaymentApplicationService;
+    private final PaymentIntentLock paymentIntentLock;
     private final AccountingCalendarZoneResolver zoneResolver;
     private final Counter payloadRejectedCounter;
     private final Counter paymentSettledUnmappableCounter;
@@ -140,6 +141,7 @@ public class SettlementEventsListener {
             AutomaticPaymentApplicationService automaticPaymentApplicationService,
             ObjectProvider<MeterRegistry> meterRegistry,
             PlatformTransactionManager transactionManager,
+            PaymentIntentLock paymentIntentLock,
             AccountingCalendarZoneResolver zoneResolver) {
         this.clock = clock;
         this.zoneResolver = zoneResolver;
@@ -152,6 +154,7 @@ public class SettlementEventsListener {
         this.ledgerCurrency = ledgerCurrency;
         this.ingestionRecorder = ingestionRecorder;
         this.automaticPaymentApplicationService = automaticPaymentApplicationService;
+        this.paymentIntentLock = paymentIntentLock;
         this.handlerTransaction = new TransactionTemplate(transactionManager);
         this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         MeterRegistry registry = meterRegistry.getIfAvailable();
@@ -356,7 +359,9 @@ public class SettlementEventsListener {
         // the same: the application is decided on the whole payment, and a refund only ever releases what
         // the application left. The payment, its application or outcome row, the release and the processed
         // mark commit together, so a failure anywhere rolls all of them back and the record is redelivered.
+        // The payment's lock first: a refund of it committing at the same time waits, and then sees the payment.
         handlerTransaction.executeWithoutResult(_ -> {
+            paymentIntentLock.lock(payload.paymentIntentId());
             ReceivablePayment payment = paymentApplicationService.handlePaymentCleared(
                     payload.paymentIntentId(),
                     customerId,
@@ -367,7 +372,7 @@ public class SettlementEventsListener {
                     payload.invoiceId(),
                     payload.methodType());
             automaticPaymentApplicationService.applySettled(payment, payload, eventId);
-            paymentApplicationService.releaseRefundsRecordedBeforeSettlement(payment.getPaymentId(), eventUuid);
+            paymentApplicationService.releaseRefundsRecordedBeforePayment(payment.getPaymentId(), eventUuid);
             markProcessed(eventId);
         });
     }
@@ -490,6 +495,11 @@ public class SettlementEventsListener {
         }
 
         handlerTransaction.executeWithoutResult(_ -> {
+            // The payment's lock first (#2556): the fact recording the payment, committing at the same time,
+            // either sees this refund row or has committed the payment this release then finds.
+            if (payload.paymentIntentId() != null) {
+                paymentIntentLock.lock(payload.paymentIntentId());
+            }
             extInvoicePaymentReversalRepository.save(ExtInvoicePaymentReversal.builder()
                     .refundId(payload.refundId())
                     .paymentIntentId(payload.paymentIntentId())

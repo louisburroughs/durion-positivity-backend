@@ -55,6 +55,9 @@ class InvoicePaymentEventProcessorTest {
     @Mock
     private PaymentApplicationReversalRepository reversalRepository;
 
+    @Mock
+    private PaymentIntentLock paymentIntentLock;
+
     private InvoicePaymentEventProcessor processor;
     private ExtInvoice invoice;
 
@@ -66,7 +69,8 @@ class InvoicePaymentEventProcessorTest {
                 reversalRepository,
                 invoiceBalanceCalculator,
                 new LedgerCurrency("USD"),
-                Clock.fixed(NOW, ZoneOffset.UTC));
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                paymentIntentLock);
         invoice = new ExtInvoice();
         invoice.setInvoiceId(INVOICE_ID);
         invoice.setPartyId(CUSTOMER_ID.toString());
@@ -110,6 +114,59 @@ class InvoicePaymentEventProcessorTest {
         assertThat(event.getDomainKeyId()).isEqualTo(PAYMENT_ID.toString());
         assertThat(event.getProcessedAt()).isEqualTo(NOW);
         assertThat(event.getJournalEntryId()).isNull();
+    }
+
+    @Test
+    @DisplayName("#2556: the payment's lock comes first, and refunds stored before this event recorded the payment"
+            + " are released after the application, under this event's id")
+    void recordingEventLocksFirstAndReleasesStoredRefundsAfterTheApplication() {
+        AccountingEvent event = event(validPayload());
+        stubEligibleInvoice(new BigDecimal("150.00"));
+        when(receivablePaymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.empty());
+
+        processor.process(event);
+
+        org.mockito.InOrder order =
+                org.mockito.Mockito.inOrder(paymentIntentLock, receivablePaymentRepository, paymentApplicationService);
+        order.verify(paymentIntentLock).lock(PAYMENT_ID);
+        order.verify(receivablePaymentRepository).findById(PAYMENT_ID);
+        order.verify(paymentApplicationService)
+                .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
+        order.verify(paymentApplicationService).applyAutomatically(any(), any(), any(), any(), any(), any());
+        order.verify(paymentApplicationService).releaseRefundsRecordedBeforePayment(PAYMENT_ID, EVENT_ID);
+    }
+
+    @Test
+    @DisplayName("#2556: stored refunds are released after a whole-payment credit too")
+    void paidInFullInvoice_releasesStoredRefundsAfterTheCredit() {
+        AccountingEvent event = event(validPayload());
+        stubEligibleInvoice(BigDecimal.ZERO);
+        when(receivablePaymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.empty());
+
+        processor.process(event);
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(paymentApplicationService);
+        order.verify(paymentApplicationService).creditUnappliedPayment(PAYMENT_ID, "INVOICE_PAYMENT:" + EVENT_ID);
+        order.verify(paymentApplicationService).releaseRefundsRecordedBeforePayment(PAYMENT_ID, EVENT_ID);
+    }
+
+    @Test
+    @DisplayName("#2556: a payment this event did not record (another path, or a replay of this event) releases"
+            + " nothing; the lock is still taken")
+    void paymentNotRecordedHere_releasesNothing() {
+        AccountingEvent event = event(validPayload());
+        stubEligibleInvoice(new BigDecimal("150.00"));
+        ReceivablePayment other = recorded(new BigDecimal("100.00"), UUID.randomUUID());
+        other.setUnappliedAmount(new BigDecimal("60.00"));
+        when(receivablePaymentRepository.findById(PAYMENT_ID))
+                .thenReturn(Optional.of(other))
+                .thenReturn(Optional.of(recorded(new BigDecimal("100.00"), EVENT_ID)));
+
+        processor.process(event);
+        processor.process(event(validPayload()));
+
+        verify(paymentIntentLock, org.mockito.Mockito.times(2)).lock(PAYMENT_ID);
+        verify(paymentApplicationService, never()).releaseRefundsRecordedBeforePayment(any(), any());
     }
 
     @Test

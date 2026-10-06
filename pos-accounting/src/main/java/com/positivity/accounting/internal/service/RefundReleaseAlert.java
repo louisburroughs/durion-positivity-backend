@@ -15,12 +15,17 @@ import org.springframework.stereotype.Component;
  * #2556): a WARN and the counter {@code accounting.refund.unreleased}, tagged by reason.
  *
  * <ul>
- *   <li>{@code payment_not_recorded} — the refund arrived before the payment was recorded (the refund
- *       fact was processed before its settlement fact). Nothing is lost: the refund row is stored, and the
- *       settlement that records the payment takes it off then. A count that keeps rising, or a payment
- *       that never arrives (held for its currency, party-less), is for a person.
- *   <li>{@code exceeds_remainder} — the refund is more than the payment still has unapplied. The applied
- *       part stays applied and the invoice still shows paid; a person reverses the application.
+ *   <li>{@code payment_not_recorded} (WARN) — the refund arrived before the payment was recorded (the
+ *       refund fact was processed before the settlement fact or {@code INVOICE_PAYMENT} event that records
+ *       it). Nothing is lost: the refund row is stored, and the event that records the payment takes it off
+ *       then. A count that keeps rising, or a payment that never arrives (held for its currency,
+ *       party-less), is for a person.
+ *   <li>{@code exceeds_remainder} (WARN) — the payment still had something unapplied, and the refund is
+ *       more than that. The applied part stays applied and the invoice still shows paid; a person reverses
+ *       the application.
+ *   <li>{@code fully_applied} (INFO) — the payment had nothing unapplied: the ordinary refund of a paid
+ *       invoice, which pos-invoice reverses on its side. Counted so the rate is visible, never raised, so it
+ *       does not drown the two above.
  * </ul>
  */
 @Slf4j
@@ -33,14 +38,19 @@ public class RefundReleaseAlert {
 
     static final String REASON_EXCEEDS_REMAINDER = "exceeds_remainder";
 
+    static final String REASON_FULLY_APPLIED = "fully_applied";
+
     private final @Nullable Counter paymentNotRecorded;
 
     private final @Nullable Counter exceedsRemainder;
+
+    private final @Nullable Counter fullyApplied;
 
     public RefundReleaseAlert(ObjectProvider<MeterRegistry> meterRegistry) {
         MeterRegistry registry = meterRegistry.getIfAvailable();
         this.paymentNotRecorded = registry == null ? null : counter(registry, REASON_PAYMENT_NOT_RECORDED);
         this.exceedsRemainder = registry == null ? null : counter(registry, REASON_EXCEEDS_REMAINDER);
+        this.fullyApplied = registry == null ? null : counter(registry, REASON_FULLY_APPLIED);
     }
 
     private static Counter counter(MeterRegistry registry, String reason) {
@@ -94,6 +104,24 @@ public class RefundReleaseAlert {
                 refunded,
                 released,
                 refunded.subtract(released),
+                source);
+    }
+
+    /**
+     * The payment had nothing unapplied, so nothing was released: the refund is of the applied part.
+     *
+     * @param paymentId the refunded payment
+     * @param refunded  what was refunded
+     * @param source    the refund, or the refunds a recording event released, for the log
+     */
+    public void fullyApplied(@NonNull UUID paymentId, @NonNull BigDecimal refunded, @NonNull String source) {
+        if (fullyApplied != null) {
+            fullyApplied.increment();
+        }
+        log.info(
+                "Refund of a payment with nothing unapplied | paymentId={} | refunded={} | {} | nothing released",
+                paymentId,
+                refunded,
                 source);
     }
 }

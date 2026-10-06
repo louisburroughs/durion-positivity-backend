@@ -118,9 +118,10 @@ public interface PaymentApplicationService {
      * This is how a CASH walk-in excess, refunded through pos-invoice, leaves the unpaid walk-in sales read.
      *
      * <p>Runs in the caller's transaction (the refund replica's handler, whose {@code refundId} key makes
-     * it once per refund). A payment accounting has not recorded yet is left to its settlement ({@link
-     * #releaseRefundsRecordedBeforeSettlement}) and raised at WARN; a refund above the unapplied remainder
-     * releases the remainder only and is raised at WARN ({@code RefundReleaseAlert}, #2556).
+     * it once per refund). A payment accounting has not recorded yet is left to the fact that records it
+     * ({@link #releaseRefundsRecordedBeforePayment}) and raised at WARN; a refund above a non-zero unapplied
+     * remainder releases the remainder only and is raised at WARN; a refund of a payment with nothing
+     * unapplied is counted at INFO ({@code RefundReleaseAlert}, #2556).
      *
      * @param paymentId      the refunded payment ({@code paymentIntentId})
      * @param refundedAmount the refunded amount, above zero
@@ -132,22 +133,31 @@ public interface PaymentApplicationService {
             @NonNull UUID paymentId, @NonNull BigDecimal refundedAmount, @NonNull UUID refundId);
 
     /**
-     * The other half of {@link #releaseRefundedRemainder} for a refund processed before its settlement fact
-     * (#2556): when the settlement records the payment, the refunds already stored for it come off what the
-     * automatic application left unapplied, never below zero, with any excess raised at WARN. Called after
-     * the automatic application in the settlement's transaction, so the outcome is the one the settlement
-     * then refund order gives.
+     * The other half of {@link #releaseRefundedRemainder} for a refund processed before the fact that
+     * records its payment (#2556): when a {@code payment.payment.settled} fact or an {@code INVOICE_PAYMENT}
+     * event records the payment, the refunds already stored for it come off what that path's application
+     * left unapplied, never below zero. Called after the application, in the recording transaction, so the
+     * outcome is the one the record-then-refund order gives. Both callers, and the refund handler, take
+     * {@code PaymentIntentLock} first, so a refund and a recording that commit at the same time cannot both
+     * miss each other.
      *
-     * <p>Only the settlement that recorded the payment releases anything ({@code sourceEventId} equals
-     * {@code settlementEventId}): a payment recorded earlier was there for every later refund, which
-     * released itself, and a settlement replayed under a new event id changes nothing.
+     * <p>Only the event that recorded the payment releases anything ({@code sourceEventId} equals {@code
+     * recordingEventId}): a payment recorded earlier was there for every later refund, which released
+     * itself, and the same payment re-published under a new event id changes nothing.
      *
-     * @param paymentId         the settled payment ({@code paymentIntentId})
-     * @param settlementEventId the settlement fact's event id
+     * <p><strong>Not idempotent on its own.</strong> A rerun of the recording event under the same id
+     * passes the {@code sourceEventId} check and would release the stored refunds a second time. That is
+     * safe only because the recording event's processed mark ({@code processed_events} for the Kafka fact,
+     * the {@code accounting_event} status for {@code INVOICE_PAYMENT}) commits atomically with the payment,
+     * so a redelivery is skipped before it gets here. Any path that reruns a recording event while bypassing
+     * that mark (a manual replay, a reprocess that ignores it) must not call this.
+     *
+     * @param paymentId        the recorded payment ({@code paymentIntentId})
+     * @param recordingEventId the id of the event that recorded it
      * @return the amount taken off the unapplied remainder; zero when none was
      */
     @NonNull
-    BigDecimal releaseRefundsRecordedBeforeSettlement(@NonNull UUID paymentId, @NonNull UUID settlementEventId);
+    BigDecimal releaseRefundsRecordedBeforePayment(@NonNull UUID paymentId, @NonNull UUID recordingEventId);
 
     void voidPayment(@NonNull UUID paymentId);
 
