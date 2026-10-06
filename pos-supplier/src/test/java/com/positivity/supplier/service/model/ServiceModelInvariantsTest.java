@@ -183,10 +183,22 @@ class ServiceModelInvariantsTest {
     @Nested
     class VendorProfileRequestInvariants {
 
+        private static final java.util.UUID VENDOR_ID =
+                java.util.UUID.fromString("018f0000-0000-7000-8000-0000000005a1");
+
+        @Test
+        void vendorIdIsRequired() {
+            // #2516 AC 6: a profile always belongs to a vendor; a body without one is a 400 VALIDATION_ERROR.
+            assertThatThrownBy(
+                            () -> new VendorProfileRequest("m", "M", true, false, null, null, null, null, null, null))
+                    .isInstanceOf(SupplierValidationException.class)
+                    .hasMessageContaining("vendorId");
+        }
+
         @Test
         void nullProtocolDefaultsMeanDeploymentDefault() {
-            VendorProfileRequest request =
-                    new VendorProfileRequest("michelin-eu", "Michelin EU", true, false, null, null, null, null, null);
+            VendorProfileRequest request = new VendorProfileRequest(
+                    "michelin-eu", "Michelin EU", true, false, null, null, null, null, null, VENDOR_ID);
 
             assertThat(request.connectTimeoutMillis()).isNull();
             assertThat(request.maxRetries()).isNull();
@@ -197,7 +209,8 @@ class ServiceModelInvariantsTest {
         @Test
         void rejectsBlankSandboxBaseUrlOverride() {
             // A blank override is not "absent": it would resolve to no host at call time.
-            assertThatThrownBy(() -> new VendorProfileRequest("m", "M", true, true, null, null, null, "  ", null))
+            assertThatThrownBy(() ->
+                            new VendorProfileRequest("m", "M", true, true, null, null, null, "  ", null, VENDOR_ID))
                     .isInstanceOf(SupplierValidationException.class)
                     .hasMessageContaining("sandboxBaseUrlOverride");
         }
@@ -205,7 +218,16 @@ class ServiceModelInvariantsTest {
         @Test
         void acceptsSandboxOverlayFields() {
             VendorProfileRequest request = new VendorProfileRequest(
-                    "m", "M", true, true, null, null, null, "https://sandbox.example/api", RetryBackoff.FIXED);
+                    "m",
+                    "M",
+                    true,
+                    true,
+                    null,
+                    null,
+                    null,
+                    "https://sandbox.example/api",
+                    RetryBackoff.FIXED,
+                    VENDOR_ID);
 
             assertThat(request.sandboxBaseUrlOverride()).isEqualTo("https://sandbox.example/api");
             assertThat(request.retryBackoff()).isEqualTo(RetryBackoff.FIXED);
@@ -213,17 +235,21 @@ class ServiceModelInvariantsTest {
 
         @Test
         void rejectsNonPositiveTimeoutsAndNegativeRetries() {
-            assertThatThrownBy(() -> new VendorProfileRequest("m", "M", true, false, 0, null, null, null, null))
+            assertThatThrownBy(
+                            () -> new VendorProfileRequest("m", "M", true, false, 0, null, null, null, null, VENDOR_ID))
                     .isInstanceOf(SupplierValidationException.class)
                     .hasMessageContaining("connectTimeoutMillis");
-            assertThatThrownBy(() -> new VendorProfileRequest("m", "M", true, false, null, -1, null, null, null))
+            assertThatThrownBy(() ->
+                            new VendorProfileRequest("m", "M", true, false, null, -1, null, null, null, VENDOR_ID))
                     .isInstanceOf(SupplierValidationException.class)
                     .hasMessageContaining("readTimeoutMillis");
-            assertThatThrownBy(() -> new VendorProfileRequest("m", "M", true, false, null, null, -1, null, null))
+            assertThatThrownBy(() ->
+                            new VendorProfileRequest("m", "M", true, false, null, null, -1, null, null, VENDOR_ID))
                     .isInstanceOf(SupplierValidationException.class)
                     .hasMessageContaining("maxRetries");
             // Zero retries is a legal budget (no pre-send retries), unlike zero timeouts.
-            assertThat(new VendorProfileRequest("m", "M", true, false, null, null, 0, null, null).maxRetries())
+            assertThat(new VendorProfileRequest("m", "M", true, false, null, null, 0, null, null, VENDOR_ID)
+                            .maxRetries())
                     .isZero();
         }
     }

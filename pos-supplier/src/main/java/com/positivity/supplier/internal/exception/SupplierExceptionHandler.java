@@ -162,6 +162,18 @@ public class SupplierExceptionHandler {
         return build(HttpStatus.UNPROCESSABLE_ENTITY, "SUPPLIER_INVOICE_FETCH_FAILED", ex.getMessage(), request);
     }
 
+    /** A domain rule refusing a caller who holds the permission, e.g. remit-to self-approval (#2516). */
+    @ExceptionHandler(SupplierForbiddenException.class)
+    public ResponseEntity<ApiError> handleForbidden(SupplierForbiddenException ex, HttpServletRequest request) {
+        return build(HttpStatus.FORBIDDEN, ex.getCode(), ex.getMessage(), request);
+    }
+
+    /** A body naming a vendor that does not exist in the tenant, or an inactive one (#2516). */
+    @ExceptionHandler(SupplierUnprocessableException.class)
+    public ResponseEntity<ApiError> handleUnprocessable(SupplierUnprocessableException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNPROCESSABLE_ENTITY, ex.getCode(), ex.getMessage(), request);
+    }
+
     /** Configuration-state collisions, including YAML-managed profile mutation (ADR-0050 §6). */
     @ExceptionHandler(SupplierConflictException.class)
     public ResponseEntity<ApiError> handleConflict(SupplierConflictException ex, HttpServletRequest request) {

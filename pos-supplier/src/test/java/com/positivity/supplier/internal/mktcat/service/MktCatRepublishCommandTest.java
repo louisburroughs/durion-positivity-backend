@@ -23,10 +23,12 @@ import com.positivity.supplier.internal.repository.ProcessedEventRepository;
 import com.positivity.supplier.internal.repository.SupplierMktCatVariantRepository;
 import com.positivity.supplier.internal.repository.SupplierOutboxEventRepository;
 import com.positivity.supplier.internal.service.SupplierOutboxEventWriter;
+import com.positivity.supplier.internal.service.SupplierOutboxReplayService;
 import jakarta.persistence.EntityManager;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -150,6 +152,8 @@ class MktCatRepublishCommandTest extends PostgresSliceTestBase {
                 mock(PriceCatalogRepublisher.class),
                 republisher,
                 mock(OrderNotDispatchedPublisher.class),
+                mock(SupplierOutboxReplayService.class),
+                Duration.ofDays(30),
                 transactionManager);
     }
 

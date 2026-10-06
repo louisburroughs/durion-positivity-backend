@@ -5,7 +5,11 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 /** Drain queue for supplier domain events (ADR-0044 §4). */
 public interface SupplierOutboxEventRepository extends JpaRepository<SupplierOutboxEventEntity, UUID> {
@@ -31,4 +35,20 @@ public interface SupplierOutboxEventRepository extends JpaRepository<SupplierOut
 
         int getAttempts();
     }
+
+    /**
+     * Re-queues {@code tenantId}'s already-published rows of one topic created in {@code [since, until)}
+     * (ADR-0044 §4 drift repair, #2516). The publisher re-sends them with their original envelopes — and so
+     * their original event ids, which consumers dedupe on. A global table: the tenant is a column here, not a
+     * policy, so the filter is explicit.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update SupplierOutboxEventEntity e set e.publishedAt = null, e.attempts = 0, e.lastError = null"
+            + " where e.publishedAt is not null and e.tenantId = :tenantId and e.topic = :topic"
+            + " and e.createdAt >= :since and e.createdAt < :until")
+    int markForReplayBetween(
+            @Param("tenantId") @NonNull UUID tenantId,
+            @Param("topic") @NonNull String topic,
+            @Param("since") @NonNull Instant since,
+            @Param("until") @NonNull Instant until);
 }

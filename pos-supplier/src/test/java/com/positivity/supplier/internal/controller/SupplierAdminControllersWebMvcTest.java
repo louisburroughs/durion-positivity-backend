@@ -106,6 +106,7 @@ class SupplierAdminControllersWebMvcTest {
 
     private static final UUID PROFILE_ID = UUID.fromString("018f0000-0000-7000-8000-000000000501");
     private static final UUID CHILD_ID = UUID.fromString("018f0000-0000-7000-8000-000000000502");
+    private static final UUID VENDOR_ID = UUID.fromString("018f0000-0000-7000-8000-000000000503");
     private static final String BASE = "/v1/supplier/admin/profiles";
     private static final String CORRELATION_HEADER = "X-Correlation-Id";
 
@@ -134,14 +135,17 @@ class SupplierAdminControllersWebMvcTest {
                 30000,
                 3,
                 "https://sandbox.michelin.example/a25",
-                RetryBackoff.EXPONENTIAL);
+                RetryBackoff.EXPONENTIAL,
+                VENDOR_ID,
+                "MICHELIN",
+                "Michelin");
     }
 
     private static String profileJson() {
         return """
                 {"supplierRef": "michelin-eu", "displayName": "Michelin EU", "enabled": true,
                  "sandbox": false, "connectTimeoutMillis": 5000, "readTimeoutMillis": 30000,
-                 "maxRetries": 3}
+                 "maxRetries": 3, "vendorId": "018f0000-0000-7000-8000-000000000503"}
                 """;
     }
 
@@ -185,19 +189,62 @@ class SupplierAdminControllersWebMvcTest {
             assertThat(deserialized.displayName()).isEqualTo("Michelin EU");
             assertThat(deserialized.enabled()).isTrue();
             assertThat(deserialized.maxRetries()).isEqualTo(3);
+            assertThat(deserialized.vendorId()).isEqualTo(VENDOR_ID);
         }
 
         @Test
         void getAndListProfilesSerializeTheView() throws Exception {
             when(adminService.getProfile(PROFILE_ID)).thenReturn(profileView());
-            when(adminService.listProfiles()).thenReturn(List.of(profileView()));
+            when(adminService.listProfiles(null)).thenReturn(List.of(profileView()));
+            when(adminService.listProfiles(VENDOR_ID)).thenReturn(List.of(profileView()));
 
             mockMvc.perform(authed(get(BASE + "/{id}", PROFILE_ID), SupplierPermissions.PROFILE_READ))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.supplierRef").value("michelin-eu"));
+                    .andExpect(jsonPath("$.supplierRef").value("michelin-eu"))
+                    .andExpect(jsonPath("$.vendorId").value(VENDOR_ID.toString()))
+                    .andExpect(jsonPath("$.vendorNumber").value("MICHELIN"))
+                    .andExpect(jsonPath("$.vendorDisplayName").value("Michelin"));
             mockMvc.perform(authed(get(BASE), SupplierPermissions.PROFILE_READ))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$[0].vendorProfileId").value(PROFILE_ID.toString()));
+            mockMvc.perform(authed(get(BASE).param("vendorId", VENDOR_ID.toString()), SupplierPermissions.PROFILE_READ))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$[0].vendorId").value(VENDOR_ID.toString()));
+            verify(adminService).listProfiles(VENDOR_ID);
+        }
+
+        @Test
+        void createProfileWithoutVendorIdIs400ValidationError() throws Exception {
+            mockMvc.perform(authed(
+                            post(BASE).contentType(MediaType.APPLICATION_JSON).content("""
+                                            {"supplierRef": "michelin-eu", "displayName": "Michelin EU",
+                                             "enabled": true, "sandbox": false}
+                                            """),
+                            SupplierPermissions.PROFILE_WRITE))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        }
+
+        @Test
+        void createProfileNamingAnUnknownOrInactiveVendorIs422() throws Exception {
+            when(adminService.createProfile(any()))
+                    .thenThrow(new com.positivity.supplier.internal.exception.SupplierUnprocessableException(
+                            com.positivity.supplier.internal.exception.SupplierUnprocessableException.VENDOR_NOT_FOUND,
+                            "Vendor does not exist"))
+                    .thenThrow(new com.positivity.supplier.internal.exception.SupplierUnprocessableException(
+                            com.positivity.supplier.internal.exception.SupplierUnprocessableException.VENDOR_INACTIVE,
+                            "Vendor is inactive"));
+
+            mockMvc.perform(authed(
+                            post(BASE).contentType(MediaType.APPLICATION_JSON).content(profileJson()),
+                            SupplierPermissions.PROFILE_WRITE))
+                    .andExpect(status().is(422))
+                    .andExpect(jsonPath("$.code").value("SUPPLIER_VENDOR_NOT_FOUND"));
+            mockMvc.perform(authed(
+                            post(BASE).contentType(MediaType.APPLICATION_JSON).content(profileJson()),
+                            SupplierPermissions.PROFILE_WRITE))
+                    .andExpect(status().is(422))
+                    .andExpect(jsonPath("$.code").value("SUPPLIER_VENDOR_INACTIVE"));
         }
 
         @Test

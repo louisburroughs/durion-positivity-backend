@@ -8,6 +8,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -30,6 +31,9 @@ import org.jspecify.annotations.Nullable;
  * @param failureDetail operator-facing failure summary; {@code null} on success. Never a credential
  * @param responseHeaders control-flow response headers, restricted to
  *     {@link #CARRIED_RESPONSE_HEADERS}; empty when none were present
+ * @param exchangeId the exchange-audit id of the final attempt (#2516), so a caller can name the
+ *     exchange a document came from as provenance; {@code null} when no attempt was recorded (a
+ *     response built outside the transport, e.g. in a test)
  */
 public record SupplierHttpResponse(
         @NonNull ExchangeOutcome outcome,
@@ -39,7 +43,8 @@ public record SupplierHttpResponse(
         int attempts,
         @NonNull Duration totalDuration,
         @Nullable String failureDetail,
-        @NonNull Map<String, String> responseHeaders) {
+        @NonNull Map<String, String> responseHeaders,
+        @Nullable UUID exchangeId) {
 
     /**
      * The only response headers carried out of the transport, matched case-insensitively.
@@ -93,7 +98,23 @@ public record SupplierHttpResponse(
             int attempts,
             @NonNull Duration totalDuration,
             @Nullable String failureDetail) {
-        this(outcome, httpStatus, body, correlationId, attempts, totalDuration, failureDetail, Map.of());
+        this(outcome, httpStatus, body, correlationId, attempts, totalDuration, failureDetail, Map.of(), null);
+    }
+
+    /**
+     * Builds a response with headers but no recorded exchange — for responses built outside the transport,
+     * which never wrote an exchange-audit row and so have no id to report.
+     */
+    public SupplierHttpResponse(
+            @NonNull ExchangeOutcome outcome,
+            @Nullable Integer httpStatus,
+            @Nullable String body,
+            @NonNull String correlationId,
+            int attempts,
+            @NonNull Duration totalDuration,
+            @Nullable String failureDetail,
+            @NonNull Map<String, String> responseHeaders) {
+        this(outcome, httpStatus, body, correlationId, attempts, totalDuration, failureDetail, responseHeaders, null);
     }
 
     /**

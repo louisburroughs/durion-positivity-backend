@@ -4,6 +4,7 @@ import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.DomainTopics;
 import com.positivity.domainevents.supplier.SupplierInvoiceLine;
 import com.positivity.domainevents.supplier.SupplierInvoiceReceivedV1;
+import com.positivity.domainevents.supplier.SupplierInvoiceTax;
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.supplier.internal.domain.model.SupplierInvoice;
 import com.positivity.supplier.internal.entity.SupplierInvoiceEntity;
@@ -18,6 +19,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,16 +54,33 @@ public class InvoiceImporter {
     private final Clock clock;
 
     /**
+     * Where a fetched batch came from (#2516): the profile and its vendor, and the provenance the
+     * invoice fact carries.
+     *
+     * @param vendorProfileId the fetching profile
+     * @param vendorId that profile's vendor; stored on every invoice and always set on the fact
+     * @param supplierRef the profile's alias at fetch time
+     * @param channel the binding's ADR-0051 protocol family, e.g. {@code EDIWHEEL_B}
+     * @param exchangeId the exchange-audit id of the exchange that returned the batch; provenance only
+     */
+    public record InvoiceSource(
+            @NonNull UUID vendorProfileId,
+            @NonNull UUID vendorId,
+            @NonNull String supplierRef,
+            @NonNull String channel,
+            @Nullable UUID exchangeId) {}
+
+    /**
      * Stores and publishes every invoice in a fetched batch that has not been seen before.
      *
      * @return how many were new; the rest were already held from an earlier, overlapping window
      */
     @Transactional
-    public int importInvoices(
-            @NonNull UUID vendorProfileId, @NonNull String supplierRef, @NonNull List<SupplierInvoice> fetched) {
+    public int importInvoices(@NonNull InvoiceSource source, @NonNull List<SupplierInvoice> fetched) {
+        String supplierRef = source.supplierRef();
         int imported = 0;
         for (SupplierInvoice invoice : fetched) {
-            if (importOne(vendorProfileId, supplierRef, invoice)) {
+            if (importOne(source, invoice)) {
                 imported++;
             }
         }
@@ -75,7 +94,9 @@ public class InvoiceImporter {
         return imported;
     }
 
-    private boolean importOne(UUID vendorProfileId, String supplierRef, SupplierInvoice invoice) {
+    private boolean importOne(InvoiceSource source, SupplierInvoice invoice) {
+        UUID vendorProfileId = source.vendorProfileId();
+        String supplierRef = source.supplierRef();
         boolean alreadyHeld = invoiceRepository
                 .findByVendorProfileIdAndVendorInvoiceNumberAndInvoiceDate(
                         vendorProfileId, invoice.vendorInvoiceNumber(), invoice.invoiceDate())
@@ -91,6 +112,7 @@ public class InvoiceImporter {
         Instant now = Instant.now(clock);
         SupplierInvoiceEntity entity = SupplierInvoiceEntity.builder()
                 .vendorProfileId(vendorProfileId)
+                .vendorId(source.vendorId())
                 .supplierRef(supplierRef)
                 .vendorInvoiceNumber(invoice.vendorInvoiceNumber())
                 .invoiceDate(invoice.invoiceDate())
@@ -131,7 +153,7 @@ public class InvoiceImporter {
                     invoice.vendorInvoiceNumber());
             return false;
         }
-        publish(saved, invoice, now);
+        publish(saved, invoice, source, now);
         log.info("Imported vendor invoice {} ({}) from {}", invoice.vendorInvoiceNumber(), invoice.type(), supplierRef);
         return true;
     }
@@ -152,7 +174,8 @@ public class InvoiceImporter {
                 .orElse(null);
     }
 
-    private void publish(SupplierInvoiceEntity saved, SupplierInvoice invoice, Instant occurredAt) {
+    private void publish(
+            SupplierInvoiceEntity saved, SupplierInvoice invoice, InvoiceSource source, Instant occurredAt) {
         List<SupplierInvoiceLine> lines = new ArrayList<>(invoice.lines().size());
         for (SupplierInvoice.Line line : invoice.lines()) {
             lines.add(new SupplierInvoiceLine(
@@ -177,7 +200,19 @@ public class InvoiceImporter {
                 saved.getTotalGrossAmount(),
                 saved.getVendorOrderReference(),
                 occurredAt,
-                lines);
+                lines,
+                // Additive within v1 (#2516, ADR-0044 §3): the vendor is always set from now on; channel and
+                // exchange are provenance only; terms and the tax split are whatever the document stated.
+                saved.getVendorId(),
+                source.channel(),
+                source.exchangeId(),
+                invoice.dueDate(),
+                invoice.paymentTerms(),
+                invoice.taxes() == null
+                        ? null
+                        : invoice.taxes().stream()
+                                .map(tax -> new SupplierInvoiceTax(tax.taxType(), tax.amount()))
+                                .toList());
 
         outboxEventWriter.publish(
                 DomainTopics.events("supplier"),
