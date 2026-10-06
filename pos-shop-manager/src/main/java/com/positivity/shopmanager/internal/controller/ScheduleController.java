@@ -140,8 +140,11 @@ public class ScheduleController {
             description = """
                     Returns, for every date in [from, to], the location's day status (OK, CLOSED, HOLIDAY or \
                     UNAVAILABLE) and, on an OK date, every active bay with its occupied-minutes total and an \
-                    hourly occupancy count array — never appointment identifiers, customer snapshots, titles or \
-                    conflict details.
+                    hourly occupancy count array, plus every rostered technician with hourly on-duty and \
+                    assigned-appointment counts aligned with those bay slots, and a response-level \
+                    staffingStatus saying whether rostering is known at all — never appointment identifiers, \
+                    customer snapshots, titles or conflict details. Technician entries say who is on duty and \
+                    busy, not who is certified for a job; use searchOpenings for job eligibility.
                     Use this tool to render a week or month capacity calendar in one call; use viewSchedule \
                     instead when a single day's full appointment board, including conflicts, is needed.
                     Preconditions: the day window and hours come from the location's replicated timezone and \

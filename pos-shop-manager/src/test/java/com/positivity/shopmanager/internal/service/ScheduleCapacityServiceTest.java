@@ -504,9 +504,9 @@ class ScheduleCapacityServiceTest {
                 .as("42 days must not cost more queries than 1 day")
                 .isEqualTo(queriesForOneDay);
         assertThat(queriesForOneDay)
-                .as("location replica, active bays, appointments in range, bays held (#2530): four fixed "
-                        + "statements")
-                .isEqualTo(4L);
+                .as("location replica, active bays, appointments in range, bays held (#2530), staffing "
+                        + "(#2527): five fixed statements")
+                .isEqualTo(5L);
     }
 
     private long measureCapacityStatements(Statistics statistics, UUID locationId, LocalDate from, LocalDate to) {
@@ -787,8 +787,8 @@ class ScheduleCapacityServiceTest {
                 .isEqualTo(queriesForOneDay);
         assertThat(queriesForOneDay)
                 .as("location replica, active bays, appointments in range, batched workorder actuals, "
-                        + "bays held (#2530): five fixed statements")
-                .isEqualTo(5L);
+                        + "bays held (#2530), staffing (#2527): six fixed statements")
+                .isEqualTo(6L);
     }
 
     // -------------------------------------------------------------------------
@@ -2035,9 +2035,9 @@ class ScheduleCapacityServiceTest {
         long queriesForFortyTwoDays = measureCapacityStatements(statistics, locationId, MONDAY, MONDAY.plusDays(41));
 
         assertThat(queriesForFourDays)
-                .as("location replica, active bays, appointments, workorder actuals, bays held (#2530): "
-                        + "five statements")
-                .isEqualTo(5L);
+                .as("location replica, active bays, appointments, workorder actuals, bays held (#2530), "
+                        + "staffing (#2527): six statements")
+                .isEqualTo(6L);
         assertThat(queriesForFortyTwoDays)
                 .as("constant in the number of days, malformed entries and all")
                 .isEqualTo(queriesForFourDays);
@@ -2170,9 +2170,9 @@ class ScheduleCapacityServiceTest {
         long queriesForFortyTwoDays = measureCapacityStatements(statistics, locationId, MONDAY, MONDAY.plusDays(41));
 
         assertThat(queriesForFourDays)
-                .as("location replica, active bays, appointments, workorder actuals, bays held (#2530): "
-                        + "five statements")
-                .isEqualTo(5L);
+                .as("location replica, active bays, appointments, workorder actuals, bays held (#2530), "
+                        + "staffing (#2527): six statements")
+                .isEqualTo(6L);
         assertThat(queriesForFortyTwoDays)
                 .as("the disjunction changes which rows come back, never how many statements")
                 .isEqualTo(queriesForFourDays);
