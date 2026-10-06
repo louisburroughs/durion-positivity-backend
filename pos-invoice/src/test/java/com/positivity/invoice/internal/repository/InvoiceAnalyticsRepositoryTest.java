@@ -2,6 +2,7 @@ package com.positivity.invoice.internal.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.positivity.invoice.internal.entity.ExtCustomerPartyReplica;
 import com.positivity.invoice.internal.entity.ExtWorkorderReplica;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
@@ -168,6 +169,55 @@ class InvoiceAnalyticsRepositoryTest {
         assertThat(rows).hasSize(1);
         assertThat(rows.getFirst().getRevenue()).isEqualByComparingTo("2000.0000");
         assertThat(rows.getFirst().getInvoiceCount()).isEqualTo(1);
+    }
+
+    private ExtCustomerPartyReplica party(UUID partyId, String displayName, String houseAccount) {
+        return ExtCustomerPartyReplica.builder()
+                .partyId(partyId)
+                .partyType("COMMERCIAL")
+                .displayName(displayName)
+                .status("ACTIVE")
+                .houseAccount(houseAccount)
+                .aggregateVersion(1)
+                .updatedAt(IN_WINDOW)
+                .build();
+    }
+
+    /**
+     * CAP:550 S9 AC7 (spec §4.4 item 2, AW12): walk-in sales on the tenant's CASH house account are
+     * not customer revenue — only the two named customers are listed, even though the CASH account
+     * out-earns both. The exclusion keys on the replica's {@code houseAccount} flag, never on the
+     * display name; an ordinary party with the same display name still ranks.
+     */
+    @Test
+    void excludesHouseAccountPartiesFromRevenueByCustomer() {
+        UUID cashParty = UUID.fromString("018f0000-0000-7000-8000-0000000000ca");
+        UUID lookalike = UUID.fromString("018f0000-0000-7000-8000-0000000000cc");
+        entityManager.persist(party(cashParty, "Walk-in customer", "CASH_SALE"));
+        entityManager.persist(party(PARTY_A, "Acme", null));
+        entityManager.persist(party(lookalike, "Walk-in customer", null));
+        entityManager.persist(
+                invoice("INV-CASH-1", cashParty, InvoiceStatus.FINALIZED, new BigDecimal("5000.0000"), IN_WINDOW));
+        entityManager.persist(
+                invoice("INV-CASH-2", cashParty, InvoiceStatus.POSTED, new BigDecimal("5000.0000"), LATER_IN_WINDOW));
+        entityManager.persist(
+                invoice("INV-A", PARTY_A, InvoiceStatus.FINALIZED, new BigDecimal("100.0000"), IN_WINDOW));
+        // PARTY_B has no replica row at all: an unknown party counts as an ordinary customer.
+        entityManager.persist(invoice("INV-B", PARTY_B, InvoiceStatus.POSTED, new BigDecimal("50.0000"), IN_WINDOW));
+        entityManager.persist(
+                invoice("INV-LOOK", lookalike, InvoiceStatus.FINALIZED, new BigDecimal("10.0000"), IN_WINDOW));
+        entityManager.flush();
+        entityManager.clear();
+
+        List<RevenueByCustomerProjection> rows = invoiceRepository.revenueByCustomer(
+                WINDOW_START,
+                WINDOW_END,
+                EnumSet.of(InvoiceStatus.FINALIZED, InvoiceStatus.POSTED),
+                PageRequest.of(0, 10));
+
+        assertThat(rows)
+                .extracting(RevenueByCustomerProjection::getCustomerId)
+                .containsExactly(PARTY_A.toString(), PARTY_B.toString(), lookalike.toString());
     }
 
     @Test

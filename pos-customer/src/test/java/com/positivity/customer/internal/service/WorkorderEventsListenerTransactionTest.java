@@ -157,7 +157,7 @@ class WorkorderEventsListenerTransactionTest {
         private final AtomicBoolean sawActiveTransaction = new AtomicBoolean(false);
 
         FailingInteractionService(CustomerInteractionRepository interactionRepository) {
-            super(Clock.systemUTC(), interactionRepository);
+            super(Clock.systemUTC(), interactionRepository, org.mockito.Mockito.mock(HouseAccountGuard.class));
         }
 
         boolean sawActiveTransaction() {

@@ -125,6 +125,8 @@ public class CrmContactsController {
                     Emits a CRM_CONTACT_ROLES_UPDATE event; assignments are rewritten in place.
                     Returns 404 when the party or contact person cannot be found, and 400 when a roleCode is \
                     not a recognized role.
+                    Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant's system house account \
+                    (the CASH walk-in account), which no request can change.
                     """)
     @ApiResponses(
             value = {
@@ -149,6 +151,14 @@ public class CrmContactsController {
                 @ApiResponse(
                         responseCode = "404",
                         description = "Party or contact not found",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "409",
+                        description =
+                                "HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant's system house account (the CASH walk-in account), which no request can change",
                         content =
                                 @Content(
                                         mediaType = "application/json",

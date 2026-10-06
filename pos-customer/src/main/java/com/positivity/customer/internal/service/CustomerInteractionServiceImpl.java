@@ -31,11 +31,13 @@ public class CustomerInteractionServiceImpl implements CustomerInteractionServic
 
     private final Clock clock;
     private final CustomerInteractionRepository interactionRepository;
+    private final HouseAccountGuard houseAccountGuard;
 
     @Override
     @Transactional
     public @NonNull CustomerInteractionResponse record(
             @NonNull UUID partyId, @NonNull RecordInteractionRequest request) {
+        houseAccountGuard.requireNotHouseAccount(partyId);
         CustomerInteraction interaction = CustomerInteraction.builder()
                 .partyId(partyId)
                 .contactId(request.getContactId())

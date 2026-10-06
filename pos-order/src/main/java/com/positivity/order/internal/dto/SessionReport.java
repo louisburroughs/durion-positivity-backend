@@ -24,6 +24,7 @@ import org.jspecify.annotations.Nullable;
  * @param countedCash physical cash counted at close (null for an X-report / before begin-close)
  * @param overShort countedCash − theoreticalCash (null until counted)
  * @param orderCount number of orders bound to the session
+ * @param walkInByClerk walk-in share per cashier over the session's orders that left DRAFT
  * @param movements individual cash movements
  * @param openedAt when the session opened
  * @param generatedAt when the report was produced
@@ -42,6 +43,7 @@ public record SessionReport(
         @Nullable BigDecimal countedCash,
         @Nullable BigDecimal overShort,
         long orderCount,
+        @NonNull List<ClerkWalkInShare> walkInByClerk,
         @NonNull List<CashMovementSummary> movements,
         @NonNull Instant openedAt,
         @NonNull Instant generatedAt) {
@@ -54,4 +56,19 @@ public record SessionReport(
      */
     public record TenderTotal(
             @NonNull String methodType, @NonNull BigDecimal amount) {}
+
+    /**
+     * One cashier's walk-in share (CAP:550 S8, spec §4.4 item 2): how many of the cashier's orders
+     * that left DRAFT were sold to the tenant's CASH house account, and for how much.
+     *
+     * @param clerkId the order's clerk, as supplied when the cart was created
+     * @param orderCount the clerk's session orders that left DRAFT
+     * @param walkInOrderCount how many of those are walk-in orders
+     * @param walkInTotal Σ grand total of the walk-in orders
+     */
+    public record ClerkWalkInShare(
+            @NonNull String clerkId,
+            long orderCount,
+            long walkInOrderCount,
+            @NonNull BigDecimal walkInTotal) {}
 }

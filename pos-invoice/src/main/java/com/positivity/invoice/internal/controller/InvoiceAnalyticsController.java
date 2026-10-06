@@ -55,7 +55,9 @@ public class InvoiceAnalyticsController {
                     been billed and CANCELLED/ERROR invoices never will be. Deposit-take invoices — the document \
                     a deposit-take order renders for the down-payment itself — are excluded (#1623): a deposit is \
                     a contract liability, not a sale, and the later settlement invoice already carries the full \
-                    gross amount, so counting both would overstate revenue by every deposit taken. \
+                    gross amount, so counting both would overstate revenue by every deposit taken; invoices \
+                    whose party is a house account (the tenant's CASH walk-in account) are excluded as well, since \
+                    the CASH account is not a customer and would top every ranking. \
                     Each row's avgInvoiceValue is \
                     revenue / invoiceCount, computed here rather than left to the caller, and lastInvoiceDate is \
                     that customer's most recent contributing invoice in the window.

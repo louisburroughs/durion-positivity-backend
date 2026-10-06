@@ -41,6 +41,7 @@ public class InquiryServiceImpl implements InquiryService {
     private final CommercialPartyRepository commercialPartyRepository;
     private final PersonPartyRepository personPartyRepository;
     private final PartyService partyService;
+    private final HouseAccountGuard houseAccountGuard;
     private final int publicSubmissionsPerHour;
 
     public InquiryServiceImpl(
@@ -49,12 +50,14 @@ public class InquiryServiceImpl implements InquiryService {
             CommercialPartyRepository commercialPartyRepository,
             PersonPartyRepository personPartyRepository,
             PartyService partyService,
+            HouseAccountGuard houseAccountGuard,
             @Value("${pos.customer.inquiry.public.max-submissions-per-hour:5}") int publicSubmissionsPerHour) {
         this.clock = clock;
         this.inquiryRepository = inquiryRepository;
         this.commercialPartyRepository = commercialPartyRepository;
         this.personPartyRepository = personPartyRepository;
         this.partyService = partyService;
+        this.houseAccountGuard = houseAccountGuard;
         this.publicSubmissionsPerHour = publicSubmissionsPerHour;
     }
 
@@ -144,6 +147,9 @@ public class InquiryServiceImpl implements InquiryService {
     }
 
     private UUID linkExisting(UUID partyId) {
+        // An inquiry carries a person's name and contact details; linking one to the house
+        // account would attach exactly the personal data that account must never hold (#2505).
+        houseAccountGuard.requireNotHouseAccount(partyId);
         if (!commercialPartyRepository.existsById(partyId) && !personPartyRepository.existsById(partyId)) {
             throw new CrmResourceNotFoundException("Party", partyId);
         }

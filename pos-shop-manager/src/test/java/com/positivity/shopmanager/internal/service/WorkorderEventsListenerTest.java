@@ -3,7 +3,9 @@ package com.positivity.shopmanager.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.domainevents.workorder.WorkorderUpdatedV1;
@@ -22,6 +24,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -52,6 +55,7 @@ class WorkorderEventsListenerTest {
     private static final UUID VEHICLE_ID = UUID.fromString("00000000-0000-0000-0000-0000000000d1");
     private static final UUID MECHANIC_ONE = UUID.fromString("00000000-0000-0000-0000-0000000000e1");
     private static final UUID MECHANIC_TWO = UUID.fromString("00000000-0000-0000-0000-0000000000e2");
+    private static final UUID APPOINTMENT_ID = UUID.fromString("00000000-0000-0000-0000-0000000000f1");
     private static final String EVENT_ID = "01960003-0000-7000-8000-000000000001";
     private static final Instant NOW = Instant.parse("2026-09-03T09:00:00Z");
 
@@ -63,6 +67,9 @@ class WorkorderEventsListenerTest {
 
     @Mock
     private ExtWorkorderReplicaRepository workorderRepository;
+
+    @Mock
+    private WorkorderAppointmentLinkService workorderAppointmentLinkService;
 
     @Mock
     private ApplicationEventPublisher applicationEventPublisher;
@@ -79,6 +86,7 @@ class WorkorderEventsListenerTest {
                 objectMapper,
                 processedEventRepository,
                 workorderRepository,
+                workorderAppointmentLinkService,
                 applicationEventPublisher,
                 Mockito.mock(ObjectProvider.class),
                 Mockito.mock(PlatformTransactionManager.class));
@@ -315,6 +323,74 @@ class WorkorderEventsListenerTest {
         ArgumentCaptor<ExtWorkorderReplica> captor = ArgumentCaptor.forClass(ExtWorkorderReplica.class);
         verify(workorderRepository).save(captor.capture());
         assertThat(captor.getValue().getLocationId()).isEqualTo(LOCATION_ID);
+    }
+
+    @Test
+    @DisplayName(
+            "#2531 - a fact naming its source appointment links the workorder to it, before the status notification")
+    void sourceAppointmentIsLinkedBeforeTheStatusNotification() {
+        listener.onWorkorderEvent(envelopeWithAppointment(3, "\"" + APPOINTMENT_ID + "\""));
+
+        InOrder inOrder =
+                Mockito.inOrder(workorderRepository, workorderAppointmentLinkService, applicationEventPublisher);
+        inOrder.verify(workorderRepository).save(any());
+        inOrder.verify(workorderAppointmentLinkService).link(WORKORDER_ID, APPOINTMENT_ID);
+        // The appointment sync is delivered after commit and looks the link up, so the link has to
+        // be written first or the very fact that establishes it logs an orphaned workorder.
+        inOrder.verify(applicationEventPublisher).publishEvent(any(WorkorderStatusChangedEvent.class));
+    }
+
+    @Test
+    @DisplayName("#2531 - the fact that first links an already-replicated workorder raises the status notification "
+            + "even though the status did not move; a later unchanged fact stays quiet")
+    void firstLinkRaisesTheNotificationWithoutATransition() {
+        when(workorderRepository.findById(WORKORDER_ID))
+                .thenReturn(Optional.of(ExtWorkorderReplica.builder()
+                        .workorderId(WORKORDER_ID)
+                        .status("WORK_IN_PROGRESS")
+                        .aggregateVersion(3)
+                        .build()));
+        when(workorderAppointmentLinkService.link(WORKORDER_ID, APPOINTMENT_ID)).thenReturn(true, false);
+
+        // A backfill: same version, same status, now carrying the link.
+        listener.onWorkorderEvent(envelopeWithAppointment(3, "\"" + APPOINTMENT_ID + "\""));
+        verify(applicationEventPublisher).publishEvent(any(WorkorderStatusChangedEvent.class));
+
+        Mockito.clearInvocations(applicationEventPublisher);
+        listener.onWorkorderEvent(envelopeWithAppointment(3, "\"" + APPOINTMENT_ID + "\""));
+        verify(applicationEventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    @DisplayName(
+            "#2531 - a walk-in (explicit null) and a pre-#2531 fact (field absent) link nothing and unlink nothing")
+    void noSourceAppointmentLinksNothing() {
+        listener.onWorkorderEvent(envelopeWithAppointment(3, "null"));
+        listener.onWorkorderEvent(envelope(4, "WORK_IN_PROGRESS", BAY_ID, "BAY"));
+
+        verify(workorderRepository, times(2)).save(any());
+        verifyNoInteractions(workorderAppointmentLinkService);
+    }
+
+    @Test
+    @DisplayName("#2531 - a stale fact does not link, like every other write it carries")
+    void staleFactDoesNotLink() {
+        when(workorderRepository.findById(WORKORDER_ID))
+                .thenReturn(Optional.of(ExtWorkorderReplica.builder()
+                        .workorderId(WORKORDER_ID)
+                        .status("ASSIGNED")
+                        .aggregateVersion(5)
+                        .build()));
+
+        listener.onWorkorderEvent(envelopeWithAppointment(4, "\"" + APPOINTMENT_ID + "\""));
+
+        verifyNoInteractions(workorderAppointmentLinkService);
+    }
+
+    /** The standard envelope plus the #2531 field, given as raw JSON so a test can pass {@code null}. */
+    private String envelopeWithAppointment(long aggregateVersion, String appointmentIdJson) {
+        String base = envelope(aggregateVersion, "WORK_IN_PROGRESS", BAY_ID, "BAY");
+        return base.substring(0, base.length() - 2) + ",\"appointmentId\":" + appointmentIdJson + "}}";
     }
 
     private String envelope(long aggregateVersion, String status, UUID resourceId, String resourceType) {

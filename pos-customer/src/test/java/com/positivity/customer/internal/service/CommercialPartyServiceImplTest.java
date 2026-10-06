@@ -62,7 +62,8 @@ class CommercialPartyServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new CommercialPartyServiceImpl(commercialRepository, customerFactPublisher);
+        service = new CommercialPartyServiceImpl(
+                commercialRepository, customerFactPublisher, org.mockito.Mockito.mock(HouseAccountGuard.class));
     }
 
     private static CommercialParty party() {

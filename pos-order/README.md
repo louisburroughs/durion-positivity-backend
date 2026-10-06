@@ -25,13 +25,17 @@ Order management service for the Durion Positivity ETSMS platform. Manages sales
 - `POST /v1/orders/carts/{orderId}/items` — add a line item
 - `PUT /v1/orders/carts/{orderId}/items/{lineId}` — update a line item
 - `DELETE /v1/orders/carts/{orderId}/items/{lineId}` — remove a line item
+- `PUT /v1/orders/carts/{orderId}/customer` — set or change a DRAFT cart's customer (`order:order:edit`):
+  body `{"customerId": …, "vehicleId": …}` for a registered customer, or `{"walkIn": true}` for the
+  Walk-in customer; exactly one of the two. See [Customer at checkout](#customer-at-checkout-and-walk-in-sales-cap550-s8).
 - `PUT /v1/orders/carts/{orderId}/discount` / `DELETE …/discount` — order-level discount
 - `POST /v1/orders/carts/{orderId}/quote` / `POST …/quote/reopen` — counter-quote lifecycle
 - `POST /v1/orders/{orderId}/checkout` — freeze the cart, create the fronting invoice at
   pos-invoice, enter `PENDING_PAYMENT` (`Idempotency-Key` header required; replay-safe).
   Optional body `{"tenderType": "ON_ACCOUNT"}` charges a validated commercial customer's
   account (permission `order:order:charge_on_account`) and completes the order synchronously —
-  the accepted AR invoice counts as settlement.
+  the accepted AR invoice counts as settlement. The cart must name a customer; for a walk-in cart
+  the body's `tenderedAmount` (cash and card taken now) must cover the final grand total.
 - `POST /v1/orders/{orderId}/void` — terminal void of a PENDING_PAYMENT order before any
   settlement; cancels the fronting invoice; 409 when settled payments exist (use cancel)
 - `POST /v1/orders/{orderId}/cancel` — cancel an order
@@ -40,6 +44,48 @@ Order management service for the Durion Positivity ETSMS platform. Manages sales
 - `GET /v1/orders/price-overrides/pending` — list pending approvals
 - `POST /v1/orders/price-overrides/{overrideId}/approve` — approve an override
 - `POST /v1/orders/price-overrides/{overrideId}/reject` — reject an override
+
+## Customer at checkout and walk-in sales (CAP:550 S8)
+
+Every sale needs a customer (accounting workspace decision AW12). Checkout refuses a cart without
+one — `422 ORDER_CUSTOMER_REQUIRED` — before any demand is registered, and nothing in this module
+ever assigns a customer on its own. The rule applies from go-live: carts still open need a customer
+at checkout, and orders already past checkout are not re-checked (AW13).
+
+**Walk-in** is the tenant's CASH house account, provisioned by pos-customer and recognised here by
+one thing only: the `house_account = 'CASH_SALE'` flag on the `ext_customer` replica row
+(`CustomerPartyUpdatedV1.houseAccount`). The customer number and the display name prove nothing.
+It is chosen explicitly — `PUT …/customer {"walkIn": true}`, or its id as `customerId` — and a
+cart whose customer is that account is a *walk-in cart*:
+
+| Rule | Where it is checked | Refusal |
+| --- | --- | --- |
+| Never on account (`tenderType = ON_ACCOUNT`) | checkout, before the on-account gate | `422 ORDER_WALK_IN_NOT_ALLOWED`, `fieldErrors[walkIn] = ON_ACCOUNT` |
+| Never a deposit take | set-customer, checkout | `422 ORDER_WALK_IN_NOT_ALLOWED`, `DEPOSIT` |
+| Never workorder-linked | set-customer, `PATCH …/source`, checkout | `422 ORDER_WALK_IN_NOT_ALLOWED`, `WORKORDER_LINK` |
+| Paid in full now | checkout, after the final reprice and tax | `422 ORDER_WALK_IN_NOT_PAID_IN_FULL`, `fieldErrors[tenderedAmount]` names the grand total |
+| Refunded to the original tender only | `POST /v1/returns` | `422 RETURN_WALK_IN_NOT_ALLOWED` for `STORE_CREDIT` / `ON_ACCOUNT_CREDIT` |
+
+- `tenderedAmount` is a declaration, compared with the server's own total **at cent scale**
+  (`grandTotal` rounded HALF_UP to 2 dp — the figure the register shows and the amount pos-invoice
+  settles, S9); the 4-dp calculator residue of a percent discount or line tax is never demanded.
+  The payments are still captured in pos-invoice after checkout. A refused cart stays `DRAFT`; retry with a new
+  `Idempotency-Key`. For a cart with a registered customer the field is ignored. A replay of a
+  completed checkout returns the stored result and re-evaluates nothing.
+- When the replica holds no active house account for the tenant (not provisioned yet, or the party
+  fact not replayed since the flag was added), Walk-in answers `422 ORDER_WALK_IN_UNAVAILABLE` and
+  nothing is substituted. Fill the replica with pos-customer's party-fact replay
+  (`POST /v1/crm/accounts/facts/replay`); the listener applies equal versions, so a replay repairs
+  existing rows.
+- A cart with a linked `WORKORDER` source keeps its customer (`422 ORDER_UNPROCESSABLE` on a change).
+- `SalesOrderResponse` carries `walkIn` and `customerDisplayName` (from the replica; null when the
+  customer is unknown). X and Z session reports carry `walkInByClerk[]` —
+  `{clerkId, orderCount, walkInOrderCount, walkInTotal}` over the session's orders that left
+  `DRAFT`, keyed on the order's `clerkId`.
+- Refusals are logged at INFO with the order number and code. The `order.checkout.refused` meter
+  (tag `code`) counts only the three S8 checkout refusals — `ORDER_CUSTOMER_REQUIRED`,
+  `ORDER_WALK_IN_NOT_ALLOWED`, `ORDER_WALK_IN_NOT_PAID_IN_FULL` — not the pre-existing ones
+  (empty cart, pending validation, serials, on-account eligibility).
 
 ## Location scope (ADR-0061, #1872)
 
@@ -159,10 +205,15 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `RETURN_INVALID_STATE` | 409 | The return order's status does not allow the operation |
 | `ORDER_PRICE_OVERRIDE_INVALID` | 422 | Price override failed business validation |
 | `ORDER_INVALID_CUSTOMER` | 422 | The customer referenced by the order is not valid for it |
+| `ORDER_CUSTOMER_REQUIRED` | 422 | Checkout of a cart that names no customer (CAP:550 S8) |
+| `ORDER_WALK_IN_UNAVAILABLE` | 422 | Walk-in was chosen but the customer replica holds no active CASH house account for the tenant |
+| `ORDER_WALK_IN_NOT_ALLOWED` | 422 | A walk-in cart asked for on-account tender, a deposit take or a workorder link; `fieldErrors[walkIn]` is `ON_ACCOUNT`, `DEPOSIT` or `WORKORDER_LINK` |
+| `ORDER_WALK_IN_NOT_PAID_IN_FULL` | 422 | A walk-in checkout whose `tenderedAmount` is absent or below the final grand total; `fieldErrors[tenderedAmount]` names the total |
 | `ORDER_UNPROCESSABLE` | 422 | The order is refused by an attribute of the target other than its status, or by the state of a referenced resource (`SalesOrderUnprocessableException`) |
 | `RETURN_LINE_NOT_RETURNABLE` | 422 | Requested return line is not returnable per policy (issue #1694; split out of the former blanket `RETURN_INVALID_ARGUMENT` 422 catch-all) |
 | `RETURN_OVER_CAP` | 422 | The return exceeds the un-refunded remainder of one or more sold lines; `fieldErrors` lists the current `returnableQty` per offending line |
 | `RETURN_WARRANTY_ROUTING` | 422 | A WARRANTY-condition return was requested on a non-returnable workorder-consumed line; it routes to pos-warranty instead |
+| `RETURN_WALK_IN_NOT_ALLOWED` | 422 | A return against a walk-in sale asked for `STORE_CREDIT` or `ON_ACCOUNT_CREDIT`; only `ORIGINAL_TENDER` is allowed |
 | `RETURN_UNPROCESSABLE` | 422 | A structurally valid return that a domain rule refuses: a refund method needing a customer the return lacks, no invoice to refund against, or insufficient settled original tender |
 | `UOM_CONVERSION_UNDEFINED` | 422 | A purchase-order line names a `uomCode` with no conversion row for the product |
 | `SUPPLIER_REF_MISSING` | 422 | The purchase order cannot be transmitted: no supplier reference |
@@ -223,6 +274,10 @@ Uses Flyway with PostgreSQL. Migrations at `src/main/resources/db/migration`: `V
 `order_payment_record.currency_code` (the ISO 4217 currency of the settled or reversed payment as stamped on the
 pos-invoice fact, ADR-0067 DF-3; ON_ACCOUNT rows stay null). Alpha databases are recreated rather than migrated
 (`docs/runbooks/flyway-baseline-reset.md`, "Alpha Cutover").
+
+Forward migrations: `V2__order_prior_transmitted_version.sql` (#2492) and
+`V3__ext_customer_house_account.sql` (CAP:550 S8 — the nullable `ext_customer.house_account` flag that marks the
+tenant's CASH house account; filled by a party-fact replay).
 
 ## Development
 

@@ -316,6 +316,69 @@ class ReplicaListenerContractTest {
         verify(customerRepository).deleteById(ID);
     }
 
+    /** CAP:550 S9: the replica stores the owner's house-account flag (S7); old payloads leave it null. */
+    @Test
+    @DisplayName("customer: stores houseAccount from the fact, null when the payload predates the field")
+    void customerMapping_houseAccount() {
+        CustomerEventsListener listener = new CustomerEventsListener(
+                clock,
+                objectMapper,
+                processedEventRepository,
+                customerRepository,
+                org.mockito.Mockito.mock(ObjectProvider.class),
+                org.mockito.Mockito.mock(PlatformTransactionManager.class));
+
+        listener.onCustomerEvent("""
+                {"eventId":"evt-cash","eventType":"%s","aggregateVersion":5,
+                 "payload":{"partyId":"%s","partyType":"COMMERCIAL","displayName":"Walk-in customer",
+                   "status":"ACTIVE","requirementsMet":true,"houseAccount":"CASH_SALE"}}""".formatted(CustomerPartyUpdatedV1.EVENT_TYPE, ID));
+
+        ArgumentCaptor<ExtCustomerPartyReplica> captor = ArgumentCaptor.forClass(ExtCustomerPartyReplica.class);
+        verify(customerRepository).save(captor.capture());
+        assertThat(captor.getValue().getHouseAccount()).isEqualTo(CustomerPartyUpdatedV1.HOUSE_ACCOUNT_CASH_SALE);
+
+        org.mockito.Mockito.clearInvocations(customerRepository);
+        listener.onCustomerEvent("""
+                {"eventId":"evt-legacy","eventType":"%s","aggregateVersion":6,
+                 "payload":{"partyId":"%s","partyType":"ORGANIZATION","displayName":"Fleet Co",
+                   "status":"ACTIVE","requirementsMet":true}}""".formatted(CustomerPartyUpdatedV1.EVENT_TYPE, ID));
+        verify(customerRepository).save(captor.capture());
+        assertThat(captor.getValue().getHouseAccount()).isNull();
+    }
+
+    /** CAP:550 S9 (S8 precedent): a replay at an equal version fills the flag on an existing row. */
+    @Test
+    @DisplayName("customer: a replay at the same aggregateVersion fills houseAccount on an existing row")
+    void customerMapping_replayFillsHouseAccountOnExistingRow() {
+        CustomerEventsListener listener = new CustomerEventsListener(
+                clock,
+                objectMapper,
+                processedEventRepository,
+                customerRepository,
+                org.mockito.Mockito.mock(ObjectProvider.class),
+                org.mockito.Mockito.mock(PlatformTransactionManager.class));
+        when(customerRepository.findById(ID))
+                .thenReturn(Optional.of(ExtCustomerPartyReplica.builder()
+                        .partyId(ID)
+                        .partyType("COMMERCIAL")
+                        .displayName("Walk-in customer")
+                        .status("ACTIVE")
+                        .houseAccount(null)
+                        .aggregateVersion(7)
+                        .updatedAt(NOW.minusSeconds(60))
+                        .build()));
+
+        listener.onCustomerEvent("""
+                {"eventId":"evt-replay","eventType":"%s","aggregateVersion":7,
+                 "payload":{"partyId":"%s","partyType":"COMMERCIAL","displayName":"Walk-in customer",
+                   "status":"ACTIVE","requirementsMet":true,"houseAccount":"CASH_SALE"}}""".formatted(CustomerPartyUpdatedV1.EVENT_TYPE, ID));
+
+        ArgumentCaptor<ExtCustomerPartyReplica> captor = ArgumentCaptor.forClass(ExtCustomerPartyReplica.class);
+        verify(customerRepository).save(captor.capture());
+        assertThat(captor.getValue().getHouseAccount()).isEqualTo("CASH_SALE");
+        assertThat(captor.getValue().getAggregateVersion()).isEqualTo(7);
+    }
+
     @Test
     @DisplayName("location: replicates the full address an invoice is stamped with")
     void locationMapping() {

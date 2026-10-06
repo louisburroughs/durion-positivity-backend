@@ -93,6 +93,9 @@ class ReturnOrderReadModelAndGuardsTest {
     @Mock
     private com.positivity.order.internal.config.OrderDomainEventPublisher domainEventPublisher;
 
+    private final com.positivity.order.internal.repository.ExtCustomerRepository extCustomerRepository =
+            org.mockito.Mockito.mock(com.positivity.order.internal.repository.ExtCustomerRepository.class);
+
     private ReturnOrderServiceImpl service;
 
     @BeforeEach
@@ -105,6 +108,7 @@ class ReturnOrderReadModelAndGuardsTest {
                 paymentRecordRepository,
                 invoicingPort,
                 domainEventPublisher,
+                new com.positivity.order.internal.service.HouseAccountReplica(extCustomerRepository),
                 CLOCK);
         ReflectionTestUtils.setField(service, "approvalThreshold", new BigDecimal("250.00"));
     }

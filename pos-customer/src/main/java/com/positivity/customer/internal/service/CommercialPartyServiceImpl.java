@@ -30,6 +30,7 @@ public class CommercialPartyServiceImpl implements CustomerService {
 
     private final CommercialPartyRepository commercialRepository;
     private final CustomerFactPublisher customerFactPublisher;
+    private final HouseAccountGuard houseAccountGuard;
 
     /**
      * Retrieves all customers as DTOs.
@@ -155,6 +156,7 @@ public class CommercialPartyServiceImpl implements CustomerService {
     @Transactional
     public Optional<CustomerDTO> updateCustomer(@NonNull UUID id, @NonNull CustomerDTO dto) {
         log.debug("Updating customer with id: {}", id);
+        houseAccountGuard.requireNotHouseAccount(id);
 
         // Try commercial repository
         Optional<CommercialParty> commercialOpt = commercialRepository.findById(id);
@@ -178,6 +180,7 @@ public class CommercialPartyServiceImpl implements CustomerService {
     @Transactional
     public boolean deleteCustomer(@NonNull UUID id) {
         log.debug("Deleting customer with id: {}", id);
+        houseAccountGuard.requireNotHouseAccount(id);
 
         // Check commercial repository
         Optional<CommercialParty> existing = commercialRepository.findById(id);
@@ -218,6 +221,10 @@ public class CommercialPartyServiceImpl implements CustomerService {
                 .primaryAddress(entity.getPrimaryAddress())
                 .vehicleVins(new ArrayList<>(entity.getVehicleVins()))
                 .customerType(customerType.toString())
+                .houseAccount(
+                        entity.getHouseAccount() != null
+                                ? entity.getHouseAccount().name()
+                                : null)
                 .build();
     }
 

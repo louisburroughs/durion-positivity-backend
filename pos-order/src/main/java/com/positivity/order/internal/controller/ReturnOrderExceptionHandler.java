@@ -6,6 +6,7 @@ import com.positivity.order.internal.exception.ReturnOrderNotFoundException;
 import com.positivity.order.internal.exception.ReturnOrderStateConflictException;
 import com.positivity.order.internal.exception.ReturnOrderUnprocessableException;
 import com.positivity.order.internal.exception.ReturnRequestValidationException;
+import com.positivity.order.internal.exception.ReturnWalkInNotAllowedException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.order.internal.exception.WarrantyReturnRoutingException;
 import com.positivity.shared.error.ApiError;
@@ -120,6 +121,25 @@ public class ReturnOrderExceptionHandler {
                 .header(X_CORRELATION_ID, correlationId)
                 .body(ApiError.of(
                         "RETURN_UNPROCESSABLE",
+                        ex.getMessage(),
+                        HttpStatus.UNPROCESSABLE_CONTENT.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    /**
+     * A return against a walk-in sale asked for store credit or on-account credit (CAP:550 S8).
+     * The request is well-formed and refused on its merits — ADR-0017 §2 makes that a 422 — and
+     * carries its own code so the register can offer the original tender instead.
+     */
+    @ExceptionHandler(ReturnWalkInNotAllowedException.class)
+    public ResponseEntity<ApiError> handleWalkInNotAllowed(
+            ReturnWalkInNotAllowedException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.of(
+                        "RETURN_WALK_IN_NOT_ALLOWED",
                         ex.getMessage(),
                         HttpStatus.UNPROCESSABLE_CONTENT.value(),
                         Instant.now(clock).toString(),

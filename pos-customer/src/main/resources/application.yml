@@ -105,6 +105,13 @@ pos:
       # accelerated profile advances far faster than the scheduler's own real clock.
       service-due-reminder-interval-ms: ${POS_CUSTOMER_SERVICE_DUE_REMINDER_INTERVAL_MS:86400000}
       service-due-reminder-batch-size: ${POS_CUSTOMER_SERVICE_DUE_REMINDER_BATCH_SIZE:500}
+    house-account:
+      # CASH house account (CAP:550 S7, #2505): one system "walk-in" party per tenant, flagged
+      # houseAccount=CASH_SALE on customer.party.updated. Provisioned at startup and then on this
+      # sweep, which is what covers a tenant added while the service runs (pos-customer does not
+      # consume tenant.events.v1 yet). Idempotent; a failed tenant is retried on the next sweep.
+      enabled: ${POS_CUSTOMER_HOUSE_ACCOUNT_ENABLED:true}
+      sweep-interval-ms: ${POS_CUSTOMER_HOUSE_ACCOUNT_SWEEP_INTERVAL_MS:3600000}
     inquiry:
       public:
         # Story #1154: the only unauthenticated write surface in pos-customer. OFF by default.

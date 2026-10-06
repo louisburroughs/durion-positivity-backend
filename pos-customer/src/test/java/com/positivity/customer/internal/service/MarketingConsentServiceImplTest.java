@@ -109,7 +109,8 @@ class MarketingConsentServiceImplTest {
                 commercialPartyRepository,
                 personPartyRepository,
                 consentEventRepository,
-                factPublisher);
+                factPublisher,
+                org.mockito.Mockito.mock(HouseAccountGuard.class));
     }
 
     private static MarketingConsentDecision allowed() {

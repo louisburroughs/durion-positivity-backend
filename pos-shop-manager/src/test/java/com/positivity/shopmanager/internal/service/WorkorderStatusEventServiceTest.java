@@ -173,6 +173,29 @@ class WorkorderStatusEventServiceTest {
     // -------------------------------------------------------------------------
 
     @Test
+    void handleWorkorderStatusChanged_cancelledAppointment_staysCancelledAndIsNotSaved() {
+        // A workorder that goes on after its appointment was cancelled (#2531 review): ASSIGNED
+        // would map to CHECKED_IN and put the cancelled booking back on the schedule.
+        UUID workOrderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        WorkorderStatusChangedEvent event = new WorkorderStatusChangedEvent(
+                UUID.fromString("00000000-0000-0000-0000-000000000009"),
+                workOrderId,
+                "ASSIGNED",
+                Instant.now(TEST_CLOCK),
+                UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        when(mappingRepository.findByWorkOrderId(workOrderId))
+                .thenReturn(Optional.of(buildMapping(workOrderId, appointmentId)));
+        Appointment cancelled = buildAppointment(appointmentId, AppointmentStatus.CANCELLED);
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(cancelled));
+
+        service.handleWorkorderStatusChanged(event);
+
+        assertThat(cancelled.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
+        verify(appointmentRepository, never()).save(any());
+    }
+
+    @Test
     void handleWorkorderStatusChanged_mappingNotFound_treatsAsOrphanAndSkipsSave() {
         // Arrange
         UUID workOrderId = UUID.fromString("00000000-0000-0000-0000-000000000001");

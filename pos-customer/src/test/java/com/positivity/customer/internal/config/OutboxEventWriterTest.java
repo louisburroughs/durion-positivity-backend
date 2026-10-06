@@ -91,6 +91,7 @@ class OutboxEventWriterTest {
                         "STANDARD",
                         true,
                         null,
+                        null,
                         null),
                 Clock.fixed(NOW, ZoneOffset.UTC));
     }

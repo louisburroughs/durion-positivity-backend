@@ -28,6 +28,7 @@ final class FakeTenantChart implements TenantChart {
     final List<DefaultMapping> defaultMappings = new ArrayList<>();
     final Map<UUID, AccountingTemplate.StatementLine> lines = new LinkedHashMap<>();
     final Map<UUID, UUID> lineAccounts = new LinkedHashMap<>();
+    final Map<UUID, String> lineLocations = new LinkedHashMap<>();
 
     /** Every write, in order: {@code "create ACCOUNT:1000"}, {@code "refresh STATEMENT_LINE:..."}. */
     final List<String> writes = new ArrayList<>();
@@ -76,6 +77,13 @@ final class FakeTenantChart implements TenantChart {
         UUID id = UUID.randomUUID();
         lines.put(id, line);
         lineAccounts.put(id, accounts.get(line.accountCode()).id());
+        return id;
+    }
+
+    /** A per-location override of a line (#731): never what the template looks for or writes. */
+    UUID holdLocationOverride(AccountingTemplate.StatementLine line, String locationId) {
+        UUID id = holdLine(line);
+        lineLocations.put(id, locationId);
         return id;
     }
 
@@ -191,7 +199,8 @@ final class FakeTenantChart implements TenantChart {
         lookups++;
         return lines.entrySet().stream()
                 .filter(entry -> entry.getValue().statementType() == statementType
-                        && accountId.equals(lineAccounts.get(entry.getKey())))
+                        && accountId.equals(lineAccounts.get(entry.getKey()))
+                        && !lineLocations.containsKey(entry.getKey()))
                 .map(entry -> new LineRow(entry.getKey(), entry.getValue()))
                 .findFirst();
     }
@@ -199,6 +208,9 @@ final class FakeTenantChart implements TenantChart {
     @Override
     public Optional<LineRow> findStatementLine(UUID lineId) {
         lookups++;
+        if (lineLocations.containsKey(lineId)) {
+            return Optional.empty();
+        }
         return Optional.ofNullable(lines.get(lineId)).map(line -> new LineRow(lineId, line));
     }
 

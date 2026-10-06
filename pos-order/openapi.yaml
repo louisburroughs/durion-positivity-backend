@@ -369,6 +369,90 @@ paths:
       - Order Cancellation
       x-required-permissions:
       - order:order:cancel
+  /v1/orders/carts/{orderId}/customer:
+    put:
+      description: 'Sets or changes the customer on a DRAFT sales order cart — either a registered customer, optionally with one of that customer''s vehicles, or the business''s Walk-in customer (the CASH house account) by an explicit walkIn choice — which is how a cart created without a customer becomes payable, since checkout refuses a cart with none.
+
+        Use this tool to name who a sale is for after the cart exists; do not use createCart, which only sets the customer when the cart is first created, and do not expect Walk-in to be applied by default, because it is only ever this explicit choice.
+
+        Preconditions: the order must exist and be DRAFT; a registered customer and its vehicle must exist in CRM; Walk-in needs the Walk-in customer to be set up for the business and is refused on a deposit-take cart or a cart with a linked workorder; and a cart with a linked WORKORDER source keeps its customer.
+
+        Required inputs: orderId (UUID) as a path parameter, and a body with exactly one of customerId (UUID) or walkIn set to true; vehicleId (UUID) is optional with customerId, clears the cart''s vehicle when omitted, and is not allowed with walkIn.
+
+        Emits an ORDER_CART_CUSTOMER_SET event and marks tax stale; the response carries walkIn and customerDisplayName, and a walk-in sale must then be paid in full at checkout.
+
+        Returns 200 with the cart, 400 when the body names both or neither of customerId and walkIn or combines vehicleId with walkIn, 404 when the order does not exist, 409 when the order is not DRAFT, and 422 when the customer or vehicle cannot be validated (ORDER_INVALID_CUSTOMER), no Walk-in customer is set up (ORDER_WALK_IN_UNAVAILABLE), the cart is not walk-in eligible (ORDER_WALK_IN_NOT_ALLOWED) or the cart''s workorder link fixes its customer (ORDER_UNPROCESSABLE).
+
+        '
+      operationId: setCartCustomer
+      parameters:
+      - in: path
+        name: orderId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Registered customer with vehicle:
+                description: Registered customer with vehicle
+                value:
+                  customerId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a70
+                  vehicleId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a80
+              Walk-in:
+                description: Walk-in
+                value:
+                  walkIn: true
+            schema:
+              $ref: '#/components/schemas/SetCartCustomerRequest'
+        description: 'Who the sale is for: a registered customer, or the Walk-in customer.'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesOrderResponse'
+          description: Customer set; the cart is returned.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'The body names both or neither of customerId and walkIn: true, or combines vehicleId with walkIn (ORDER_INVALID_ARGUMENT).'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Insufficient permissions.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Order not found (ORDER_NOT_FOUND).
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The order is not DRAFT (ORDER_NOT_EDITABLE).
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The customer or vehicle cannot be validated (ORDER_INVALID_CUSTOMER); no Walk-in customer is set up for the business (ORDER_WALK_IN_UNAVAILABLE); the cart is a deposit take or workorder-linked, so Walk-in is refused (ORDER_WALK_IN_NOT_ALLOWED, fieldErrors[walkIn] = DEPOSIT or WORKORDER_LINK); or the cart's linked WORKORDER source fixes its customer (ORDER_UNPROCESSABLE).
+      security:
+      - bearerAuth: []
+      summary: Set or Change a Cart's Customer
+      tags:
+      - Sales Orders
+      x-required-permissions:
+      - order:order:edit
   /v1/orders/carts/{orderId}/discount:
     delete:
       description: 'Clears any order-level discount from a DRAFT cart and recomputes totals.
@@ -681,13 +765,13 @@ paths:
 
         Use this tool to pull approved estimate or workorder lines onto a sale; do not use addCartItem, which adds individually priced counter lines.
 
-        Preconditions: the order must be DRAFT, a WORKORDER source requires a customer already on the cart, and source lines already linked to the cart are skipped, making the call replay-safe.
+        Preconditions: the order must be DRAFT, a WORKORDER source requires a registered customer already on the cart (never the Walk-in customer), and source lines already linked to the cart are skipped, making the call replay-safe.
 
         Required inputs: sourceType (ESTIMATE or WORKORDER) and sourceId, both in the body.
 
         Emits an ORDER_LINK_SOURCE event, recomputes order totals, and marks tax stale.
 
-        Returns 404 when the order does not exist, 400 when sourceType is unknown or sourceId is not a UUID, 409 when the order is not DRAFT, and 422 when a WORKORDER link is attempted without a customer on the cart or when the source document does not resolve in the replica.
+        Returns 404 when the order does not exist, 400 when sourceType is unknown or sourceId is not a UUID, 409 when the order is not DRAFT, and 422 when a WORKORDER link is attempted without a customer on the cart or on a walk-in cart (ORDER_WALK_IN_NOT_ALLOWED), or when the source document does not resolve in the replica.
 
         '
       operationId: linkOrderSource
@@ -747,7 +831,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: A WORKORDER link without a customer on the cart, or a source document that does not resolve in the replica (ORDER_UNPROCESSABLE).
+          description: A WORKORDER link without a customer on the cart, or a source document that does not resolve in the replica (ORDER_UNPROCESSABLE); or a WORKORDER link onto a walk-in cart (ORDER_WALK_IN_NOT_ALLOWED, fieldErrors[walkIn] = WORKORDER_LINK).
       security:
       - bearerAuth: []
       summary: Link a Source Document to an Order
@@ -2180,13 +2264,13 @@ paths:
 
         Use this tool when the customer is ready to pay; do not use quoteCart, which produces a resumable quote, and do not use voidOrder, which abandons an order already in PENDING_PAYMENT.
 
-        Preconditions: the cart must be non-empty with customer validation not PENDING, every line must have sufficient inventory, serial-tracked lines must carry one serial per unit (lot-tracked at least one), and ON_ACCOUNT additionally requires the order:order:charge_on_account permission and a VALIDATED commercial customer with payment terms and no credit hold.
+        Preconditions: the cart must be non-empty and name a customer (set at creation or with setCartCustomer) whose validation is not PENDING, every line must have sufficient inventory, serial-tracked lines must carry one serial per unit (lot-tracked at least one), and ON_ACCOUNT additionally requires the order:order:charge_on_account permission and a VALIDATED commercial customer with payment terms and no credit hold. A walk-in cart (its customer is the business''s Walk-in customer) must be paid in full now: it is never ON_ACCOUNT, a deposit take or workorder-linked, and tenderedAmount must cover the final grand total.
 
-        Required inputs: the Idempotency-Key header; the body is optional with tenderType DEFAULT or ON_ACCOUNT — DEFAULT settles asynchronously via payment events that complete the order when the balance reaches zero, while ON_ACCOUNT settles against the AR invoice and completes the order immediately.
+        Required inputs: the Idempotency-Key header; the body is optional with tenderType DEFAULT or ON_ACCOUNT — DEFAULT settles asynchronously via payment events that complete the order when the balance reaches zero, while ON_ACCOUNT settles against the AR invoice and completes the order immediately — and tenderedAmount, the cash and card being taken now, which is required for a walk-in cart and ignored otherwise.
 
         Emits an ORDER_CHECKOUT event; an ON_ACCOUNT checkout also records a settled ON_ACCOUNT ledger entry and publishes an order-completed fact.
 
-        Returns 201 on checkout, 200 when the same Idempotency-Key replays the checked-out order, 400 when the Idempotency-Key header is blank or tenderType is unsupported, 409 when the key belongs to a different order or the status does not allow checkout, 422 when the cart is empty, customer validation is pending, availability or serial capture is insufficient, or on-account eligibility fails, and 503 when the tax or invoicing service is unreachable.
+        Returns 201 on checkout, 200 when the same Idempotency-Key replays the checked-out order (the stored result, with no rule re-evaluated), 400 when the Idempotency-Key header is blank, tenderType is unsupported or tenderedAmount is negative, 409 when the key belongs to a different order or the status does not allow checkout, 422 when the cart is empty, has no customer (ORDER_CUSTOMER_REQUIRED), customer validation is pending, a walk-in cart is not eligible (ORDER_WALK_IN_NOT_ALLOWED) or not paid in full (ORDER_WALK_IN_NOT_PAID_IN_FULL), serial capture is insufficient, or on-account eligibility fails, and 503 when the tax or invoicing service is unreachable.
 
         '
       operationId: checkoutOrder
@@ -2211,6 +2295,10 @@ paths:
                 description: On-account tender
                 value:
                   tenderType: ON_ACCOUNT
+              Walk-in paid in full:
+                description: Walk-in paid in full
+                value:
+                  tenderedAmount: 84.37
             schema:
               $ref: '#/components/schemas/CheckoutRequest'
         description: Optional checkout options; omit the body entirely for default tender.
@@ -2220,7 +2308,49 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SalesOrderResponse'
-          description: OK
+          description: A replayed Idempotency-Key returned the stored checkout result.
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesOrderResponse'
+          description: Order checked out to PENDING_PAYMENT.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Blank Idempotency-Key, unsupported tenderType or negative tenderedAmount (ORDER_INVALID_ARGUMENT).
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Insufficient permissions.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Order not found (ORDER_NOT_FOUND).
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The Idempotency-Key belongs to a different order, or the status does not allow checkout.
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The cart has no customer (ORDER_CUSTOMER_REQUIRED); a walk-in cart is on account, a deposit take or workorder-linked (ORDER_WALK_IN_NOT_ALLOWED, fieldErrors[walkIn] = ON_ACCOUNT, DEPOSIT or WORKORDER_LINK); a walk-in cart's tenderedAmount is absent or below the final grand total (ORDER_WALK_IN_NOT_PAID_IN_FULL, fieldErrors[tenderedAmount] names the total); customer validation is pending or on-account eligibility fails (ORDER_INVALID_CUSTOMER); or the cart is empty or serial capture is insufficient (ORDER_UNPROCESSABLE).
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The tax or invoicing service is unreachable.
       security:
       - bearerAuth: []
       summary: Check Out a Sales Order
@@ -2320,13 +2450,13 @@ paths:
 
         Use this tool to take goods back after a completed sale; do not use cancelOrder or voidOrder, which abandon an order before completion, and check listReturnableLines first to see each line''s remaining returnable quantity.
 
-        Preconditions: the original order must be COMPLETED, every line must be returnable (workorder consumed lines without an imported returnable flag are not), and each sold line may appear at most once in the request.
+        Preconditions: the original order must be COMPLETED, every line must be returnable (workorder consumed lines without an imported returnable flag are not), and each sold line may appear at most once in the request. A return against a walk-in sale (the original order''s customer is the business''s Walk-in customer) can only be refunded to ORIGINAL_TENDER.
 
         Required inputs: originalOrderId (UUID), refundMethod (ORIGINAL_TENDER, STORE_CREDIT or ON_ACCOUNT_CREDIT), and at least one line with originalOrderLineId, a positive returnQty, and condition (RESTOCK, SCRAP or WARRANTY); reasonCode, per-line serialNumbers, and the Idempotency-Key header (replays return the original return) are optional.
 
         Emits an ORDER_RETURN_CREATE event; a refund total above the approval threshold (default 250.00, configurable via pos.order.return.approval-threshold) parks the return at PENDING_APPROVAL, otherwise it starts at RETURN_REQUESTED ready for processReturn.
 
-        Returns 201 on creation (idempotent replays included), 400 when the request has no lines, a line reference is duplicated or unknown, returnQty is not positive, or refundMethod/condition is unrecognised, 404 when the original order does not exist, 409 when the original order is not COMPLETED, and 422 when a line exceeds its returnable remainder (each offending line''s returnableQty is listed in fieldErrors), a line is not returnable, or a WARRANTY-condition line must route to pos-warranty.
+        Returns 201 on creation (idempotent replays included), 400 when the request has no lines, a line reference is duplicated or unknown, returnQty is not positive, or refundMethod/condition is unrecognised, 404 when the original order does not exist, 409 when the original order is not COMPLETED, and 422 when a line exceeds its returnable remainder (each offending line''s returnableQty is listed in fieldErrors), a line is not returnable, a WARRANTY-condition line must route to pos-warranty, or a walk-in sale is asked to refund to STORE_CREDIT or ON_ACCOUNT_CREDIT (RETURN_WALK_IN_NOT_ALLOWED).
 
         '
       operationId: createReturn
@@ -2939,6 +3069,33 @@ components:
           description: 'Tender intent: DEFAULT (asynchronous settlement via payments) or ON_ACCOUNT (charge a validated commercial customer''s account; requires order:order:charge_on_account and the order completes with the balance carried by the AR invoice)'
           example: ON_ACCOUNT
           type: string
+        tenderedAmount:
+          description: Total of cash and card the cashier is taking now. Required for a walk-in cart (the customer is the business's Walk-in customer), where it must cover the final grand total computed at checkout; ignored for any other cart. Never negative
+          example: 84.37
+          minimum: 0
+          type: number
+      type: object
+    ClerkWalkInShare:
+      description: 'One cashier''s walk-in share: orders sold to the Walk-in customer out of all their orders'
+      properties:
+        clerkId:
+          description: Clerk the orders belong to
+          example: clerk-001
+          type: string
+        orderCount:
+          description: The clerk's session orders that left DRAFT
+          example: 3
+          format: int64
+          type: integer
+        walkInOrderCount:
+          description: How many of those were sold to the Walk-in customer
+          example: 1
+          format: int64
+          type: integer
+        walkInTotal:
+          description: Total of the clerk's walk-in orders
+          example: 84.37
+          type: number
       type: object
     Conflict:
       description: A single named conflict behind a 409 response
@@ -4249,6 +4406,10 @@ components:
           description: Identifier of the user who created the order
           example: 01960003-0000-7000-8000-000000000050
           type: string
+        customerDisplayName:
+          description: Display name of the order's customer; null when the order has no customer or the customer is not known yet
+          example: Walk-in customer
+          type: string
         customerId:
           description: Identifier of the customer associated with the order
           example: 01960003-0000-7000-8000-000000000070
@@ -4341,6 +4502,10 @@ components:
           description: Identifier of the vehicle associated with the order
           example: 01960003-0000-7000-8000-000000000080
           type: string
+        walkIn:
+          description: 'True when the order''s customer is the business''s Walk-in customer (the CASH house account): the sale must be paid in full at checkout'
+          example: false
+          type: boolean
       required:
       - orderId
       - status
@@ -4389,6 +4554,29 @@ components:
           type: string
         theoreticalCash:
           type: number
+        walkInByClerk:
+          description: Walk-in share per cashier over the session's orders that left DRAFT
+          items:
+            $ref: '#/components/schemas/ClerkWalkInShare'
+          type: array
+      type: object
+    SetCartCustomerRequest:
+      description: 'Sets or changes a cart''s customer: exactly one of customerId (a registered customer) or walkIn: true (the business''s Walk-in customer, for a sale paid in full now)'
+      properties:
+        customerId:
+          description: Registered customer to put on the cart. Omit when walkIn is true
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a70
+          format: uuid
+          type: string
+        vehicleId:
+          description: One of the customer's vehicles; when omitted the cart's vehicle is cleared. Not allowed together with walkIn
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a80
+          format: uuid
+          type: string
+        walkIn:
+          description: true to choose the Walk-in customer explicitly. Never applied by default
+          example: false
+          type: boolean
       type: object
     SortObject:
       properties:

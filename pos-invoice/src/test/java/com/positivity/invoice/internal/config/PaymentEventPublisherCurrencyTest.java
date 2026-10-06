@@ -10,6 +10,7 @@ import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.payment.PaymentSettledV1;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.entity.PaymentIntent;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -31,10 +32,12 @@ class PaymentEventPublisherCurrencyTest {
         InvoiceCurrencySource currencySource = mock(InvoiceCurrencySource.class);
         when(currencySource.currencyCode()).thenReturn("CAD");
         Clock clock = Clock.fixed(Instant.parse("2026-09-28T00:00:00Z"), ZoneOffset.UTC);
-        PaymentEventPublisher publisher = new PaymentEventPublisher(clock, currencySource, provider);
+        ObjectProvider<MeterRegistry> meterRegistry = mock(ObjectProvider.class);
+        PaymentEventPublisher publisher = new PaymentEventPublisher(clock, currencySource, provider, meterRegistry);
 
         Invoice invoice = new Invoice();
         invoice.setId(UUID.randomUUID());
+        invoice.setPartyId(UUID.randomUUID().toString());
         PaymentIntent intent = new PaymentIntent();
         intent.setId(UUID.randomUUID());
         intent.setInvoice(invoice);

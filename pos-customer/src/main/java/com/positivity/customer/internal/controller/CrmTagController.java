@@ -303,6 +303,8 @@ public class CrmTagController {
                     assignment is created.
                     Returns 404 when the tag does not exist, and 422 when the tag is inactive and not \
                     already assigned.
+                    Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant's system house account \
+                    (the CASH walk-in account), which no request can change.
                     """)
     @ApiResponses({
         @ApiResponse(
@@ -320,6 +322,11 @@ public class CrmTagController {
         @ApiResponse(
                 responseCode = "403",
                 description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "409",
+                description =
+                        "HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant's system house account (the CASH walk-in account), which no request can change",
                 content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PostMapping("/parties/{partyId}/tags")
@@ -354,13 +361,20 @@ public class CrmTagController {
                     Required inputs: partyId and tagId (UUIDs) as path parameters; there is no request body.
                     Emits a CRM_PARTY_TAG_REMOVE event and publishes a party-tag-changed fact when an \
                     assignment was actually removed.
-                    Returns 204 in every authorized call, including when nothing was assigned.
+                    Returns 204 in every other authorized call, including when nothing was assigned.
+                    Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant's system house account \
+                    (the CASH walk-in account), which no request can change.
                     """)
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "Tag removed", content = @Content),
         @ApiResponse(
                 responseCode = "403",
                 description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "409",
+                description =
+                        "HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant's system house account (the CASH walk-in account), which no request can change",
                 content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @DeleteMapping("/parties/{partyId}/tags/{tagId}")

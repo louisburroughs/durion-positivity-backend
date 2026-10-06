@@ -8,6 +8,7 @@ import com.positivity.order.internal.dto.LinkSourceRequest;
 import com.positivity.order.internal.dto.OrderDiscountRequest;
 import com.positivity.order.internal.dto.SalesOrderLineResponse;
 import com.positivity.order.internal.dto.SalesOrderResponse;
+import com.positivity.order.internal.dto.SetCartCustomerRequest;
 import com.positivity.order.internal.dto.UpdateItemRequest;
 import com.positivity.order.internal.dto.VoidOrderRequest;
 import com.positivity.order.internal.security.OrderPermissions;
@@ -19,6 +20,7 @@ import com.positivity.order.internal.service.model.CreateCartResult;
 import com.positivity.order.internal.service.model.OrderDiscountCommand;
 import com.positivity.order.internal.service.model.SalesOrderLineSummary;
 import com.positivity.order.internal.service.model.SalesOrderSummary;
+import com.positivity.order.internal.service.model.SetCartCustomerCommand;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
@@ -151,6 +153,88 @@ public class SalesOrderController {
                 request.getDepositSourceId()));
         HttpStatus status = result.replay() ? HttpStatus.OK : HttpStatus.CREATED;
         return ResponseEntity.status(status).body(toResponse(result.summary()));
+    }
+
+    @Operation(
+            operationId = "setCartCustomer",
+            summary = "Set or Change a Cart's Customer",
+            description = """
+                    Sets or changes the customer on a DRAFT sales order cart — either a registered customer, \
+                    optionally with one of that customer's vehicles, or the business's Walk-in customer (the CASH \
+                    house account) by an explicit walkIn choice — which is how a cart created without a customer \
+                    becomes payable, since checkout refuses a cart with none.
+                    Use this tool to name who a sale is for after the cart exists; do not use createCart, which \
+                    only sets the customer when the cart is first created, and do not expect Walk-in to be applied \
+                    by default, because it is only ever this explicit choice.
+                    Preconditions: the order must exist and be DRAFT; a registered customer and its vehicle must \
+                    exist in CRM; Walk-in needs the Walk-in customer to be set up for the business and is refused \
+                    on a deposit-take cart or a cart with a linked workorder; and a cart with a linked WORKORDER \
+                    source keeps its customer.
+                    Required inputs: orderId (UUID) as a path parameter, and a body with exactly one of customerId \
+                    (UUID) or walkIn set to true; vehicleId (UUID) is optional with customerId, clears the cart's \
+                    vehicle when omitted, and is not allowed with walkIn.
+                    Emits an ORDER_CART_CUSTOMER_SET event and marks tax stale; the response carries walkIn and \
+                    customerDisplayName, and a walk-in sale must then be paid in full at checkout.
+                    Returns 200 with the cart, 400 when the body names both or neither of customerId and walkIn or \
+                    combines vehicleId with walkIn, 404 when the order does not exist, 409 when the order is not \
+                    DRAFT, and 422 when the customer or vehicle cannot be validated (ORDER_INVALID_CUSTOMER), no \
+                    Walk-in customer is set up (ORDER_WALK_IN_UNAVAILABLE), the cart is not walk-in eligible \
+                    (ORDER_WALK_IN_NOT_ALLOWED) or the cart's workorder link fixes its customer \
+                    (ORDER_UNPROCESSABLE).
+                    """,
+            tags = {"Sales Orders"})
+    @ApiResponse(responseCode = "200", description = "Customer set; the cart is returned.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "The body names both or neither of customerId and walkIn: true, or combines vehicleId "
+                    + "with walkIn (ORDER_INVALID_ARGUMENT).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Order not found (ORDER_NOT_FOUND).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "The order is not DRAFT (ORDER_NOT_EDITABLE).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "The customer or vehicle cannot be validated (ORDER_INVALID_CUSTOMER); no Walk-in "
+                    + "customer is set up for the business (ORDER_WALK_IN_UNAVAILABLE); the cart is a deposit take "
+                    + "or workorder-linked, so Walk-in is refused (ORDER_WALK_IN_NOT_ALLOWED, fieldErrors[walkIn] "
+                    + "= DEPOSIT or WORKORDER_LINK); or the cart's linked WORKORDER source fixes its customer "
+                    + "(ORDER_UNPROCESSABLE).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @PutMapping("/carts/{orderId}/customer")
+    @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_EDIT + "')")
+    @EmitEvent(id = "ORDER_CART_CUSTOMER_SET", apiVersion = "1")
+    public ResponseEntity<SalesOrderResponse> setCartCustomer(
+            @PathVariable UUID orderId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Who the sale is for: a registered customer, or the Walk-in customer.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = {
+                                                @ExampleObject(name = "Registered customer with vehicle", value = """
+                                                                {"customerId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a70",
+                                                                 "vehicleId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a80"}
+                                                                """),
+                                                @ExampleObject(name = "Walk-in", value = "{\"walkIn\":true}")
+                                            }))
+                    @Valid
+                    @RequestBody
+                    SetCartCustomerRequest request) {
+        SalesOrderSummary updated = salesOrderService.setCartCustomer(
+                orderId,
+                new SetCartCustomerCommand(
+                        request.getCustomerId(), Boolean.TRUE.equals(request.getWalkIn()), request.getVehicleId()));
+        return ResponseEntity.ok(toResponse(updated));
     }
 
     @Operation(
@@ -454,23 +538,63 @@ public class SalesOrderController {
                     invoice at pos-invoice, rolling the whole checkout back if invoice creation fails.
                     Use this tool when the customer is ready to pay; do not use quoteCart, which produces a \
                     resumable quote, and do not use voidOrder, which abandons an order already in PENDING_PAYMENT.
-                    Preconditions: the cart must be non-empty with customer validation not PENDING, every line must \
-                    have sufficient inventory, serial-tracked lines must carry one serial per unit (lot-tracked at \
-                    least one), and ON_ACCOUNT additionally requires the order:order:charge_on_account permission \
-                    and a VALIDATED commercial customer with payment terms and no credit hold.
+                    Preconditions: the cart must be non-empty and name a customer (set at creation or with \
+                    setCartCustomer) whose validation is not PENDING, every line must have sufficient inventory, \
+                    serial-tracked lines must carry one serial per unit (lot-tracked at least one), and ON_ACCOUNT \
+                    additionally requires the order:order:charge_on_account permission and a VALIDATED commercial \
+                    customer with payment terms and no credit hold. A walk-in cart (its customer is the business's \
+                    Walk-in customer) must be paid in full now: it is never ON_ACCOUNT, a deposit take or \
+                    workorder-linked, and tenderedAmount must cover the final grand total.
                     Required inputs: the Idempotency-Key header; the body is optional with tenderType DEFAULT or \
                     ON_ACCOUNT — DEFAULT settles asynchronously via payment events that complete the order when \
                     the balance reaches zero, while ON_ACCOUNT settles against the AR invoice and completes the \
-                    order immediately.
+                    order immediately — and tenderedAmount, the cash and card being taken now, which is required \
+                    for a walk-in cart and ignored otherwise.
                     Emits an ORDER_CHECKOUT event; an ON_ACCOUNT checkout also records a settled ON_ACCOUNT ledger \
                     entry and publishes an order-completed fact.
-                    Returns 201 on checkout, 200 when the same Idempotency-Key replays the checked-out order, 400 \
-                    when the Idempotency-Key header is blank or tenderType is unsupported, 409 when the key belongs \
-                    to a different order or the status does not allow checkout, 422 when the cart is empty, \
-                    customer validation is pending, availability or serial capture is insufficient, or on-account \
-                    eligibility fails, and 503 when the tax or invoicing service is unreachable.
+                    Returns 201 on checkout, 200 when the same Idempotency-Key replays the checked-out order \
+                    (the stored result, with no rule re-evaluated), 400 when the Idempotency-Key header is blank, \
+                    tenderType is unsupported or tenderedAmount is negative, 409 when the key belongs to a \
+                    different order or the status does not allow checkout, 422 when the cart is empty, has no \
+                    customer (ORDER_CUSTOMER_REQUIRED), customer validation is pending, a walk-in cart is not \
+                    eligible (ORDER_WALK_IN_NOT_ALLOWED) or not paid in full (ORDER_WALK_IN_NOT_PAID_IN_FULL), \
+                    serial capture is insufficient, or on-account eligibility fails, and 503 when the tax or \
+                    invoicing service is unreachable.
                     """,
             tags = {"Sales Orders"})
+    @ApiResponse(responseCode = "201", description = "Order checked out to PENDING_PAYMENT.")
+    @ApiResponse(responseCode = "200", description = "A replayed Idempotency-Key returned the stored checkout result.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Blank Idempotency-Key, unsupported tenderType or negative tenderedAmount "
+                    + "(ORDER_INVALID_ARGUMENT).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Order not found (ORDER_NOT_FOUND).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "The Idempotency-Key belongs to a different order, or the status does not allow checkout.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "The cart has no customer (ORDER_CUSTOMER_REQUIRED); a walk-in cart is on account, a "
+                    + "deposit take or workorder-linked (ORDER_WALK_IN_NOT_ALLOWED, fieldErrors[walkIn] = "
+                    + "ON_ACCOUNT, DEPOSIT or WORKORDER_LINK); a walk-in cart's tenderedAmount is absent or below "
+                    + "the final grand total (ORDER_WALK_IN_NOT_PAID_IN_FULL, fieldErrors[tenderedAmount] names "
+                    + "the total); customer validation is pending or on-account eligibility fails "
+                    + "(ORDER_INVALID_CUSTOMER); or the cart is empty or serial capture is insufficient "
+                    + "(ORDER_UNPROCESSABLE).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "The tax or invoicing service is unreachable.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping("/{orderId}/checkout")
     @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_CHECKOUT + "')")
     @EmitEvent(id = "ORDER_CHECKOUT", apiVersion = "1")
@@ -485,14 +609,21 @@ public class SalesOrderController {
                             content =
                                     @Content(
                                             mediaType = "application/json",
-                                            examples =
-                                                    @ExampleObject(
-                                                            name = "On-account tender",
-                                                            value = "{\"tenderType\":\"ON_ACCOUNT\"}")))
+                                            examples = {
+                                                @ExampleObject(
+                                                        name = "On-account tender",
+                                                        value = "{\"tenderType\":\"ON_ACCOUNT\"}"),
+                                                @ExampleObject(
+                                                        name = "Walk-in paid in full",
+                                                        value = "{\"tenderedAmount\":84.37}")
+                                            }))
                     @RequestBody(required = false)
                     CheckoutRequest request) {
-        CheckoutResult result =
-                salesOrderService.checkout(orderId, idempotencyKey, request == null ? null : request.getTenderType());
+        CheckoutResult result = salesOrderService.checkout(
+                orderId,
+                idempotencyKey,
+                request == null ? null : request.getTenderType(),
+                request == null ? null : request.getTenderedAmount());
         HttpStatus status = result.replay() ? HttpStatus.OK : HttpStatus.CREATED;
         return ResponseEntity.status(status).body(toResponse(result.summary()));
     }
@@ -546,13 +677,15 @@ public class SalesOrderController {
                     and are never repriced.
                     Use this tool to pull approved estimate or workorder lines onto a sale; do not use addCartItem, \
                     which adds individually priced counter lines.
-                    Preconditions: the order must be DRAFT, a WORKORDER source requires a customer already on the \
-                    cart, and source lines already linked to the cart are skipped, making the call replay-safe.
+                    Preconditions: the order must be DRAFT, a WORKORDER source requires a registered customer \
+                    already on the cart (never the Walk-in customer), and source lines already linked to the cart \
+                    are skipped, making the call replay-safe.
                     Required inputs: sourceType (ESTIMATE or WORKORDER) and sourceId, both in the body.
                     Emits an ORDER_LINK_SOURCE event, recomputes order totals, and marks tax stale.
                     Returns 404 when the order does not exist, 400 when sourceType is unknown or sourceId is not \
                     a UUID, 409 when the order is not DRAFT, and 422 when a WORKORDER link is attempted without a \
-                    customer on the cart or when the source document does not resolve in the replica.
+                    customer on the cart or on a walk-in cart (ORDER_WALK_IN_NOT_ALLOWED), or when the source \
+                    document does not resolve in the replica.
                     """,
             tags = {"Sales Orders"})
     @ApiResponse(responseCode = "200", description = "Source lines imported into the cart.")
@@ -575,7 +708,8 @@ public class SalesOrderController {
     @ApiResponse(
             responseCode = "422",
             description = "A WORKORDER link without a customer on the cart, or a source document that does not "
-                    + "resolve in the replica (ORDER_UNPROCESSABLE).",
+                    + "resolve in the replica (ORDER_UNPROCESSABLE); or a WORKORDER link onto a walk-in cart "
+                    + "(ORDER_WALK_IN_NOT_ALLOWED, fieldErrors[walkIn] = WORKORDER_LINK).",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PatchMapping("/carts/{orderId}/source")
     @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_EDIT + "')")
@@ -609,6 +743,8 @@ public class SalesOrderController {
                 .locationId(summary.locationId())
                 .label(summary.label())
                 .customerId(summary.customerId())
+                .walkIn(summary.walkIn())
+                .customerDisplayName(summary.customerDisplayName())
                 .vehicleId(summary.vehicleId())
                 .customerValidationStatus(summary.customerValidationStatus())
                 .clerkId(summary.clerkId())

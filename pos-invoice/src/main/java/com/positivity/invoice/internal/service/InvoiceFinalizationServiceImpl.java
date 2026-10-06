@@ -12,6 +12,7 @@ import com.positivity.invoice.internal.enums.InvoiceStatus;
 import com.positivity.invoice.internal.exception.InvalidInvoiceStateException;
 import com.positivity.invoice.internal.exception.InvalidManagerApprovalException;
 import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
+import com.positivity.invoice.internal.exception.InvoicePartyRequiredException;
 import com.positivity.invoice.internal.exception.ManagerApprovalRequiredException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.security.common.SecurityContextHelper;
@@ -71,6 +72,9 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
     static final BigDecimal SERVICE_ADVISOR_LIMIT = new BigDecimal("500.00");
     static final Duration REVERSION_WINDOW = Duration.ofHours(24);
 
+    /** CAP:550 S9: the one refusal text the eligibility read and the finalize command share. */
+    static final String PARTY_REQUIRED_MESSAGE = "This invoice has no customer; set the customer before finalizing";
+
     private static final String OVERRIDE_AUTHORITY = "invoice:finalize:override";
 
     private final InvoiceRepository invoiceRepository;
@@ -127,6 +131,11 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
                     false, "Invoice is not in DRAFT status (current: " + invoice.getStatus() + ")", false);
         }
 
+        // CAP:550 S9: the detail page and the finalize endpoint agree on the party backstop.
+        if (!hasParty(invoice)) {
+            return new FinalizationEligibilityResult(false, PARTY_REQUIRED_MESSAGE, false);
+        }
+
         BigDecimal total = invoice.getTotal();
         boolean requiresApproval = total.compareTo(SERVICE_ADVISOR_LIMIT) > 0;
 
@@ -157,6 +166,22 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
             if (existing.getStatus() != InvoiceStatus.DRAFT) {
                 throw new IllegalStateException(
                         "Invoice " + invoiceId + " is in " + existing.getStatus() + " status and cannot be finalized");
+            }
+            // CAP:550 S9 (spec §4.4 item 1, §9.4, AW12): no invoice becomes FINALIZED without a
+            // bill-to party — the backstop behind S8's checkout customer requirement (gap G6: a
+            // party-less invoice posted Dr 1200 while pos-accounting skipped its settlement).
+            // Before the permission matrix and the committable tax call below, so a refused
+            // invoice creates no provider document. A workorder draft whose party has not arrived
+            // from the backfill is refused until it does; the retry then succeeds.
+            if (!hasParty(existing)) {
+                // ADR-0018: the refusal names its actor from the security context.
+                log.info(
+                        "Refusing finalization of invoice {} ({}) by {}: {}",
+                        existing.getInvoiceNumber(),
+                        invoiceId,
+                        SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM),
+                        InvoicePartyRequiredException.CODE);
+                throw new InvoicePartyRequiredException(PARTY_REQUIRED_MESSAGE);
             }
             // Decision D-T5: invoice finalization hard-requires a successful tax calculation —
             // it must never issue with a silently-missing tax result. pos-invoice never applies a
@@ -589,5 +614,11 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
                 .toList();
         response.setAdjustmentEntries(adjustmentResponses);
         return response;
+    }
+
+    /** CAP:550 S9: a bill-to party is present when {@code partyId} is neither null nor blank. */
+    private static boolean hasParty(@NonNull Invoice invoice) {
+        String partyId = invoice.getPartyId();
+        return partyId != null && !partyId.isBlank();
     }
 }

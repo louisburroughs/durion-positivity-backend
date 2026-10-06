@@ -6,9 +6,15 @@ import static com.positivity.tenancy.testing.TenantTestSupport.asTenant;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.entity.PartyTag;
+import com.positivity.customer.internal.enums.HouseAccountKind;
+import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.PartyTagRepository;
+import com.positivity.customer.internal.service.HouseAccountProvisioningService;
 import com.positivity.tenancy.TenantContext;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
@@ -32,6 +38,12 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
 
     @Autowired
     private DataSource dataSource;
+
+    @Autowired
+    private CommercialPartyRepository parties;
+
+    @Autowired
+    private HouseAccountProvisioningService houseAccounts;
 
     @AfterEach
     void clear() {
@@ -86,6 +98,70 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
                 () -> assertThat(tags.findById(id).orElseThrow().getCategory())
                         .as("tenant B's UPDATE touched nothing")
                         .isEqualTo("isolation"));
+    }
+
+    /**
+     * Every tenant holds its own CASH house account (CAP:550 S7, #2505) under the same customer
+     * number, and neither can see, guard against or count the other's: the account, its partial
+     * unique index and the guard's lookup are all scoped to the bound tenant.
+     */
+    @Test
+    void eachTenantsHouseAccountIsInvisibleToTheOther() {
+        JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        List<UUID> created = new ArrayList<>();
+        try {
+            UUID houseOfA = asTenant(TENANT_A, () -> provisionOrFind(created));
+            UUID houseOfB = asTenant(TENANT_B, () -> provisionOrFind(created));
+            assertThat(houseOfA).isNotEqualTo(houseOfB);
+
+            asTenant(TENANT_A, () -> {
+                assertThat(parties.findByHouseAccount(HouseAccountKind.CASH_SALE))
+                        .map(CommercialParty::getPartyId)
+                        .as("tenant A resolves its own house account")
+                        .contains(houseOfA);
+                assertThat(parties.existsByPartyIdAndHouseAccountIsNotNull(houseOfA))
+                        .isTrue();
+                assertThat(parties.findById(houseOfB))
+                        .as("Hibernate filter hides tenant B's house account")
+                        .isEmpty();
+                assertThat(parties.existsByPartyIdAndHouseAccountIsNotNull(houseOfB))
+                        .as("the guard's lookup never sees another tenant's house account")
+                        .isFalse();
+                assertThat(countHouseAccounts(jdbc))
+                        .as("RLS shows tenant A exactly its own")
+                        .isEqualTo(1);
+                assertThat(jdbc.update(
+                                "UPDATE commercial_party SET legal_name = 'stolen' WHERE customer_id = ?", houseOfB))
+                        .as("RLS makes tenant B's house account unreachable for UPDATE")
+                        .isZero();
+            });
+            asTenant(TENANT_B, () -> {
+                assertThat(parties.findByHouseAccount(HouseAccountKind.CASH_SALE))
+                        .map(CommercialParty::getPartyId)
+                        .contains(houseOfB);
+                assertThat(parties.findById(houseOfA)).isEmpty();
+                assertThat(countHouseAccounts(jdbc)).isEqualTo(1);
+            });
+            // Unbound: no tenant, no house account.
+            assertThat(countHouseAccounts(jdbc)).isZero();
+        } finally {
+            created.forEach(partyId -> owner.update("DELETE FROM commercial_party WHERE customer_id = ?", partyId));
+        }
+    }
+
+    /** Provisions the bound tenant's house account, remembering it for cleanup if this call created it. */
+    private UUID provisionOrFind(List<UUID> created) {
+        houseAccounts.createCashAccountIfMissing().ifPresent(created::add);
+        return parties.findByHouseAccount(HouseAccountKind.CASH_SALE)
+                .map(CommercialParty::getPartyId)
+                .orElseThrow();
+    }
+
+    private static int countHouseAccounts(JdbcTemplate jdbc) {
+        Integer count = jdbc.queryForObject(
+                "SELECT count(*) FROM commercial_party WHERE house_account IS NOT NULL", Integer.class);
+        return count == null ? 0 : count;
     }
 
     private static int countByName(JdbcTemplate jdbc, String name) {

@@ -97,6 +97,16 @@ class CrmExceptionHandlerTest {
     }
 
     @Test
+    @DisplayName("maps a write to a house account to 409 HOUSE_ACCOUNT_IMMUTABLE (CAP:550 S7)")
+    void houseAccountImmutable() {
+        ResponseEntity<ApiError> result = handler.handleHouseAccountImmutable(
+                new com.positivity.customer.internal.exception.HouseAccountImmutableException(ID), request, response);
+
+        assertEnvelope(result, HttpStatus.CONFLICT, "HOUSE_ACCOUNT_IMMUTABLE");
+        assertThat(result.getBody().message()).contains("house account");
+    }
+
+    @Test
     @DisplayName("maps a permission failure to 403 without naming the missing authority")
     void accessDenied() {
         ResponseEntity<ApiError> result =
@@ -263,6 +273,11 @@ class CrmExceptionHandlerTest {
                                     new CrmDuplicateResourceException("Segment", "VIP"), request, response)),
                     Named.of("handleConflict", (HandlerInvocation) (request, response) -> h.handleConflict(
                             new CrmConflictException("Fact publication is disabled"), request, response)),
+                    Named.of("handleHouseAccountImmutable", (HandlerInvocation)
+                            (request, response) -> h.handleHouseAccountImmutable(
+                                    new com.positivity.customer.internal.exception.HouseAccountImmutableException(ID),
+                                    request,
+                                    response)),
                     Named.of("handleUnprocessable", (HandlerInvocation) (request, response) -> h.handleUnprocessable(
                             new CrmUnprocessableEntityException("predicate references an unknown attribute"),
                             request,

@@ -52,6 +52,11 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * {@link com.positivity.domainevents.workorder.WorkorderUpdatedV1} for why, and do not "fix" it by
  * deriving it from {@code now()}.
  *
+ * <p>The fact also carries {@code appointmentId} (#2531) — the source appointment of the estimate
+ * the workorder was promoted from — which is the only way pos-shop-manager can learn which
+ * appointment a workorder belongs to. Read as an id-only projection for the whole pending set, for
+ * the reason {@link WorkorderRepository#findSourceAppointments} gives.
+ *
  * <p>{@code mechanicIds} (#2015) is the workorder's current {@code technician_assignment} first,
  * followed by any {@code mechanic_ids} entry not already named — the same rule
  * {@code DashboardServiceImpl.assignedMechanics} applies for the dispatch board. The technician
@@ -143,6 +148,14 @@ public class WorkorderFactPublisher {
             }
         }
 
+        // Also one batched query (#2531): the appointment each workorder's estimate came from.
+        Map<UUID, UUID> sourceAppointmentByWorkorder = new HashMap<>();
+        for (WorkorderRepository.SourceAppointment source : workorderRepository.findSourceAppointments(pending)) {
+            if (source.getWorkorderId() != null && source.getAppointmentId() != null) {
+                sourceAppointmentByWorkorder.putIfAbsent(source.getWorkorderId(), source.getAppointmentId());
+            }
+        }
+
         for (UUID workorderId : pending) {
             Workorder workorder = workorderRepository.findById(workorderId).orElse(null);
             if (workorder == null) {
@@ -186,7 +199,9 @@ public class WorkorderFactPublisher {
                     // estimated remaining labour (ADR-0058/ADR-0059, both PROPOSED and not built), and
                     // a guessed projection would be indistinguishable from a known one to a consumer.
                     // Same precedent as promisedAt above — null until the owner actually has the field.
-                    null);
+                    null,
+                    // The appointment this work was booked as (#2531); null for a walk-in.
+                    sourceAppointmentByWorkorder.get(workorderId));
             writer.publish(
                     WorkorderUpdatedV1.EVENT_TYPE,
                     WorkorderUpdatedV1.SCHEMA_VERSION,

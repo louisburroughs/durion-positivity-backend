@@ -129,6 +129,8 @@ public class CrmCommunicationPreferencesController {
                     Emits a CRM_COMMUNICATION_PREFERENCES_UPSERT event and writes the preference record, \
                     reporting operationType CREATED or UPDATED with a new version.
                     Returns 404 when no party exists for the supplied partyId.
+                    Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant's system house account \
+                    (the CASH walk-in account), which no request can change.
                     """)
     @ApiResponses(
             value = {
@@ -158,6 +160,14 @@ public class CrmCommunicationPreferencesController {
                 @ApiResponse(
                         responseCode = "404",
                         description = "Party not found",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "409",
+                        description =
+                                "HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant's system house account (the CASH walk-in account), which no request can change",
                         content =
                                 @Content(
                                         mediaType = "application/json",

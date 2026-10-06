@@ -133,6 +133,28 @@ class VehicleEventsListenerTest {
     }
 
     @Test
+    @DisplayName("Never attaches a VIN to the CASH house account, and never fails the consumer (#2505)")
+    void skipsAssociationForHouseAccount() {
+        CommercialParty houseAccount = commercialParty(ACCOUNT_ID);
+        houseAccount.setHouseAccount(com.positivity.customer.internal.enums.HouseAccountKind.CASH_SALE);
+        when(processedEvents.existsById("e-house")).thenReturn(false);
+        when(replica.findById(VEHICLE_ID)).thenReturn(Optional.empty());
+        when(personParties.findByVehicleVin(VIN)).thenReturn(List.of());
+        when(commercialParties.findByVehicleVin(VIN)).thenReturn(List.of());
+        when(personParties.findById(ACCOUNT_ID)).thenReturn(Optional.empty());
+        when(commercialParties.findById(ACCOUNT_ID)).thenReturn(Optional.of(houseAccount));
+
+        // A fact naming the house account as owner is the vehicle owner's data, not a request:
+        // it is consumed (replica row and processed marker), but nothing is written to the party.
+        listener.onVehicleEvent(event("e-house", 0, ACCOUNT_ID, true));
+
+        assertThat(houseAccount.getVehicleVins()).isEmpty();
+        verify(commercialParties, never()).save(any());
+        verify(replica).save(any());
+        verify(processedEvents).save(any());
+    }
+
+    @Test
     @DisplayName("Moves the VIN between parties on ownership transfer")
     void movesAssociationOnTransfer() {
         CommercialParty previousOwner = commercialParty(OTHER_PARTY_ID);

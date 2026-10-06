@@ -431,7 +431,9 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
 
         // When: deactivating
         partyRelationshipService.deactivateRelationship(
-                created.getRelationshipId(), UUID.fromString("00000000-0000-0000-0000-000000000001"));
+                testParty.getPartyId(),
+                created.getRelationshipId(),
+                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
         // Then: end date set to today
         PartyRelationship relationship = partyRelationshipRepository

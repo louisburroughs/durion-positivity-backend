@@ -9,6 +9,7 @@ import static org.assertj.core.api.Assertions.tuple;
 import com.positivity.accounting.internal.dto.EnableTemplateAddOnRequest;
 import com.positivity.accounting.internal.dto.IncomeStatementReport;
 import com.positivity.accounting.internal.dto.TenantTemplateStatusResponse;
+import com.positivity.accounting.internal.entity.AccountingConfiguration;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.entity.GLMapping;
 import com.positivity.accounting.internal.entity.MappingKey;
@@ -19,6 +20,7 @@ import com.positivity.accounting.internal.enums.StatementType;
 import com.positivity.accounting.internal.enums.TemplateEntryReason;
 import com.positivity.accounting.internal.enums.TenantTemplateState;
 import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
+import com.positivity.accounting.internal.repository.AccountingConfigurationRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.GLMappingRepository;
 import com.positivity.accounting.internal.repository.MappingKeyRepository;
@@ -29,6 +31,7 @@ import com.positivity.accounting.internal.service.AccountingTemplate;
 import com.positivity.accounting.internal.service.AccountingTemplateApplier;
 import com.positivity.accounting.internal.service.AccountingTemplateReader;
 import com.positivity.accounting.internal.service.AccountingTemplateStartupSweep;
+import com.positivity.accounting.internal.service.AccountingTemplateStateLock;
 import com.positivity.accounting.internal.service.AccountingTenantProvisioner;
 import com.positivity.accounting.internal.service.FinancialReportingService;
 import com.positivity.accounting.internal.service.GLMappingResolver;
@@ -58,6 +61,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -124,6 +128,12 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
 
     @Autowired
     private AccountingTemplateReader templateReader;
+
+    @Autowired
+    private AccountingTemplateStateLock stateLock;
+
+    @Autowired
+    private AccountingConfigurationRepository configuration;
 
     @Autowired
     private AccountingTenantProvisioner provisioner;
@@ -250,6 +260,14 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
                 .isEqualTo(1);
         assertThat(count(t2, "override_policy_threshold")).isEqualTo(3);
         assertThat(count(t2, "refund_policy_config")).isEqualTo(1);
+        assertThat(owner.queryForObject(
+                        "SELECT count(*) FROM statement_line_mappings l JOIN gl_account a ON a.gl_account_id ="
+                                + " l.gl_account_id WHERE l.tenant_id = ? AND (l.location_id IS NOT NULL OR"
+                                + " l.account_name IS DISTINCT FROM a.account_name)",
+                        Integer.class,
+                        t2))
+                .as("every created line is global and names its account by name")
+                .isZero();
 
         // New UUIDv7 ids, never a template row's id, and the system actor on every row with an actor.
         for (Map.Entry<String, String> table : Map.of(
@@ -950,6 +968,143 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
 
         assertThat(rows(t2)).as("a replay changes nothing").isEqualTo(afterFirst);
         assertThat(replayed).isEqualTo(enabled);
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Review round 1: location overrides, and the lock before any decision.
+    // ------------------------------------------------------------------------------------------
+
+    @Test
+    @DisplayName(
+            "a tenant holding only a location override of a new template line gets the global line; the override is untouched")
+    void locationOverrideIsNotAdoptedAsTheGlobalLine() {
+        UUID t2 = newTenant();
+        AccountingTemplate snapshot = templateReader.snapshot();
+        provision(t2, snapshot);
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+        // T2 opened its own 4100 and reports it on the income statement for one location only.
+        UUID overrideId = asTenant(
+                t2,
+                () -> tx.execute(status -> {
+                    GLAccount parts = new GLAccount(UUIDv7Generator.generate());
+                    parts.setAccountCode("4100");
+                    parts.setAccountName("Parts Revenue");
+                    parts.setAccountType(AccountType.REVENUE);
+                    parts.setCreatedBy("carol.controller");
+                    parts.setModifiedBy("carol.controller");
+                    glAccounts.save(parts);
+                    return statementLines
+                            .save(StatementLineMapping.builder()
+                                    .glAccount(parts)
+                                    .accountName("Parts Revenue")
+                                    .statementType(StatementType.INCOME_STATEMENT)
+                                    .statementLineCode("TULSA_PARTS")
+                                    .lineDescription("Tulsa parts counter")
+                                    .displayOrder(5)
+                                    .operation(OperationType.SUM)
+                                    .locationId("TULSA")
+                                    .build())
+                            .getMappingId();
+                }));
+        List<String> overrideBefore = owner().queryForList(
+                        "SELECT row_to_json(l)::text FROM statement_line_mappings l WHERE tenant_id = ? AND mapping_id = ?",
+                        String.class,
+                        t2,
+                        overrideId);
+
+        // The template gains 4100 and its income-statement line.
+        provision(
+                t2,
+                plus(
+                        snapshot,
+                        new AccountingTemplate.Account(
+                                "4100", "Parts Revenue", AccountType.REVENUE, null, false, null, TEMPLATE_EFFECTIVE),
+                        new AccountingTemplate.StatementLine(
+                                StatementType.INCOME_STATEMENT,
+                                "4100",
+                                "REVENUE",
+                                null,
+                                "REVENUE",
+                                2,
+                                OperationType.SUM)));
+
+        List<Map<String, Object>> lines = owner().queryForList(
+                        "SELECT l.location_id, l.statement_line_code, l.account_name FROM statement_line_mappings l JOIN"
+                                + " gl_account a ON a.gl_account_id = l.gl_account_id WHERE l.tenant_id = ? AND a.account_code"
+                                + " = '4100' AND l.statement_type = 'INCOME_STATEMENT' ORDER BY l.location_id NULLS FIRST",
+                        t2);
+        assertThat(lines).hasSize(2);
+        assertThat(lines.get(0))
+                .containsEntry("location_id", null)
+                .containsEntry("statement_line_code", "REVENUE")
+                .containsEntry("account_name", "Parts Revenue");
+        assertThat(lines.get(1))
+                .containsEntry("location_id", "TULSA")
+                .containsEntry("statement_line_code", "TULSA_PARTS");
+        assertThat(owner().queryForList(
+                                "SELECT row_to_json(l)::text FROM statement_line_mappings l WHERE tenant_id = ? AND mapping_id = ?",
+                                String.class,
+                                t2,
+                                overrideId))
+                .as("the override is exactly as the tenant left it")
+                .isEqualTo(overrideBefore);
+        assertThat(owner().queryForObject(
+                                "SELECT outcome FROM accounting_template_entry WHERE tenant_id = ? AND entry_key ="
+                                        + " 'STATEMENT_LINE:INCOME_STATEMENT:4100'",
+                                String.class,
+                                t2))
+                .isEqualTo("CREATED");
+        assertThat(owner().queryForObject(
+                                "SELECT outcome FROM accounting_template_entry WHERE tenant_id = ? AND entry_key = 'ACCOUNT:4100'",
+                                String.class,
+                                t2))
+                .isEqualTo("ADOPTED");
+    }
+
+    @Test
+    @DisplayName(
+            "a sweep that arrives while an add-on choice is being committed applies the full template, not the stale generic one")
+    void sweepWaitingBehindAnAddOnChoiceAppliesTheFullTemplate() throws Exception {
+        UUID t2 = newTenant();
+        AccountingTemplate snapshot = templateReader.snapshot();
+        provision(t2, snapshot);
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+        CountDownLatch lockHeld = new CountDownLatch(1);
+
+        // The add-on choice: the state row locked first, the choice written, a slow commit.
+        Callable<Boolean> choice = () -> asTenant(
+                t2,
+                () -> tx.execute(status -> {
+                    stateLock.acquire();
+                    AccountingConfiguration row = new AccountingConfiguration();
+                    row.setConfigKey(RetreadPlantAddOnSource.CONFIG_KEY);
+                    row.setConfigValue(RetreadPlantAddOnSource.ON);
+                    configuration.saveAndFlush(row);
+                    lockHeld.countDown();
+                    try {
+                        Thread.sleep(1500);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                    return true;
+                }));
+        // The sweep: started once the choice holds the lock, so it must wait for the commit.
+        Callable<Boolean> sweep = () -> {
+            assertThat(lockHeld.await(30, TimeUnit.SECONDS)).isTrue();
+            return asTenant(t2, () -> provisioner.provision(t2, null, snapshot))
+                    .orElseThrow()
+                    .changed();
+        };
+
+        List<Boolean> results = runTogether(choice, sweep);
+
+        assertThat(results.get(1)).as("the sweep applied the add-on").isTrue();
+        assertThat(codes(t2)).containsAll(RetreadPlantAddOnSource.ACCOUNT_CODES);
+        TenantTemplateStatusResponse status = status(t2);
+        assertThat(status.retreadPlantAddOn()).isTrue();
+        assertThat(status.state())
+                .as("the fingerprint recorded is the full template's")
+                .isEqualTo(TenantTemplateState.UP_TO_DATE);
     }
 
     // ------------------------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -411,6 +412,79 @@ class WorkorderFactPublisherTest {
         verify(writer).publish(any(), anyInt(), any(), anyLong(), payloadCaptor.capture());
         assertThat(((WorkorderUpdatedV1) payloadCaptor.getValue()).mechanicIds())
                 .containsExactly(plannedMechanicId);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Source appointment (#2531)
+    // ---------------------------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("#2531 - a workorder promoted from an appointment's estimate publishes that appointmentId")
+    void publishesTheSourceAppointment() {
+        UUID workorderId = UUID.randomUUID();
+        UUID appointmentId = UUID.randomUUID();
+        Workorder workorder = Workorder.builder()
+                .id(workorderId)
+                .status(WorkorderStatus.APPROVED)
+                .version(1L)
+                .build();
+        when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
+        when(workorderPartRepository.findByWorkorderId(workorderId)).thenReturn(List.of());
+        when(workorderRepository.findSourceAppointments(Set.of(workorderId)))
+                .thenReturn(List.of(sourceAppointment(workorderId, appointmentId)));
+
+        publisher.markChanged(workorderId);
+        fireBeforeCommit();
+
+        ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(writer).publish(any(), anyInt(), any(), anyLong(), payloadCaptor.capture());
+        assertThat(((WorkorderUpdatedV1) payloadCaptor.getValue()).appointmentId())
+                .isEqualTo(appointmentId);
+    }
+
+    @Test
+    @DisplayName("#2531 - a walk-in publishes a null appointmentId, and one batched lookup serves the whole commit")
+    void walkInPublishesNoSourceAppointment() {
+        UUID linkedId = UUID.randomUUID();
+        UUID walkInId = UUID.randomUUID();
+        UUID appointmentId = UUID.randomUUID();
+        for (UUID id : List.of(linkedId, walkInId)) {
+            when(workorderRepository.findById(id))
+                    .thenReturn(Optional.of(Workorder.builder()
+                            .id(id)
+                            .status(WorkorderStatus.APPROVED)
+                            .version(1L)
+                            .build()));
+            when(workorderPartRepository.findByWorkorderId(id)).thenReturn(List.of());
+        }
+        when(workorderRepository.findSourceAppointments(Set.of(linkedId, walkInId)))
+                .thenReturn(List.of(sourceAppointment(linkedId, appointmentId)));
+
+        publisher.markChanged(linkedId);
+        publisher.markChanged(walkInId);
+        fireBeforeCommit();
+
+        verify(workorderRepository, times(1)).findSourceAppointments(any());
+        ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(writer, times(2)).publish(any(), anyInt(), any(), anyLong(), payloadCaptor.capture());
+        assertThat(payloadCaptor.getAllValues())
+                .extracting(payload -> (WorkorderUpdatedV1) payload)
+                .extracting(WorkorderUpdatedV1::workorderId, WorkorderUpdatedV1::appointmentId)
+                .containsExactly(tuple(linkedId, appointmentId), tuple(walkInId, null));
+    }
+
+    private static WorkorderRepository.SourceAppointment sourceAppointment(UUID workorderId, UUID appointmentId) {
+        return new WorkorderRepository.SourceAppointment() {
+            @Override
+            public UUID getWorkorderId() {
+                return workorderId;
+            }
+
+            @Override
+            public UUID getAppointmentId() {
+                return appointmentId;
+            }
+        };
     }
 
     @Test

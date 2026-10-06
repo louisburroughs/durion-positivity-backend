@@ -51,6 +51,7 @@ class AccountingTenantProvisionerTest {
     private final ProcessedEventRepository processedEvents = mock(ProcessedEventRepository.class);
     private final AccountingTemplateSource generic = mock(AccountingTemplateSource.class);
     private final AccountingTemplateSource addOn = mock(AccountingTemplateSource.class);
+    private final AccountingTemplateStateLock stateLock = mock(AccountingTemplateStateLock.class);
     private final MeterRegistry meters = new SimpleMeterRegistry();
 
     private AccountingTenantProvisioner provisioner;
@@ -70,6 +71,7 @@ class AccountingTenantProvisionerTest {
         ObjectProvider<MeterRegistry> meterProvider = mock(ObjectProvider.class);
         when(meterProvider.getIfAvailable()).thenReturn(meters);
         provisioner = new AccountingTenantProvisioner(
+                stateLock,
                 applier,
                 List.of(generic, addOn),
                 policyDefaults,
@@ -106,6 +108,22 @@ class AccountingTenantProvisionerTest {
                         .counter()
                         .count())
                 .isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("the tenant's state row is locked before the eventId is re-checked and before the sources are asked")
+    void locksBeforeDecidingAnything() {
+        provisioner.provision(TENANT, EVENT_ID, SNAPSHOT);
+        provisioner.reconcile(TENANT, SNAPSHOT);
+
+        InOrder order = inOrder(stateLock, processedEvents, addOn, applier);
+        order.verify(stateLock).acquire();
+        order.verify(processedEvents).existsById(EVENT_ID);
+        order.verify(addOn).appliesTo(TENANT);
+        order.verify(applier).apply(any(), any());
+        order.verify(stateLock).acquire();
+        order.verify(addOn).appliesTo(TENANT);
+        order.verify(applier).apply(any(), any());
     }
 
     @Test

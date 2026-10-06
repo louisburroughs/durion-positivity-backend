@@ -289,6 +289,9 @@
                                              default at runtime, but the generated spec must still
                                              describe it or the SDK silently loses the operation. -->
                                         <argument>--pos.customer.inquiry.public.enabled=true</argument>
+                                        <!-- CAP:550 S7 (#2505): this boot only dumps the spec; it has no
+                                             business provisioning a CASH house account into the throwaway H2. -->
+                                        <argument>--pos.customer.house-account.enabled=false</argument>
                                         <argument>--spring.boot.admin.client.enabled=false</argument>
                                         <argument>--logging.level.root=WARN</argument>
                                         <argument>--logging.level.org.hibernate.SQL=ERROR</argument>

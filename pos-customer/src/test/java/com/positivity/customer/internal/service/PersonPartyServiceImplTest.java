@@ -76,7 +76,11 @@ class PersonPartyServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new PersonPartyServiceImpl(customerRepository, personDirectoryService, customerFactPublisher);
+        service = new PersonPartyServiceImpl(
+                customerRepository,
+                personDirectoryService,
+                customerFactPublisher,
+                org.mockito.Mockito.mock(HouseAccountGuard.class));
         when(personDirectoryService.fetchPersonIdentitiesQuietly(anyCollection()))
                 .thenReturn(Map.of());
     }

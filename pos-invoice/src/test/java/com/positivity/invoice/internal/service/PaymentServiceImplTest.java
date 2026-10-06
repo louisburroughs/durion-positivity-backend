@@ -21,6 +21,7 @@ import com.positivity.invoice.internal.enums.PaymentIntentStatus;
 import com.positivity.invoice.internal.enums.RefundStatus;
 import com.positivity.invoice.internal.exception.InvalidPaymentStateException;
 import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
+import com.positivity.invoice.internal.exception.InvoicePartyRequiredException;
 import com.positivity.invoice.internal.exception.PaymentDeclinedException;
 import com.positivity.invoice.internal.exception.PaymentIdempotencyConflictException;
 import com.positivity.invoice.internal.exception.PaymentIntentNotFoundException;
@@ -92,6 +93,7 @@ class PaymentServiceImplTest {
     private static final UUID OTHER_INVOICE_ID = UUID.fromString("00000000-0000-0000-0000-000000000099");
     private static final UUID PAYMENT_INTENT_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
     private static final UUID OTHER_PAYMENT_INTENT_ID = UUID.fromString("00000000-0000-0000-0000-000000000098");
+    private static final String PARTY_ID = "00000000-0000-0000-0000-0000000000aa";
     private static final String IDEMPOTENCY_KEY = "idem-key-001";
     private static final String CAPTURE_IDEMPOTENCY_KEY = "capture-idempotency-key-001";
     private static final BigDecimal AMOUNT_BELOW_LIMIT = BigDecimal.valueOf(200_00, 2);
@@ -680,10 +682,136 @@ class PaymentServiceImplTest {
         };
     }
 
+    /** An invoice that names a customer, as every invoice reaching a payment must (CAP:550 S9). */
     private Invoice invoice(UUID id) {
         Invoice invoice = new Invoice();
         invoice.setId(id);
+        invoice.setPartyId(PARTY_ID);
         return invoice;
+    }
+
+    // -------------------------------------------------------------------------
+    // CAP:550 S9 — party backstops (spec §4.4 item 1, AW12)
+    // -------------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("party backstops (CAP:550 S9, #2507)")
+    class PartyBackstops {
+
+        private Invoice partyLessInvoice(String partyId) {
+            Invoice invoice = new Invoice();
+            invoice.setId(INVOICE_ID);
+            invoice.setInvoiceNumber("INV-000009");
+            invoice.setPartyId(partyId);
+            return invoice;
+        }
+
+        /** AC2: no PaymentIntent row and no gateway call for a null party. */
+        @Test
+        @DisplayName("initiatePayment (SALE_CAPTURE) on a null-party invoice: 422, no intent saved, gateway untouched")
+        void initiatePayment_nullParty_refusedBeforeIntentAndGateway() {
+            withAuthorities(InvoicePermissions.PAYMENT_PROCESS);
+            var request = buildRequest(PaymentFlow.SALE_CAPTURE, AMOUNT_BELOW_LIMIT, IDEMPOTENCY_KEY);
+            when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(partyLessInvoice(null)));
+            when(paymentIntentRepository.findByIdempotencyKey(IDEMPOTENCY_KEY)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> paymentService.initiatePayment(INVOICE_ID, request))
+                    .isInstanceOf(InvoicePartyRequiredException.class)
+                    .hasMessageContaining("no customer");
+
+            verify(paymentIntentRepository, never()).save(any());
+            verifyNoInteractions(gatewayPort);
+            verifyNoInteractions(paymentEventPublisher);
+        }
+
+        /** A blank party is as missing as a null one. */
+        @Test
+        @DisplayName("initiatePayment (AUTH_ONLY) on a blank-party invoice: 422, no intent saved, gateway untouched")
+        void initiatePayment_blankParty_refusedBeforeIntentAndGateway() {
+            withAuthorities(InvoicePermissions.PAYMENT_PROCESS, InvoicePermissions.PAYMENT_FLOW_SELECT);
+            var request = buildRequest(PaymentFlow.AUTH_ONLY, AMOUNT_BELOW_LIMIT, IDEMPOTENCY_KEY);
+            when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(partyLessInvoice("  ")));
+            when(paymentIntentRepository.findByIdempotencyKey(IDEMPOTENCY_KEY)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> paymentService.initiatePayment(INVOICE_ID, request))
+                    .isInstanceOf(InvoicePartyRequiredException.class);
+
+            verify(paymentIntentRepository, never()).save(any());
+            verifyNoInteractions(gatewayPort);
+        }
+
+        /** AC3: an AUTHORIZED hold on a party-less invoice is not captured and stays AUTHORIZED. */
+        @Test
+        @DisplayName("capturePayment on a null-party invoice: 422, gateway capture not called, hold stays AUTHORIZED")
+        void capturePayment_nullParty_refusedBeforeGateway() {
+            withAuthorities(InvoicePermissions.PAYMENT_CAPTURE);
+            PaymentIntent intent = authorizedPaymentIntent(AMOUNT_BELOW_LIMIT);
+            intent.setInvoice(partyLessInvoice(null));
+            when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(intent));
+
+            assertThatThrownBy(() -> paymentService.capturePayment(
+                            INVOICE_ID, PAYMENT_INTENT_ID, AMOUNT_BELOW_LIMIT, CAPTURE_IDEMPOTENCY_KEY))
+                    .isInstanceOf(InvoicePartyRequiredException.class);
+
+            assertThat(intent.getStatus()).isEqualTo(PaymentIntentStatus.AUTHORIZED);
+            verify(paymentIntentRepository, never()).save(any());
+            verifyNoInteractions(gatewayPort);
+            verifyNoInteractions(paymentEventPublisher);
+        }
+
+        /** The state check still comes first: a non-AUTHORIZED intent answers INVALID_PAYMENT_STATE, not the party code. */
+        @Test
+        @DisplayName("capturePayment: the AUTHORIZED state check precedes the party check")
+        void capturePayment_stateCheckPrecedesPartyCheck() {
+            withAuthorities(InvoicePermissions.PAYMENT_CAPTURE);
+            PaymentIntent intent = capturedPaymentIntent();
+            intent.setInvoice(partyLessInvoice(null));
+            when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(intent));
+
+            assertThatThrownBy(() -> paymentService.capturePayment(
+                            INVOICE_ID, PAYMENT_INTENT_ID, AMOUNT_BELOW_LIMIT, CAPTURE_IDEMPOTENCY_KEY))
+                    .isInstanceOf(InvalidPaymentStateException.class);
+            verifyNoInteractions(gatewayPort);
+        }
+
+        /** AC8: a replay of an intent created before deploy returns the stored intent unchanged, party or not. */
+        @Test
+        @DisplayName("initiatePayment replay of a pre-deploy intent on a party-less invoice returns it unchanged")
+        void initiatePayment_replayOnPartyLessInvoice_returnsStoredIntent() {
+            withAuthorities(InvoicePermissions.PAYMENT_PROCESS);
+            var request = buildRequest(PaymentFlow.SALE_CAPTURE, AMOUNT_BELOW_LIMIT, IDEMPOTENCY_KEY);
+            PaymentIntent stored = capturedPaymentIntent();
+            stored.setInvoice(partyLessInvoice(null));
+            when(paymentIntentRepository.findByIdempotencyKey(IDEMPOTENCY_KEY)).thenReturn(Optional.of(stored));
+
+            InitiatePaymentResponse response = paymentService.initiatePayment(INVOICE_ID, request);
+
+            assertThat(response.getPaymentIntentId()).isEqualTo(PAYMENT_INTENT_ID);
+            assertThat(response.getStatus()).isEqualTo(PaymentIntentStatus.CAPTURED);
+            verify(paymentIntentRepository, never()).save(any());
+            verifyNoInteractions(gatewayPort);
+            verifyNoInteractions(paymentEventPublisher);
+        }
+
+        /** AC4: the CASH house account is a valid party — a sale-capture on it settles and publishes. */
+        @Test
+        @DisplayName("initiatePayment on the CASH house-account party captures and publishes the settled fact")
+        void initiatePayment_cashHouseAccountParty_captures() {
+            withAuthorities(InvoicePermissions.PAYMENT_PROCESS);
+            var request = buildRequest(PaymentFlow.SALE_CAPTURE, AMOUNT_BELOW_LIMIT, IDEMPOTENCY_KEY);
+            Invoice cashInvoice = partyLessInvoice("00000000-0000-0000-0000-0000000000ca");
+            when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(cashInvoice));
+            when(paymentIntentRepository.findByIdempotencyKey(IDEMPOTENCY_KEY)).thenReturn(Optional.empty());
+            when(gatewayPort.saleCapture(any())).thenReturn(capturedResult(AMOUNT_BELOW_LIMIT));
+            when(paymentIntentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            InitiatePaymentResponse response = paymentService.initiatePayment(INVOICE_ID, request);
+
+            assertThat(response.getStatus()).isEqualTo(PaymentIntentStatus.CAPTURED);
+            ArgumentCaptor<PaymentIntent> captor = ArgumentCaptor.forClass(PaymentIntent.class);
+            verify(paymentEventPublisher).publishPaymentSettled(captor.capture());
+            assertThat(captor.getValue().getInvoice().getPartyId()).isEqualTo("00000000-0000-0000-0000-0000000000ca");
+        }
     }
 
     // -------------------------------------------------------------------------

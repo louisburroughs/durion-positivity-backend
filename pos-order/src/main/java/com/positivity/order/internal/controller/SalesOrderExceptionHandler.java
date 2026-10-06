@@ -1,14 +1,19 @@
 package com.positivity.order.internal.controller;
 
 import com.positivity.order.internal.exception.InvalidSkuException;
+import com.positivity.order.internal.exception.OrderCustomerRequiredException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.order.internal.exception.SalesOrderRequestValidationException;
 import com.positivity.order.internal.exception.SalesOrderUnprocessableException;
+import com.positivity.order.internal.exception.WalkInNotAllowedException;
+import com.positivity.order.internal.exception.WalkInNotPaidInFullException;
+import com.positivity.order.internal.exception.WalkInUnavailableException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -93,6 +98,64 @@ public class SalesOrderExceptionHandler {
                         HttpStatus.UNPROCESSABLE_CONTENT.value(),
                         Instant.now(clock).toString(),
                         correlationId));
+    }
+
+    /**
+     * Checkout of a cart that names no customer (CAP:550 S8, decision AW12). A domain rule
+     * refusing a well-formed request on an attribute of the cart — a 422 per ADR-0017 §2.
+     */
+    @ExceptionHandler(OrderCustomerRequiredException.class)
+    public ResponseEntity<ApiError> handleCustomerRequired(
+            OrderCustomerRequiredException ex, HttpServletRequest request) {
+        return unprocessable("ORDER_CUSTOMER_REQUIRED", ex.getMessage(), List.of(), request);
+    }
+
+    /** Walk-in chosen while the replica holds no active CASH house account for the tenant (CAP:550 S8). */
+    @ExceptionHandler(WalkInUnavailableException.class)
+    public ResponseEntity<ApiError> handleWalkInUnavailable(WalkInUnavailableException ex, HttpServletRequest request) {
+        return unprocessable("ORDER_WALK_IN_UNAVAILABLE", ex.getMessage(), List.of(), request);
+    }
+
+    /**
+     * A walk-in cart asked for on-account tender, a deposit take or a workorder link (CAP:550
+     * S8). {@code fieldErrors[walkIn]} carries which: ON_ACCOUNT, DEPOSIT or WORKORDER_LINK.
+     */
+    @ExceptionHandler(WalkInNotAllowedException.class)
+    public ResponseEntity<ApiError> handleWalkInNotAllowed(WalkInNotAllowedException ex, HttpServletRequest request) {
+        return unprocessable(
+                "ORDER_WALK_IN_NOT_ALLOWED",
+                ex.getMessage(),
+                List.of(new ApiError.FieldError("walkIn", ex.getReason().name())),
+                request);
+    }
+
+    /**
+     * A walk-in checkout whose declared tender is absent or below the final grand total (CAP:550
+     * S8). {@code fieldErrors[tenderedAmount]} names the grand total to tender.
+     */
+    @ExceptionHandler(WalkInNotPaidInFullException.class)
+    public ResponseEntity<ApiError> handleWalkInNotPaidInFull(
+            WalkInNotPaidInFullException ex, HttpServletRequest request) {
+        return unprocessable(
+                "ORDER_WALK_IN_NOT_PAID_IN_FULL",
+                ex.getMessage(),
+                List.of(new ApiError.FieldError(
+                        "tenderedAmount", "must cover the grand total " + ex.grandTotalDisplay())),
+                request);
+    }
+
+    private ResponseEntity<ApiError> unprocessable(
+            String code, String message, List<ApiError.FieldError> fieldErrors, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        String timestamp = Instant.now(clock).toString();
+        int status = HttpStatus.UNPROCESSABLE_CONTENT.value();
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(
+                        fieldErrors.isEmpty()
+                                ? ApiError.of(code, message, status, timestamp, correlationId)
+                                : ApiError.withFieldErrors(
+                                        code, message, status, timestamp, correlationId, fieldErrors));
     }
 
     @ExceptionHandler(InvalidSkuException.class)

@@ -50,13 +50,16 @@ public class CommunicationPreferenceServiceImpl implements CommunicationPreferen
     private final CommunicationPreferenceRepository preferenceRepository;
     private final CommercialPartyRepository partyRepository;
     private final PersonPartyRepository personPartyRepository;
+    private final HouseAccountGuard houseAccountGuard;
 
     public CommunicationPreferenceServiceImpl(
             CommunicationPreferenceRepository preferenceRepository,
             CommercialPartyRepository partyRepository,
             PersonPartyRepository personPartyRepository,
-            Clock clock) {
+            Clock clock,
+            HouseAccountGuard houseAccountGuard) {
         this.clock = clock;
+        this.houseAccountGuard = houseAccountGuard;
         this.preferenceRepository = preferenceRepository;
         this.partyRepository = partyRepository;
         this.personPartyRepository = personPartyRepository;
@@ -103,6 +106,7 @@ public class CommunicationPreferenceServiceImpl implements CommunicationPreferen
     @Transactional
     public UpsertCommunicationPreferencesResponse upsertCommunicationPreferences(
             @NonNull UUID partyId, @NonNull UpsertCommunicationPreferencesRequest request) {
+        houseAccountGuard.requireNotHouseAccount(partyId);
         assertPartyExists(partyId);
 
         // Find existing preferences or create new

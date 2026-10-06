@@ -134,6 +134,11 @@ class SalesOrderServiceImplTest {
         SecurityContextHolder.clearContext();
     }
 
+    /** CAP:550 S8: no meter registry in these unit tests; refusals are logged but not counted. */
+    @SuppressWarnings("unchecked")
+    private final org.springframework.beans.factory.ObjectProvider<io.micrometer.core.instrument.MeterRegistry>
+            meterRegistryProvider = org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class);
+
     @BeforeEach
     void setUp() {
         // createCart now consults the caller's location scope (ADR-0061 §3, #1872): install a
@@ -163,7 +168,9 @@ class SalesOrderServiceImplTest {
                 orderNumberService,
                 new com.positivity.order.internal.service.OrderTotalsCalculator(),
                 orderTaxService,
+                new com.positivity.order.internal.service.HouseAccountReplica(extCustomerRepository),
                 inventoryCommandPublisherProvider,
+                meterRegistryProvider,
                 java.time.Clock.systemUTC());
         org.mockito.Mockito.lenient().when(orderNumberService.nextNumber(any())).thenReturn("SO-TEST-2607-000001");
     }

@@ -541,6 +541,28 @@ Tenant-scoped per ADR-0062 §3, mirroring `POST /v1/outbox/replay`: an ordinary 
 only its own rows, and a platform-tenant operator — who owns no workorder rows — fans out over every
 active tenant in turn, each from the beginning of its own bounded run (a cursor cannot span tenants).
 
+## Published workorder fact: source appointment (#2531)
+
+`WorkorderUpdatedV1` also carries `appointmentId`, additive within schema v1: the appointment the
+work was booked as, taken from the estimate the workorder was promoted from (`Estimate.appointmentId`,
+set by `createEstimateFromAppointment`). It is null for a walk-in and for any workorder whose
+estimate did not come from an appointment, and it never changes for a workorder.
+
+It is the only statement of that link that leaves this module. pos-shop-manager owns appointments and
+writes its `work_order_appointment_mapping` from this field; before the fact carried it, nothing wrote
+that table and the appointment status sync, the actual-versus-planned read and carry-over all had
+nothing to work from.
+
+The publisher reads it as an id-only projection for the whole commit
+(`WorkorderRepository.findSourceAppointments`), not through `workorder.getEstimate()`:
+`Workorder.setEstimateId` installs an id-only `Estimate` stub, which answers null for `appointmentId`
+in the transaction that created it.
+
+**Workorders that already exist** get the field on their next fact. For one that has started or
+completed, the `workorder.fact-backfill.requested` command above re-emits a fact from current state,
+which now carries `appointmentId`, so one backfill run links them. A workorder that never started is
+outside that command's selection and is linked the next time it changes.
+
 ## Pick facade (ADR-0044 §4/§6, #901; scan-by-code #2217; location scope #2204)
 
 `WorkorderPickFacadeController` / `WorkorderPickedItemsController` (`WorkorderPickFacadeServiceImpl`)

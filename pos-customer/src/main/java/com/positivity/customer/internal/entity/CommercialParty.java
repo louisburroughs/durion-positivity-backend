@@ -1,5 +1,6 @@
 package com.positivity.customer.internal.entity;
 
+import com.positivity.customer.internal.enums.HouseAccountKind;
 import com.positivity.customer.internal.enums.PartyType;
 import com.positivity.shared.id.UUIDv7Generator;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -10,6 +11,8 @@ import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -116,6 +119,22 @@ public class CommercialParty extends AbstractParty {
     @Nullable
     @Schema(description = "When the account-level marketing gate was last set")
     private Instant accountMarketingOptOutAt;
+
+    /**
+     * Marks this party as a system house account (CAP:550 S7, #2505): {@code CASH_SALE} for the
+     * tenant's CASH walk-in account, null for every ordinary party. Written once, by
+     * {@code HouseAccountProvisioner}, and never updatable — no request DTO, bulk-ingest record or
+     * command maps onto it. At most one per tenant, enforced by the partial unique index
+     * {@code commercial_party_house_account_uk}.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "house_account", columnDefinition = "VARCHAR(20)", updatable = false)
+    @Nullable
+    @Schema(
+            description = "House-account kind when this party is a system house account; null otherwise",
+            allowableValues = "CASH_SALE",
+            nullable = true)
+    private HouseAccountKind houseAccount;
 
     @PreUpdate
     @PrePersist

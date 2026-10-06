@@ -169,6 +169,8 @@ public class CrmFollowUpController {
                     optional, and an omitted assignedTo leaves the task in the shared queue.
                     Emits a CRM_FOLLOWUP_CREATE event and persists the task with status OPEN.
                     Returns 404 when no party exists for the supplied partyId, and 400 when type is missing.
+                    Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant's system house account \
+                    (the CASH walk-in account), which no request can change.
                     """)
     @ApiResponses({
         @ApiResponse(
@@ -182,6 +184,11 @@ public class CrmFollowUpController {
         @ApiResponse(
                 responseCode = "403",
                 description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "409",
+                description =
+                        "HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant's system house account (the CASH walk-in account), which no request can change",
                 content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PostMapping("/parties/{partyId}/follow-ups")

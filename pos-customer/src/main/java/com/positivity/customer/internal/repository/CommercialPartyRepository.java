@@ -1,8 +1,10 @@
 package com.positivity.customer.internal.repository;
 
 import com.positivity.customer.internal.entity.CommercialParty;
+import com.positivity.customer.internal.enums.HouseAccountKind;
 import com.positivity.tenancy.TenantAudited;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -33,6 +35,29 @@ public interface CommercialPartyRepository
      * same name is refused at create rather than left to poison those lookups (issue #1978).
      */
     Optional<CommercialParty> findFirstByLegalNameIgnoreCase(@NonNull String legalName);
+
+    /**
+     * Whether the given party is a system house account of the bound tenant (CAP:550 S7, #2505).
+     * The single read behind {@code HouseAccountGuard}; another tenant's house account is not a
+     * row this tenant can see, so it answers false (ADR-0062).
+     */
+    boolean existsByPartyIdAndHouseAccountIsNotNull(@NonNull UUID partyId);
+
+    /**
+     * Which of the given parties are house accounts of the bound tenant — one query for a whole
+     * request's worth of ids (static segment membership), instead of one lookup per id.
+     */
+    @Query("SELECT p.partyId FROM CommercialParty p WHERE p.houseAccount IS NOT NULL AND p.partyId IN :partyIds")
+    List<UUID> findHouseAccountIdsIn(@Param("partyIds") @NonNull Collection<UUID> partyIds);
+
+    /**
+     * A commercial party of the bound tenant holding exactly this customer number. Used to name the
+     * party that blocks provisioning when something else already took the house account's number.
+     */
+    Optional<CommercialParty> findFirstByCustomerNumber(@NonNull String customerNumber);
+
+    /** The bound tenant's house account of the given kind, if it has been provisioned. */
+    Optional<CommercialParty> findByHouseAccount(@NonNull HouseAccountKind houseAccount);
 
     /**
      * Commercial parties currently associated with the given vehicle VIN. Used by the

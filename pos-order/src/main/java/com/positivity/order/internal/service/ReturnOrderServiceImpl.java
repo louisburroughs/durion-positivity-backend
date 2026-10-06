@@ -21,6 +21,7 @@ import com.positivity.order.internal.exception.ReturnOrderNotFoundException;
 import com.positivity.order.internal.exception.ReturnOrderStateConflictException;
 import com.positivity.order.internal.exception.ReturnOrderUnprocessableException;
 import com.positivity.order.internal.exception.ReturnRequestValidationException;
+import com.positivity.order.internal.exception.ReturnWalkInNotAllowedException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.order.internal.exception.WarrantyReturnRoutingException;
 import com.positivity.order.internal.repository.OrderPaymentRecordRepository;
@@ -76,6 +77,7 @@ public class ReturnOrderServiceImpl implements ReturnOrderService {
     private final OrderPaymentRecordRepository paymentRecordRepository;
     private final InvoicingPort invoicingPort;
     private final OrderDomainEventPublisher domainEventPublisher;
+    private final HouseAccountReplica houseAccounts;
     private final Clock clock;
 
     /** Refund total above this amount requires order:return:approve before the saga runs. */
@@ -104,6 +106,16 @@ public class ReturnOrderServiceImpl implements ReturnOrderService {
                     + original.getOrderId() + " is " + original.getStatus());
         }
         RefundMethod refundMethod = parseRefundMethod(command.refundMethod());
+        // CAP:550 S8 (decision AW12): the CASH house account never carries a balance, so a walk-in
+        // sale is refunded to its original tender only. Refused here, before any return exists and
+        // long before the saga would issue the credit.
+        if (refundMethod != RefundMethod.ORIGINAL_TENDER && houseAccounts.isCashSale(original.getCustomerId())) {
+            log.info(
+                    "Return against order {} refused: RETURN_WALK_IN_NOT_ALLOWED ({} refund of a walk-in sale)",
+                    original.getOrderNumber(),
+                    refundMethod);
+            throw new ReturnWalkInNotAllowedException(refundMethod.name());
+        }
 
         Map<UUID, SalesOrderLine> soldLines = new HashMap<>();
         for (SalesOrderLine line : salesOrderLineRepository.findByOrder_OrderId(original.getOrderId())) {

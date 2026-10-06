@@ -103,6 +103,19 @@ public class SearchPartiesResponse {
         private String createdAt;
 
         /**
+         * House-account kind (CAP:550 S7): set only for a system house account, so a client can
+         * decide whether to show the row (the register search hides it).
+         */
+        @Schema(
+                description =
+                        "House-account kind when this party is a system house account (CASH_SALE is the tenant's walk-in CASH account, which no request can change); null for every ordinary party. Recognise a house account from this value only, never from a name or customer number.",
+                example = "CASH_SALE",
+                allowableValues = "CASH_SALE",
+                requiredMode = NOT_REQUIRED,
+                nullable = true)
+        private String houseAccount;
+
+        /**
          * Primary contact for the party, surfaced so the customer directory can render
          * it without a per-row fetch. Null when the party has no resolvable contact.
          */

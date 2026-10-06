@@ -96,6 +96,8 @@ public class CrmConsentController {
                     Emits a CRM_MARKETING_CONSENT_UPDATE event and republishes the resolved eligibility \
                     decision for both channels so downstream consumers never hold a stale allow.
                     Returns 404 when no party exists for the supplied partyId.
+                    Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant's system house account \
+                    (the CASH walk-in account), which no request can change.
                     """)
     @ApiResponses({
         @ApiResponse(
@@ -109,6 +111,11 @@ public class CrmConsentController {
         @ApiResponse(
                 responseCode = "403",
                 description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "409",
+                description =
+                        "HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant's system house account (the CASH walk-in account), which no request can change",
                 content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PutMapping("/marketing-consent")
@@ -150,6 +157,8 @@ public class CrmConsentController {
                     Emits a CRM_MARKETING_ACCOUNT_GATE_SET event, and when the gate actually flips it \
                     republishes the resolved eligibility decisions for both channels.
                     Returns 404 when no commercial party exists for the supplied partyId.
+                    Returns 409 HOUSE_ACCOUNT_IMMUTABLE when the target party is the tenant's system house account \
+                    (the CASH walk-in account), which no request can change.
                     """)
     @ApiResponses({
         @ApiResponse(
@@ -163,6 +172,11 @@ public class CrmConsentController {
         @ApiResponse(
                 responseCode = "403",
                 description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "409",
+                description =
+                        "HOUSE_ACCOUNT_IMMUTABLE: the target party is the tenant's system house account (the CASH walk-in account), which no request can change",
                 content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PutMapping("/marketing-consent/account-gate")
