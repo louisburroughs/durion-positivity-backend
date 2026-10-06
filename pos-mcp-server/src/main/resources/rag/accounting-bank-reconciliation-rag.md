@@ -199,7 +199,7 @@ Platform sources (repository-relative):
 - `pos-accounting/src/main/java/com/positivity/accounting/internal/bankrec/service/BankReconciliationLedgerChangeService.java`
   (`onPosted`, `onReversed`) and `ReconciliationLifecycle.invalidate` (only `FINALIZED` is invalidated)
 - `pos-accounting/src/main/java/com/positivity/accounting/internal/bankrec/readmodel/BankReconciliationCloseReadiness.java`
-  (`decide`), `AccountingPeriodGate.OVERRIDE_AUTHORITY`, `bankrec/intake/Justification.java` (`MIN_LENGTH = 10`),
+  (`decide`), `AccountingPermissions.PERIOD_OVERRIDE`, `bankrec/intake/Justification.java` (`MIN_LENGTH = 10`),
   `dto/PeriodCloseRequest.java`
 - `pos-accounting/README.md` ("Bank reconciliation close readiness and policy (#2305)", "Error codes",
   "Configuration")

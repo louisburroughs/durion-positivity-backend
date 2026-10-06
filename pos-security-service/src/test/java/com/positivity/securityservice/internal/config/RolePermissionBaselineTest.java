@@ -73,6 +73,13 @@ import org.junit.jupiter.api.Test;
  * purely additive) then paired 15 of the codes gated by pos-catalog/pos-price/pos-vehicle-inventory/
  * pos-vehicle-fitment's new {@code @PreAuthorize} checks with the role grants their personas need,
  * adding rows only and touching no legacy-baseline fixture row.
+ *
+ * <p><b>CAP:550 S3 (#2504, 2026-10).</b> The alpha fixture role the switch expanded as
+ * ACCOUNTING_ASSOCIATE was retired in favour of the floor role ACCOUNTING_CLERK
+ * ({@code V10__retire_accounting_associate.sql} renames it in place), so the fixture's seven rows for
+ * it were relabeled to ACCOUNTING_CLERK and its {@code accounting:ap:pay} row was deleted outright:
+ * clerks never pay bills (SPEC-accounting-workspace §4.3, AW6), the one deliberate revocation of that
+ * story. Intentional, not drift.
  */
 @DisplayName("role_permissions baseline seed")
 class RolePermissionBaselineTest {
