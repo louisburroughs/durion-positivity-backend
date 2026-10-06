@@ -299,6 +299,8 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1tenant-template~1add-ons~1retread-plant
   /v1/accounting/tenant-template/status:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1tenant-template~1status
+  /v1/accounting/unpaid-walk-in-sales:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1unpaid-walk-in-sales
   /v1/accounting/vendor-bills:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1vendor-bills
   /v1/accounting/vendor-bills/event/{eventId}:
