@@ -44,7 +44,7 @@ class WorkorderAppointmentLinkServiceImplTest {
         when(mappingRepository.existsById(WORKORDER_ID)).thenReturn(false);
         when(appointmentRepository.findById(APPOINTMENT_ID)).thenReturn(Optional.of(appointment));
 
-        service.link(WORKORDER_ID, APPOINTMENT_ID);
+        assertThat(service.link(WORKORDER_ID, APPOINTMENT_ID)).isTrue();
 
         ArgumentCaptor<WorkOrderAppointmentMapping> captor = ArgumentCaptor.forClass(WorkOrderAppointmentMapping.class);
         verify(mappingRepository).save(captor.capture());
@@ -57,7 +57,7 @@ class WorkorderAppointmentLinkServiceImplTest {
     void leavesAnExistingLinkAlone() {
         when(mappingRepository.existsById(WORKORDER_ID)).thenReturn(true);
 
-        service.link(WORKORDER_ID, APPOINTMENT_ID);
+        assertThat(service.link(WORKORDER_ID, APPOINTMENT_ID)).isFalse();
 
         verify(appointmentRepository, never()).findById(any());
         verify(mappingRepository, never()).save(any());
@@ -69,7 +69,7 @@ class WorkorderAppointmentLinkServiceImplTest {
         when(mappingRepository.existsById(WORKORDER_ID)).thenReturn(false);
         when(appointmentRepository.findById(APPOINTMENT_ID)).thenReturn(Optional.empty());
 
-        service.link(WORKORDER_ID, APPOINTMENT_ID);
+        assertThat(service.link(WORKORDER_ID, APPOINTMENT_ID)).isFalse();
 
         verify(mappingRepository, never()).save(any());
     }

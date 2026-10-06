@@ -27,6 +27,8 @@ public interface WorkorderAppointmentLinkService {
      *
      * @param workorderId the workorder the fact describes
      * @param appointmentId the appointment that fact names as the workorder's source
+     * @return true when this call created the link; false when the workorder was already linked or
+     *     the appointment is not held here
      */
-    void link(@NonNull UUID workorderId, @NonNull UUID appointmentId);
+    boolean link(@NonNull UUID workorderId, @NonNull UUID appointmentId);
 }

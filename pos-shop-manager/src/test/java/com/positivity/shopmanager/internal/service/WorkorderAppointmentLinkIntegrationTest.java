@@ -146,6 +146,38 @@ class WorkorderAppointmentLinkIntegrationTest {
     }
 
     @Test
+    @DisplayName("review - an appointment cancelled after linking stays cancelled while its workorder goes on")
+    void aCancelledAppointmentIsNotRevivedByItsWorkorder() {
+        listener.onWorkorderEvent(fact(1, "DRAFT", appointmentId, null, null));
+        assertThat(statusOf(appointmentId)).isEqualTo(AppointmentStatus.SCHEDULED);
+        inTransaction(() -> {
+            Appointment appointment =
+                    appointmentRepository.findById(appointmentId).orElseThrow();
+            appointment.setStatus(AppointmentStatus.CANCELLED);
+            return appointmentRepository.save(appointment);
+        });
+
+        listener.onWorkorderEvent(fact(2, "ASSIGNED", appointmentId, null, null));
+
+        assertThat(statusOf(appointmentId)).isEqualTo(AppointmentStatus.CANCELLED);
+    }
+
+    @Test
+    @DisplayName("review - a backfill that first links an already-replicated, completed workorder moves the "
+            + "appointment at once")
+    void aBackfillThatFirstLinksCatchesTheAppointmentUp() {
+        // Replicated before the link was published: no appointmentId, already COMPLETED.
+        listener.onWorkorderEvent(fact(4, "COMPLETED", null, ACTUAL_START, ACTUAL_END));
+        assertThat(statusOf(appointmentId)).isEqualTo(AppointmentStatus.SCHEDULED);
+
+        // The backfill: same version, same status, now naming the appointment.
+        listener.onWorkorderEvent(fact(4, "COMPLETED", appointmentId, ACTUAL_START, ACTUAL_END));
+
+        assertThat(linkedAppointmentOf(workorderId)).isEqualTo(appointmentId);
+        assertThat(statusOf(appointmentId)).isEqualTo(AppointmentStatus.QUALITY_CHECK);
+    }
+
+    @Test
     @DisplayName("a walk-in's fact writes the replica and no link, and leaves every appointment alone")
     void aWalkInLinksNothing() {
         listener.onWorkorderEvent(fact(1, "WORK_IN_PROGRESS", null, ACTUAL_START, null));

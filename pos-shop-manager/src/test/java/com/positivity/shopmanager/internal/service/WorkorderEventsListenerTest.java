@@ -341,6 +341,27 @@ class WorkorderEventsListenerTest {
     }
 
     @Test
+    @DisplayName("#2531 - the fact that first links an already-replicated workorder raises the status notification "
+            + "even though the status did not move; a later unchanged fact stays quiet")
+    void firstLinkRaisesTheNotificationWithoutATransition() {
+        when(workorderRepository.findById(WORKORDER_ID))
+                .thenReturn(Optional.of(ExtWorkorderReplica.builder()
+                        .workorderId(WORKORDER_ID)
+                        .status("WORK_IN_PROGRESS")
+                        .aggregateVersion(3)
+                        .build()));
+        when(workorderAppointmentLinkService.link(WORKORDER_ID, APPOINTMENT_ID)).thenReturn(true, false);
+
+        // A backfill: same version, same status, now carrying the link.
+        listener.onWorkorderEvent(envelopeWithAppointment(3, "\"" + APPOINTMENT_ID + "\""));
+        verify(applicationEventPublisher).publishEvent(any(WorkorderStatusChangedEvent.class));
+
+        Mockito.clearInvocations(applicationEventPublisher);
+        listener.onWorkorderEvent(envelopeWithAppointment(3, "\"" + APPOINTMENT_ID + "\""));
+        verify(applicationEventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
     @DisplayName(
             "#2531 - a walk-in (explicit null) and a pre-#2531 fact (field absent) link nothing and unlink nothing")
     void noSourceAppointmentLinksNothing() {
