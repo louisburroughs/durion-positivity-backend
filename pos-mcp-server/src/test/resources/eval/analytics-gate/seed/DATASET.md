@@ -322,7 +322,11 @@ included since #1604): V1 800, V2 2600, V3 400; grand total 3800.00.
   location; `workorder_service` rows exist only because `workorder_labor_entry
   .workorder_service_id` is NOT NULL — quantity 1, unit_price/line_total 0.
 - `vendor_bill`: `created_by/modified_by 'trackb-seed'`, `approved_at` = bill_date+1h;
-  no `vendor_bill_line` rows (nothing served reads them).
+  no `vendor_bill_line` rows (nothing served reads them). `bill_number_key` is the duplicate-rule
+  key of `bill_number` (durion-positivity-backend#2501; pos-accounting `V4`, NOT NULL), computed
+  by `bill_number_key()` in the generator as pos-accounting's `VendorBillNumbers.normalise` does:
+  `TRACKB-BILL-V1-202409` → `TRACKBBILLV1202409`. Every seeded bill has its own key, so the
+  partial unique index `uq_vendor_bill_duplicate_rule` admits all of them.
 - `ap_payment`: `payment_method 'ACH'`, `fee 0`, `net = gross`, `gl_posted_at` =
   payment_date+1h, status `GL_POSTED` (in E8's settled set).
 - pos_customer parties: ordinal columns status=0 (ACTIVE), tier=0 (STANDARD),

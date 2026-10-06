@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -11,16 +12,19 @@ import static org.mockito.Mockito.when;
 import com.positivity.accounting.internal.dto.GoodsReceivedEvent;
 import com.positivity.accounting.internal.dto.VendorBillResponse;
 import com.positivity.accounting.internal.dto.VendorInvoiceReceivedEvent;
+import com.positivity.accounting.internal.entity.AccountingSequence;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.entity.VendorBillLine;
 import com.positivity.accounting.internal.entity.VendorBillMatchCandidate;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.InvalidDateRangeException;
+import com.positivity.accounting.internal.exception.VendorBillDuplicateException;
 import com.positivity.accounting.internal.exception.VendorBillMatchNotFoundException;
 import com.positivity.accounting.internal.exception.VendorBillOperatorActionException;
 import com.positivity.accounting.internal.repository.VendorBillLineRepository;
 import com.positivity.accounting.internal.repository.VendorBillMatchCandidateRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -29,6 +33,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -40,7 +45,10 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.transaction.PlatformTransactionManager;
 
 /**
  * Unit tests for VendorBillServiceImpl.
@@ -70,6 +78,18 @@ class VendorBillServiceTest {
 
     @Mock
     private VendorDirectoryService vendorDirectoryService;
+
+    /** A mock answers "no duplicate"; the {@link DuplicateRule} tests build a service over a real guard. */
+    @Mock
+    private VendorBillDuplicateGuard duplicateGuard;
+
+    /** The goods-receipt create runs in a TransactionTemplate (#2501); a mock manager just runs it. */
+    @Mock
+    private PlatformTransactionManager transactionManager;
+
+    /** The per-tenant counter goods-receipt bill numbers are drawn from (ADR-0062 section 9). */
+    @Mock
+    private AccountingSequenceLocker sequenceLocker;
 
     @InjectMocks
     private VendorBillServiceImpl vendorBillService;
@@ -148,7 +168,6 @@ class VendorBillServiceTest {
 
             when(billRepository.findByVendorIdAndStatus(testVendorId, VendorBillStatus.PENDING_RECEIPT_MATCH))
                     .thenReturn(List.of(bill));
-            when(billRepository.getNextBillSequence()).thenReturn(1L);
             when(billRepository.save(any(VendorBill.class))).thenAnswer(inv -> inv.getArgument(0));
 
             // Scoring: return matching bill lines (for Jaccard=1.0 → 30 pts)
@@ -181,7 +200,6 @@ class VendorBillServiceTest {
 
             when(billRepository.findByVendorIdAndStatus(testVendorId, VendorBillStatus.PENDING_RECEIPT_MATCH))
                     .thenReturn(List.of(bill));
-            when(billRepository.getNextBillSequence()).thenReturn(1L);
             when(billRepository.save(any(VendorBill.class))).thenAnswer(inv -> inv.getArgument(0));
 
             VendorBillLine line1 =
@@ -213,7 +231,6 @@ class VendorBillServiceTest {
 
             when(billRepository.findByVendorIdAndStatus(testVendorId, VendorBillStatus.PENDING_RECEIPT_MATCH))
                     .thenReturn(List.of(bill));
-            when(billRepository.getNextBillSequence()).thenReturn(1L);
             when(billRepository.save(any(VendorBill.class))).thenAnswer(inv -> inv.getArgument(0));
 
             VendorBillLine line1 =
@@ -249,7 +266,6 @@ class VendorBillServiceTest {
 
             when(billRepository.findByVendorIdAndStatus(testVendorId, VendorBillStatus.PENDING_RECEIPT_MATCH))
                     .thenReturn(List.of(bill1, bill2));
-            when(billRepository.getNextBillSequence()).thenReturn(1L);
             when(billRepository.save(any(VendorBill.class))).thenAnswer(inv -> inv.getArgument(0));
             when(matchCandidateRepository.save(any(VendorBillMatchCandidate.class)))
                     .thenAnswer(inv -> inv.getArgument(0));
@@ -594,6 +610,237 @@ class VendorBillServiceTest {
                     pageableCaptor.getValue().getSort().getOrderFor("dueDate");
             assertThat(order).isNotNull();
             assertThat(order.getDirection()).isEqualTo(org.springframework.data.domain.Sort.Direction.ASC);
+        }
+    }
+
+    // ========================================
+    // The duplicate rule (#2501)
+    // ========================================
+
+    @Nested
+    @DisplayName("#2501: one duplicate rule (vendor, normalised bill number, bill date)")
+    class DuplicateRule {
+
+        private static final Pattern UUID_PATTERN =
+                Pattern.compile("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
+
+        private final UUID originalId = UUID.fromString("00000000-0000-0000-0000-0000000000e1");
+
+        private VendorBillServiceImpl service;
+
+        @BeforeEach
+        void realGuard() {
+            ObjectProvider<MeterRegistry> noMeters = mock();
+            service = new VendorBillServiceImpl(
+                    clock,
+                    billRepository,
+                    billLineRepository,
+                    matchCandidateRepository,
+                    eventPublisher,
+                    vendorDirectoryService,
+                    new VendorBillDuplicateGuard(billRepository, noMeters),
+                    sequenceLocker,
+                    transactionManager);
+            when(billRepository.findLiveDuplicate(any(), any(), any(), any(), any()))
+                    .thenReturn(Optional.empty());
+        }
+
+        private VendorBill original(String billNumber, LocalDateTime billDate, VendorBillStatus status) {
+            VendorBill bill = buildBill(originalId, status, new BigDecimal("1300.00"), billDate);
+            bill.setBillNumber(billNumber);
+            bill.setVendorName("Acme Tire");
+            return bill;
+        }
+
+        /** The number the service generates for the test vendor on the fixed clock's date with sequence 7. */
+        private static final String GENERATED = "BILL_00000000_20260115_0000007";
+
+        /** The tenant's counter for the fixed clock's month, about to hand out {@code next}. */
+        private AccountingSequence counterAt(long next) {
+            AccountingSequence counter = new AccountingSequence();
+            counter.setScopeKey("BILL-202601");
+            counter.setNextValue(next);
+            when(sequenceLocker.lockOrProvision("BILL-202601")).thenReturn(counter);
+            return counter;
+        }
+
+        @Test
+        @DisplayName("criterion 4: a goods-receipt bill that repeats a live bill's vendor, key and date is refused")
+        void goodsReceiptDuplicateIsRefusedBeforeAnythingIsWritten() {
+            UUID eventId = UUID.fromString("00000000-0000-0000-0000-000000000032");
+            when(billRepository.findByOriginEventId(eventId)).thenReturn(Optional.empty());
+            AccountingSequence counter = counterAt(7);
+            VendorBill live = original(GENERATED, BILL_DATE_CLOSE.withHour(9), VendorBillStatus.APPROVED);
+            when(billRepository.findLiveDuplicate(
+                            testVendorId,
+                            "BILL00000000202601150000007",
+                            LocalDateTime.of(2026, 1, 16, 0, 0),
+                            LocalDateTime.of(2026, 1, 17, 0, 0),
+                            null))
+                    .thenReturn(Optional.of(live));
+
+            assertThatThrownBy(() -> service.handleGoodsReceivedEvent(buildGoodsReceivedEvent(eventId)))
+                    .isInstanceOfSatisfying(VendorBillDuplicateException.class, refused -> {
+                        assertThat(refused.getOriginalBillId()).isEqualTo(originalId);
+                        assertThat(refused.getMessage())
+                                .isEqualTo("Bill " + GENERATED
+                                        + " from Acme Tire dated 2026-01-16 already exists (APPROVED)");
+                        assertThat(UUID_PATTERN.matcher(refused.getMessage()).find())
+                                .as("ADR-0064: the message names no id")
+                                .isFalse();
+                    });
+
+            verify(billRepository, never()).saveAndFlush(any());
+            verify(billRepository, never()).save(any());
+            verify(billLineRepository, never()).save(any());
+            verify(eventPublisher, never()).publishEvent(any(Object.class));
+            verify(vendorDirectoryService, never()).recordVendorInCurrentTransaction(any(), any());
+            // The number was drawn from the tenant's counter in the same transaction as the refused
+            // bill; that transaction rolls back, and the increment with it (Postgres IT).
+            assertThat(counter.getNextValue()).isEqualTo(8L);
+        }
+
+        @Test
+        @DisplayName("criterion 4: a bill with no vendor name is described as from this vendor")
+        void refusalWithoutAVendorNameSaysThisVendor() {
+            VendorBill live = original("INV-00123", LocalDateTime.of(2026, 10, 1, 9, 30), VendorBillStatus.PAID);
+            live.setVendorName(null);
+
+            assertThat(new VendorBillDuplicateException(live))
+                    .hasMessage("Bill INV-00123 from this vendor dated 2026-10-01 already exists (PAID)");
+        }
+
+        @Test
+        @DisplayName("criterion 4: an insert refused by the unique index gives the same refusal, with the original")
+        void goodsReceiptThatLosesTheRaceIsRefusedWithTheOriginal() {
+            UUID eventId = UUID.fromString("00000000-0000-0000-0000-000000000033");
+            when(billRepository.findByOriginEventId(eventId)).thenReturn(Optional.empty());
+            counterAt(7);
+            VendorBill live = original(GENERATED, BILL_DATE_CLOSE, VendorBillStatus.PENDING_RECEIPT_MATCH);
+            // The pre-check sees nothing; the competing writer commits; the read after the collision sees it.
+            when(billRepository.findLiveDuplicate(any(), any(), any(), any(), any()))
+                    .thenReturn(Optional.empty())
+                    .thenReturn(Optional.of(live));
+            when(billRepository.saveAndFlush(any(VendorBill.class)))
+                    .thenThrow(new DataIntegrityViolationException(
+                            "could not execute statement [ERROR: duplicate key value violates unique constraint"
+                                    + " \"uq_vendor_bill_duplicate_rule\"]"));
+
+            assertThatThrownBy(() -> service.handleGoodsReceivedEvent(buildGoodsReceivedEvent(eventId)))
+                    .isInstanceOfSatisfying(
+                            VendorBillDuplicateException.class,
+                            refused -> assertThat(refused.getOriginalBillId()).isEqualTo(originalId));
+
+            verify(eventPublisher, never()).publishEvent(any(Object.class));
+            verify(vendorDirectoryService, never()).recordVendorInCurrentTransaction(any(), any());
+        }
+
+        @Test
+        @DisplayName("criterion 4: any other integrity violation on the insert is not turned into a duplicate")
+        void anotherIntegrityViolationIsNotADuplicate() {
+            UUID eventId = UUID.fromString("00000000-0000-0000-0000-000000000034");
+            when(billRepository.findByOriginEventId(eventId)).thenReturn(Optional.empty());
+            counterAt(7);
+            when(billRepository.saveAndFlush(any(VendorBill.class)))
+                    .thenThrow(new DataIntegrityViolationException("value too long for type character varying(50)"));
+
+            assertThatThrownBy(() -> service.handleGoodsReceivedEvent(buildGoodsReceivedEvent(eventId)))
+                    .isInstanceOf(DataIntegrityViolationException.class)
+                    .hasMessageContaining("value too long");
+        }
+
+        @Test
+        @DisplayName("criterion 5 (BR-8): a replayed eventId returns the existing bill before the rule is asked")
+        void replayedEventReturnsTheExistingBillWithoutAskingTheRule() {
+            UUID eventId = UUID.fromString("00000000-0000-0000-0000-000000000035");
+            VendorBill existing = original(GENERATED, BILL_DATE_CLOSE, VendorBillStatus.PENDING_RECEIPT_MATCH);
+            existing.setOriginEventId(eventId);
+            when(billRepository.findByOriginEventId(eventId)).thenReturn(Optional.of(existing));
+            // Were the rule asked, it would find the bill itself and refuse.
+            when(billRepository.findLiveDuplicate(any(), any(), any(), any(), any()))
+                    .thenReturn(Optional.of(existing));
+
+            VendorBillResponse replayed = service.handleGoodsReceivedEvent(buildGoodsReceivedEvent(eventId));
+
+            assertThat(replayed.getVendorBillId()).isEqualTo(originalId);
+            verify(billRepository, never()).findLiveDuplicate(any(), any(), any(), any(), any());
+            verify(billRepository, never()).saveAndFlush(any());
+        }
+
+        /** A goods-receipt bill that scores HIGH_CONFIDENCE against {@link #buildInvoiceEvent}. */
+        private VendorBill matchableGoodsReceiptBill() {
+            VendorBill bill = buildBill(
+                    testBillId, VendorBillStatus.PENDING_RECEIPT_MATCH, new BigDecimal("1300.00"), BILL_DATE_CLOSE);
+            bill.setBillNumber(GENERATED);
+            bill.setPurchaseOrderId(UUID.randomUUID());
+            when(billRepository.findByVendorIdAndStatus(testVendorId, VendorBillStatus.PENDING_RECEIPT_MATCH))
+                    .thenReturn(List.of(bill));
+            when(billRepository.save(any(VendorBill.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(billLineRepository.findByVendorBill_VendorBillIdOrderByLineNumber(testBillId))
+                    .thenReturn(List.of(
+                            buildBillLine(
+                                    testBillId, testProductId1, new BigDecimal("100.00"), new BigDecimal("12.50")),
+                            buildBillLine(
+                                    testBillId, testProductId2, new BigDecimal("1.00"), new BigDecimal("50.00"))));
+            return bill;
+        }
+
+        private VendorInvoiceReceivedEvent invoiceNamed(String invoiceReference) {
+            VendorInvoiceReceivedEvent event = buildInvoiceEvent(testVendorId, new BigDecimal("1300.00"));
+            event.setInvoiceReference(invoiceReference);
+            return event;
+        }
+
+        @Test
+        @DisplayName(
+                "criterion 6: a match onto a live bill's number is refused and the goods-receipt bill is untouched")
+        void matchOntoALiveBillsNumberIsRefused() {
+            VendorBill goodsReceiptBill = matchableGoodsReceiptBill();
+            VendorBill live = original("INV-77", BILL_DATE_CLOSE.withHour(8), VendorBillStatus.PENDING_RECEIPT_MATCH);
+            // Same vendor, same key, the goods-receipt bill's own date, the goods-receipt bill excluded.
+            when(billRepository.findLiveDuplicate(
+                            testVendorId,
+                            "INV77",
+                            LocalDateTime.of(2026, 1, 16, 0, 0),
+                            LocalDateTime.of(2026, 1, 17, 0, 0),
+                            testBillId))
+                    .thenReturn(Optional.of(live));
+
+            assertThatThrownBy(() -> service.handleVendorInvoiceReceivedEvent(invoiceNamed("inv 77")))
+                    .isInstanceOfSatisfying(
+                            VendorBillDuplicateException.class,
+                            refused -> assertThat(refused.getOriginalBillId()).isEqualTo(originalId));
+
+            assertThat(goodsReceiptBill.getBillNumber()).isEqualTo(GENERATED);
+            assertThat(goodsReceiptBill.getStatus()).isEqualTo(VendorBillStatus.PENDING_RECEIPT_MATCH);
+            assertThat(goodsReceiptBill.getApprovedBy()).isNull();
+            assertThat(goodsReceiptBill.getApprovedAt()).isNull();
+            assertThat(goodsReceiptBill.getApprovalJustification()).isNull();
+            assertThat(goodsReceiptBill.getRejectionReason()).isNull();
+            assertThat(goodsReceiptBill.getDueDate()).isNull();
+            verify(billRepository, never()).save(any());
+            verify(matchCandidateRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("criterion 7: with the other bill voided the rule finds no live original and the match proceeds")
+        void matchProceedsWhenNoLiveBillHoldsTheNumber() {
+            VendorBill goodsReceiptBill = matchableGoodsReceiptBill();
+            // A VOIDED bill is not returned by findLiveDuplicate (the status filter is pinned on
+            // Postgres by VendorBillDuplicateRulePostgresIT), so the stub from realGuard() stands.
+
+            VendorBillResponse matched = service.handleVendorInvoiceReceivedEvent(invoiceNamed("inv 77"));
+
+            assertThat(matched.getBillNumber()).isEqualTo("inv 77");
+            assertThat(goodsReceiptBill.getBillNumberKey()).isEqualTo("INV77");
+            assertThat(goodsReceiptBill.getStatus()).isEqualTo(VendorBillStatus.APPROVED);
+            verify(billRepository)
+                    .findLiveDuplicate(
+                            testVendorId,
+                            "INV77",
+                            LocalDateTime.of(2026, 1, 16, 0, 0),
+                            LocalDateTime.of(2026, 1, 17, 0, 0),
+                            testBillId);
         }
     }
 

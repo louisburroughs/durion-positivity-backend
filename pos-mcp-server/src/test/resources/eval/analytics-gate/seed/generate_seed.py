@@ -33,6 +33,7 @@ compilation of that document; change them together.
 """
 
 import os
+import unicodedata
 import uuid
 from datetime import date, datetime, timedelta
 
@@ -96,6 +97,23 @@ def q(v):
 
 def money(x):
     return "%.2f" % x  # numeric literal, no quotes
+
+
+def bill_number_key(bill_number):
+    """vendor_bill.bill_number_key: the duplicate-rule key of a bill number.
+
+    The twin of pos-accounting's VendorBillNumbers.normalise (durion-positivity-backend#2501, BR-1),
+    which is the only producer of the key at runtime. A raw INSERT bypasses the entity, so the seed
+    must supply it: NFKC, upper case, letters and decimal digits only (Java's
+    Character.isLetterOrDigit), leading zeros removed while more than one character remains, at
+    most 255 characters.
+    """
+    upper = unicodedata.normalize("NFKC", bill_number).upper()
+    kept = "".join(c for c in upper
+                   if unicodedata.category(c).startswith("L") or unicodedata.category(c) == "Nd")
+    while len(kept) > 1 and kept[0] == "0":
+        kept = kept[1:]
+    return kept[:255]
 
 
 def tstz(d, hh, mm=0, ss=0):
@@ -955,14 +973,15 @@ def gen_accounting_db():
     for key, vk, amt, bd, dd, paid in BILLS:
         bill_id = uid(key)
         pay_d = bd.replace(day=25) if paid else None
+        bill_number = "%s-BILL-%s" % (MARK, key.replace("bill-", "").upper())
         f.insert(
             "vendor_bill",
-            ["vendor_bill_id", "vendor_id", "vendor_name", "bill_number", "status",
-             "total_amount", "bill_date", "due_date", "created_at", "modified_at",
+            ["vendor_bill_id", "vendor_id", "vendor_name", "bill_number", "bill_number_key",
+             "status", "total_amount", "bill_date", "due_date", "created_at", "modified_at",
              "created_by", "modified_by", "approved_at", "approved_by", "paid_at",
              "paid_by"],
             [q(bill_id), q(VENDOR_ID[vk]), q(VENDORS[vk]),
-             q("%s-BILL-%s" % (MARK, key.replace("bill-", "").upper())),
+             q(bill_number), q(bill_number_key(bill_number)),
              q("PAID" if paid else "APPROVED"), money(amt), q(tsnaive(bd, 12)),
              q(tsnaive(dd, 0)), q(tstz(bd, 12)), q(tstz(pay_d or bd, 12)), q(SEED_USER),
              q(SEED_USER), q(tstz(bd, 13)), q(SEED_USER),

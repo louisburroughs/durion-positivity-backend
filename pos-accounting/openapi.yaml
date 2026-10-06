@@ -10718,6 +10718,8 @@ paths:
 
         Returns 201 with the created (or already-existing) bill, and 400 when the payload fails validation.
 
+        Returns 409 AP_BILL_DUPLICATE when a live bill (any status except VOIDED or REJECTED) already holds the same vendor, bill date and bill number, compared ignoring case, spacing, punctuation and leading zeros; referenceId is the existing bill''s vendorBillId and nothing is created. A replayed eventId is never a duplicate.
+
         '
       operationId: createVendorBillFromGoodsReceived
       requestBody:
@@ -10755,6 +10757,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Invalid request payload
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'AP_BILL_DUPLICATE: a live bill already holds this vendor, bill number and bill date; referenceId is the existing bill''s vendorBillId'
       security:
       - bearerAuth:
         - accounting:ap:pay
@@ -10823,6 +10831,10 @@ paths:
 
         Returns 400 when no pending receipt matches the invoice or the payload fails validation.
 
+        Returns 409 AP_BILL_DUPLICATE when the matched bill would take an invoiceReference that another live bill (any status except VOIDED or REJECTED) of the same vendor already holds on the same bill date, compared ignoring case, spacing, punctuation and leading zeros; referenceId is that bill''s vendorBillId and the match changes nothing.
+
+        A match that loses a concurrent race for the same number between that check and its commit answers the generic 409 DUPLICATE_RESOURCE instead, with no referenceId; the match is rolled back and no second bill holds the number.
+
         '
       operationId: matchVendorInvoice
       requestBody:
@@ -10860,6 +10872,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Invalid request payload
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'AP_BILL_DUPLICATE: another live bill of this vendor already holds this invoice reference on the same bill date; referenceId is that bill''s vendorBillId. DUPLICATE_RESOURCE, with no referenceId, when a concurrent writer takes the number between the check and the commit'
       security:
       - bearerAuth:
         - accounting:ap:pay

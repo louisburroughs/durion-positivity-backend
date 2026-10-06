@@ -7,12 +7,14 @@ import com.positivity.accounting.internal.dto.VendorBillListRow;
 import com.positivity.accounting.internal.dto.VendorBillMatchCandidateResponse;
 import com.positivity.accounting.internal.dto.VendorBillResponse;
 import com.positivity.accounting.internal.dto.VendorInvoiceReceivedEvent;
+import com.positivity.accounting.internal.entity.AccountingSequence;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.entity.VendorBillLine;
 import com.positivity.accounting.internal.entity.VendorBillMatchCandidate;
 import com.positivity.accounting.internal.enums.MatchConfidence;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.InvalidDateRangeException;
+import com.positivity.accounting.internal.exception.VendorBillDuplicateException;
 import com.positivity.accounting.internal.exception.VendorBillMatchNotFoundException;
 import com.positivity.accounting.internal.exception.VendorBillOperatorActionException;
 import com.positivity.accounting.internal.repository.VendorBillLineRepository;
@@ -20,30 +22,36 @@ import com.positivity.accounting.internal.repository.VendorBillMatchCandidateRep
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
+import java.io.Serial;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Implementation of Vendor Bill lifecycle management (Issue #130).
@@ -64,17 +72,50 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class VendorBillServiceImpl implements VendorBillService {
     private final Clock clock;
 
     private static final String SYSTEM_USER = "SYSTEM";
+
+    /** Prefix of the per-tenant {@code accounting_sequence} scope that numbers goods-receipt bills. */
+    static final String BILL_NUMBER_SCOPE_PREFIX = "BILL-";
 
     private final VendorBillRepository billRepository;
     private final VendorBillLineRepository billLineRepository;
     private final VendorBillMatchCandidateRepository matchCandidateRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final VendorDirectoryService vendorDirectoryService;
+    private final VendorBillDuplicateGuard duplicateGuard;
+    private final AccountingSequenceLocker sequenceLocker;
+
+    /**
+     * The goods-receipt create, in a transaction this class can see the end of (#2501): the original
+     * of a bill that lost a race under {@code uq_vendor_bill_duplicate_rule} is read after this
+     * template has returned. By then the failed transaction has rolled back when this class began it,
+     * and is marked rollback-only when it joined a caller's.
+     */
+    private final TransactionTemplate goodsReceiptTransaction;
+
+    public VendorBillServiceImpl(
+            Clock clock,
+            VendorBillRepository billRepository,
+            VendorBillLineRepository billLineRepository,
+            VendorBillMatchCandidateRepository matchCandidateRepository,
+            ApplicationEventPublisher eventPublisher,
+            VendorDirectoryService vendorDirectoryService,
+            VendorBillDuplicateGuard duplicateGuard,
+            AccountingSequenceLocker sequenceLocker,
+            PlatformTransactionManager transactionManager) {
+        this.clock = clock;
+        this.billRepository = billRepository;
+        this.billLineRepository = billLineRepository;
+        this.matchCandidateRepository = matchCandidateRepository;
+        this.eventPublisher = eventPublisher;
+        this.vendorDirectoryService = vendorDirectoryService;
+        this.duplicateGuard = duplicateGuard;
+        this.sequenceLocker = sequenceLocker;
+        this.goodsReceiptTransaction = new TransactionTemplate(transactionManager);
+    }
 
     private String getCurrentUser() {
         return SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_USER);
@@ -97,9 +138,84 @@ public class VendorBillServiceImpl implements VendorBillService {
      */
     private static final int MAX_LIST_PAGE_SIZE = 100;
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Not {@code @Transactional}: the work runs in {@link #goodsReceiptTransaction}, which joins a
+     * caller's transaction when there is one. A bill that would duplicate a live one (#2501; same
+     * vendor, normalised number and bill date) is refused with {@link VendorBillDuplicateException}
+     * before anything is saved. When a concurrent writer commits the same key between that check and
+     * the insert, the unique index refuses the insert instead and Postgres aborts the transaction. If
+     * this method began it, it has rolled back by the time the original is read; if it joined a
+     * caller's, it is only marked rollback-only and the caller rolls it back. In both cases the
+     * original is read by {@link VendorBillDuplicateGuard#findOriginalAfterCollision} in a {@code
+     * REQUIRES_NEW} transaction of its own, which is what makes the read possible, so both paths
+     * give the same answer.
+     *
+     * <p><strong>Connections.</strong> The bill's number is drawn under the tenant's counter row lock
+     * ({@link #generateBillNumber}), which is held until the transaction ends, so concurrent creates in
+     * a tenant queue on it, each holding a pooled connection. While that lock is held this method
+     * therefore asks for no second connection: on a small pool the holder would wait for one behind
+     * the very writers waiting for its lock, until the pool's timeout, and for that long no tenant
+     * would get a connection at all (the defect #2342 removed from the counter's own bootstrap). The
+     * vendor-directory write, which used to run in a {@code REQUIRES_NEW} transaction of its own, is
+     * made on the bill's connection with a conflict-tolerant insert
+     * ({@link VendorDirectoryService#recordVendorInCurrentTransaction}), so it commits with the bill
+     * and a refused or rolled-back create writes no directory row. Nothing else between the number
+     * and the commit leaves the bill's connection: the duplicate check, the bill and its lines, and
+     * the GL posting event's handler and event ingestion all join this transaction.
+     *
+     * <p>One exception remains, on the collision path only. When this method runs inside a caller's
+     * transaction and the unique index refuses the insert, that transaction is aborted but still
+     * holds the counter lock until the caller rolls it back, and reading the original takes one more
+     * connection meanwhile. The cost is bounded: one extra connection per refused create, for one
+     * indexed read, and only for a collision inside a caller's transaction. If the pool has none to
+     * give, the read fails after the pool's connection timeout and that error is thrown instead of
+     * the refusal; no bill is created either way. When this method began the transaction itself, it
+     * has rolled back, lock and connection released, before the original is read.
+     */
     @Override
-    @Transactional
     public @NonNull VendorBillResponse handleGoodsReceivedEvent(@NonNull GoodsReceivedEvent event) {
+        try {
+            return Objects.requireNonNull(goodsReceiptTransaction.execute(_ -> createFromGoodsReceipt(event)));
+        } catch (LostDuplicateRace lost) {
+            VendorBill original = duplicateGuard
+                    .findOriginalAfterCollision(event.getVendorId(), lost.billNumber, lost.billDate)
+                    .orElseThrow(lost::getCause);
+            throw duplicateGuard.refusal(
+                    VendorBillDuplicateGuard.Channel.GOODS_RECEIPT,
+                    event.getVendorId(),
+                    lost.billNumber,
+                    lost.billDate,
+                    original);
+        }
+    }
+
+    /**
+     * An insert refused by {@code uq_vendor_bill_duplicate_rule}: carries what is needed to find the
+     * original out of the failed transaction.
+     */
+    private static final class LostDuplicateRace extends RuntimeException {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        private final String billNumber;
+        private final LocalDateTime billDate;
+
+        LostDuplicateRace(String billNumber, LocalDateTime billDate, DataIntegrityViolationException cause) {
+            super(cause);
+            this.billNumber = billNumber;
+            this.billDate = billDate;
+        }
+
+        @Override
+        public synchronized @NonNull DataIntegrityViolationException getCause() {
+            return (DataIntegrityViolationException) super.getCause();
+        }
+    }
+
+    private @NonNull VendorBillResponse createFromGoodsReceipt(@NonNull GoodsReceivedEvent event) {
         log.info(
                 "Processing GoodsReceivedEvent | eventId={} | vendorId={} | poId={}",
                 event.getEventId(),
@@ -119,7 +235,6 @@ public class VendorBillServiceImpl implements VendorBillService {
         VendorBill bill = new VendorBill();
         bill.setVendorId(event.getVendorId());
         bill.setVendorName(event.getVendorName());
-        bill.setBillNumber(generateBillNumber(event.getVendorId()));
         bill.setBillDate(event.getReceivedDate());
         bill.setStatus(VendorBillStatus.PENDING_RECEIPT_MATCH);
         bill.setOriginEventId(event.getEventId());
@@ -134,20 +249,33 @@ public class VendorBillServiceImpl implements VendorBillService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         bill.setTotalAmount(totalAmount);
 
-        // Step 4: Save bill
-        VendorBill savedBill = billRepository.save(bill);
+        // The number, as late as it can be drawn: from here to the end of this transaction the
+        // tenant's counter row is locked, and nothing below asks for a second connection.
+        bill.setBillNumber(generateBillNumber(event.getVendorId()));
 
-        // Keep the AP vendor directory (name typeahead) in sync (Issue #816).
-        // Best-effort: runs in its own transaction, and a failure (e.g. a
-        // concurrent insert of the same vendor) must never fail bill creation.
+        // Step 4: The duplicate rule (#2501), then the insert. Flushed here so the unique index
+        // answers before the lines or the GL posting event see the bill.
+        duplicateGuard.refuseIfDuplicate(
+                VendorBillDuplicateGuard.Channel.GOODS_RECEIPT,
+                bill.getVendorId(),
+                bill.getBillNumber(),
+                bill.getBillDate(),
+                null);
+        VendorBill savedBill;
         try {
-            vendorDirectoryService.recordVendor(event.getVendorId(), event.getVendorName());
-        } catch (RuntimeException e) {
-            log.warn(
-                    "Vendor directory sync failed, continuing bill creation | vendorId={} | error={}",
-                    event.getVendorId(),
-                    e.getMessage());
+            savedBill = billRepository.saveAndFlush(bill);
+        } catch (DataIntegrityViolationException e) {
+            if (VendorBillDuplicateGuard.isDuplicateRuleViolation(e)) {
+                throw new LostDuplicateRace(bill.getBillNumber(), bill.getBillDate(), e);
+            }
+            throw e;
         }
+
+        // Keep the AP vendor directory (name typeahead) in sync (Issue #816), on this connection:
+        // the counter row lock is held, so no second connection may be requested here
+        // (handleGoodsReceivedEvent). The insert tolerates an existing row, so it cannot fail the
+        // bill for the reason the former REQUIRES_NEW write was isolated against.
+        vendorDirectoryService.recordVendorInCurrentTransaction(event.getVendorId(), event.getVendorName());
 
         // Step 5: Save line items for three-way matching
         int lineNumber = 1;
@@ -283,6 +411,15 @@ public class VendorBillServiceImpl implements VendorBillService {
 
             return toResponse(bill);
         }
+
+        // The bill is about to take the vendor's invoice reference as its number: the duplicate rule
+        // (#2501) is checked first, the bill itself excluded, so a refusal leaves it untouched.
+        duplicateGuard.refuseIfDuplicate(
+                VendorBillDuplicateGuard.Channel.MATCH,
+                bill.getVendorId(),
+                event.getInvoiceReference(),
+                bill.getBillDate(),
+                bill.getVendorBillId());
 
         // Step 3: Auto-approve based on confidence
         if (matchResult.getConfidence() == MatchConfidence.HIGH_CONFIDENCE) {
@@ -640,19 +777,32 @@ public class VendorBillServiceImpl implements VendorBillService {
     }
 
     /**
-     * Generate bill number with vendor prefix, date, and database sequence.
-     * Format: BILL_<VendorPrefix>_<YYYYMMDD>_<Sequence>
-     * Example: BILL_A1B2C3D4_20250211_0001234
+     * Generates a goods-receipt bill number: {@code BILL_<VendorPrefix>_<YYYYMMDD>_<Sequence>}, for
+     * example {@code BILL_A1B2C3D4_20250211_0001234}. The date is the day the bill is recorded.
      *
-     * Uses PostgreSQL sequence for guaranteed uniqueness, cluster-awareness, and
-     * restart resilience. Survives service restarts and multi-instance deployments.
+     * <p>The sequence is the bound tenant's own (ADR-0062 section 9; #2501): the per-tenant {@code
+     * accounting_sequence} counter under scope {@code BILL-{YYYYMM}}, the month of that same date,
+     * through the {@link AccountingSequenceLocker} machinery that numbers journal entries
+     * ({@code JournalEntryServiceImpl.assignEntryNumber}, #942) and credit memos
+     * ({@code CreditMemoServiceImpl.assignCreditMemoReference}). No database sequence is involved: a
+     * shared one would hand every tenant numbers out of one series.
+     *
+     * <p>The counter row is read under {@code FOR UPDATE} and incremented inside the bill's own
+     * transaction, so concurrent creates in a tenant take distinct numbers one after another (and
+     * the caller must request no second pooled connection until that transaction ends; see {@link
+     * #handleGoodsReceivedEvent}), and a create that rolls back (a refused duplicate included) rolls the increment back with it: the
+     * number is not consumed, and the next create takes it. A tenant's row for a month is created on
+     * first use by the locker; nothing provisions it.
      */
     private @NonNull String generateBillNumber(@NonNull UUID vendorId) {
-        String vendorPrefix = vendorId.toString().substring(0, 8).toUpperCase();
-        String dateStamp =
-                java.time.LocalDate.now(clock).format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd"));
-        long sequence = billRepository.getNextBillSequence();
-        return String.format("BILL_%s_%s_%07d", vendorPrefix, dateStamp, sequence);
+        String vendorPrefix = vendorId.toString().substring(0, 8).toUpperCase(Locale.ROOT);
+        LocalDate recorded = LocalDate.now(clock);
+        AccountingSequence sequence = sequenceLocker.lockOrProvision(
+                String.format("%s%04d%02d", BILL_NUMBER_SCOPE_PREFIX, recorded.getYear(), recorded.getMonthValue()));
+        long assigned = sequence.getNextValue();
+        sequence.setNextValue(assigned + 1);
+        return String.format(
+                "BILL_%s_%s_%07d", vendorPrefix, recorded.format(DateTimeFormatter.BASIC_ISO_DATE), assigned);
     }
 
     // ===== Match Candidate Persistence & Selection =====

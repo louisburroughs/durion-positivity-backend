@@ -1,14 +1,15 @@
 package com.positivity.accounting.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.dto.GoodsReceivedEvent;
 import com.positivity.accounting.internal.dto.VendorBillGLPostingEvent;
+import com.positivity.accounting.internal.entity.AccountingSequence;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.repository.VendorBillLineRepository;
@@ -24,11 +25,13 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.transaction.PlatformTransactionManager;
 
 /**
  * Unit tests for GL posting event emission in VendorBillServiceImpl.
@@ -56,6 +59,21 @@ class VendorBillServiceGLPostingTest {
     @Mock
     private VendorDirectoryService vendorDirectoryService;
 
+    /** A mock answers "no duplicate": these tests are about the GL posting event, not the rule (#2501). */
+    @Mock
+    private VendorBillDuplicateGuard duplicateGuard;
+
+    /** The goods-receipt create runs in a TransactionTemplate (#2501); a mock manager just runs it. */
+    @Mock
+    private PlatformTransactionManager transactionManager;
+
+    /** The per-tenant counter goods-receipt bill numbers are drawn from (ADR-0062 section 9). */
+    @Mock
+    private AccountingSequenceLocker sequenceLocker;
+
+    /** The tenant's counter for the fixed clock's month, 2024-01, about to hand out 42. */
+    private final AccountingSequence billCounter = new AccountingSequence();
+
     @InjectMocks
     private VendorBillServiceImpl vendorBillService;
 
@@ -67,6 +85,10 @@ class VendorBillServiceGLPostingTest {
 
     @BeforeEach
     void setUp() {
+        billCounter.setScopeKey("BILL-202401");
+        billCounter.setNextValue(42L);
+        // Lenient: the replayed-event test returns the existing bill before any number is drawn.
+        lenient().when(sequenceLocker.lockOrProvision("BILL-202401")).thenReturn(billCounter);
         testVendorId = UUID.fromString("00000000-0000-0000-0000-000000000003");
         testPoId = UUID.fromString("00000000-0000-0000-0000-000000000009");
         testProductId1 = UUID.fromString("00000000-0000-0000-0000-000000000011");
@@ -98,27 +120,51 @@ class VendorBillServiceGLPostingTest {
     }
 
     @Test
-    @DisplayName("Should record vendor in directory when bill is created")
-    void shouldRecordVendorInDirectory() {
+    @DisplayName(
+            "The bill number's sequence is drawn from the tenant's own counter for the month, which moves on by one")
+    void billNumberIsDrawnFromTheTenantsCounter() {
         when(billRepository.findByOriginEventId(testEvent.getEventId())).thenReturn(Optional.empty());
-        when(billRepository.save(any(VendorBill.class))).thenReturn(createSavedBill());
+        when(billRepository.saveAndFlush(any(VendorBill.class))).thenAnswer(saved -> {
+            VendorBill persisted = saved.getArgument(0);
+            persisted.setVendorBillId(UUID.fromString("00000000-0000-0000-0000-000000000051"));
+            return persisted;
+        });
 
         vendorBillService.handleGoodsReceivedEvent(testEvent);
 
-        verify(vendorDirectoryService).recordVendor(testVendorId, "Test Vendor Inc");
+        ArgumentCaptor<VendorBill> saved = ArgumentCaptor.forClass(VendorBill.class);
+        verify(billRepository).saveAndFlush(saved.capture());
+        // Vendor prefix, the day the bill is recorded (the fixed clock's), the counter's value.
+        assertThat(saved.getValue().getBillNumber()).isEqualTo("BILL_00000000_20240101_0000042");
+        assertThat(billCounter.getNextValue()).isEqualTo(43L);
+        verify(sequenceLocker).lockOrProvision("BILL-202401");
     }
 
     @Test
-    @DisplayName("Should not fail bill creation when vendor directory sync fails")
-    void shouldNotFailBillCreationWhenDirectorySyncFails() {
+    @DisplayName("Should record vendor in directory when bill is created")
+    void shouldRecordVendorInDirectory() {
         when(billRepository.findByOriginEventId(testEvent.getEventId())).thenReturn(Optional.empty());
-        when(billRepository.save(any(VendorBill.class))).thenReturn(createSavedBill());
-        doThrow(new RuntimeException("duplicate key"))
-                .when(vendorDirectoryService)
-                .recordVendor(any(), any());
+        when(billRepository.saveAndFlush(any(VendorBill.class))).thenReturn(createSavedBill());
 
-        assertThatCode(() -> vendorBillService.handleGoodsReceivedEvent(testEvent))
-                .doesNotThrowAnyException();
+        vendorBillService.handleGoodsReceivedEvent(testEvent);
+
+        // On the bill's own connection (#2501): the counter row lock is held, so no second
+        // connection may be requested.
+        verify(vendorDirectoryService).recordVendorInCurrentTransaction(testVendorId, "Test Vendor Inc");
+    }
+
+    @Test
+    @DisplayName("The directory row is written after the bill is flushed and before the GL posting event")
+    void directoryRowIsWrittenAfterTheBillAndBeforeThePosting() {
+        when(billRepository.findByOriginEventId(testEvent.getEventId())).thenReturn(Optional.empty());
+        when(billRepository.saveAndFlush(any(VendorBill.class))).thenReturn(createSavedBill());
+
+        vendorBillService.handleGoodsReceivedEvent(testEvent);
+
+        InOrder order = inOrder(billRepository, vendorDirectoryService, eventPublisher);
+        order.verify(billRepository).saveAndFlush(any(VendorBill.class));
+        order.verify(vendorDirectoryService).recordVendorInCurrentTransaction(testVendorId, "Test Vendor Inc");
+        order.verify(eventPublisher).publishEvent(any(Object.class));
     }
 
     @Test
@@ -128,7 +174,7 @@ class VendorBillServiceGLPostingTest {
         when(billRepository.findByOriginEventId(testEvent.getEventId())).thenReturn(Optional.empty());
 
         VendorBill savedBill = createSavedBill();
-        when(billRepository.save(any(VendorBill.class))).thenReturn(savedBill);
+        when(billRepository.saveAndFlush(any(VendorBill.class))).thenReturn(savedBill);
 
         // When: Processing goods received event
         vendorBillService.handleGoodsReceivedEvent(testEvent);
@@ -156,7 +202,7 @@ class VendorBillServiceGLPostingTest {
         when(billRepository.findByOriginEventId(testEvent.getEventId())).thenReturn(Optional.empty());
 
         VendorBill savedBill = createSavedBill();
-        when(billRepository.save(any(VendorBill.class))).thenReturn(savedBill);
+        when(billRepository.saveAndFlush(any(VendorBill.class))).thenReturn(savedBill);
 
         // When: Processing goods received event
         vendorBillService.handleGoodsReceivedEvent(testEvent);
@@ -187,7 +233,7 @@ class VendorBillServiceGLPostingTest {
         when(billRepository.findByOriginEventId(testEvent.getEventId())).thenReturn(Optional.empty());
 
         VendorBill savedBill = createSavedBill();
-        when(billRepository.save(any(VendorBill.class))).thenReturn(savedBill);
+        when(billRepository.saveAndFlush(any(VendorBill.class))).thenReturn(savedBill);
 
         // When: Processing goods received event
         vendorBillService.handleGoodsReceivedEvent(testEvent);
@@ -208,7 +254,7 @@ class VendorBillServiceGLPostingTest {
         when(billRepository.findByOriginEventId(testEvent.getEventId())).thenReturn(Optional.empty());
 
         VendorBill savedBill = createSavedBill();
-        when(billRepository.save(any(VendorBill.class))).thenReturn(savedBill);
+        when(billRepository.saveAndFlush(any(VendorBill.class))).thenReturn(savedBill);
 
         // When: Processing goods received event
         vendorBillService.handleGoodsReceivedEvent(testEvent);

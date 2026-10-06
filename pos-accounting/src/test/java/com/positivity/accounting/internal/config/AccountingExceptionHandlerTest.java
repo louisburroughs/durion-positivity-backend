@@ -9,8 +9,10 @@ import com.positivity.accounting.internal.bankrec.intake.BankRecErrorCode;
 import com.positivity.accounting.internal.bankrec.intake.BankRecException;
 import com.positivity.accounting.internal.dto.DuplicateEventException;
 import com.positivity.accounting.internal.dto.UnbalancedEntryException;
+import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
+import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.AccountNotInactiveException;
 import com.positivity.accounting.internal.exception.AccountNotReconcilableException;
 import com.positivity.accounting.internal.exception.AccountNotZeroBalanceException;
@@ -52,6 +54,7 @@ import com.positivity.accounting.internal.exception.TaxSnapshotConflictException
 import com.positivity.accounting.internal.exception.TaxSnapshotNotFoundException;
 import com.positivity.accounting.internal.exception.TaxSnapshotPeriodNotClosedException;
 import com.positivity.accounting.internal.exception.UnbalancedRulesException;
+import com.positivity.accounting.internal.exception.VendorBillDuplicateException;
 import com.positivity.shared.error.ApiError;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.persistence.OptimisticLockException;
@@ -60,6 +63,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.List;
@@ -131,6 +135,8 @@ class AccountingExceptionHandlerTest {
                             new AuthenticationCredentialsNotFoundException("no credentials"), request)),
                     Named.of("handleAccessDenied", (HandlerInvocation)
                             request -> handler.handleAccessDenied(new AccessDeniedException("denied"), request)),
+                    Named.of("handleVendorBillDuplicate", (HandlerInvocation)
+                            request -> handler.handleVendorBillDuplicate(vendorBillDuplicate(), request)),
                     Named.of("handleInvalidDateRange", (HandlerInvocation) request ->
                             handler.handleInvalidDateRange(new InvalidDateRangeException("end before start"), request)),
                     Named.of("handleInvalidRequestParameter", (HandlerInvocation)
@@ -281,6 +287,14 @@ class AccountingExceptionHandlerTest {
                             new ObjectOptimisticLockingFailureException(Object.class, "id"), request)),
                     Named.of("handleResponseStatus", (HandlerInvocation) request -> handler.handleResponseStatus(
                             new ResponseStatusException(HttpStatus.BAD_GATEWAY, "bad gateway"), request)));
+        }
+
+        private static VendorBillDuplicateException vendorBillDuplicate() {
+            VendorBill original = new VendorBill(UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"));
+            original.setBillNumber("INV-00123");
+            original.setBillDate(LocalDateTime.of(2026, 10, 1, 9, 30));
+            original.setStatus(VendorBillStatus.APPROVED);
+            return new VendorBillDuplicateException(original);
         }
 
         @ParameterizedTest

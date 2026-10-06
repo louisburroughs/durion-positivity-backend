@@ -95,6 +95,10 @@ public class VendorBillController {
                     and never fails bill creation.
                     Returns 201 with the created (or already-existing) bill, and 400 when the payload fails \
                     validation.
+                    Returns 409 AP_BILL_DUPLICATE when a live bill (any status except VOIDED or REJECTED) \
+                    already holds the same vendor, bill date and bill number, compared ignoring case, \
+                    spacing, punctuation and leading zeros; referenceId is the existing bill's vendorBillId \
+                    and nothing is created. A replayed eventId is never a duplicate.
                     """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
@@ -104,6 +108,11 @@ public class VendorBillController {
     @ApiResponse(
             responseCode = "400",
             description = "Invalid request payload",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "AP_BILL_DUPLICATE: a live bill already holds this vendor, bill number and bill date; "
+                    + "referenceId is the existing bill's vendorBillId",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<VendorBillResponse> createBillFromGoodsReceivedEvent(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -172,6 +181,13 @@ public class VendorBillController {
                     outcome (APPROVED or MATCH_EXCEPTION), so callers must inspect it rather than assume \
                     approval.
                     Returns 400 when no pending receipt matches the invoice or the payload fails validation.
+                    Returns 409 AP_BILL_DUPLICATE when the matched bill would take an invoiceReference that \
+                    another live bill (any status except VOIDED or REJECTED) of the same vendor already \
+                    holds on the same bill date, compared ignoring case, spacing, punctuation and leading \
+                    zeros; referenceId is that bill's vendorBillId and the match changes nothing.
+                    A match that loses a concurrent race for the same number between that check and its \
+                    commit answers the generic 409 DUPLICATE_RESOURCE instead, with no referenceId; the \
+                    match is rolled back and no second bill holds the number.
                     """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
@@ -181,6 +197,12 @@ public class VendorBillController {
     @ApiResponse(
             responseCode = "400",
             description = "Invalid request payload",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "AP_BILL_DUPLICATE: another live bill of this vendor already holds this invoice reference "
+                    + "on the same bill date; referenceId is that bill's vendorBillId. DUPLICATE_RESOURCE, with no "
+                    + "referenceId, when a concurrent writer takes the number between the check and the commit",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<VendorBillResponse> matchVendorInvoice(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(

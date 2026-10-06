@@ -11,6 +11,10 @@ import com.positivity.accounting.internal.dto.VendorResponse;
 import com.positivity.accounting.internal.entity.Vendor;
 import com.positivity.accounting.internal.enums.VendorStatus;
 import com.positivity.accounting.internal.repository.VendorRepository;
+import com.positivity.tenancy.TenantResolver;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -21,6 +25,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -35,8 +40,17 @@ class VendorDirectoryServiceImplTest {
 
     private static final UUID VENDOR_ID = UUID.fromString("00000000-0000-0000-0000-000000000042");
 
+    private static final UUID TENANT = UUID.fromString("01900000-0000-7000-8000-000000000001");
+    private static final Instant NOW = Instant.parse("2026-10-01T09:30:00Z");
+
     @Mock
     private VendorRepository vendorRepository;
+
+    @Mock
+    private TenantResolver tenantResolver;
+
+    @Spy
+    private Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
 
     @InjectMocks
     private VendorDirectoryServiceImpl service;
@@ -134,29 +148,31 @@ class VendorDirectoryServiceImplTest {
     }
 
     @Nested
-    @DisplayName("recordVendor")
-    class RecordVendor {
+    @DisplayName("recordVendorInCurrentTransaction (#2501: on the caller's connection)")
+    class RecordVendorInCurrentTransaction {
 
         @Test
-        @DisplayName("Should insert a new vendor when not present")
-        void shouldInsertNewVendor() {
-            when(vendorRepository.findById(VENDOR_ID)).thenReturn(Optional.empty());
+        @DisplayName("inserts the row, trimmed, with the tenant and the caller's clock, and reads nothing back")
+        void insertsWhenAbsent() {
+            when(tenantResolver.require()).thenReturn(TENANT);
+            when(vendorRepository.insertIfAbsent(TENANT, VENDOR_ID, "Acme Auto Parts", NOW))
+                    .thenReturn(1);
 
-            service.recordVendor(VENDOR_ID, "Acme Auto Parts");
+            service.recordVendorInCurrentTransaction(VENDOR_ID, "  Acme Auto Parts ");
 
-            ArgumentCaptor<Vendor> captor = ArgumentCaptor.forClass(Vendor.class);
-            verify(vendorRepository).save(captor.capture());
-            assertThat(captor.getValue().getVendorId()).isEqualTo(VENDOR_ID);
-            assertThat(captor.getValue().getName()).isEqualTo("Acme Auto Parts");
-            assertThat(captor.getValue().getStatus()).isEqualTo(VendorStatus.ACTIVE);
+            verify(vendorRepository).insertIfAbsent(TENANT, VENDOR_ID, "Acme Auto Parts", NOW);
+            verify(vendorRepository, never()).findById(any());
+            verify(vendorRepository, never()).save(any());
         }
 
         @Test
-        @DisplayName("Should refresh the stored name when it changed")
-        void shouldRefreshChangedName() {
+        @DisplayName("refreshes the stored name when the row exists with another name")
+        void refreshesChangedName() {
+            when(tenantResolver.require()).thenReturn(TENANT);
+            when(vendorRepository.insertIfAbsent(any(), any(), any(), any())).thenReturn(0);
             when(vendorRepository.findById(VENDOR_ID)).thenReturn(Optional.of(vendor(VENDOR_ID, "Old Name")));
 
-            service.recordVendor(VENDOR_ID, "New Name");
+            service.recordVendorInCurrentTransaction(VENDOR_ID, "New Name");
 
             ArgumentCaptor<Vendor> captor = ArgumentCaptor.forClass(Vendor.class);
             verify(vendorRepository).save(captor.capture());
@@ -164,22 +180,25 @@ class VendorDirectoryServiceImplTest {
         }
 
         @Test
-        @DisplayName("Should not save when the name is unchanged")
-        void shouldSkipUnchangedName() {
-            when(vendorRepository.findById(VENDOR_ID)).thenReturn(Optional.of(vendor(VENDOR_ID, "Acme Auto Parts")));
+        @DisplayName(
+                "an existing row this tenant cannot see (another tenant's, same id) is left alone, without an error")
+        void invisibleRowIsLeftAlone() {
+            when(tenantResolver.require()).thenReturn(TENANT);
+            when(vendorRepository.insertIfAbsent(any(), any(), any(), any())).thenReturn(0);
+            when(vendorRepository.findById(VENDOR_ID)).thenReturn(Optional.empty());
 
-            service.recordVendor(VENDOR_ID, "Acme Auto Parts");
+            service.recordVendorInCurrentTransaction(VENDOR_ID, "Acme Auto Parts");
 
             verify(vendorRepository, never()).save(any());
         }
 
         @Test
-        @DisplayName("Should ignore null or blank names")
-        void shouldIgnoreBlankNames() {
-            service.recordVendor(VENDOR_ID, null);
-            service.recordVendor(VENDOR_ID, "   ");
+        @DisplayName("a null or blank name is a no-op")
+        void blankNameIsANoOp() {
+            service.recordVendorInCurrentTransaction(VENDOR_ID, null);
+            service.recordVendorInCurrentTransaction(VENDOR_ID, "   ");
 
-            verify(vendorRepository, never()).findById(any());
+            verify(vendorRepository, never()).insertIfAbsent(any(), any(), any(), any());
             verify(vendorRepository, never()).save(any());
         }
     }

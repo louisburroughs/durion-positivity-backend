@@ -2,12 +2,12 @@ package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
-import com.positivity.tenancy.TenantAudited;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -182,9 +182,38 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
     Page<VendorBill> findByDueDateBetween(LocalDateTime dueFrom, LocalDateTime dueTo, Pageable pageable);
 
     /**
-     * Find a bill by vendor and bill number.
+     * The live bill a new bill number would duplicate (#2501, BR-2; ADR-0070 Decision 4): same vendor,
+     * same normalised number, bill date on the same calendar day, and not {@code VOIDED} or
+     * {@code REJECTED}. The tenant is the bound one. The partial unique index
+     * {@code uq_vendor_bill_duplicate_rule} allows at most one such row, so the result is an
+     * {@link Optional}.
+     *
+     * @param vendorId      the vendor id as stored on the bill
+     * @param billNumberKey {@link com.positivity.accounting.internal.entity.VendorBillNumbers#normalise}
+     *                      of the bill number
+     * @param dayStart      start of the bill date's calendar day, inclusive
+     * @param nextDayStart  start of the following day, exclusive
+     * @param excludeBillId a bill that is not its own duplicate (the bill being renamed), or null
+     * @return the live original, if there is one
      */
-    Optional<VendorBill> findByVendorIdAndBillNumber(UUID vendorId, String billNumber);
+    @Query("""
+            SELECT vb
+            FROM VendorBill vb
+            WHERE vb.vendorId = :vendorId
+              AND vb.billNumberKey = :billNumberKey
+              AND vb.billDate >= :dayStart
+              AND vb.billDate < :nextDayStart
+              AND vb.status NOT IN (
+                    com.positivity.accounting.internal.enums.VendorBillStatus.VOIDED,
+                    com.positivity.accounting.internal.enums.VendorBillStatus.REJECTED)
+              AND (:excludeBillId IS NULL OR vb.vendorBillId <> :excludeBillId)
+            """)
+    Optional<VendorBill> findLiveDuplicate(
+            @Param("vendorId") UUID vendorId,
+            @Param("billNumberKey") String billNumberKey,
+            @Param("dayStart") LocalDateTime dayStart,
+            @Param("nextDayStart") LocalDateTime nextDayStart,
+            @Param("excludeBillId") @Nullable UUID excludeBillId);
 
     /**
      * Find unpaid bills (status = APPROVED or PENDING_REVIEW) for a vendor.
@@ -218,23 +247,4 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
      * @return Optional containing the bill if found
      */
     Optional<VendorBill> findByOriginEventId(UUID originEventId);
-
-    /**
-     * Get the next bill sequence number from PostgreSQL sequence.
-     * Guarantees unique, monotonically increasing bill numbers across service
-     * restarts
-     * and multi-instance deployments.
-     *
-     * Note: Requires 'bill_number_seq' sequence to exist in the database:
-     * CREATE SEQUENCE IF NOT EXISTS bill_number_seq
-     * START WITH 1
-     * INCREMENT BY 1
-     * NO CYCLE;
-     *
-     * @return Next sequence value for bill number generation
-     */
-    @TenantAudited(
-            reason = "reads a sequence, not a table: bill numbers are unique platform-wide and carry no tenant data")
-    @Query(value = "SELECT nextval('bill_number_seq')", nativeQuery = true)
-    long getNextBillSequence();
 }
