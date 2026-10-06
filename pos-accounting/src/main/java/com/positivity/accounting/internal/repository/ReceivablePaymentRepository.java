@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
+import com.positivity.tenancy.TenantAudited;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Collection;
@@ -128,6 +129,9 @@ public interface ReceivablePaymentRepository extends JpaRepository<ReceivablePay
      * @param key the lock key
      * @return always 1
      */
+    @TenantAudited(
+            reason = "reads and writes no table, scoped or not: it only takes a transaction-scoped advisory lock keyed"
+                    + " on the payment intent id, so there is no tenant data to filter")
     @Query(value = "SELECT 1 FROM (SELECT pg_advisory_xact_lock(:key)) AS held", nativeQuery = true)
     int takeAdvisoryTransactionLock(@Param("key") long key);
 }
