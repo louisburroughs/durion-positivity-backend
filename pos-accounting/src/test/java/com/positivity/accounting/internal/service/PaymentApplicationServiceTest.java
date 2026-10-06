@@ -273,6 +273,73 @@ class PaymentApplicationServiceTest {
     }
 
     // ========================================
+    // releaseRefundedRemainder() (#2508, review #2553)
+    // ========================================
+
+    @Nested
+    @DisplayName("a refund takes money off the unapplied remainder (#2508)")
+    class RefundedRemainder {
+
+        private final UUID refundId = UUID.fromString("00000000-0000-0000-0000-0000000f2508");
+
+        @Test
+        @DisplayName("a 5.00 refund of a payment with 5.00 unapplied leaves it FULLY_APPLIED at zero")
+        void refundOfTheWholeRemainder() {
+            testPayment.setUnappliedAmount(new BigDecimal("5.00"));
+            when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+
+            BigDecimal released = service.releaseRefundedRemainder(testPaymentId, new BigDecimal("5.00"), refundId);
+
+            assertThat(released).isEqualByComparingTo("5.00");
+            assertThat(testPayment.getUnappliedAmount()).isEqualByComparingTo("0.00");
+            assertThat(testPayment.getStatus()).isEqualTo(ReceivablePaymentStatus.FULLY_APPLIED);
+            verify(receivablePaymentRepository).save(testPayment);
+        }
+
+        @Test
+        @DisplayName("a partial refund leaves the rest AVAILABLE")
+        void partialRefund() {
+            testPayment.setUnappliedAmount(new BigDecimal("5.00"));
+            when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+
+            service.releaseRefundedRemainder(testPaymentId, new BigDecimal("2.00"), refundId);
+
+            assertThat(testPayment.getUnappliedAmount()).isEqualByComparingTo("3.00");
+            assertThat(testPayment.getStatus()).isEqualTo(ReceivablePaymentStatus.AVAILABLE);
+        }
+
+        @Test
+        @DisplayName("a refund larger than the remainder takes the remainder only; applications are not touched")
+        void refundCappedAtTheRemainder() {
+            testPayment.setUnappliedAmount(new BigDecimal("5.00"));
+            when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+
+            BigDecimal released = service.releaseRefundedRemainder(testPaymentId, new BigDecimal("50.00"), refundId);
+
+            assertThat(released).isEqualByComparingTo("5.00");
+            assertThat(testPayment.getUnappliedAmount()).isEqualByComparingTo("0.00");
+            verify(paymentApplicationRepository, never()).save(any());
+            verify(paymentApplicationReversalRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("nothing unapplied, or a payment accounting never recorded: nothing changes")
+        void nothingToRelease() {
+            testPayment.setUnappliedAmount(BigDecimal.ZERO);
+            testPayment.setStatus(ReceivablePaymentStatus.FULLY_APPLIED);
+            when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+            UUID unknown = UUID.fromString("00000000-0000-0000-0000-0000000f2509");
+            when(receivablePaymentRepository.findById(unknown)).thenReturn(Optional.empty());
+
+            assertThat(service.releaseRefundedRemainder(testPaymentId, new BigDecimal("5.00"), refundId))
+                    .isEqualByComparingTo("0");
+            assertThat(service.releaseRefundedRemainder(unknown, new BigDecimal("5.00"), refundId))
+                    .isEqualByComparingTo("0");
+            verify(receivablePaymentRepository, never()).save(any());
+        }
+    }
+
+    // ========================================
     // creditUnappliedPayment() Tests (#2435)
     // ========================================
 

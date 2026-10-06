@@ -49,6 +49,7 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -483,6 +484,36 @@ public class PaymentApplicationServiceImpl
                 .remainingAmount(payment.getUnappliedAmount())
                 .createdAt(creditInfo.getCreatedAt())
                 .build();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public @NonNull BigDecimal releaseRefundedRemainder(
+            @NonNull UUID paymentId, @NonNull BigDecimal refundedAmount, @NonNull UUID refundId) {
+        Optional<ReceivablePayment> recorded = receivablePaymentRepository.findById(paymentId);
+        if (recorded.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+        ReceivablePayment payment = recorded.get();
+        BigDecimal unapplied = payment.getUnappliedAmount();
+        if (unapplied == null || unapplied.signum() <= 0 || refundedAmount.signum() <= 0) {
+            return BigDecimal.ZERO;
+        }
+        // Up to the remainder only: the applied part of the payment stays applied (its refund, if any, is a
+        // person's reversal of the application).
+        BigDecimal released = refundedAmount.min(unapplied);
+        payment.applyAmount(released);
+        payment.setUpdatedAt(Instant.now(clock));
+        payment.setModifiedBy(SYSTEM_ACTOR);
+        receivablePaymentRepository.save(payment);
+        log.info(
+                "Refund {} took {} off the unapplied remainder of payment {}; {} left (status {})",
+                refundId,
+                released,
+                paymentId,
+                payment.getUnappliedAmount(),
+                payment.getStatus());
+        return released;
     }
 
     /**

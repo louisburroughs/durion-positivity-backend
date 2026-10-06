@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -139,6 +140,12 @@ class SettlementEventsListenerPaymentReversedTest {
         assertThat(saved.getReversedAt()).isEqualTo(Instant.parse("2026-08-27T00:00:00Z"));
         assertThat(saved.getSourceEventId()).isEqualTo(UUID.fromString(EVENT_ID));
         verify(processedEventRepository).save(any(ProcessedEvent.class));
+        // #2508: the refunded money leaves the payment's unapplied remainder, in the same handler transaction.
+        verify(paymentApplicationService)
+                .releaseRefundedRemainder(
+                        eq(PAYMENT_INTENT_ID),
+                        org.mockito.ArgumentMatchers.argThat(amount -> amount.compareTo(new BigDecimal("42.50")) == 0),
+                        eq(REFUND_ID));
     }
 
     @Test
@@ -148,6 +155,7 @@ class SettlementEventsListenerPaymentReversedTest {
 
         verify(extInvoicePaymentReversalRepository, never()).save(any());
         verify(processedEventRepository).save(any(ProcessedEvent.class));
+        verify(paymentApplicationService, never()).releaseRefundedRemainder(any(), any(), any());
     }
 
     @Test
@@ -163,6 +171,7 @@ class SettlementEventsListenerPaymentReversedTest {
         assertThat(saved.getPartyId()).isNull();
         assertThat(saved.getRefundId()).isEqualTo(REFUND_ID);
         verify(processedEventRepository).save(any(ProcessedEvent.class));
+        verify(paymentApplicationService, never()).releaseRefundedRemainder(any(), any(), any());
     }
 
     @Test
@@ -185,6 +194,8 @@ class SettlementEventsListenerPaymentReversedTest {
 
         verify(extInvoicePaymentReversalRepository, never()).save(any());
         verify(processedEventRepository).save(any(ProcessedEvent.class));
+        // A replayed refund never releases the remainder twice (#2508).
+        verify(paymentApplicationService, never()).releaseRefundedRemainder(any(), any(), any());
     }
 
     @Test

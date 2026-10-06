@@ -48,6 +48,7 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -134,7 +135,15 @@ public class AccountingAnalyticsServiceImpl implements AccountingAnalyticsServic
         this.invoiceBalanceCalculator = invoiceBalanceCalculator;
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>One snapshot (REPEATABLE READ, review #2553): the gross sums and the CASH walk-in exclusion sums are
+     * separate queries, and under READ COMMITTED a CASH application or reversal committing between them would
+     * be subtracted without having been added (collected -45.00 in a CASH-only window) or the reverse.
+     */
     @Override
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public @NonNull CollectionsAnalyticsReport getCollectionsAnalytics(
             @NonNull LocalDate startDate, @NonNull LocalDate endDate) {
 
@@ -254,7 +263,14 @@ public class AccountingAnalyticsServiceImpl implements AccountingAnalyticsServic
                 .build();
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>One snapshot (REPEATABLE READ, review #2553): the CASH parties, the invoices and their applications
+     * are read as of the same moment.
+     */
     @Override
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public @NonNull PaymentLagCohortsReport getPaymentLagCohorts(
             @NonNull LocalDate issuedFrom, @NonNull LocalDate issuedTo, int limit) {
 

@@ -495,6 +495,12 @@ public class SettlementEventsListener {
                     .reversedAt(payload.reversedAt())
                     .sourceEventId(eventUuid)
                     .build());
+            // The refunded money is no longer there to apply (#2508): a refunded CASH walk-in excess leaves
+            // the unpaid walk-in sales read. Once per refund: the refundId guard above skips a replay.
+            if (payload.paymentIntentId() != null) {
+                paymentApplicationService.releaseRefundedRemainder(
+                        payload.paymentIntentId(), payload.amount(), payload.refundId());
+            }
             markProcessed(eventId);
         });
     }

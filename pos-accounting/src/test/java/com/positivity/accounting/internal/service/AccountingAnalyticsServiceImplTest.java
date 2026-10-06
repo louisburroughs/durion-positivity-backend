@@ -232,6 +232,25 @@ class AccountingAnalyticsServiceImplTest {
         }
 
         @Test
+        @DisplayName("collections and payment-lag read the gross and the CASH exclusion sums in one REPEATABLE READ"
+                + " snapshot (review #2553)")
+        void readsInOneSnapshot() throws NoSuchMethodException {
+            for (java.lang.reflect.Method method : List.of(
+                    AccountingAnalyticsServiceImpl.class.getMethod(
+                            "getCollectionsAnalytics", LocalDate.class, LocalDate.class),
+                    AccountingAnalyticsServiceImpl.class.getMethod(
+                            "getPaymentLagCohorts", LocalDate.class, LocalDate.class, int.class))) {
+                org.springframework.transaction.annotation.Transactional transactional =
+                        method.getAnnotation(org.springframework.transaction.annotation.Transactional.class);
+                assertThat(transactional).as(method.getName()).isNotNull();
+                assertThat(transactional.readOnly()).isTrue();
+                assertThat(transactional.isolation())
+                        .as(method.getName())
+                        .isEqualTo(org.springframework.transaction.annotation.Isolation.REPEATABLE_READ);
+            }
+        }
+
+        @Test
         @DisplayName("without a CASH party in the replica nothing is excluded and no exclusion query runs")
         void noWalkInPartyExcludesNothing() {
             when(extInvoiceRepository.findByFinalizedAtBetween(any(), any()))

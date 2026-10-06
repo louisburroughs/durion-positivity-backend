@@ -549,9 +549,16 @@ no job and nothing stored. It never posts and never changes an invoice.
   overpayments are refunded, not kept as credit"), nothing written. The excess is returned through
   pos-invoice's payment refund (`POST /v1/invoices/{invoiceId}/payments/{paymentId}/refunds`).
 
+A completed refund (`payment.payment.reversed`, `REFUND`) takes the refunded amount off the payment's
+unapplied remainder — up to the remainder, never touching its applications — in the same transaction as the
+refund replica row and once per `refundId` (a replay is skipped). A payment left with nothing is
+`FULLY_APPLIED`, leaves `unappliedPayments` and cannot be applied again. This holds for every customer's
+payment, not only CASH.
+
 **Excluded from customer views and measures** (§4.4 item 2; ADR-0057): aged receivables; collections (E2)
 `invoiced`, and applications to CASH invoices and their reversals out of `collected` /
-`applicationReversals` (the deposit-take exclusion pattern); payment-lag cohorts. The ledger is unchanged
+`applicationReversals` (the deposit-take exclusion pattern); payment-lag cohorts. Both analytics reads run in
+one REPEATABLE READ snapshot, so the gross and the exclusion sums see the same commits. The ledger is unchanged
 (account 1200, trial balance, balance sheet; ADR-0047). No customer statement, dunning or collection-case
 feature exists yet; when one is built it must leave the CASH account out by the same rule.
 

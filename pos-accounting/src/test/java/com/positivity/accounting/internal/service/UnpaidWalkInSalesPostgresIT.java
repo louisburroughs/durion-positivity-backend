@@ -45,6 +45,7 @@ import com.positivity.accounting.internal.repository.PaymentApplicationReversalR
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
 import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository;
+import com.positivity.domainevents.payment.PaymentReversedV1;
 import com.positivity.domainevents.payment.PaymentSettledV1;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -263,6 +264,7 @@ class UnpaidWalkInSalesPostgresIT extends PostgresCommittingTestBase {
         historyRepository.deleteAll();
         outboxRepository.deleteAll();
         customerCreditRepository.deleteAll();
+        extInvoicePaymentReversalRepository.deleteAll();
         reversalRepository.deleteAll();
         paymentApplicationRepository.deleteAll();
         receivablePaymentRepository.deleteAll();
@@ -399,6 +401,78 @@ class UnpaidWalkInSalesPostgresIT extends PostgresCommittingTestBase {
         assertThat(unpaidWalkInSalesService.read().getUnappliedPayments())
                 .singleElement()
                 .satisfies(unapplied -> assertThat(unapplied.getPaymentId()).isEqualTo(secondPayment));
+    }
+
+    @Test
+    @DisplayName("review #2553: refunding the 5.00 excess through pos-invoice takes it off the payment: it leaves"
+            + " the read, cannot be applied again, the 45.00 application stands, and a refund replay changes"
+            + " nothing")
+    void refundedExcessLeavesTheRead() {
+        seedInvoice("45.00");
+        UUID intent = nextUuid();
+        consume(nextUuid(), fact(intent, "50.00"));
+        assertThat(unpaidWalkInSalesService.read().getUnappliedPayments()).hasSize(1);
+
+        UUID refundId = nextUuid();
+        consumeRefund(nextUuid(), refundId, intent, "5.00");
+
+        ReceivablePayment payment = receivablePaymentRepository.findById(intent).orElseThrow();
+        assertThat(payment.getUnappliedAmount()).isEqualByComparingTo("0.00");
+        assertThat(payment.getStatus()).isEqualTo(ReceivablePaymentStatus.FULLY_APPLIED);
+        assertThat(unpaidWalkInSalesService.read().getUnappliedPayments()).isEmpty();
+        assertThat(paymentApplicationRepository.findAll())
+                .singleElement()
+                .satisfies(application ->
+                        assertThat(application.getAppliedAmount()).isEqualByComparingTo("45.00"));
+
+        UUID other = nextUuid();
+        extInvoiceRepository.save(ExtInvoice.builder()
+                .invoiceId(other)
+                .invoiceNumber("INV-W2")
+                .locationId(locationId)
+                .partyId(cashParty.toString())
+                .status("FINALIZED")
+                .total(new BigDecimal("5.00"))
+                .invoiceCreatedAt(SOLD_AT)
+                .finalizedAt(SOLD_AT)
+                .aggregateVersion(1L)
+                .updatedAt(SOLD_AT)
+                .build());
+        PaymentApplicationRequest again = new PaymentApplicationRequest(
+                "manual-after-refund",
+                List.of(new PaymentApplicationRequest.InvoiceApplication(other, new BigDecimal("5.00"))),
+                null);
+        assertThatThrownBy(() -> paymentApplicationService.applyPaymentToInvoices(intent, again))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("not available");
+        assertThat(paymentApplicationRepository.count()).isEqualTo(1);
+
+        // The same refund re-published under a new event id: the refundId guard skips it.
+        consumeRefund(nextUuid(), refundId, intent, "5.00");
+        assertThat(receivablePaymentRepository.findById(intent).orElseThrow().getUnappliedAmount())
+                .isEqualByComparingTo("0.00");
+        assertThat(extInvoicePaymentReversalRepository.count()).isEqualTo(1);
+    }
+
+    private void consumeRefund(UUID eventId, UUID refundId, UUID intent, String amount) {
+        Map<String, Object> envelope = new HashMap<>();
+        envelope.put("eventType", PaymentReversedV1.EVENT_TYPE);
+        envelope.put("eventId", eventId.toString());
+        envelope.put("schemaVersion", PaymentReversedV1.SCHEMA_VERSION);
+        envelope.put(
+                "payload",
+                new PaymentReversedV1(
+                        intent,
+                        refundId,
+                        invoiceId,
+                        null,
+                        cashParty.toString(),
+                        "REFUND",
+                        new BigDecimal(amount),
+                        "USD",
+                        "overpayment",
+                        SETTLED_AT.plusSeconds(3600)));
+        listener.onPaymentEvent(envelopeMapper.writeValueAsString(envelope));
     }
 
     private double overpayments() {

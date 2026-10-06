@@ -111,6 +111,25 @@ public interface PaymentApplicationService {
     @NonNull
     RemainderCreditResponse creditPaymentRemainder(@NonNull UUID paymentId, @NonNull RemainderCreditRequest request);
 
+    /**
+     * A completed refund of a payment takes its money out of what can still be applied (#2508): the
+     * payment's unapplied remainder shrinks by the refunded amount, never below zero, and the payment
+     * becomes {@code FULLY_APPLIED} when nothing is left. Applications already made are never touched.
+     * This is how a CASH walk-in excess, refunded through pos-invoice, leaves the unpaid walk-in sales read.
+     *
+     * <p>Runs in the caller's transaction (the refund replica's handler, whose {@code refundId} key makes
+     * it once per refund). A payment accounting never recorded, or one with nothing unapplied, is left as
+     * it is.
+     *
+     * @param paymentId      the refunded payment ({@code paymentIntentId})
+     * @param refundedAmount the refunded amount, above zero
+     * @param refundId       the refund, for the log
+     * @return the amount taken off the unapplied remainder; zero when none was
+     */
+    @NonNull
+    BigDecimal releaseRefundedRemainder(
+            @NonNull UUID paymentId, @NonNull BigDecimal refundedAmount, @NonNull UUID refundId);
+
     void voidPayment(@NonNull UUID paymentId);
 
     void reversePayment(@NonNull UUID paymentId, @NonNull String reason);
