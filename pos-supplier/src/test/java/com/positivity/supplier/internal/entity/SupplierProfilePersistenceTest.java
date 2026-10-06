@@ -5,6 +5,7 @@ import static com.positivity.supplier.internal.entity.SupplierProfilePersistence
 import static com.positivity.supplier.internal.entity.SupplierProfilePersistenceFixtures.binding;
 import static com.positivity.supplier.internal.entity.SupplierProfilePersistenceFixtures.deliveryAccount;
 import static com.positivity.supplier.internal.entity.SupplierProfilePersistenceFixtures.profile;
+import static com.positivity.supplier.internal.entity.SupplierProfilePersistenceFixtures.vendor;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -17,6 +18,7 @@ import com.positivity.supplier.internal.repository.SupplierAccountRepository;
 import com.positivity.supplier.internal.repository.SupplierAuthConfigRepository;
 import com.positivity.supplier.internal.repository.SupplierEndpointBindingRepository;
 import com.positivity.supplier.internal.repository.SupplierProfileRepository;
+import com.positivity.supplier.internal.repository.SupplierVendorRepository;
 import jakarta.persistence.EntityManager;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -42,6 +44,9 @@ class SupplierProfilePersistenceTest extends PostgresSliceTestBase {
     private SupplierProfileRepository profileRepository;
 
     @Autowired
+    private SupplierVendorRepository vendorRepository;
+
+    @Autowired
     private SupplierAuthConfigRepository authConfigRepository;
 
     @Autowired
@@ -55,7 +60,8 @@ class SupplierProfilePersistenceTest extends PostgresSliceTestBase {
 
     @Test
     void persistsFullProfileAggregateWithUuidV7IdsAndAuditFields() {
-        SupplierProfileEntity profile = profileRepository.saveAndFlush(profile("michelin-eu"));
+        SupplierProfileEntity profile =
+                profileRepository.saveAndFlush(profile("michelin-eu", vendor(vendorRepository)));
 
         assertThat(profile.getVendorProfileId()).isNotNull();
         assertThat(profile.getVendorProfileId().version()).isEqualTo(7);
@@ -86,16 +92,16 @@ class SupplierProfilePersistenceTest extends PostgresSliceTestBase {
 
     @Test
     void supplierRefIsUnique() {
-        profileRepository.saveAndFlush(profile("michelin-eu"));
+        profileRepository.saveAndFlush(profile("michelin-eu", vendor(vendorRepository)));
 
-        assertThatThrownBy(() -> profileRepository.saveAndFlush(profile("michelin-eu")))
+        assertThatThrownBy(() -> profileRepository.saveAndFlush(profile("michelin-eu", vendor(vendorRepository))))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
     void authConfigNameIsUniquePerProfileButReusableAcrossProfiles() {
-        SupplierProfileEntity first = profileRepository.saveAndFlush(profile("michelin-eu"));
-        SupplierProfileEntity second = profileRepository.saveAndFlush(profile("michelin-na"));
+        SupplierProfileEntity first = profileRepository.saveAndFlush(profile("michelin-eu", vendor(vendorRepository)));
+        SupplierProfileEntity second = profileRepository.saveAndFlush(profile("michelin-na", vendor(vendorRepository)));
         authConfigRepository.saveAndFlush(basicAuth(first.getVendorProfileId(), "ediwheel-basic"));
 
         // Same name on another profile is legal.
@@ -108,7 +114,8 @@ class SupplierProfilePersistenceTest extends PostgresSliceTestBase {
 
     @Test
     void onlyOneBillingAccountPerProfile() {
-        SupplierProfileEntity profile = profileRepository.saveAndFlush(profile("michelin-eu"));
+        SupplierProfileEntity profile =
+                profileRepository.saveAndFlush(profile("michelin-eu", vendor(vendorRepository)));
         accountRepository.saveAndFlush(billingAccount(profile.getVendorProfileId(), "0000012345"));
 
         assertThatThrownBy(() ->
@@ -118,7 +125,8 @@ class SupplierProfilePersistenceTest extends PostgresSliceTestBase {
 
     @Test
     void onlyOneDeliveryAccountPerProfileAndLocation() {
-        SupplierProfileEntity profile = profileRepository.saveAndFlush(profile("michelin-eu"));
+        SupplierProfileEntity profile =
+                profileRepository.saveAndFlush(profile("michelin-eu", vendor(vendorRepository)));
         accountRepository.saveAndFlush(deliveryAccount(profile.getVendorProfileId(), LOCATION_A, "0000067890"));
 
         // A second location is legal; the same location is not.
@@ -131,7 +139,8 @@ class SupplierProfilePersistenceTest extends PostgresSliceTestBase {
 
     @Test
     void entityInvariantRejectsDeliveryWithoutLocationAndBillingWithLocation() {
-        SupplierProfileEntity profile = profileRepository.saveAndFlush(profile("michelin-eu"));
+        SupplierProfileEntity profile =
+                profileRepository.saveAndFlush(profile("michelin-eu", vendor(vendorRepository)));
 
         SupplierAccountEntity deliveryWithoutLocation = deliveryAccount(profile.getVendorProfileId(), LOCATION_A, "1");
         deliveryWithoutLocation.setDeliveryLocationId(null);
@@ -150,7 +159,8 @@ class SupplierProfilePersistenceTest extends PostgresSliceTestBase {
 
     @Test
     void databaseCheckBacksTheRoleLocationInvariant() {
-        SupplierProfileEntity profile = profileRepository.saveAndFlush(profile("michelin-eu"));
+        SupplierProfileEntity profile =
+                profileRepository.saveAndFlush(profile("michelin-eu", vendor(vendorRepository)));
 
         // Bypass the entity to prove the DB CHECK holds on raw SQL too.
         Throwable thrown = catchThrowable(() -> entityManager
@@ -175,7 +185,8 @@ class SupplierProfilePersistenceTest extends PostgresSliceTestBase {
 
     @Test
     void atMostOneBindingPerProfileAndCapability() {
-        SupplierProfileEntity profile = profileRepository.saveAndFlush(profile("michelin-eu"));
+        SupplierProfileEntity profile =
+                profileRepository.saveAndFlush(profile("michelin-eu", vendor(vendorRepository)));
         authConfigRepository.saveAndFlush(basicAuth(profile.getVendorProfileId(), "ediwheel-basic"));
         bindingRepository.saveAndFlush(
                 binding(profile.getVendorProfileId(), SupplierCapability.STOCK_INQUIRY, "ediwheel-basic"));

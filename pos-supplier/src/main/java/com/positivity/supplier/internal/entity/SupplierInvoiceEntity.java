@@ -55,6 +55,10 @@ public class SupplierInvoiceEntity extends TenantScopedEntity {
     @Column(name = "vendor_profile_id", nullable = false)
     private UUID vendorProfileId;
 
+    /** The fetching profile's vendor at import (#2516); {@code null} for documents fetched before the vendor master. */
+    @Column(name = "vendor_id")
+    private UUID vendorId;
+
     /** The profile's alias at fetch time — a snapshot for reading, never a key. */
     @Column(name = "supplier_ref", nullable = false, length = 100)
     private String supplierRef;

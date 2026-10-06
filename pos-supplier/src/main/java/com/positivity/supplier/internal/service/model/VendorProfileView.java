@@ -24,6 +24,9 @@ import org.jspecify.annotations.Nullable;
  * @param sandboxBaseUrlOverride base URL used while {@code sandbox} is set (ADR-0050 §2);
  *     {@code null} means the bindings' own base URLs apply unchanged
  * @param retryBackoff default retry backoff strategy; {@code null} means deployment default
+ * @param vendorId the vendor this connection belongs to (#2516)
+ * @param vendorNumber that vendor's number, the reference people quote (ADR-0064)
+ * @param vendorDisplayName that vendor's display name
  */
 @Schema(
         description =
@@ -96,7 +99,19 @@ public record VendorProfileView(
                 description = "Default retry backoff strategy. Omit to use the deployment default.",
                 example = "EXPONENTIAL")
         @Nullable
-        RetryBackoff retryBackoff) {
+        RetryBackoff retryBackoff,
+
+        @Schema(
+                description = "The vendor this connection belongs to (UUIDv7).",
+                example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c")
+        @NonNull
+        UUID vendorId,
+
+        @Schema(description = "That vendor's number, the reference people quote.", example = "MICHELIN") @NonNull
+        String vendorNumber,
+
+        @Schema(description = "That vendor's display name.", example = "Michelin") @NonNull
+        String vendorDisplayName) {
 
     // Left as IllegalArgumentException (#1694): this is a response view built server-side from a
     // persisted entity by the admin service, never from client input (the create/update payload
@@ -107,6 +122,9 @@ public record VendorProfileView(
         Objects.requireNonNull(supplierRef, "supplierRef must not be null");
         Objects.requireNonNull(displayName, "displayName must not be null");
         Objects.requireNonNull(sourceOfTruth, "sourceOfTruth must not be null");
+        Objects.requireNonNull(vendorId, "vendorId must not be null");
+        Objects.requireNonNull(vendorNumber, "vendorNumber must not be null");
+        Objects.requireNonNull(vendorDisplayName, "vendorDisplayName must not be null");
         if (supplierRef.isBlank()) {
             throw new IllegalArgumentException("supplierRef must not be blank");
         }

@@ -1,6 +1,7 @@
 package com.positivity.supplier.internal.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.supplier.PostgresSliceTestBase;
@@ -21,18 +22,22 @@ import com.positivity.supplier.internal.entity.SupplierAuthConfigEntity;
 import com.positivity.supplier.internal.entity.SupplierEndpointBindingEntity;
 import com.positivity.supplier.internal.entity.SupplierProfileEntity;
 import com.positivity.supplier.internal.entity.SupplierProfilePersistenceFixtures;
+import com.positivity.supplier.internal.entity.SupplierVendorEntity;
 import com.positivity.supplier.internal.enums.ProfileSourceOfTruth;
 import com.positivity.supplier.internal.enums.RetryBackoff;
 import com.positivity.supplier.internal.enums.SupplierAccountRole;
 import com.positivity.supplier.internal.enums.SupplierAuthType;
+import com.positivity.supplier.internal.enums.VendorStatus;
 import com.positivity.supplier.internal.exception.SupplierConfigurationException;
 import com.positivity.supplier.internal.repository.SupplierAccountRepository;
 import com.positivity.supplier.internal.repository.SupplierAuthConfigRepository;
 import com.positivity.supplier.internal.repository.SupplierEndpointBindingRepository;
 import com.positivity.supplier.internal.repository.SupplierProfileRepository;
+import com.positivity.supplier.internal.repository.SupplierVendorRepository;
 import com.positivity.supplier.internal.service.EnvSecretReferenceResolver;
 import com.positivity.supplier.internal.service.SecretSchemeRegistry;
 import com.positivity.tenancy.TenantIterator;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -72,19 +77,43 @@ class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
     @Autowired
     private PlatformTransactionManager transactionManager;
 
+    @Autowired
+    private SupplierVendorRepository vendorRepository;
+
     private SupplierYamlBootstrap bootstrap;
+
+    private SimpleMeterRegistry meterRegistry;
+
+    private UUID michelinVendorId;
+
+    /** A vendor of the bound tenant, as the vendor master would hold it (#2516). */
+    private SupplierVendorEntity vendor(String vendorNumber) {
+        return vendorRepository.saveAndFlush(SupplierVendorEntity.builder()
+                .vendorNumber(vendorNumber)
+                .legalName(vendorNumber + " Inc.")
+                .displayName(vendorNumber)
+                .defaultPaymentTerms("NET30")
+                .defaultCurrency("USD")
+                .status(VendorStatus.ACTIVE)
+                .build());
+    }
 
     @BeforeEach
     void createBootstrap() {
+        meterRegistry = new SimpleMeterRegistry();
         bootstrap = new SupplierYamlBootstrap(
                 new SupplierProfileProperties(null),
                 profileRepository,
                 authConfigRepository,
                 accountRepository,
                 bindingRepository,
+                vendorRepository,
                 new SecretSchemeRegistry(List.of(new EnvSecretReferenceResolver())),
                 tenantIterator,
-                transactionManager);
+                transactionManager,
+                meterRegistry);
+        michelinVendorId = vendor("MICHELIN").getVendorId();
+        vendor("CONTI");
     }
 
     @Test
@@ -220,7 +249,8 @@ class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
                         null,
                         null,
                         null)),
-                new Sandbox(false, null));
+                new Sandbox(false, null),
+                "MICHELIN");
 
         bootstrap.reconcile(properties(changed));
 
@@ -269,8 +299,8 @@ class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
 
     @Test
     void adminManagedProfilesAreNeverTouched() {
-        SupplierProfileEntity admin =
-                profileRepository.saveAndFlush(SupplierProfilePersistenceFixtures.profile("admin-vendor"));
+        SupplierProfileEntity admin = profileRepository.saveAndFlush(
+                SupplierProfilePersistenceFixtures.profile("admin-vendor", michelinVendorId));
         Long adminVersion = admin.getVersion();
 
         bootstrap.reconcile(properties(michelinSpec()));
@@ -285,7 +315,7 @@ class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
 
     @Test
     void yamlKeyCollidingWithAdminProfileFailsStartup() {
-        profileRepository.saveAndFlush(SupplierProfilePersistenceFixtures.profile("michelin-eu"));
+        profileRepository.saveAndFlush(SupplierProfilePersistenceFixtures.profile("michelin-eu", michelinVendorId));
 
         assertThatThrownBy(() -> bootstrap.reconcile(properties(michelinSpec())))
                 .isInstanceOf(SupplierConfigurationException.class)
@@ -313,7 +343,8 @@ class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
                         null,
                         null)),
                 null,
-                null);
+                null,
+                "MICHELIN");
 
         assertThatThrownBy(() -> bootstrap.reconcile(properties(spec)))
                 .isInstanceOf(SupplierConfigurationException.class)
@@ -348,7 +379,8 @@ class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
                         null,
                         null)),
                 null,
-                null);
+                null,
+                "MICHELIN");
 
         assertThatThrownBy(() -> bootstrap.reconcile(properties(spec)))
                 .isInstanceOf(SupplierConfigurationException.class)
@@ -381,7 +413,8 @@ class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
                         null,
                         null,
                         null)),
-                null);
+                null,
+                "MICHELIN");
 
         assertThatThrownBy(() -> bootstrap.reconcile(properties(spec)))
                 .isInstanceOf(SupplierConfigurationException.class)
@@ -409,7 +442,8 @@ class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
                         null,
                         null,
                         null)),
-                null);
+                null,
+                "MICHELIN");
 
         assertThatThrownBy(() -> bootstrap.reconcile(properties(badCapability)))
                 .isInstanceOf(SupplierConfigurationException.class)
@@ -456,7 +490,8 @@ class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
                         null),
                 List.of(basicAuthSpec("env:CONTI_EDI_PASSWORD")),
                 null,
-                null);
+                null,
+                "CONTI");
 
         bootstrap.reconcile(properties(michelinSpec(), second));
 
@@ -494,6 +529,7 @@ class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
                 authConfigRepository,
                 accountRepository,
                 bindingRepository,
+                vendorRepository,
                 new SecretSchemeRegistry(List.of(new EnvSecretReferenceResolver())),
                 // A discarding publisher: these assertions are about YAML authority rejecting the write
                 // before anything is published. If a credential-invalidation event ever escaped a rejected
@@ -503,7 +539,7 @@ class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
         assertThatThrownBy(() -> adminService.updateProfile(
                         profileId,
                         new com.positivity.supplier.internal.service.model.VendorProfileRequest(
-                                "michelin-eu", "Hijacked", false, false, 1, 1, 0, null, null)))
+                                "michelin-eu", "Hijacked", false, false, 1, 1, 0, null, null, michelinVendorId)))
                 .isInstanceOf(com.positivity.supplier.internal.exception.SupplierConflictException.class)
                 .hasFieldOrPropertyWithValue(
                         "code",
@@ -647,7 +683,8 @@ class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
                 List.of(
                         binding("STOCK_INQUIRY", "ediwheel-basic", null),
                         binding("STOCK_INQUIRY", "ediwheel-basic", null)),
-                base.sandbox());
+                base.sandbox(),
+                base.vendorNumber());
 
         assertThatThrownBy(() -> bootstrap.reconcile(properties(spec)))
                 .isInstanceOf(SupplierConfigurationException.class)
@@ -670,7 +707,8 @@ class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
                 base.accounts(),
                 base.auth(),
                 List.of(binding),
-                base.sandbox());
+                base.sandbox(),
+                base.vendorNumber());
     }
 
     private static SupplierProfileProperties properties(ProfileSpec... specs) {
@@ -703,7 +741,8 @@ class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
                 base.accounts(),
                 base.auth(),
                 base.bindings(),
-                base.sandbox());
+                base.sandbox(),
+                base.vendorNumber());
     }
 
     /** Mirrors the architecture doc §7 YAML example, families per binding. */
@@ -742,6 +781,101 @@ class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
                                 true,
                                 "REDACTED",
                                 List.of("COMMERCIAL_PRICING"))),
-                new Sandbox(true, "https://sandbox.api.michelin.example"));
+                new Sandbox(true, "https://sandbox.api.michelin.example"),
+                "MICHELIN");
+    }
+
+    // ── Vendor binding (#2516, ADR-0050 amendment) ──────────────────────────────────
+
+    @Test
+    void yamlProfileBindsTheVendorNamedByVendorNumber() {
+        bootstrap.reconcile(properties(michelinSpec()));
+
+        assertThat(profileRepository
+                        .findBySupplierRef("michelin-eu")
+                        .orElseThrow()
+                        .getVendorId())
+                .isEqualTo(michelinVendorId);
+        assertThat(meterRegistry
+                        .find(SupplierYamlBootstrap.VENDOR_UNRESOLVED_METRIC)
+                        .counter())
+                .isNull();
+    }
+
+    @Test
+    void yamlProfileWithoutVendorNumberFailsStartup() {
+        ProfileSpec base = michelinSpec();
+        ProfileSpec noVendor = new ProfileSpec(
+                base.key(),
+                base.displayName(),
+                base.enabled(),
+                base.protocolDefaults(),
+                base.accounts(),
+                base.auth(),
+                base.bindings(),
+                base.sandbox(),
+                null);
+
+        assertThatThrownBy(() -> bootstrap.reconcile(properties(noVendor)))
+                .isInstanceOf(SupplierConfigurationException.class)
+                .hasFieldOrPropertyWithValue("code", SupplierConfigurationException.YAML_BOOTSTRAP_INVALID)
+                .hasMessageContaining("vendorNumber is required");
+        assertThat(profileRepository.findBySupplierRef("michelin-eu")).isEmpty();
+    }
+
+    @Test
+    void unresolvedVendorNumberSkipsTheProfileInThisTenantWithoutFailingStartup() {
+        ProfileSpec base = michelinSpec();
+        ProfileSpec unknownVendor = new ProfileSpec(
+                base.key(),
+                base.displayName(),
+                base.enabled(),
+                base.protocolDefaults(),
+                base.accounts(),
+                base.auth(),
+                base.bindings(),
+                base.sandbox(),
+                "NOT-IN-THIS-TENANT");
+
+        assertThatCode(() -> bootstrap.reconcile(properties(unknownVendor))).doesNotThrowAnyException();
+
+        assertThat(profileRepository.findBySupplierRef("michelin-eu")).isEmpty();
+        assertThat(meterRegistry
+                        .get(SupplierYamlBootstrap.VENDOR_UNRESOLVED_METRIC)
+                        .tag("profile", "michelin-eu")
+                        .counter()
+                        .count())
+                .isEqualTo(1.0);
+    }
+
+    @Test
+    void existingProfileWhoseVendorNoLongerResolvesIsDisabledAndKeepsItsVendor() {
+        bootstrap.reconcile(properties(michelinSpec()));
+        ProfileSpec base = michelinSpec();
+        ProfileSpec renamedVendor = new ProfileSpec(
+                base.key(),
+                base.displayName(),
+                base.enabled(),
+                base.protocolDefaults(),
+                base.accounts(),
+                base.auth(),
+                base.bindings(),
+                base.sandbox(),
+                "MICHELIN-NA");
+
+        bootstrap.reconcile(properties(renamedVendor));
+
+        SupplierProfileEntity profile =
+                profileRepository.findBySupplierRef("michelin-eu").orElseThrow();
+        assertThat(profile.isEnabled()).isFalse();
+        assertThat(profile.getVendorId()).isEqualTo(michelinVendorId);
+
+        // Once the vendor exists, the next startup binds it and re-enables the profile.
+        UUID renamedId = vendor("MICHELIN-NA").getVendorId();
+        bootstrap.reconcile(properties(renamedVendor));
+        SupplierProfileEntity rebound =
+                profileRepository.findBySupplierRef("michelin-eu").orElseThrow();
+        assertThat(rebound.isEnabled()).isTrue();
+        assertThat(rebound.getVendorId()).isEqualTo(renamedId);
     }
 }

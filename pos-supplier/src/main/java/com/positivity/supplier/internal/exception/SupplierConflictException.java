@@ -34,6 +34,22 @@ public class SupplierConflictException extends RuntimeException {
      */
     public static final String PRODUCT_SKU_AMBIGUOUS = "SUPPLIER_PRODUCT_SKU_AMBIGUOUS";
 
+    /** The vendor number is already used by another vendor of the tenant (#2516). */
+    public static final String VENDOR_NUMBER_TAKEN = "SUPPLIER_VENDOR_NUMBER_TAKEN";
+
+    /** The vendor already has a remit-to change waiting for a decision; at most one may (#2516). */
+    public static final String VENDOR_REMIT_CHANGE_PENDING = "SUPPLIER_VENDOR_REMIT_CHANGE_PENDING";
+
+    /** The remit-to change was already approved or rejected; both are terminal (#2516). */
+    public static final String VENDOR_REMIT_CHANGE_NOT_PENDING = "SUPPLIER_VENDOR_REMIT_CHANGE_NOT_PENDING";
+
+    /**
+     * The caller's view of a vendor is stale (#2516): an update carried an old {@code version}, or a
+     * status command asked for the status the vendor already has. The platform's generic optimistic-lock
+     * code, so a client handles both the same way — refresh and retry.
+     */
+    public static final String CONFLICT = "CONFLICT";
+
     private final String code;
 
     public SupplierConflictException(String code, String message) {

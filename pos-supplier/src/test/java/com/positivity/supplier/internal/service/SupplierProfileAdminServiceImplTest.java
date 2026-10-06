@@ -7,11 +7,13 @@ import com.positivity.supplier.PostgresSliceTestBase;
 import com.positivity.supplier.TestClockConfig;
 import com.positivity.supplier.internal.config.JpaConfig;
 import com.positivity.supplier.internal.entity.SupplierProfileEntity;
+import com.positivity.supplier.internal.entity.SupplierProfilePersistenceFixtures;
 import com.positivity.supplier.internal.exception.SupplierConflictException;
 import com.positivity.supplier.internal.exception.SupplierNotFoundException;
 import com.positivity.supplier.internal.exception.SupplierValidationException;
 import com.positivity.supplier.internal.repository.SupplierAuthConfigRepository;
 import com.positivity.supplier.internal.repository.SupplierProfileRepository;
+import com.positivity.supplier.internal.repository.SupplierVendorRepository;
 import com.positivity.supplier.internal.service.model.AuthConfigRequest;
 import com.positivity.supplier.internal.service.model.AuthConfigView;
 import com.positivity.supplier.internal.service.model.CommercialAccountRequest;
@@ -29,6 +31,7 @@ import com.positivity.supplier.internal.spi.SupplierAuthConfigChanged;
 import java.util.List;
 import java.util.UUID;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
@@ -66,6 +69,17 @@ class SupplierProfileAdminServiceImplTest extends PostgresSliceTestBase {
     @Autowired
     private ApplicationEvents applicationEvents;
 
+    @Autowired
+    private SupplierVendorRepository vendorRepository;
+
+    /** The vendor every profile in these tests belongs to (#2516). */
+    private UUID vendorId;
+
+    @BeforeEach
+    void seedVendor() {
+        vendorId = SupplierProfilePersistenceFixtures.vendor(vendorRepository);
+    }
+
     private List<SupplierAuthConfigChanged> credentialInvalidations() {
         return applicationEvents.stream(SupplierAuthConfigChanged.class).toList();
     }
@@ -80,7 +94,7 @@ class SupplierProfileAdminServiceImplTest extends PostgresSliceTestBase {
         assertThat(zeta.sourceOfTruth()).isEqualTo(ProfileSourceOfTruth.ADMIN);
         assertThat(zeta.vendorProfileId()).isNotNull();
         assertThat(alpha.connectTimeoutMillis()).isEqualTo(5000);
-        assertThat(adminService.listProfiles())
+        assertThat(adminService.listProfiles(null))
                 .extracting(VendorProfileView::supplierRef)
                 .containsExactly("alpha-tyres", "zeta-tyres");
     }
@@ -109,7 +123,8 @@ class SupplierProfileAdminServiceImplTest extends PostgresSliceTestBase {
                         null,
                         null,
                         "https://sandbox.michelin.example/a25",
-                        RetryBackoff.EXPONENTIAL));
+                        RetryBackoff.EXPONENTIAL,
+                        vendorId));
         assertThat(updated.displayName()).isEqualTo("Michelin EU (renamed)");
         assertThat(updated.enabled()).isFalse();
         assertThat(updated.sandbox()).isTrue();
@@ -159,7 +174,7 @@ class SupplierProfileAdminServiceImplTest extends PostgresSliceTestBase {
             adminService.updateProfile(
                     profileId,
                     new VendorProfileRequest(
-                            "michelin-eu", "Michelin EU (v2)", true, false, null, null, null, null, null));
+                            "michelin-eu", "Michelin EU (v2)", true, false, null, null, null, null, null, vendorId));
             profileRepository.flush();
 
             SupplierProfileEntity profile =
@@ -585,8 +600,9 @@ class SupplierProfileAdminServiceImplTest extends PostgresSliceTestBase {
         return profileId;
     }
 
-    private static VendorProfileRequest profileRequest(String supplierRef) {
-        return new VendorProfileRequest(supplierRef, "Display " + supplierRef, true, false, 5000, 30000, 3, null, null);
+    private VendorProfileRequest profileRequest(String supplierRef) {
+        return new VendorProfileRequest(
+                supplierRef, "Display " + supplierRef, true, false, 5000, 30000, 3, null, null, vendorId);
     }
 
     private static AuthConfigRequest bearerAuthRequest(String name) {

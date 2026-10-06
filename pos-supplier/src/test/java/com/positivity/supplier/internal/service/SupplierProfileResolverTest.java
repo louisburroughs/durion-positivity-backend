@@ -20,6 +20,7 @@ import com.positivity.supplier.internal.repository.SupplierAccountRepository;
 import com.positivity.supplier.internal.repository.SupplierAuthConfigRepository;
 import com.positivity.supplier.internal.repository.SupplierEndpointBindingRepository;
 import com.positivity.supplier.internal.repository.SupplierProfileRepository;
+import com.positivity.supplier.internal.repository.SupplierVendorRepository;
 import java.util.UUID;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,6 +46,9 @@ class SupplierProfileResolverTest extends PostgresSliceTestBase {
     private SupplierProfileRepository profileRepository;
 
     @Autowired
+    private SupplierVendorRepository vendorRepository;
+
+    @Autowired
     private SupplierAuthConfigRepository authConfigRepository;
 
     @Autowired
@@ -60,7 +64,8 @@ class SupplierProfileResolverTest extends PostgresSliceTestBase {
 
     @BeforeEach
     void seedProfile() {
-        profile = profileRepository.save(SupplierProfilePersistenceFixtures.profile("michelin-eu"));
+        profile = profileRepository.save(SupplierProfilePersistenceFixtures.profile(
+                "michelin-eu", SupplierProfilePersistenceFixtures.vendor(vendorRepository)));
         authConfigRepository.save(SupplierProfilePersistenceFixtures.basicAuth(vendorProfileId(), "ediwheel-basic"));
         accountRepository.save(SupplierProfilePersistenceFixtures.billingAccount(vendorProfileId(), "0000012345"));
         accountRepository.save(

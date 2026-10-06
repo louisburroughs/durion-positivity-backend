@@ -53,6 +53,14 @@ public class SupplierProfileEntity extends TenantScopedEntity {
     @Column(name = "supplier_ref", nullable = false, unique = true, length = 100)
     private String supplierRef;
 
+    /**
+     * The vendor this connection belongs to (#2516, ADR-0070 Decision 7): required, a vendor of the
+     * profile's own tenant. YAML profiles bind it by {@code vendorNumber}; ADMIN profiles may be
+     * re-pointed.
+     */
+    @Column(name = "vendor_id", nullable = false)
+    private UUID vendorId;
+
     @Column(name = "display_name", nullable = false)
     private String displayName;
 

@@ -31,6 +31,8 @@ public record SupplierProfileProperties(@Nullable List<ProfileSpec> profiles) {
      * @param auth auth configs carrying secret references
      * @param bindings capability endpoint bindings
      * @param sandbox environment overlay
+     * @param vendorNumber the {@code vendorNumber} of the vendor this profile belongs to, resolved in
+     *     each tenant's vendor master (#2516, ADR-0050 amendment); required — YAML never creates a vendor
      */
     public record ProfileSpec(
             @Nullable String key,
@@ -40,7 +42,8 @@ public record SupplierProfileProperties(@Nullable List<ProfileSpec> profiles) {
             @Nullable Accounts accounts,
             @Nullable List<AuthSpec> auth,
             @Nullable List<BindingSpec> bindings,
-            @Nullable Sandbox sandbox) {}
+            @Nullable Sandbox sandbox,
+            @Nullable String vendorNumber) {}
 
     /**
      * Profile-level protocol defaults (§7 {@code protocolDefaults}).

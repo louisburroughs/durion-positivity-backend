@@ -19,6 +19,7 @@ import jakarta.validation.constraints.NotNull;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -30,6 +31,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -49,19 +51,21 @@ public class SupplierProfileAdminController {
 
     private static final String PROFILE_EXAMPLE = """
             {"supplierRef":"michelin-eu","displayName":"Michelin Europe","enabled":true,"sandbox":false,
-             "connectTimeoutMillis":5000,"readTimeoutMillis":30000,"maxRetries":2,"retryBackoff":"EXPONENTIAL"}
+             "connectTimeoutMillis":5000,"readTimeoutMillis":30000,"maxRetries":2,"retryBackoff":"EXPONENTIAL",
+             "vendorId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c"}
             """;
 
     private final SupplierProfileAdminService adminService;
 
     @Operation(operationId = "listVendorProfiles", summary = "List vendor profiles", description = """
                     Returns every configured vendor profile, ordered by supplierRef, with its enabled, sandbox and
-                    source-of-truth state.
+                    source-of-truth state and the vendor it belongs to.
                     Use this tool to discover a vendorProfileId before working with accounts, auth config or
-                    bindings; use getVendorProfile instead when the id is already known.
-                    Preconditions: none; the list is unfiltered and includes both ADMIN-managed and YAML-managed
-                    profiles.
-                    Required inputs: none, and there is no request body, paging or filtering.
+                    bindings, or to list one vendor's connections; use getVendorProfile instead when the id is
+                    already known.
+                    Preconditions: none; the list includes both ADMIN-managed and YAML-managed profiles.
+                    Required inputs: none; vendorId optionally narrows the list to one vendor's profiles, and
+                    there is no request body or paging.
                     Emits a SUPPLIER_PROFILE_LIST audit event; no configuration is changed.
                     Returns 200 with an empty array when nothing is configured, so an empty result is not an error
                     condition.
@@ -80,8 +84,18 @@ public class SupplierProfileAdminController {
     @PreAuthorize("hasAuthority('" + SupplierPermissions.PROFILE_READ + "')")
     @EmitEvent(id = "SUPPLIER_PROFILE_LIST", apiVersion = "1")
     @GetMapping
-    public ResponseEntity<List<VendorProfileView>> listProfiles() {
-        return ResponseEntity.ok(adminService.listProfiles());
+    public ResponseEntity<List<VendorProfileView>> listProfiles(
+            @Parameter(
+                            description = "Only the profiles of this vendor (UUIDv7).",
+                            schema =
+                                    @Schema(
+                                            type = "string",
+                                            format = "uuid",
+                                            example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c"))
+                    @RequestParam(required = false)
+                    @Nullable
+                    UUID vendorId) {
+        return ResponseEntity.ok(adminService.listProfiles(vendorId));
     }
 
     @Operation(operationId = "getVendorProfile", summary = "Get vendor profile", description = """
@@ -134,16 +148,25 @@ public class SupplierProfileAdminController {
                     Use this tool when onboarding a new supplier connection; do not use it to change an existing
                     profile, which is updateVendorProfile, and note that YAML-managed profiles cannot be created
                     here at all.
-                    Preconditions: supplierRef must not already be in use by another profile.
-                    Required inputs: supplierRef and displayName, both non-blank, plus the enabled and sandbox flags;
+                    Preconditions: supplierRef must not already be in use by another profile, and vendorId must
+                    name an ACTIVE vendor of the caller's tenant.
+                    Required inputs: supplierRef and displayName, both non-blank, vendorId, plus the enabled and
+                    sandbox flags;
                     timeouts, maxRetries, retryBackoff and sandboxBaseUrlOverride are optional and fall back to the
                     deployment defaults when omitted.
                     Emits a SUPPLIER_PROFILE_CREATE audit event; the profile is created with no bindings, so it
                     resolves every capability to a not-configured outcome until bindings are added.
-                    Returns 409 when supplierRef is already in use, and 400 when supplierRef or displayName are blank
-                    or a timeout value is not greater than zero.
+                    Returns 409 when supplierRef is already in use, 400 when supplierRef or displayName are blank,
+                    vendorId is missing or a timeout value is not greater than zero, and 422
+                    SUPPLIER_VENDOR_NOT_FOUND or SUPPLIER_VENDOR_INACTIVE when vendorId does not name an active
+                    vendor of the tenant.
                     """)
     @ApiResponse(responseCode = "201", description = "Profile created.")
+    @ApiResponse(
+            responseCode = "422",
+            description = "SUPPLIER_VENDOR_NOT_FOUND: vendorId names no vendor of the tenant;"
+                    + " SUPPLIER_VENDOR_INACTIVE: the vendor is inactive.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "400",
             description = "Invalid request.",
@@ -189,17 +212,23 @@ public class SupplierProfileAdminController {
                     Use this tool to change connection defaults or take a supplier out of service by clearing
                     enabled; do not use it on YAML-managed profiles, whose source of truth is the deployment
                     configuration instead.
-                    Preconditions: the profile must exist, must be ADMIN-managed, and the supplierRef in the body
-                    must not belong to a different profile.
+                    Preconditions: the profile must exist, must be ADMIN-managed, the supplierRef in the body
+                    must not belong to a different profile, and vendorId must name a vendor of the caller's
+                    tenant; the profile may be re-pointed to another vendor.
                     Required inputs: vendorProfileId (UUIDv7) path parameter plus the full body, because every field
                     is replaced; omitting an optional field resets it to the deployment default rather than leaving
                     the stored value.
                     Emits a SUPPLIER_PROFILE_UPDATE audit event; disabling a profile immediately makes its bindings
                     resolve to a typed not-configured outcome.
                     Returns 404 when the profile does not exist, 409 when it is YAML-managed or the supplierRef is
-                    taken, and 400 when a required field is blank or a timeout is not greater than zero.
+                    taken, 400 when a required field is blank or a timeout is not greater than zero, and 422
+                    SUPPLIER_VENDOR_NOT_FOUND when vendorId names no vendor of the tenant.
                     """)
     @ApiResponse(responseCode = "200", description = "Profile updated.")
+    @ApiResponse(
+            responseCode = "422",
+            description = "SUPPLIER_VENDOR_NOT_FOUND: vendorId names no vendor of the tenant.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "400",
             description = "Invalid request.",

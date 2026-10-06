@@ -30,9 +30,61 @@ S2S operation) would be a new capability with its own spec, not a revival of thi
 
 ## API surface
 
-Three surfaces, four permissions. Everything is under `/v1/supplier/admin`.
+The vendor master is under `/v1/supplier/vendors`; connection configuration is under `/v1/supplier/admin`.
+
+### Vendor master (#2516, ADR-0070 Decision 2) — `supplier:vendor:read` / `supplier:vendor:write` / `supplier:vendor_remit:approve` / `supplier:fact:replay`
+
+One vendor for every party the shop buys from or pays, with or without a supplier connection. Every
+connection profile belongs to exactly one vendor. No endpoint deletes a vendor.
+
+| Method | Route | Permission | Codes |
+| --- | --- | --- | --- |
+| GET | `/v1/supplier/vendors?q=&status=&page=&size=` | `supplier:vendor:read` | 200 |
+| GET | `/v1/supplier/vendors/{vendorId}` | `supplier:vendor:read` | 200, 404 `SUPPLIER_VENDOR_NOT_FOUND` |
+| POST | `/v1/supplier/vendors` | `supplier:vendor:write` | 201, 400 `VALIDATION_ERROR`, 409 `SUPPLIER_VENDOR_NUMBER_TAKEN` |
+| PUT | `/v1/supplier/vendors/{vendorId}` (carries `version`) | `supplier:vendor:write` | 200, 400, 404, 409 `CONFLICT` |
+| POST | `…/{vendorId}/deactivation` · `…/reactivation` `{reason}` | `supplier:vendor:write` | 200, 400, 404, 409 `CONFLICT` |
+| POST | `…/{vendorId}/remit-to-changes` `{remitTo, reason}` | `supplier:vendor:write` | 201, 400, 404, 409 `SUPPLIER_VENDOR_REMIT_CHANGE_PENDING` |
+| GET | `…/{vendorId}/remit-to-changes?status=` | `supplier:vendor:read` | 200 |
+| POST | `…/remit-to-changes/{changeId}/approval` `{verificationNote}` | `supplier:vendor_remit:approve` | 200, 400, 403 `SUPPLIER_VENDOR_REMIT_SELF_APPROVAL`, 409 `SUPPLIER_VENDOR_REMIT_CHANGE_NOT_PENDING` |
+| POST | `…/remit-to-changes/{changeId}/rejection` `{note}` | `supplier:vendor_remit:approve` | 200, 400, 409 `SUPPLIER_VENDOR_REMIT_CHANGE_NOT_PENDING` |
+| POST | `/v1/supplier/vendors/facts/replay?afterVendorId=&limit=` | `supplier:fact:replay` | 200 (`emitted`, `nextAfterVendorId`, `complete`) |
+
+- **`vendorNumber`** is optional on create: give one (`^[A-Z0-9][A-Z0-9-]{0,29}$`, unique in the tenant)
+  or get `V-000001`, `V-000002`, … from a per-tenant counter. It never changes afterwards: YAML profiles
+  bind to it and people quote it (ADR-0064). `vendorId` is never display text.
+- **Remit-to changes need a second person.** A remit-to given at creation is version 1 without approval.
+  Every later remit-to — including a first one on a vendor created without — is a `PENDING` change
+  request (reason ≥ 10 characters), at most one per vendor. Only a holder of
+  `supplier:vendor_remit:approve` **who is not the requester** can approve it (verification note ≥ 10
+  characters); that applies it and raises `remitToVersion` by one. Rejection (note ≥ 10 characters)
+  changes nothing. A pending change is never on the vendor and never published.
+- **Status** is `ACTIVE ⇄ INACTIVE` with a reason. Deactivation does not disable the vendor's profiles:
+  its EDI documents still arrive, and accounting records them as exceptions.
+- **No bank details** — not on the record, not on Kafka (OI-14).
+- **`supplier.vendor.updated` v1** (`SupplierVendorUpdatedV1`) on `supplier.events.v1`, key `vendorId`,
+  `aggregateVersion` = the vendor's `@Version`: queued through the outbox in the transaction of every
+  create, update, status change and remit-to approval. It carries every vendor field plus
+  `remitToChangedAt`, `remitToRequestedBy`, `remitToApprovedBy` (security-context principal names),
+  `createdBy`, `createdAt`, `occurredAt`. Consumers apply it under `ReplicaVersionGuard`.
+- **Replay (ADR-0044 §4).** `POST /v1/supplier/vendors/facts/replay` re-emits one page (limit clamped to
+  1–1000, default 200) of the caller's tenant's vendors at their current version. The
+  `supplier.outbox.replay-requested` command on `supplier.commands.v1`
+  (`{"commandType":"supplier.outbox.replay-requested","payload":{"since":…,"until":…}}`, tenant from the
+  record header) re-queues that tenant's published `supplier.events.v1` rows of the window with their
+  original event ids; a window older than `pos.supplier.outbox.replay.max-lookback` (default `P30D`) is
+  logged and dropped.
+- **Not yet:** the per-tenant reconciliation manifest on `supplier.manifest.v1`. `TopicInventoryTest`
+  refuses a `*.manifest.v1` topic without a production consumer, so the manifest publisher ships with
+  S24's first `supplier.manifest.v1` listener (durion-positivity-backend#2517).
 
 ### Vendor profile administration — `supplier:profile:read` / `supplier:profile:write`
+
+Every profile names its vendor: `vendorId` is required on create and update (a vendor of the caller's
+tenant — **422 `SUPPLIER_VENDOR_NOT_FOUND`** otherwise — and `ACTIVE` on create, **422
+`SUPPLIER_VENDOR_INACTIVE`**); an ADMIN profile may be re-pointed to another vendor. The view carries
+`vendorId`, `vendorNumber` and `vendorDisplayName`; `GET …/profiles?vendorId=` lists one vendor's
+profiles.
 
 | Route | Operations |
 | --- | --- |
@@ -423,6 +475,12 @@ A profile is either `YAML`-managed or `ADMIN`-managed, recorded on the row.
 Use YAML for suppliers that belong to the deployment (reproducible, reviewable, in git). Use the admin
 API for suppliers an operator onboards at runtime.
 
+**Every YAML profile names its vendor by `vendorNumber`** (ADR-0050 amendment, #2516); a spec without
+one fails startup. The number is resolved in each tenant's own vendor master. Where a tenant does not
+have it, the profile is not created there (or an existing one is disabled and keeps its vendor), a WARN
+names the profile and tenant, `supplier.yaml.profile.vendor_unresolved{profile,tenant}` is counted, and
+the next startup tries again — other tenants and startup are unaffected. YAML never creates a vendor.
+
 ### Full YAML example
 
 Prefix is `supplier`, so this sits at the root of any profile-specific config file:
@@ -432,6 +490,7 @@ supplier:
   profiles:
     - key: MICHELIN                       # supplierRef: the human-readable alias used everywhere
       displayName: Michelin France
+      vendorNumber: MICHELIN              # required: the vendor of each tenant's vendor master this binds to
       enabled: true
       protocolDefaults:
         family: MICHELIN_S2S

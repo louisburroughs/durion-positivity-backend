@@ -63,6 +63,6 @@ class InvoiceFetchRunnerTest {
         // happens either, so a typo cannot surface as a configuration error about the wrong thing.
         verify(profileResolver, never()).resolveBinding(any(), any());
         verify(baseClient, never()).exchange(any());
-        verify(importer, never()).importInvoices(any(), any(), any());
+        verify(importer, never()).importInvoices(any(), any());
     }
 }

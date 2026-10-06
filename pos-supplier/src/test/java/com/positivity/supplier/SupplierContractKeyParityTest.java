@@ -103,7 +103,17 @@ class SupplierContractKeyParityTest {
                         com.positivity.supplier.internal.enums.AuditPayloadOutcome.class),
                 Arguments.of(
                         com.positivity.supplier.internal.service.model.RedactionClassification.class,
-                        com.positivity.supplier.internal.enums.RedactionClassification.class));
+                        com.positivity.supplier.internal.enums.RedactionClassification.class),
+                // Vendor master (#2516)
+                Arguments.of(
+                        com.positivity.supplier.internal.vendor.service.model.VendorStatus.class,
+                        com.positivity.supplier.internal.enums.VendorStatus.class),
+                Arguments.of(
+                        com.positivity.supplier.internal.vendor.service.model.RemitChangeStatus.class,
+                        com.positivity.supplier.internal.enums.RemitChangeStatus.class),
+                Arguments.of(
+                        com.positivity.supplier.internal.vendor.service.model.VendorStatus.class,
+                        com.positivity.domainevents.supplier.SupplierVendorUpdatedV1.Status.class));
     }
 
     /**

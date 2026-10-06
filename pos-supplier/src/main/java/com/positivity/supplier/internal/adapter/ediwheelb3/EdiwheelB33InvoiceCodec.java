@@ -169,7 +169,12 @@ public class EdiwheelB33InvoiceCodec implements SupplierAdapterCodec {
                 // The vendor's own total, not the sum of the lines. Where they disagree the vendor's
                 // figure is what it will expect to be paid, and the disagreement is worth seeing.
                 amount(wire.summary == null ? null : wire.summary.totalAmount),
-                lines);
+                lines,
+                // The B3.3 wire carries no due date, no terms and no tax split by type (#2516): null is
+                // "the document does not say", which consumers read as today's behaviour.
+                null,
+                null,
+                null);
     }
 
     /**

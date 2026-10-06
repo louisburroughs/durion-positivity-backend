@@ -144,5 +144,31 @@ public final class SupplierPermissions {
      */
     public static final String MARKETING_CATALOG_IMPORT = "supplier:mktcat:import";
 
+    /**
+     * Reading the vendor master and its remit-to change requests (#2516, ADR-0070 Decision 10).
+     *
+     * <p>Separate from {@link #PROFILE_READ}: a vendor is the commercial party the shop buys from and
+     * pays, read by the people who buy and pay; a profile is a machine connection's configuration.
+     */
+    public static final String VENDOR_READ = "supplier:vendor:read";
+
+    /**
+     * Creating and changing vendors, deactivating and reactivating them, and requesting a remit-to
+     * change (#2516). Does not apply a remit-to change: that is {@link #VENDOR_REMIT_APPROVE}.
+     */
+    public static final String VENDOR_WRITE = "supplier:vendor:write";
+
+    /**
+     * Approving or rejecting a remit-to change (#2516, SPEC §4.9 "Remit-to changes need a second
+     * person"). Holding it is not enough on its own: the approver must not be the requester.
+     */
+    public static final String VENDOR_REMIT_APPROVE = "supplier:vendor_remit:approve";
+
+    /**
+     * Re-emitting the tenant's vendor facts so a new replica can be seeded (ADR-0044 §4, #2516; the
+     * {@code crm:fact:replay} precedent).
+     */
+    public static final String FACT_REPLAY = "supplier:fact:replay";
+
     private SupplierPermissions() {}
 }

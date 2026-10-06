@@ -21,9 +21,11 @@ import com.positivity.supplier.internal.service.SupplierProfileResolver.Resolved
 import com.positivity.supplier.internal.spi.SupplierInvoicePort;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 
 /**
@@ -67,10 +69,17 @@ public class InvoiceFetchRunner implements SupplierInvoicePort {
      */
     public FetchOutcome fetchWindow(
             @NonNull SupplierRef supplierRef, @NonNull LocalDate fromDate, @NonNull LocalDate toDate) {
-        List<SupplierInvoice> invoices = fetchInvoices(supplierRef, fromDate, toDate);
-
-        ResolvedBinding binding = profileResolver.resolveBinding(supplierRef, SupplierCapability.INVOICE_FETCH);
-        int imported = importer.importInvoices(binding.binding().getVendorProfileId(), supplierRef.value(), invoices);
+        FetchedWindow fetched = fetch(supplierRef, fromDate, toDate);
+        List<SupplierInvoice> invoices = fetched.invoices();
+        ResolvedBinding binding = fetched.binding();
+        int imported = importer.importInvoices(
+                new InvoiceImporter.InvoiceSource(
+                        binding.binding().getVendorProfileId(),
+                        binding.profile().getVendorId(),
+                        supplierRef.value(),
+                        binding.family().name(),
+                        fetched.exchangeId()),
+                invoices);
         log.info(
                 "Invoice window {}..{} for {}: {} fetched, {} new",
                 fromDate,
@@ -92,6 +101,16 @@ public class InvoiceFetchRunner implements SupplierInvoicePort {
     @Override
     @NonNull
     public List<SupplierInvoice> fetchInvoices(
+            @NonNull SupplierRef supplierRef, @NonNull LocalDate fromDate, @NonNull LocalDate toDate) {
+        return fetch(supplierRef, fromDate, toDate).invoices();
+    }
+
+    /**
+     * The vendor conversation, plus what the importer records as provenance (#2516): the binding it used
+     * and the exchange-audit id of the exchange that returned the documents.
+     */
+    @NonNull
+    private FetchedWindow fetch(
             @NonNull SupplierRef supplierRef, @NonNull LocalDate fromDate, @NonNull LocalDate toDate) {
         if (toDate.isBefore(fromDate)) {
             // Checked here so every caller sees one exception type from this method. Letting the
@@ -119,7 +138,7 @@ public class InvoiceFetchRunner implements SupplierInvoicePort {
         }
 
         try {
-            return codec.decode(response.body());
+            return new FetchedWindow(codec.decode(response.body()), binding, response.exchangeId());
         } catch (InvoiceDecodeException e) {
             // Also thrown. A document-level refusal ("window too wide") is a configuration problem
             // that will recur until somebody changes something, and it must not look like a quiet
@@ -137,4 +156,10 @@ public class InvoiceFetchRunner implements SupplierInvoicePort {
      * together are what make that legible rather than alarming.
      */
     public record FetchOutcome(int fetched, int imported) {}
+
+    /** One window's documents with the binding that fetched them and the exchange that returned them. */
+    private record FetchedWindow(
+            @NonNull List<SupplierInvoice> invoices,
+            @NonNull ResolvedBinding binding,
+            @Nullable UUID exchangeId) {}
 }

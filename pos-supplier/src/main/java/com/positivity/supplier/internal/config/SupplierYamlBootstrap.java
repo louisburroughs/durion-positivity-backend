@@ -11,6 +11,7 @@ import com.positivity.supplier.internal.entity.SupplierAccountEntity;
 import com.positivity.supplier.internal.entity.SupplierAuthConfigEntity;
 import com.positivity.supplier.internal.entity.SupplierEndpointBindingEntity;
 import com.positivity.supplier.internal.entity.SupplierProfileEntity;
+import com.positivity.supplier.internal.entity.SupplierVendorEntity;
 import com.positivity.supplier.internal.enums.PayloadCaptureLevel;
 import com.positivity.supplier.internal.enums.ProfileSourceOfTruth;
 import com.positivity.supplier.internal.enums.RedactionClassification;
@@ -22,15 +23,20 @@ import com.positivity.supplier.internal.repository.SupplierAccountRepository;
 import com.positivity.supplier.internal.repository.SupplierAuthConfigRepository;
 import com.positivity.supplier.internal.repository.SupplierEndpointBindingRepository;
 import com.positivity.supplier.internal.repository.SupplierProfileRepository;
+import com.positivity.supplier.internal.repository.SupplierVendorRepository;
 import com.positivity.supplier.internal.service.AuthReferenceRules;
 import com.positivity.supplier.internal.service.SecretSchemeRegistry;
 import com.positivity.supplier.internal.service.model.AuthConfigRequest;
 import com.positivity.supplier.internal.service.model.SupplierAuthType;
+import com.positivity.tenancy.TenantContext;
 import com.positivity.tenancy.TenantIterator;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
@@ -69,6 +75,14 @@ import org.springframework.transaction.support.TransactionTemplate;
  * with a clear {@link SupplierConfigurationException} — a partially applied
  * YAML never
  * reaches the database.
+ *
+ * <p>
+ * Every profile names its vendor by {@code vendorNumber} (#2516, ADR-0050 amendment), resolved
+ * in each tenant's own vendor master. A spec without one fails startup with the other shape
+ * errors. A number the tenant does not have is not a startup failure: that tenant's profile is
+ * not created, or an existing one is disabled and keeps its vendor, with a WARN naming the
+ * profile and tenant and a {@value #VENDOR_UNRESOLVED_METRIC} count; the next startup tries
+ * again. YAML never creates a vendor.
  */
 @Component
 @RequiredArgsConstructor
@@ -78,6 +92,9 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
     /** Audit actor of YAML reconciliation writes (ADR-0050 §6). */
     public static final String BOOTSTRAP_ACTOR = "system:yaml-bootstrap";
 
+    /** Counter of YAML profiles whose {@code vendorNumber} did not resolve in a tenant (#2516). */
+    public static final String VENDOR_UNRESOLVED_METRIC = "supplier.yaml.profile.vendor_unresolved";
+
     private static final Logger log = LoggerFactory.getLogger(SupplierYamlBootstrap.class);
 
     private final SupplierProfileProperties properties;
@@ -85,12 +102,14 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
     private final SupplierAuthConfigRepository authConfigRepository;
     private final SupplierAccountRepository accountRepository;
     private final SupplierEndpointBindingRepository bindingRepository;
+    private final SupplierVendorRepository vendorRepository;
 
     /** Supplies the legal secret-reference scheme allowlist (ADR-0050 §4). */
     private final SecretSchemeRegistry secretSchemeRegistry;
 
     private final TenantIterator tenantIterator;
     private final PlatformTransactionManager transactionManager;
+    private final MeterRegistry meterRegistry;
 
     /**
      * Reconciles the YAML profiles into every active tenant (ADR-0062 §3): the profile tables are
@@ -149,6 +168,13 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
             throw invalid("YAML profile '" + spec.key() + "' collides with an existing ADMIN-managed profile"
                     + " of the same supplierRef; remove one configuration source (ADR-0050 §6)");
         }
+        String vendorNumber = Objects.requireNonNull(spec.vendorNumber(), "validated vendorNumber");
+        Optional<SupplierVendorEntity> vendor = vendorRepository.findByVendorNumber(vendorNumber);
+        if (vendor.isEmpty()) {
+            vendorUnresolved(spec, profile);
+            return;
+        }
+        profile.setVendorId(vendor.get().getVendorId());
         profile.setSupplierRef(spec.key());
         profile.setDisplayName(spec.displayName());
         profile.setEnabled(spec.enabled() == null || spec.enabled());
@@ -284,6 +310,29 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
     }
 
     /**
+     * The profile's vendor does not exist in this tenant (#2516). An existing profile is disabled and keeps
+     * its vendor; a new one is not created. Other tenants are unaffected, startup continues, and the next
+     * startup tries again.
+     */
+    private void vendorUnresolved(@NonNull ProfileSpec spec, @NonNull SupplierProfileEntity profile) {
+        String tenant = TenantContext.current().map(UUID::toString).orElse("unbound");
+        log.warn(
+                "YAML profile '{}' names vendorNumber '{}', which tenant {} does not have; the profile is {} in that"
+                        + " tenant until the vendor exists",
+                spec.key(),
+                spec.vendorNumber(),
+                tenant,
+                profile.getVendorProfileId() == null ? "not created" : "disabled");
+        meterRegistry
+                .counter(VENDOR_UNRESOLVED_METRIC, "profile", spec.key(), "tenant", tenant)
+                .increment();
+        if (profile.getVendorProfileId() != null && profile.isEnabled()) {
+            profile.setEnabled(false);
+            profileRepository.save(profile);
+        }
+    }
+
+    /**
      * ADR-0050 §6: previously-YAML profiles absent from current YAML are disabled,
      * never deleted.
      */
@@ -310,6 +359,10 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
             }
             if (spec.displayName() == null || spec.displayName().isBlank()) {
                 throw invalid(PROFILE_PREFIX + spec.key() + "': displayName must not be blank");
+            }
+            if (spec.vendorNumber() == null || spec.vendorNumber().isBlank()) {
+                throw invalid(PROFILE_PREFIX + spec.key() + "': vendorNumber is required — every profile belongs to"
+                        + " a vendor of the vendor master (ADR-0050 amendment, #2516)");
             }
             validateProtocolDefaults(spec);
             Set<String> authNames = validateAuthSpecs(spec);

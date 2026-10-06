@@ -10,12 +10,18 @@ import com.positivity.supplier.internal.order.service.OrderNotDispatchedPublishe
 import com.positivity.supplier.internal.order.service.TransmissionIntentWriter;
 import com.positivity.supplier.internal.pricecatalog.service.PriceCatalogRepublisher;
 import com.positivity.supplier.internal.repository.ProcessedEventRepository;
+import com.positivity.supplier.internal.service.SupplierOutboxReplayService;
 import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.format.DateTimeParseException;
+import java.util.Locale;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
@@ -27,8 +33,20 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * The single consumer of {@code supplier.commands.v1} (ADR-0049 §3): purchase-order transmission
- * requests from pos-order, PRICAT re-publication requests from pos-catalog, and MKCAT
- * re-publication requests sent on pos-catalog's behalf (ADR-0044 §4, #2356).
+ * requests from pos-order, PRICAT re-publication requests from pos-catalog, MKCAT
+ * re-publication requests sent on pos-catalog's behalf (ADR-0044 §4, #2356), and
+ * {@code supplier.outbox.replay-requested} drift repairs from consumers of
+ * {@code supplier.events.v1} (ADR-0044 §4, #2516).
+ *
+ * <h2>The replay command</h2>
+ *
+ * A manifest listener asks with the platform's command shape — {@code commandType} and a
+ * {@code payload} of {@code since} / {@code until}, no event id — so it is dispatched before the
+ * event-id guard and recorded nowhere: replay is idempotent (the rows are re-sent with their original
+ * event ids, which consumers dedupe), as in every other owner. Only the tenant the command arrived under
+ * is replayed. A window reaching further back than {@code pos.supplier.outbox.replay.max-lookback}
+ * (default {@code P30D}) is logged and dropped; a malformed one is logged at error and dropped; a
+ * transient database failure propagates for the container to retry.
  *
  * <h2>Why one consumer and not one per command</h2>
  *
@@ -90,6 +108,12 @@ public class SupplierCommandListener {
     /** Owner recorded for a command this module does not handle and whose source is unstated. */
     static final String UNKNOWN_OWNER = "unknown";
 
+    /** {@code supplier.outbox.replay-requested}, normalised to command-type form. */
+    static final String COMMAND_OUTBOX_REPLAY_REQUESTED = "SUPPLIER_OUTBOX_REPLAY_REQUESTED";
+
+    /** Covers the sub-millisecond skew between an outbox row's createdAt and its event id's timestamp. */
+    private static final Duration REPLAY_WINDOW_SLACK = Duration.ofSeconds(1);
+
     private final Clock clock;
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
@@ -97,6 +121,10 @@ public class SupplierCommandListener {
     private final PriceCatalogRepublisher republisher;
     private final MktCatRepublisher mktCatRepublisher;
     private final OrderNotDispatchedPublisher notDispatchedPublisher;
+    private final SupplierOutboxReplayService outboxReplayService;
+
+    /** How far back a replay window may start; older requests are logged and dropped. */
+    private final Duration replayMaxLookback;
 
     /** A handler and its processed mark in one transaction; a failure's mark in its own. */
     private final TransactionTemplate handlerTransaction;
@@ -109,6 +137,8 @@ public class SupplierCommandListener {
             PriceCatalogRepublisher republisher,
             MktCatRepublisher mktCatRepublisher,
             OrderNotDispatchedPublisher notDispatchedPublisher,
+            SupplierOutboxReplayService outboxReplayService,
+            @Value("${pos.supplier.outbox.replay.max-lookback:P30D}") Duration replayMaxLookback,
             PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
@@ -117,6 +147,8 @@ public class SupplierCommandListener {
         this.republisher = republisher;
         this.mktCatRepublisher = mktCatRepublisher;
         this.notDispatchedPublisher = notDispatchedPublisher;
+        this.outboxReplayService = outboxReplayService;
+        this.replayMaxLookback = replayMaxLookback;
         this.handlerTransaction = new TransactionTemplate(transactionManager);
         this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -130,6 +162,13 @@ public class SupplierCommandListener {
             envelope = objectMapper.readTree(message);
         } catch (Exception e) {
             log.warn("Skipping unparsable supplier command", e);
+            return;
+        }
+        String commandType = envelope.path("commandType").stringValue(null);
+        if (commandType != null
+                && COMMAND_OUTBOX_REPLAY_REQUESTED.equals(
+                        commandType.toUpperCase(Locale.ROOT).replace('.', '_').replace('-', '_'))) {
+            handleOutboxReplayRequested(envelope);
             return;
         }
         String eventType = envelope.path("eventType").stringValue(null);
@@ -182,6 +221,58 @@ public class SupplierCommandListener {
             }
             log.warn("Skipping malformed supplier command eventId={}", eventId, e);
             handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId, ownerOf(eventType, envelope)));
+        }
+    }
+
+    /**
+     * Re-queues the bound tenant's {@code supplier.events.v1} rows of the requested window (#2516).
+     * Malformed and out-of-lookback requests are dropped after logging; a transient database failure
+     * propagates so the container retries it (ADR-0044 §4).
+     */
+    private void handleOutboxReplayRequested(@NonNull JsonNode command) {
+        JsonNode payload = command.path("payload");
+        Instant since = parseInstant(payload, "since");
+        Instant until = parseInstant(payload, "until");
+        if (since == null || (payload.hasNonNull("until") && until == null)) {
+            log.error(
+                    "Dropping malformed supplier outbox replay command (since/until missing or unparsable): {}",
+                    command);
+            return;
+        }
+        Instant now = Instant.now(clock);
+        Instant lookbackLimit = now.minus(replayMaxLookback);
+        if (since.isBefore(lookbackLimit)) {
+            log.warn(
+                    "Dropping supplier outbox replay command: since={} is beyond the max lookback {} (limit {})",
+                    since,
+                    replayMaxLookback,
+                    lookbackLimit);
+            return;
+        }
+        Instant end = until != null && until.isAfter(since) ? until : now;
+        try {
+            int queued = outboxReplayService.replayEventsBetween(
+                    since.minus(REPLAY_WINDOW_SLACK), end.plus(REPLAY_WINDOW_SLACK));
+            log.info(
+                    "Supplier outbox replay command processed since={} until={} eventsQueued={}", since, until, queued);
+        } catch (RuntimeException e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // The container retries with backoff, then publishes to {topic}.dlq (ADR-0044 §4).
+                throw e;
+            }
+            log.error("Supplier outbox replay command failed and will not be retried: {}", command, e);
+        }
+    }
+
+    private static @Nullable Instant parseInstant(@NonNull JsonNode payload, @NonNull String field) {
+        String value = payload.path(field).stringValue(null);
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Instant.parse(value);
+        } catch (DateTimeParseException _) {
+            return null;
         }
     }
 

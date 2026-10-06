@@ -30,3 +30,26 @@ permissions:
     description: "View and clear fleet workorder authorizations parked for manual review"
   - name: "supplier:mktcat:import"
     description: "Run a marketing-catalogue (MKCAT) import on demand and read staged enrichment"
+  - name: "supplier:vendor:read"
+    description: "View vendors (the vendor master) and their remit-to change requests"
+    grantTo:
+      - ADMIN
+      - CONTROLLER
+      - ACCOUNTING_CLERK
+      - GENERAL_MANAGER
+  - name: "supplier:vendor:write"
+    description: "Create and edit vendors, deactivate or reactivate them, and request a remit-to change"
+    grantTo:
+      - ADMIN
+      - CONTROLLER
+      - ACCOUNTING_CLERK
+  - name: "supplier:vendor_remit:approve"
+    description: "Approve or reject a vendor remit-to change requested by someone else"
+    grantTo:
+      - ADMIN
+      - CONTROLLER
+      - GENERAL_MANAGER
+  - name: "supplier:fact:replay"
+    description: "Re-emit the tenant's supplier.vendor.updated facts to seed or repair a replica"
+    grantTo:
+      - ADMIN

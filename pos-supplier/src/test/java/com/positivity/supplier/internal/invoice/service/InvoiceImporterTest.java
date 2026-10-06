@@ -45,6 +45,13 @@ class InvoiceImporterTest {
 
     private static final UUID PROFILE = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f6a01");
     private static final String REF = "michelin-de";
+    private static final UUID VENDOR = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f6a02");
+    private static final UUID EXCHANGE = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f6a03");
+
+    /** The profile, its vendor, and the provenance of the fetch (#2516). */
+    private static final InvoiceImporter.InvoiceSource SOURCE =
+            new InvoiceImporter.InvoiceSource(PROFILE, VENDOR, REF, "EDIWHEEL_B", EXCHANGE);
+
     private static final Instant NOW = Instant.parse("2026-08-16T08:00:00Z");
     private static final LocalDate ISSUED = LocalDate.of(2026, 8, 14);
 
@@ -84,7 +91,10 @@ class InvoiceImporterTest {
                         4,
                         new BigDecimal("60.00"),
                         new BigDecimal("240.00"),
-                        "PO-778")));
+                        "PO-778")),
+                null,
+                null,
+                null);
     }
 
     private SupplierInvoiceReceivedV1 published() {
@@ -96,8 +106,8 @@ class InvoiceImporterTest {
     @Test
     @DisplayName("a new invoice is stored and published with the vendor's own figures")
     void newInvoiceIsStoredAndPublished() {
-        int imported = importer.importInvoices(
-                PROFILE, REF, List.of(invoice("INV-1", SupplierInvoice.Type.INVOICE, "288.00")));
+        int imported =
+                importer.importInvoices(SOURCE, List.of(invoice("INV-1", SupplierInvoice.Type.INVOICE, "288.00")));
 
         assertThat(imported).isEqualTo(1);
         SupplierInvoiceReceivedV1 fact = published();
@@ -110,13 +120,33 @@ class InvoiceImporterTest {
     }
 
     @Test
+    @DisplayName(
+            "AC 9: the fact names the profile's vendor, the channel and the fetch's exchange; the vendor is stored")
+    void factCarriesVendorChannelAndExchange() {
+        importer.importInvoices(SOURCE, List.of(invoice("INV-1", SupplierInvoice.Type.INVOICE, "288.00")));
+
+        SupplierInvoiceReceivedV1 fact = published();
+        assertThat(fact.vendorId()).isEqualTo(VENDOR);
+        assertThat(fact.channel()).isEqualTo("EDIWHEEL_B");
+        assertThat(fact.exchangeId()).isEqualTo(EXCHANGE);
+        // The B3.3 document states no due date, terms or tax split: null is "not stated".
+        assertThat(fact.dueDate()).isNull();
+        assertThat(fact.paymentTerms()).isNull();
+        assertThat(fact.taxes()).isNull();
+
+        ArgumentCaptor<SupplierInvoiceEntity> stored = ArgumentCaptor.forClass(SupplierInvoiceEntity.class);
+        verify(invoiceRepository).saveAndFlush(stored.capture());
+        assertThat(stored.getValue().getVendorId()).isEqualTo(VENDOR);
+    }
+
+    @Test
     @DisplayName("an invoice already held from an overlapping window is not published again")
     void alreadyHeldInvoiceIsDropped() {
         when(invoiceRepository.findByVendorProfileIdAndVendorInvoiceNumberAndInvoiceDate(PROFILE, "INV-1", ISSUED))
                 .thenReturn(Optional.of(new SupplierInvoiceEntity()));
 
-        int imported = importer.importInvoices(
-                PROFILE, REF, List.of(invoice("INV-1", SupplierInvoice.Type.INVOICE, "288.00")));
+        int imported =
+                importer.importInvoices(SOURCE, List.of(invoice("INV-1", SupplierInvoice.Type.INVOICE, "288.00")));
 
         // Windows overlap so a failed fetch can simply be repeated. Publishing again would put the
         // same debt in front of AP a second time, with only its own guard between that and a
@@ -129,7 +159,7 @@ class InvoiceImporterTest {
     @Test
     @DisplayName("a credit note is published as one, not as a negative invoice")
     void creditNoteKeepsItsType() {
-        importer.importInvoices(PROFILE, REF, List.of(invoice("CN-9", SupplierInvoice.Type.CREDIT_NOTE, "50.00")));
+        importer.importInvoices(SOURCE, List.of(invoice("CN-9", SupplierInvoice.Type.CREDIT_NOTE, "50.00")));
 
         SupplierInvoiceReceivedV1 fact = published();
         // The direction is carried as a type rather than as a sign, so a consumer cannot mistake a
@@ -146,8 +176,7 @@ class InvoiceImporterTest {
                 .thenReturn(Optional.of(new SupplierInvoiceEntity()));
 
         int imported = importer.importInvoices(
-                PROFILE,
-                REF,
+                SOURCE,
                 List.of(
                         invoice("INV-1", SupplierInvoice.Type.INVOICE, "288.00"),
                         invoice("INV-2", SupplierInvoice.Type.INVOICE, "120.00")));
@@ -165,8 +194,8 @@ class InvoiceImporterTest {
                 .when(invoiceRepository)
                 .saveAndFlush(any());
 
-        int imported = importer.importInvoices(
-                PROFILE, REF, List.of(invoice("INV-1", SupplierInvoice.Type.INVOICE, "288.00")));
+        int imported =
+                importer.importInvoices(SOURCE, List.of(invoice("INV-1", SupplierInvoice.Type.INVOICE, "288.00")));
 
         // Another instance won the insert between the check and the write. The unique identity did
         // its job and the invoice is held either way; failing the whole fetch over a document that
