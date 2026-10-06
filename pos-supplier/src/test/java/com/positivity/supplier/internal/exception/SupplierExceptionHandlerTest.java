@@ -481,6 +481,14 @@ class SupplierExceptionHandlerTest {
                             handler.handleFleetLookupFailure(new FleetLookupException("vendor unreachable"), request)),
                     Named.of("handleInvoiceFetch", (HandlerInvocation) request ->
                             handler.handleInvoiceFetch(new InvoiceFetchException("window fetch failed"), request)),
+                    Named.of("handleForbidden", (HandlerInvocation) request -> handler.handleForbidden(
+                            new SupplierForbiddenException(
+                                    SupplierForbiddenException.VENDOR_REMIT_SELF_APPROVAL, "second person"),
+                            request)),
+                    Named.of("handleUnprocessable", (HandlerInvocation) request -> handler.handleUnprocessable(
+                            new SupplierUnprocessableException(
+                                    SupplierUnprocessableException.VENDOR_INACTIVE, "vendor inactive"),
+                            request)),
                     Named.of("handleConflict", (HandlerInvocation) request -> handler.handleConflict(
                             new SupplierConflictException(SupplierConflictException.SUPPLIER_REF_CONFLICT, "ref taken"),
                             request)),

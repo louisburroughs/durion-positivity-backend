@@ -11,6 +11,7 @@ import com.positivity.supplier.internal.service.model.VendorProfileView;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Vendor profile administration contract (ADR-0026, ADR-0050) — CRUD over vendor profiles and
@@ -73,12 +74,13 @@ public interface SupplierProfileAdminService {
     VendorProfileView getProfile(@NonNull UUID vendorProfileId);
 
     /**
-     * Returns all vendor profiles of this deployment.
+     * Returns the vendor profiles of this deployment, or of one vendor.
      *
+     * @param vendorId only this vendor's profiles (#2516); {@code null} for all
      * @return profiles ordered by {@code supplierRef}; empty when none configured
      */
     @NonNull
-    List<VendorProfileView> listProfiles();
+    List<VendorProfileView> listProfiles(@Nullable UUID vendorId);
 
     // ── Auth configs (ADR-0050 §4) ──────────────────────────────────────────────────
 

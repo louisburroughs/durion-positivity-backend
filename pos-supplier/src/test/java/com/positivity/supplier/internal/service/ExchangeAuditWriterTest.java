@@ -10,10 +10,12 @@ import com.positivity.supplier.internal.domain.model.ProtocolFamily;
 import com.positivity.supplier.internal.domain.model.SupplierCapability;
 import com.positivity.supplier.internal.entity.SupplierEndpointBindingEntity;
 import com.positivity.supplier.internal.entity.SupplierProfileEntity;
+import com.positivity.supplier.internal.entity.SupplierProfilePersistenceFixtures;
 import com.positivity.supplier.internal.enums.ProfileSourceOfTruth;
 import com.positivity.supplier.internal.repository.ExchangeAuditRepository;
 import com.positivity.supplier.internal.repository.SupplierEndpointBindingRepository;
 import com.positivity.supplier.internal.repository.SupplierProfileRepository;
+import com.positivity.supplier.internal.repository.SupplierVendorRepository;
 import com.positivity.supplier.internal.spi.ExchangeContext;
 import com.positivity.supplier.internal.spi.ExchangeOutcome;
 import java.sql.Connection;
@@ -65,6 +67,9 @@ class ExchangeAuditWriterTest extends PostgresSliceTestBase {
     private SupplierProfileRepository profileRepository;
 
     @Autowired
+    private SupplierVendorRepository vendorRepository;
+
+    @Autowired
     private SupplierEndpointBindingRepository bindingRepository;
 
     @Autowired
@@ -85,6 +90,7 @@ class ExchangeAuditWriterTest extends PostgresSliceTestBase {
             statement.executeUpdate("DELETE FROM supplier_endpoint_binding_redaction");
             statement.executeUpdate("DELETE FROM supplier_endpoint_binding");
             statement.executeUpdate("DELETE FROM supplier_profile");
+            statement.executeUpdate("DELETE FROM supplier_vendor");
         }
     }
 
@@ -94,6 +100,7 @@ class ExchangeAuditWriterTest extends PostgresSliceTestBase {
 
     private static ExchangeContext context(String correlationId, String uri, String failureDetail) {
         return new ExchangeContext(
+                com.positivity.shared.id.UUIDv7Generator.generate(),
                 PROFILE_ID,
                 "michelin-eu",
                 SupplierCapability.STOCK_INQUIRY,
@@ -120,6 +127,19 @@ class ExchangeAuditWriterTest extends PostgresSliceTestBase {
      * for. Before the split, the row went with the rollback — the audit trail lost exactly the events worth
      * auditing, and no test noticed because every test was already inside a rolled-back transaction.
      */
+    @Test
+    void theStoredRowCarriesTheTransportsExchangeId() {
+        // #2516 AC 9: the invoice fact names the exchange by this id, so the row must be stored under it.
+        ExchangeContext context = context("exchange-id-provenance");
+
+        observer.onExchange(context);
+
+        assertThat(auditRepository.findAll())
+                .singleElement()
+                .extracting(com.positivity.supplier.internal.entity.ExchangeAuditEntity::getExchangeAuditId)
+                .isEqualTo(context.exchangeId());
+    }
+
     @Test
     void auditRowSurvivesARolledBackCallerTransaction() {
         transactionTemplate.executeWithoutResult(status -> {
@@ -151,6 +171,7 @@ class ExchangeAuditWriterTest extends PostgresSliceTestBase {
         assertThatCode(() -> transactionTemplate.executeWithoutResult(status -> {
                     // Real work in the caller's transaction, committed afterwards.
                     SupplierProfileEntity profile = new SupplierProfileEntity();
+                    profile.setVendorId(SupplierProfilePersistenceFixtures.vendor(vendorRepository));
                     profile.setSupplierRef("michelin-eu");
                     profile.setDisplayName("Michelin EU");
                     profile.setEnabled(true);
@@ -257,6 +278,7 @@ class ExchangeAuditWriterTest extends PostgresSliceTestBase {
     void aBindingsDeclaredClassificationsNarrowItsRedactedCapture() {
         UUID bindingId = transactionTemplate.execute(status -> {
             SupplierProfileEntity profile = new SupplierProfileEntity();
+            profile.setVendorId(SupplierProfilePersistenceFixtures.vendor(vendorRepository));
             profile.setSupplierRef("michelin-eu");
             profile.setDisplayName("Michelin EU");
             profile.setEnabled(true);
@@ -307,6 +329,7 @@ class ExchangeAuditWriterTest extends PostgresSliceTestBase {
 
     private static ExchangeContext workorderContext(UUID bindingId, String body) {
         return new ExchangeContext(
+                com.positivity.shared.id.UUIDv7Generator.generate(),
                 PROFILE_ID,
                 "michelin-eu",
                 SupplierCapability.WORKORDER_AUTHORIZATION,

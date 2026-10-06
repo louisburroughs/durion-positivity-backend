@@ -1038,13 +1038,18 @@ public enum PermissionCode {
     // no role until that endpoint enforces it. No @PreAuthorize names it yet, so
     // scripts/generate-permissions.sh --sync cannot discover it — assigned with the script's own
     // catalog-sync functions, as bits 540-541 and 546-547 were hand assigned.
-    ACCOUNTING__PAYMENT__ASSIGN_CUSTOMER(548, "accounting:payment:assign-customer");
+    ACCOUNTING__PAYMENT__ASSIGN_CUSTOMER(548, "accounting:payment:assign-customer"),
+    // ── Supplier (new) ─────────────────────────────────────────────────────────
+    SUPPLIER__FACT__REPLAY(549, "supplier:fact:replay"),
+    SUPPLIER__VENDOR__READ(550, "supplier:vendor:read"),
+    SUPPLIER__VENDOR__WRITE(551, "supplier:vendor:write"),
+    SUPPLIER__VENDOR_REMIT__APPROVE(552, "supplier:vendor_remit:approve");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 97;
+    public static final int CATALOG_VERSION = 98;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

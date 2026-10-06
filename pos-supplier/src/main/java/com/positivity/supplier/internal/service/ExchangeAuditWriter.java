@@ -85,6 +85,8 @@ public class ExchangeAuditWriter {
         String storedFailureDetail = PayloadRedactor.redactEmbeddedUris(context.failureDetail());
 
         ExchangeAuditEntity row = ExchangeAuditEntity.builder()
+                // The transport's id for the attempt, so the row and the caller's provenance agree (#2516).
+                .exchangeAuditId(context.exchangeId())
                 .vendorProfileId(context.vendorProfileId())
                 .supplierRef(truncate(context.supplierRef(), 100))
                 .bindingId(context.bindingId())

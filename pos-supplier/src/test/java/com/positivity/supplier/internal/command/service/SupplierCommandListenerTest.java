@@ -18,7 +18,9 @@ import com.positivity.supplier.internal.order.service.OrderNotDispatchedPublishe
 import com.positivity.supplier.internal.order.service.TransmissionIntentWriter;
 import com.positivity.supplier.internal.pricecatalog.service.PriceCatalogRepublisher;
 import com.positivity.supplier.internal.repository.ProcessedEventRepository;
+import com.positivity.supplier.internal.service.SupplierOutboxReplayService;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.UUID;
@@ -61,6 +63,9 @@ class SupplierCommandListenerTest {
     @Mock
     private OrderNotDispatchedPublisher notDispatchedPublisher;
 
+    @Mock
+    private SupplierOutboxReplayService outboxReplayService;
+
     private SupplierCommandListener listener;
 
     @BeforeEach
@@ -73,6 +78,8 @@ class SupplierCommandListenerTest {
                 republisher,
                 mktCatRepublisher,
                 notDispatchedPublisher,
+                outboxReplayService,
+                Duration.ofDays(30),
                 mock(PlatformTransactionManager.class));
     }
 
@@ -361,5 +368,76 @@ class SupplierCommandListenerTest {
         assertThatThrownBy(() -> listener.onSupplierCommand(catalogRepublishCommand("e-16")))
                 .isInstanceOf(QueryTimeoutException.class);
         verify(processedEventRepository, never()).save(any());
+    }
+
+    // ── supplier.outbox.replay-requested (#2516, ADR-0044 §4) ───────────────────────
+
+    private static String replayCommand(String since, String until) {
+        return """
+                {"commandType":"supplier.outbox.replay-requested","payload":{"since":%s,"until":%s}}
+                """.formatted(
+                        since == null ? "null" : "\"" + since + "\"", until == null ? "null" : "\"" + until + "\"");
+    }
+
+    @Test
+    @DisplayName("AC 11: a replay request re-queues the requested window, widened by the id/createdAt slack")
+    void replayRequestReQueuesTheWindow() {
+        when(outboxReplayService.replayEventsBetween(any(), any())).thenReturn(3);
+
+        listener.onSupplierCommand(replayCommand("2026-08-14T10:00:00Z", "2026-08-14T11:00:00Z"));
+
+        verify(outboxReplayService)
+                .replayEventsBetween(Instant.parse("2026-08-14T09:59:59Z"), Instant.parse("2026-08-14T11:00:01Z"));
+        // Idempotent and id-less: recorded nowhere, as in every other owner.
+        verifyNoInteractions(processedEventRepository);
+    }
+
+    @Test
+    @DisplayName("a replay request reaching beyond the max lookback is logged and dropped")
+    void replayBeyondLookbackIsDropped() {
+        listener.onSupplierCommand(replayCommand("2026-07-01T00:00:00Z", "2026-07-01T01:00:00Z"));
+
+        verifyNoInteractions(outboxReplayService);
+    }
+
+    @Test
+    @DisplayName("a malformed replay request is dropped, not retried")
+    void malformedReplayIsDropped() {
+        listener.onSupplierCommand(replayCommand(null, null));
+        listener.onSupplierCommand(replayCommand("yesterday", null));
+        listener.onSupplierCommand(replayCommand("2026-08-14T10:00:00Z", "later"));
+        // An inverted or empty window is malformed too: it must not widen into "since until now".
+        listener.onSupplierCommand(replayCommand("2026-08-14T10:00:00Z", "2026-08-14T09:00:00Z"));
+        listener.onSupplierCommand(replayCommand("2026-08-14T10:00:00Z", "2026-08-14T10:00:00Z"));
+
+        verifyNoInteractions(outboxReplayService);
+    }
+
+    @Test
+    @DisplayName("a missing until replays from since up to now")
+    void missingUntilReplaysToNow() {
+        listener.onSupplierCommand(replayCommand("2026-08-14T10:00:00Z", null));
+
+        verify(outboxReplayService)
+                .replayEventsBetween(Instant.parse("2026-08-14T09:59:59Z"), Instant.parse("2026-08-14T12:00:01Z"));
+    }
+
+    @Test
+    @DisplayName("a dropped database connection during replay propagates for the container to retry")
+    void droppedConnectionDuringReplayPropagates() {
+        when(outboxReplayService.replayEventsBetween(any(), any()))
+                .thenThrow(new DataAccessResourceFailureException("connection refused"));
+
+        assertThatThrownBy(() -> listener.onSupplierCommand(replayCommand("2026-08-14T10:00:00Z", null)))
+                .isInstanceOf(DataAccessResourceFailureException.class);
+    }
+
+    @Test
+    @DisplayName("a transient database failure during replay propagates for the container to retry")
+    void transientReplayFailurePropagates() {
+        when(outboxReplayService.replayEventsBetween(any(), any())).thenThrow(new QueryTimeoutException("db busy"));
+
+        assertThatThrownBy(() -> listener.onSupplierCommand(replayCommand("2026-08-14T10:00:00Z", null)))
+                .isInstanceOf(QueryTimeoutException.class);
     }
 }

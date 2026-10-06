@@ -3,6 +3,7 @@ package com.positivity.supplier.internal.command.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.supplier.SupplierOrderRequestedV1;
@@ -19,9 +20,11 @@ import com.positivity.supplier.internal.repository.SupplierProfileRepository;
 import com.positivity.supplier.internal.repository.SupplierTransmissionIntentRepository;
 import com.positivity.supplier.internal.repository.SupplierTransmissionLineRepository;
 import com.positivity.supplier.internal.service.SupplierOutboxEventWriter;
+import com.positivity.supplier.internal.service.SupplierOutboxReplayService;
 import com.positivity.tenancy.TenantContext;
 import com.positivity.tenancy.testing.TenantTestSupport;
 import java.time.Clock;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -114,6 +117,8 @@ class SupplierCommandListenerTransactionTest {
                 republisher,
                 mktCatRepublisher,
                 notDispatchedPublisher,
+                mock(SupplierOutboxReplayService.class),
+                Duration.ofDays(30),
                 transactionManager);
     }
 
@@ -184,6 +189,8 @@ class SupplierCommandListenerTransactionTest {
                             }
                         },
                         Clock.systemUTC()),
+                mock(SupplierOutboxReplayService.class),
+                Duration.ofDays(30),
                 transactionManager);
 
         assertThatThrownBy(() -> failing.onSupplierCommand(orderCommandForUnknownVendor()))

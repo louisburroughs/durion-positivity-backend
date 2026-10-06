@@ -10,6 +10,7 @@ import com.positivity.supplier.internal.domain.model.ProtocolFamily;
 import com.positivity.supplier.internal.domain.model.SupplierCapability;
 import com.positivity.supplier.internal.entity.SupplierEndpointBindingEntity;
 import com.positivity.supplier.internal.entity.SupplierProfileEntity;
+import com.positivity.supplier.internal.entity.SupplierProfilePersistenceFixtures;
 import com.positivity.supplier.internal.entity.SupplierScheduleLeaseEntity;
 import com.positivity.supplier.internal.enums.ProfileSourceOfTruth;
 import com.positivity.tenancy.testing.TenantTestSupport;
@@ -72,6 +73,9 @@ class SupplierScheduleLeaseRepositoryTest extends PostgresSliceTestBase {
     private SupplierProfileRepository profileRepository;
 
     @Autowired
+    private SupplierVendorRepository vendorRepository;
+
+    @Autowired
     private SupplierEndpointBindingRepository bindingRepository;
 
     @Autowired
@@ -97,6 +101,7 @@ class SupplierScheduleLeaseRepositoryTest extends PostgresSliceTestBase {
     @BeforeEach
     void setUp() {
         SupplierProfileEntity profile = new SupplierProfileEntity();
+        profile.setVendorId(SupplierProfilePersistenceFixtures.vendor(vendorRepository));
         profile.setSupplierRef("michelin-" + UUID.randomUUID());
         profile.setDisplayName("Michelin");
         profile.setEnabled(true);
@@ -227,12 +232,23 @@ class SupplierScheduleLeaseRepositoryTest extends PostgresSliceTestBase {
         UUID contestedBinding = UUID.randomUUID();
         try (var connection = dataSource.getConnection()) {
             connection.setAutoCommit(true);
+            // Every profile belongs to a vendor (#2516); the fixture's vendor reuses the profile id.
+            try (var statement = connection.prepareStatement(
+                    "INSERT INTO supplier_vendor (vendor_id, vendor_number, legal_name, display_name, status,"
+                            + " created_at, updated_at, created_by, version)"
+                            + " VALUES (?, ?, 'Contested', 'Contested', 'ACTIVE', now(), now(), 'test', 0)")) {
+                statement.setObject(1, profileId);
+                statement.setString(
+                        2, "C-" + profileId.toString().substring(0, 8).toUpperCase(java.util.Locale.ROOT));
+                statement.executeUpdate();
+            }
             try (var statement = connection.prepareStatement(
                     "INSERT INTO supplier_profile (vendor_profile_id, supplier_ref, display_name, enabled,"
-                            + " sandbox, source_of_truth, created_at, updated_at, version)"
-                            + " VALUES (?, ?, 'Contested', TRUE, FALSE, 'ADMIN', now(), now(), 0)")) {
+                            + " sandbox, source_of_truth, created_at, updated_at, version, vendor_id)"
+                            + " VALUES (?, ?, 'Contested', TRUE, FALSE, 'ADMIN', now(), now(), 0, ?)")) {
                 statement.setObject(1, profileId);
                 statement.setString(2, "contested-" + profileId);
+                statement.setObject(3, profileId);
                 statement.executeUpdate();
             }
             try (var statement = connection.prepareStatement(
@@ -277,6 +293,7 @@ class SupplierScheduleLeaseRepositoryTest extends PostgresSliceTestBase {
             delete(connection, "DELETE FROM supplier_schedule_lease WHERE binding_id = ?", committedFixtureBinding);
             delete(connection, "DELETE FROM supplier_endpoint_binding WHERE id = ?", committedFixtureBinding);
             delete(connection, "DELETE FROM supplier_profile WHERE vendor_profile_id = ?", contestedProfileId);
+            delete(connection, "DELETE FROM supplier_vendor WHERE vendor_id = ?", contestedProfileId);
         } finally {
             committedFixtureBinding = null;
         }

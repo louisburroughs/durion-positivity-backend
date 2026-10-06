@@ -3,7 +3,7 @@ package com.positivity.gateway.config;
 public final class GatewayPermissionCatalog {
     private GatewayPermissionCatalog() {}
 
-    public static final int CATALOG_VERSION = 97;
+    public static final int CATALOG_VERSION = 98;
 
     protected static final String[] AUTHORITY_BY_BIT = {
         "PERM_accounting:je:view",
@@ -735,7 +735,13 @@ public final class GatewayPermissionCatalog {
 
         // ── catalog v97 (CAP:550 S3, #2504): accounting:payment:assign-customer, registered
         // ahead of its endpoint (AD-004) and granted to no role yet ─────────────
-        "PERM_accounting:payment:assign-customer" // 548
+        "PERM_accounting:payment:assign-customer", // 548
+
+        // ── New batch (bits 549–552) ──────────────────────────────────────────
+        "PERM_supplier:fact:replay", // 549
+        "PERM_supplier:vendor:read", // 550
+        "PERM_supplier:vendor:write", // 551
+        "PERM_supplier:vendor_remit:approve" // 552
     };
 
     public static String authorityForBit(int bitIndex) {
