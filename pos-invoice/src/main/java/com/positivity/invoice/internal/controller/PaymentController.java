@@ -75,7 +75,8 @@ public class PaymentController {
                     intent that is CAPTURED immediately (SALE_CAPTURE) or left AUTHORIZED as a hold (AUTH_ONLY).
                     Use this tool to take card tender; do not use capturePayment, which settles an existing \
                     AUTH_ONLY hold rather than starting a new payment.
-                    Preconditions: the invoice must exist; the caller needs the invoice:payment:process authority \
+                    Preconditions: the invoice must exist and must name a customer (partyId); the caller needs the \
+                    invoice:payment:process authority \
                     (scoped to the invoice's location, ADR-0061), and must also hold \
                     invoice:payment:limit_override when the amount exceeds 500.00 and invoice:payment:flow_select \
                     to choose AUTH_ONLY, each for that location.
@@ -86,7 +87,8 @@ public class PaymentController {
                     Returns 201 with the intent, 403 when invoice:payment:process or a conditional authority the \
                     request needs is missing or the invoice's location is outside the caller's reach, 404 when the \
                     invoice does not exist, 409 when the idempotencyKey was already used with a different payload, \
-                    and 422 when the gateway declines.
+                    422 with INVOICE_PARTY_REQUIRED when the invoice has no customer (no intent is created and the \
+                    gateway is not called), and 422 with PAYMENT_DECLINED when the gateway declines.
                     """)
     @ApiResponse(responseCode = "201", description = "Payment intent created")
     @ApiResponse(
@@ -100,7 +102,8 @@ public class PaymentController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description = "Payment method declined",
+            description = "PAYMENT_DECLINED when the gateway declines; INVOICE_PARTY_REQUIRED when the invoice has no"
+                    + " customer (no intent is created and the gateway is not called)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "503",
@@ -143,8 +146,9 @@ public class PaymentController {
                     captured amount is below the authorized amount, the remainder of the hold is voided.
                     Use this tool to settle an existing AUTHORIZED intent; do not use initiatePayment, which starts \
                     a new payment, and use voidPayment instead to release the hold without taking funds.
-                    Preconditions: the payment intent must belong to the invoice and be in AUTHORIZED status; the \
-                    caller needs the invoice:payment:capture authority (scoped to the invoice's location, ADR-0061).
+                    Preconditions: the payment intent must belong to the invoice and be in AUTHORIZED status, and \
+                    the invoice must name a customer (partyId); the caller needs the invoice:payment:capture \
+                    authority (scoped to the invoice's location, ADR-0061).
                     Required inputs: amount (positive, up to the authorized amount) and captureIdempotencyKey, which \
                     is forwarded to the gateway so a retried capture settles at most once.
                     Emits an INVOICE_PAYMENT_CAPTURE event; the intent moves to CAPTURED on success or \
@@ -152,7 +156,9 @@ public class PaymentController {
                     before failing.
                     Returns 200 with the captured intent, 403 when invoice:payment:capture is missing or the \
                     invoice's location is outside the caller's reach, 404 when the intent does not exist under the \
-                    invoice, 409 when the intent is not AUTHORIZED, and 422 when the gateway declines the capture.
+                    invoice, 409 when the intent is not AUTHORIZED, 422 with INVOICE_PARTY_REQUIRED when the invoice \
+                    has no customer (the hold stays AUTHORIZED and the gateway is not called), and 422 with \
+                    PAYMENT_DECLINED when the gateway declines the capture.
                     """)
     @ApiResponse(responseCode = "200", description = "Payment captured")
     @ApiResponse(
@@ -163,6 +169,11 @@ public class PaymentController {
     @ApiResponse(
             responseCode = "404",
             description = "Payment intent not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "PAYMENT_DECLINED when the gateway declines the capture; INVOICE_PARTY_REQUIRED when the"
+                    + " invoice has no customer (the hold stays AUTHORIZED and the gateway is not called)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public InitiatePaymentResponse capturePayment(
             @PathVariable @NonNull UUID invoiceId,

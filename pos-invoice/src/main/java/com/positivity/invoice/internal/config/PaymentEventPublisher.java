@@ -9,11 +9,12 @@ import com.positivity.invoice.internal.entity.DepositCredit;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.entity.PaymentIntent;
 import com.positivity.invoice.internal.entity.RefundRecord;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -32,24 +33,68 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class PaymentEventPublisher {
 
     private static final String SOURCE_SERVICE = "pos-invoice";
     /** All pos-invoice payment intents settle through the card gateway today. */
     private static final String GATEWAY_METHOD_TYPE = "CARD";
 
+    /**
+     * CAP:550 S9: a {@code payment.payment.settled} fact queued without a party. Fires only on a
+     * defect — the finalization and payment backstops make a missing party unreachable — so a
+     * non-zero rate is an alert (README "Payment settlement events").
+     */
+    static final String PARTY_MISSING_COUNTER = "payment.settled.party_missing";
+
     private final Clock clock;
     private final InvoiceCurrencySource currencySource;
     private final ObjectProvider<OutboxEventWriter> outboxEventWriter;
+    private final @Nullable Counter partyMissingCounter;
 
-    /** Emits {@code payment.payment.settled} for a just-captured intent. */
+    public PaymentEventPublisher(
+            @NonNull Clock clock,
+            @NonNull InvoiceCurrencySource currencySource,
+            @NonNull ObjectProvider<OutboxEventWriter> outboxEventWriter,
+            @NonNull ObjectProvider<MeterRegistry> meterRegistry) {
+        this.clock = clock;
+        this.currencySource = currencySource;
+        this.outboxEventWriter = outboxEventWriter;
+        MeterRegistry registry = meterRegistry.getIfAvailable();
+        this.partyMissingCounter = registry == null
+                ? null
+                : Counter.builder(PARTY_MISSING_COUNTER)
+                        .description("payment.payment.settled facts queued without a partyId (defect: the"
+                                + " finalization and payment backstops should make this unreachable)")
+                        .register(registry);
+    }
+
+    /**
+     * Emits {@code payment.payment.settled} for a just-captured intent.
+     *
+     * <p>CAP:550 S9 (spec §4.4 item 1): from schema version 2 the fact always names the party.
+     * {@code PaymentServiceImpl} refuses to create or capture an intent on a party-less invoice,
+     * so the party is present here. Should it ever be missing, the capture has already happened:
+     * the fact is still queued (dropping it would leave pos-order unable to complete the order),
+     * logged at ERROR and counted on {@value #PARTY_MISSING_COUNTER}; S11's accounting alert then
+     * treats the event as a defect.
+     */
     public void publishPaymentSettled(@NonNull PaymentIntent paymentIntent) {
         OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
         if (writer == null) {
             return;
         }
         Invoice invoice = paymentIntent.getInvoice();
+        if (invoice.getPartyId() == null || invoice.getPartyId().isBlank()) {
+            log.error(
+                    "payment.payment.settled queued without a partyId: paymentIntentId={} invoiceId={} invoiceNumber={}"
+                            + " — the party backstops should make this unreachable; investigate as a defect",
+                    paymentIntent.getId(),
+                    invoice.getId(),
+                    invoice.getInvoiceNumber());
+            if (partyMissingCounter != null) {
+                partyMissingCounter.increment();
+            }
+        }
         PaymentSettledV1 payload = new PaymentSettledV1(
                 paymentIntent.getId(),
                 invoice.getId(),

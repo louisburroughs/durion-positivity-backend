@@ -380,9 +380,9 @@ public class InvoiceController {
                     tax, totals, payment terms and due date, then commits the provider tax document.
                     Use this tool when the sale is ready to issue; do not use revertInvoice, which undoes a \
                     finalization, and mint the managerApprovalCode with elevateManagerApproval when one is needed.
-                    Preconditions: the invoice must be DRAFT with tax already calculated; callers without \
-                    invoice:finalize:override (or a manager/admin role) need a valid elevation token as \
-                    managerApprovalCode when the stored total exceeds 500.00.
+                    Preconditions: the invoice must be DRAFT with tax already calculated and must name a \
+                    customer (partyId); callers without invoice:finalize:override (or a manager/admin role) \
+                    need a valid elevation token as managerApprovalCode when the stored total exceeds 500.00.
                     Required inputs: invoiceId (UUID) as a path parameter; managerApprovalCode and overrideReason in \
                     the body are optional below the cap and for override holders.
                     Emits an INVOICE_FINALIZED event and publishes the invoice.invoice.updated fact (status \
@@ -391,7 +391,9 @@ public class InvoiceController {
                     tax commit tolerates a provider outage by recording PENDING_COMMIT in pos-tax for the re-commit \
                     job, and is skipped entirely when nothing is taxable.
                     Returns 200 with the finalized invoice, 404 when the invoice does not exist, 409 when the \
-                    invoice is not DRAFT or tax has not been calculated, and 403 with MANAGER_APPROVAL_REQUIRED or \
+                    invoice is not DRAFT or tax has not been calculated, 422 with INVOICE_PARTY_REQUIRED when the \
+                    invoice has no customer (it stays DRAFT and no tax document is created; set the customer and \
+                    retry), and 403 with MANAGER_APPROVAL_REQUIRED or \
                     MANAGER_APPROVAL_INVALID when a required managerApprovalCode is missing, invalid, or expired \
                     (a step-up credential the caller lacks; nextAction points at elevateManagerApproval), and 503 \
                     with a Retry-After header and LOCATION_REPLICATION_PENDING when the invoice's location has \
@@ -402,6 +404,11 @@ public class InvoiceController {
             responseCode = "403",
             description = "MANAGER_APPROVAL_REQUIRED or MANAGER_APPROVAL_INVALID: a required managerApprovalCode is "
                     + "missing, invalid, or expired",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "INVOICE_PARTY_REQUIRED: the invoice has no customer; it stays DRAFT and no provider tax"
+                    + " document is created",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "503",

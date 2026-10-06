@@ -149,6 +149,9 @@ public class CustomerEventsListener {
                 .partyType(payload.partyType())
                 .displayName(payload.displayName())
                 .status(payload.status())
+                // CAP:550 S9: the owner's house-account flag (S7). Old payloads parse to null; the
+                // stale guard above applies equal versions, so a replay fills existing rows.
+                .houseAccount(payload.houseAccount())
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());

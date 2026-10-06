@@ -45,6 +45,14 @@ public class ExtCustomerPartyReplica extends TenantScopedEntity {
     @Column(name = "status", nullable = false, length = 32)
     private String status;
 
+    /**
+     * Owner-published house-account kind (CAP:550 S7/S9): {@code CASH_SALE} for the tenant's CASH
+     * walk-in account, null for every ordinary party. Consumers key on this flag only — never on a
+     * customer number or display name.
+     */
+    @Column(name = "house_account", length = 20)
+    private String houseAccount;
+
     @Column(name = "aggregate_version", nullable = false)
     private long aggregateVersion;
 

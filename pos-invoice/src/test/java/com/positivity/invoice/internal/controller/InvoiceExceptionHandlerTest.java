@@ -6,6 +6,7 @@ import com.positivity.invoice.internal.exception.ExcessiveAdjustmentException;
 import com.positivity.invoice.internal.exception.InvalidInvoiceStateException;
 import com.positivity.invoice.internal.exception.InvalidManagerApprovalException;
 import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
+import com.positivity.invoice.internal.exception.InvoicePartyRequiredException;
 import com.positivity.invoice.internal.exception.InvoiceRequestValidationException;
 import com.positivity.invoice.internal.exception.ManagerApprovalRequiredException;
 import com.positivity.shared.error.ApiError;
@@ -80,7 +81,10 @@ class InvoiceExceptionHandlerTest {
                                     request)),
                     Named.of("handleExcessiveAdjustment", (HandlerInvocation)
                             request -> handler.handleExcessiveAdjustment(
-                                    new ExcessiveAdjustmentException("invoice total cannot be negative"), request)));
+                                    new ExcessiveAdjustmentException("invoice total cannot be negative"), request)),
+                    Named.of("handleInvoicePartyRequired", (HandlerInvocation)
+                            request -> handler.handleInvoicePartyRequired(
+                                    new InvoicePartyRequiredException("This invoice has no customer"), request)));
         }
 
         @ParameterizedTest

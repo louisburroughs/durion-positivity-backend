@@ -81,6 +81,52 @@ Active on the Kafka rails (any profile but `dev`/`test`/`pg`, or `local-kafka`);
 `POS_INVOICE_ACCOUNTING_EVENTS_TOPIC` (`accounting.events.v1`) and
 `POS_INVOICE_ACCOUNTING_EVENTS_CONSUMER_GROUP` (`pos-invoice-accounting-events`).
 
+## Customer required to finalize and pay (CAP:550 S9, #2507)
+
+Every invoice that is finalized or paid names a customer (spec `SPEC-accounting-workspace.md`
+§4.4 item 1, AW12). pos-order's checkout already refuses a cart without one (S8) and sends the
+tenant's CASH house account for walk-in sales; pos-invoice is the backstop behind it, closing gap
+G6 (a party-less invoice posted to accounts receivable while pos-accounting skipped its payment):
+
+- `POST /v1/invoices/{invoiceId}/finalize` answers `422 INVOICE_PARTY_REQUIRED` when the invoice's
+  `partyId` is null or blank — after the `DRAFT` check and **before** the manager-approval matrix and
+  the committable tax calculation, so no provider tax document is created. The invoice stays
+  `DRAFT`; `InvoiceFinalizationService.checkEligibility` reports `eligible = false` with the same
+  reason, so a detail read and the finalize command agree.
+- `POST /v1/invoices/{invoiceId}/payments` answers `422 INVOICE_PARTY_REQUIRED` before the intent is
+  saved or the gateway is called (a `SALE_CAPTURE` initiate captures in one step, so the initiate is
+  covered as well as the separate capture). No `payment_intents` row is written and no money moves.
+- `POST /v1/invoices/{invoiceId}/payments/{paymentId}/capture` answers the same after the
+  `AUTHORIZED` state check and before the gateway capture; the hold stays `AUTHORIZED`.
+- A replay of an existing intent under the same `idempotencyKey` returns the stored intent
+  unchanged, party or not — no new money movement.
+
+Draft creation stays permissive (`POST /v1/invoices`, `/from-order`): a workorder draft can still
+acquire its party through `InvoicePartyIdBackfillService` before finalization, and a finalize
+attempt before the backfill fills it is refused until the retry succeeds. The CASH house account
+is a valid party for finalization and payment. Nothing back-assigns past invoices (AW13), and
+reassigning a finalized invoice to another customer is not built (spec §12 OI-5). Each refused
+attempt is still recorded by the `INVOICE_FINALIZED` / `INVOICE_PAYMENT_INITIATE` /
+`INVOICE_PAYMENT_CAPTURE` audit events with its actor (ADR-0018) and logged at INFO with the invoice
+number and the code.
+
+**Rollout check.** Orders checked out before S8 can still be `PENDING_PAYMENT` with a party-less
+`DRAFT` invoice; once this backstop ships their payment is refused and the session-close guard then
+blocks that drawer. Before deploying, run the two queries below against each tenant and settle or
+void each hit (re-ring a voided order under S8's rules). The alpha tenant is expected to have none.
+
+```sql
+-- party-less DRAFT invoices that front an open order
+SELECT id, invoice_number, order_id, created_at
+  FROM invoices
+ WHERE status = 'DRAFT' AND (party_id IS NULL OR party_id = '') AND order_id IS NOT NULL;
+
+-- AUTHORIZED holds on party-less invoices
+SELECT p.id AS payment_intent_id, p.invoice_id, i.invoice_number, p.authorized_amount
+  FROM payment_intents p JOIN invoices i ON i.id = p.invoice_id
+ WHERE p.status = 'AUTHORIZED' AND (i.party_id IS NULL OR i.party_id = '');
+```
+
 ## Kafka error handling and dead-lettering (ADR-0044 §4, #2483)
 
 On the Kafka rails (outside dev/test), `KafkaErrorHandlingConfig` installs a `DefaultErrorHandler` on
@@ -116,6 +162,20 @@ On the Kafka rails (outside dev/test), per-payment settlement facts are publishe
 manual capture) and `payment.payment.reversed` on voids and refunds (gateway and standalone).
 pos-order's completion handshake is the first consumer (order parity story C3).
 
+`payment.payment.settled` is published at **`schemaVersion` 2** (CAP:550 S9): `partyId` is always
+present, because the backstops above never let a party-less invoice reach a capture. The bump is in
+place on `payment.events.v1` (ADR-0044 §4, like `catalog.service.updated`), not a new topic; the
+`PaymentSettledV1` record keeps no constructor rejection of null, so version-1 facts published before
+go-live still deserialise on redelivery or replay (AW13). Consumers keep their defensive handling and
+tell legacy from defect by `schemaVersion`; `payment.payment.reversed` keeps a nullable party because
+reversals of pre-go-live payments must still flow.
+
+Should a captured intent ever reach `PaymentEventPublisher` without a party, the fact is still queued
+(the capture has happened; dropping it would leave pos-order unable to complete the order), logged at
+ERROR and counted on **`payment.settled.party_missing`**. The counter fires only on a defect:
+alert on any non-zero rate, e.g. `increase(payment_settled_party_missing_total[15m]) > 0`, and treat
+each hit as a bug in the backstops rather than a business case.
+
 ## Error codes
 
 Every non-2xx response carries the platform `ApiError` envelope. Field semantics, payload examples,
@@ -143,6 +203,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `PAYMENT_WINDOW_EXPIRED` | 422 | Refund window for the payment has closed |
 | `INSUFFICIENT_REFUNDABLE_AMOUNT` | 422 | Refund amount exceeds what was originally paid |
 | `EXCESSIVE_ADJUSTMENT` | 422 | Adjustment would drive the invoice total negative; a credit memo is required instead (issue #1694; split out of the former blanket `IllegalArgumentException` 400 catch-all) |
+| `INVOICE_PARTY_REQUIRED` | 422 | The invoice has no customer (`partyId` null or blank): finalization, payment initiate and payment capture are refused before any tax document or gateway call; the invoice stays `DRAFT` and an `AUTHORIZED` hold stays `AUTHORIZED` (CAP:550 S9, #2507) |
 | `INTERNAL_SERVER_ERROR` | 500 | The payment gateway call failed during a reversal |
 | `LOCATION_REPLICATION_PENDING` | 503 | The invoice's `ext_location` row has not replicated from `location.events.v1` yet, so its tax jurisdiction cannot be resolved (create, adjustment, finalize). Carries `Retry-After` and `referenceId` = the location id; not-yet, not no, so retry (#1994). A replicated location missing country/postal code stays `409` |
 
@@ -221,6 +282,14 @@ non-whitelisted table has `tenant_id`, RLS enabled and forced, and the `tenant_i
 ## Database
 
 Uses Flyway with PostgreSQL. Migrations at `src/main/resources/db/migration`.
+
+`ext_customer_party.house_account` (V3, CAP:550 S9) carries the owner's house-account kind from
+`CustomerPartyUpdatedV1.houseAccount` (`CASH_SALE` for the tenant's CASH walk-in account, null for
+every ordinary party). `GET /v1/invoices/analytics/revenue-by-customer` leaves invoices whose party
+is a house account out of the ranking — the CASH account is not a customer and would top every
+list (spec §4.4 item 2, ADR-0057) — keyed on that flag only, never on a name or customer number;
+`truncated`/`limit` semantics are unchanged. Rows replicated before pos-customer published the field
+hold null until a party-fact replay at the same version fills them.
 
 ## Development
 

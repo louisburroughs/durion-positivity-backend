@@ -4,6 +4,7 @@ import com.positivity.invoice.internal.exception.ExcessiveAdjustmentException;
 import com.positivity.invoice.internal.exception.InvalidInvoiceStateException;
 import com.positivity.invoice.internal.exception.InvalidManagerApprovalException;
 import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
+import com.positivity.invoice.internal.exception.InvoicePartyRequiredException;
 import com.positivity.invoice.internal.exception.InvoiceRequestValidationException;
 import com.positivity.invoice.internal.exception.ManagerApprovalRequiredException;
 import com.positivity.shared.error.ApiError;
@@ -158,6 +159,25 @@ public class InvoiceExceptionHandler {
                 .header(X_CORRELATION_ID, correlationId)
                 .body(ApiError.of(
                         "EXCESSIVE_ADJUSTMENT",
+                        ex.getMessage(),
+                        HttpStatus.UNPROCESSABLE_CONTENT.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    /**
+     * CAP:550 S9 (spec §4.4 item 1, AW12): the finalize request is shape-valid, but the invoice has
+     * no bill-to party — a documented domain-policy refusal, not a malformed request, so 422 per
+     * ADR-0017 §1/§2. The invoice stays DRAFT; set the customer and retry.
+     */
+    @ExceptionHandler(InvoicePartyRequiredException.class)
+    public ResponseEntity<ApiError> handleInvoicePartyRequired(
+            InvoicePartyRequiredException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.of(
+                        InvoicePartyRequiredException.CODE,
                         ex.getMessage(),
                         HttpStatus.UNPROCESSABLE_CONTENT.value(),
                         Instant.now(clock).toString(),

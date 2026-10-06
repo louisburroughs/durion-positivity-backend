@@ -15,6 +15,7 @@ import com.positivity.invoice.internal.dto.InitiatePaymentResponse;
 import com.positivity.invoice.internal.dto.PaymentIntentResponse;
 import com.positivity.invoice.internal.enums.PaymentFlow;
 import com.positivity.invoice.internal.enums.PaymentIntentStatus;
+import com.positivity.invoice.internal.exception.InvoicePartyRequiredException;
 import com.positivity.invoice.internal.exception.PaymentDeclinedException;
 import com.positivity.invoice.internal.security.InvoicePermissions;
 import com.positivity.invoice.internal.service.PaymentService;
@@ -93,6 +94,44 @@ class PaymentControllerErrorHandlingTest {
                 .andExpect(status().is(422))
                 .andExpect(jsonPath("$.code").value("PAYMENT_DECLINED"))
                 .andExpect(jsonPath("$.message").value("Card declined"))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty())
+                .andExpect(header().exists("X-Correlation-Id"));
+    }
+
+    /** CAP:550 S9 AC2: initiating a payment on a party-less invoice answers 422 INVOICE_PARTY_REQUIRED. */
+    @Test
+    @DisplayName("initiatePayment on an invoice without a customer answers 422 INVOICE_PARTY_REQUIRED")
+    void initiatePaymentWithoutPartyAnswers422InvoicePartyRequired() throws Exception {
+        when(paymentService.initiatePayment(any(), any()))
+                .thenThrow(new InvoicePartyRequiredException(
+                        "This invoice has no customer; set the customer before taking a payment"));
+
+        mockMvc.perform(withAuth(post("/v1/invoices/{invoiceId}/payments", INVOICE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_BODY)))
+                .andExpect(status().is(422))
+                .andExpect(jsonPath("$.code").value("INVOICE_PARTY_REQUIRED"))
+                .andExpect(jsonPath("$.message")
+                        .value("This invoice has no customer; set the customer before taking a payment"))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty())
+                .andExpect(header().exists("X-Correlation-Id"));
+    }
+
+    /** CAP:550 S9 AC3: capturing a hold on a party-less invoice answers 422 INVOICE_PARTY_REQUIRED. */
+    @Test
+    @DisplayName("capturePayment on an invoice without a customer answers 422 INVOICE_PARTY_REQUIRED")
+    void capturePaymentWithoutPartyAnswers422InvoicePartyRequired() throws Exception {
+        when(paymentService.capturePayment(any(), any(), any(), any()))
+                .thenThrow(new InvoicePartyRequiredException(
+                        "This invoice has no customer; set the customer before taking a payment"));
+
+        mockMvc.perform(withAuthorities(
+                        post("/v1/invoices/{invoiceId}/payments/{paymentId}/capture", INVOICE_ID, UUID.randomUUID())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(CAPTURE_BODY),
+                        InvoicePermissions.PAYMENT_CAPTURE))
+                .andExpect(status().is(422))
+                .andExpect(jsonPath("$.code").value("INVOICE_PARTY_REQUIRED"))
                 .andExpect(jsonPath("$.correlationId").isNotEmpty())
                 .andExpect(header().exists("X-Correlation-Id"));
     }
