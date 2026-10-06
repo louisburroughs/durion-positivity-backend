@@ -331,6 +331,14 @@ SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', 
 --   Side effect: void and reverse of a receivable payment are gated by accounting:ap:pay
 --   (PaymentApplicationController), so a clerk can no longer use them; this story does not regate
 --   them.
+-- * CAP:550 S23 (#2516, ADR-0070 Decision 7, Security sign-off OI-5 2026-10-05, AW31): the pos-supplier
+--   vendor master keys (bits 549-552).
+--     supplier:vendor:read           -> ADMIN, CONTROLLER, ACCOUNTING_CLERK, GENERAL_MANAGER (+ SUPPORT,
+--                                       the read-only ceiling's rule for every floor read)
+--     supplier:vendor:write          -> ADMIN, CONTROLLER, ACCOUNTING_CLERK
+--     supplier:vendor_remit:approve  -> ADMIN, CONTROLLER, GENERAL_MANAGER (never the requester: the
+--                                       service refuses self-approval whatever the grant)
+--     supplier:fact:replay           -> ADMIN (the crm:fact:replay precedent)
 --
 -- IDEMPOTENCY
 -- Every statement below is ON CONFLICT DO NOTHING, and role/permission ids are
@@ -790,6 +798,7 @@ FROM (VALUES
     ('shop:schedule:view', 'shop', 'schedule', 'view', 157),
     ('shop:technician:view', 'shop', 'technician', 'view', 361),
     ('supplier:audit:read', 'supplier', 'audit', 'read', 445),
+    ('supplier:fact:replay', 'supplier', 'fact', 'replay', 549),
     ('supplier:invoice:fetch', 'supplier', 'invoice', 'fetch', 461),
     ('supplier:mktcat:import', 'supplier', 'mktcat', 'import', 465),
     ('supplier:pricecatalog:import', 'supplier', 'pricecatalog', 'import', 449),
@@ -801,6 +810,9 @@ FROM (VALUES
     ('supplier:stocksnapshot:read', 'supplier', 'stocksnapshot', 'read', 503),
     ('supplier:transmission:read', 'supplier', 'transmission', 'read', 451),
     ('supplier:transmission:resolve', 'supplier', 'transmission', 'resolve', 452),
+    ('supplier:vendor:read', 'supplier', 'vendor', 'read', 550),
+    ('supplier:vendor:write', 'supplier', 'vendor', 'write', 551),
+    ('supplier:vendor_remit:approve', 'supplier', 'vendor_remit', 'approve', 552),
     ('supplier:workorderauth:request', 'supplier', 'workorderauth', 'request', 462),
     ('supplier:workorderauth:review', 'supplier', 'workorderauth', 'review', 463),
     ('tax:calculate', 'tax', '', 'calculate', 163),
@@ -934,6 +946,8 @@ FROM (VALUES
     ('ACCOUNTING_CLERK', 'people:employee:view'),
     ('ACCOUNTING_CLERK', 'people:self:view'),
     ('ACCOUNTING_CLERK', 'reporting:view:financial-statements'),
+    ('ACCOUNTING_CLERK', 'supplier:vendor:read'),
+    ('ACCOUNTING_CLERK', 'supplier:vendor:write'),
     ('ACCOUNTING_CLERK', 'vehicle-inventory:registry:view'),
     ('ACCOUNTING_CLERK', 'workorder:workorder:view'),
     ('ADMIN', 'accounting:analytics:view'),
@@ -1295,6 +1309,7 @@ FROM (VALUES
     ('ADMIN', 'shop:schedule:view'),
     ('ADMIN', 'shop:technician:view'),
     ('ADMIN', 'supplier:audit:read'),
+    ('ADMIN', 'supplier:fact:replay'),
     ('ADMIN', 'supplier:invoice:fetch'),
     ('ADMIN', 'supplier:mktcat:import'),
     ('ADMIN', 'supplier:pricecatalog:import'),
@@ -1306,6 +1321,9 @@ FROM (VALUES
     ('ADMIN', 'supplier:stocksnapshot:read'),
     ('ADMIN', 'supplier:transmission:read'),
     ('ADMIN', 'supplier:transmission:resolve'),
+    ('ADMIN', 'supplier:vendor:read'),
+    ('ADMIN', 'supplier:vendor:write'),
+    ('ADMIN', 'supplier:vendor_remit:approve'),
     ('ADMIN', 'supplier:workorderauth:request'),
     ('ADMIN', 'supplier:workorderauth:review'),
     ('ADMIN', 'tax:calculate'),
@@ -1458,6 +1476,9 @@ FROM (VALUES
     ('CONTROLLER', 'nlti:request:submit'),
     ('CONTROLLER', 'people:self:view'),
     ('CONTROLLER', 'reporting:view:financial-statements'),
+    ('CONTROLLER', 'supplier:vendor:read'),
+    ('CONTROLLER', 'supplier:vendor:write'),
+    ('CONTROLLER', 'supplier:vendor_remit:approve'),
     ('CONTROLLER', 'tax:commit'),
     ('CONTROLLER', 'workorder:financials:view'),
     ('DISPATCHER', 'appointments:cancel'),
@@ -1542,6 +1563,8 @@ FROM (VALUES
     ('GENERAL_MANAGER', 'security:role:assign'),
     ('GENERAL_MANAGER', 'security:role:view'),
     ('GENERAL_MANAGER', 'shop:conflict:override'),
+    ('GENERAL_MANAGER', 'supplier:vendor:read'),
+    ('GENERAL_MANAGER', 'supplier:vendor_remit:approve'),
     ('GENERAL_MANAGER', 'vehicle-fitment:catalog:view'),
     ('GENERAL_MANAGER', 'vehicle-fitment:hint:view'),
     ('GENERAL_MANAGER', 'vehicle-inventory:registry:view'),
@@ -1750,6 +1773,7 @@ FROM (VALUES
     ('SUPPORT', 'supplier:stockavailability:read'),
     ('SUPPORT', 'supplier:stocksnapshot:read'),
     ('SUPPORT', 'supplier:transmission:read'),
+    ('SUPPORT', 'supplier:vendor:read'),
     ('SUPPORT', 'tax:exemption:view'),
     ('SUPPORT', 'tax:mode:view'),
     ('SUPPORT', 'tax:rates:view'),
@@ -2175,6 +2199,7 @@ BEGIN
         ('shop:schedule:view'),
         ('shop:technician:view'),
         ('supplier:audit:read'),
+        ('supplier:fact:replay'),
         ('supplier:invoice:fetch'),
         ('supplier:mktcat:import'),
         ('supplier:pricecatalog:import'),
@@ -2186,6 +2211,9 @@ BEGIN
         ('supplier:stocksnapshot:read'),
         ('supplier:transmission:read'),
         ('supplier:transmission:resolve'),
+        ('supplier:vendor:read'),
+        ('supplier:vendor:write'),
+        ('supplier:vendor_remit:approve'),
         ('supplier:workorderauth:request'),
         ('supplier:workorderauth:review'),
         ('tax:calculate'),

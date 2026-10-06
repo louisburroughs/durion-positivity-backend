@@ -700,6 +700,9 @@ class RolePermissionBaselineTest {
             expected.remove("accounting:ap:pay");
             expected.add("accounting:payment:apply");
             expected.add("accounting:reconciliation:adjust");
+            // CAP:550 S23 (#2516): clerks keep the vendor master and request remit-to changes.
+            expected.add("supplier:vendor:read");
+            expected.add("supplier:vendor:write");
 
             assertThat(sqlSeededGrants.get("ACCOUNTING_CLERK"))
                     .as("ACCOUNTING_CLERK grants in the SQL seed")

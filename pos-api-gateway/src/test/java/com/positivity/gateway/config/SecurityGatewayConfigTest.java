@@ -1613,9 +1613,9 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 97")
+    @DisplayName("CATALOG_VERSION is 98")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(97);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(98);
     }
 
     @Test
@@ -1965,8 +1965,13 @@ class SecurityGatewayConfigTest {
         // catalog v97 (CAP:550 S3, #2504): accounting:payment:assign-customer, registered ahead of
         // its endpoint (AD-004) and granted to no role yet (bit 548)
         assertThat(GatewayPermissionCatalog.authorityForBit(548)).isEqualTo("PERM_accounting:payment:assign-customer");
+        // catalog v98 (CAP:550 S23, #2516): the pos-supplier vendor master keys (bits 549-552)
+        assertThat(GatewayPermissionCatalog.authorityForBit(549)).isEqualTo("PERM_supplier:fact:replay");
+        assertThat(GatewayPermissionCatalog.authorityForBit(550)).isEqualTo("PERM_supplier:vendor:read");
+        assertThat(GatewayPermissionCatalog.authorityForBit(551)).isEqualTo("PERM_supplier:vendor:write");
+        assertThat(GatewayPermissionCatalog.authorityForBit(552)).isEqualTo("PERM_supplier:vendor_remit:approve");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(549)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(553)).isNull();
     }
 
     @Test
