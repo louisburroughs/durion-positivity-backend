@@ -167,6 +167,8 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1mappings~1resolve-test
   /v1/accounting/payment-applications:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1payment-applications
+  /v1/accounting/payment-applications/automatic:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1payment-applications~1automatic
   /v1/accounting/payment-applications/{applicationId}/reverse:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1payment-applications~1{applicationId}~1reverse
   /v1/accounting/payments/{paymentId}/applications:
