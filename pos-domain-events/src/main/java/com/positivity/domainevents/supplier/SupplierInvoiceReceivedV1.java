@@ -46,6 +46,23 @@ import org.jspecify.annotations.Nullable;
  *                              not a reason to withhold the invoice
  * @param occurredAt            when the document was fetched
  * @param lines                 the document's lines, as stated
+ * @param vendorId              the pos-supplier vendor the fetching profile belongs to (ADR-0070
+ *                              Decision 7); always set by producers from durion-positivity-backend#2516
+ *                              on, {@code null} only in a payload published before the field existed
+ * @param channel               the ADR-0051 protocol family of the binding that returned the
+ *                              document, e.g. {@code EDIWHEEL_B}; provenance only
+ * @param exchangeId            the exchange-audit id of the vendor exchange that returned the
+ *                              document; provenance only — no consumer calls pos-supplier with it
+ * @param dueDate               the payment due date the document states; {@code null} when the
+ *                              document states none (EDIWheel B3.3 never does)
+ * @param paymentTerms          the payment terms the document states, verbatim; {@code null} when
+ *                              it states none
+ * @param taxes                 the document's tax amounts by tax type, as stated; {@code null}
+ *                              when the document does not split its tax by type
+ *
+ * <p>The last six components are additive within schema version 1 (ADR-0044 §3, #2516): every one is
+ * nullable, and a payload published before they existed deserializes with them all {@code null},
+ * which means exactly today's behaviour.
  */
 public record SupplierInvoiceReceivedV1(
         @NonNull UUID vendorProfileId,
@@ -59,7 +76,13 @@ public record SupplierInvoiceReceivedV1(
         @Nullable BigDecimal totalGrossAmount,
         @Nullable String vendorOrderReference,
         @NonNull Instant occurredAt,
-        @NonNull List<SupplierInvoiceLine> lines) {
+        @NonNull List<SupplierInvoiceLine> lines,
+        @Nullable UUID vendorId,
+        @Nullable String channel,
+        @Nullable UUID exchangeId,
+        @Nullable LocalDate dueDate,
+        @Nullable String paymentTerms,
+        @Nullable List<SupplierInvoiceTax> taxes) {
 
     /** Event type of this payload on {@code supplier.events.v1}. */
     public static final String EVENT_TYPE = "supplier.invoice.received";
@@ -90,6 +113,7 @@ public record SupplierInvoiceReceivedV1(
         Objects.requireNonNull(occurredAt, "occurredAt must not be null");
         Objects.requireNonNull(lines, "lines must not be null");
         lines = List.copyOf(lines);
+        taxes = taxes == null ? null : List.copyOf(taxes);
     }
 
     /** Whether this document increases what is owed to the vendor. */
