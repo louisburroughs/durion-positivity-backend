@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.positivity.accounting.internal.dto.GeneralLedgerAccountSection;
 import com.positivity.accounting.internal.dto.GeneralLedgerLine;
 import com.positivity.accounting.internal.dto.GeneralLedgerReport;
+import com.positivity.accounting.internal.enums.AccountType;
+import com.positivity.accounting.internal.enums.NormalSide;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -89,7 +91,10 @@ class GeneralLedgerCsvRendererTest {
                         .accountId("123e4567-e89b-12d3-a456-426614174000")
                         .accountNumber("1000")
                         .accountName("Cash - Operating")
+                        .accountType(AccountType.ASSET)
+                        .normalSide(NormalSide.DEBIT)
                         .openingBalance(new BigDecimal("50000.00"))
+                        .normalOpeningBalance(new BigDecimal("50000.00"))
                         .lines(List.of(
                                 GeneralLedgerLine.builder()
                                         .journalEntryId(UUID.fromString("01960003-0000-7000-8000-000000000001"))
@@ -98,6 +103,8 @@ class GeneralLedgerCsvRendererTest {
                                         .description("Customer payment")
                                         .debitAmount(new BigDecimal("30000.00"))
                                         .runningBalance(new BigDecimal("80000.00"))
+                                        .direction(GeneralLedgerLine.Direction.INCREASE)
+                                        .normalRunningBalance(new BigDecimal("80000.00"))
                                         .build(),
                                 GeneralLedgerLine.builder()
                                         .journalEntryId(UUID.fromString("01960003-0000-7000-8000-000000000002"))
@@ -106,10 +113,13 @@ class GeneralLedgerCsvRendererTest {
                                         .description("Rent")
                                         .creditAmount(new BigDecimal("5000.00"))
                                         .runningBalance(new BigDecimal("75000.00"))
+                                        .direction(GeneralLedgerLine.Direction.DECREASE)
+                                        .normalRunningBalance(new BigDecimal("75000.00"))
                                         .build()))
                         .totalDebit(new BigDecimal("30000.00"))
                         .totalCredit(new BigDecimal("5000.00"))
                         .closingBalance(new BigDecimal("75000.00"))
+                        .normalClosingBalance(new BigDecimal("75000.00"))
                         .build()))
                 .totalDebit(new BigDecimal("30000.00"))
                 .totalCredit(new BigDecimal("5000.00"))

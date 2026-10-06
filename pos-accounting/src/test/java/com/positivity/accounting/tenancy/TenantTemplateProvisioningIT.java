@@ -818,7 +818,7 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
         assertThat(platformBefore.get("mapping_key")).isEqualTo(31);
         assertThat(platformBefore.get("gl_mapping")).isEqualTo(31);
         assertThat(platformBefore.get("default_gl_mapping")).isEqualTo(1);
-        assertThat(platformBefore.get("statement_line_mappings")).isEqualTo(43);
+        assertThat(platformBefore.get("statement_line_mappings")).isEqualTo(53); // 42 Labor & Overhead + 11 (#2524)
     }
 
     // ------------------------------------------------------------------------------------------
