@@ -148,7 +148,7 @@ public interface FinancialReportingService {
      *
      * <p>
      * <b>Balances.</b> {@code openingBalance} is the signed net (debit positive)
-     * of POSTED activity strictly before {@code startDate}. Each line's
+     * of ledger activity (POSTED and REVERSED entries) strictly before {@code startDate}. Each line's
      * {@code runningBalance} is the opening balance plus the cumulative signed net
      * of in-period lines up to and including that line, ordered by transaction
      * date then entry number. {@code closingBalance} equals opening balance plus
@@ -156,8 +156,8 @@ public interface FinancialReportingService {
      * sections.
      *
      * <p>
-     * Returns empty {@code accounts} with zero grand totals when no POSTED
-     * activity exists in the range for the filter.
+     * Returns empty {@code accounts} with zero grand totals when no ledger
+     * activity (POSTED or REVERSED) exists in the range for the filter.
      *
      * @param accountId optional GL account UUID filter; {@code null} spans all
      *                  accounts

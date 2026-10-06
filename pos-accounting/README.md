@@ -112,8 +112,8 @@ collides), and a replay of the issuing command returns the credit: an `applyPaym
 payment that is not `AVAILABLE` (409 `PAYMENT_NOT_AVAILABLE`), in another currency (422
 `CURRENCY_NOT_SUPPORTED`) or whose unapplied amount no longer equals `expectedAmount` (422
 `PAYMENT_REMAINDER_CHANGED`), writing nothing; the same `requestId` on another payment is 409
-`IDEMPOTENCY_CONFLICT`. It runs through `RetryingPaymentApplicationService` with apply's one retry; a
-second conflict is 409 `OPTIMISTIC_LOCK`. The report-export request carries no `organizationId`: the tenant
+`IDEMPOTENCY_CONFLICT`. It runs through `RetryingPaymentApplicationService` with apply's one retry, which also covers a lost race on `uq_customer_credit_request_id` (two
+simultaneous requests with one key: the retry replays the winner's credit); a second conflict is 409 `OPTIMISTIC_LOCK`. The report-export request carries no `organizationId`: the tenant
 comes from the caller's context (ADR-0062).
 
 ## Chart of Accounts
@@ -446,7 +446,7 @@ the sign and the totals; the statement line code is a label only and carries no 
   provisioning") carries the balance sheet lines `BS_IN_THE_BANK` (1000), `BS_WAITING_TO_BE_DEPOSITED` (1090,
   1095), `BS_CUSTOMERS_OWE_YOU` (1200), `BS_INVENTORY` (1300), `BS_BILLS_FROM_VENDORS` (2000),
   `BS_SALES_TAX_COLLECTED` (2200), `BS_CUSTOMER_CREDITS` (2300) and the income statement lines `IS_SALES` (4000,
-  formerly `REVENUE`), `IS_COST_OF_PARTS_SOLD` (5000), `IS_CARD_PROCESSING_FEES` (6000). `BS_KEPT_IN_DRAWERS`
+  formerly `REVENUE`), `IS_COST_OF_PARTS_SOLD` (5000, and 5100 Inventory Shrinkage: cost of inventory consumed sits above gross margin), `IS_CARD_PROCESSING_FEES` (6000). `BS_KEPT_IN_DRAWERS`
   (1080), `BS_OWNER_EQUITY` (3000) and `BS_OPENING_BALANCE_EQUITY` (3900) are reserved for S15; 1250 and 1260
   for S32. Until then those accounts fall on computed lines.
 - **Drill-down.** `GET /reports/financial/drilldown/accounts/{statementLineCode}` lists every account on the

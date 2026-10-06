@@ -384,6 +384,30 @@ class FinancialReportingG2ServiceTest {
     }
 
     @Test
+    @DisplayName("Aged AR: rows order by customer name case-insensitively, nulls last (#2524)")
+    void agedReceivablesOrdersNamesCaseInsensitively() {
+        UUID lower = UUID.fromString("c0000000-0000-7000-8000-000000000011");
+        UUID upper = UUID.fromString("c0000000-0000-7000-8000-000000000012");
+        ExtInvoice first = arInvoice(lower, new BigDecimal("10.00"), AS_OF.minusDays(10), AS_OF.minusDays(5));
+        ExtInvoice second = arInvoice(upper, new BigDecimal("20.00"), AS_OF.minusDays(10), AS_OF.minusDays(5));
+        when(extInvoiceRepository.findByStatusIn(any())).thenReturn(List.of(first, second));
+        when(invoiceBalanceCalculator.isArEligible(any())).thenReturn(true);
+        when(invoiceBalanceCalculator.balanceDue(first)).thenReturn(first.getTotal());
+        when(invoiceBalanceCalculator.balanceDue(second)).thenReturn(second.getTotal());
+        when(displayReferenceResolver.resolve(eq(DisplayReferenceType.CUSTOMER), any()))
+                .thenReturn(Map.of(
+                        lower, new ResolvedDisplayReference("acme tires", "C-11"),
+                        upper, new ResolvedDisplayReference("Zeta Fleet", "C-12")));
+
+        AgedReceivablesReport report = service.generateAgedReceivables(AS_OF);
+
+        // Case-sensitive order would put "Zeta" before "acme".
+        assertThat(report.getRows())
+                .extracting(row -> row.getCustomerName())
+                .containsExactly("acme tires", "Zeta Fleet");
+    }
+
+    @Test
     @DisplayName("Aged AR: null due date ages by the invoice date")
     void agedReceivablesNullDueDateAgesByInvoiceDate() {
         // Drafts and replica rows predating V22__ext_invoice_due_date.sql carry no due date.
@@ -628,11 +652,12 @@ class FinancialReportingG2ServiceTest {
         matchException.setStatus(VendorBillStatus.MATCH_EXCEPTION);
         VendorBill pendingMatch = apBill(vendorId, "Acme", new BigDecimal("100.00"), billDate, AS_OF.minusDays(10));
         pendingMatch.setStatus(VendorBillStatus.PENDING_RECEIPT_MATCH);
-        // The repository never returns a held bill (the status set excludes it); listing it here checks the
-        // service drops one that escaped, as a foreign-currency bill is dropped.
+        // The repository never returns a held bill (the status set excludes it); listing it here, in the ledger
+        // currency, checks the status rule keeps out one that escaped: only PENDING_RECEIPT_MATCH and
+        // MATCH_EXCEPTION are unapproved, any other non-APPROVED status is ignored.
         VendorBill held = apBill(vendorId, "Acme", new BigDecimal("900.00"), billDate, AS_OF.minusDays(10));
         held.setStatus(VendorBillStatus.CURRENCY_HOLD);
-        held.setCurrency("EUR");
+        held.setCurrency("USD");
         when(vendorBillRepository.findByStatusIn(any()))
                 .thenReturn(List.of(approved, matchException, pendingMatch, held));
         when(apPaymentAllocationRepository.sumAllocatedAmountByVendorBillIdIn(any()))

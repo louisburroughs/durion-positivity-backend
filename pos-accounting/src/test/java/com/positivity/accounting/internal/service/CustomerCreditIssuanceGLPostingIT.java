@@ -98,6 +98,10 @@ class CustomerCreditIssuanceGLPostingIT {
     @Autowired
     private CustomerCreditService customerCreditService;
 
+    /** The {@code @Primary} retrying decorator, the bean the controller calls. */
+    @Autowired
+    private PaymentApplicationService retryingPaymentApplicationService;
+
     @Autowired
     private CustomerCreditReliefGLPostingEventHandler reliefHandler;
 
@@ -390,6 +394,46 @@ class CustomerCreditIssuanceGLPostingIT {
                         paymentId, remainder("again", new BigDecimal("12.50"))))
                 .isInstanceOf(PaymentNotAvailableException.class);
         assertThat(customerCreditRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("#2524 AC9 under concurrency: two simultaneous requests with the same requestId both return the same"
+            + " credit, and exactly one credit and one issuance work item exist")
+    void remainderCredit_concurrentSameRequestId_replaysTheWinner() throws Exception {
+        for (int round = 0; round < 5; round++) {
+            UUID paymentId = seedAvailablePayment(new BigDecimal("12.50"));
+            String requestId = "race-" + round + "-" + UUID.randomUUID();
+            java.util.concurrent.CyclicBarrier start = new java.util.concurrent.CyclicBarrier(2);
+            java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+            try {
+                java.util.concurrent.Callable<RemainderCreditResponse> call = () -> {
+                    start.await();
+                    return retryingPaymentApplicationService.creditPaymentRemainder(
+                            paymentId, remainder(requestId, new BigDecimal("12.50")));
+                };
+                java.util.concurrent.Future<RemainderCreditResponse> first = pool.submit(call);
+                java.util.concurrent.Future<RemainderCreditResponse> second = pool.submit(call);
+                RemainderCreditResponse a = first.get(30, java.util.concurrent.TimeUnit.SECONDS);
+                RemainderCreditResponse b = second.get(30, java.util.concurrent.TimeUnit.SECONDS);
+
+                assertThat(a.getCreditId())
+                        .as("round %s: both callers get the same credit", round)
+                        .isEqualTo(b.getCreditId());
+                assertThat(customerCreditRepository.findBySourcePaymentId(paymentId))
+                        .as("round %s: one credit row", round)
+                        .hasSize(1);
+                assertThat(outboxRepository.findAll().stream()
+                                .filter(o -> CustomerCreditIssuanceGLPostingEvent.class
+                                        .getName()
+                                        .equals(o.getEventType()))
+                                .filter(o -> o.getPayload().contains("REMAINDER:" + requestId))
+                                .count())
+                        .as("round %s: one issuance work item", round)
+                        .isEqualTo(1);
+            } finally {
+                pool.shutdownNow();
+            }
+        }
     }
 
     private static RemainderCreditRequest remainder(String requestId, BigDecimal expectedAmount) {
