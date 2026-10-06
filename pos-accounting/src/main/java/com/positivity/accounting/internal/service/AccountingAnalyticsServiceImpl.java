@@ -156,6 +156,8 @@ public class AccountingAnalyticsServiceImpl implements AccountingAnalyticsServic
         // the deposit-take rule): they are not a customer's collections, and their applications and the reversals
         // of those leave `collected` with them. A view and measure rule only; postings are unchanged (ADR-0047).
         Set<UUID> walkInPartyIds = invoiceBalanceCalculator.walkInPartyIds();
+        // ext_invoice.party_id is stored canonical (pos-invoice writes UUID.toString()), so the exclusion queries
+        // match these strings as stored, the same parties isWalkIn reads as UUIDs.
         List<String> walkInParties = walkInPartyIds.stream().map(UUID::toString).toList();
 
         BigDecimal invoiced = extInvoiceRepository.findByFinalizedAtBetween(startInstant, endInstant).stream()

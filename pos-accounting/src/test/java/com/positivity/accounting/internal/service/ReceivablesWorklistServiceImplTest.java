@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -87,6 +86,9 @@ class ReceivablesWorklistServiceImplTest {
     @Mock
     private DisplayReferenceResolver resolver;
 
+    @Mock
+    private com.positivity.accounting.internal.repository.ExtCustomerPartyRepository parties;
+
     private ReceivablesWorklistServiceImpl service;
 
     private static UUID id(int n) {
@@ -96,13 +98,7 @@ class ReceivablesWorklistServiceImplTest {
     @BeforeEach
     void setUp() {
         InvoiceBalanceCalculator calculator = new InvoiceBalanceCalculator(
-                invoices,
-                applications,
-                reversals,
-                creditMemos,
-                creditTransactions,
-                depositApplications,
-                mock(com.positivity.accounting.internal.repository.ExtCustomerPartyRepository.class));
+                invoices, applications, reversals, creditMemos, creditTransactions, depositApplications, parties);
         service = new ReceivablesWorklistServiceImpl(
                 payments,
                 invoices,
@@ -232,6 +228,54 @@ class ReceivablesWorklistServiceImplTest {
             ArgumentCaptor<Collection<String>> parties = ArgumentCaptor.forClass(Collection.class);
             verify(invoices).findByPartyIdInAndStatusIn(parties.capture(), anyCollection());
             assertThat(parties.getValue()).containsExactlyInAnyOrder(CUSTOMER_A.toString(), CUSTOMER_B.toString());
+        }
+    }
+
+    @Nested
+    @DisplayName("the CASH walk-in account (#2508)")
+    class WalkIn {
+
+        @Test
+        @DisplayName("a CASH payment's suggestion offers no leftOver credit; another customer's keeps it; the CASH"
+                + " parties are read once per list call")
+        void walkInPaymentHasNoLeftOver() {
+            ReceivablePayment ofA = payment(1, CUSTOMER_A, "200.00", NOW.minusSeconds(600));
+            ReceivablePayment cash = payment(2, CUSTOMER_B, "200.00", NOW.minusSeconds(300));
+            ReceivablePayment cashAgain = payment(3, CUSTOMER_B, "60.00", NOW.minusSeconds(200));
+            when(payments.findByStatus(eq(ReceivablePaymentStatus.AVAILABLE), any(Pageable.class)))
+                    .thenAnswer(call -> new PageImpl<>(List.of(ofA, cash, cashAgain), call.getArgument(1), 3));
+            when(payments.totalsByStatus(ReceivablePaymentStatus.AVAILABLE))
+                    .thenReturn(new ReceivablePaymentTotals(3, new BigDecimal("460.00")));
+            when(invoices.findByPartyIdInAndStatusIn(anyCollection(), anyCollection()))
+                    .thenReturn(
+                            List.of(invoice(1, CUSTOMER_A, "150.00", TODAY), invoice(2, CUSTOMER_B, "45.00", TODAY)));
+            when(parties.findByHouseAccount("CASH_SALE"))
+                    .thenReturn(List.of(com.positivity.accounting.internal.entity.ExtCustomerParty.builder()
+                            .partyId(CUSTOMER_B)
+                            .houseAccount("CASH_SALE")
+                            .build()));
+
+            UnappliedPaymentsPage page = service.listUnappliedPayments(null, 0, 25);
+
+            assertThat(page.getItems().get(0).getSuggestion().getLeftOver()).isNotNull();
+            assertThat(page.getItems().get(1).getSuggestion().getLeftOver()).isNull();
+            assertThat(page.getItems().get(1).getSuggestion().getSuggestedTotal())
+                    .isNotNull();
+            assertThat(page.getItems().get(2).getSuggestion().getLeftOver()).isNull();
+            verify(parties, org.mockito.Mockito.times(1)).findByHouseAccount("CASH_SALE");
+        }
+
+        @Test
+        @DisplayName("an empty page reads no CASH party")
+        void emptyPageSkipsTheLookup() {
+            when(payments.findByStatus(eq(ReceivablePaymentStatus.AVAILABLE), any(Pageable.class)))
+                    .thenAnswer(call -> new PageImpl<>(List.of(), call.getArgument(1), 0));
+            when(payments.totalsByStatus(ReceivablePaymentStatus.AVAILABLE))
+                    .thenReturn(new ReceivablePaymentTotals(0, BigDecimal.ZERO));
+
+            service.listUnappliedPayments(null, 0, 25);
+
+            verify(parties, never()).findByHouseAccount(any());
         }
     }
 

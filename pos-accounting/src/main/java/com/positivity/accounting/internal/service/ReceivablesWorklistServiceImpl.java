@@ -99,6 +99,9 @@ public class ReceivablesWorklistServiceImpl implements ReceivablesWorklistServic
         Map<UUID, ResolvedDisplayReference> sourceInvoices =
                 displayReferenceResolver.resolve(DisplayReferenceType.INVOICE, sourceInvoiceIds);
         Map<UUID, List<OpenInvoice>> openByCustomer = openInvoicesByCustomer(customerIds);
+        // The CASH walk-in account never keeps a credit (#2508): its suggestions offer no leftOver. One query
+        // per list call, and none for an empty page.
+        Set<UUID> walkInPartyIds = rows.isEmpty() ? Set.of() : invoiceBalanceCalculator.walkInPartyIds();
 
         List<UnappliedPaymentRow> items = new ArrayList<>(rows.size());
         for (ReceivablePayment payment : rows) {
@@ -109,6 +112,9 @@ public class ReceivablesWorklistServiceImpl implements ReceivablesWorklistServic
                     payment.getSourceInvoiceId(),
                     unapplied,
                     openByCustomer.getOrDefault(payment.getCustomerId(), List.of()));
+            if (walkInPartyIds.contains(payment.getCustomerId())) {
+                suggestion.setLeftOver(null);
+            }
             items.add(UnappliedPaymentRow.builder()
                     .paymentId(payment.getPaymentId())
                     .customerId(payment.getCustomerId())

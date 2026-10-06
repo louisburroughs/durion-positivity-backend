@@ -386,73 +386,95 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
     }
 
     /**
-     * The unpaid walk-in sales read of #2508 (AC10, ADR-0062): tenant A's CASH account, walk-in invoice and
-     * unapplied walk-in payment never reach tenant B's read, which has no CASH account of its own.
+     * The unpaid walk-in sales read of #2508 (AC10, ADR-0062): each tenant has its own CASH account with one
+     * open walk-in invoice and one unapplied walk-in payment, and each tenant's read lists only its own rows —
+     * so the invoice, balance and payment queries all run under both tenants.
      */
     @Test
     void theUnpaidWalkInSalesReadIsTenantScoped() {
-        TransactionTemplate tx = new TransactionTemplate(transactionManager);
-        UUID cash = UUID.fromString("00000000-0000-7000-8000-0000002508a1");
-        UUID invoiceId = UUID.fromString("00000000-0000-7000-8000-0000002508a2");
-        UUID paymentId = UUID.fromString("00000000-0000-7000-8000-0000002508a3");
-        Instant soldAt = Instant.parse("2026-09-01T15:00:00Z");
+        WalkInFixture a = new WalkInFixture(0xa1, "INV-WA-1", "40.00", "5.00");
+        WalkInFixture b = new WalkInFixture(0xb1, "INV-WB-1", "70.00", "8.00");
         try {
-            asTenant(
-                    TENANT_A,
-                    () -> tx.executeWithoutResult(status -> {
-                        customerParties.save(ExtCustomerParty.builder()
-                                .partyId(cash)
-                                .partyType("COMMERCIAL")
-                                .displayName("Walk-in customer")
-                                .customerNumber("CASH")
-                                .houseAccount("CASH_SALE")
-                                .status("ACTIVE")
-                                .aggregateVersion(1L)
-                                .updatedAt(soldAt)
-                                .build());
-                        invoices.save(ExtInvoice.builder()
-                                .invoiceId(invoiceId)
-                                .invoiceNumber("INV-W-1")
-                                .partyId(cash.toString())
-                                .status("FINALIZED")
-                                .total(new BigDecimal("40.00"))
-                                .invoiceCreatedAt(soldAt)
-                                .finalizedAt(soldAt)
-                                .aggregateVersion(1L)
-                                .updatedAt(soldAt)
-                                .build());
-                        paymentApplicationService.handlePaymentCleared(
-                                paymentId,
-                                cash,
-                                "USD",
-                                new BigDecimal("5.00"),
-                                soldAt,
-                                UUID.fromString("00000000-0000-7000-8000-0000002508a4"),
-                                invoiceId,
-                                "CASH");
-                    }));
+            seedWalkIn(TENANT_A, a);
+            seedWalkIn(TENANT_B, b);
 
-            UnpaidWalkInSalesResponse ownRead = asTenant(TENANT_A, unpaidWalkInSalesService::read);
-            assertThat(ownRead.isHouseAccountKnown()).isTrue();
-            assertThat(ownRead.getBalance()).isEqualByComparingTo("40.00");
-            assertThat(ownRead.getOpenInvoices())
-                    .singleElement()
-                    .satisfies(open -> assertThat(open.getInvoiceId()).isEqualTo(invoiceId));
-            assertThat(ownRead.getUnappliedPayments())
-                    .singleElement()
-                    .satisfies(unapplied -> assertThat(unapplied.getPaymentId()).isEqualTo(paymentId));
-
-            UnpaidWalkInSalesResponse otherRead = asTenant(TENANT_B, unpaidWalkInSalesService::read);
-            assertThat(otherRead.isHouseAccountKnown()).isFalse();
-            assertThat(otherRead.getBalance()).isEqualByComparingTo("0.00");
-            assertThat(otherRead.getOpenInvoices()).isEmpty();
-            assertThat(otherRead.getUnappliedPayments()).isEmpty();
+            assertOnlyOwnRows(asTenant(TENANT_A, unpaidWalkInSalesService::read), a);
+            assertOnlyOwnRows(asTenant(TENANT_B, unpaidWalkInSalesService::read), b);
         } finally {
             JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
-            owner.update("DELETE FROM receivable_payment WHERE payment_id = ?", paymentId);
-            owner.update("DELETE FROM ext_invoice WHERE invoice_id = ?", invoiceId);
-            owner.update("DELETE FROM ext_customer_party WHERE party_id = ?", cash);
+            for (WalkInFixture fixture : List.of(a, b)) {
+                owner.update("DELETE FROM receivable_payment WHERE payment_id = ?", fixture.paymentId());
+                owner.update("DELETE FROM ext_invoice WHERE invoice_id = ?", fixture.invoiceId());
+                owner.update("DELETE FROM ext_customer_party WHERE party_id = ?", fixture.cashParty());
+            }
         }
+    }
+
+    /** One tenant's CASH party, its open walk-in invoice and its unapplied walk-in payment. */
+    private record WalkInFixture(
+            UUID cashParty, UUID invoiceId, UUID paymentId, String invoiceNumber, String total, String unapplied) {
+
+        WalkInFixture(int seed, String invoiceNumber, String total, String unapplied) {
+            this(
+                    UUID.fromString(String.format("00000000-0000-7000-8000-0000002508%02x", seed)),
+                    UUID.fromString(String.format("00000000-0000-7000-8000-0000002509%02x", seed)),
+                    UUID.fromString(String.format("00000000-0000-7000-8000-000000250a%02x", seed)),
+                    invoiceNumber,
+                    total,
+                    unapplied);
+        }
+    }
+
+    private void seedWalkIn(UUID tenant, WalkInFixture fixture) {
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+        Instant soldAt = Instant.parse("2026-09-01T15:00:00Z");
+        asTenant(
+                tenant,
+                () -> tx.executeWithoutResult(status -> {
+                    customerParties.save(ExtCustomerParty.builder()
+                            .partyId(fixture.cashParty())
+                            .partyType("COMMERCIAL")
+                            .displayName("Walk-in customer")
+                            .customerNumber("CASH")
+                            .houseAccount("CASH_SALE")
+                            .status("ACTIVE")
+                            .aggregateVersion(1L)
+                            .updatedAt(soldAt)
+                            .build());
+                    invoices.save(ExtInvoice.builder()
+                            .invoiceId(fixture.invoiceId())
+                            .invoiceNumber(fixture.invoiceNumber())
+                            .partyId(fixture.cashParty().toString())
+                            .status("FINALIZED")
+                            .total(new BigDecimal(fixture.total()))
+                            .invoiceCreatedAt(soldAt)
+                            .finalizedAt(soldAt)
+                            .aggregateVersion(1L)
+                            .updatedAt(soldAt)
+                            .build());
+                    paymentApplicationService.handlePaymentCleared(
+                            fixture.paymentId(),
+                            fixture.cashParty(),
+                            "USD",
+                            new BigDecimal(fixture.unapplied()),
+                            soldAt,
+                            UUID.randomUUID(),
+                            fixture.invoiceId(),
+                            "CASH");
+                }));
+    }
+
+    private static void assertOnlyOwnRows(UnpaidWalkInSalesResponse read, WalkInFixture own) {
+        assertThat(read.isHouseAccountKnown()).isTrue();
+        assertThat(read.getCustomerId()).isEqualTo(own.cashParty());
+        assertThat(read.getBalance()).isEqualByComparingTo(own.total());
+        assertThat(read.getOpenInvoices())
+                .singleElement()
+                .satisfies(open -> assertThat(open.getInvoiceId()).isEqualTo(own.invoiceId()));
+        assertThat(read.getUnappliedPayments()).singleElement().satisfies(unapplied -> {
+            assertThat(unapplied.getPaymentId()).isEqualTo(own.paymentId());
+            assertThat(unapplied.getUnappliedAmount()).isEqualByComparingTo(own.unapplied());
+        });
     }
 
     private static int countById(JdbcTemplate jdbc, String table, String key, UUID id) {

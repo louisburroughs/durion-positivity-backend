@@ -16,6 +16,7 @@ import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.repository.ExtLocationReplicaRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
 import com.positivity.domainevents.customer.CustomerPartyUpdatedV1;
+import com.positivity.tenancy.TenantContext;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.DateTimeException;
@@ -72,7 +73,7 @@ public class UnpaidWalkInSalesServiceImpl implements UnpaidWalkInSalesService {
     private final LedgerCurrency ledgerCurrency;
     private final Clock clock;
 
-    /** Locations whose UTC fallback was already logged by this instance. */
+    /** Tenant and location pairs whose UTC fallback was already logged by this instance. */
     private final Set<String> fallbackLogged = ConcurrentHashMap.newKeySet();
 
     public UnpaidWalkInSalesServiceImpl(
@@ -148,6 +149,8 @@ public class UnpaidWalkInSalesServiceImpl implements UnpaidWalkInSalesService {
     }
 
     private List<WalkInOpenInvoice> openInvoices(Set<UUID> partyIds, Instant now, String currency) {
+        // ext_invoice.party_id is stored canonical (pos-invoice writes UUID.toString()), so these strings match
+        // as stored, the same parties InvoiceBalanceCalculator.isWalkIn reads as UUIDs.
         List<String> parties = partyIds.stream().map(UUID::toString).toList();
         List<ExtInvoice> candidates =
                 extInvoiceRepository.findByPartyIdInAndStatusIn(parties, InvoiceBalanceCalculator.AR_ELIGIBLE_STATUSES);
@@ -261,9 +264,10 @@ public class UnpaidWalkInSalesServiceImpl implements UnpaidWalkInSalesService {
         return null;
     }
 
-    private void logFallback(String key, String reason) {
-        if (fallbackLogged.add(key)) {
-            log.warn("Walk-in business day computed in UTC for location {}: {}", key, reason);
+    private void logFallback(String location, String reason) {
+        String tenant = TenantContext.current().map(UUID::toString).orElse("unbound");
+        if (fallbackLogged.add(tenant + "/" + location)) {
+            log.warn("Walk-in business day computed in UTC for tenant {} location {}: {}", tenant, location, reason);
         }
     }
 

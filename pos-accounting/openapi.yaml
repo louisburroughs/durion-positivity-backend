@@ -18928,9 +18928,11 @@ components:
             $ref: '#/components/schemas/SuggestedInvoice'
           type: array
         leftOver:
-          description: 'Unapplied amount minus the suggested total: what would become a customer credit (AD-003)'
+          description: 'Unapplied amount minus the suggested total: what would become a customer credit (AD-003); null for a payment of the CASH walk-in account, which never keeps a credit: its excess is refunded (#2508)'
           example: 0.0
-          type: number
+          type:
+          - number
+          - 'null'
         reasons:
           description: 'Why these invoices are suggested. Served values: REMITTANCE_REFERENCE (the payment was taken against this invoice), SAME_CUSTOMER (the invoices belong to the payment''s customer), EXACT_TOTAL (the suggested balances add up exactly to the unapplied amount). A client renders an unknown value as Unknown. Empty when the customer has no open invoice.'
           items:
@@ -18943,7 +18945,6 @@ components:
           type: number
       required:
       - invoices
-      - leftOver
       - reasons
       - suggestedTotal
       type: object
