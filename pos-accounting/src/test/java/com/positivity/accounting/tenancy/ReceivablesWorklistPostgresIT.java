@@ -296,7 +296,8 @@ class ReceivablesWorklistPostgresIT extends PostgresTenancyTestBase {
         owner.update(
                 "INSERT INTO payment_application (tenant_id, payment_application_id, payment_id, invoice_id,"
                         + " customer_id, applied_amount, currency, application_timestamp, created_at, created_by,"
-                        + " application_request_id) VALUES (?, ?, ?, ?, ?, ?, 'USD', now(), now(), 'it', ?)",
+                        + " application_request_id, application_source)"
+                        + " VALUES (?, ?, ?, ?, ?, ?, 'USD', now(), now(), 'it', ?, 'MANUAL')",
                 tenant,
                 id,
                 payment,

@@ -10,12 +10,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.config.LedgerCurrency;
-import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
+import com.positivity.accounting.internal.enums.ApplicationSource;
 import com.positivity.accounting.internal.exception.AccountingEventRejectedException;
+import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -51,6 +52,9 @@ class InvoicePaymentEventProcessorTest {
     @Mock
     private InvoiceBalanceCalculator invoiceBalanceCalculator;
 
+    @Mock
+    private PaymentApplicationReversalRepository reversalRepository;
+
     private InvoicePaymentEventProcessor processor;
     private ExtInvoice invoice;
 
@@ -59,6 +63,7 @@ class InvoicePaymentEventProcessorTest {
         processor = new InvoicePaymentEventProcessor(
                 paymentApplicationService,
                 receivablePaymentRepository,
+                reversalRepository,
                 invoiceBalanceCalculator,
                 new LedgerCurrency("USD"),
                 Clock.fixed(NOW, ZoneOffset.UTC));
@@ -87,13 +92,16 @@ class InvoicePaymentEventProcessorTest {
                         EVENT_ID,
                         INVOICE_ID,
                         null);
-        ArgumentCaptor<PaymentApplicationRequest> request = ArgumentCaptor.forClass(PaymentApplicationRequest.class);
-        verify(paymentApplicationService).applyPaymentToInvoices(eq(PAYMENT_ID), request.capture());
-        assertThat(request.getValue().getApplicationRequestId()).isEqualTo("INVOICE_PAYMENT:" + EVENT_ID);
-        assertThat(request.getValue().getApplications()).singleElement().satisfies(app -> {
-            assertThat(app.getInvoiceId()).isEqualTo(INVOICE_ID);
-            assertThat(app.getAmountToApply()).isEqualByComparingTo("100.00");
-        });
+        ArgumentCaptor<BigDecimal> amount = ArgumentCaptor.forClass(BigDecimal.class);
+        verify(paymentApplicationService)
+                .applyAutomatically(
+                        eq(PAYMENT_ID),
+                        eq(INVOICE_ID),
+                        amount.capture(),
+                        eq("INVOICE_PAYMENT:" + EVENT_ID),
+                        eq(NOW),
+                        eq(ApplicationSource.INVOICE_PAYMENT));
+        assertThat(amount.getValue()).isEqualByComparingTo("100.00");
         verify(paymentApplicationService, never()).creditUnappliedPayment(any(), anyString());
 
         assertThat(event.getStatus()).isEqualTo(AccountingEventStatus.PROCESSED);
@@ -114,7 +122,7 @@ class InvoicePaymentEventProcessorTest {
         processor.process(event);
 
         verify(paymentApplicationService).creditUnappliedPayment(PAYMENT_ID, "INVOICE_PAYMENT:" + EVENT_ID);
-        verify(paymentApplicationService, never()).applyPaymentToInvoices(any(), any());
+        verify(paymentApplicationService, never()).applyAutomatically(any(), any(), any(), any(), any(), any());
         assertThat(event.getStatus()).isEqualTo(AccountingEventStatus.PROCESSED);
     }
 
@@ -131,7 +139,7 @@ class InvoicePaymentEventProcessorTest {
 
         verify(paymentApplicationService, never())
                 .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
-        verify(paymentApplicationService, never()).applyPaymentToInvoices(any(), any());
+        verify(paymentApplicationService, never()).applyAutomatically(any(), any(), any(), any(), any(), any());
         assertThat(event.getStatus()).isEqualTo(AccountingEventStatus.PROCESSED);
         assertThat(event.getIdempotencyOutcome()).isEqualTo("DUPLICATE_IGNORED");
     }
@@ -149,12 +157,30 @@ class InvoicePaymentEventProcessorTest {
 
         verify(paymentApplicationService, never())
                 .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
-        ArgumentCaptor<PaymentApplicationRequest> request = ArgumentCaptor.forClass(PaymentApplicationRequest.class);
-        verify(paymentApplicationService).applyPaymentToInvoices(eq(PAYMENT_ID), request.capture());
-        assertThat(request.getValue().getApplications())
-                .singleElement()
-                .satisfies(app -> assertThat(app.getAmountToApply()).isEqualByComparingTo("60.00"));
+        ArgumentCaptor<BigDecimal> amount = ArgumentCaptor.forClass(BigDecimal.class);
+        verify(paymentApplicationService)
+                .applyAutomatically(eq(PAYMENT_ID), eq(INVOICE_ID), amount.capture(), any(), any(), any());
+        assertThat(amount.getValue()).isEqualByComparingTo("60.00");
         assertThat(event.getIdempotencyOutcome()).isEqualTo("NEW");
+    }
+
+    @Test
+    @DisplayName("#2503 BR-8: a payment another path applied automatically and a clerk undid is DUPLICATE_IGNORED,"
+            + " never applied or credited again")
+    void undoneAutomaticApplicationElsewhere_duplicateIgnored() {
+        AccountingEvent event = event(validPayload());
+        stubEligibleInvoiceNoBalance();
+        ReceivablePayment recorded = recorded(new BigDecimal("100.00"), UUID.randomUUID());
+        recorded.setUnappliedAmount(new BigDecimal("100.00"));
+        when(receivablePaymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(recorded));
+        when(reversalRepository.existsReversedAutomaticApplication(PAYMENT_ID)).thenReturn(true);
+
+        processor.process(event);
+
+        verify(paymentApplicationService, never()).applyAutomatically(any(), any(), any(), any(), any(), any());
+        verify(paymentApplicationService, never()).creditUnappliedPayment(any(), anyString());
+        assertThat(event.getStatus()).isEqualTo(AccountingEventStatus.PROCESSED);
+        assertThat(event.getIdempotencyOutcome()).isEqualTo("DUPLICATE_IGNORED");
     }
 
     @Test
@@ -169,7 +195,8 @@ class InvoicePaymentEventProcessorTest {
 
         verify(paymentApplicationService, never())
                 .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
-        verify(paymentApplicationService).applyPaymentToInvoices(eq(PAYMENT_ID), any());
+        verify(paymentApplicationService)
+                .applyAutomatically(eq(PAYMENT_ID), any(), any(), any(), any(), eq(ApplicationSource.INVOICE_PAYMENT));
         assertThat(event.getIdempotencyOutcome()).isEqualTo("NEW");
     }
 

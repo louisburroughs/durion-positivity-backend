@@ -73,6 +73,7 @@ Every display value is resolved from data accounting already holds — its own r
 - `GET /v1/accounting/reports/financial/aged-payables` — aged payables with the same buckets over APPROVED bills only; bills not yet approved (`PENDING_RECEIPT_MATCH`, `MATCH_EXCEPTION`) are reported unaged as `unapproved`, `unapprovedBillCount`, `totalIncludingUnapproved` per row and beside `totals` (AW11; CAP:550 S35, #2524)
 - `POST /v1/accounting/payments/{paymentId}/remainder-credit` — keep a payment's whole unapplied remainder as a customer credit (AD-003): one transaction creates the credit, enqueues Dr 1090 / Cr 2300, and the payment becomes `FULLY_APPLIED`; idempotent on `requestId`, guarded by `expectedAmount` (permission `accounting:payment:apply`, event `ACCOUNTING_PAYMENT_REMAINDER_CREDIT`, CAP:550 S35, #2524)
 - `GET /v1/accounting/receivable-payments?status=AVAILABLE&customerId=&page=&size=` — customer payments still waiting to be matched, oldest cleared first (`size` 1-100, default 25; any other `status` → 400 `VALIDATION_ERROR`). Each row carries the customer's name and number from the replica (null when unknown), `paymentMethod`, `sourceInvoiceId` / `sourceInvoiceNumber` (the invoice it was taken against) and a `suggestion` of the open invoices it most likely pays: `reasons` (`REMITTANCE_REFERENCE`, `SAME_CUSTOMER`, `EXACT_TOTAL`), `invoices` with `suggestedAmount`, `suggestedTotal` and `leftOver` (the would-be credit, AD-003). `summary` totals every matching payment, not only the page (permission `accounting:payment:apply`, event `ACCOUNTING_RECEIVABLE_PAYMENT_LIST_VIEW`, CAP:550 S1, #2502)
+- `GET /v1/accounting/payment-applications/automatic?since=&page=&size=` — "Matched automatically": the payment applications nobody made by hand (`source` `PAYMENT_SETTLED` or `INVOICE_PAYMENT`) at or after `since` (required ISO-8601 instant, at most 31 days back), newest first (`size` 1-100, default 50). Each row carries `paymentApplicationId` / `paymentId` / `invoiceId` for commands and links, `appliedAt`, `appliedAmount`, `invoiceNumber`, `customerDisplayName`, `customerReference` (null when unresolved, never a UUID), `creditCreatedAmount` (the credit the same request kept, else null), `reversed` / `reversedAt`, and `actions` = `["UNDO"]` while it stands and the caller holds `accounting:payment:reverse` (undo is `reversePaymentApplication`). `totalElements` counts reversed ones too (permission `accounting:payment:apply`, event `ACCOUNTING_PAYMENT_APPLICATION_AUTOMATIC_LIST_VIEW`, CAP:550 S2, #2503)
 - `GET /v1/accounting/customers/{customerId}/open-invoices?page=&size=` — the customer's open invoices (`FINALIZED` / `POSTED` with a derived balance above 0.00) in `OLDEST_FIRST` order, with `balanceDue` net of applications, customer credits, posted credit memos and deposits, `arStatus`, `overdue` / `daysOverdue` (due date, else document date) and `workorderId` for a link only; `size` 1-200, default 100; an unknown customer gets 200 with no rows. `summary` totals every open invoice and equals the customer's aged-receivables total today (permission `accounting:payment:apply`, event `ACCOUNTING_CUSTOMER_OPEN_INVOICES_VIEW`, #2502)
 - `GET /v1/accounting/settlements/{settlementId}/lines` — list settlement lines, optional `unmatchedOnly` filter (permission `accounting:reconciliation:view`, event `ACCOUNTING_SETTLEMENT_LINES_LIST`, story F1c)
 - `POST /v1/accounting/settlements/lines/{lineId}/match` — manually match an unmatched line to a receivable payment (permission `accounting:reconciliation:adjust`, event `ACCOUNTING_SETTLEMENT_LINE_MATCH`, story F1c)
@@ -461,7 +462,48 @@ the sign and the totals; the statement line code is a label only and carries no 
   account balance carries `accountType`, `normalSide` and `normalBalance`. Signed (debit-positive) fields are
   unchanged. `NormalSide` is the one rule.
 
-## Payment Application Concurrency
+## Payment Application
+
+Every `payment_application` records the path that created it in `application_source` (V8, #2503):
+`MANUAL` (`POST .../payments/{paymentId}/applications`, dated now, by the caller), `INVOICE_PAYMENT` (the
+`INVOICE_PAYMENT` event processor, #2435) or `PAYMENT_SETTLED`. Rows created before V8 were backfilled from
+the request id (`INVOICE_PAYMENT:` prefix → `INVOICE_PAYMENT`, else `MANUAL`).
+
+**Settled payments apply automatically** (CAP:550 S2, #2503; AW14). After `SettlementEventsListener`
+records a `payment.payment.settled` payment, `AutomaticPaymentApplicationService` decides in the same
+handler transaction — the first rule that matches wins. Before the rules, the payment's history decides:
+if a person undid an automatic application of it (by this path or the `INVOICE_PAYMENT` processor) nothing
+is applied again, and if an application already exists under this settlement's request id that is the
+result; neither writes a row.
+
+| Case | Outcome | `accounting_event` row |
+|---|---|---|
+| a. `methodType` not `CASH` / `CARD` | not applied | `SKIPPED / NOT_POSTABLE` |
+| b. invoice not in `ext_invoice` | not applied; the retry job tries again, sharing the module retry cap (`pos.accounting.failed-event-retry.max-retries`, default 3 passes, about 45 minutes at the default 15-minute poll). After that the row stays `SUSPENDED` and needs a manual `POST /v1/accounting/events/{eventId}/reprocess` once the invoice arrives | `SUSPENDED / INVOICE_NOT_FOUND` |
+| c. invoice not `FINALIZED` / `POSTED` | not applied; retried up to the attempt cap | `FAILED / INVOICE_NOT_ELIGIBLE` |
+| d. invoice party (UUID) missing or not the payment's customer | not applied | `SKIPPED / NOT_POSTABLE` "customer differs from invoice INV-…" |
+| e. settlement date in a closed or hard-locked period | not applied; reprocess by hand after reopening (a hard-locked date cannot be reopened: the detail says to match or credit the payment by hand) | `SUSPENDED / PERIOD_CLOSED` |
+| f. payment has nothing unapplied (another path applied it) | nothing | none |
+| g. invoice has no open balance | not applied, not credited, left for a person (most likely a duplicate charge; confirmed by the Accounting Domain, 2026-10-06) | `SKIPPED / NOT_POSTABLE` |
+| h. otherwise | the whole unapplied amount applied to **that invoice only**, capped at its balance, excess kept as a customer credit (AD-003) | none: the application is the evidence |
+
+The application, any credit and both GL work items (Dr 1090 / Cr 1200, and Dr 1090 / Cr 2300 for an excess)
+are dated `settledAt`, created by `SYSTEM`, keyed `PAYMENT_SETTLED:<paymentIntentId>`. That key makes it
+once per settlement: a redelivery, a re-publish under a new event id or a reprocess returns the recorded
+application. An automatic application undone through `reversePaymentApplication` is never repeated by
+either automatic path: a later settled fact or reprocess applies nothing, and a later `INVOICE_PAYMENT`
+event for the payment is `PROCESSED / DUPLICATE_IGNORED` (the payment stays `AVAILABLE` for a person). The
+application's and credit's `created_at` is when they were written (ADR-0024); the business date is
+`application_timestamp` and the journal entries' date. A payment left unapplied stays `AVAILABLE` in
+`GET /v1/accounting/receivable-payments`. Counter `accounting.payment.settled.auto_apply`, tag `outcome`
+(`applied`, `skipped_method`, `skipped_party`, `skipped_paid`, `suspended_invoice`, `suspended_period`,
+`failed_ineligible`, `already_applied`). Reprocessing a held row (`POST /v1/accounting/events/{eventId}/reprocess`,
+or the retry job for `INVOICE_NOT_FOUND` / `INVOICE_NOT_ELIGIBLE`) re-runs this decision from the stored fact,
+never the posting engine and never recording the payment again: applied (or already settled) → `PROCESSED /
+NEW`; a skip → `SKIPPED`; still held → the new hold. Payments settled before this shipped are not
+re-processed (AW13).
+
+### Concurrency
 
 `ReceivablePayment` uses JPA optimistic locking (`@Version`, V10). `RetryingPaymentApplicationService`
 (`@Primary` decorator outside the transaction boundary) retries an application exactly once on an
@@ -505,8 +547,8 @@ on an inbound fact means the ledger currency until producers stamp one (E-3).
   `errorMessage`; a redelivery writes no second row. Find one with
   `GET /v1/accounting/events?eventType=order.session.closed&domainKeyId=<sessionId>`.
 - **Settled payments** (`payment.payment.settled`, #2310) — one in another currency never becomes an
-  `AVAILABLE` `ReceivablePayment`. It is held the same way: `sourceSystem = pos-invoice`, `SUSPENDED`,
-  `CURRENCY_NOT_SUPPORTED`, `domainKeyId` = `paymentIntentId`.
+  `AVAILABLE` `ReceivablePayment` and is never applied automatically (#2503). It is held the same way:
+  `sourceSystem = pos-invoice`, `SUSPENDED`, `CURRENCY_NOT_SUPPORTED`, `domainKeyId` = `paymentIntentId`.
 - **Releasing a hold** (#2334) — a held fact is `SUSPENDED`, not terminal, so it stays visible until a
   booking rate (ADR-0067 B1) or manual handling releases it. The scheduled auto-retry skips it, as it skips
   `PERIOD_CLOSED`; release goes through the audited `POST /v1/accounting/events/{eventId}/reprocess`. While
@@ -802,8 +844,9 @@ ignored without recording its eventId.
   (a redelivered envelope, same `eventId`, is short-circuited by `processed_events` and writes no row) and
   `postingDeduplication` (per listener, the business key a re-emitted fact is matched on: the deterministic
   `sourceEventId` for inventory / invoice / order journal entries, vendor + bill number for supplier
-  invoices, the reimbursement id for warranty — which never records `DUPLICATE_IGNORED` — and the currency
-  hold for `payment.payment.settled`).
+  invoices, the reimbursement id for warranty — which never records `DUPLICATE_IGNORED` — and, for
+  `payment.payment.settled`, the application request id `PAYMENT_SETTLED:<paymentIntentId>` plus the
+  held row's event type + `paymentIntentId` + reason).
 
 ## Kafka Fact Ingestion Records — the event list (issue #2433)
 
@@ -819,6 +862,7 @@ transaction as the posting and the `processed_events` mark:
 | `OrderEventsListener` | `order.session.closed` | `pos-order` | session id | `PROCESSED / NEW` + entry; `PROCESSED / NEW`, no entry, for a zero variance; `PROCESSED / DUPLICATE_IGNORED` when the session key was already posted; a foreign-currency hold is the `SUSPENDED / CURRENCY_NOT_SUPPORTED` row (Ledger currency above) |
 | `SupplierInvoiceEventsListener` | `supplier.invoice.received` | `pos-supplier` | vendor bill id | `PROCESSED / NEW`, no entry (nothing posts on ingest), for a new bill and for a duplicate flagged on the live original; `PROCESSED / DUPLICATE_IGNORED` for a duplicate identical to the live bill held, under the duplicate rule above (#2501) |
 | `WarrantyEventsListener` | `warranty.reimbursement.submitted`, `warranty.reimbursement.resolved` | `pos-warranty` | reimbursement id | `PROCESSED / NEW`, no entry; `SKIPPED / NOT_POSTABLE` for a stale fact |
+| `SettlementEventsListener` | `payment.payment.settled` | `pos-invoice` | `paymentIntentId` | no row when the payment is applied automatically or another path already applied it (the application is the evidence); otherwise one row per Payment Application above: `SKIPPED / NOT_POSTABLE`, `SUSPENDED / INVOICE_NOT_FOUND`, `SUSPENDED / PERIOD_CLOSED`, `FAILED / INVOICE_NOT_ELIGIBLE`, or the `SUSPENDED / CURRENCY_NOT_SUPPORTED` hold; a re-emitted fact already skipped for the same cause, or held for the same reason, writes no second row (#2503) |
 
 - `domainKeyId` is not unique: every fact about the same document (an invoice finalized, posted, then
   cancelled) writes its own row under the same key. `eventReference` (`AE-YYYYMM-n`) is the unique one.
@@ -826,7 +870,7 @@ transaction as the posting and the `processed_events` mark:
   recording failure is a posting failure: it propagates unmarked for container retry / DLQ.
 - Malformed payloads, other event types on these topics, and the replica-only listeners (customer,
   location, invoice manifest, settlement config, work order) write no row. `SettlementEventsListener`
-  writes one only for a foreign-currency `payment.payment.settled` hold.
+  writes one only for a `payment.payment.settled` fact it did not apply (table above).
 - Each listener exposes its codes as `RECORDED_EVENT_TYPES` for the event-type registry (#2436).
 - **No backfill.** Rows start with the deploy of #2433. Facts consumed before it (on alpha, 2026-10-03: 2009
   posted invoice-revenue journal entries, plus every register over/short, vendor bill and warranty

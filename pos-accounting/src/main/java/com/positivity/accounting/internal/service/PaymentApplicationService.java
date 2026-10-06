@@ -6,6 +6,7 @@ import com.positivity.accounting.internal.dto.PaymentApplicationReversalResponse
 import com.positivity.accounting.internal.dto.RemainderCreditRequest;
 import com.positivity.accounting.internal.dto.RemainderCreditResponse;
 import com.positivity.accounting.internal.entity.ReceivablePayment;
+import com.positivity.accounting.internal.enums.ApplicationSource;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
@@ -50,6 +51,31 @@ public interface PaymentApplicationService {
     @NonNull
     PaymentApplicationResponse applyPaymentToInvoices(
             @NonNull UUID paymentId, @NonNull PaymentApplicationRequest request);
+
+    /**
+     * Apply a payment to one invoice on behalf of the system, not a person (CAP:550 S2, #2503): the
+     * apply logic of {@link #applyPaymentToInvoices} — idempotent on {@code requestId}, capped at the
+     * invoice's balance with any excess kept as a {@code CustomerCredit} (AD-003) — with the
+     * application, the credit and both GL work items dated {@code appliedAt}, the system actor
+     * ({@code SYSTEM}, ADR-0018) as creator, and {@code source} recorded on the application. Internal
+     * only: the REST command keeps stamping the current time (§4.4 item 5).
+     *
+     * @param paymentId an {@code AVAILABLE} receivable payment
+     * @param invoiceId the one invoice to apply it to
+     * @param amount    the amount to apply before the cap, usually the payment's whole unapplied amount
+     * @param requestId the idempotency key; a replay returns the recorded result and writes nothing
+     * @param appliedAt the application date, e.g. the settlement instant
+     * @param source    the path applying it; never {@link ApplicationSource#MANUAL}
+     * @return the application result, or the recorded one on a replay
+     */
+    @NonNull
+    PaymentApplicationResponse applyAutomatically(
+            @NonNull UUID paymentId,
+            @NonNull UUID invoiceId,
+            @NonNull BigDecimal amount,
+            @NonNull String requestId,
+            @NonNull Instant appliedAt,
+            @NonNull ApplicationSource source);
 
     /**
      * Convert a payment's whole unapplied balance into a {@code CustomerCredit} (AD-003) when no

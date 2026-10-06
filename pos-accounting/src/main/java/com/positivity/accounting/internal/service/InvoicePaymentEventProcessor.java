@@ -2,14 +2,15 @@ package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.config.AccountingEventTypeRegistry;
 import com.positivity.accounting.internal.config.LedgerCurrency;
-import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
+import com.positivity.accounting.internal.enums.ApplicationSource;
 import com.positivity.accounting.internal.enums.IdempotencyOutcome;
 import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.exception.AccountingEventRejectedException;
+import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -18,7 +19,6 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.Currency;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -71,6 +71,7 @@ public class InvoicePaymentEventProcessor {
 
     private final PaymentApplicationService paymentApplicationService;
     private final ReceivablePaymentRepository receivablePaymentRepository;
+    private final PaymentApplicationReversalRepository reversalRepository;
     private final InvoiceBalanceCalculator invoiceBalanceCalculator;
     private final LedgerCurrency ledgerCurrency;
     private final Clock clock;
@@ -126,7 +127,10 @@ public class InvoicePaymentEventProcessor {
                 // it applies nothing). Apply what is still unapplied; when nothing is, the payment is
                 // already fully in the subledger and this event adds nothing.
                 BigDecimal unapplied = recorded.getUnappliedAmount();
-                if (recorded.getStatus() != ReceivablePayment.ReceivablePaymentStatus.AVAILABLE
+                // An automatic application of it that a person undid is never repeated by this path either
+                // (#2503, BR-8): the payment waits for that person.
+                if (reversalRepository.existsReversedAutomaticApplication(recorded.getPaymentId())
+                        || recorded.getStatus() != ReceivablePayment.ReceivablePaymentStatus.AVAILABLE
                         || unapplied == null
                         || unapplied.signum() <= 0) {
                     markProcessed(event, payment, IdempotencyOutcome.DUPLICATE_IGNORED);
@@ -149,13 +153,15 @@ public class InvoicePaymentEventProcessor {
         // Deterministic per event, so a replay never applies or credits twice (AD-010).
         String requestId = REQUEST_ID_PREFIX + event.getEventId();
         if (invoiceBalanceCalculator.balanceDue(invoice).compareTo(BigDecimal.ZERO) > 0) {
-            // Capped at the balance due; any excess becomes a CustomerCredit inside the application.
-            paymentApplicationService.applyPaymentToInvoices(
+            // Capped at the balance due; any excess becomes a CustomerCredit inside the application,
+            // which records this path as its source (#2503).
+            paymentApplicationService.applyAutomatically(
                     payment.paymentId(),
-                    new PaymentApplicationRequest(
-                            requestId,
-                            List.of(new PaymentApplicationRequest.InvoiceApplication(payment.invoiceId(), toApply)),
-                            null));
+                    payment.invoiceId(),
+                    toApply,
+                    requestId,
+                    Instant.now(clock),
+                    ApplicationSource.INVOICE_PAYMENT);
         } else {
             paymentApplicationService.creditUnappliedPayment(payment.paymentId(), requestId);
         }

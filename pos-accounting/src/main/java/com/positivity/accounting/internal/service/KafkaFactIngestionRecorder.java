@@ -34,13 +34,16 @@ import tools.jackson.databind.ObjectMapper;
  * posting listener (inventory, invoice revenue, register over/short, supplier invoice, warranty
  * reimbursement, settlement currency holds) passes its producing module as {@code sourceSystem}.
  *
- * <p><b>Terminal states only.</b> A row is {@link AccountingEventStatus#PROCESSED} (posted, a fact
- * that legitimately posts nothing, or a fact whose posting key was already registered) or {@link
- * AccountingEventStatus#SKIPPED} (deliberately not posted, with a {@code failureReasonCode}). Never
- * {@code FAILED}, and {@code SUSPENDED} only for a currency hold (below): the REST retry scheduler
- * and {@code retryAccountingEvent} select those and would run the fact through posting rule sets
- * that do not exist. Failures that propagate (closed period, missing mapping, transient) roll this
- * row back with the handler and are visible on the DLQ instead. A redelivery of the same Kafka
+ * <p><b>Terminal states, with two kinds of hold.</b> A row is {@link AccountingEventStatus#PROCESSED}
+ * (posted, a fact that legitimately posts nothing, or a fact whose posting key was already registered)
+ * or {@link AccountingEventStatus#SKIPPED} (deliberately not posted, with a {@code failureReasonCode}).
+ * The only non-terminal rows are a currency hold ({@code SUSPENDED}, below) and a settled payment its
+ * automatic application could not complete yet ({@link #recordSuspended}: {@code SUSPENDED} or {@code
+ * FAILED}, #2503), whose reprocess is routed back to that path. Any other path must not write {@code
+ * SUSPENDED} or {@code FAILED}: the retry scheduler and {@code retryAccountingEvent} select those
+ * statuses and would run the fact through posting rule sets that do not exist. Failures that propagate
+ * (closed period, missing mapping, transient) roll this row back with the handler and are visible on
+ * the DLQ instead. A redelivery of the same Kafka
  * envelope is short-circuited by {@code processed_events} before any posting and writes no row.
  *
  * <p>{@code eventReference} is the module's display reference {@code AE-{YYYYMM}-{seq}} (a
@@ -214,6 +217,36 @@ public class KafkaFactIngestionRecorder {
     }
 
     /**
+     * {@link #recordSkipped} once per fact and cause (#2503): a fact already skipped for the same reason
+     * and detail under the same event type and domain key — a re-publish under a new envelope id — writes
+     * no second row; a skip with another cause does.
+     *
+     * @return whether a new skipped record was written
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean recordSkippedOnce(
+            @NonNull String sourceSystem,
+            @NonNull String eventType,
+            @NonNull String envelopeEventId,
+            @NonNull UUID domainKeyId,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull Object fact,
+            @NonNull PostingFailureReason reason,
+            @NonNull String detail) {
+        if (accountingEventRepository.existsByEventTypeAndDomainKeyIdAndFailureReasonCodeAndErrorMessage(
+                eventType, domainKeyId.toString(), reason.name(), detail)) {
+            log.info(
+                    "Fact already skipped, not recorded again | eventType={} | domainKeyId={} | reason={}",
+                    eventType,
+                    domainKeyId,
+                    reason);
+            return false;
+        }
+        recordSkipped(sourceSystem, eventType, envelopeEventId, domainKeyId, transactionDate, fact, reason, detail);
+        return true;
+    }
+
+    /**
      * Hold a consumed fact whose amount is in a currency other than the ledger's (ADR-0067 PC-9,
      * E-5, issues #2312, #2334): {@code SUSPENDED / CURRENCY_NOT_SUPPORTED}, with the currency in
      * the error message, findable through {@code listAccountingEvents?eventType=…&domainKeyId=…} and
@@ -245,6 +278,52 @@ public class KafkaFactIngestionRecorder {
         }
         AccountingEvent event = newEvent(sourceSystem, eventType, envelopeEventId, domainKeyId, transactionDate, fact);
         event.setStatus(AccountingEventStatus.SUSPENDED);
+        event.setIdempotencyOutcome(IdempotencyOutcome.NEW.name());
+        event.setFailureReasonCode(reason);
+        event.setFailureDetails(detail);
+        event.setErrorMessage(detail);
+        save(event);
+        return true;
+    }
+
+    /**
+     * Hold a consumed fact its own path could not complete yet (CAP:550 S2, #2503): {@code SUSPENDED}
+     * or {@code FAILED} with the given reason, shaped like {@link #recordCurrencyHeld}. Only a path
+     * that routes the row back to itself on reprocess may use it ({@code
+     * EventIngestionServiceImpl#rerunPosting} sends a {@code payment.payment.settled} row with one of
+     * the automatic-application reasons back to {@link AutomaticPaymentApplicationService}), since the
+     * scheduled retry picks up both statuses. A re-emitted fact already held for the same reason is not
+     * recorded twice.
+     *
+     * @param status {@code SUSPENDED} or {@code FAILED}
+     * @param reason the stored {@code failureReasonCode}
+     * @return whether a new held record was written
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean recordSuspended(
+            @NonNull String sourceSystem,
+            @NonNull String eventType,
+            @NonNull String envelopeEventId,
+            @NonNull UUID domainKeyId,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull Object fact,
+            @NonNull AccountingEventStatus status,
+            @NonNull String reason,
+            @NonNull String detail) {
+        if (status != AccountingEventStatus.SUSPENDED && status != AccountingEventStatus.FAILED) {
+            throw new IllegalArgumentException("recordSuspended takes SUSPENDED or FAILED, not " + status);
+        }
+        if (accountingEventRepository.existsByEventTypeAndDomainKeyIdAndFailureReasonCode(
+                eventType, domainKeyId.toString(), reason)) {
+            log.info(
+                    "Fact already held, not recorded again | eventType={} | domainKeyId={} | reason={}",
+                    eventType,
+                    domainKeyId,
+                    reason);
+            return false;
+        }
+        AccountingEvent event = newEvent(sourceSystem, eventType, envelopeEventId, domainKeyId, transactionDate, fact);
+        event.setStatus(status);
         event.setIdempotencyOutcome(IdempotencyOutcome.NEW.name());
         event.setFailureReasonCode(reason);
         event.setFailureDetails(detail);

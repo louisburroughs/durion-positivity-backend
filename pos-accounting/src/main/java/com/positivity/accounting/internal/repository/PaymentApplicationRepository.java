@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.PaymentApplication;
+import com.positivity.accounting.internal.enums.ApplicationSource;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -160,4 +161,13 @@ public interface PaymentApplicationRepository extends JpaRepository<PaymentAppli
                     + " WHERE pa.invoiceId IN :invoiceIds GROUP BY pa.invoiceId")
     @NonNull
     List<InvoiceAmount> sumAppliedAmountByInvoiceIdIn(@Param("invoiceIds") @NonNull Collection<UUID> invoiceIds);
+
+    /**
+     * Applications created by any of {@code sources} at or after {@code since}, reversed or not (#2503,
+     * the "Matched automatically" read); order and page come from {@code pageable}. Served by {@code
+     * idx_payment_application_source_ts}.
+     */
+    @NonNull
+    Page<PaymentApplication> findByApplicationSourceInAndApplicationTimestampGreaterThanEqual(
+            @NonNull Collection<ApplicationSource> sources, @NonNull Instant since, @NonNull Pageable pageable);
 }

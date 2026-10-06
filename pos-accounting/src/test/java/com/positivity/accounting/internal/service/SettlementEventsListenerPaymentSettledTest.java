@@ -76,6 +76,9 @@ class SettlementEventsListenerPaymentSettledTest {
     @Mock
     private KafkaFactIngestionRecorder ingestionRecorder;
 
+    @Mock
+    private AutomaticPaymentApplicationService automaticPaymentApplicationService;
+
     private String envelope(String eventId, PaymentSettledV1 payload) {
         return mapper.writeValueAsString(
                 Map.of("eventType", PaymentSettledV1.EVENT_TYPE, "eventId", eventId, "payload", payload));
@@ -120,6 +123,7 @@ class SettlementEventsListenerPaymentSettledTest {
                     extInvoiceDepositCreditApplicationRepository,
                     new LedgerCurrency("USD"),
                     ingestionRecorder,
+                    automaticPaymentApplicationService,
                     mock(ObjectProvider.class),
                     org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class));
         }
@@ -153,6 +157,55 @@ class SettlementEventsListenerPaymentSettledTest {
             // guaranteed to preserve trailing zeros, so amount equivalence is asserted by value.
             assertThat(amountCaptor.getValue()).isEqualByComparingTo("150.00");
             verify(processedEventRepository).save(any(ProcessedEvent.class));
+        }
+
+        @Test
+        @DisplayName("#2503: the recorded payment goes to the automatic application with the fact and the event id,"
+                + " before the processed mark")
+        void recordedPaymentIsAppliedAutomaticallyBeforeTheMark() {
+            ReceivablePayment recorded = new ReceivablePayment();
+            when(paymentApplicationService.handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any()))
+                    .thenReturn(recorded);
+
+            listener().onPaymentEvent(envelope(EVENT_ID, settled(PARTY_UUID.toString())));
+
+            ArgumentCaptor<PaymentSettledV1> fact = ArgumentCaptor.forClass(PaymentSettledV1.class);
+            org.mockito.InOrder order = org.mockito.Mockito.inOrder(
+                    paymentApplicationService, automaticPaymentApplicationService, processedEventRepository);
+            order.verify(paymentApplicationService)
+                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
+            order.verify(automaticPaymentApplicationService)
+                    .applySettled(
+                            org.mockito.ArgumentMatchers.same(recorded),
+                            fact.capture(),
+                            org.mockito.ArgumentMatchers.eq(EVENT_ID));
+            order.verify(processedEventRepository).save(any(ProcessedEvent.class));
+            assertThat(fact.getValue().paymentIntentId()).isEqualTo(PAYMENT_INTENT_ID);
+            assertThat(fact.getValue().invoiceId()).isEqualTo(INVOICE_ID);
+        }
+
+        @Test
+        @DisplayName("#2503: an automatic-application failure propagates unmarked, for container retry/DLQ")
+        void automaticApplicationFailurePropagatesUnmarked() {
+            when(paymentApplicationService.handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any()))
+                    .thenReturn(new ReceivablePayment());
+            doThrow(new IllegalStateException("conflict"))
+                    .when(automaticPaymentApplicationService)
+                    .applySettled(any(), any(), any());
+
+            assertThatThrownBy(() -> listener().onPaymentEvent(envelope(EVENT_ID, settled(PARTY_UUID.toString()))))
+                    .hasMessage("conflict");
+
+            verify(processedEventRepository, never()).save(any(ProcessedEvent.class));
+        }
+
+        @Test
+        @DisplayName("#2503 AC10: a foreign currency or a missing party never reaches the automatic application")
+        void heldOrSkippedFactsAreNotAppliedAutomatically() {
+            listener().onPaymentEvent(envelope(EVENT_ID, settled(PARTY_UUID.toString(), "EUR")));
+            listener().onPaymentEvent(envelope("01960003-0000-7000-8000-000000000098", settled(null)));
+
+            verify(automaticPaymentApplicationService, never()).applySettled(any(), any(), any());
         }
 
         @Test
@@ -312,6 +365,7 @@ class SettlementEventsListenerPaymentSettledTest {
                     extInvoiceDepositCreditApplicationRepository,
                     new LedgerCurrency("USD"),
                     ingestionRecorder,
+                    automaticPaymentApplicationService,
                     mock(ObjectProvider.class),
                     org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class));
         }

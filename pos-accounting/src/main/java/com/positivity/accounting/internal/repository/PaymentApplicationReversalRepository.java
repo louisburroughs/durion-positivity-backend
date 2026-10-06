@@ -107,4 +107,20 @@ public interface PaymentApplicationReversalRepository extends JpaRepository<Paym
     List<UUID> findReversedApplicationIds(
             @org.springframework.data.repository.query.Param("originalPaymentApplicationIds")
                     Collection<UUID> originalPaymentApplicationIds);
+
+    /** The reversals of any of the given applications, in one query (#2503). */
+    @NonNull
+    List<PaymentApplicationReversal> findByOriginalPaymentApplication_PaymentApplicationIdIn(
+            @NonNull Collection<UUID> originalPaymentApplicationIds);
+
+    /**
+     * Whether any application of the payment that a person did not make (source other than {@code
+     * MANUAL}) has been reversed (#2503, BR-8): an undone automatic application, by either automatic
+     * path, means no automatic path applies the payment again.
+     */
+    @org.springframework.data.jpa.repository.Query("SELECT COUNT(r) > 0 FROM PaymentApplicationReversal r"
+            + " WHERE r.originalPaymentApplication.payment.paymentId = :paymentId"
+            + " AND r.originalPaymentApplication.applicationSource"
+            + " <> com.positivity.accounting.internal.enums.ApplicationSource.MANUAL")
+    boolean existsReversedAutomaticApplication(@Param("paymentId") @NonNull UUID paymentId);
 }

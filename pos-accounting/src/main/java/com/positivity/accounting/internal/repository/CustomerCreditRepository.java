@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.CustomerCredit;
 import com.positivity.accounting.internal.enums.CustomerCreditStatus;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -99,4 +100,8 @@ public interface CustomerCreditRepository extends JpaRepository<CustomerCredit, 
      */
     @Query("SELECT COALESCE(SUM(cc.amount - cc.appliedAmount - cc.refundedAmount), 0) FROM CustomerCredit cc")
     java.math.BigDecimal sumOpenAmount();
+
+    /** The credits issued by any of the given namespaced request ids, in one query (#2503). */
+    @NonNull
+    List<CustomerCredit> findByRequestIdIn(@NonNull Collection<String> requestIds);
 }
