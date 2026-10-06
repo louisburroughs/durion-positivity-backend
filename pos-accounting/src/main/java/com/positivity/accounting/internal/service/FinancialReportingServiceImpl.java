@@ -697,24 +697,24 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
 
         Map<UUID, AgingBuckets> byCustomer = new LinkedHashMap<>();
         for (ExtInvoice invoice : invoices) {
-            if (!invoiceBalanceCalculator.isArEligible(invoice)) {
-                continue;
-            }
-            BigDecimal openBalance = invoiceBalanceCalculator.balanceDue(invoice);
-            if (openBalance.signum() <= 0) {
+            BigDecimal balanceDue = invoiceBalanceCalculator.balanceDue(invoice);
+            // The open-invoice rule the receivables worklist uses too (#2502, BR-2), and the same
+            // currency-scale rounding, so a customer's open invoices add up to this report's total.
+            if (!InvoiceBalanceCalculator.isOpenReceivable(invoice, balanceDue, ledgerCurrency.code())) {
                 continue; // only positive-open items contribute
             }
+            BigDecimal openBalance = InvoiceBalanceCalculator.atCurrencyScale(balanceDue, ledgerCurrency.code());
             UUID customerId = parsePartyId(invoice.getPartyId(), invoice.getInvoiceId());
             if (customerId == null) {
                 continue; // non-UUID party cannot be represented in the contract's UUID field
             }
-            if (receivableDocumentDate(invoice).isAfter(asOfDate)) {
+            if (InvoiceBalanceCalculator.receivableDocumentDate(invoice).isAfter(asOfDate)) {
                 // Raised after asOfDate — the invoice did not exist yet (finding 10). This
                 // existence test is against the DOCUMENT date, never the aging date: a
                 // not-yet-due invoice already exists and must still be reported.
                 continue;
             }
-            LocalDate agingDate = receivableAgingDate(invoice);
+            LocalDate agingDate = InvoiceBalanceCalculator.receivableAgingDate(invoice);
             long daysPastDue = ChronoUnit.DAYS.between(agingDate, asOfDate);
             byCustomer.computeIfAbsent(customerId, key -> new AgingBuckets()).add(daysPastDue, openBalance);
         }
@@ -1431,43 +1431,8 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
     }
 
     /**
-     * AR aging basis: the invoice's due date, falling back to the invoice document date
-     * ({@link #receivableDocumentDate}). This is deliberately the same rule
-     * {@link #payableAgingDate} applies on the A/P side (due date, falling back to the bill date),
-     * so both halves of the aging report age from one documented basis.
-     *
-     * <p>{@code due_date} arrived with {@code V22__ext_invoice_due_date.sql} ("collections-aging
-     * due date frozen at finalization by pos-invoice") and is also what {@code OLDEST_FIRST}
-     * allocation ages by. It is null on drafts and on replica rows built from events predating
-     * that enrichment; those rows fall back to the document date.
-     */
-    private LocalDate receivableAgingDate(ExtInvoice invoice) {
-        LocalDate dueDate = invoice.getDueDate();
-        return dueDate != null ? dueDate : receivableDocumentDate(invoice);
-    }
-
-    /**
-     * AR document date (the invoice's own date): {@code invoiceCreatedAt}, falling back to
-     * {@code finalizedAt}, then {@code updatedAt}. Instants are read at UTC for
-     * timezone-independent, deterministic day math.
-     *
-     * <p>This answers "did the invoice exist as of the report date?" and is kept distinct from
-     * {@link #receivableAgingDate}, which answers "how far past due is it?".
-     */
-    private LocalDate receivableDocumentDate(ExtInvoice invoice) {
-        Instant source = invoice.getInvoiceCreatedAt();
-        if (source == null) {
-            source = invoice.getFinalizedAt();
-        }
-        if (source == null) {
-            source = invoice.getUpdatedAt();
-        }
-        return source.atZone(ZoneOffset.UTC).toLocalDate();
-    }
-
-    /**
      * AP aging basis: the bill's due date, falling back to the bill date — deliberately the same
-     * rule {@link #receivableAgingDate} applies on the A/R side (due date, falling back to the
+     * rule {@link InvoiceBalanceCalculator#receivableAgingDate} applies on the A/R side (due date, falling back to the
      * invoice date). {@code due_date} is nullable on {@code vendor_bill} (terms not yet known);
      * those bills fall back to the bill date.
      */

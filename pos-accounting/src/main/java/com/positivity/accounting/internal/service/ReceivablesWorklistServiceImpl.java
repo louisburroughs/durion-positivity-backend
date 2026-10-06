@@ -18,15 +18,12 @@ import com.positivity.accounting.internal.repository.ReceivablePaymentRepository
 import com.positivity.accounting.internal.repository.ReceivablePaymentTotals;
 import com.positivity.accounting.internal.service.UnappliedPaymentSuggester.OpenInvoice;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Currency;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -167,7 +164,8 @@ public class ReceivablesWorklistServiceImpl implements ReceivablesWorklistServic
         Map<UUID, BigDecimal> balances = invoiceBalanceCalculator.balancesDue(candidates);
 
         List<OpenInvoiceRow> open = candidates.stream()
-                .filter(invoice -> money(balances.get(invoice.getInvoiceId())).signum() > 0)
+                .filter(invoice -> InvoiceBalanceCalculator.isOpenReceivable(
+                        invoice, balances.get(invoice.getInvoiceId()), ledgerCurrency.code()))
                 .sorted(InvoiceBalanceCalculator.OLDEST_FIRST)
                 .map(invoice -> openInvoiceRow(invoice, balances.get(invoice.getInvoiceId()), today))
                 .toList();
@@ -224,7 +222,8 @@ public class ReceivablesWorklistServiceImpl implements ReceivablesWorklistServic
 
         Map<UUID, List<OpenInvoice>> byCustomer = new LinkedHashMap<>();
         candidates.stream()
-                .filter(invoice -> money(balances.get(invoice.getInvoiceId())).signum() > 0)
+                .filter(invoice -> InvoiceBalanceCalculator.isOpenReceivable(
+                        invoice, balances.get(invoice.getInvoiceId()), ledgerCurrency.code()))
                 .sorted(InvoiceBalanceCalculator.OLDEST_FIRST)
                 .forEach(invoice -> byCustomer
                         .computeIfAbsent(UUID.fromString(invoice.getPartyId()), key -> new ArrayList<>())
@@ -236,14 +235,13 @@ public class ReceivablesWorklistServiceImpl implements ReceivablesWorklistServic
     }
 
     private OpenInvoiceRow openInvoiceRow(ExtInvoice invoice, BigDecimal balance, LocalDate today) {
-        LocalDate documentDate = documentDate(invoice);
-        LocalDate agingDate = invoice.getDueDate() != null ? invoice.getDueDate() : documentDate;
+        LocalDate agingDate = InvoiceBalanceCalculator.receivableAgingDate(invoice);
         long daysOverdue = Math.max(0, ChronoUnit.DAYS.between(agingDate, today));
         return OpenInvoiceRow.builder()
                 .invoiceId(invoice.getInvoiceId())
                 .invoiceNumber(invoice.getInvoiceNumber())
                 .workorderId(invoice.getWorkorderId())
-                .documentDate(documentDate)
+                .documentDate(InvoiceBalanceCalculator.receivableDocumentDate(invoice))
                 .dueDate(invoice.getDueDate())
                 .total(money(invoice.getTotal()))
                 .balanceDue(money(balance))
@@ -256,31 +254,13 @@ public class ReceivablesWorklistServiceImpl implements ReceivablesWorklistServic
                 .build();
     }
 
-    /**
-     * The invoice's own date: {@code invoiceCreatedAt}, else {@code finalizedAt}, else the replica's
-     * {@code updatedAt}, read at UTC — the aged-receivables document-date rule.
-     */
-    private static LocalDate documentDate(ExtInvoice invoice) {
-        Instant source = invoice.getInvoiceCreatedAt();
-        if (source == null) {
-            source = invoice.getFinalizedAt();
-        }
-        if (source == null) {
-            source = invoice.getUpdatedAt();
-        }
-        return source.atZone(ZoneOffset.UTC).toLocalDate();
-    }
-
     private BigDecimal money(@Nullable BigDecimal amount) {
-        return (amount == null ? BigDecimal.ZERO : amount).setScale(currencyScale(), RoundingMode.HALF_UP);
+        return InvoiceBalanceCalculator.atCurrencyScale(
+                amount == null ? BigDecimal.ZERO : amount, ledgerCurrency.code());
     }
 
     private BigDecimal zero() {
-        return BigDecimal.ZERO.setScale(currencyScale());
-    }
-
-    private int currencyScale() {
-        return Math.max(Currency.getInstance(ledgerCurrency.code()).getDefaultFractionDigits(), 0);
+        return money(BigDecimal.ZERO);
     }
 
     private long elapsedMillis(Instant started) {

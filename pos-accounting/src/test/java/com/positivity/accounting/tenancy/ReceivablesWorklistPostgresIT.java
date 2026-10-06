@@ -12,7 +12,6 @@ import com.positivity.accounting.internal.dto.UnappliedPaymentsPage;
 import com.positivity.accounting.internal.service.FinancialReportingService;
 import com.positivity.accounting.internal.service.ReceivablesWorklistService;
 import com.positivity.shared.id.UUIDv7Generator;
-import jakarta.persistence.EntityManagerFactory;
 import java.math.BigDecimal;
 import java.sql.Date;
 import java.sql.Timestamp;
@@ -22,10 +21,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
-import org.hibernate.SessionFactory;
-import org.hibernate.stat.Statistics;
 import org.jspecify.annotations.Nullable;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -51,15 +47,7 @@ class ReceivablesWorklistPostgresIT extends PostgresTenancyTestBase {
     private FinancialReportingService financialReportingService;
 
     @Autowired
-    private EntityManagerFactory entityManagerFactory;
-
-    @Autowired
     private Clock clock;
-
-    @AfterEach
-    void disableStatistics() {
-        entityManagerFactory.unwrap(SessionFactory.class).getStatistics().setStatisticsEnabled(false);
-    }
 
     @Test
     @DisplayName("V7 adds the two payment columns and the (tenant, party, status) index")
@@ -136,16 +124,18 @@ class ReceivablesWorklistPostgresIT extends PostgresTenancyTestBase {
     }
 
     @Test
-    @DisplayName("AC5: 500.00 less a 100.00 application of which 50.00 is reversed, a posted 30.00 memo, a 20.00 credit"
-            + " and a 40.00 deposit leaves 360.00")
+    @DisplayName("AC5: 500.00 less 100.00 applied of which 50.00 is reversed (two 50.00 applications, one reversed in"
+            + " full), a posted 30.00 memo, a 20.00 credit and a 40.00 deposit leaves 360.00")
     void balanceNetsEveryTerm() {
         UUID tenant = UUIDv7Generator.generate();
         UUID customer = UUIDv7Generator.generate();
         UUID invoice = invoice(tenant, customer, "INV-500", "POSTED", "500.00", LocalDate.now(clock));
         UUID source = payment(tenant, customer, "100.00", "0.00", "FULLY_APPLIED", Instant.now(clock), null, null);
-        // 500 - (100 - 50) - 30 - 20 - 40 = 360: the formula nets the reversal against what was applied.
-        UUID applied = application(tenant, source, invoice, customer, "100.00");
-        reversal(tenant, applied, "50.00");
+        // A reversal always reverses a whole application (reversePaymentApplication), so the reachable state
+        // is two 50.00 applications with one reversed: 500 - (100 - 50) - 30 - 20 - 40 = 360.
+        application(tenant, source, invoice, customer, "50.00");
+        UUID reversed = application(tenant, source, invoice, customer, "50.00");
+        reversal(tenant, reversed, "50.00");
         creditMemo(tenant, invoice, customer, "25.00", "5.00", "POSTED");
         creditMemo(tenant, invoice, customer, "99.00", "0.00", "DRAFT");
         customerCreditApplication(tenant, source, invoice, customer, "20.00");
@@ -217,17 +207,13 @@ class ReceivablesWorklistPostgresIT extends PostgresTenancyTestBase {
     @Test
     @DisplayName("AC11: a page of 100 open invoices costs the same queries as one — the candidates and five balance"
             + " terms")
-    void boundedQueries() {
+    void boundedQueries() throws Exception {
         UUID tenant = UUIDv7Generator.generate();
         UUID customer = UUIDv7Generator.generate();
         UUID first = invoice(tenant, customer, "INV-0", "POSTED", "10.00", LocalDate.now(clock));
         UUID source = payment(tenant, customer, "1.00", "0.00", "FULLY_APPLIED", Instant.now(clock), null, null);
         application(tenant, source, first, customer, "1.00");
-        Statistics statistics =
-                entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
-        statistics.setStatisticsEnabled(true);
-
-        long forOne = queriesFor(statistics, tenant, customer, 1);
+        long forOne = statementsFor(tenant, customer, 1);
         for (int n = 1; n < 100; n++) {
             invoice(
                     tenant,
@@ -237,7 +223,7 @@ class ReceivablesWorklistPostgresIT extends PostgresTenancyTestBase {
                     "10.00",
                     LocalDate.now(clock).plusDays(n));
         }
-        long forHundred = queriesFor(statistics, tenant, customer, 100);
+        long forHundred = statementsFor(tenant, customer, 100);
 
         assertThat(forHundred).as("a hundred invoices cost no more than one").isEqualTo(forOne);
         assertThat(forOne)
@@ -245,11 +231,15 @@ class ReceivablesWorklistPostgresIT extends PostgresTenancyTestBase {
                 .isEqualTo(6);
     }
 
-    private long queriesFor(Statistics statistics, UUID tenant, UUID customer, int expectedRows) {
-        statistics.clear();
-        CustomerOpenInvoicesPage page = asTenant(tenant, () -> worklist.listOpenInvoices(customer, 0, 100));
-        assertThat(page.getItems()).hasSize(expectedRows);
-        return statistics.getQueryExecutionCount();
+    /**
+     * Statements this read issues on the test thread only: scheduled jobs (the outbox processor polls
+     * every five seconds) run on other threads and are not counted.
+     */
+    private long statementsFor(UUID tenant, UUID customer, int expectedRows) throws Exception {
+        ThreadStatementCounter.Counted<CustomerOpenInvoicesPage> counted =
+                ThreadStatementCounter.count(() -> asTenant(tenant, () -> worklist.listOpenInvoices(customer, 0, 100)));
+        assertThat(counted.result().getItems()).hasSize(expectedRows);
+        return counted.statements();
     }
 
     // ---- fixtures (owner, explicit tenant) ----

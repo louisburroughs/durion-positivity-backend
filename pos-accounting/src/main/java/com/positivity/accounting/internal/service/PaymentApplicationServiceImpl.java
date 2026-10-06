@@ -36,8 +36,10 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -82,6 +84,9 @@ public class PaymentApplicationServiceImpl
 
     /** Namespace of the request id a credit issued by {@link #creditPaymentRemainder} records. */
     static final String REMAINDER_REQUEST_ID_PREFIX = "REMAINDER:";
+
+    /** Settlement methods {@code PaymentSettledV1.methodType} documents (#2502). */
+    static final Set<String> KNOWN_PAYMENT_METHODS = Set.of("CASH", "CARD", "ON_ACCOUNT", "OTHER");
 
     private final Clock clock;
     private final ReceivablePaymentRepository receivablePaymentRepository;
@@ -160,7 +165,7 @@ public class PaymentApplicationServiceImpl
         payment.setClearedAt(clearedAt);
         payment.setSourceEventId(sourceEventId);
         payment.setSourceInvoiceId(sourceInvoiceId);
-        payment.setPaymentMethod(paymentMethod);
+        payment.setPaymentMethod(knownPaymentMethod(paymentMethod));
         payment.setCreatedBy(getCurrentUser()); // From PaymentCleared event
 
         ReceivablePayment saved = receivablePaymentRepository.save(payment);
@@ -171,6 +176,21 @@ public class PaymentApplicationServiceImpl
                 totalAmount,
                 sourceEventId);
         return saved;
+    }
+
+    /**
+     * The settlement method as stored on a receivable payment (#2502): one of the values the
+     * {@code payment.payment.settled} fact documents, compared trimmed and upper-cased, else null.
+     * {@code methodType} is free text on the wire; anything else, or anything longer than the column,
+     * is recorded as no method rather than failing the transaction that records the payment.
+     */
+    @Nullable
+    static String knownPaymentMethod(@Nullable String method) {
+        if (method == null) {
+            return null;
+        }
+        String normalized = method.trim().toUpperCase(Locale.ROOT);
+        return KNOWN_PAYMENT_METHODS.contains(normalized) ? normalized : null;
     }
 
     /**

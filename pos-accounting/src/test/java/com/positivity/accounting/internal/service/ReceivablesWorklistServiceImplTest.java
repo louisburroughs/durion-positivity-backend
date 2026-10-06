@@ -274,11 +274,12 @@ class ReceivablesWorklistServiceImplTest {
         }
 
         @Test
-        @DisplayName("AC5: 500.00 less a 100.00 application of which 50.00 is reversed, a 30.00 memo, a 20.00 credit"
+        @DisplayName("AC5: 500.00 less two 50.00 applications with one reversed in full, a 30.00 memo, a 20.00 credit"
                 + " and a 40.00 deposit is 360.00")
         void balanceNetsEveryTerm() {
             when(invoices.findByPartyIdInAndStatusIn(anyCollection(), anyCollection()))
                     .thenReturn(List.of(invoice(1, CUSTOMER_A, "500.00", TODAY)));
+            // Two 50.00 applications (grouped: 100.00) and one of them reversed in full (50.00).
             when(applications.sumAppliedAmountByInvoiceIdIn(anyCollection()))
                     .thenReturn(List.of(new InvoiceAmount(id(1), new BigDecimal("100.00"))));
             when(reversals.sumReversedAmountByInvoiceIdIn(anyCollection()))

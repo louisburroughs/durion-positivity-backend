@@ -8,6 +8,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -129,8 +130,10 @@ public interface CreditMemoRepository extends JpaRepository<CreditMemo, UUID> {
             "SELECT new com.positivity.accounting.internal.repository.InvoiceAmount(cm.originalInvoiceId, SUM(cm.creditAmount + cm.taxAmountReversed))"
                     + " FROM CreditMemo cm WHERE cm.originalInvoiceId IN :invoiceIds AND cm.status = :status"
                     + " GROUP BY cm.originalInvoiceId")
+    @NonNull
     List<InvoiceAmount> sumCreditedAmountByInvoiceIdInAndStatus(
-            @Param("invoiceIds") Collection<UUID> invoiceIds, @Param("status") CreditMemoStatus status);
+            @Param("invoiceIds") @NonNull Collection<UUID> invoiceIds,
+            @Param("status") @NonNull CreditMemoStatus status);
 
     /**
      * Sum of credit amounts (revenue portion only, excluding reversed tax) for an invoice in a

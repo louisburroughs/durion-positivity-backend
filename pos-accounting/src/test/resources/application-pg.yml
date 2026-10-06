@@ -18,6 +18,9 @@ spring:
     hibernate:
       ddl-auto: validate
     open-in-view: false
+    properties:
+      # Counts statements per thread only while a test opens a count (ReceivablesWorklistPostgresIT, #2502).
+      hibernate.session_factory.statement_inspector: com.positivity.accounting.tenancy.ThreadStatementCounter
   flyway:
     enabled: true
   cloud:

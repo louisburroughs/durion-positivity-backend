@@ -51,6 +51,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.InjectMocks;
@@ -389,6 +391,39 @@ class PaymentApplicationServiceTest {
 
         verify(receivablePaymentRepository).existsBySourceEventId(testSourceEventId);
         verify(receivablePaymentRepository).save(any(ReceivablePayment.class));
+    }
+
+    @ParameterizedTest(name = "method \"{0}\" is stored as {1}")
+    @CsvSource(
+            value = {
+                "CASH, CASH",
+                "CARD, CARD",
+                "ON_ACCOUNT, ON_ACCOUNT",
+                "OTHER, OTHER",
+                "' card ', CARD",
+                "CHEQUE, NULL",
+                "A_METHOD_NAME_LONGER_THAN_TWENTY_CHARACTERS, NULL",
+                "'', NULL",
+                "NULL, NULL"
+            },
+            nullValues = "NULL")
+    @DisplayName("Only a known settlement method is stored; anything else is recorded as no method (#2502)")
+    void testHandlePaymentCleared_storesKnownMethodsOnly(String sent, String stored) {
+        when(receivablePaymentRepository.existsBySourceEventId(testSourceEventId))
+                .thenReturn(false);
+        when(receivablePaymentRepository.save(any(ReceivablePayment.class))).thenAnswer(call -> call.getArgument(0));
+
+        ReceivablePayment result = service.handlePaymentCleared(
+                testPaymentId,
+                testCustomerId,
+                "USD",
+                new BigDecimal("1000.00"),
+                Instant.now(TEST_CLOCK),
+                testSourceEventId,
+                REMITTANCE_INVOICE_ID,
+                sent);
+
+        assertThat(result.getPaymentMethod()).isEqualTo(stored);
     }
 
     @Test

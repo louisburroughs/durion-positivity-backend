@@ -6,6 +6,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -157,5 +158,6 @@ public interface PaymentApplicationRepository extends JpaRepository<PaymentAppli
     @Query(
             "SELECT new com.positivity.accounting.internal.repository.InvoiceAmount(pa.invoiceId, SUM(pa.appliedAmount)) FROM PaymentApplication pa"
                     + " WHERE pa.invoiceId IN :invoiceIds GROUP BY pa.invoiceId")
-    List<InvoiceAmount> sumAppliedAmountByInvoiceIdIn(@Param("invoiceIds") Collection<UUID> invoiceIds);
+    @NonNull
+    List<InvoiceAmount> sumAppliedAmountByInvoiceIdIn(@Param("invoiceIds") @NonNull Collection<UUID> invoiceIds);
 }

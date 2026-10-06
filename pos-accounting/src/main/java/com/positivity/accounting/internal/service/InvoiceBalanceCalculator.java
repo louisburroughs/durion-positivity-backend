@@ -12,10 +12,13 @@ import com.positivity.accounting.internal.repository.InvoiceAmount;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.Currency;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -94,6 +97,56 @@ public class InvoiceBalanceCalculator {
             return invoice.getDueDate().atStartOfDay(ZoneOffset.UTC).toInstant();
         }
         return invoice.getFinalizedAt();
+    }
+
+    /**
+     * The one open-invoice rule (#2502, BR-2), shared by the receivables worklist and aged
+     * receivables so their totals cannot drift: an AR-eligible lifecycle status ({@code FINALIZED},
+     * {@code POSTED}) and a balance due above zero once rounded to the currency's scale.
+     *
+     * @param invoice    the replica row
+     * @param balanceDue its derived balance ({@link #balanceDue} or {@link #balancesDue})
+     * @param currency   ISO 4217 code whose minor unit sets the rounding scale (the ledger currency)
+     */
+    public static boolean isOpenReceivable(
+            @NonNull ExtInvoice invoice, @NonNull BigDecimal balanceDue, @NonNull String currency) {
+        return AR_ELIGIBLE_STATUSES.contains(invoice.getStatus())
+                && atCurrencyScale(balanceDue, currency).signum() > 0;
+    }
+
+    /** {@code amount} rounded HALF_UP to the minor unit of {@code currency}: how receivable money is served. */
+    @NonNull
+    public static BigDecimal atCurrencyScale(@NonNull BigDecimal amount, @NonNull String currency) {
+        int scale = Math.max(Currency.getInstance(currency).getDefaultFractionDigits(), 0);
+        return amount.setScale(scale, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * AR document date (the invoice's own date): {@code invoiceCreatedAt}, falling back to
+     * {@code finalizedAt}, then {@code updatedAt}, read at UTC for timezone-independent day math.
+     * Answers "did the invoice exist as of a date?".
+     */
+    @NonNull
+    public static LocalDate receivableDocumentDate(@NonNull ExtInvoice invoice) {
+        Instant source = invoice.getInvoiceCreatedAt();
+        if (source == null) {
+            source = invoice.getFinalizedAt();
+        }
+        if (source == null) {
+            source = invoice.getUpdatedAt();
+        }
+        return source.atZone(ZoneOffset.UTC).toLocalDate();
+    }
+
+    /**
+     * AR aging basis: the due date frozen at finalization, falling back to the
+     * {@linkplain #receivableDocumentDate document date} for rows that carry none. Answers "how far
+     * past due is it?".
+     */
+    @NonNull
+    public static LocalDate receivableAgingDate(@NonNull ExtInvoice invoice) {
+        LocalDate dueDate = invoice.getDueDate();
+        return dueDate != null ? dueDate : receivableDocumentDate(invoice);
     }
 
     /** True when the replica's lifecycle status allows AR activity (payments, credits). */

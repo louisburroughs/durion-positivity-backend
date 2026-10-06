@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -69,7 +70,8 @@ public interface PaymentApplicationReversalRepository extends JpaRepository<Paym
             "SELECT new com.positivity.accounting.internal.repository.InvoiceAmount(r.originalPaymentApplication.invoiceId, SUM(r.amount))"
                     + " FROM PaymentApplicationReversal r WHERE r.originalPaymentApplication.invoiceId IN :invoiceIds"
                     + " GROUP BY r.originalPaymentApplication.invoiceId")
-    List<InvoiceAmount> sumReversedAmountByInvoiceIdIn(@Param("invoiceIds") Collection<UUID> invoiceIds);
+    @NonNull
+    List<InvoiceAmount> sumReversedAmountByInvoiceIdIn(@Param("invoiceIds") @NonNull Collection<UUID> invoiceIds);
 
     /**
      * Sum of reversal amounts whose {@code reversedAt} falls in the inclusive instant range. Used

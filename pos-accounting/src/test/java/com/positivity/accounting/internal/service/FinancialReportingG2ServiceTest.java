@@ -288,7 +288,6 @@ class FinancialReportingG2ServiceTest {
         // landed in days31To60; under the due-date basis it is not yet due.
         ExtInvoice invoice = arInvoice(new BigDecimal("100.00"), AS_OF.minusDays(45), AS_OF.plusDays(15));
         when(extInvoiceRepository.findByStatusIn(any())).thenReturn(List.of(invoice));
-        when(invoiceBalanceCalculator.isArEligible(any())).thenReturn(true);
         when(invoiceBalanceCalculator.balanceDue(invoice)).thenReturn(invoice.getTotal());
 
         AgedReceivablesReport report = service.generateAgedReceivables(AS_OF);
@@ -318,7 +317,6 @@ class FinancialReportingG2ServiceTest {
 
         List<ExtInvoice> all = List.of(dueTomorrow, dueToday, d1, d30, d31, d60, d61, d90, d91);
         when(extInvoiceRepository.findByStatusIn(any())).thenReturn(all);
-        when(invoiceBalanceCalculator.isArEligible(any())).thenReturn(true);
         for (ExtInvoice invoice : all) {
             when(invoiceBalanceCalculator.balanceDue(invoice)).thenReturn(invoice.getTotal());
         }
@@ -357,7 +355,6 @@ class FinancialReportingG2ServiceTest {
         ExtInvoice third = arInvoice(alsoKnown, new BigDecimal("300.00"), AS_OF.minusDays(10), AS_OF.minusDays(5));
         List<ExtInvoice> invoices = List.of(first, second, third);
         when(extInvoiceRepository.findByStatusIn(any())).thenReturn(invoices);
-        when(invoiceBalanceCalculator.isArEligible(any())).thenReturn(true);
         for (ExtInvoice invoice : invoices) {
             when(invoiceBalanceCalculator.balanceDue(invoice)).thenReturn(invoice.getTotal());
         }
@@ -389,7 +386,6 @@ class FinancialReportingG2ServiceTest {
         // Drafts and replica rows predating V22__ext_invoice_due_date.sql carry no due date.
         ExtInvoice invoice = arInvoice(new BigDecimal("400.00"), AS_OF.minusDays(61), null);
         when(extInvoiceRepository.findByStatusIn(any())).thenReturn(List.of(invoice));
-        when(invoiceBalanceCalculator.isArEligible(any())).thenReturn(true);
         when(invoiceBalanceCalculator.balanceDue(invoice)).thenReturn(invoice.getTotal());
 
         AgedReceivablesReport report = service.generateAgedReceivables(AS_OF);
@@ -411,7 +407,6 @@ class FinancialReportingG2ServiceTest {
                 .finalizedAt(AS_OF.minusDays(45).atStartOfDay().toInstant(ZoneOffset.UTC))
                 .build();
         when(extInvoiceRepository.findByStatusIn(any())).thenReturn(List.of(invoice));
-        when(invoiceBalanceCalculator.isArEligible(any())).thenReturn(true);
         when(invoiceBalanceCalculator.balanceDue(invoice)).thenReturn(invoice.getTotal());
 
         AgedReceivablesReport report = service.generateAgedReceivables(AS_OF);
@@ -424,7 +419,6 @@ class FinancialReportingG2ServiceTest {
     void agedReceivablesExcludesFullyPaid() {
         ExtInvoice paid = arInvoice(new BigDecimal("100.00"), AS_OF.minusDays(10));
         when(extInvoiceRepository.findByStatusIn(any())).thenReturn(List.of(paid));
-        when(invoiceBalanceCalculator.isArEligible(any())).thenReturn(true);
         when(invoiceBalanceCalculator.balanceDue(paid)).thenReturn(BigDecimal.ZERO);
 
         AgedReceivablesReport report = service.generateAgedReceivables(AS_OF);
@@ -451,7 +445,6 @@ class FinancialReportingG2ServiceTest {
         // Existence is tested against the invoice date, never the due date.
         ExtInvoice future = arInvoice(new BigDecimal("100.00"), AS_OF.plusDays(10), AS_OF.plusDays(40));
         when(extInvoiceRepository.findByStatusIn(any())).thenReturn(List.of(future));
-        when(invoiceBalanceCalculator.isArEligible(any())).thenReturn(true);
         when(invoiceBalanceCalculator.balanceDue(future)).thenReturn(new BigDecimal("100.00"));
 
         AgedReceivablesReport report = service.generateAgedReceivables(AS_OF);
@@ -468,7 +461,6 @@ class FinancialReportingG2ServiceTest {
         // in the past) but is not yet due, so it must be reported rather than dropped.
         ExtInvoice notYetDue = arInvoice(new BigDecimal("100.00"), AS_OF.minusDays(10), AS_OF.plusDays(20));
         when(extInvoiceRepository.findByStatusIn(any())).thenReturn(List.of(notYetDue));
-        when(invoiceBalanceCalculator.isArEligible(any())).thenReturn(true);
         when(invoiceBalanceCalculator.balanceDue(notYetDue)).thenReturn(new BigDecimal("100.00"));
 
         AgedReceivablesReport report = service.generateAgedReceivables(AS_OF);
@@ -495,7 +487,6 @@ class FinancialReportingG2ServiceTest {
                 .dueDate(AS_OF.minusDays(45))
                 .build();
         when(extInvoiceRepository.findByStatusIn(any())).thenReturn(List.of(noWorkorder));
-        when(invoiceBalanceCalculator.isArEligible(any())).thenReturn(true);
         when(invoiceBalanceCalculator.balanceDue(noWorkorder)).thenReturn(noWorkorder.getTotal());
 
         AgedReceivablesReport report = service.generateAgedReceivables(AS_OF);
@@ -574,7 +565,6 @@ class FinancialReportingG2ServiceTest {
                 .map(f -> arInvoice(f.partyId(), new BigDecimal(f.open()), f.documentDate(), dueDateOf.apply(f)))
                 .toList();
         when(extInvoiceRepository.findByStatusIn(any())).thenReturn(invoices);
-        when(invoiceBalanceCalculator.isArEligible(any())).thenReturn(true);
         for (ExtInvoice invoice : invoices) {
             // The report must sum the OPEN balance, which the fixture keeps equal to the invoice
             // total for readability; the point under test is the inclusion rule, not the balance.
@@ -789,7 +779,6 @@ class FinancialReportingG2ServiceTest {
         ExtInvoice arNoDueDate = arInvoice(new BigDecimal("300.00"), documentDate, null);
         List<ExtInvoice> invoices = List.of(arNotYetDue, arPastDue, arNoDueDate);
         when(extInvoiceRepository.findByStatusIn(any())).thenReturn(invoices);
-        when(invoiceBalanceCalculator.isArEligible(any())).thenReturn(true);
         for (ExtInvoice invoice : invoices) {
             when(invoiceBalanceCalculator.balanceDue(invoice)).thenReturn(invoice.getTotal());
         }

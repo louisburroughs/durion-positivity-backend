@@ -16,7 +16,7 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 135 event types (includes +2 from the receivables worklist reads (CAP:550 S1, Issue #2502):
+     * Total: 141 event types (includes +2 from the receivables worklist reads (CAP:550 S1, Issue #2502):
      * ACCOUNTING_RECEIVABLE_PAYMENT_LIST_VIEW, ACCOUNTING_CUSTOMER_OPEN_INVOICES_VIEW, +2 from tenant
      * template provisioning (CAP:550 S37, Issue #2526):
      * ACCOUNTING_TENANT_TEMPLATE_STATUS_VIEW, ACCOUNTING_TENANT_TEMPLATE_ADD_ON_ENABLE,
