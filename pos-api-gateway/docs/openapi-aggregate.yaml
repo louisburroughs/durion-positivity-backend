@@ -287,6 +287,10 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1settlements~1lines~1{lineId}~1write-off
   /v1/accounting/settlements/{settlementId}/lines:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1settlements~1{settlementId}~1lines
+  /v1/accounting/tenant-template/add-ons/retread-plant:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1tenant-template~1add-ons~1retread-plant
+  /v1/accounting/tenant-template/status:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1tenant-template~1status
   /v1/accounting/vendor-bills:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1vendor-bills
   /v1/accounting/vendor-bills/event/{eventId}:
