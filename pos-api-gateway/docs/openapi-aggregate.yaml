@@ -169,6 +169,8 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1payment-applications~1{applicationId}~1reverse
   /v1/accounting/payments/{paymentId}/applications:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1payments~1{paymentId}~1applications
+  /v1/accounting/payments/{paymentId}/remainder-credit:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1payments~1{paymentId}~1remainder-credit
   /v1/accounting/payments/{paymentId}/reverse:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1payments~1{paymentId}~1reverse
   /v1/accounting/payments/{paymentId}/void:
