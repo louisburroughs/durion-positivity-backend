@@ -3,6 +3,9 @@ package com.positivity.accounting;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 
 import com.positivity.accounting.internal.config.TestPaymentGatewayConfig;
+import com.positivity.accounting.internal.entity.AccountingConfiguration;
+import com.positivity.accounting.internal.repository.AccountingConfigurationRepository;
+import com.positivity.accounting.internal.service.AccountingCalendarZoneResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -145,6 +148,25 @@ public abstract class BaseIntegrationTest {
         this.mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext)
                 .apply(springSecurity())
                 .build();
+        seedAccountingTimeZone();
+    }
+
+    /**
+     * The H2 contexts run no Flyway and so no template provisioning, which is what gives a tenant its accounting
+     * time zone (#2558). Without one every dated posting fails closed, so give the default tenant the provisioning
+     * seed, {@code UTC}, when a test (or an earlier one) left it without.
+     */
+    private void seedAccountingTimeZone() {
+        AccountingConfigurationRepository configurations =
+                webApplicationContext.getBean(AccountingConfigurationRepository.class);
+        if (configurations
+                .findByConfigKey(AccountingCalendarZoneResolver.CONFIG_KEY)
+                .isEmpty()) {
+            AccountingConfiguration zone = new AccountingConfiguration();
+            zone.setConfigKey(AccountingCalendarZoneResolver.CONFIG_KEY);
+            zone.setConfigValue("UTC");
+            configurations.save(zone);
+        }
     }
 
     /**
