@@ -4,12 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.config.DatabaseDialectSupport;
 import com.positivity.accounting.internal.dto.AgedReceivablesReport;
+import com.positivity.accounting.internal.dto.AgedReceivablesRow;
+import com.positivity.accounting.internal.dto.UnpaidWalkInSalesResponse;
+import com.positivity.accounting.internal.entity.ExtCustomerParty;
 import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.accounting.internal.enums.CustomerCreditTransactionType;
@@ -19,14 +23,17 @@ import com.positivity.accounting.internal.repository.AccountingSequenceRepositor
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
 import com.positivity.accounting.internal.repository.CreditMemoTaxRepository;
 import com.positivity.accounting.internal.repository.CustomerCreditTransactionRepository;
+import com.positivity.accounting.internal.repository.ExtCustomerPartyRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceDepositCreditApplicationRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceTaxRepository;
+import com.positivity.accounting.internal.repository.ExtLocationReplicaRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.InvoiceAmount;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
+import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
 import com.positivity.accounting.internal.repository.StatementLineMappingRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import java.math.BigDecimal;
@@ -38,6 +45,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -80,6 +88,9 @@ class InvoiceBalanceCalculatorTest {
     @Mock
     private ExtInvoiceDepositCreditApplicationRepository depositCreditApplicationRepository;
 
+    @Mock
+    private ExtCustomerPartyRepository customerPartyRepository;
+
     private InvoiceBalanceCalculator calculator;
 
     @BeforeEach
@@ -90,7 +101,8 @@ class InvoiceBalanceCalculatorTest {
                 reversalRepository,
                 creditMemoRepository,
                 creditTransactionRepository,
-                depositCreditApplicationRepository);
+                depositCreditApplicationRepository,
+                customerPartyRepository);
     }
 
     @Test
@@ -390,6 +402,46 @@ class InvoiceBalanceCalculatorTest {
      * FinancialReportingServiceImpl} instead.
      */
     @Nested
+    @DisplayName("the walk-in rule (#2508)")
+    class WalkInRule {
+
+        private final UUID cash = UUID.fromString("00000000-0000-7000-8000-0000000000a3");
+
+        @Test
+        @DisplayName("the CASH parties are the ones the replica flags CASH_SALE, keyed on the flag only")
+        void walkInPartiesComeFromTheFlag() {
+            when(customerPartyRepository.findByHouseAccount("CASH_SALE"))
+                    .thenReturn(List.of(ExtCustomerParty.builder().partyId(cash).build()));
+
+            assertThat(calculator.walkInPartyIds()).containsExactly(cash);
+        }
+
+        @Test
+        @DisplayName("an invoice is a walk-in sale when its party, as a UUID, is a CASH party; blank, non-UUID and"
+                + " other parties are not")
+        void isWalkIn() {
+            Set<UUID> walkIn = Set.of(cash);
+
+            assertThat(InvoiceBalanceCalculator.isWalkIn(
+                            withParty(cash.toString().toUpperCase()), walkIn))
+                    .isTrue();
+            assertThat(InvoiceBalanceCalculator.isWalkIn(
+                            withParty(UUID.randomUUID().toString()), walkIn))
+                    .isFalse();
+            assertThat(InvoiceBalanceCalculator.isWalkIn(withParty(null), walkIn))
+                    .isFalse();
+            assertThat(InvoiceBalanceCalculator.isWalkIn(withParty("CASH"), walkIn))
+                    .isFalse();
+            assertThat(InvoiceBalanceCalculator.isWalkIn(withParty(cash.toString()), Set.of()))
+                    .isFalse();
+        }
+
+        private ExtInvoice withParty(String partyId) {
+            return ExtInvoice.builder().invoiceId(INVOICE_ID).partyId(partyId).build();
+        }
+    }
+
+    @Nested
     @DisplayName("aged receivables through a real InvoiceBalanceCalculator (#1652)")
     @ExtendWith(MockitoExtension.class)
     class AgedReceivablesThroughRealCalculator {
@@ -445,17 +497,29 @@ class InvoiceBalanceCalculatorTest {
         @Mock
         private DisplayReferenceResolver displayReferenceResolver;
 
+        @Mock
+        private ExtCustomerPartyRepository customerPartyRepository;
+
+        @Mock
+        private ExtLocationReplicaRepository locationRepository;
+
+        @Mock
+        private ReceivablePaymentRepository receivablePaymentRepository;
+
+        private InvoiceBalanceCalculator realCalculator;
+
         private FinancialReportingServiceImpl service;
 
         @BeforeEach
         void setUp() {
-            InvoiceBalanceCalculator realCalculator = new InvoiceBalanceCalculator(
+            realCalculator = new InvoiceBalanceCalculator(
                     extInvoiceRepository,
                     paymentApplicationRepository,
                     reversalRepository,
                     creditMemoRepository,
                     creditTransactionRepository,
-                    depositCreditApplicationRepository);
+                    depositCreditApplicationRepository,
+                    customerPartyRepository);
             service = new FinancialReportingServiceImpl(
                     journalEntryRepository,
                     statementLineMappingRepository,
@@ -516,6 +580,96 @@ class InvoiceBalanceCalculatorTest {
             assertThat(report.getRows())
                     .singleElement()
                     .satisfies(row -> assertThat(row.getTotalOutstanding()).isEqualByComparingTo("10.01"));
+        }
+
+        @Test
+        @DisplayName("AC7 (#2508): aged receivables lists the two named customers only, and its total plus the"
+                + " unpaid walk-in sales balance is the AR subledger")
+        void agedReceivablesLeavesTheCashAccountOut() {
+            UUID rivera = UUID.fromString("00000000-0000-7000-8000-0000000000a1");
+            UUID okafor = UUID.fromString("00000000-0000-7000-8000-0000000000a2");
+            UUID cash = UUID.fromString("00000000-0000-7000-8000-0000000000a3");
+            ExtInvoice riveraInvoice = arInvoice("00000000-0000-7000-8000-0000000000b1", rivera, "100.00");
+            ExtInvoice okaforInvoice = arInvoice("00000000-0000-7000-8000-0000000000b2", okafor, "250.00");
+            ExtInvoice walkIn = arInvoice("00000000-0000-7000-8000-0000000000b3", cash, "40.00");
+            List<ExtInvoice> subledger = List.of(riveraInvoice, okaforInvoice, walkIn);
+            when(customerPartyRepository.findByHouseAccount("CASH_SALE"))
+                    .thenReturn(List.of(ExtCustomerParty.builder()
+                            .partyId(cash)
+                            .partyType("COMMERCIAL")
+                            .customerNumber("CASH")
+                            .houseAccount("CASH_SALE")
+                            .status("ACTIVE")
+                            .build()));
+            when(extInvoiceRepository.findByStatusIn(any())).thenReturn(subledger);
+            when(extInvoiceRepository.findByPartyIdInAndStatusIn(
+                            List.of(cash.toString()), InvoiceBalanceCalculator.AR_ELIGIBLE_STATUSES))
+                    .thenReturn(List.of(walkIn));
+            for (ExtInvoice invoice : List.of(riveraInvoice, okaforInvoice)) {
+                stubNothingAgainst(invoice.getInvoiceId());
+            }
+            // Lenient: aged receivables never prices the walk-in invoice, unless its CASH filter is removed (the
+            // mutation this test must catch by its assertions, not by an unstubbed null).
+            lenient()
+                    .when(paymentApplicationRepository.sumAppliedAmountByInvoiceId(walkIn.getInvoiceId()))
+                    .thenReturn(BigDecimal.ZERO);
+            lenient()
+                    .when(reversalRepository.sumReversedAmountByInvoiceId(walkIn.getInvoiceId()))
+                    .thenReturn(BigDecimal.ZERO);
+            lenient()
+                    .when(creditMemoRepository.sumCreditedAmountByInvoiceIdAndStatus(
+                            walkIn.getInvoiceId(), CreditMemoStatus.POSTED))
+                    .thenReturn(BigDecimal.ZERO);
+            lenient()
+                    .when(creditTransactionRepository.sumAmountByInvoiceIdAndType(
+                            walkIn.getInvoiceId(), CustomerCreditTransactionType.APPLICATION))
+                    .thenReturn(BigDecimal.ZERO);
+            lenient()
+                    .when(depositCreditApplicationRepository.sumAmountAppliedByInvoiceId(walkIn.getInvoiceId()))
+                    .thenReturn(BigDecimal.ZERO);
+
+            AgedReceivablesReport report = service.generateAgedReceivables(AS_OF);
+            UnpaidWalkInSalesResponse walkInSales = new UnpaidWalkInSalesServiceImpl(
+                            customerPartyRepository,
+                            extInvoiceRepository,
+                            locationRepository,
+                            receivablePaymentRepository,
+                            realCalculator,
+                            new com.positivity.accounting.internal.config.LedgerCurrency("USD"),
+                            Clock.fixed(FIXED_NOW, ZoneOffset.UTC))
+                    .read();
+
+            assertThat(report.getRows())
+                    .extracting(AgedReceivablesRow::getCustomerId)
+                    .containsExactlyInAnyOrder(rivera, okafor);
+            BigDecimal subledgerTotal =
+                    subledger.stream().map(ExtInvoice::getTotal).reduce(BigDecimal.ZERO, BigDecimal::add);
+            assertThat(report.getTotals().getTotalOutstanding().add(walkInSales.getBalance()))
+                    .isEqualByComparingTo(subledgerTotal);
+            assertThat(walkInSales.getBalance()).isEqualByComparingTo("40.00");
+        }
+
+        private ExtInvoice arInvoice(String id, UUID party, String total) {
+            return ExtInvoice.builder()
+                    .invoiceId(UUID.fromString(id))
+                    .partyId(party.toString())
+                    .status("FINALIZED")
+                    .total(new BigDecimal(total))
+                    .invoiceCreatedAt(AS_OF.minusDays(10).atStartOfDay().toInstant(ZoneOffset.UTC))
+                    .finalizedAt(AS_OF.minusDays(10).atStartOfDay().toInstant(ZoneOffset.UTC))
+                    .dueDate(AS_OF)
+                    .build();
+        }
+
+        private void stubNothingAgainst(UUID id) {
+            when(paymentApplicationRepository.sumAppliedAmountByInvoiceId(id)).thenReturn(BigDecimal.ZERO);
+            when(reversalRepository.sumReversedAmountByInvoiceId(id)).thenReturn(BigDecimal.ZERO);
+            when(creditMemoRepository.sumCreditedAmountByInvoiceIdAndStatus(id, CreditMemoStatus.POSTED))
+                    .thenReturn(BigDecimal.ZERO);
+            when(creditTransactionRepository.sumAmountByInvoiceIdAndType(id, CustomerCreditTransactionType.APPLICATION))
+                    .thenReturn(BigDecimal.ZERO);
+            when(depositCreditApplicationRepository.sumAmountAppliedByInvoiceId(id))
+                    .thenReturn(BigDecimal.ZERO);
         }
 
         @Test

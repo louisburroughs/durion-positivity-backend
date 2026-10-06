@@ -59,6 +59,14 @@ public class ExtCustomerParty extends TenantScopedEntity {
     @Column(name = "status", nullable = false, length = 32)
     private String status;
 
+    /**
+     * House-account kind from {@code CustomerPartyUpdatedV1.houseAccount} (#2505, #2508): {@code
+     * CASH_SALE} for the tenant's CASH walk-in account, null for every other party. Walk-in rules key on
+     * this flag only, never on the customer number or name.
+     */
+    @Column(name = "house_account", length = 20)
+    private String houseAccount;
+
     @Column(name = "aggregate_version", nullable = false)
     private long aggregateVersion;
 

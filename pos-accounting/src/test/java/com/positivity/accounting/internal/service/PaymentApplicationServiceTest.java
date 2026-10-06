@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -28,6 +29,7 @@ import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePay
 import com.positivity.accounting.internal.enums.AllocationStrategy;
 import com.positivity.accounting.internal.enums.ApplicationSource;
 import com.positivity.accounting.internal.enums.InvoiceStatus;
+import com.positivity.accounting.internal.exception.CashCustomerCreditNotAllowedException;
 import com.positivity.accounting.internal.exception.CurrencyNotSupportedException;
 import com.positivity.accounting.internal.exception.IdempotencyConflictException;
 import com.positivity.accounting.internal.exception.MultiApplicationReversalException;
@@ -45,11 +47,13 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -103,6 +107,9 @@ class PaymentApplicationServiceTest {
     @Spy
     private LedgerCurrency ledgerCurrency = new LedgerCurrency("USD");
 
+    @Mock
+    private WalkInOverpaymentAlert walkInOverpaymentAlert;
+
     @InjectMocks
     private PaymentApplicationServiceImpl service;
 
@@ -135,6 +142,201 @@ class PaymentApplicationServiceTest {
         testPayment.setClearedAt(Instant.now(TEST_CLOCK));
         testPayment.setSourceEventId(testSourceEventId);
         testPayment.setCreatedAt(Instant.now(TEST_CLOCK));
+    }
+
+    // ========================================
+    // The CASH walk-in account never gets a customer credit (CAP:550 S11, #2508)
+    // ========================================
+
+    @Nested
+    @DisplayName("CASH walk-in account (#2508, §4.4 item 4)")
+    class WalkInAccount {
+
+        @BeforeEach
+        void cashCustomer() {
+            lenient().when(invoiceBalanceCalculator.walkInPartyIds()).thenReturn(Set.of(testCustomerId));
+        }
+
+        @Test
+        @DisplayName("AC5: a person's overpayment of a CASH payment is refused with"
+                + " CASH_CUSTOMER_CREDIT_NOT_ALLOWED, and nothing is applied or credited")
+        void manualOverpayment_refusedWritingNothing() {
+            PaymentApplicationRequest request = createApplicationRequest(
+                    testApplicationRequestId, List.of(createInvoiceApplication(testInvoiceId, "1000.00")));
+            when(paymentApplicationRepository.existsByApplicationRequestId(testApplicationRequestId))
+                    .thenReturn(false);
+            when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+            stubInvoice(testInvoiceId, "400.00");
+
+            assertThatThrownBy(() -> service.applyPaymentToInvoices(testPaymentId, request))
+                    .isInstanceOf(CashCustomerCreditNotAllowedException.class)
+                    .hasMessageStartingWith("Walk-in overpayments are refunded, not kept as credit");
+
+            verify(paymentApplicationRepository, never()).save(any());
+            verify(customerCreditRepository, never()).save(any());
+            verify(receivablePaymentRepository, never()).save(any());
+            verify(outboxService, never()).saveToOutbox(any(), any(), any(), any(), any());
+            verifyNoInteractions(walkInOverpaymentAlert);
+            assertThat(testPayment.getUnappliedAmount()).isEqualByComparingTo("1000.00");
+        }
+
+        @Test
+        @DisplayName("a person's exact application of a CASH payment is allowed: only an excess is refused")
+        void manualExactApplication_allowed() {
+            PaymentApplicationRequest request = createApplicationRequest(
+                    testApplicationRequestId, List.of(createInvoiceApplication(testInvoiceId, "400.00")));
+            when(paymentApplicationRepository.existsByApplicationRequestId(testApplicationRequestId))
+                    .thenReturn(false);
+            when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+            when(paymentApplicationRepository.save(any(PaymentApplication.class)))
+                    .thenAnswer(invocation -> invocation.getArgument(0));
+            when(receivablePaymentRepository.save(any(ReceivablePayment.class)))
+                    .thenAnswer(invocation -> invocation.getArgument(0));
+            stubInvoice(testInvoiceId, "400.00");
+
+            PaymentApplicationResponse response = service.applyPaymentToInvoices(testPaymentId, request);
+
+            assertThat(response.getAppliedAmount()).isEqualByComparingTo("400.00");
+            assertThat(response.getCustomerCredit()).isNull();
+            verifyNoInteractions(walkInOverpaymentAlert);
+        }
+
+        @Test
+        @DisplayName("AC4: an automatic application applies up to the balance, creates no credit, leaves the excess"
+                + " unapplied on an AVAILABLE payment and raises it")
+        void automaticOverpayment_excessLeftUnapplied() {
+            String requestId = "PAYMENT_SETTLED:" + testPaymentId;
+            when(paymentApplicationRepository.existsByApplicationRequestId(requestId))
+                    .thenReturn(false);
+            when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+            when(paymentApplicationRepository.save(any(PaymentApplication.class)))
+                    .thenAnswer(invocation -> invocation.getArgument(0));
+            when(receivablePaymentRepository.save(any(ReceivablePayment.class)))
+                    .thenAnswer(invocation -> invocation.getArgument(0));
+            stubInvoice(testInvoiceId, "450.00");
+
+            PaymentApplicationResponse response = service.applyAutomatically(
+                    testPaymentId,
+                    testInvoiceId,
+                    new BigDecimal("1000.00"),
+                    requestId,
+                    Instant.now(TEST_CLOCK),
+                    ApplicationSource.PAYMENT_SETTLED);
+
+            assertThat(response.getAppliedAmount()).isEqualByComparingTo("450.00");
+            assertThat(response.getCustomerCredit()).isNull();
+            assertThat(response.getRemainingAmount()).isEqualByComparingTo("550.00");
+            assertThat(testPayment.getStatus()).isEqualTo(ReceivablePaymentStatus.AVAILABLE);
+            verify(customerCreditRepository, never()).save(any());
+            verify(outboxService, never()).saveToOutbox(any(), eq("CustomerCreditIssuance"), any(), any(), any());
+            verify(walkInOverpaymentAlert)
+                    .excessLeftUnapplied(
+                            eq(testPayment),
+                            argThat(amount -> amount.compareTo(new BigDecimal("550.00")) == 0),
+                            eq(ApplicationSource.PAYMENT_SETTLED));
+        }
+
+        @Test
+        @DisplayName("AC5: crediting the remainder of a CASH payment for an INVOICE_PAYMENT on a paid invoice"
+                + " creates no credit, leaves it unapplied and raises it")
+        void creditUnappliedPayment_leftUnapplied() {
+            when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+
+            PaymentApplicationResponse.CustomerCreditInfo credit =
+                    service.creditUnappliedPayment(testPaymentId, "INVOICE_PAYMENT:req");
+
+            assertThat(credit).isNull();
+            assertThat(testPayment.getUnappliedAmount()).isEqualByComparingTo("1000.00");
+            assertThat(testPayment.getStatus()).isEqualTo(ReceivablePaymentStatus.AVAILABLE);
+            verify(customerCreditRepository, never()).save(any());
+            verify(receivablePaymentRepository, never()).save(any());
+            verify(walkInOverpaymentAlert)
+                    .excessLeftUnapplied(
+                            eq(testPayment),
+                            argThat(amount -> amount.compareTo(new BigDecimal("1000.00")) == 0),
+                            eq(ApplicationSource.INVOICE_PAYMENT));
+        }
+
+        @Test
+        @DisplayName("a person's remainder credit on a CASH payment is refused with CASH_CUSTOMER_CREDIT_NOT_ALLOWED")
+        void creditPaymentRemainder_refused() {
+            testPayment.setUnappliedAmount(new BigDecimal("12.50"));
+            when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+
+            assertThatThrownBy(() -> service.creditPaymentRemainder(testPaymentId, remainder("remainder-1", "12.50")))
+                    .isInstanceOf(CashCustomerCreditNotAllowedException.class);
+
+            verify(customerCreditRepository, never()).save(any());
+            verify(receivablePaymentRepository, never()).save(any());
+            verify(outboxService, never()).saveToOutbox(any(), any(), any(), any(), any());
+        }
+    }
+
+    // ========================================
+    // releaseRefundedRemainder() (#2508, review #2553)
+    // ========================================
+
+    @Nested
+    @DisplayName("a refund takes money off the unapplied remainder (#2508)")
+    class RefundedRemainder {
+
+        private final UUID refundId = UUID.fromString("00000000-0000-0000-0000-0000000f2508");
+
+        @Test
+        @DisplayName("a 5.00 refund of a payment with 5.00 unapplied leaves it FULLY_APPLIED at zero")
+        void refundOfTheWholeRemainder() {
+            testPayment.setUnappliedAmount(new BigDecimal("5.00"));
+            when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+
+            BigDecimal released = service.releaseRefundedRemainder(testPaymentId, new BigDecimal("5.00"), refundId);
+
+            assertThat(released).isEqualByComparingTo("5.00");
+            assertThat(testPayment.getUnappliedAmount()).isEqualByComparingTo("0.00");
+            assertThat(testPayment.getStatus()).isEqualTo(ReceivablePaymentStatus.FULLY_APPLIED);
+            verify(receivablePaymentRepository).save(testPayment);
+        }
+
+        @Test
+        @DisplayName("a partial refund leaves the rest AVAILABLE")
+        void partialRefund() {
+            testPayment.setUnappliedAmount(new BigDecimal("5.00"));
+            when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+
+            service.releaseRefundedRemainder(testPaymentId, new BigDecimal("2.00"), refundId);
+
+            assertThat(testPayment.getUnappliedAmount()).isEqualByComparingTo("3.00");
+            assertThat(testPayment.getStatus()).isEqualTo(ReceivablePaymentStatus.AVAILABLE);
+        }
+
+        @Test
+        @DisplayName("a refund larger than the remainder takes the remainder only; applications are not touched")
+        void refundCappedAtTheRemainder() {
+            testPayment.setUnappliedAmount(new BigDecimal("5.00"));
+            when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+
+            BigDecimal released = service.releaseRefundedRemainder(testPaymentId, new BigDecimal("50.00"), refundId);
+
+            assertThat(released).isEqualByComparingTo("5.00");
+            assertThat(testPayment.getUnappliedAmount()).isEqualByComparingTo("0.00");
+            verify(paymentApplicationRepository, never()).save(any());
+            verify(paymentApplicationReversalRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("nothing unapplied, or a payment accounting never recorded: nothing changes")
+        void nothingToRelease() {
+            testPayment.setUnappliedAmount(BigDecimal.ZERO);
+            testPayment.setStatus(ReceivablePaymentStatus.FULLY_APPLIED);
+            when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+            UUID unknown = UUID.fromString("00000000-0000-0000-0000-0000000f2509");
+            when(receivablePaymentRepository.findById(unknown)).thenReturn(Optional.empty());
+
+            assertThat(service.releaseRefundedRemainder(testPaymentId, new BigDecimal("5.00"), refundId))
+                    .isEqualByComparingTo("0");
+            assertThat(service.releaseRefundedRemainder(unknown, new BigDecimal("5.00"), refundId))
+                    .isEqualByComparingTo("0");
+            verify(receivablePaymentRepository, never()).save(any());
+        }
     }
 
     // ========================================

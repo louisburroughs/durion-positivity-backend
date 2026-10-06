@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -50,8 +51,11 @@ public class PaymentMatchSuggestion {
     private BigDecimal suggestedTotal;
 
     @Schema(
-            description = "Unapplied amount minus the suggested total: what would become a customer credit (AD-003)",
+            description = "Unapplied amount minus the suggested total: what would become a customer credit (AD-003);"
+                    + " null for a payment of the CASH walk-in account, which never keeps a credit: its excess is"
+                    + " refunded (#2508)",
             example = "0.00",
-            requiredMode = REQUIRED)
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
     private BigDecimal leftOver;
 }

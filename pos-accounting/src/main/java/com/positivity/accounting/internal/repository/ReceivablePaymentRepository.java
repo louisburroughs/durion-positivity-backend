@@ -4,6 +4,7 @@ import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -54,6 +55,18 @@ public interface ReceivablePaymentRepository extends JpaRepository<ReceivablePay
      * @return list of payments
      */
     List<ReceivablePayment> findByStatus(ReceivablePaymentStatus status);
+
+    /**
+     * Payments of the given customers in {@code status}, oldest cleared first (#2508): with {@code
+     * AVAILABLE}, the walk-in payments with money left unapplied.
+     *
+     * @param customerIds customers to include
+     * @param status      payment status
+     * @return matching payments, ordered by clearedAt ascending
+     */
+    @NonNull
+    List<ReceivablePayment> findByCustomerIdInAndStatusOrderByClearedAtAscPaymentIdAsc(
+            @NonNull Collection<UUID> customerIds, @NonNull ReceivablePaymentStatus status);
 
     /**
      * A page of payments in {@code status}, for the unapplied-payments list (#2502); the caller

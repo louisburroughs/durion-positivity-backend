@@ -34,13 +34,20 @@ import com.positivity.accounting.internal.bankrec.repository.BankStatementReposi
 import com.positivity.accounting.internal.bankrec.repository.BankTransactionRepository;
 import com.positivity.accounting.internal.dto.BankReconciliationPolicyRequest;
 import com.positivity.accounting.internal.dto.BankReconciliationPolicyResponse;
+import com.positivity.accounting.internal.dto.UnpaidWalkInSalesResponse;
 import com.positivity.accounting.internal.entity.AccountingAuditLog;
+import com.positivity.accounting.internal.entity.ExtCustomerParty;
+import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.AccountingTemplateEntryRepository;
 import com.positivity.accounting.internal.repository.AccountingTemplateStateRepository;
+import com.positivity.accounting.internal.repository.ExtCustomerPartyRepository;
+import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.service.AccountingConfigurationService;
 import com.positivity.accounting.internal.service.AccountingPeriodService;
+import com.positivity.accounting.internal.service.PaymentApplicationService;
+import com.positivity.accounting.internal.service.UnpaidWalkInSalesService;
 import com.positivity.tenancy.TenantContext;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -115,6 +122,18 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
 
     @Autowired
     private AccountingTemplateEntryRepository templateEntries;
+
+    @Autowired
+    private ExtCustomerPartyRepository customerParties;
+
+    @Autowired
+    private ExtInvoiceRepository invoices;
+
+    @Autowired
+    private PaymentApplicationService paymentApplicationService;
+
+    @Autowired
+    private UnpaidWalkInSalesService unpaidWalkInSalesService;
 
     /** {@code 1000 Cash} of TENANT_A, which each test provisions from the accounting template and finds by code. */
     private UUID cashAccountId;
@@ -363,6 +382,98 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
                         .as("an unbound connection sees no %s row", table)
                         .isZero();
             }
+        });
+    }
+
+    /**
+     * The unpaid walk-in sales read of #2508 (AC10, ADR-0062): each tenant has its own CASH account with one
+     * open walk-in invoice and one unapplied walk-in payment, and each tenant's read lists only its own rows —
+     * so the invoice, balance and payment queries all run under both tenants.
+     */
+    @Test
+    void theUnpaidWalkInSalesReadIsTenantScoped() {
+        WalkInFixture a = new WalkInFixture(0xa1, "INV-WA-1", "40.00", "5.00");
+        WalkInFixture b = new WalkInFixture(0xb1, "INV-WB-1", "70.00", "8.00");
+        try {
+            seedWalkIn(TENANT_A, a);
+            seedWalkIn(TENANT_B, b);
+
+            assertOnlyOwnRows(asTenant(TENANT_A, unpaidWalkInSalesService::read), a);
+            assertOnlyOwnRows(asTenant(TENANT_B, unpaidWalkInSalesService::read), b);
+        } finally {
+            JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
+            for (WalkInFixture fixture : List.of(a, b)) {
+                owner.update("DELETE FROM receivable_payment WHERE payment_id = ?", fixture.paymentId());
+                owner.update("DELETE FROM ext_invoice WHERE invoice_id = ?", fixture.invoiceId());
+                owner.update("DELETE FROM ext_customer_party WHERE party_id = ?", fixture.cashParty());
+            }
+        }
+    }
+
+    /** One tenant's CASH party, its open walk-in invoice and its unapplied walk-in payment. */
+    private record WalkInFixture(
+            UUID cashParty, UUID invoiceId, UUID paymentId, String invoiceNumber, String total, String unapplied) {
+
+        WalkInFixture(int seed, String invoiceNumber, String total, String unapplied) {
+            this(
+                    UUID.fromString(String.format("00000000-0000-7000-8000-0000002508%02x", seed)),
+                    UUID.fromString(String.format("00000000-0000-7000-8000-0000002509%02x", seed)),
+                    UUID.fromString(String.format("00000000-0000-7000-8000-000000250a%02x", seed)),
+                    invoiceNumber,
+                    total,
+                    unapplied);
+        }
+    }
+
+    private void seedWalkIn(UUID tenant, WalkInFixture fixture) {
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+        Instant soldAt = Instant.parse("2026-09-01T15:00:00Z");
+        asTenant(
+                tenant,
+                () -> tx.executeWithoutResult(status -> {
+                    customerParties.save(ExtCustomerParty.builder()
+                            .partyId(fixture.cashParty())
+                            .partyType("COMMERCIAL")
+                            .displayName("Walk-in customer")
+                            .customerNumber("CASH")
+                            .houseAccount("CASH_SALE")
+                            .status("ACTIVE")
+                            .aggregateVersion(1L)
+                            .updatedAt(soldAt)
+                            .build());
+                    invoices.save(ExtInvoice.builder()
+                            .invoiceId(fixture.invoiceId())
+                            .invoiceNumber(fixture.invoiceNumber())
+                            .partyId(fixture.cashParty().toString())
+                            .status("FINALIZED")
+                            .total(new BigDecimal(fixture.total()))
+                            .invoiceCreatedAt(soldAt)
+                            .finalizedAt(soldAt)
+                            .aggregateVersion(1L)
+                            .updatedAt(soldAt)
+                            .build());
+                    paymentApplicationService.handlePaymentCleared(
+                            fixture.paymentId(),
+                            fixture.cashParty(),
+                            "USD",
+                            new BigDecimal(fixture.unapplied()),
+                            soldAt,
+                            UUID.randomUUID(),
+                            fixture.invoiceId(),
+                            "CASH");
+                }));
+    }
+
+    private static void assertOnlyOwnRows(UnpaidWalkInSalesResponse read, WalkInFixture own) {
+        assertThat(read.isHouseAccountKnown()).isTrue();
+        assertThat(read.getCustomerId()).isEqualTo(own.cashParty());
+        assertThat(read.getBalance()).isEqualByComparingTo(own.total());
+        assertThat(read.getOpenInvoices())
+                .singleElement()
+                .satisfies(open -> assertThat(open.getInvoiceId()).isEqualTo(own.invoiceId()));
+        assertThat(read.getUnappliedPayments()).singleElement().satisfies(unapplied -> {
+            assertThat(unapplied.getPaymentId()).isEqualTo(own.paymentId());
+            assertThat(unapplied.getUnappliedAmount()).isEqualByComparingTo(own.unapplied());
         });
     }
 

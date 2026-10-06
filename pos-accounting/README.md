@@ -69,12 +69,13 @@ Every display value is resolved from data accounting already holds — its own r
 - `GET /v1/accounting/export/status/{jobId}` — get export job status
 - `GET /v1/accounting/export/history` — list export job history
 - `GET /v1/accounting/reports/financial/general-ledger` — general ledger report (story G2)
-- `GET /v1/accounting/reports/financial/aged-receivables` — aged receivables by due state: `notYetDue`, `days1To30`, `days31To60`, `days61To90`, `days90Plus`, `overdue`, `totalOutstanding`; rows carry `customerName` / `customerReference` from the customer replica, ordered by name then id (story G2; CAP:550 S35, #2524)
+- `GET /v1/accounting/reports/financial/aged-receivables` — aged receivables by due state: `notYetDue`, `days1To30`, `days31To60`, `days61To90`, `days90Plus`, `overdue`, `totalOutstanding`; rows carry `customerName` / `customerReference` from the customer replica, ordered by name then id; the CASH walk-in house account is left out (its open sales are the unpaid walk-in sales read's, so aged receivables plus that read's `balance` is the AR subledger, apart from legacy party-less invoices) (story G2; CAP:550 S35, #2524; S11, #2508)
 - `GET /v1/accounting/reports/financial/aged-payables` — aged payables with the same buckets over APPROVED bills only; bills not yet approved (`PENDING_RECEIPT_MATCH`, `MATCH_EXCEPTION`) are reported unaged as `unapproved`, `unapprovedBillCount`, `totalIncludingUnapproved` per row and beside `totals` (AW11; CAP:550 S35, #2524)
-- `POST /v1/accounting/payments/{paymentId}/remainder-credit` — keep a payment's whole unapplied remainder as a customer credit (AD-003): one transaction creates the credit, enqueues Dr 1090 / Cr 2300, and the payment becomes `FULLY_APPLIED`; idempotent on `requestId`, guarded by `expectedAmount` (permission `accounting:payment:apply`, event `ACCOUNTING_PAYMENT_REMAINDER_CREDIT`, CAP:550 S35, #2524)
-- `GET /v1/accounting/receivable-payments?status=AVAILABLE&customerId=&page=&size=` — customer payments still waiting to be matched, oldest cleared first (`size` 1-100, default 25; any other `status` → 400 `VALIDATION_ERROR`). Each row carries the customer's name and number from the replica (null when unknown), `paymentMethod`, `sourceInvoiceId` / `sourceInvoiceNumber` (the invoice it was taken against) and a `suggestion` of the open invoices it most likely pays: `reasons` (`REMITTANCE_REFERENCE`, `SAME_CUSTOMER`, `EXACT_TOTAL`), `invoices` with `suggestedAmount`, `suggestedTotal` and `leftOver` (the would-be credit, AD-003). `summary` totals every matching payment, not only the page (permission `accounting:payment:apply`, event `ACCOUNTING_RECEIVABLE_PAYMENT_LIST_VIEW`, CAP:550 S1, #2502)
+- `POST /v1/accounting/payments/{paymentId}/remainder-credit` — keep a payment's whole unapplied remainder as a customer credit (AD-003): one transaction creates the credit, enqueues Dr 1090 / Cr 2300, and the payment becomes `FULLY_APPLIED`; idempotent on `requestId`, guarded by `expectedAmount`; refused with 422 `CASH_CUSTOMER_CREDIT_NOT_ALLOWED` for a payment of the CASH walk-in account (#2508) (permission `accounting:payment:apply`, event `ACCOUNTING_PAYMENT_REMAINDER_CREDIT`, CAP:550 S35, #2524)
+- `GET /v1/accounting/receivable-payments?status=AVAILABLE&customerId=&page=&size=` — customer payments still waiting to be matched, oldest cleared first (`size` 1-100, default 25; any other `status` → 400 `VALIDATION_ERROR`). Each row carries the customer's name and number from the replica (null when unknown), `paymentMethod`, `sourceInvoiceId` / `sourceInvoiceNumber` (the invoice it was taken against) and a `suggestion` of the open invoices it most likely pays: `reasons` (`REMITTANCE_REFERENCE`, `SAME_CUSTOMER`, `EXACT_TOTAL`), `invoices` with `suggestedAmount`, `suggestedTotal` and `leftOver` (the would-be credit, AD-003; null for a payment of the CASH walk-in account, which never keeps a credit, #2508). `summary` totals every matching payment, not only the page (permission `accounting:payment:apply`, event `ACCOUNTING_RECEIVABLE_PAYMENT_LIST_VIEW`, CAP:550 S1, #2502)
 - `GET /v1/accounting/payment-applications/automatic?since=&page=&size=` — "Matched automatically": the payment applications nobody made by hand (`source` `PAYMENT_SETTLED` or `INVOICE_PAYMENT`) at or after `since` (required ISO-8601 instant, at most 31 days back), newest first (`size` 1-100, default 50). Each row carries `paymentApplicationId` / `paymentId` / `invoiceId` for commands and links, `appliedAt`, `appliedAmount`, `invoiceNumber`, `customerDisplayName`, `customerReference` (null when unresolved, never a UUID), `creditCreatedAmount` (the credit the same request kept, else null), `reversed` / `reversedAt`, and `actions` = `["UNDO"]` while it stands and the caller holds `accounting:payment:reverse` (undo is `reversePaymentApplication`). `totalElements` counts reversed ones too (permission `accounting:payment:apply`, event `ACCOUNTING_PAYMENT_APPLICATION_AUTOMATIC_LIST_VIEW`, CAP:550 S2, #2503)
-- `GET /v1/accounting/customers/{customerId}/open-invoices?page=&size=` — the customer's open invoices (`FINALIZED` / `POSTED` with a derived balance above 0.00) in `OLDEST_FIRST` order, with `balanceDue` net of applications, customer credits, posted credit memos and deposits, `arStatus`, `overdue` / `daysOverdue` (due date, else document date) and `workorderId` for a link only; `size` 1-200, default 100; an unknown customer gets 200 with no rows. `summary` totals every open invoice and equals the customer's aged-receivables total today (permission `accounting:payment:apply`, event `ACCOUNTING_CUSTOMER_OPEN_INVOICES_VIEW`, #2502)
+- `GET /v1/accounting/customers/{customerId}/open-invoices?page=&size=` — the customer's open invoices (`FINALIZED` / `POSTED` with a derived balance above 0.00) in `OLDEST_FIRST` order, with `balanceDue` net of applications, customer credits, posted credit memos and deposits, `arStatus`, `overdue` / `daysOverdue` (due date, else document date) and `workorderId` for a link only; `size` 1-200, default 100; an unknown customer gets 200 with no rows. `summary` totals every open invoice and equals the customer's aged-receivables total today (except for the CASH walk-in account, which aged receivables leaves out; its open sales are in the unpaid walk-in sales read, #2508) (permission `accounting:payment:apply`, event `ACCOUNTING_CUSTOMER_OPEN_INVOICES_VIEW`, #2502)
+- `GET /v1/accounting/unpaid-walk-in-sales` — unpaid walk-in sales (see [Unpaid walk-in sales](#unpaid-walk-in-sales-cap550-s11-2508)): the CASH house account's `balance`, its `openInvoices` oldest sale first, the day-end `needsAttention` item and `unappliedPayments` (permission `reporting:view:financial-statements`, event `ACCOUNTING_UNPAID_WALK_IN_SALES_VIEW`, CAP:550 S11, #2508)
 - `GET /v1/accounting/settlements/{settlementId}/lines` — list settlement lines, optional `unmatchedOnly` filter (permission `accounting:reconciliation:view`, event `ACCOUNTING_SETTLEMENT_LINES_LIST`, story F1c)
 - `POST /v1/accounting/settlements/lines/{lineId}/match` — manually match an unmatched line to a receivable payment (permission `accounting:reconciliation:adjust`, event `ACCOUNTING_SETTLEMENT_LINE_MATCH`, story F1c)
 - `POST /v1/accounting/settlements/lines/{lineId}/write-off` — write off a small unmatched line with mandatory reason (permission `accounting:reconciliation:adjust`, event `ACCOUNTING_SETTLEMENT_LINE_WRITE_OFF`, story F1c)
@@ -485,7 +486,7 @@ result; neither writes a row.
 | e. settlement date in a closed or hard-locked period | not applied; reprocess by hand after reopening (a hard-locked date cannot be reopened: the detail says to match or credit the payment by hand) | `SUSPENDED / PERIOD_CLOSED` |
 | f. payment has nothing unapplied (another path applied it) | nothing | none |
 | g. invoice has no open balance | not applied, not credited, left for a person (most likely a duplicate charge; confirmed by the Accounting Domain, 2026-10-06) | `SKIPPED / NOT_POSTABLE` |
-| h. otherwise | the whole unapplied amount applied to **that invoice only**, capped at its balance, excess kept as a customer credit (AD-003) | none: the application is the evidence |
+| h. otherwise | the whole unapplied amount applied to **that invoice only**, capped at its balance, excess kept as a customer credit (AD-003) — except on the CASH walk-in account, where the excess stays unapplied (see below) | none: the application is the evidence |
 
 The application, any credit and both GL work items (Dr 1090 / Cr 1200, and Dr 1090 / Cr 2300 for an excess)
 are dated `settledAt`, created by `SYSTEM`, keyed `PAYMENT_SETTLED:<paymentIntentId>`. That key makes it
@@ -509,6 +510,70 @@ re-processed (AW13).
 (`@Primary` decorator outside the transaction boundary) retries an application exactly once on an
 optimistic-lock conflict, re-reading fresh state and re-running all validations (AD-010 idempotency
 preserved); a second conflict returns `409 Conflict` and the client should retry.
+
+## Unpaid walk-in sales (CAP:550 S11, #2508)
+
+Walk-in sales go to the tenant's CASH house account (AW12), which must net to zero every business day. The
+account is the party the `ext_customer_party` replica flags `house_account = CASH_SALE`
+(`CustomerPartyUpdatedV1.houseAccount`, V9) — never the customer number `CASH` or the name. One shared rule,
+`InvoiceBalanceCalculator.walkInPartyIds()` / `isWalkIn`, serves every view below.
+
+**The read.** `GET /v1/accounting/unpaid-walk-in-sales` (`reporting:view:financial-statements`, event
+`ACCOUNTING_UNPAID_WALK_IN_SALES_VIEW`) returns `asOf`, `houseAccountKnown`, `customerNumber`,
+`currencyCode` (functional, ADR-0067), `balance` (the CASH party's open AR-eligible balances, the same open
+rule and currency scale as aged receivables), `openInvoices[]` (`invoiceNumber`, `locationCode`, `saleDate`,
+`total`, `balanceDue`, `businessDayEnded`, `timezoneFallback`, `resolutions`, and `invoiceId` / `locationId`
+for links), `needsAttention {count, amount}` and `unappliedPayments[]` (`paymentReference` = the number of
+the invoice the payment was taken against, `receivedAt`, `unappliedAmount`, `paymentId`). Computed on read;
+no job and nothing stored. It never posts and never changes an invoice.
+
+- **Business day.** A sale's date is the local date of `finalizedAt` (else `invoiceCreatedAt`) in its
+  location's time zone (`ext_location.timezone`, V9, from `LocationUpdatedV1.timezone`). Its business day has
+  ended once that date is before the location's current local date; such an invoice is the day-end
+  needs-attention item (§9.5a). A location without a usable time zone, or an invoice without a location,
+  uses UTC with `timezoneFallback = true`, logged once per location (WARN).
+- **Resolutions** are `COLLECT` (payment capture in pos-invoice) and `CREDIT_MEMO`. **Reassign** to the real
+  customer is not offered until Invoicing & Payments decides reassignment of a finalised invoice (§12 OI-5).
+- **`houseAccountKnown = false`** means the replica has no CASH party yet: the read answers zero but cannot
+  vouch for it; a consumer must not show "all clear" on that basis.
+
+**No customer credit on the CASH account** (§4.4 item 4). `PaymentApplicationServiceImpl` never creates a
+`CustomerCredit` for a CASH payment:
+
+- automatic paths (`PAYMENT_SETTLED`, case h above, and `INVOICE_PAYMENT`, including a payment on an invoice
+  already paid): applied up to the open balance; the excess stays unapplied on the `ReceivablePayment`, which
+  stays `AVAILABLE` and is listed in `unappliedPayments`; WARN and counter `accounting.walk_in.overpayment`.
+  The event is still processed, so no retry loop starts;
+- a person (`POST .../payments/{paymentId}/applications` with an overpayment, or
+  `POST .../payments/{paymentId}/remainder-credit`): 422 `CASH_CUSTOMER_CREDIT_NOT_ALLOWED` ("Walk-in
+  overpayments are refunded, not kept as credit"), nothing written. The excess is returned through
+  pos-invoice's payment refund (`POST /v1/invoices/{invoiceId}/payments/{paymentId}/refunds`).
+
+A completed refund (`payment.payment.reversed`, `REFUND`) takes the refunded amount off the payment's
+unapplied remainder — up to the remainder, never touching its applications — in the same transaction as the
+refund replica row and once per `refundId` (a replay is skipped). A payment left with nothing is
+`FULLY_APPLIED`, leaves `unappliedPayments` and cannot be applied again. This holds for every customer's
+payment, not only CASH.
+
+**Excluded from customer views and measures** (§4.4 item 2; ADR-0057): aged receivables; collections (E2)
+`invoiced`, and applications to CASH invoices and their reversals out of `collected` /
+`applicationReversals` (the deposit-take exclusion pattern); payment-lag cohorts. Both analytics reads run in
+one REPEATABLE READ snapshot, so the gross and the exclusion sums see the same commits. The ledger is unchanged
+(account 1200, trial balance, balance sheet; ADR-0047). No customer statement, dunning or collection-case
+feature exists yet; when one is built it must leave the CASH account out by the same rule.
+
+**Settled payments without a party** (§4.4 item 1). Never given an invented customer; the envelope's
+`schemaVersion` decides the severity: `1` (legacy, before go-live) keeps the WARN and
+`payment.settled.unmappable`; `≥ 2` is a defect (S9 guarantees the party): ERROR with the payment intent id
+and invoice number, counter `payment.settled.party_missing_defect`.
+
+**Alert rules** for the operations dashboard: `payment.settled.party_missing_defect` > 0 (any rate is a
+defect); and any CASH `needsAttention.amount` carried over more than one business day.
+
+**Post-deploy step.** Existing CASH rows in this module's replica get the flag only from a pos-customer
+party-fact replay: run `POST /v1/crm/accounts/facts/replay` once after deploying V9 (equal versions apply,
+`ReplicaVersionGuard`). Location time zones fill on pos-location's next fact or replay the same way. Until
+then the read answers `houseAccountKnown = false`, and the UTC fallback applies.
 
 ## Location scope (ADR-0061, #1885)
 
@@ -673,6 +738,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `IDEMPOTENCY_CONFLICT` | 409 | An AP payment idempotency key was reused with a different payload; a remainder-credit `requestId` reused on another payment (#2524) |
 | `PAYMENT_NOT_AVAILABLE` | 409 | Remainder credit on a payment that is not `AVAILABLE` (already fully applied or credited); nothing is written (#2524) |
 | `PAYMENT_REMAINDER_CHANGED` | 422 | The remainder-credit `expectedAmount` no longer matches the payment's unapplied amount (an application intervened); nothing is written, re-read the payment (#2524) |
+| `CASH_CUSTOMER_CREDIT_NOT_ALLOWED` | 422 | A person's application with an overpayment, or a remainder credit, on a payment of the CASH walk-in house account: walk-in overpayments are refunded, never kept as credit; nothing is written (#2508) |
 | `GL_POSTING_FAILED` | 409 | General ledger posting failed |
 | `DUPLICATE_ACCOUNT_CODE` | 409 | Chart of accounts code already exists |
 | `AP_BILL_DUPLICATE` | 409 | A live vendor bill (any status except `VOIDED` or `REJECTED`) already has the same vendor, normalised bill number and bill date; `referenceId` is that bill's `vendorBillId` and `nextAction` is `Open the existing bill.` Raised by vendor-bill create and match (#2501) |

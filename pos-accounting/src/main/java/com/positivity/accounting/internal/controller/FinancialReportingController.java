@@ -454,7 +454,8 @@ public class FinancialReportingController {
             summary = "Generate Aged Receivables",
             description = """
                     Generates the Aged Receivables report as of a date: per-customer open invoice balances \
-                    bucketed by days past due (0-30, 31-60, 61-90, 90+) with grand totals.
+                    bucketed by days past due (0-30, 31-60, 61-90, 90+) with grand totals, leaving out the CASH \
+                    walk-in house account, whose open sales getUnpaidWalkInSales reports.
                     Buckets are days past the invoice's DUE date, falling back to the invoice date when an \
                     invoice carries no due date — the same rule generateAgedPayables uses — and not-yet-due \
                     balances are INCLUDED in the 0-30 bucket, which therefore means "not yet due, or up to \

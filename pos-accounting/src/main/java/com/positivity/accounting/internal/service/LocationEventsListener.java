@@ -170,6 +170,7 @@ public class LocationEventsListener {
                 .name(payload.name())
                 .code(payload.code())
                 .active(payload.active())
+                .timezone(payload.timezone())
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());

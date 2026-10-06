@@ -21,6 +21,7 @@ import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedEx
 import com.positivity.accounting.internal.exception.AccountingPeriodNotFoundException;
 import com.positivity.accounting.internal.exception.AccountingPeriodStateException;
 import com.positivity.accounting.internal.exception.AdjustmentSignInvalidException;
+import com.positivity.accounting.internal.exception.CashCustomerCreditNotAllowedException;
 import com.positivity.accounting.internal.exception.CurrencyNotSupportedException;
 import com.positivity.accounting.internal.exception.DefaultGLMappingNotFoundException;
 import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
@@ -266,6 +267,9 @@ class AccountingExceptionHandlerTest {
                     Named.of("handlePaymentRemainderChanged", (HandlerInvocation)
                             request -> handler.handlePaymentRemainderChanged(
                                     new PaymentRemainderChangedException("remainder changed"), request)),
+                    Named.of("handleCashCustomerCreditNotAllowed", (HandlerInvocation)
+                            request -> handler.handleCashCustomerCreditNotAllowed(
+                                    new CashCustomerCreditNotAllowedException("walk-in excess"), request)),
                     Named.of("handleAccountNotReconcilable", (HandlerInvocation)
                             request -> handler.handleAccountNotReconcilable(
                                     new AccountNotReconcilableException("not reconcilable"), request)),

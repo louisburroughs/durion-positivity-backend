@@ -91,6 +91,23 @@ public interface PaymentApplicationRepository extends JpaRepository<PaymentAppli
     List<PaymentApplication> findByApplicationTimestampBetween(Instant start, Instant end);
 
     /**
+     * Total applied, within the inclusive instant range, to invoices of the given parties (#2508): the
+     * walk-in applications the collections measure leaves out.
+     *
+     * @param start    inclusive lower bound
+     * @param end      inclusive upper bound
+     * @param partyIds parties as {@code ext_invoice.party_id} stores them (canonical UUID strings)
+     * @return total applied; zero when there is none
+     */
+    @Query("SELECT COALESCE(SUM(pa.appliedAmount), 0) FROM PaymentApplication pa"
+            + " WHERE pa.applicationTimestamp BETWEEN :start AND :end"
+            + " AND pa.invoiceId IN (SELECT i.invoiceId FROM ExtInvoice i WHERE i.partyId IN :partyIds)")
+    java.math.@NonNull BigDecimal sumAppliedAmountByApplicationTimestampBetweenAndInvoicePartyIdIn(
+            @Param("start") @NonNull Instant start,
+            @Param("end") @NonNull Instant end,
+            @Param("partyIds") @NonNull Collection<String> partyIds);
+
+    /**
      * Find applications whose application timestamp falls in the inclusive instant range, with
      * pagination, INCLUDING applications that have since been reversed. Used by the
      * payment-application list endpoint (Wave 2 E10, issue #1598) when the caller passes

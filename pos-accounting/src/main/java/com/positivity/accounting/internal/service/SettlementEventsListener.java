@@ -53,7 +53,11 @@ import tools.jackson.databind.ObjectMapper;
  * SettlementReportedV1} below (PR #977 finding 13). Splitting it out would buy nothing but a second
  * partition assignment and a second full read of the topic.
  *
- * <p><strong>Known gap (issue #1537 D4 finding):</strong> {@link PaymentSettledV1#partyId()} is
+ * <p><strong>Party-less facts (issue #1537 D4; #2508, §4.4 item 1):</strong> since #2507 a fact at
+ * envelope {@code schemaVersion} 2 always names its party, so one without is a defect: ERROR and the
+ * counter {@code payment.settled.party_missing_defect}. A version-1 fact from before go-live keeps the
+ * legacy WARN and {@code payment.settled.unmappable}. Either way it is skipped, never given an
+ * invented customer. The legacy case: {@link PaymentSettledV1#partyId()} was
  * {@code @Nullable} — {@code null} for anonymous counter sales (see {@code
  * OrderInvoiceServiceImpl#buildDraftInvoice}, {@code InvoiceServiceImpl#createNewInvoice}) — while
  * {@code ReceivablePayment.customerId} is a non-null column and {@code handlePaymentCleared}'s
@@ -100,6 +104,9 @@ public class SettlementEventsListener {
     public static final java.util.List<String> RECORDED_EVENT_TYPES =
             AccountingEventTypeRegistry.kafkaCodes(AccountingEventTypeRegistry.DOMAIN_PAYMENT);
 
+    /** Counter of version-2 settled payments without a usable party (#2508, §4.4 item 1). */
+    static final String PARTY_MISSING_DEFECT_COUNTER = "payment.settled.party_missing_defect";
+
     /** The only producer of {@code payment.payment.settled} (pos-invoice PaymentEventPublisher). */
     static final String PAYMENT_SETTLED_SOURCE_SYSTEM = "pos-invoice";
 
@@ -115,6 +122,7 @@ public class SettlementEventsListener {
     private final AutomaticPaymentApplicationService automaticPaymentApplicationService;
     private final Counter payloadRejectedCounter;
     private final Counter paymentSettledUnmappableCounter;
+    private final Counter paymentSettledPartyMissingDefectCounter;
 
     /** The handler plus its processed mark, or a skip's mark alone, per transaction; see the class doc. */
     private final TransactionTemplate handlerTransaction;
@@ -159,6 +167,14 @@ public class SettlementEventsListener {
                         .description("payment.payment.settled events skipped because they carry no usable party id "
                                 + "(e.g. an anonymous counter sale) and so cannot be turned into a "
                                 + "customer-keyed ReceivablePayment (issue #1537 D4)")
+                        .tag("owner", "payment")
+                        .register(registry);
+        this.paymentSettledPartyMissingDefectCounter = registry == null
+                ? null
+                : Counter.builder(PARTY_MISSING_DEFECT_COUNTER)
+                        .description("payment.payment.settled events at schema version 2 or later with no usable"
+                                + " party id: a defect, since pos-invoice guarantees the party from version 2"
+                                + " (#2507, #2508); alert on any non-zero rate")
                         .tag("owner", "payment")
                         .register(registry);
     }
@@ -272,16 +288,36 @@ public class SettlementEventsListener {
 
         UUID customerId = resolveCustomerId(payload.partyId());
         if (customerId == null) {
-            if (paymentSettledUnmappableCounter != null) {
-                paymentSettledUnmappableCounter.increment();
+            // Never an invented customer (§4.4 item 1): the skip stays, and the envelope's schema version
+            // decides the severity. From version 2 pos-invoice guarantees the party (#2507), so a missing
+            // one is a defect; version 1 is a legacy fact from before go-live (AW13).
+            int schemaVersion = envelope.path("schemaVersion").asInt(1);
+            if (schemaVersion >= PaymentSettledV1.SCHEMA_VERSION) {
+                if (paymentSettledPartyMissingDefectCounter != null) {
+                    paymentSettledPartyMissingDefectCounter.increment();
+                }
+                log.error(
+                        "Defect: payment.payment.settled schemaVersion={} eventId={} paymentIntentId={}"
+                                + " invoiceNumber={} carries no usable party id although version {} guarantees one"
+                                + " — no receivable is created; correct the payment at its source",
+                        schemaVersion,
+                        eventId,
+                        payload.paymentIntentId(),
+                        payload.invoiceNumber(),
+                        PaymentSettledV1.SCHEMA_VERSION);
+            } else {
+                if (paymentSettledUnmappableCounter != null) {
+                    paymentSettledUnmappableCounter.increment();
+                }
+                log.warn(
+                        "Skipping payment.payment.settled eventId={} paymentIntentId={} invoiceId={}: no usable"
+                                + " party id (a legacy schema version 1 fact, e.g. an anonymous counter sale, issue"
+                                + " #1537 D4 finding) — accounting cannot materialize a ReceivablePayment without a"
+                                + " customer id",
+                        eventId,
+                        payload.paymentIntentId(),
+                        payload.invoiceId());
             }
-            log.warn(
-                    "Skipping payment.payment.settled eventId={} paymentIntentId={} invoiceId={}: no usable party"
-                            + " id (e.g. an anonymous counter sale, issue #1537 D4 finding) — accounting cannot"
-                            + " materialize a ReceivablePayment without a customer id",
-                    eventId,
-                    payload.paymentIntentId(),
-                    payload.invoiceId());
             markInOwnTransaction(eventId);
             return;
         }
@@ -459,6 +495,12 @@ public class SettlementEventsListener {
                     .reversedAt(payload.reversedAt())
                     .sourceEventId(eventUuid)
                     .build());
+            // The refunded money is no longer there to apply (#2508): a refunded CASH walk-in excess leaves
+            // the unpaid walk-in sales read. Once per refund: the refundId guard above skips a replay.
+            if (payload.paymentIntentId() != null) {
+                paymentApplicationService.releaseRefundedRemainder(
+                        payload.paymentIntentId(), payload.amount(), payload.refundId());
+            }
             markProcessed(eventId);
         });
     }

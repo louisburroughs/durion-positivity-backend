@@ -139,6 +139,14 @@ public class RetryingPaymentApplicationService implements PaymentApplicationServ
      */
     @Override
     @NonNull
+    public BigDecimal releaseRefundedRemainder(
+            @NonNull UUID paymentId, @NonNull BigDecimal refundedAmount, @NonNull UUID refundId) {
+        // Inside the refund handler's transaction: a conflict rolls the whole record back for redelivery.
+        return delegate.releaseRefundedRemainder(paymentId, refundedAmount, refundId);
+    }
+
+    @Override
+    @NonNull
     public RemainderCreditResponse creditPaymentRemainder(
             @NonNull UUID paymentId, @NonNull RemainderCreditRequest request) {
         try {

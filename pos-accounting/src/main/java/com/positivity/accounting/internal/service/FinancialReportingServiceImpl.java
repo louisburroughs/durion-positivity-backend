@@ -702,9 +702,16 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         // facts (payment applications, reversals, credit memos) via the shared
         // InvoiceBalanceCalculator — never fetched from another service.
         List<ExtInvoice> invoices = extInvoiceRepository.findByStatusIn(AR_ELIGIBLE_STATUSES);
+        // The CASH walk-in account is not a customer to age (#2508, §4.4 item 2): its open sales are the unpaid
+        // walk-in sales read's, so aged receivables plus that read's balance is the AR subledger. The ledger
+        // itself is unchanged (ADR-0047).
+        Set<UUID> walkInPartyIds = invoiceBalanceCalculator.walkInPartyIds();
 
         Map<UUID, AgingBuckets> byCustomer = new LinkedHashMap<>();
         for (ExtInvoice invoice : invoices) {
+            if (InvoiceBalanceCalculator.isWalkIn(invoice, walkInPartyIds)) {
+                continue;
+            }
             BigDecimal balanceDue = invoiceBalanceCalculator.balanceDue(invoice);
             // The open-invoice rule the receivables worklist uses too (#2502, BR-2), and the same
             // currency-scale rounding, so a customer's open invoices add up to this report's total.

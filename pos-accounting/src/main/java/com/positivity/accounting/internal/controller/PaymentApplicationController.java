@@ -189,7 +189,8 @@ public class PaymentApplicationController {
      * - Each invoice must be applicable (not PaidInFull/Voided/Cancelled)
      * - Applications are atomic across all target invoices
      * - Idempotent via applicationRequestId
-     * - Overpayments create CustomerCredit
+     * - Overpayments create CustomerCredit, except on the CASH walk-in account: 422
+     *   CASH_CUSTOMER_CREDIT_NOT_ALLOWED (#2508)
      * - Optional allocationStrategy: CALLER_ORDER (default when absent) or
      *   OLDEST_FIRST (allocate by ascending invoice date) — Issue #955
      *
@@ -212,7 +213,8 @@ public class PaymentApplicationController {
                     applyCustomerCredit, which draws down a standing credit rather than a payment.
                     Preconditions: the payment must be AVAILABLE with sufficient unapplied funds, and every \
                     target invoice must be applicable (not paid in full, voided or cancelled); an overpayment \
-                    creates a CustomerCredit for the excess.
+                    creates a CustomerCredit for the excess, except on the CASH walk-in account, whose excess is \
+                    refunded through pos-invoice instead.
                     Required inputs: paymentId (UUID) as a path parameter, applicationRequestId (max 100 \
                     chars, the idempotency key) and a non-empty applications list of invoiceId plus \
                     amountToApply (min 0.01); allocationStrategy is optional, CALLER_ORDER when omitted or \
@@ -221,7 +223,9 @@ public class PaymentApplicationController {
                     and idempotent on applicationRequestId.
                     Returns 404 when the payment is not found, 400 for insufficient funds, 409 for an \
                     inapplicable invoice, 422 CURRENCY_NOT_SUPPORTED for a payment in a currency other than \
-                    the ledger's (nothing is written), and 503 when the invoice service is unreachable.
+                    the ledger's, 422 CASH_CUSTOMER_CREDIT_NOT_ALLOWED for an overpayment of a CASH walk-in \
+                    payment (nothing is written in either case), and 503 when the invoice service is \
+                    unreachable.
                     """,
             tags = {"Payment Applications"})
     @ApiResponse(responseCode = "201", description = "Payment applied successfully")
@@ -239,8 +243,9 @@ public class PaymentApplicationController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description = "CURRENCY_NOT_SUPPORTED: the payment is in a currency other than the ledger's;"
-                    + " nothing is written (ADR-0067 PC-9)",
+            description = "CURRENCY_NOT_SUPPORTED: the payment is in a currency other than the ledger's"
+                    + " (ADR-0067 PC-9); CASH_CUSTOMER_CREDIT_NOT_ALLOWED: an overpayment of a CASH walk-in payment,"
+                    + " which is refunded, not kept as credit (#2508); nothing is written",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_PAYMENT_APPLY", apiVersion = "1")
     public ResponseEntity<PaymentApplicationResponse> applyPayment(
@@ -317,7 +322,9 @@ public class PaymentApplicationController {
                     PAYMENT_NOT_AVAILABLE when it is already fully applied, 409 IDEMPOTENCY_CONFLICT when the \
                     requestId was used on another payment, 409 OPTIMISTIC_LOCK after a second concurrent \
                     update, 422 PAYMENT_REMAINDER_CHANGED when expectedAmount no longer matches (re-read the \
-                    payment), and 422 CURRENCY_NOT_SUPPORTED for a payment in another currency.
+                    payment), 422 CURRENCY_NOT_SUPPORTED for a payment in another currency, and 422 \
+                    CASH_CUSTOMER_CREDIT_NOT_ALLOWED for a payment of the CASH walk-in account, whose remainder is \
+                    refunded instead.
                     """,
             tags = {"Payment Applications"})
     @ApiResponse(responseCode = "201", description = "Remainder credited; a replay returns the same credit")
@@ -335,7 +342,8 @@ public class PaymentApplicationController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description = "PAYMENT_REMAINDER_CHANGED or CURRENCY_NOT_SUPPORTED; nothing is written",
+            description = "PAYMENT_REMAINDER_CHANGED, CURRENCY_NOT_SUPPORTED or CASH_CUSTOMER_CREDIT_NOT_ALLOWED;"
+                    + " nothing is written",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_PAYMENT_REMAINDER_CREDIT", apiVersion = "1")
     public ResponseEntity<RemainderCreditResponse> creditPaymentRemainder(

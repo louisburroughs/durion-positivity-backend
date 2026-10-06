@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.dto.CollectionsAnalyticsReport;
@@ -40,6 +42,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -89,6 +92,9 @@ class AccountingAnalyticsServiceImplTest {
     @Mock
     private VendorRepository vendorRepository;
 
+    @Mock
+    private InvoiceBalanceCalculator invoiceBalanceCalculator;
+
     private AccountingAnalyticsServiceImpl service;
 
     @BeforeEach
@@ -104,7 +110,8 @@ class AccountingAnalyticsServiceImplTest {
                 customerCreditTransactionRepository,
                 apPaymentRepository,
                 vendorBillRepository,
-                vendorRepository);
+                vendorRepository,
+                invoiceBalanceCalculator);
     }
 
     private static ExtInvoice invoice(UUID id, Instant finalizedAt, String total) {
@@ -171,6 +178,124 @@ class AccountingAnalyticsServiceImplTest {
         bill.setTotalAmount(new BigDecimal(total));
         bill.setCreatedBy("test");
         return bill;
+    }
+
+    /**
+     * Walk-in sales on the CASH house account are left out of collections and payment-lag cohorts
+     * (#2508, §4.4 item 2), the same exclusion pattern as the deposit-take rule (ADR-0057 decision 6).
+     */
+    @Nested
+    @DisplayName("CASH walk-in exclusions (#2508)")
+    class WalkInExclusionTests {
+
+        private final UUID cash = UUID.fromString("00000000-0000-7000-8000-00000000ca5e");
+        private final UUID rivera = UUID.fromString("00000000-0000-7000-8000-0000000000a1");
+
+        private ExtInvoice of(UUID party, ExtInvoice invoice) {
+            invoice.setPartyId(party.toString());
+            return invoice;
+        }
+
+        @Test
+        @DisplayName("AC8: collections leaves walk-in invoices out of invoiced, their applications out of collected"
+                + " and those applications' reversals out of applicationReversals; deposit takes stay excluded")
+        void collectionsExcludeWalkInSales() {
+            when(invoiceBalanceCalculator.walkInPartyIds()).thenReturn(Set.of(cash));
+            when(extInvoiceRepository.findByFinalizedAtBetween(any(), any()))
+                    .thenReturn(List.of(
+                            of(rivera, invoice(UUID.randomUUID(), Instant.parse("2026-06-05T00:00:00Z"), "1000.00")),
+                            of(
+                                    rivera,
+                                    depositTakeInvoice(
+                                            UUID.randomUUID(), Instant.parse("2026-06-06T00:00:00Z"), "500.00")),
+                            of(cash, invoice(UUID.randomUUID(), Instant.parse("2026-06-07T00:00:00Z"), "45.00"))));
+            when(paymentApplicationRepository.findByApplicationTimestampBetween(any(), any()))
+                    .thenReturn(List.of(
+                            application(UUID.randomUUID(), Instant.parse("2026-06-10T00:00:00Z"), "800.00", "200.00"),
+                            application(UUID.randomUUID(), Instant.parse("2026-06-07T00:00:00Z"), "45.00", "0.00")));
+            when(paymentApplicationRepository.sumAppliedAmountByApplicationTimestampBetweenAndInvoicePartyIdIn(
+                            any(), any(), eq(List.of(cash.toString()))))
+                    .thenReturn(new BigDecimal("45.00"));
+            when(paymentApplicationReversalRepository.sumAmountByReversedAtBetween(any(), any()))
+                    .thenReturn(new BigDecimal("110.00"));
+            when(paymentApplicationReversalRepository.sumAmountByReversedAtBetweenAndInvoicePartyIdIn(
+                            any(), any(), eq(List.of(cash.toString()))))
+                    .thenReturn(new BigDecimal("10.00"));
+
+            CollectionsAnalyticsReport report =
+                    service.getCollectionsAnalytics(LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30));
+
+            assertThat(report.getInvoiced()).isEqualByComparingTo("1000.00");
+            assertThat(report.getApplicationReversals()).isEqualByComparingTo("100.00");
+            assertThat(report.getCollected()).isEqualByComparingTo("700.00");
+            assertThat(report.getCollectionRatePct()).isEqualByComparingTo("70.00");
+        }
+
+        @Test
+        @DisplayName("collections and payment-lag read the gross and the CASH exclusion sums in one REPEATABLE READ"
+                + " snapshot (review #2553)")
+        void readsInOneSnapshot() throws NoSuchMethodException {
+            for (java.lang.reflect.Method method : List.of(
+                    AccountingAnalyticsServiceImpl.class.getMethod(
+                            "getCollectionsAnalytics", LocalDate.class, LocalDate.class),
+                    AccountingAnalyticsServiceImpl.class.getMethod(
+                            "getPaymentLagCohorts", LocalDate.class, LocalDate.class, int.class))) {
+                org.springframework.transaction.annotation.Transactional transactional =
+                        method.getAnnotation(org.springframework.transaction.annotation.Transactional.class);
+                assertThat(transactional).as(method.getName()).isNotNull();
+                assertThat(transactional.readOnly()).isTrue();
+                assertThat(transactional.isolation())
+                        .as(method.getName())
+                        .isEqualTo(org.springframework.transaction.annotation.Isolation.REPEATABLE_READ);
+            }
+        }
+
+        @Test
+        @DisplayName("without a CASH party in the replica nothing is excluded and no exclusion query runs")
+        void noWalkInPartyExcludesNothing() {
+            when(extInvoiceRepository.findByFinalizedAtBetween(any(), any()))
+                    .thenReturn(List.of(
+                            of(cash, invoice(UUID.randomUUID(), Instant.parse("2026-06-07T00:00:00Z"), "45.00"))));
+            when(paymentApplicationRepository.findByApplicationTimestampBetween(any(), any()))
+                    .thenReturn(List.of());
+            when(paymentApplicationReversalRepository.sumAmountByReversedAtBetween(any(), any()))
+                    .thenReturn(BigDecimal.ZERO);
+
+            CollectionsAnalyticsReport report =
+                    service.getCollectionsAnalytics(LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30));
+
+            assertThat(report.getInvoiced()).isEqualByComparingTo("45.00");
+            verify(paymentApplicationRepository, never())
+                    .sumAppliedAmountByApplicationTimestampBetweenAndInvoicePartyIdIn(any(), any(), any());
+            verify(paymentApplicationReversalRepository, never())
+                    .sumAmountByReversedAtBetweenAndInvoicePartyIdIn(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("AC8: payment-lag cohorts leave walk-in invoices out")
+        void paymentLagExcludesWalkInSales() {
+            when(invoiceBalanceCalculator.walkInPartyIds()).thenReturn(Set.of(cash));
+            UUID named = UUID.randomUUID();
+            UUID walkIn = UUID.randomUUID();
+            Instant issued = Instant.parse("2026-01-01T00:00:00Z");
+            when(extInvoiceRepository.findByFinalizedAtBetween(any(), any()))
+                    .thenReturn(List.of(
+                            of(rivera, invoice(named, issued, "100.00")), of(cash, invoice(walkIn, issued, "45.00"))));
+            when(paymentApplicationRepository.findByInvoiceIdIn(List.of(named)))
+                    .thenReturn(List.of(
+                            application(named, issued.plus(10, java.time.temporal.ChronoUnit.DAYS), "100.00", "0.00")));
+
+            PaymentLagCohortsReport report =
+                    service.getPaymentLagCohorts(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 6, 30), 4);
+
+            assertThat(report.getCohorts())
+                    .filteredOn(row -> row.getInvoiceCount() > 0)
+                    .singleElement()
+                    .satisfies(row -> {
+                        assertThat(row.getCohort()).isEqualTo("<=30");
+                        assertThat(row.getAmount()).isEqualByComparingTo("100.00");
+                    });
+        }
     }
 
     @Nested

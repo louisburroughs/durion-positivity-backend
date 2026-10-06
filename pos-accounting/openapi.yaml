@@ -73,9 +73,9 @@ tags:
 paths:
   /v1/accounting/analytics/collections:
     get:
-      description: 'Returns one aggregate row for a single date window: invoiced (the sum of ExtInvoice totals for invoices finalized in the window), collected, applicationReversals, refunded, netCashCollected, received, nonCashSettled, settled, and the server-derived collectionRatePct and settlementRatePct.
+      description: 'Returns one aggregate row for a single date window: invoiced (the sum of ExtInvoice totals for invoices finalized in the window, leaving out deposit-take invoices and walk-in sales on the CASH house account), collected, applicationReversals, refunded, netCashCollected, received, nonCashSettled, settled, and the server-derived collectionRatePct and settlementRatePct.
 
-        collected is payment amounts applied to accounts receivable within the window, net of application reversals recorded within the window rather than cash received, on a movement basis where a January payment reversed in March reduces March and never restates January, so collected may be negative in a heavy-reversal window and is deliberately not clamped; applicationReversals reports that gross reversal amount as a positive number so a dip in collected can be attributed without a second call. Deposit-credit and customer-credit settlement is excluded from collected, because that cash was received when the deposit was taken rather than when the credit was drawn down, so collectionRatePct is understated for a window in which deposit-funded invoices finalize; as a basis guide, so the right figure gets picked for a question: received is cash actually taken in (cash basis, independent of application); collected is A/R relief on a movement basis (not cash received); nonCashSettled is invoice settlement reached without any new cash (deposit/customer-credit draw-downs); refunded is gross completed-refund cash out. "How much cash came in vs went out" is received vs refunded — both genuine cash movements measured on the same basis. "How much of what we billed got settled, by any means" is invoiced / settled / settlementRatePct, where settled = collected + nonCashSettled.
+        collected is payment amounts applied to accounts receivable within the window, net of application reversals recorded within the window rather than cash received, on a movement basis where a January payment reversed in March reduces March and never restates January, so collected may be negative in a heavy-reversal window and is deliberately not clamped; applicationReversals reports that gross reversal amount as a positive number so a dip in collected can be attributed without a second call. Applications to walk-in sales on the CASH house account, and their reversals, are left out of collected and applicationReversals; deposit-credit and customer-credit settlement is excluded from collected, because that cash was received when the deposit was taken rather than when the credit was drawn down, so collectionRatePct is understated for a window in which deposit-funded invoices finalize; as a basis guide, so the right figure gets picked for a question: received is cash actually taken in (cash basis, independent of application); collected is A/R relief on a movement basis (not cash received); nonCashSettled is invoice settlement reached without any new cash (deposit/customer-credit draw-downs); refunded is gross completed-refund cash out. "How much cash came in vs went out" is received vs refunded — both genuine cash movements measured on the same basis. "How much of what we billed got settled, by any means" is invoiced / settled / settlementRatePct, where settled = collected + nonCashSettled.
 
         netCashCollected (= collected - refunded) has a mixed-basis caveat: the commonest refund shape, a refunded invoice payment, already reduced collected via its PaymentApplicationReversal, so subtracting refunded again under-counts for that shape — prefer received - refunded for a clean cash-in-vs-cash-out answer.
 
@@ -141,7 +141,7 @@ paths:
       - accounting:analytics:view
   /v1/accounting/analytics/payment-lag-cohorts:
     get:
-      description: 'Generates payment-lag cohorts for invoices issued (finalized) in a date window: exactly four cohorts (<=30, 31-60, 61-90, unpaid) each with an invoice count and total invoice amount, where issuedFrom/issuedTo anchor on invoice issue date (ExtInvoice.finalizedAt) rather than payment date.
+      description: 'Generates payment-lag cohorts for invoices issued (finalized) in a date window: exactly four cohorts (<=30, 31-60, 61-90, unpaid) each with an invoice count and total invoice amount, where issuedFrom/issuedTo anchor on invoice issue date (ExtInvoice.finalizedAt) rather than payment date, leaving out walk-in sales on the CASH house account.
 
         Use this tool for AR collection-speed distribution across invoices; do not use getCollectionsAnalytics instead, which reports a period cash total rather than a per-invoice speed distribution.
 
@@ -6142,13 +6142,13 @@ paths:
 
         Use this tool to settle invoices from an available payment; do not use applyCustomerCredit, which draws down a standing credit rather than a payment.
 
-        Preconditions: the payment must be AVAILABLE with sufficient unapplied funds, and every target invoice must be applicable (not paid in full, voided or cancelled); an overpayment creates a CustomerCredit for the excess.
+        Preconditions: the payment must be AVAILABLE with sufficient unapplied funds, and every target invoice must be applicable (not paid in full, voided or cancelled); an overpayment creates a CustomerCredit for the excess, except on the CASH walk-in account, whose excess is refunded through pos-invoice instead.
 
         Required inputs: paymentId (UUID) as a path parameter, applicationRequestId (max 100 chars, the idempotency key) and a non-empty applications list of invoiceId plus amountToApply (min 0.01); allocationStrategy is optional, CALLER_ORDER when omitted or OLDEST_FIRST to allocate by ascending invoice date.
 
         Emits an ACCOUNTING_PAYMENT_APPLY event; the application is atomic across all invoices and idempotent on applicationRequestId.
 
-        Returns 404 when the payment is not found, 400 for insufficient funds, 409 for an inapplicable invoice, 422 CURRENCY_NOT_SUPPORTED for a payment in a currency other than the ledger''s (nothing is written), and 503 when the invoice service is unreachable.
+        Returns 404 when the payment is not found, 400 for insufficient funds, 409 for an inapplicable invoice, 422 CURRENCY_NOT_SUPPORTED for a payment in a currency other than the ledger''s, 422 CASH_CUSTOMER_CREDIT_NOT_ALLOWED for an overpayment of a CASH walk-in payment (nothing is written in either case), and 503 when the invoice service is unreachable.
 
         '
       operationId: applyPayment
@@ -6208,7 +6208,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'CURRENCY_NOT_SUPPORTED: the payment is in a currency other than the ledger''s; nothing is written (ADR-0067 PC-9)'
+          description: 'CURRENCY_NOT_SUPPORTED: the payment is in a currency other than the ledger''s (ADR-0067 PC-9); CASH_CUSTOMER_CREDIT_NOT_ALLOWED: an overpayment of a CASH walk-in payment, which is refunded, not kept as credit (#2508); nothing is written'
       security:
       - bearerAuth:
         - accounting:payment:apply
@@ -6229,7 +6229,7 @@ paths:
 
         Emits an ACCOUNTING_PAYMENT_REMAINDER_CREDIT event; the credit''s creator and the issuance entry''s actor come from the security context.
 
-        Returns 201 with the credit, 404 PAYMENT_NOT_FOUND when the payment does not exist, 409 PAYMENT_NOT_AVAILABLE when it is already fully applied, 409 IDEMPOTENCY_CONFLICT when the requestId was used on another payment, 409 OPTIMISTIC_LOCK after a second concurrent update, 422 PAYMENT_REMAINDER_CHANGED when expectedAmount no longer matches (re-read the payment), and 422 CURRENCY_NOT_SUPPORTED for a payment in another currency.
+        Returns 201 with the credit, 404 PAYMENT_NOT_FOUND when the payment does not exist, 409 PAYMENT_NOT_AVAILABLE when it is already fully applied, 409 IDEMPOTENCY_CONFLICT when the requestId was used on another payment, 409 OPTIMISTIC_LOCK after a second concurrent update, 422 PAYMENT_REMAINDER_CHANGED when expectedAmount no longer matches (re-read the payment), 422 CURRENCY_NOT_SUPPORTED for a payment in another currency, and 422 CASH_CUSTOMER_CREDIT_NOT_ALLOWED for a payment of the CASH walk-in account, whose remainder is refunded instead.
 
         '
       operationId: creditPaymentRemainder
@@ -6284,7 +6284,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: PAYMENT_REMAINDER_CHANGED or CURRENCY_NOT_SUPPORTED; nothing is written
+          description: PAYMENT_REMAINDER_CHANGED, CURRENCY_NOT_SUPPORTED or CASH_CUSTOMER_CREDIT_NOT_ALLOWED; nothing is written
       security:
       - bearerAuth:
         - accounting:payment:apply
@@ -9835,7 +9835,7 @@ paths:
       - reporting:view:financial-statements
   /v1/accounting/reports/financial/aged-receivables:
     get:
-      description: 'Generates the Aged Receivables report as of a date: per-customer open invoice balances bucketed by days past due (0-30, 31-60, 61-90, 90+) with grand totals.
+      description: 'Generates the Aged Receivables report as of a date: per-customer open invoice balances bucketed by days past due (0-30, 31-60, 61-90, 90+) with grand totals, leaving out the CASH walk-in house account, whose open sales getUnpaidWalkInSales reports.
 
         Buckets are days past the invoice''s DUE date, falling back to the invoice date when an invoice carries no due date — the same rule generateAgedPayables uses — and not-yet-due balances are INCLUDED in the 0-30 bucket, which therefore means "not yet due, or up to 30 days past due".
 
@@ -11008,6 +11008,43 @@ paths:
       - Accounting Tenant Template
       x-required-permissions:
       - accounting:coa:view
+  /v1/accounting/unpaid-walk-in-sales:
+    get:
+      description: 'Reads what is still owed on the CASH walk-in house account: the balance, its open invoices oldest sale first, the invoices whose business day has ended at their location (needsAttention), and walk-in payments with money left unapplied.
+
+        Use this tool to check that the CASH receivable nets to zero each day and to find walk-in sales to collect or credit; do not use aged receivables for this, because it leaves the CASH account out.
+
+        Preconditions: the caller needs reporting:view:financial-statements authority; a business day ends at local midnight in the location''s time zone, or in UTC when the location has none (timezoneFallback).
+
+        Required inputs: none.
+
+        Emits an ACCOUNTING_UNPAID_WALK_IN_SALES_VIEW event and changes no state; each open invoice offers COLLECT and CREDIT_MEMO, while reassignment awaits a decision.
+
+        Returns 200 with houseAccountKnown false and zero amounts when accounting has not yet received the CASH account, and 403 when the caller lacks the authority.
+
+        '
+      operationId: getUnpaidWalkInSales
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnpaidWalkInSalesResponse'
+          description: The CASH balance, open walk-in invoices, the needs-attention item and unapplied walk-in payments
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks reporting:view:financial-statements
+      security:
+      - bearerAuth:
+        - reporting:view:financial-statements
+      summary: Get Unpaid Walk-in Sales
+      tags:
+      - Financial Reporting
+      x-required-permissions:
+      - reporting:view:financial-statements
   /v1/accounting/vendor-bills:
     get:
       description: 'Lists vendor bills whose due date falls in [dueFrom, dueTo], optionally filtered by status, ordered by due date ascending.
@@ -15140,11 +15177,11 @@ components:
       description: 'Invoiced-vs-collected analytics for one date window. invoiced and collected are different invoice cohorts (see field descriptions) — do not present collectionRatePct as a cohort collection rate. collected is applied-to-A/R net of reversals recorded in the window, not cash received: it excludes deposit-credit and customer-credit settlement. refunded is gross completed refunds (cash out); netCashCollected = collected - refunded but mixes bases and under-counts when a refund also reversed an application, so prefer received - refunded for a clean cash-in-vs-cash-out pair. received is cash actually taken in (cash basis), independent of application. nonCashSettled is invoice settlement without new cash (deposit/customer credit draw-downs); settled = collected + nonCashSettled and settlementRatePct = settled/invoiced is the "billed vs settled by any means" pair, distinct from the cash-only collectionRatePct.'
       properties:
         applicationReversals:
-          description: GROSS sum of PaymentApplicationReversal.amount whose reversedAt falls in the window, as a positive number; this amount has already been subtracted from collected. Reported so a consumer seeing a dip in collected can attribute it to reversals without a second call. 0 when no reversals were recorded in the window
+          description: GROSS sum of PaymentApplicationReversal.amount whose reversedAt falls in the window, as a positive number; this amount has already been subtracted from collected. Reported so a consumer seeing a dip in collected can attribute it to reversals without a second call. Reversals of applications to walk-in sales on the CASH house account are EXCLUDED (#2508). 0 when no reversals were recorded in the window
           example: 1750.0
           type: number
         collected:
-          description: 'Payment amounts APPLIED to accounts receivable within the window, NET of application reversals recorded within the window — this is NOT cash received. Computed as the sum of PaymentApplication.appliedAmount whose applicationTimestamp falls in the window, minus the sum of PaymentApplicationReversal.amount whose reversedAt falls in the window (movement basis: a January payment reversed in March reduces March and never restates January, so sub-windows remain additive). Settlement by deposit credit or customer credit is EXCLUDED, because that cash was received when the deposit was taken rather than when the credit was drawn down, so a window in which deposit-funded invoices finalize shows collectionRatePct understated. Refunds have their own dedicated figure, refunded (see #1620): where a refund is accompanied by a payment-application reversal — the commonest shape — that reversal reduces collected in the window the reversal was recorded, per the movement basis above, whereas standalone refunds and credit-balance refunds are not reflected here at all (but do count in refunded). May be NEGATIVE in a heavy-reversal window; it is deliberately not clamped. 0 when nothing was applied or reversed in the window'
+          description: 'Payment amounts APPLIED to accounts receivable within the window, NET of application reversals recorded within the window — this is NOT cash received. Computed as the sum of PaymentApplication.appliedAmount whose applicationTimestamp falls in the window, minus the sum of PaymentApplicationReversal.amount whose reversedAt falls in the window (movement basis: a January payment reversed in March reduces March and never restates January, so sub-windows remain additive). Applications to walk-in sales on the CASH house account, and their reversals, are EXCLUDED (#2508). Settlement by deposit credit or customer credit is EXCLUDED, because that cash was received when the deposit was taken rather than when the credit was drawn down, so a window in which deposit-funded invoices finalize shows collectionRatePct understated. Refunds have their own dedicated figure, refunded (see #1620): where a refund is accompanied by a payment-application reversal — the commonest shape — that reversal reduces collected in the window the reversal was recorded, per the movement basis above, whereas standalone refunds and credit-balance refunds are not reflected here at all (but do count in refunded). May be NEGATIVE in a heavy-reversal window; it is deliberately not clamped. 0 when nothing was applied or reversed in the window'
           example: 98250.0
           type: number
         collectionRatePct:
@@ -15164,7 +15201,7 @@ components:
           format: date-time
           type: string
         invoiced:
-          description: 'Sum of ExtInvoice.total for invoices whose finalizedAt (accrual/posting date) falls in the window; 0 when none finalized in the window. Deposit-take invoices — the document a deposit-take order renders for the down payment itself, identified by a non-null depositSourceType — are EXCLUDED: they are a contract-liability document, not a sale (#1623, ADR-0057 decision 6)'
+          description: 'Sum of ExtInvoice.total for invoices whose finalizedAt (accrual/posting date) falls in the window; 0 when none finalized in the window. Deposit-take invoices — the document a deposit-take order renders for the down payment itself, identified by a non-null depositSourceType — are EXCLUDED: they are a contract-liability document, not a sale (#1623, ADR-0057 decision 6). Walk-in sales on the CASH house account are EXCLUDED the same way: they are not a customer''s collections (#2508)'
           example: 125000.0
           type: number
         netCashCollected:
@@ -18891,9 +18928,11 @@ components:
             $ref: '#/components/schemas/SuggestedInvoice'
           type: array
         leftOver:
-          description: 'Unapplied amount minus the suggested total: what would become a customer credit (AD-003)'
+          description: 'Unapplied amount minus the suggested total: what would become a customer credit (AD-003); null for a payment of the CASH walk-in account, which never keeps a credit: its excess is refunded (#2508)'
           example: 0.0
-          type: number
+          type:
+          - number
+          - 'null'
         reasons:
           description: 'Why these invoices are suggested. Served values: REMITTANCE_REFERENCE (the payment was taken against this invoice), SAME_CUSTOMER (the invoices belong to the payment''s customer), EXACT_TOTAL (the suggested balances add up exactly to the unapplied amount). A client renders an unknown value as Unknown. Empty when the customer has no open invoice.'
           items:
@@ -18906,7 +18945,6 @@ components:
           type: number
       required:
       - invoices
-      - leftOver
       - reasons
       - suggestedTotal
       type: object
@@ -21171,6 +21209,58 @@ components:
       - currency
       - totalUnappliedAmount
       type: object
+    UnpaidWalkInSalesResponse:
+      description: Unpaid walk-in sales on the CASH house account, with the day-end needs-attention item
+      properties:
+        asOf:
+          description: When the read was computed
+          example: '2026-10-06T15:00:00Z'
+          format: date-time
+          type: string
+        balance:
+          description: Sum of the balances due on the CASH account's open invoices
+          example: 52.5
+          type: number
+        currencyCode:
+          description: Functional (ledger) currency, ISO 4217
+          example: USD
+          type: string
+        customerId:
+          description: Party identifier of the CASH account, for links; null when unknown
+          example: 0198a000-0000-7000-8000-000000000001
+          format: uuid
+          type:
+          - string
+          - 'null'
+        customerNumber:
+          description: Customer number of the CASH account; null when unknown
+          example: CASH
+          type:
+          - string
+          - 'null'
+        houseAccountKnown:
+          description: 'False when accounting''s customer replica holds no CASH house account yet: the read then answers zero but cannot vouch for it'
+          example: true
+          type: boolean
+        needsAttention:
+          $ref: '#/components/schemas/WalkInNeedsAttention'
+        openInvoices:
+          description: Open walk-in invoices, oldest sale first
+          items:
+            $ref: '#/components/schemas/WalkInOpenInvoice'
+          type: array
+        unappliedPayments:
+          description: CASH payments with money left unapplied, oldest first
+          items:
+            $ref: '#/components/schemas/WalkInUnappliedPayment'
+          type: array
+      required:
+      - asOf
+      - balance
+      - currencyCode
+      - houseAccountKnown
+      - needsAttention
+      type: object
     Unresolved:
       description: Unresolved items, late arrivals first
       properties:
@@ -21628,6 +21718,114 @@ components:
           type: string
       required:
       - voidReason
+      type: object
+    WalkInNeedsAttention:
+      description: Walk-in invoices still open after their business day ended
+      properties:
+        amount:
+          description: Sum of their balances due
+          example: 40.0
+          type: number
+        count:
+          description: Number of such invoices
+          example: 1
+          format: int32
+          type: integer
+      required:
+      - amount
+      - count
+      type: object
+    WalkInOpenInvoice:
+      description: A walk-in sale on the CASH account with a balance still due
+      properties:
+        balanceDue:
+          description: Balance still due after payment applications, credit memos and credits
+          example: 40.0
+          type: number
+        businessDayEnded:
+          description: 'True when the sale''s business day has ended at its location: the invoice needs attention'
+          example: true
+          type: boolean
+        invoiceId:
+          description: Invoice identifier, for links
+          example: 0199a000-0000-7000-8000-000000001702
+          format: uuid
+          type: string
+        invoiceNumber:
+          description: Invoice number; null when the invoice replica has none
+          example: INV-2026-01042
+          type:
+          - string
+          - 'null'
+        locationCode:
+          description: Code of the location that made the sale; null when unknown
+          example: LOC-107
+          type:
+          - string
+          - 'null'
+        locationId:
+          description: Location identifier, for links; null when the invoice has none
+          example: 0198a000-0000-7000-8000-000000000107
+          format: uuid
+          type:
+          - string
+          - 'null'
+        resolutions:
+          description: 'How the invoice can be resolved: COLLECT and CREDIT_MEMO; reassigning it to the real customer awaits a decision (OI-5)'
+          items:
+            enum:
+            - COLLECT
+            - CREDIT_MEMO
+            type: string
+          type: array
+        saleDate:
+          description: Local date of the sale in its location's time zone (UTC when timezoneFallback is true)
+          example: '2026-10-05'
+          format: date
+          type: string
+        timezoneFallback:
+          description: True when the location has no time zone (or the invoice no location), so day end was computed in UTC
+          example: false
+          type: boolean
+        total:
+          description: Invoice total
+          example: 40.0
+          type: number
+      required:
+      - balanceDue
+      - businessDayEnded
+      - invoiceId
+      - saleDate
+      - timezoneFallback
+      - total
+      type: object
+    WalkInUnappliedPayment:
+      description: A walk-in payment with money left unapplied, to be refunded
+      properties:
+        paymentId:
+          description: Receivable payment identifier, for links
+          example: 0199a000-0000-7000-8000-000000000101
+          format: uuid
+          type: string
+        paymentReference:
+          description: Number of the invoice the payment was taken against (its remittance reference); null when unknown
+          example: INV-2026-01042
+          type:
+          - string
+          - 'null'
+        receivedAt:
+          description: When the payment cleared
+          example: '2026-10-05T15:12:09Z'
+          format: date-time
+          type: string
+        unappliedAmount:
+          description: Amount not applied to any invoice
+          example: 5.0
+          type: number
+      required:
+      - paymentId
+      - receivedAt
+      - unappliedAmount
       type: object
   securitySchemes:
     bearerAuth:

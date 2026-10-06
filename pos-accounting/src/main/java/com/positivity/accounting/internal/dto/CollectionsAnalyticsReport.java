@@ -97,7 +97,8 @@ public class CollectionsAnalyticsReport {
                     + " window; 0 when none finalized in the window. Deposit-take invoices — the document a"
                     + " deposit-take order renders for the down payment itself, identified by a non-null"
                     + " depositSourceType — are EXCLUDED: they are a contract-liability document, not a sale"
-                    + " (#1623, ADR-0057 decision 6)",
+                    + " (#1623, ADR-0057 decision 6). Walk-in sales on the CASH house account are EXCLUDED"
+                    + " the same way: they are not a customer's collections (#2508)",
             example = "125000.00",
             requiredMode = REQUIRED)
     @NonNull
@@ -109,7 +110,8 @@ public class CollectionsAnalyticsReport {
                     + " sum of PaymentApplication.appliedAmount whose applicationTimestamp falls in the"
                     + " window, minus the sum of PaymentApplicationReversal.amount whose reversedAt falls"
                     + " in the window (movement basis: a January payment reversed in March reduces March"
-                    + " and never restates January, so sub-windows remain additive). Settlement by deposit"
+                    + " and never restates January, so sub-windows remain additive). Applications to walk-in"
+                    + " sales on the CASH house account, and their reversals, are EXCLUDED (#2508). Settlement by deposit"
                     + " credit or customer credit is EXCLUDED, because that cash was received when the"
                     + " deposit was taken rather than when the credit was drawn down, so a window in which"
                     + " deposit-funded invoices finalize shows collectionRatePct understated. Refunds have"
@@ -128,7 +130,8 @@ public class CollectionsAnalyticsReport {
             description = "GROSS sum of PaymentApplicationReversal.amount whose reversedAt falls in the window, as a"
                     + " positive number; this amount has already been subtracted from collected. Reported"
                     + " so a consumer seeing a dip in collected can attribute it to reversals without a"
-                    + " second call. 0 when no reversals were recorded in the window",
+                    + " second call. Reversals of applications to walk-in sales on the CASH house account are"
+                    + " EXCLUDED (#2508). 0 when no reversals were recorded in the window",
             example = "1750.00",
             requiredMode = REQUIRED)
     @NonNull

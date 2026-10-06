@@ -55,7 +55,8 @@ public interface PaymentApplicationService {
     /**
      * Apply a payment to one invoice on behalf of the system, not a person (CAP:550 S2, #2503): the
      * apply logic of {@link #applyPaymentToInvoices} — idempotent on {@code requestId}, capped at the
-     * invoice's balance with any excess kept as a {@code CustomerCredit} (AD-003) — with the
+     * invoice's balance with any excess kept as a {@code CustomerCredit} (AD-003), except on the CASH
+     * walk-in account, where the excess stays unapplied and is raised (#2508) — with the
      * application, the credit and both GL work items dated {@code appliedAt}, the system actor
      * ({@code SYSTEM}, ADR-0018) as creator, and {@code source} recorded on the application. Internal
      * only: the REST command keeps stamping the current time (§4.4 item 5).
@@ -87,8 +88,11 @@ public interface PaymentApplicationService {
      * @param paymentId an {@code AVAILABLE} receivable payment
      * @param creditRequestId idempotency key for the credit leg; the credit records it (#2524), so a
      *                        replay returns the credit it issued
+     * <p>The CASH walk-in account never gets a credit (#2508, §4.4 item 4): its remainder stays unapplied
+     * on the payment, raised as a walk-in overpayment, and this returns {@code null}.
+     *
      * @return the credit issued (or issued earlier under this key), or {@code null} when the payment
-     *         had nothing left to credit
+     *         had nothing left to credit or is the CASH walk-in account's
      */
     PaymentApplicationResponse.@Nullable CustomerCreditInfo creditUnappliedPayment(
             @NonNull UUID paymentId, @NonNull String creditRequestId);
@@ -97,7 +101,8 @@ public interface PaymentApplicationService {
      * Keep a payment's whole unapplied remainder as a customer credit on request (AD-003; CAP:550 S35,
      * #2524). Idempotent on {@code requestId}; refused, writing nothing, when the payment is not
      * {@code AVAILABLE}, is in another currency, or no longer carries exactly
-     * {@code expectedAmount} unapplied.
+     * {@code expectedAmount} unapplied, and refused for a payment of the CASH walk-in account
+     * ({@code CashCustomerCreditNotAllowedException}, 422; #2508).
      *
      * @param paymentId the payment whose remainder to credit
      * @param request   idempotency key and the remainder the caller expects
@@ -105,6 +110,25 @@ public interface PaymentApplicationService {
      */
     @NonNull
     RemainderCreditResponse creditPaymentRemainder(@NonNull UUID paymentId, @NonNull RemainderCreditRequest request);
+
+    /**
+     * A completed refund of a payment takes its money out of what can still be applied (#2508): the
+     * payment's unapplied remainder shrinks by the refunded amount, never below zero, and the payment
+     * becomes {@code FULLY_APPLIED} when nothing is left. Applications already made are never touched.
+     * This is how a CASH walk-in excess, refunded through pos-invoice, leaves the unpaid walk-in sales read.
+     *
+     * <p>Runs in the caller's transaction (the refund replica's handler, whose {@code refundId} key makes
+     * it once per refund). A payment accounting never recorded, or one with nothing unapplied, is left as
+     * it is.
+     *
+     * @param paymentId      the refunded payment ({@code paymentIntentId})
+     * @param refundedAmount the refunded amount, above zero
+     * @param refundId       the refund, for the log
+     * @return the amount taken off the unapplied remainder; zero when none was
+     */
+    @NonNull
+    BigDecimal releaseRefundedRemainder(
+            @NonNull UUID paymentId, @NonNull BigDecimal refundedAmount, @NonNull UUID refundId);
 
     void voidPayment(@NonNull UUID paymentId);
 
