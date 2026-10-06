@@ -5,6 +5,7 @@ import com.positivity.accounting.internal.enums.CustomerCreditStatus;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -23,7 +24,8 @@ public interface CustomerCreditRepository extends JpaRepository<CustomerCredit, 
      * @param requestId namespaced command id ({@code APPLY:…}, {@code REMAINDER:…}, …)
      * @return the credit that command issued, if any
      */
-    Optional<CustomerCredit> findByRequestId(String requestId);
+    @NonNull
+    Optional<CustomerCredit> findByRequestId(@NonNull String requestId);
 
     /**
      * Find all credits for a customer.

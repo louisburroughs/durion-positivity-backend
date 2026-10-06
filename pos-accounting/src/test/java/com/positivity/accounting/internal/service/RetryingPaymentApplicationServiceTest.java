@@ -249,6 +249,42 @@ class RetryingPaymentApplicationServiceTest {
     }
 
     @Test
+    @DisplayName("#2524: a concurrent request that inserted the same requestId first (uq_customer_credit_request_id)"
+            + " is retried once, so the retry replays the winner's credit")
+    void creditPaymentRemainder_requestIdRace_retriesAndReplays() {
+        RemainderCreditRequest request = remainderRequest();
+        RemainderCreditResponse winner = RemainderCreditResponse.builder()
+                .paymentId(PAYMENT_ID)
+                .requestId("remainder-1")
+                .creditId(UUID.fromString("00000000-0000-0000-0000-00000000c4c2"))
+                .amount(new BigDecimal("12.50"))
+                .remainingAmount(BigDecimal.ZERO)
+                .build();
+        when(delegate.creditPaymentRemainder(PAYMENT_ID, request))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException(
+                        "could not execute statement",
+                        new RuntimeException("ERROR: duplicate key value violates unique constraint"
+                                + " \"uq_customer_credit_request_id\"")))
+                .thenReturn(winner);
+
+        assertThat(retryingService.creditPaymentRemainder(PAYMENT_ID, request)).isSameAs(winner);
+        verify(delegate, org.mockito.Mockito.times(2)).creditPaymentRemainder(PAYMENT_ID, request);
+    }
+
+    @Test
+    @DisplayName("#2524: any other integrity violation on creditPaymentRemainder is not retried")
+    void creditPaymentRemainder_otherIntegrityViolation_notRetried() {
+        RemainderCreditRequest request = remainderRequest();
+        when(delegate.creditPaymentRemainder(PAYMENT_ID, request))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException(
+                        "chk_customer_credit_consumed_within_amount"));
+
+        assertThatThrownBy(() -> retryingService.creditPaymentRemainder(PAYMENT_ID, request))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+        verify(delegate).creditPaymentRemainder(PAYMENT_ID, request);
+    }
+
+    @Test
     @DisplayName("#2524: a business refusal on creditPaymentRemainder is not retried")
     void creditPaymentRemainder_businessFailure_notRetried() {
         RemainderCreditRequest request = remainderRequest();

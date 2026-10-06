@@ -156,8 +156,16 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
     private static final Set<VendorBillStatus> OPEN_PAYABLE_STATUSES =
             Set.of(VendorBillStatus.PENDING_RECEIPT_MATCH, VendorBillStatus.MATCH_EXCEPTION, VendorBillStatus.APPROVED);
 
-    /** The one status whose open bills are aged; every other loaded status is unapproved. */
+    /** The one status whose open bills are aged. */
     private static final Set<VendorBillStatus> APPROVED_PAYABLE_STATUSES = Set.of(VendorBillStatus.APPROVED);
+
+    /**
+     * Statuses of open bills not yet approved, reported beside the buckets and never aged (AW11). S12
+     * (#2509) adds {@code AWAITING_APPROVAL} here. A bill in any other status is neither aged nor
+     * counted as unapproved.
+     */
+    private static final Set<VendorBillStatus> UNAPPROVED_PAYABLE_STATUSES =
+            Set.of(VendorBillStatus.PENDING_RECEIPT_MATCH, VendorBillStatus.MATCH_EXCEPTION);
 
     /**
      * Chart-of-accounts code of the single Sales-Tax Payable account (D-4: one GL
@@ -743,7 +751,8 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
                             .build();
                 })
                 .sorted(Comparator.comparing(
-                                AgedReceivablesRow::getCustomerName, Comparator.nullsLast(Comparator.naturalOrder()))
+                                AgedReceivablesRow::getCustomerName,
+                                Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
                         .thenComparing(AgedReceivablesRow::getCustomerId))
                 .toList();
 
@@ -806,9 +815,14 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
                 // not-yet-due bill already exists and must still be reported.
                 continue;
             }
+            boolean approved = APPROVED_PAYABLE_STATUSES.contains(bill.getStatus());
+            boolean unapproved = UNAPPROVED_PAYABLE_STATUSES.contains(bill.getStatus());
+            if (!approved && !unapproved) {
+                continue; // held, voided, rejected or paid: neither aged nor unapproved (§4.2)
+            }
             VendorAging aging =
                     byVendor.computeIfAbsent(bill.getVendorId(), key -> new VendorAging(bill.getVendorName()));
-            if (!APPROVED_PAYABLE_STATUSES.contains(bill.getStatus())) {
+            if (unapproved) {
                 // Not yet approved: counted beside the buckets, never in one (AW11, §4.2).
                 aging.unapproved = aging.unapproved.add(openBalance);
                 aging.unapprovedBillCount++;

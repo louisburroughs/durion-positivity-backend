@@ -36,6 +36,7 @@ import com.positivity.shopmanager.internal.repository.ExtMobileUnitReplicaReposi
 import com.positivity.shopmanager.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtStaffingAssignmentReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtVehicleReplicaRepository;
+import com.positivity.shopmanager.internal.repository.ExtWorkorderPositionReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtWorkorderReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ProcessedEventRepository;
 import com.positivity.tenancy.kafka.TenantKafkaHeaders;
@@ -277,6 +278,7 @@ class ReplicaAndManifestListenerContractTest {
                                 objectMapper,
                                 processedEventRepository,
                                 workorderRepository,
+                                org.mockito.Mockito.mock(ExtWorkorderPositionReplicaRepository.class),
                                 org.mockito.Mockito.mock(WorkorderAppointmentLinkService.class),
                                 applicationEventPublisher,
                                 org.mockito.Mockito.mock(ObjectProvider.class),

@@ -101,6 +101,7 @@ class StatementLineSeedIT extends PostgresCommittingTestBase {
         post(line("1000", "500.00", "0"), line("1090", "0", "500.00"));
         post(line("1300", "900.00", "0"), line("2000", "0", "900.00"));
         post(line("5000", "300.00", "0"), line("1300", "0", "300.00"));
+        post(line("5100", "20.00", "0"), line("1300", "0", "20.00")); // shrinkage
         post(line("6000", "25.00", "0"), line("1000", "0", "25.00"));
         post(line("1000", "40.00", "0"), line("2350", "0", "40.00"));
         post(line("1090", "12.50", "0"), line("2300", "0", "12.50"));
@@ -125,18 +126,18 @@ class StatementLineSeedIT extends PostgresCommittingTestBase {
         assertThat(bs.get("BS_IN_THE_BANK")).isEqualByComparingTo("519.00"); // 500 - 25 + 40 + 7 - 3
         assertThat(bs.get("BS_WAITING_TO_BE_DEPOSITED")).isEqualByComparingTo("512.50"); // 600 - 500 + 12.50 + 400
         assertThat(bs.get("BS_CUSTOMERS_OWE_YOU")).isEqualByComparingTo("1000.00");
-        assertThat(bs.get("BS_INVENTORY")).isEqualByComparingTo("600.00");
+        assertThat(bs.get("BS_INVENTORY")).isEqualByComparingTo("580.00");
         assertThat(bs.get("BS_BILLS_FROM_VENDORS")).isEqualByComparingTo("900.00");
         assertThat(bs.get("BS_SALES_TAX_COLLECTED")).isEqualByComparingTo("180.00");
         assertThat(bs.get("BS_CUSTOMER_CREDITS")).isEqualByComparingTo("12.50");
         assertThat(bs.get("BS_OTHER_LIABILITIES"))
                 .as("2350 Settlement Suspense")
                 .isEqualByComparingTo("40.00");
-        // Revenue 1820 + 7 less expenses 300 + 25 + 3.
-        assertThat(bs.get("BS_PROFIT_NOT_YET_CLOSED")).isEqualByComparingTo("1499.00");
-        assertThat(balanceSheet.getTotalAssets()).isEqualByComparingTo("2631.50");
+        // Revenue 1820 + 7 less expenses 300 + 20 + 25 + 3.
+        assertThat(bs.get("BS_PROFIT_NOT_YET_CLOSED")).isEqualByComparingTo("1479.00");
+        assertThat(balanceSheet.getTotalAssets()).isEqualByComparingTo("2611.50");
         assertThat(balanceSheet.getTotalLiabilities()).isEqualByComparingTo("1132.50");
-        assertThat(balanceSheet.getTotalEquity()).isEqualByComparingTo("1499.00");
+        assertThat(balanceSheet.getTotalEquity()).isEqualByComparingTo("1479.00");
         assertThat(balanceSheet.getBalanced()).isTrue();
 
         IncomeStatementReport incomeStatement = financialReportingService.generateIncomeStatement(DAY, DAY);
@@ -150,14 +151,16 @@ class StatementLineSeedIT extends PostgresCommittingTestBase {
                         "IS_OTHER_INCOME",
                         "IS_OTHER_EXPENSES");
         assertThat(is.get("IS_SALES")).isEqualByComparingTo("1820.00");
-        assertThat(is.get("IS_COST_OF_PARTS_SOLD")).isEqualByComparingTo("300.00");
+        // 5000 Cost of Goods Sold + 5100 Inventory Shrinkage: shrinkage is cost of inventory consumed and sits above
+        // gross margin, never on IS_OTHER_EXPENSES (Accounting Domain sign-off on #2545).
+        assertThat(is.get("IS_COST_OF_PARTS_SOLD")).isEqualByComparingTo("320.00");
         assertThat(is.get("IS_CARD_PROCESSING_FEES")).isEqualByComparingTo("25.00");
         assertThat(is.get("IS_OTHER_INCOME")).as("4930 Cash Over").isEqualByComparingTo("7.00");
         assertThat(is.get("IS_OTHER_EXPENSES"))
                 .as("6115 Cash Short (6040 after S15)")
                 .isEqualByComparingTo("3.00");
         assertThat(incomeStatement.getTotalRevenue()).isEqualByComparingTo("1827.00");
-        assertThat(incomeStatement.getTotalExpenses()).isEqualByComparingTo("328.00");
+        assertThat(incomeStatement.getTotalExpenses()).isEqualByComparingTo("348.00");
         assertThat(incomeStatement.getNetIncome())
                 .isEqualByComparingTo(incomeStatement.getTotalRevenue().subtract(incomeStatement.getTotalExpenses()))
                 .isNotEqualByComparingTo(incomeStatement.getTotalRevenue());
@@ -275,6 +278,13 @@ class StatementLineSeedIT extends PostgresCommittingTestBase {
                             tenant))
                     .as("tenant %s: the eight balance-sheet mappings", tenant)
                     .isEqualTo(8);
+            assertThat(owner.queryForObject(
+                            "SELECT count(*) FROM statement_line_mappings WHERE tenant_id = ? AND statement_type ="
+                                    + " 'INCOME_STATEMENT' AND statement_line_code = 'IS_COST_OF_PARTS_SOLD'",
+                            Integer.class,
+                            tenant))
+                    .as("tenant %s: 5000 and 5100 on cost of parts sold", tenant)
+                    .isEqualTo(2);
         }
         assertThat(statementLineMappingRepository.findByStatementLineCode("IS_SALES"))
                 .singleElement()

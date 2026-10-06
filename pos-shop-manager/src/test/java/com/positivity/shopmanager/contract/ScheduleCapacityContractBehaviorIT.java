@@ -17,6 +17,7 @@ import com.positivity.shopmanager.internal.enums.AppointmentStatus;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.ExtBayReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtLocationReplicaRepository;
+import com.positivity.shopmanager.internal.repository.ExtWorkorderPositionReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtWorkorderReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ProcessedEventRepository;
 import com.positivity.shopmanager.internal.repository.WorkOrderAppointmentMappingRepository;
@@ -24,6 +25,7 @@ import com.positivity.shopmanager.internal.service.WorkorderAppointmentLinkServi
 import com.positivity.shopmanager.internal.service.WorkorderEventsListener;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -33,8 +35,12 @@ import org.mockito.Mockito;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -66,8 +72,21 @@ import tools.jackson.databind.ObjectMapper;
             "pos.security.permission-registration.enabled=false"
         })
 @Tag("contract")
+@Import(ScheduleCapacityContractBehaviorIT.FixedClockConfig.class)
 @DisplayName("Issue #2023: GET /v1/schedules/capacity — Contract Behavioral Tests")
 class ScheduleCapacityContractBehaviorIT extends BaseContractIntegrationTest {
+
+    /** "Now" is Monday 2026-10-05 noon UTC: the scenarios book that week (see #2530 on past dates). */
+    static final Instant NOW = Instant.parse("2026-10-05T12:00:00Z");
+
+    @TestConfiguration
+    static class FixedClockConfig {
+        @Bean
+        @Primary
+        Clock clock() {
+            return Clock.fixed(NOW, ZoneOffset.UTC);
+        }
+    }
 
     private static final UUID LOCATION_ID = UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc");
     private static final UUID CUSTOMER_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
@@ -105,6 +124,9 @@ class ScheduleCapacityContractBehaviorIT extends BaseContractIntegrationTest {
     private ExtWorkorderReplicaRepository extWorkorderReplicaRepository;
 
     @Autowired
+    private ExtWorkorderPositionReplicaRepository extWorkorderPositionReplicaRepository;
+
+    @Autowired
     private ProcessedEventRepository processedEventRepository;
 
     @Autowired
@@ -124,6 +146,7 @@ class ScheduleCapacityContractBehaviorIT extends BaseContractIntegrationTest {
     void cleanDatabase() {
         // Mappings first: work_order_appointment_mapping carries the FK onto appointment.
         workOrderAppointmentMappingRepository.deleteAll();
+        extWorkorderPositionReplicaRepository.deleteAll();
         extWorkorderReplicaRepository.deleteAll();
         appointmentRepository.deleteAll();
         extBayReplicaRepository.deleteAll();
@@ -369,6 +392,7 @@ class ScheduleCapacityContractBehaviorIT extends BaseContractIntegrationTest {
                         new ObjectMapper(),
                         processedEventRepository,
                         extWorkorderReplicaRepository,
+                        extWorkorderPositionReplicaRepository,
                         workorderAppointmentLinkService,
                         applicationEventPublisher,
                         Mockito.mock(ObjectProvider.class),
@@ -408,6 +432,82 @@ class ScheduleCapacityContractBehaviorIT extends BaseContractIntegrationTest {
                     .andExpect(jsonPath("$.days[0].bays[0].carryOverIn[0].workorderId")
                             .value(workorderId.toString()))
                     .andExpect(jsonPath("$.days[0].bays[0].carryOverIn[0].bayHours")
+                            .value(3.0));
+        } finally {
+            processedEventRepository.deleteById(eventId);
+        }
+    }
+
+    // ─── SC10: a walk-in, with no appointment at all, through its own bay history (#2530) ──
+
+    @Test
+    @DisplayName("SC10: a walk-in workorder's bay history alone holds the bay on a past date and carries over, "
+            + "named by its workorder with no appointmentId (#2530 AC1, AC6, AC9)")
+    @SuppressWarnings("unchecked")
+    void should_return_200_with_a_walk_in_counted_from_its_bay_history() throws Exception {
+        UUID bayId = UUIDv7Generator.generate();
+        extBayReplicaRepository.save(ExtBayReplica.builder()
+                .bayId(bayId)
+                .locationId(LOCATION_ID)
+                .name("Bay 1")
+                .active(true)
+                .aggregateVersion(1)
+                .updatedAt(Instant.now())
+                .build());
+        // NOW is Monday 2026-10-05 12:00Z. The walk-in took Bay 1 the Monday before at 15:00 and gave
+        // it up the Tuesday after that at 11:00 — all in the past, with no appointment anywhere.
+        UUID workorderId = UUIDv7Generator.generate();
+        String eventId = UUIDv7Generator.generate().toString();
+        new WorkorderEventsListener(
+                        Clock.systemUTC(),
+                        new ObjectMapper(),
+                        processedEventRepository,
+                        extWorkorderReplicaRepository,
+                        extWorkorderPositionReplicaRepository,
+                        workorderAppointmentLinkService,
+                        applicationEventPublisher,
+                        Mockito.mock(ObjectProvider.class),
+                        transactionManager)
+                .onWorkorderEvent("""
+                        {"eventId":"%s","eventType":"%s","aggregateVersion":1,"payload":{
+                          "workorderId":"%s","workorderNumber":"WO-2530-10","status":"COMPLETED",
+                          "shopId":"%s","customerId":null,"vehicleId":null,"invoiceId":null,"parts":[],
+                          "services":[],"createdAt":null,"updatedAt":null,"locationId":"%s",
+                          "resourceId":null,"resourceType":null,"mechanicIds":[],"promisedAt":null,
+                          "scheduledDate":null,"workStartedAt":"2026-09-28T15:00:00Z",
+                          "completedAt":"2026-09-29T11:00:00Z","expectedEndAt":null,"appointmentId":null,
+                          "positions":[{"resourceType":"BAY","resourceId":"%s","locationId":"%s",
+                                        "assignedAt":"2026-09-28T15:00:00Z","releasedAt":"2026-09-29T11:00:00Z"}]}}""".formatted(
+                                eventId,
+                                WorkorderUpdatedV1.EVENT_TYPE,
+                                workorderId,
+                                LOCATION_ID,
+                                LOCATION_ID,
+                                bayId,
+                                LOCATION_ID));
+
+        try {
+            mockMvc.perform(withGatewayAuth(get("/v1/schedules/capacity")
+                            .param("locationId", LOCATION_ID.toString())
+                            .param("from", "2026-09-28")
+                            .param("to", "2026-09-29")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.days[0].status").value("OK"))
+                    // Monday 15:00-17:00.
+                    .andExpect(jsonPath("$.days[0].bays[0].occupiedMinutes").value(120))
+                    .andExpect(
+                            jsonPath("$.days[0].bays[0].carryOverIn.length()").value(0))
+                    // Tuesday 08:00-11:00, held by Monday's walk-in.
+                    .andExpect(jsonPath("$.days[1].bays[0].occupiedMinutes").value(180))
+                    .andExpect(
+                            jsonPath("$.days[1].bays[0].carryOverIn.length()").value(1))
+                    .andExpect(jsonPath("$.days[1].bays[0].carryOverIn[0].fromDate")
+                            .value("2026-09-28"))
+                    .andExpect(jsonPath("$.days[1].bays[0].carryOverIn[0].appointmentId")
+                            .value(org.hamcrest.Matchers.nullValue()))
+                    .andExpect(jsonPath("$.days[1].bays[0].carryOverIn[0].workorderId")
+                            .value(workorderId.toString()))
+                    .andExpect(jsonPath("$.days[1].bays[0].carryOverIn[0].bayHours")
                             .value(3.0));
         } finally {
             processedEventRepository.deleteById(eventId);

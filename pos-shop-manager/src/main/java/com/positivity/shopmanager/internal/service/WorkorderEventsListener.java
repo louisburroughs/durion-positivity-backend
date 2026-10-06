@@ -3,9 +3,11 @@ package com.positivity.shopmanager.internal.service;
 import com.positivity.domainevents.workorder.WorkorderUpdatedV1;
 import com.positivity.kafka.common.KafkaRails;
 import com.positivity.shopmanager.internal.dto.WorkorderStatusChangedEvent;
+import com.positivity.shopmanager.internal.entity.ExtWorkorderPositionReplica;
 import com.positivity.shopmanager.internal.entity.ExtWorkorderReplica;
 import com.positivity.shopmanager.internal.entity.ProcessedEvent;
 import com.positivity.shopmanager.internal.enums.ShopDashboardUnitType;
+import com.positivity.shopmanager.internal.repository.ExtWorkorderPositionReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtWorkorderReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ProcessedEventRepository;
 import com.positivity.tenancy.kafka.RetryableConsumerFailures;
@@ -55,6 +57,11 @@ import tools.jackson.databind.ObjectMapper;
  * {@code processed_events} row from landing. Handling it inline would have done both at once, and
  * a failed dedup insert means the same record is redelivered indefinitely.
  *
+ * <p>It is also the only writer of {@code ext_workorder_position} (#2530): the fact's {@code
+ * positions} is the owner's whole position history and replaces this module's copy of it, the way
+ * the catalog listener replaces a service's skill children. A fact without the field (a pre-#2530
+ * producer) leaves the copy alone.
+ *
  * <p>It is also the only writer of {@code work_order_appointment_mapping} (#2531). A fact names the
  * appointment its workorder was booked as, and the link is written in the same transaction as the
  * replica row, <em>before</em> the status notification below is delivered — which is what lets that
@@ -84,6 +91,7 @@ public class WorkorderEventsListener {
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
     private final ExtWorkorderReplicaRepository extWorkorderReplicaRepository;
+    private final ExtWorkorderPositionReplicaRepository extWorkorderPositionReplicaRepository;
     private final WorkorderAppointmentLinkService workorderAppointmentLinkService;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final Counter payloadRejectedCounter;
@@ -96,6 +104,7 @@ public class WorkorderEventsListener {
             ObjectMapper objectMapper,
             ProcessedEventRepository processedEventRepository,
             ExtWorkorderReplicaRepository extWorkorderReplicaRepository,
+            ExtWorkorderPositionReplicaRepository extWorkorderPositionReplicaRepository,
             WorkorderAppointmentLinkService workorderAppointmentLinkService,
             ApplicationEventPublisher applicationEventPublisher,
             ObjectProvider<MeterRegistry> meterRegistry,
@@ -104,6 +113,7 @@ public class WorkorderEventsListener {
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.extWorkorderReplicaRepository = extWorkorderReplicaRepository;
+        this.extWorkorderPositionReplicaRepository = extWorkorderPositionReplicaRepository;
         this.workorderAppointmentLinkService = workorderAppointmentLinkService;
         this.applicationEventPublisher = applicationEventPublisher;
         this.handlerTransaction = new TransactionTemplate(transactionManager);
@@ -231,6 +241,26 @@ public class WorkorderEventsListener {
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());
+
+        // #2530: the owner's position history, as a replacement set. Absent (a pre-#2530 producer)
+        // or null says nothing and keeps what is held; an empty list says "never placed".
+        List<WorkorderUpdatedV1.PositionInterval> positions = payload.positions();
+        if (positions != null) {
+            UUID factLocationId = payload.locationId() != null ? payload.locationId() : payload.shopId();
+            extWorkorderPositionReplicaRepository.deleteAllByWorkorderId(payload.workorderId());
+            extWorkorderPositionReplicaRepository.saveAll(positions.stream()
+                    .map(position -> ExtWorkorderPositionReplica.builder()
+                            .workorderId(payload.workorderId())
+                            .resourceType(position.resourceType())
+                            .resourceId(position.resourceId())
+                            // History written before the owner stamped the site has none; the
+                            // fact's own site is the best statement available.
+                            .locationId(position.locationId() != null ? position.locationId() : factLocationId)
+                            .assignedAt(position.assignedAt())
+                            .releasedAt(position.releasedAt())
+                            .build())
+                    .toList());
+        }
 
         // #2531: an absent or null appointmentId says nothing (a walk-in, or a pre-#2531 producer),
         // so an existing link is never removed from here.

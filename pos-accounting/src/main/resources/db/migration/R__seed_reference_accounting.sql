@@ -268,6 +268,7 @@ FROM (VALUES
     ('BALANCE_SHEET', '2300', 'BS_CUSTOMER_CREDITS', NULL::text, 'Credits customers can still use', 7, 'SUM'),
     ('INCOME_STATEMENT', '4000', 'IS_SALES', NULL::text, 'Sales', 1, 'SUM'),
     ('INCOME_STATEMENT', '5000', 'IS_COST_OF_PARTS_SOLD', NULL::text, 'Cost of tires and parts sold', 2, 'SUM'),
+    ('INCOME_STATEMENT', '5100', 'IS_COST_OF_PARTS_SOLD', NULL::text, 'Cost of tires and parts sold', 2, 'SUM'),
     ('INCOME_STATEMENT', '6000', 'IS_CARD_PROCESSING_FEES', NULL::text, 'Card processing fees', 3, 'SUM')
 ) AS t(statement_type, code, line_code, parent_line_code, line_description, display_order, operation)
 ON CONFLICT (tenant_id, mapping_id) DO UPDATE SET

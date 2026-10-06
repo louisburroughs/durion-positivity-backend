@@ -15,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.annotation.Primary;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -51,6 +52,13 @@ import org.springframework.web.server.ResponseStatusException;
 @Primary
 @RequiredArgsConstructor
 public class RetryingPaymentApplicationService implements PaymentApplicationService {
+
+    /**
+     * The unique index on a credit's namespaced request id (V6, #2524). Two simultaneous remainder-credit
+     * requests with the same key both pass the replay lookup; the loser's insert fails on this index. That
+     * is a lost race, not an error: the retry finds the winner's credit and replays it (AC9).
+     */
+    static final String CREDIT_REQUEST_ID_INDEX = "uq_customer_credit_request_id";
 
     private final PaymentApplicationServiceImpl delegate;
 
@@ -105,9 +113,10 @@ public class RetryingPaymentApplicationService implements PaymentApplicationServ
     }
 
     /**
-     * Same one-retry rule as {@link #applyPaymentToInvoices} (CAP:550 S35, #2524): the retry re-runs
-     * the idempotency lookup, so a replayed request that lost a race returns the credit the winner
-     * issued; a second conflict is 409 OPTIMISTIC_LOCK.
+     * Same one-retry rule as {@link #applyPaymentToInvoices} (CAP:550 S35, #2524), applied to an
+     * optimistic-lock conflict and to a lost race on {@link #CREDIT_REQUEST_ID_INDEX}: the retry re-runs
+     * the idempotency lookup, so a request that lost a race returns the credit the winner issued; a
+     * second conflict is 409 OPTIMISTIC_LOCK.
      */
     @Override
     @NonNull
@@ -116,11 +125,11 @@ public class RetryingPaymentApplicationService implements PaymentApplicationServ
         try {
             return delegate.creditPaymentRemainder(paymentId, request);
         } catch (RuntimeException firstFailure) {
-            if (!isOptimisticLockConflict(firstFailure)) {
+            if (!isOptimisticLockConflict(firstFailure) && !isRequestIdRace(firstFailure)) {
                 throw firstFailure;
             }
             log.warn(
-                    "Optimistic lock conflict crediting the remainder of payment {} (request {}); retrying once",
+                    "Concurrent update crediting the remainder of payment {} (request {}); retrying once",
                     paymentId,
                     request.getRequestId(),
                     firstFailure);
@@ -165,6 +174,24 @@ public class RetryingPaymentApplicationService implements PaymentApplicationServ
      * @param failure thrown exception
      * @return true if the failure is an optimistic-lock conflict
      */
+    /**
+     * Whether the failure is an integrity violation of {@link #CREDIT_REQUEST_ID_INDEX}: a
+     * {@link DataIntegrityViolationException} somewhere in the cause chain, and the index named by it or
+     * by one of its causes (the driver's message names the constraint). Any other integrity violation is
+     * a real error and is not retried.
+     */
+    static boolean isRequestIdRace(@NonNull Throwable failure) {
+        boolean integrityViolation = false;
+        boolean namesIndex = false;
+        for (Throwable current = failure; current != null; ) {
+            integrityViolation |= current instanceof DataIntegrityViolationException;
+            namesIndex |= String.valueOf(current.getMessage()).contains(CREDIT_REQUEST_ID_INDEX);
+            Throwable cause = current.getCause();
+            current = (cause == current) ? null : cause;
+        }
+        return integrityViolation && namesIndex;
+    }
+
     static boolean isOptimisticLockConflict(@NonNull Throwable failure) {
         for (Throwable current = failure; current != null; ) {
             if (current instanceof OptimisticLockingFailureException || current instanceof OptimisticLockException) {

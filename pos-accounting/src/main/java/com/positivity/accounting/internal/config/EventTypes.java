@@ -164,7 +164,7 @@ public final class EventTypes {
                                 "Reprocess a suspended accounting event after mapping/rule correction")
                         .build(),
 
-                // InvoicePaymentController / PaymentApplicationController - 3 events
+                // InvoicePaymentController / PaymentApplicationController - 4 events
                 EventTypeRegistration.write("ACCOUNTING_PAYMENT_APPLY", "Apply a payment to an invoice")
                         .build(),
                 EventTypeRegistration.write(

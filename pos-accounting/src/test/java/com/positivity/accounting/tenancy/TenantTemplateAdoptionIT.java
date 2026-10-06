@@ -51,10 +51,10 @@ class TenantTemplateAdoptionIT extends PostgresCommittingTestBase {
 
     /**
      * Statement lines in the template that the old seeds never wrote (CAP:550 S35, #2524): the eight
-     * balance-sheet lines and the income-statement lines for 5000 and 6000. The old seed's REVENUE line for
+     * balance-sheet lines and the income-statement lines for 5000, 5100 and 6000. The old seed's REVENUE line for
      * 4000 is adopted as it is.
      */
-    private static final int S35_STATEMENT_LINES = 10;
+    private static final int S35_STATEMENT_LINES = 11;
 
     /** {@code 1000 Cash} as the old seed wrote it for the default tenant. */
     private static final UUID LEGACY_CASH_ID = UUID.fromString("5eed0acc-0000-4000-8000-000000001000");
@@ -128,7 +128,7 @@ class TenantTemplateAdoptionIT extends PostgresCommittingTestBase {
         // Every row the old seeds wrote is still exactly as it was (the adopted 4000 line keeps its REVENUE
         // code: a presentation the tenant held before adoption is the tenant's). The only additions are
         // the statement lines S35 (#2524) put in the template that the old seeds never had: eight
-        // balance-sheet lines and the income-statement lines for 5000 and 6000.
+        // balance-sheet lines and the income-statement lines for 5000, 5100 and 6000.
         List<String> after = chartRows(owner);
         assertThat(after).as("no default-tenant row was removed or modified").containsAll(before);
         List<String> added = new ArrayList<>(after);
@@ -141,6 +141,16 @@ class TenantTemplateAdoptionIT extends PostgresCommittingTestBase {
                         .filter(row -> row.contains("\"BALANCE_SHEET\""))
                         .count())
                 .isEqualTo(8);
+        assertThat(owner.queryForObject(
+                        "SELECT l.statement_line_code FROM statement_line_mappings l JOIN gl_account a ON"
+                                + " a.gl_account_id = l.gl_account_id WHERE l.tenant_id = ? AND a.tenant_id = ? AND"
+                                + " a.account_code = '4000' AND l.statement_type = 'INCOME_STATEMENT'",
+                        String.class,
+                        TENANT,
+                        TENANT))
+                .as("the adopted 4000 line keeps the REVENUE code the old seed gave it: adoption never rewrites a"
+                        + " line the tenant held before")
+                .isEqualTo("REVENUE");
         assertThat(owner.queryForObject(
                         "SELECT account_code FROM gl_account WHERE tenant_id = ? AND gl_account_id = ?",
                         String.class,

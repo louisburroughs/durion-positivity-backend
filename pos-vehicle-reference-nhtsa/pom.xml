@@ -12,12 +12,12 @@
     <description>Vehicle reference module for NHTSA</description>
 
     <properties>
-        <!-- Coverage ratchet: measured 53.4% line / 58.3% branch by the gate's own
+        <!-- Coverage ratchet: measured 88.8% line / 77.5% branch by the gate's own
              command, `verify -DskipITs` (../durion/docs/architecture/TEST_COVERAGE_POLICY.md §6.1).
              Floors sit 3 points under. Re-derive them ONLY from a -DskipITs run — an
              IT-inclusive measurement describes coverage the gate cannot see. -->
-        <jacoco.line.min>0.50</jacoco.line.min>
-        <jacoco.branch.min>0.55</jacoco.branch.min>
+        <jacoco.line.min>0.85</jacoco.line.min>
+        <jacoco.branch.min>0.74</jacoco.branch.min>
     </properties>
 
     <packaging>jar</packaging>
