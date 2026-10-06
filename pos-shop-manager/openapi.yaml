@@ -603,7 +603,7 @@ paths:
       - appointments:reschedule
   /v1/schedules/capacity:
     get:
-      description: 'Returns, for every date in [from, to], the location''s day status (OK, CLOSED, HOLIDAY or UNAVAILABLE) and, on an OK date, every active bay with its occupied-minutes total and an hourly occupancy count array, plus every rostered technician with hourly on-duty and assigned-appointment counts aligned with those bay slots, and a response-level staffingStatus saying whether rostering is known at all — never appointment identifiers, customer snapshots, titles or conflict details. Technician entries say who is on duty and busy, not who is certified for a job; use searchOpenings for job eligibility.
+      description: 'Returns, for every date in [from, to], the location''s day status (OK, CLOSED, HOLIDAY or UNAVAILABLE) and, on an OK date, every active bay with its occupied-minutes total and an hourly occupancy count array, plus every rostered technician with hourly on-duty and assigned-appointment counts aligned with those bay slots, and a response-level staffingStatus saying whether rostering is known at all — never appointment identifiers, customer snapshots, titles or conflict details, and never who is certified for a job (searchOpenings answers that).
 
         Use this tool to render a week or month capacity calendar in one call; use viewSchedule instead when a single day''s full appointment board, including conflicts, is needed.
 
@@ -2117,7 +2117,6 @@ components:
       - bays
       - date
       - status
-      - technicians
       type: object
     FieldError:
       description: Validation error for a specific request field
@@ -2573,7 +2572,7 @@ components:
           format: uuid
           type: string
         staffingStatus:
-          description: 'Whether the staffing-assignment replica holds any ACTIVE assignment at this location (#2527). AVAILABLE: each OK day''s technicians list is that date''s real roster, and an empty list means nobody in a technician role is rostered. UNAVAILABLE: rostering is unknown, every technicians list is empty, and that must not be read as nobody on duty.'
+          description: 'Whether the staffing-assignment replica holds any ACTIVE assignment at this location (#2527). AVAILABLE: each OK day''s technicians list is that date''s real roster, and an empty list means nobody in a technician role is rostered. UNAVAILABLE: rostering is unknown, every technicians list is empty, and that must not be read as nobody on duty. Always present; optional in the schema only so the addition stays non-breaking for existing typed clients.'
           enum:
           - AVAILABLE
           - UNAVAILABLE
@@ -2597,7 +2596,6 @@ components:
       - days
       - from
       - locationId
-      - staffingStatus
       - to
       - viewGeneratedAt
       type: object

@@ -143,8 +143,8 @@ public class ScheduleController {
                     hourly occupancy count array, plus every rostered technician with hourly on-duty and \
                     assigned-appointment counts aligned with those bay slots, and a response-level \
                     staffingStatus saying whether rostering is known at all — never appointment identifiers, \
-                    customer snapshots, titles or conflict details. Technician entries say who is on duty and \
-                    busy, not who is certified for a job; use searchOpenings for job eligibility.
+                    customer snapshots, titles or conflict details, and never who is certified for a job \
+                    (searchOpenings answers that).
                     Use this tool to render a week or month capacity calendar in one call; use viewSchedule \
                     instead when a single day's full appointment board, including conflicts, is needed.
                     Preconditions: the day window and hours come from the location's replicated timezone and \

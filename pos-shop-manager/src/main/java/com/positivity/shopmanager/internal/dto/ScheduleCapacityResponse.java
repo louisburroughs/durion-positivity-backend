@@ -63,9 +63,10 @@ public class ScheduleCapacityResponse {
                     + "location (#2527). AVAILABLE: each OK day's technicians list is that date's real "
                     + "roster, and an empty list means nobody in a technician role is rostered. "
                     + "UNAVAILABLE: rostering is unknown, every technicians list is empty, and that must "
-                    + "not be read as nobody on duty.",
+                    + "not be read as nobody on duty. Always present; optional in the schema only so the "
+                    + "addition stays non-breaking for existing typed clients.",
             example = "AVAILABLE",
-            requiredMode = REQUIRED)
+            requiredMode = NOT_REQUIRED)
     private ScheduleCapacityStaffingStatus staffingStatus;
 
     @Schema(description = "One entry per date in [from, to], in order; never omits a date", requiredMode = REQUIRED)
@@ -116,7 +117,7 @@ public class ScheduleCapacityResponse {
                         + "OK and staffingStatus is AVAILABLE. Publishes who is on duty and who is busy, "
                         + "not who is competent for a given job: certification stays with the client "
                         + "(technician roster credentials) and with GET /v1/schedules/openings.",
-                requiredMode = REQUIRED)
+                requiredMode = NOT_REQUIRED)
         private List<TechnicianCapacityView> technicians = new ArrayList<>();
     }
 
