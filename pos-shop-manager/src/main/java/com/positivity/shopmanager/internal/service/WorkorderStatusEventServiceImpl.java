@@ -91,6 +91,20 @@ public class WorkorderStatusEventServiceImpl implements WorkorderStatusEventServ
                 .orElseThrow(() -> new IllegalStateException(
                         "Appointment not found: " + mappingOpt.get().getAppointmentId()));
 
+        // A cancelled appointment stays cancelled (#2531 review). The workorder behind it may go
+        // on — a cancellation is the customer's, a workorder's lifecycle is the shop's — and mapping
+        // its next status onto the appointment would put a booking nobody holds back on the schedule
+        // and back into capacity. The same rule #2275 states for a transferred workorder.
+        if (appointment.getStatus() == AppointmentStatus.CANCELLED) {
+            log.info(
+                    "Appointment {} is CANCELLED; workorder {} status '{}' (event {}) not applied",
+                    appointment.getAppointmentId(),
+                    event.workorderId(),
+                    sanitizeForLog(event.newStatus()),
+                    event.eventId());
+            return;
+        }
+
         if (appointment.getStatusTimeline() == null) {
             appointment.setStatusTimeline(new ArrayList<>());
         }

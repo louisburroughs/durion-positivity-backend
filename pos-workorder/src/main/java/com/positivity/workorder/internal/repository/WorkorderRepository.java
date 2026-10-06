@@ -361,4 +361,27 @@ public interface WorkorderRepository extends JpaRepository<Workorder, UUID> {
             + "ORDER BY w.id ASC")
     @NonNull
     List<UUID> findActualTimeBackfillPage(@Param("afterId") @NonNull UUID afterId, @NonNull Pageable pageable);
+
+    /** A workorder and the appointment its work was booked as. */
+    interface SourceAppointment {
+        UUID getWorkorderId();
+
+        UUID getAppointmentId();
+    }
+
+    /**
+     * The source appointment of each listed workorder that has one, as ids only (#2531).
+     *
+     * <p>The link lives on the estimate the workorder was promoted from ({@code
+     * Estimate.appointmentId}, set by the appointment-to-estimate bridge), so a walk-in or any
+     * workorder whose estimate did not come from an appointment has no row here. Selected as a
+     * projection rather than read through {@code workorder.getEstimate()}: {@code
+     * Workorder.setEstimateId} installs an id-only {@code Estimate} stub, and reading
+     * {@code appointmentId} off that stub in the transaction that created it answers null for a
+     * workorder that does have a source appointment.
+     */
+    @Query("SELECT w.id AS workorderId, e.appointmentId AS appointmentId FROM Workorder w JOIN w.estimate e"
+            + " WHERE w.id IN :workorderIds AND e.appointmentId IS NOT NULL")
+    @NonNull
+    List<SourceAppointment> findSourceAppointments(@Param("workorderIds") @NonNull Collection<UUID> workorderIds);
 }

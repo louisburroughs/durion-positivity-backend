@@ -55,6 +55,13 @@ import tools.jackson.databind.ObjectMapper;
  * {@code processed_events} row from landing. Handling it inline would have done both at once, and
  * a failed dedup insert means the same record is redelivered indefinitely.
  *
+ * <p>It is also the only writer of {@code work_order_appointment_mapping} (#2531). A fact names the
+ * appointment its workorder was booked as, and the link is written in the same transaction as the
+ * replica row, <em>before</em> the status notification below is delivered — which is what lets that
+ * notification find the appointment instead of logging an orphaned workorder. The fact that first
+ * links a workorder raises the notification even when the status did not move, so an appointment
+ * linked by a backfill catches up with its workorder at once.
+ *
  * <p>Staleness is expected and fail-open by design: the dashboard is a read model over an
  * at-least-once feed with retry and backoff, so an assignment made a moment ago may not be visible
  * yet. The endpoint's OpenAPI description says so.
@@ -77,6 +84,7 @@ public class WorkorderEventsListener {
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
     private final ExtWorkorderReplicaRepository extWorkorderReplicaRepository;
+    private final WorkorderAppointmentLinkService workorderAppointmentLinkService;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final Counter payloadRejectedCounter;
 
@@ -88,6 +96,7 @@ public class WorkorderEventsListener {
             ObjectMapper objectMapper,
             ProcessedEventRepository processedEventRepository,
             ExtWorkorderReplicaRepository extWorkorderReplicaRepository,
+            WorkorderAppointmentLinkService workorderAppointmentLinkService,
             ApplicationEventPublisher applicationEventPublisher,
             ObjectProvider<MeterRegistry> meterRegistry,
             PlatformTransactionManager transactionManager) {
@@ -95,6 +104,7 @@ public class WorkorderEventsListener {
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.extWorkorderReplicaRepository = extWorkorderReplicaRepository;
+        this.workorderAppointmentLinkService = workorderAppointmentLinkService;
         this.applicationEventPublisher = applicationEventPublisher;
         this.handlerTransaction = new TransactionTemplate(transactionManager);
         this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -222,8 +232,19 @@ public class WorkorderEventsListener {
                 .updatedAt(Instant.now(clock))
                 .build());
 
+        // #2531: an absent or null appointmentId says nothing (a walk-in, or a pre-#2531 producer),
+        // so an existing link is never removed from here.
+        UUID appointmentId = payload.appointmentId();
+        boolean newlyLinked =
+                appointmentId != null && workorderAppointmentLinkService.link(payload.workorderId(), appointmentId);
+
+        // The status notification goes out on a transition — and on the fact that first links the
+        // workorder, whatever its status did. A replica that already held this status (a backfill
+        // of a workorder that ran before the link was published) would otherwise leave its newly
+        // linked appointment where it was until the workorder next moved.
         UUID notificationId = parseEventId(eventId);
-        if (notificationId != null && payload.status() != null && !Objects.equals(previousStatus, payload.status())) {
+        boolean statusMoved = !Objects.equals(previousStatus, payload.status());
+        if (notificationId != null && payload.status() != null && (statusMoved || newlyLinked)) {
             // Read the getter once (S2637): payload.mechanicIds() may be null while the event's
             // mechanicIds is @NonNull, and re-calling the getter after the null check leaves static
             // analysis unable to tell the two calls return the same value.

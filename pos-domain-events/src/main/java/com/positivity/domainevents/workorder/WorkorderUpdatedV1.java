@@ -46,6 +46,9 @@ import org.jspecify.annotations.Nullable;
  *     {@code workStartedAt} this is the actual window the job occupied its resource for.
  * @param expectedEndAt the owner's projection of when a running job will finish — see the note
  *     below; null in every fact published today
+ * @param appointmentId the pos-shop-manager appointment this workorder's work was booked as — the
+ *     {@code appointmentId} of the estimate the workorder was promoted from; null for a walk-in,
+ *     or any workorder whose estimate did not come from an appointment
  *
  * <p>{@code vehicleId} and the {@code services} list plus the extended {@code PartLine} fields
  * (description, unitPrice, lineTotal, photoEvidenceUrl) are additive within schema v1
@@ -81,6 +84,14 @@ import org.jspecify.annotations.Nullable;
  * synthesise it from {@code now()}: "N minutes over planned" is derivable from
  * {@code workStartedAt}, the appointment's planned end and the status, and a guessed projection
  * would be indistinguishable from a known one.
+ *
+ * <p>{@code appointmentId} is additive within schema v1 (ADR-0044 §3, #2531). It is the only
+ * statement of which appointment a workorder belongs to that reaches pos-shop-manager: that module
+ * owns appointments and pos-workorder owns the estimate that remembers its source appointment, so
+ * without it the consumer's {@code work_order_appointment_mapping} could never be written and every
+ * read built on that link (status sync, actual-versus-planned, carry-over) stayed inert. It never
+ * changes for a workorder, and a consumer must treat an absent field (a pre-#2531 producer) as "not
+ * stated", never as "unlinked".
  */
 public record WorkorderUpdatedV1(
         @NonNull UUID workorderId,
@@ -102,7 +113,8 @@ public record WorkorderUpdatedV1(
         @Nullable LocalDate scheduledDate,
         @Nullable Instant workStartedAt,
         @Nullable Instant completedAt,
-        @Nullable Instant expectedEndAt) {
+        @Nullable Instant expectedEndAt,
+        @Nullable UUID appointmentId) {
 
     public static final String EVENT_TYPE = "workorder.workorder.updated";
     public static final int SCHEMA_VERSION = 1;
@@ -256,6 +268,7 @@ public record WorkorderUpdatedV1(
                 null,
                 null,
                 null,
+                null,
                 null);
     }
 
@@ -298,6 +311,53 @@ public record WorkorderUpdatedV1(
                 scheduledDate,
                 null,
                 null,
+                null,
+                null);
+    }
+
+    /** Pre-#2531 arity (no source appointment). */
+    public WorkorderUpdatedV1(
+            @NonNull UUID workorderId,
+            @Nullable String workorderNumber,
+            @Nullable String status,
+            @Nullable UUID shopId,
+            @Nullable UUID customerId,
+            @Nullable UUID vehicleId,
+            @Nullable UUID invoiceId,
+            @Nullable List<PartLine> parts,
+            @Nullable List<ServiceLine> services,
+            @Nullable Instant createdAt,
+            @Nullable Instant updatedAt,
+            @Nullable UUID locationId,
+            @Nullable UUID resourceId,
+            @Nullable String resourceType,
+            @Nullable List<UUID> mechanicIds,
+            @Nullable Instant promisedAt,
+            @Nullable LocalDate scheduledDate,
+            @Nullable Instant workStartedAt,
+            @Nullable Instant completedAt,
+            @Nullable Instant expectedEndAt) {
+        this(
+                workorderId,
+                workorderNumber,
+                status,
+                shopId,
+                customerId,
+                vehicleId,
+                invoiceId,
+                parts,
+                services,
+                createdAt,
+                updatedAt,
+                locationId,
+                resourceId,
+                resourceType,
+                mechanicIds,
+                promisedAt,
+                scheduledDate,
+                workStartedAt,
+                completedAt,
+                expectedEndAt,
                 null);
     }
 }
