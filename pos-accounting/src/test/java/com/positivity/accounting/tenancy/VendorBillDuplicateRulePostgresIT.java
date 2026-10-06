@@ -576,7 +576,8 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
                 vendorDirectoryService,
                 racing,
                 sequenceLocker,
-                transactionManager);
+                transactionManager,
+                com.positivity.accounting.internal.service.TestZoneResolvers.utc(java.time.Clock.systemUTC()));
     }
 
     /**
@@ -726,7 +727,8 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
                 vendorDirectoryService,
                 guard,
                 sequenceLocker,
-                transactionManager);
+                transactionManager,
+                com.positivity.accounting.internal.service.TestZoneResolvers.utc(java.time.Clock.systemUTC()));
     }
 
     private String create(VendorBillService service, UUID tenant, UUID vendorId) {

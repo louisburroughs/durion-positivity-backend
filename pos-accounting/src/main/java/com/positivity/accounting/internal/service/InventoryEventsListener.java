@@ -103,6 +103,8 @@ public class InventoryEventsListener {
     private final @Nullable MeterRegistry meterRegistry;
     private final @Nullable Counter payloadRejectedCounter;
 
+    private final AccountingCalendarZoneResolver zoneResolver;
+
     /** The handler plus its processed mark, or a failure's mark alone, per transaction; see the class doc. */
     private final TransactionTemplate handlerTransaction;
 
@@ -115,7 +117,9 @@ public class InventoryEventsListener {
             InventoryRevaluationPostingService revaluationPostingService,
             KafkaFactIngestionRecorder ingestionRecorder,
             ObjectProvider<MeterRegistry> meterRegistry,
-            PlatformTransactionManager transactionManager) {
+            PlatformTransactionManager transactionManager,
+            AccountingCalendarZoneResolver zoneResolver) {
+        this.zoneResolver = zoneResolver;
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
@@ -366,7 +370,7 @@ public class InventoryEventsListener {
 
     /** Business time, in the zone the posting services use, so the record and the entry agree. */
     private LocalDateTime businessDate(Instant occurredAt) {
-        return LocalDateTime.ofInstant(occurredAt, clock.getZone());
+        return zoneResolver.heldRecordDateTime(occurredAt);
     }
 
     private void markInOwnTransaction(@NonNull String eventId) {

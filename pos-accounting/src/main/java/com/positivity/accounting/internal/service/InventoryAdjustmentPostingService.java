@@ -4,7 +4,6 @@ import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.domainevents.inventory.InventoryAdjustedV1;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
-import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -54,7 +53,7 @@ public class InventoryAdjustmentPostingService {
     static final String IDEMPOTENCY_KEY_PREFIX = "INVENTORY_ADJUSTMENT_GL_POSTING:";
     static final String SOURCE_EVENT_NAMESPACE = "INVENTORY_ADJUSTMENT:";
 
-    private final Clock clock;
+    private final AccountingCalendarZoneResolver zoneResolver;
     private final IdempotencyService idempotencyService;
     private final GLMappingResolver glMappingResolver;
     private final GLPostingService glPostingService;
@@ -93,7 +92,7 @@ public class InventoryAdjustmentPostingService {
         BigDecimal amount = unitCost.multiply(fact.quantityDelta().abs());
 
         // Business time, not processing time: redeliveries land in the same period.
-        LocalDateTime transactionDate = LocalDateTime.ofInstant(fact.occurredAt(), clock.getZone());
+        LocalDateTime transactionDate = zoneResolver.postingDateTime(fact.occurredAt());
 
         boolean loss = fact.quantityDelta().signum() < 0;
         UUID debitAccountId;

@@ -64,6 +64,9 @@ class VendorBillServiceTest {
     @Spy
     Clock clock = FIXED_CLOCK;
 
+    @Spy
+    AccountingCalendarZoneResolver zoneResolver = TestZoneResolvers.utc(FIXED_CLOCK);
+
     @Mock
     private VendorBillRepository billRepository;
 
@@ -640,7 +643,8 @@ class VendorBillServiceTest {
                     vendorDirectoryService,
                     new VendorBillDuplicateGuard(billRepository, noMeters),
                     sequenceLocker,
-                    transactionManager);
+                    transactionManager,
+                    com.positivity.accounting.internal.service.TestZoneResolvers.utc(java.time.Clock.systemUTC()));
             when(billRepository.findLiveDuplicate(any(), any(), any(), any(), any()))
                     .thenReturn(Optional.empty());
         }

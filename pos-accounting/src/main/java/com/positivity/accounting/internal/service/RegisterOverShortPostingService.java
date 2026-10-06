@@ -4,7 +4,6 @@ import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
-import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -59,7 +58,7 @@ public class RegisterOverShortPostingService {
     static final String SOURCE_EVENT_NAMESPACE = "REGISTER_OVER_SHORT:";
     static final String SOURCE_SYSTEM = "pos-order";
 
-    private final Clock clock;
+    private final AccountingCalendarZoneResolver zoneResolver;
     private final IdempotencyService idempotencyService;
     private final GLMappingResolver glMappingResolver;
     private final GLPostingService glPostingService;
@@ -90,7 +89,7 @@ public class RegisterOverShortPostingService {
         }
 
         // Business time, not processing time: redeliveries land in the same period.
-        LocalDateTime transactionDate = LocalDateTime.ofInstant(fact.closedAt(), clock.getZone());
+        LocalDateTime transactionDate = zoneResolver.postingDateTime(fact.closedAt());
 
         // Never at par (ADR-0067 PC-9, E-5; #2312): a variance counted in another currency is held
         // visibly with its currency reason, not posted into the ledger's currency.

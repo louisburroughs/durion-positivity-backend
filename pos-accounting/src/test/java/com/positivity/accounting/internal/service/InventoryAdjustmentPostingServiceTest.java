@@ -47,7 +47,11 @@ class InventoryAdjustmentPostingServiceTest {
     @BeforeEach
     void setUp() {
         service = new InventoryAdjustmentPostingService(
-                TEST_CLOCK, idempotencyService, glMappingResolver, glPostingService, journalEntryRepository);
+                com.positivity.accounting.internal.service.TestZoneResolvers.utc(TEST_CLOCK),
+                idempotencyService,
+                glMappingResolver,
+                glPostingService,
+                journalEntryRepository);
         LocalDateTime date = LocalDateTime.ofInstant(OCCURRED_AT, ZoneOffset.UTC);
         when(glMappingResolver.resolveGLAccount("INVENTORY_ADJUSTMENT", "ADJUSTMENT_LOSS", date))
                 .thenReturn(SHRINKAGE);
@@ -150,5 +154,34 @@ class InventoryAdjustmentPostingServiceTest {
     @DisplayName("An uncosted fact reaching posting is an internal routing defect")
     void uncostedFactRejected() {
         assertThatIllegalArgumentException().isThrownBy(() -> service.postAdjustment(fact("-1", null)));
+    }
+
+    @Test
+    @DisplayName("#2558: a fact at 2026-01-31T23:30-06:00 posts on 2026-01-31 in a Chicago calendar, clock in UTC")
+    void chicagoCalendar_lastEveningOfJanuaryPostsInJanuary() {
+        InventoryAdjustmentPostingService service2 = new InventoryAdjustmentPostingService(
+                TestZoneResolvers.fixed(TestZoneResolvers.CHICAGO, TEST_CLOCK),
+                idempotencyService,
+                glMappingResolver,
+                glPostingService,
+                journalEntryRepository);
+        when(glMappingResolver.resolveGLAccount(anyString(), anyString(), eq(LocalDateTime.of(2026, 1, 31, 23, 30))))
+                .thenReturn(UUID.fromString("00000000-0000-0000-0000-000000002558"));
+        when(glPostingService.postInventoryAdjustment(any(), any(), any(), any(), any(), any(), anyString(), any()))
+                .thenReturn(JOURNAL_ENTRY_ID);
+
+        service2.postAdjustment(
+                TestZoneResolvers.movedTo(fact("-4", "7.25"), OCCURRED_AT, TestZoneResolvers.JAN_31_2330_CHICAGO));
+
+        verify(glPostingService)
+                .postInventoryAdjustment(
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        eq(LocalDateTime.of(2026, 1, 31, 23, 30)),
+                        anyString(),
+                        any());
     }
 }

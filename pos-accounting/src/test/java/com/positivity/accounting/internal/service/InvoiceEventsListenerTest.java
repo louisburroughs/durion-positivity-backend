@@ -60,7 +60,8 @@ class InvoiceEventsListenerTest {
                 revenuePosting,
                 ingestionRecorder,
                 org.mockito.Mockito.mock(ObjectProvider.class),
-                mock(PlatformTransactionManager.class));
+                mock(PlatformTransactionManager.class),
+                com.positivity.accounting.internal.service.TestZoneResolvers.utc(java.time.Clock.systemUTC()));
     }
 
     private String eventWithBreakdown(String eventId, long version) {
@@ -399,7 +400,8 @@ class InvoiceEventsListenerTest {
                 revenuePosting,
                 ingestionRecorder,
                 provider,
-                mock(PlatformTransactionManager.class));
+                mock(PlatformTransactionManager.class),
+                com.positivity.accounting.internal.service.TestZoneResolvers.utc(java.time.Clock.systemUTC()));
 
         when(processedEvents.existsById("e-persist-fail")).thenReturn(false);
         when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
@@ -434,7 +436,8 @@ class InvoiceEventsListenerTest {
                 revenuePosting,
                 ingestionRecorder,
                 provider,
-                mock(PlatformTransactionManager.class));
+                mock(PlatformTransactionManager.class),
+                com.positivity.accounting.internal.service.TestZoneResolvers.utc(java.time.Clock.systemUTC()));
 
         when(processedEvents.existsById("e-programming-error")).thenReturn(false);
         when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
@@ -466,7 +469,8 @@ class InvoiceEventsListenerTest {
                 revenuePosting,
                 ingestionRecorder,
                 provider,
-                mock(PlatformTransactionManager.class));
+                mock(PlatformTransactionManager.class),
+                com.positivity.accounting.internal.service.TestZoneResolvers.utc(java.time.Clock.systemUTC()));
 
         when(processedEvents.existsById("e-tax-persist-fail")).thenReturn(false);
         when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());

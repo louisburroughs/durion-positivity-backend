@@ -52,7 +52,8 @@ class WarrantyEventsListenerTest {
                 expectations,
                 ingestionRecorder,
                 org.mockito.Mockito.mock(ObjectProvider.class),
-                mock(PlatformTransactionManager.class));
+                mock(PlatformTransactionManager.class),
+                com.positivity.accounting.internal.service.TestZoneResolvers.utc(java.time.Clock.systemUTC()));
     }
 
     private String submitted(String eventId, long version) {

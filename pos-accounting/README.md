@@ -294,9 +294,14 @@ Every posting date and every period boundary is cut in the **tenant's accounting
 `ACCOUNTING_TIME_ZONE` row of `accounting_configuration` (an IANA region id). The `Clock` bean stays UTC and
 the JVM zone is never read: `AccountingCalendarZoneResolver` is the only place an instant becomes a business
 date (period service `getPeriodIdForDate` / `getCurrentPeriodId`, the settlement listener, automatic
-application, the payment-application and customer-credit GL handlers, customer-credit draw-downs). An
-ArchUnit rule (`posting_dates_use_the_accounting_calendar_zone`) fails on `Clock.getZone()` or
-`ZoneId.systemDefault()` in those classes.
+application, the payment-application and customer-credit GL handlers, customer-credit draw-downs, invoice
+revenue recognition and reversal, inventory adjustment / revaluation / shrinkage, register over/short, the
+ingestion-record dates of the invoice, inventory, order and warranty listeners, and the vendor-bill
+duplicate-date compare). An ArchUnit rule (`posting_dates_use_the_accounting_calendar_zone`) fails on
+`Clock.getZone()` or `ZoneId.systemDefault()` anywhere under `com.positivity.accounting`; a technical UTC use
+states `ZoneOffset.UTC`. The Kafka posting listeners treat an unset zone as they treat a closed period: the
+posting fails and the record is retried by the container (DLQ after the retries); only the settled-payment
+path holds a row `SUSPENDED / ACCOUNTING_TIME_ZONE_UNSET`.
 
 - **Seed.** V10 gives every existing tenant `UTC` (what the UTC clock dated everything in, so nothing is
   re-cut); tenant provisioning (`DataInitializationServiceImpl`) gives every new tenant `UTC`. An

@@ -29,6 +29,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
@@ -94,6 +95,8 @@ public class VendorBillServiceImpl implements VendorBillService {
      * template has returned. By then the failed transaction has rolled back when this class began it,
      * and is marked rollback-only when it joined a caller's.
      */
+    private final AccountingCalendarZoneResolver zoneResolver;
+
     private final TransactionTemplate goodsReceiptTransaction;
 
     public VendorBillServiceImpl(
@@ -105,7 +108,9 @@ public class VendorBillServiceImpl implements VendorBillService {
             VendorDirectoryService vendorDirectoryService,
             VendorBillDuplicateGuard duplicateGuard,
             AccountingSequenceLocker sequenceLocker,
-            PlatformTransactionManager transactionManager) {
+            PlatformTransactionManager transactionManager,
+            AccountingCalendarZoneResolver zoneResolver) {
+        this.zoneResolver = zoneResolver;
         this.clock = clock;
         this.billRepository = billRepository;
         this.billLineRepository = billLineRepository;
@@ -708,11 +713,11 @@ public class VendorBillServiceImpl implements VendorBillService {
         }
 
         // 3. Date proximity (20 points)
-        // Convert the timezone-unaware LocalDateTime values to zone-aware ZonedDateTime (using the
-        // service Clock's zone) before computing the duration between them (java:S8700).
+        // Convert the timezone-unaware LocalDateTime values to zone-aware ZonedDateTime in the tenant's
+        // accounting-calendar zone (#2558) before computing the duration between them (java:S8700).
+        ZoneId calendarZone = zoneResolver.zone();
         long daysDiff = Math.abs(java.time.temporal.ChronoUnit.DAYS.between(
-                bill.getBillDate().atZone(clock.getZone()),
-                event.getInvoiceDate().atZone(clock.getZone())));
+                bill.getBillDate().atZone(calendarZone), event.getInvoiceDate().atZone(calendarZone)));
         if (daysDiff <= 7) {
             score += 20;
             details.append("date_match(20);");

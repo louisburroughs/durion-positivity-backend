@@ -134,7 +134,8 @@ class InventoryShrinkageGLPostingIT {
                 revaluationPostingService,
                 ingestionRecorder,
                 org.mockito.Mockito.mock(ObjectProvider.class),
-                transactionManager);
+                transactionManager,
+                com.positivity.accounting.internal.service.TestZoneResolvers.utc(java.time.Clock.systemUTC()));
     }
 
     @AfterEach

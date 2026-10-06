@@ -43,20 +43,6 @@ public class ArchitectureTest {
                 }
             };
 
-    /**
-     * The settlement, automatic-application, application-GL and customer-credit flows and the period service (#2558
-     * PR A). The remaining posting flows join in the follow-up PR, which widens the rule to the whole module.
-     */
-    static final String[] ACCOUNTING_CALENDAR_CLASSES = {
-        "com.positivity.accounting.internal.service.AccountingCalendarZoneResolver",
-        "com.positivity.accounting.internal.service.AccountingConfigurationServiceImpl",
-        "com.positivity.accounting.internal.service.AccountingPeriodServiceImpl",
-        "com.positivity.accounting.internal.service.AutomaticPaymentApplicationService",
-        "com.positivity.accounting.internal.service.SettlementEventsListener",
-        "com.positivity.accounting.internal.service.PaymentApplicationServiceImpl",
-        "com.positivity.accounting.internal.service.CustomerCreditServiceImpl"
-    };
-
     // Layer packages. The bank reconciliation core (internal.bankrec) and its adapters (internal.bankfeed.*)
     // carry their own layer sub-packages (SPEC-manual-bank-reconciliation §2.1, #2300); the layering rules
     // below bind them exactly as they bind the module's flat internal.* layers.
@@ -306,25 +292,12 @@ public class ArchitectureTest {
     @ArchTest
     static final ArchRule posting_dates_use_the_accounting_calendar_zone = noClasses()
             .that()
-            .resideInAPackage("..internal.handler..")
-            .or()
-            .haveFullyQualifiedName(ACCOUNTING_CALENDAR_CLASSES[0])
-            .or()
-            .haveFullyQualifiedName(ACCOUNTING_CALENDAR_CLASSES[1])
-            .or()
-            .haveFullyQualifiedName(ACCOUNTING_CALENDAR_CLASSES[2])
-            .or()
-            .haveFullyQualifiedName(ACCOUNTING_CALENDAR_CLASSES[3])
-            .or()
-            .haveFullyQualifiedName(ACCOUNTING_CALENDAR_CLASSES[4])
-            .or()
-            .haveFullyQualifiedName(ACCOUNTING_CALENDAR_CLASSES[5])
-            .or()
-            .haveFullyQualifiedName(ACCOUNTING_CALENDAR_CLASSES[6])
+            .resideInAPackage("com.positivity.accounting..")
             .should()
             .callMethodWhere(GUESSED_ZONE_CALL)
             .because("#2558: a posting date and a period are cut in the tenant's accounting-calendar zone"
-                    + " (AccountingCalendarZoneResolver), never in the clock's or the JVM's zone");
+                    + " (AccountingCalendarZoneResolver), never in the clock's or the JVM's zone; a technical UTC"
+                    + " use states ZoneOffset.UTC explicitly");
 
     // ---- Bank reconciliation core ↔ adapter walls (SPEC-manual-bank-reconciliation §2.1, §8.4; #2300) ----
     // The core (internal.bankrec) is provider- and format-neutral; the adapters (internal.bankfeed.*) reach it

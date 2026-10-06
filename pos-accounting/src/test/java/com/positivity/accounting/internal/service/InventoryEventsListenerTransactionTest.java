@@ -99,7 +99,8 @@ class InventoryEventsListenerTransactionTest {
                 revaluationPostingService,
                 ingestionRecorder,
                 meterRegistry,
-                transactionManager);
+                transactionManager,
+                com.positivity.accounting.internal.service.TestZoneResolvers.utc(java.time.Clock.systemUTC()));
     }
 
     @AfterEach

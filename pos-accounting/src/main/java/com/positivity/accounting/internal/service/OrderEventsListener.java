@@ -9,7 +9,6 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -70,6 +69,8 @@ public class OrderEventsListener {
     private final KafkaFactIngestionRecorder ingestionRecorder;
     private final Counter payloadRejectedCounter;
 
+    private final AccountingCalendarZoneResolver zoneResolver;
+
     /** The handler plus its processed mark, or a failure's mark alone, per transaction; see the class doc. */
     private final TransactionTemplate handlerTransaction;
 
@@ -80,7 +81,9 @@ public class OrderEventsListener {
             RegisterOverShortPostingService registerOverShortPostingService,
             KafkaFactIngestionRecorder ingestionRecorder,
             ObjectProvider<MeterRegistry> meterRegistry,
-            PlatformTransactionManager transactionManager) {
+            PlatformTransactionManager transactionManager,
+            AccountingCalendarZoneResolver zoneResolver) {
+        this.zoneResolver = zoneResolver;
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
@@ -154,7 +157,7 @@ public class OrderEventsListener {
                         RegisterSessionClosedV1.EVENT_TYPE,
                         eventId,
                         fact.sessionId(),
-                        LocalDateTime.ofInstant(fact.closedAt(), clock.getZone()),
+                        zoneResolver.heldRecordDateTime(fact.closedAt()),
                         fact,
                         outcome);
                 markProcessed(eventId);

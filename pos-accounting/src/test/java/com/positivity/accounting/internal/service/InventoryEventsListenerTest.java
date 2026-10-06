@@ -67,7 +67,8 @@ class InventoryEventsListenerTest {
                 revaluationPostingService,
                 ingestionRecorder,
                 org.mockito.Mockito.mock(ObjectProvider.class),
-                mock(PlatformTransactionManager.class));
+                mock(PlatformTransactionManager.class),
+                com.positivity.accounting.internal.service.TestZoneResolvers.utc(java.time.Clock.systemUTC()));
     }
 
     /** Representative costed scrap fact as published by pos-inventory (Wave-2 D1, #1030). */

@@ -244,7 +244,8 @@ class InvoiceManifestListenerTest {
                 org.mockito.Mockito.mock(InvoiceRevenuePostingService.class),
                 org.mockito.Mockito.mock(KafkaFactIngestionRecorder.class),
                 org.mockito.Mockito.mock(ObjectProvider.class),
-                mock(PlatformTransactionManager.class));
+                mock(PlatformTransactionManager.class),
+                com.positivity.accounting.internal.service.TestZoneResolvers.utc(java.time.Clock.systemUTC()));
 
         UUID invoiceId = UUID.randomUUID();
         UUID workorderId = UUID.randomUUID();

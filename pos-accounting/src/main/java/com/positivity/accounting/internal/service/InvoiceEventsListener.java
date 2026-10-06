@@ -17,7 +17,6 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.io.Serial;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
@@ -109,6 +108,8 @@ public class InvoiceEventsListener {
     private final Counter payloadRejectedCounter;
     private final Counter replicaPersistFailedCounter;
 
+    private final AccountingCalendarZoneResolver zoneResolver;
+
     /** The handler plus its processed mark, or a failure's mark alone, per transaction; see the class doc. */
     private final TransactionTemplate handlerTransaction;
 
@@ -121,7 +122,9 @@ public class InvoiceEventsListener {
             InvoiceRevenuePostingService invoiceRevenuePostingService,
             KafkaFactIngestionRecorder ingestionRecorder,
             ObjectProvider<MeterRegistry> meterRegistry,
-            PlatformTransactionManager transactionManager) {
+            PlatformTransactionManager transactionManager,
+            AccountingCalendarZoneResolver zoneResolver) {
+        this.zoneResolver = zoneResolver;
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
@@ -306,7 +309,7 @@ public class InvoiceEventsListener {
                 InvoiceUpdatedV1.EVENT_TYPE,
                 eventId,
                 payload.invoiceId(),
-                LocalDateTime.ofInstant(businessTime, clock.getZone()),
+                zoneResolver.heldRecordDateTime(businessTime),
                 payload,
                 outcome);
     }
