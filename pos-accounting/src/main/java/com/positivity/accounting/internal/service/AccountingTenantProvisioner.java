@@ -66,6 +66,7 @@ public class AccountingTenantProvisioner {
 
     static final String ENTRIES_COUNTER = "accounting.tenant_template.entries";
 
+    private final AccountingTemplateStateLock stateLock;
     private final AccountingTemplateApplier applier;
     private final List<AccountingTemplateSource> sources;
     private final DataInitializationService policyDefaults;
@@ -74,12 +75,14 @@ public class AccountingTenantProvisioner {
     private final @Nullable MeterRegistry meterRegistry;
 
     public AccountingTenantProvisioner(
+            AccountingTemplateStateLock stateLock,
             AccountingTemplateApplier applier,
             List<AccountingTemplateSource> sources,
             DataInitializationService policyDefaults,
             ProcessedEventRepository processedEvents,
             Clock clock,
             ObjectProvider<MeterRegistry> meterRegistry) {
+        this.stateLock = stateLock;
         this.applier = applier;
         this.sources = List.copyOf(sources);
         this.policyDefaults = policyDefaults;
@@ -100,8 +103,12 @@ public class AccountingTenantProvisioner {
     public @NonNull Optional<AccountingTemplateApplier.Result> provision(
             @NonNull UUID tenantId, @Nullable String eventId, @NonNull AccountingTemplate snapshot) {
         requireBound(tenantId);
-        // Re-checked inside the transaction: the listener's own check ran before it, and a
-        // redelivery to a second consumer can pass that check while this run is still in flight.
+        // The tenant's state row first, before any decision: a redelivery to a second consumer then
+        // waits here and finds the eventId recorded, and a sweep racing an add-on choice reads the
+        // choice only after that transaction committed, so it never writes the generic fingerprint
+        // over the full one.
+        stateLock.acquire();
+        // Re-checked inside the transaction: the listener's own check ran before it.
         if (eventId != null && processedEvents.existsById(eventId)) {
             log.debug("tenant.created eventId={} already processed for tenant {}", eventId, tenantId);
             return Optional.empty();
@@ -122,6 +129,7 @@ public class AccountingTenantProvisioner {
     public AccountingTemplateApplier.@NonNull Result reconcile(
             @NonNull UUID tenantId, @NonNull AccountingTemplate snapshot) {
         requireBound(tenantId);
+        stateLock.acquire();
         return run(tenantId, snapshot, Path.ADD_ON);
     }
 

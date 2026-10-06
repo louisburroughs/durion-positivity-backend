@@ -394,6 +394,24 @@ class AccountingTemplateApplierTest {
     }
 
     @Test
+    @DisplayName(
+            "a tenant holding only a location override of a line gets the global line created; the override is untouched")
+    void locationOverrideIsNotTheTemplatesLine() {
+        chart.holdAccount("4000", "Service Revenue", AccountType.REVENUE);
+        AccountingTemplate.StatementLine override = new AccountingTemplate.StatementLine(
+                StatementType.INCOME_STATEMENT, "4000", "TULSA_SALES", null, "Tulsa sales", 3, OperationType.SUM);
+        UUID overrideId = chart.holdLocationOverride(override, "TULSA");
+
+        applier.apply(TENANT, AccountingTemplate.of(List.of(REVENUE, REVENUE_LINE)));
+
+        assertThat(chart.writes).containsExactly("create STATEMENT_LINE:INCOME_STATEMENT:4000");
+        assertThat(chart.lines).hasSize(2);
+        assertThat(chart.lines.get(overrideId)).isEqualTo(override);
+        assertThat(entries.get("STATEMENT_LINE:INCOME_STATEMENT:4000").getTargetRowId())
+                .isNotEqualTo(overrideId);
+    }
+
+    @Test
     @DisplayName("an unchanged template with nothing open stops at the fingerprint: no look-up, no write")
     void shortCircuitsWhenUpToDate() {
         AccountingTemplate template = AccountingTemplate.of(List.of(AR, REVENUE, INVOICE_REVENUE, AR_KEY, AR_MAPPING));

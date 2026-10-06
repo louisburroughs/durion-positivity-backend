@@ -169,7 +169,10 @@ tenant (the applier holds the tenant's state row `FOR UPDATE` for the length of 
 | Add-on choice | `PUT /v1/accounting/tenant-template/add-ons/retread-plant` | Records the tenant's choice, audits it with the caller, reconciles the tenant |
 
 The provisioner also seeds the policy defaults (three override thresholds, one refund policy, each only when
-the tenant has none): `DataInitializationService` is a provisioning step, no longer a startup runner.
+the tenant has none): `DataInitializationService` is a provisioning step, no longer a startup runner, so a
+tenant receives them only through one of the three paths above. Statement lines the template creates are
+global lines (`location_id` null) that name the account by its name; a per-location override a tenant holds
+(#731) is never adopted in the global line's place and never rewritten by a refresh.
 
 **Sources.** The template is one body of rows; an `AccountingTemplateSource` says which entries are its own and
 whether a tenant receives them. `AccountingTemplateReader` is the generic source every tenant receives.
@@ -204,6 +207,16 @@ one per add-on choice (`TENANT_TEMPLATE_ADD_ON_ENABLE`, the caller, the justific
 expression, references by natural key. Never seed a tenant's rows from Flyway. A new table in the template
 needs its kind, natural key and adoption rule in `TemplateEntryKind`, `AccountingTemplate` and the applier.
 Existing tenants receive an addition at their next start.
+
+**Rolling this back is not a plain revert.** The repeatable seed before #2526 looked accounts up by code with
+sub-selects that, run as the Flyway owner, see every tenant's rows; with the template in the platform tenant
+they return more than one row and the service does not start. To roll back: revert the change, delete the
+platform tenant's rows (`WHERE tenant_id = '01900000-0000-7000-8000-000000000000'`) from
+`statement_line_mappings`, `default_gl_mapping`, `gl_mapping`, `mapping_key`, `posting_category` and
+`gl_account`, in that order, and `flyway repair` (or reset the database) so Flyway forgets `V5`, which the
+reverted code does not know. `V5`'s two tables and the configuration row can stay; rows provisioned into
+tenants stay, they are ordinary tenant rows. `TenantTemplateAdoptionIT` runs the old seed in exactly that
+template-free state.
 
 **Before a second tenant is created on a cell,** the module must use the remote registry
 (`pos.tenancy.registry.mode=REMOTE`) or list its tenants in `pos.tenancy.tenants`: the sweep reaches only the
@@ -617,7 +630,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `stripe.api-key`                                    | required             | Stripe API key for payment processing    |
 | `pos.accounting.kafka.tenant-events-topic`          | `tenant.events.v1`   | Tenant lifecycle facts; `tenant.created` provisions the new tenant from the accounting template (#2526) |
 | `pos.accounting.kafka.tenant-events-consumer-group` | `pos-accounting-tenant-events` | Consumer group of the `tenant.created` listener; reads from the earliest offset (#2526) |
-| `pos.accounting.tenant-template.startup-sweep.enabled` | `true`            | Apply the accounting template to every registry tenant at each start (#2526) |
+| `pos.accounting.tenant-template.startup-sweep.enabled` | `true`            | Apply the accounting template to every registry tenant at each start (#2526). The default override-policy thresholds and refund policy reach a tenant only through provisioning (this sweep, `tenant.created`, or an add-on choice), no longer from a startup runner of their own |
 | `pos.accounting.bankrec.match.date-window-days`     | `7`                  | Bank reconciliation candidate date window W (#2303) |
 | `pos.accounting.bankrec.duplicate.date-window-days` | `3`                  | Near-duplicate candidate window (#2303) |
 | `pos.accounting.bankrec.outstanding.aging-warning-days` | `90`             | Age past which an outstanding item needs a justification and an OTHER_LEDGER_TIMING item a reaffirmation (#2303) |

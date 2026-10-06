@@ -154,24 +154,35 @@ public class JpaTenantChart implements TenantChart {
         return defaultGlMappings.save(mapping).getMappingId();
     }
 
+    /**
+     * The account's <em>global</em> line on the statement. A line with a {@code locationId} is a
+     * per-location override (#731), a tenant's own refinement of its report: it is never what the
+     * template adopts (a tenant holding only an override still needs the global line, or every other
+     * location omits the account) and never what a refresh rewrites.
+     */
     @Override
     public Optional<LineRow> findStatementLine(@NonNull StatementType statementType, @NonNull UUID accountId) {
         return statementLines.findByGlAccount_GlAccountId(accountId).stream()
-                .filter(line -> line.getStatementType() == statementType)
+                .filter(line -> line.getStatementType() == statementType && line.getLocationId() == null)
                 .min(Comparator.comparing(StatementLineMapping::getMappingId))
                 .map(JpaTenantChart::lineRow);
     }
 
     @Override
     public Optional<LineRow> findStatementLine(@NonNull UUID lineId) {
-        return statementLines.findById(lineId).map(JpaTenantChart::lineRow);
+        return statementLines
+                .findById(lineId)
+                .filter(line -> line.getLocationId() == null)
+                .map(JpaTenantChart::lineRow);
     }
 
     @Override
     public UUID createStatementLine(AccountingTemplate.@NonNull StatementLine template, @NonNull UUID accountId) {
+        GLAccount account = accounts.findById(accountId).orElseThrow();
         StatementLineMapping line = StatementLineMapping.builder()
-                .glAccount(accounts.getReferenceById(accountId))
-                .accountName(template.accountCode())
+                .glAccount(account)
+                // The account's name, which the drill-down shows; not part of the entry fingerprint.
+                .accountName(account.getAccountName())
                 .statementType(template.statementType())
                 .statementLineCode(template.lineCode())
                 .parentLineCode(template.parentLineCode())
@@ -184,7 +195,10 @@ public class JpaTenantChart implements TenantChart {
 
     @Override
     public void refreshStatementLine(@NonNull UUID lineId, AccountingTemplate.@NonNull StatementLine template) {
-        StatementLineMapping line = statementLines.findById(lineId).orElseThrow();
+        StatementLineMapping line = statementLines
+                .findById(lineId)
+                .filter(row -> row.getLocationId() == null)
+                .orElseThrow(() -> new IllegalStateException("statement line " + lineId + " is not a global line"));
         line.setStatementLineCode(template.lineCode());
         line.setParentLineCode(template.parentLineCode());
         line.setLineDescription(template.lineDescription());
