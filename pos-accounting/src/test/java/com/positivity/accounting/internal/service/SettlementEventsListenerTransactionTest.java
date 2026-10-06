@@ -105,7 +105,8 @@ class SettlementEventsListenerTransactionTest {
                 ingestionRecorder,
                 automatic,
                 meterRegistry,
-                transactionManager);
+                transactionManager,
+                org.mockito.Mockito.mock(PaymentIntentLock.class));
     }
 
     @AfterEach

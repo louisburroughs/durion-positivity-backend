@@ -360,20 +360,18 @@ class PaymentApplicationServiceTest {
         }
 
         @Test
-        @DisplayName("#2556: a refund of a payment with nothing unapplied is raised as exceeding the remainder")
-        void refundOfAFullyAppliedPaymentIsRaised() {
+        @DisplayName("#2556 review: a refund of a payment with nothing unapplied is counted as fully_applied at INFO,"
+                + " never raised as exceeding the remainder")
+        void refundOfAFullyAppliedPaymentIsCountedNotRaised() {
             testPayment.setUnappliedAmount(BigDecimal.ZERO);
             testPayment.setStatus(ReceivablePaymentStatus.FULLY_APPLIED);
             when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
 
-            service.releaseRefundedRemainder(testPaymentId, new BigDecimal("5.00"), refundId);
+            assertThat(service.releaseRefundedRemainder(testPaymentId, new BigDecimal("5.00"), refundId))
+                    .isEqualByComparingTo("0");
 
-            verify(refundReleaseAlert)
-                    .exceedsRemainder(
-                            eq(testPaymentId),
-                            argThat(amount -> amount.compareTo(new BigDecimal("5.00")) == 0),
-                            argThat(amount -> amount.signum() == 0),
-                            any());
+            verify(refundReleaseAlert).fullyApplied(testPaymentId, new BigDecimal("5.00"), "refund " + refundId);
+            verify(refundReleaseAlert, never()).exceedsRemainder(any(), any(), any(), any());
             verify(receivablePaymentRepository, never()).save(any());
         }
 
@@ -395,18 +393,18 @@ class PaymentApplicationServiceTest {
     }
 
     // ========================================
-    // releaseRefundsRecordedBeforeSettlement() (#2556)
+    // releaseRefundsRecordedBeforePayment() (#2556)
     // ========================================
 
     @Nested
     @DisplayName("a refund stored before its settlement comes off when the settlement records the payment (#2556)")
     class RefundsBeforeSettlement {
 
-        private final UUID settlementEventId = UUID.fromString("00000000-0000-0000-0000-0000000f2556");
+        private final UUID recordingEventId = UUID.fromString("00000000-0000-0000-0000-0000000f2556");
 
         @BeforeEach
         void recordedByThisSettlement() {
-            testPayment.setSourceEventId(settlementEventId);
+            testPayment.setSourceEventId(recordingEventId);
             testPayment.setUnappliedAmount(new BigDecimal("5.00"));
         }
 
@@ -417,7 +415,7 @@ class PaymentApplicationServiceTest {
             when(refundReplicaRepository.sumAmountByPaymentIntentId(testPaymentId))
                     .thenReturn(new BigDecimal("5.00"));
 
-            BigDecimal released = service.releaseRefundsRecordedBeforeSettlement(testPaymentId, settlementEventId);
+            BigDecimal released = service.releaseRefundsRecordedBeforePayment(testPaymentId, recordingEventId);
 
             assertThat(released).isEqualByComparingTo("5.00");
             assertThat(testPayment.getUnappliedAmount()).isEqualByComparingTo("0.00");
@@ -434,7 +432,7 @@ class PaymentApplicationServiceTest {
             when(refundReplicaRepository.sumAmountByPaymentIntentId(testPaymentId))
                     .thenReturn(new BigDecimal("20.00"));
 
-            BigDecimal released = service.releaseRefundsRecordedBeforeSettlement(testPaymentId, settlementEventId);
+            BigDecimal released = service.releaseRefundsRecordedBeforePayment(testPaymentId, recordingEventId);
 
             assertThat(released).isEqualByComparingTo("5.00");
             assertThat(testPayment.getStatus()).isEqualTo(ReceivablePaymentStatus.FULLY_APPLIED);
@@ -443,7 +441,7 @@ class PaymentApplicationServiceTest {
                             eq(testPaymentId),
                             argThat(amount -> amount.compareTo(new BigDecimal("20.00")) == 0),
                             argThat(amount -> amount.compareTo(new BigDecimal("5.00")) == 0),
-                            eq("refunds recorded before settlement event " + settlementEventId));
+                            eq("refunds recorded before payment event " + recordingEventId));
         }
 
         @Test
@@ -453,7 +451,7 @@ class PaymentApplicationServiceTest {
             when(refundReplicaRepository.sumAmountByPaymentIntentId(testPaymentId))
                     .thenReturn(BigDecimal.ZERO);
 
-            assertThat(service.releaseRefundsRecordedBeforeSettlement(testPaymentId, settlementEventId))
+            assertThat(service.releaseRefundsRecordedBeforePayment(testPaymentId, recordingEventId))
                     .isEqualByComparingTo("0");
             assertThat(testPayment.getUnappliedAmount()).isEqualByComparingTo("5.00");
             verify(receivablePaymentRepository, never()).save(any());
@@ -466,7 +464,7 @@ class PaymentApplicationServiceTest {
         void recordedByAnotherFact() {
             when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
 
-            assertThat(service.releaseRefundsRecordedBeforeSettlement(
+            assertThat(service.releaseRefundsRecordedBeforePayment(
                             testPaymentId, UUID.fromString("00000000-0000-0000-0000-0000000f2557")))
                     .isEqualByComparingTo("0");
             assertThat(testPayment.getUnappliedAmount()).isEqualByComparingTo("5.00");
@@ -479,7 +477,7 @@ class PaymentApplicationServiceTest {
         void paymentNotRecorded() {
             when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.empty());
 
-            assertThat(service.releaseRefundsRecordedBeforeSettlement(testPaymentId, settlementEventId))
+            assertThat(service.releaseRefundsRecordedBeforePayment(testPaymentId, recordingEventId))
                     .isEqualByComparingTo("0");
             verifyNoInteractions(refundReplicaRepository, refundReleaseAlert);
         }

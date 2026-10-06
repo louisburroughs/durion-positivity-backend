@@ -209,14 +209,14 @@ class InvoicePaymentEventDrainIT extends PostgresCommittingTestBase {
     @DisplayName("a payment a settlement fact recorded first is applied, and a late settlement fact reuses it")
     void settlementFirst_thenEvent_appliesOnce() {
         UUID paymentId = nextUuid();
-        UUID settlementEventId = nextUuid();
+        UUID recordingEventId = nextUuid();
         paymentApplicationService.handlePaymentCleared(
                 paymentId,
                 customerId,
                 "USD",
                 new BigDecimal("100.00"),
                 Instant.parse("2026-09-15T10:00:00Z"),
-                settlementEventId,
+                recordingEventId,
                 null,
                 "CARD");
 
@@ -226,7 +226,7 @@ class InvoicePaymentEventDrainIT extends PostgresCommittingTestBase {
         assertThat(status(eventId)).isEqualTo(AccountingEventStatus.PROCESSED);
         ReceivablePayment payment =
                 receivablePaymentRepository.findById(paymentId).orElseThrow();
-        assertThat(payment.getSourceEventId()).isEqualTo(settlementEventId);
+        assertThat(payment.getSourceEventId()).isEqualTo(recordingEventId);
         assertThat(payment.getUnappliedAmount()).isEqualByComparingTo("0");
         assertThat(paymentApplicationRepository.findAll())
                 .singleElement()

@@ -119,4 +119,15 @@ public interface ReceivablePaymentRepository extends JpaRepository<ReceivablePay
     @Query("SELECT COALESCE(SUM(rp.totalAmount), 0) FROM ReceivablePayment rp"
             + " WHERE rp.clearedAt BETWEEN :start AND :end")
     BigDecimal sumTotalAmountByClearedAtBetween(@Param("start") Instant start, @Param("end") Instant end);
+
+    /**
+     * Take Postgres's transaction-scoped advisory lock {@code key} on this transaction's own connection,
+     * waiting while another transaction holds it; it is released when this transaction ends (#2556).
+     * Postgres only: call it through {@code PaymentIntentLock}, which skips it on any other database.
+     *
+     * @param key the lock key
+     * @return always 1
+     */
+    @Query(value = "SELECT 1 FROM (SELECT pg_advisory_xact_lock(:key)) AS held", nativeQuery = true)
+    int takeAdvisoryTransactionLock(@Param("key") long key);
 }

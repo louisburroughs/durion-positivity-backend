@@ -495,8 +495,8 @@ public class PaymentApplicationServiceImpl
             @NonNull UUID paymentId, @NonNull BigDecimal refundedAmount, @NonNull UUID refundId) {
         Optional<ReceivablePayment> recorded = receivablePaymentRepository.findById(paymentId);
         if (recorded.isEmpty()) {
-            // The refund fact came first (#2556): its row is stored, and the settlement that records the
-            // payment releases it (releaseRefundsRecordedBeforeSettlement).
+            // The refund fact came first (#2556): its row is stored, and the fact that records the payment
+            // releases it (releaseRefundsRecordedBeforePayment).
             refundReleaseAlert.paymentNotRecorded(paymentId, refundedAmount, refundId);
             return BigDecimal.ZERO;
         }
@@ -505,13 +505,14 @@ public class PaymentApplicationServiceImpl
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public @NonNull BigDecimal releaseRefundsRecordedBeforeSettlement(
-            @NonNull UUID paymentId, @NonNull UUID settlementEventId) {
+    public @NonNull BigDecimal releaseRefundsRecordedBeforePayment(
+            @NonNull UUID paymentId, @NonNull UUID recordingEventId) {
         Optional<ReceivablePayment> recorded = receivablePaymentRepository.findById(paymentId);
-        // Only the settlement that recorded the payment: a payment recorded by an earlier fact was there when
-        // any later refund arrived, and that refund released itself. A redelivery of the recording fact never
-        // gets here (processed_events, committed with the payment); one under a new event id fails this check.
-        if (recorded.isEmpty() || !settlementEventId.equals(recorded.get().getSourceEventId())) {
+        // Only the event that recorded the payment: a payment recorded by an earlier event was there when any
+        // later refund arrived, and that refund released itself. A redelivery of the recording event never gets
+        // here (its processed mark commits with the payment); one under a new event id fails this check. A
+        // same-id rerun that bypassed that mark would release again: see the interface.
+        if (recorded.isEmpty() || !recordingEventId.equals(recorded.get().getSourceEventId())) {
             return BigDecimal.ZERO;
         }
         BigDecimal refunded = refundReplicaRepository.sumAmountByPaymentIntentId(paymentId);
@@ -519,7 +520,7 @@ public class PaymentApplicationServiceImpl
             return BigDecimal.ZERO;
         }
         return releaseUpToRemainder(
-                recorded.get(), refunded, "refunds recorded before settlement event " + settlementEventId);
+                recorded.get(), refunded, "refunds recorded before payment event " + recordingEventId);
     }
 
     /**
@@ -532,12 +533,14 @@ public class PaymentApplicationServiceImpl
             return BigDecimal.ZERO;
         }
         BigDecimal unapplied = payment.getUnappliedAmount();
-        BigDecimal released = unapplied == null || unapplied.signum() <= 0 ? BigDecimal.ZERO : refunded.min(unapplied);
+        if (unapplied == null || unapplied.signum() <= 0) {
+            // The ordinary refund of an applied payment: counted, not raised (#2556 review).
+            refundReleaseAlert.fullyApplied(payment.getPaymentId(), refunded, source);
+            return BigDecimal.ZERO;
+        }
+        BigDecimal released = refunded.min(unapplied);
         if (released.compareTo(refunded) < 0) {
             refundReleaseAlert.exceedsRemainder(payment.getPaymentId(), refunded, released, source);
-        }
-        if (released.signum() == 0) {
-            return BigDecimal.ZERO;
         }
         payment.applyAmount(released);
         payment.setUpdatedAt(Instant.now(clock));
