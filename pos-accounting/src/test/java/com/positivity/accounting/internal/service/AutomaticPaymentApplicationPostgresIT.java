@@ -489,17 +489,6 @@ class AutomaticPaymentApplicationPostgresIT extends PostgresCommittingTestBase {
         assertThat(held.getStatus()).isEqualTo(AccountingEventStatus.SUSPENDED);
         assertThat(held.getFailureReasonCode()).isEqualTo("INVOICE_NOT_FOUND");
 
-        // Case b has no attempt cap (review #2550): more passes than max-retries (3) while the invoice is
-        // missing, and the pass after it arrives still applies the payment.
-        for (int pass = 0; pass < 4; pass++) {
-            assertThat(retryJob.retryBoundTenant()).as("pass %s", pass).isEqualTo(1);
-        }
-        assertThat(accountingEventRepository
-                        .findById(held.getEventId())
-                        .orElseThrow()
-                        .getAttemptCount())
-                .isZero();
-
         seedInvoice("115.00", customerId);
         assertThat(retryJob.retryBoundTenant()).isEqualTo(1);
 
@@ -552,6 +541,36 @@ class AutomaticPaymentApplicationPostgresIT extends PostgresCommittingTestBase {
         assertThat(after.isReversed()).isTrue();
         assertThat(after.getReversedAt()).isNotNull();
         assertThat(after.getActions()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("7: an invoice that never arrives shares the retry cap: after max-retries passes the row is no longer"
+            + " a retry candidate, and a manual reprocess applies it once the invoice arrives")
+    void criterion7_invoiceNotFoundSharesTheRetryCap() {
+        UUID intent = nextUuid();
+        consume(nextUuid(), fact(intent, "CARD", "115.00"));
+        AccountingEvent held = settledRows().getFirst();
+
+        for (int pass = 0; pass < 3; pass++) { // pos.accounting.failed-event-retry.max-retries default
+            assertThat(retryJob.retryBoundTenant()).as("pass %s", pass).isEqualTo(1);
+        }
+        AccountingEvent exhausted =
+                accountingEventRepository.findById(held.getEventId()).orElseThrow();
+        assertThat(exhausted.getAttemptCount()).isEqualTo(3);
+        assertThat(exhausted.getStatus()).isEqualTo(AccountingEventStatus.SUSPENDED);
+        assertThat(exhausted.getFailureReasonCode()).isEqualTo("INVOICE_NOT_FOUND");
+        assertThat(retryJob.retryBoundTenant())
+                .as("no longer a retry candidate")
+                .isZero();
+
+        seedInvoice("115.00", customerId);
+        assertThat(retryJob.retryBoundTenant())
+                .as("the cap still holds after the invoice arrives")
+                .isZero();
+        AccountingEventResponse reprocessed = inTransaction(
+                () -> eventIngestionService.reprocessEvent(held.getEventId(), new ReprocessEventRequest(), "ops-user"));
+        assertThat(reprocessed.getStatus()).isEqualTo(AccountingEventStatus.PROCESSED);
+        assertThat(singleApplication().getApplicationTimestamp()).isEqualTo(SETTLED_AT);
     }
 
     // ===== undo across paths (review #2550, BR-8) =====

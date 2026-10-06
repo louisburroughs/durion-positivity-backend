@@ -47,8 +47,8 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <ol type="a">
  *   <li>the method is not {@code CASH} or {@code CARD}: not applied, {@code SKIPPED / NOT_POSTABLE};
- *   <li>the invoice is not in {@code ext_invoice}: {@code SUSPENDED / INVOICE_NOT_FOUND}, retried
- *       without an attempt cap until it arrives;
+ *   <li>the invoice is not in {@code ext_invoice}: {@code SUSPENDED / INVOICE_NOT_FOUND}, retried by
+ *       the retry job up to the module's attempt cap, then reprocessed by a person;
  *   <li>the invoice is not {@code FINALIZED} or {@code POSTED}: {@code FAILED / INVOICE_NOT_ELIGIBLE},
  *       retried up to the attempt cap;
  *   <li>the invoice's party, as a UUID, is missing or is not the payment's customer (BR-2, §9.5a):

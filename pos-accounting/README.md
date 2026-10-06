@@ -479,7 +479,7 @@ result; neither writes a row.
 | Case | Outcome | `accounting_event` row |
 |---|---|---|
 | a. `methodType` not `CASH` / `CARD` | not applied | `SKIPPED / NOT_POSTABLE` |
-| b. invoice not in `ext_invoice` | not applied; the retry job tries again until it arrives (no attempt cap: a pass that still finds no invoice spends no attempt, though each pass writes its history row) | `SUSPENDED / INVOICE_NOT_FOUND` |
+| b. invoice not in `ext_invoice` | not applied; the retry job tries again, sharing the module retry cap (`pos.accounting.failed-event-retry.max-retries`, default 3 passes, about 45 minutes at the default 15-minute poll). After that the row stays `SUSPENDED` and needs a manual `POST /v1/accounting/events/{eventId}/reprocess` once the invoice arrives | `SUSPENDED / INVOICE_NOT_FOUND` |
 | c. invoice not `FINALIZED` / `POSTED` | not applied; retried up to the attempt cap | `FAILED / INVOICE_NOT_ELIGIBLE` |
 | d. invoice party (UUID) missing or not the payment's customer | not applied | `SKIPPED / NOT_POSTABLE` "customer differs from invoice INV-…" |
 | e. settlement date in a closed or hard-locked period | not applied; reprocess by hand after reopening (a hard-locked date cannot be reopened: the detail says to match or credit the payment by hand) | `SUSPENDED / PERIOD_CLOSED` |
@@ -862,7 +862,7 @@ transaction as the posting and the `processed_events` mark:
 | `OrderEventsListener` | `order.session.closed` | `pos-order` | session id | `PROCESSED / NEW` + entry; `PROCESSED / NEW`, no entry, for a zero variance; `PROCESSED / DUPLICATE_IGNORED` when the session key was already posted; a foreign-currency hold is the `SUSPENDED / CURRENCY_NOT_SUPPORTED` row (Ledger currency above) |
 | `SupplierInvoiceEventsListener` | `supplier.invoice.received` | `pos-supplier` | vendor bill id | `PROCESSED / NEW`, no entry (nothing posts on ingest), for a new bill and for a duplicate flagged on the live original; `PROCESSED / DUPLICATE_IGNORED` for a duplicate identical to the live bill held, under the duplicate rule above (#2501) |
 | `WarrantyEventsListener` | `warranty.reimbursement.submitted`, `warranty.reimbursement.resolved` | `pos-warranty` | reimbursement id | `PROCESSED / NEW`, no entry; `SKIPPED / NOT_POSTABLE` for a stale fact |
-| `SettlementEventsListener` | `payment.payment.settled` | `pos-invoice` | `paymentIntentId` | no row when the payment is applied automatically or another path already applied it (the application is the evidence); otherwise one row per Payment Application above: `SKIPPED / NOT_POSTABLE`, `SUSPENDED / INVOICE_NOT_FOUND`, `SUSPENDED / PERIOD_CLOSED`, `FAILED / INVOICE_NOT_ELIGIBLE`, or the `SUSPENDED / CURRENCY_NOT_SUPPORTED` hold; a re-emitted fact already skipped or held for the same reason writes no second row (#2503) |
+| `SettlementEventsListener` | `payment.payment.settled` | `pos-invoice` | `paymentIntentId` | no row when the payment is applied automatically or another path already applied it (the application is the evidence); otherwise one row per Payment Application above: `SKIPPED / NOT_POSTABLE`, `SUSPENDED / INVOICE_NOT_FOUND`, `SUSPENDED / PERIOD_CLOSED`, `FAILED / INVOICE_NOT_ELIGIBLE`, or the `SUSPENDED / CURRENCY_NOT_SUPPORTED` hold; a re-emitted fact already skipped for the same cause, or held for the same reason, writes no second row (#2503) |
 
 - `domainKeyId` is not unique: every fact about the same document (an invoice finalized, posted, then
   cancelled) writes its own row under the same key. `eventReference` (`AE-YYYYMM-n`) is the unique one.

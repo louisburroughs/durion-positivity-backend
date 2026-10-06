@@ -145,8 +145,8 @@ class EventIngestionSettledPaymentReprocessTest {
     }
 
     @Test
-    @DisplayName("an invoice still not replicated does not spend an attempt: case b has no cap (review #2550)")
-    void invoiceNotFoundAgainKeepsAttempts() {
+    @DisplayName("an invoice still not replicated spends an attempt: case b shares the retry cap (review #2550)")
+    void invoiceNotFoundAgainSpendsAnAttempt() {
         event.setFailureReasonCode("INVOICE_NOT_FOUND");
         when(automaticPaymentApplicationService.reapply(payload))
                 .thenReturn(new Result(Outcome.SUSPENDED_INVOICE, "invoice INV-1 is not in the invoice replica yet"));
@@ -155,7 +155,7 @@ class EventIngestionSettledPaymentReprocessTest {
 
         assertThat(response.getStatus()).isEqualTo(AccountingEventStatus.SUSPENDED);
         assertThat(event.getFailureReasonCode()).isEqualTo("INVOICE_NOT_FOUND");
-        assertThat(event.getAttemptCount()).isEqualTo(1);
+        assertThat(event.getAttemptCount()).isEqualTo(2);
         assertThat(history().getOutcome()).isEqualTo(ReprocessingOutcome.FAILURE);
     }
 

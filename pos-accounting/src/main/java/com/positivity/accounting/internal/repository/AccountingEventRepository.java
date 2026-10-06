@@ -39,6 +39,13 @@ public interface AccountingEventRepository
             String eventType, String domainKeyId, String failureReasonCode);
 
     /**
+     * Whether an ingestion record already skipped this fact for this reason and cause (#2503), so a
+     * re-published skipped fact writes no second record while a skip with another cause still does.
+     */
+    boolean existsByEventTypeAndDomainKeyIdAndFailureReasonCodeAndErrorMessage(
+            String eventType, String domainKeyId, String failureReasonCode, String errorMessage);
+
+    /**
      * Ids of the oldest events in {@code status}, for the received-event drainer (#2435). Ids only:
      * each event is then claimed and processed in its own transaction.
      */

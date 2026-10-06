@@ -217,8 +217,9 @@ public class KafkaFactIngestionRecorder {
     }
 
     /**
-     * {@link #recordSkipped} once per fact (#2503): a fact already skipped for the same reason under the
-     * same event type and domain key — a re-publish under a new envelope id — writes no second row.
+     * {@link #recordSkipped} once per fact and cause (#2503): a fact already skipped for the same reason
+     * and detail under the same event type and domain key — a re-publish under a new envelope id — writes
+     * no second row; a skip with another cause does.
      *
      * @return whether a new skipped record was written
      */
@@ -232,8 +233,8 @@ public class KafkaFactIngestionRecorder {
             @NonNull Object fact,
             @NonNull PostingFailureReason reason,
             @NonNull String detail) {
-        if (accountingEventRepository.existsByEventTypeAndDomainKeyIdAndFailureReasonCode(
-                eventType, domainKeyId.toString(), reason.name())) {
+        if (accountingEventRepository.existsByEventTypeAndDomainKeyIdAndFailureReasonCodeAndErrorMessage(
+                eventType, domainKeyId.toString(), reason.name(), detail)) {
             log.info(
                     "Fact already skipped, not recorded again | eventType={} | domainKeyId={} | reason={}",
                     eventType,
