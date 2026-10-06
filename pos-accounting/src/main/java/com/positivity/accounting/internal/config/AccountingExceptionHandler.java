@@ -12,6 +12,8 @@ import com.positivity.accounting.internal.exception.AccountingPeriodClosedExcept
 import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
 import com.positivity.accounting.internal.exception.AccountingPeriodNotFoundException;
 import com.positivity.accounting.internal.exception.AccountingPeriodStateException;
+import com.positivity.accounting.internal.exception.AccountingTimeZoneLockedException;
+import com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetException;
 import com.positivity.accounting.internal.exception.AdjustmentSignInvalidException;
 import com.positivity.accounting.internal.exception.CashCustomerCreditNotAllowedException;
 import com.positivity.accounting.internal.exception.CurrencyNotSupportedException;
@@ -23,6 +25,7 @@ import com.positivity.accounting.internal.exception.GLAccountNotActiveException;
 import com.positivity.accounting.internal.exception.GLAccountNotFoundException;
 import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
 import com.positivity.accounting.internal.exception.HardLockDateRegressionException;
+import com.positivity.accounting.internal.exception.InvalidAccountingTimeZoneException;
 import com.positivity.accounting.internal.exception.InvalidDateRangeException;
 import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.exception.JournalEntryNotFoundException;
@@ -299,6 +302,27 @@ public class AccountingExceptionHandler {
      * Hard-lock date update that would move the date backward (story B2,
      * issue #944): the hard lock is monotonic-forward-only.
      */
+    /** The requested accounting time zone is not an IANA region id (#2558). */
+    @ExceptionHandler(InvalidAccountingTimeZoneException.class)
+    public ResponseEntity<ApiError> handleInvalidAccountingTimeZone(
+            InvalidAccountingTimeZoneException ex, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, "INVALID_ACCOUNTING_TIME_ZONE", ex.getMessage(), request);
+    }
+
+    /** The accounting time zone is fixed once a period was closed or a hard-lock date set (#2558). */
+    @ExceptionHandler(AccountingTimeZoneLockedException.class)
+    public ResponseEntity<ApiError> handleAccountingTimeZoneLocked(
+            AccountingTimeZoneLockedException ex, HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, "ACCOUNTING_TIME_ZONE_LOCKED", ex.getMessage(), request);
+    }
+
+    /** No accounting time zone is set, so nothing can be dated or posted (#2558). */
+    @ExceptionHandler(AccountingTimeZoneUnsetException.class)
+    public ResponseEntity<ApiError> handleAccountingTimeZoneUnset(
+            AccountingTimeZoneUnsetException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNPROCESSABLE_CONTENT, "ACCOUNTING_TIME_ZONE_UNSET", ex.getMessage(), request);
+    }
+
     @ExceptionHandler(HardLockDateRegressionException.class)
     public ResponseEntity<ApiError> handleHardLockDateRegression(
             HardLockDateRegressionException ex, HttpServletRequest request) {

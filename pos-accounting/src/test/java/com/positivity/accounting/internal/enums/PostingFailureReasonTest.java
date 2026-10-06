@@ -44,7 +44,8 @@ class PostingFailureReasonTest {
                         PostingFailureReason.PERIOD_CLOSED,
                         PostingFailureReason.CURRENCY_NOT_SUPPORTED,
                         PostingFailureReason.VALIDATION_ERROR,
-                        PostingFailureReason.MISSING_AMOUNT);
+                        PostingFailureReason.MISSING_AMOUNT,
+                        PostingFailureReason.ACCOUNTING_TIME_ZONE_UNSET);
     }
 
     @Test

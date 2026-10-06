@@ -3,11 +3,12 @@ package com.positivity.accounting.internal.handler;
 import com.positivity.accounting.internal.dto.CustomerCreditIssuanceGLPostingEvent;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
+import com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetException;
+import com.positivity.accounting.internal.service.AccountingCalendarZoneResolver;
 import com.positivity.accounting.internal.service.GLMappingResolver;
 import com.positivity.accounting.internal.service.GLPostingService;
 import com.positivity.accounting.internal.service.IdempotencyService;
 import java.nio.charset.StandardCharsets;
-import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -63,7 +64,7 @@ public class CustomerCreditIssuanceGLPostingEventHandler {
     static final String IDEMPOTENCY_KEY_PREFIX = "CUSTOMER_CREDIT_ISSUANCE_GL_POSTING:";
     static final String SOURCE_EVENT_NAMESPACE = "CUSTOMER_CREDIT_ISSUANCE:";
 
-    private final Clock clock;
+    private final AccountingCalendarZoneResolver zoneResolver;
     private final IdempotencyService idempotencyService;
     private final GLMappingResolver glMappingResolver;
     private final GLPostingService glPostingService;
@@ -105,7 +106,7 @@ public class CustomerCreditIssuanceGLPostingEventHandler {
             // time — matching the AR cash-receipt leg so both entries land in the
             // same accounting period and resolve the same effective-dated GL
             // mapping across replays.
-            LocalDateTime transactionDate = LocalDateTime.ofInstant(event.getApplicationTimestamp(), clock.getZone());
+            LocalDateTime transactionDate = zoneResolver.postingDateTime(event.getApplicationTimestamp());
 
             // Account resolution via posting category / mapping key configuration
             // — no hardcoded account ids (issue #975 requirement).
@@ -137,7 +138,9 @@ public class CustomerCreditIssuanceGLPostingEventHandler {
                     event.getCreditId(),
                     postedJournalEntryId);
 
-        } catch (AccountingPeriodClosedException | AccountingPeriodHardLockedException e) {
+        } catch (AccountingPeriodClosedException
+                | AccountingPeriodHardLockedException
+                | AccountingTimeZoneUnsetException e) {
             // Wave 2 period gate: propagate unwrapped so the failure reason stays
             // visible in the outbox retry record; retry succeeds once the period
             // is reopened (or the hard lock moved).

@@ -105,7 +105,8 @@ class SettlementEventsListenerTransactionTest {
                 ingestionRecorder,
                 automatic,
                 meterRegistry,
-                transactionManager);
+                transactionManager,
+                TestZoneResolvers.utc(Clock.systemUTC()));
     }
 
     @AfterEach

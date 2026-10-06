@@ -20,18 +20,22 @@ import org.jspecify.annotations.Nullable;
 public interface AccountingPeriodService {
 
     /**
-     * Get the current accounting period ID.
+     * Get the current accounting period ID: this month in the tenant's accounting-calendar zone (#2558).
      *
      * @return Current period ID in format YYYY-MM (e.g., "2026-02")
+     * @throws com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetException when the tenant has no
+     *     accounting time zone
      */
     @NonNull
     String getCurrentPeriodId();
 
     /**
-     * Get the accounting period ID for a given date.
+     * Get the accounting period ID for a given instant, dated in the tenant's accounting-calendar zone (#2558).
      *
      * @param date Date to find period for
      * @return Period ID in format YYYY-MM
+     * @throws com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetException when the tenant has no
+     *     accounting time zone
      */
     @NonNull
     String getPeriodIdForDate(@NonNull Instant date);

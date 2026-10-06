@@ -87,7 +87,8 @@ class SettlementListenersReliabilityTest {
                 org.mockito.Mockito.mock(KafkaFactIngestionRecorder.class),
                 org.mockito.Mockito.mock(AutomaticPaymentApplicationService.class),
                 org.mockito.Mockito.mock(ObjectProvider.class),
-                org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class));
+                org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class),
+                TestZoneResolvers.utc(CLOCK));
     }
 
     private String envelope(String eventType, String eventId, Object payload) {

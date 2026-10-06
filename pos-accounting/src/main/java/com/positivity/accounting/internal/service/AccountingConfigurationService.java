@@ -52,6 +52,21 @@ public interface AccountingConfigurationService {
     BankReconciliationPolicyResponse getBankReconciliationPolicy();
 
     /**
+     * Set the tenant's accounting-calendar zone ({@code ACCOUNTING_TIME_ZONE}, #2558): the zone in which every
+     * instant becomes a posting date and a period. Audited with the old and new zone and the acting user; the
+     * resolver's cached zone is evicted. Posted entries keep their dates: a change never re-cuts history.
+     *
+     * @param timeZone an IANA region id, such as {@code America/Chicago}
+     * @return the stored zone id; the same id unchanged when it was already the zone (nothing written)
+     * @throws com.positivity.accounting.internal.exception.InvalidAccountingTimeZoneException 400 when the id is
+     *     unknown, a fixed offset or a {@code SystemV/*} id
+     * @throws com.positivity.accounting.internal.exception.AccountingTimeZoneLockedException 409 once the tenant has
+     *     closed a period or set a hard-lock date
+     */
+    @NonNull
+    String setAccountingTimeZone(@NonNull String timeZone);
+
+    /**
      * Replace the five bank reconciliation settings (§5.2): each setting whose effective value changes is written
      * (a {@code null} threshold deletes its row) and audited as one {@code BANK_REC_POLICY_SET} row with the old and
      * new value and the justification; an unchanged setting writes nothing.

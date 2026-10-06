@@ -41,6 +41,16 @@ public class RetryingAccountingConfigurationService implements AccountingConfigu
     }
 
     @Override
+    public @NonNull String setAccountingTimeZone(@NonNull String timeZone) {
+        try {
+            return delegate.setAccountingTimeZone(timeZone);
+        } catch (DataIntegrityViolationException raced) {
+            log.warn("Accounting time zone update lost a race on the setting's first row; retrying once", raced);
+            return delegate.setAccountingTimeZone(timeZone);
+        }
+    }
+
+    @Override
     public @NonNull BankReconciliationPolicyResponse getBankReconciliationPolicy() {
         return delegate.getBankReconciliationPolicy();
     }

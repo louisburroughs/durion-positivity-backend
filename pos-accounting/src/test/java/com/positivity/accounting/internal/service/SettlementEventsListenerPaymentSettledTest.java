@@ -155,7 +155,8 @@ class SettlementEventsListenerPaymentSettledTest {
                     ingestionRecorder,
                     automaticPaymentApplicationService,
                     provider,
-                    org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class));
+                    org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class),
+                    TestZoneResolvers.utc(CLOCK));
         }
 
         private String versioned(int schemaVersion, PaymentSettledV1 payload) {
@@ -245,7 +246,8 @@ class SettlementEventsListenerPaymentSettledTest {
                     ingestionRecorder,
                     automaticPaymentApplicationService,
                     mock(ObjectProvider.class),
-                    org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class));
+                    org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class),
+                    TestZoneResolvers.utc(CLOCK));
         }
 
         @BeforeEach
@@ -508,7 +510,8 @@ class SettlementEventsListenerPaymentSettledTest {
                     ingestionRecorder,
                     automaticPaymentApplicationService,
                     mock(ObjectProvider.class),
-                    org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class));
+                    org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class),
+                    TestZoneResolvers.utc(CLOCK));
         }
 
         @BeforeEach

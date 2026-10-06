@@ -38,6 +38,8 @@ tags:
   name: Accounting Tenant Template
 - description: 'Bank transactions as the bank reported them: reads, duplicate review, exclude and restore.'
   name: Bank Transactions
+- description: 'Tenant accounting configuration: the accounting-calendar time zone in which postings are dated and periods are cut.'
+  name: Accounting Configuration
 - description: Endpoints for vendor bill creation, matching, retrieval, and exception resolution
   name: Vendor Bill API
 - description: Ingest and manage accounting events for journal processing.
@@ -2621,6 +2623,67 @@ paths:
       - Bank Transactions
       x-required-permissions:
       - accounting:reconciliation:approve
+  /v1/accounting/configuration/time-zone:
+    put:
+      description: 'Sets the tenant''s accounting-calendar time zone: the zone in which every settlement, payment application and posting is dated and every accounting period begins and ends. A tenant without a zone posts nothing; its facts are held SUSPENDED with ACCOUNTING_TIME_ZONE_UNSET.
+
+        Use this tool once, before the tenant''s first period close, to set the zone of the legal entity''s books; use setAccountingHardLockDate to lock history instead.
+
+        Preconditions: the tenant has never closed an accounting period and has no hard-lock date; after either the zone is fixed. Entries already posted keep their dates and periods.
+
+        Required inputs: timeZone, an IANA region id such as America/Chicago; fixed offsets such as +05:00 or Etc/GMT+5 and SystemV ids are rejected, UTC is accepted.
+
+        Emits an ACCOUNTING_CONFIGURATION_TIME_ZONE_SET event; the change is audited with the old zone, the new zone and the acting user, and setting the current zone again changes nothing.
+
+        Returns 400 INVALID_ACCOUNTING_TIME_ZONE for an invalid id and 409 ACCOUNTING_TIME_ZONE_LOCKED once a period was closed or a hard-lock date was set.
+
+        '
+      operationId: setAccountingTimeZone
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Central time:
+                description: Central time
+                value:
+                  timeZone: America/Chicago
+            schema:
+              $ref: '#/components/schemas/AccountingTimeZoneUpdateRequest'
+        description: The IANA region id of the tenant's accounting calendar.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountingTimeZoneResponse'
+          description: Time zone stored; the stored zone id is returned
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: timeZone is missing or blank (ARGUMENT_NOT_VALID), or is not an IANA region id (INVALID_ACCOUNTING_TIME_ZONE)
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks the accounting:period:hard_lock permission
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The tenant has closed a period or set a hard-lock date, so the zone can no longer change (ACCOUNTING_TIME_ZONE_LOCKED)
+      security:
+      - bearerAuth:
+        - accounting:period:hard_lock
+      summary: Set Accounting Time Zone
+      tags:
+      - Accounting Configuration
+      x-required-permissions:
+      - accounting:period:hard_lock
   /v1/accounting/credit-memos:
     get:
       description: 'Lists credit memos as a paginated projection, optionally filtered by customer, original invoice or lifecycle status.
@@ -12034,6 +12097,28 @@ components:
           - CLOSED
           example: OPEN
           type: string
+      type: object
+    AccountingTimeZoneResponse:
+      description: The tenant's accounting-calendar time zone
+      properties:
+        timeZone:
+          description: IANA region id in which the tenant's postings are dated and its periods are cut
+          example: America/Chicago
+          type: string
+      required:
+      - timeZone
+      type: object
+    AccountingTimeZoneUpdateRequest:
+      description: Request payload for setting the tenant's accounting-calendar time zone
+      properties:
+        timeZone:
+          description: IANA region id of the tenant's accounting calendar, such as America/Chicago. Every settlement, application and posting is dated, and every period is cut, in this zone. Fixed offsets (+05:00, UTC+05:00, Etc/GMT+5) and SystemV ids are rejected; UTC is accepted.
+          example: America/Chicago
+          maxLength: 64
+          minLength: 0
+          type: string
+      required:
+      - timeZone
       type: object
     AdjustmentReverseRequest:
       description: Reverse a posted reconciliation adjustment

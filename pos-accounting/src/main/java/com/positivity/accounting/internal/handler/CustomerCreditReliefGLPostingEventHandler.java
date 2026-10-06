@@ -4,12 +4,13 @@ import com.positivity.accounting.internal.dto.CustomerCreditReliefGLPostingEvent
 import com.positivity.accounting.internal.enums.CustomerCreditTransactionType;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
+import com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetException;
+import com.positivity.accounting.internal.service.AccountingCalendarZoneResolver;
 import com.positivity.accounting.internal.service.CustomerCreditPostingLifecycleService;
 import com.positivity.accounting.internal.service.GLMappingResolver;
 import com.positivity.accounting.internal.service.GLPostingService;
 import com.positivity.accounting.internal.service.IdempotencyService;
 import java.nio.charset.StandardCharsets;
-import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -60,7 +61,7 @@ public class CustomerCreditReliefGLPostingEventHandler {
     static final String IDEMPOTENCY_KEY_PREFIX = "CUSTOMER_CREDIT_RELIEF_GL_POSTING:";
     static final String SOURCE_EVENT_NAMESPACE = "CUSTOMER_CREDIT_RELIEF:";
 
-    private final Clock clock;
+    private final AccountingCalendarZoneResolver zoneResolver;
     private final IdempotencyService idempotencyService;
     private final GLMappingResolver glMappingResolver;
     private final GLPostingService glPostingService;
@@ -104,7 +105,7 @@ public class CustomerCreditReliefGLPostingEventHandler {
             // Transaction date is the event's business timestamp (when the draw-down actually
             // happened), NOT the processing/clock time — so the relief lands in the period it
             // occurred in and resolves the same effective-dated GL mapping across replays.
-            LocalDateTime transactionDate = LocalDateTime.ofInstant(event.getReliefTimestamp(), clock.getZone());
+            LocalDateTime transactionDate = zoneResolver.postingDateTime(event.getReliefTimestamp());
 
             boolean application = type == CustomerCreditTransactionType.APPLICATION;
             String postingCategory = application ? APPLICATION_POSTING_CATEGORY_NAME : REFUND_POSTING_CATEGORY_NAME;
@@ -143,7 +144,9 @@ public class CustomerCreditReliefGLPostingEventHandler {
                     event.getCreditId(),
                     posted);
 
-        } catch (AccountingPeriodClosedException | AccountingPeriodHardLockedException e) {
+        } catch (AccountingPeriodClosedException
+                | AccountingPeriodHardLockedException
+                | AccountingTimeZoneUnsetException e) {
             // Wave 2 period gate: propagate unwrapped so the failure reason stays visible in the
             // outbox retry record; retry succeeds once the period is reopened (or the hard lock
             // moved).

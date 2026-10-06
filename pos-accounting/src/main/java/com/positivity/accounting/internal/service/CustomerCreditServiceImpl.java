@@ -78,6 +78,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class CustomerCreditServiceImpl implements CustomerCreditService {
 
     private final Clock clock;
+    private final AccountingCalendarZoneResolver zoneResolver;
     private final CustomerCreditRepository customerCreditRepository;
     private final CustomerCreditTransactionRepository creditTransactionRepository;
     private final ExtInvoiceRepository extInvoiceRepository;
@@ -324,10 +325,12 @@ public class CustomerCreditServiceImpl implements CustomerCreditService {
      * on instead of a silently stuck outbox row.
      */
     private void requirePostablePeriod(Instant drawDownAt) {
-        if (!periodService.isPeriodOpen(LocalDate.ofInstant(drawDownAt, clock.getZone()))) {
+        // Dated in the tenant's accounting calendar (#2558); an unset zone refuses (422 ACCOUNTING_TIME_ZONE_UNSET).
+        LocalDate drawDownOn = zoneResolver.postingDate(drawDownAt);
+        if (!periodService.isPeriodOpen(drawDownOn)) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Accounting period for " + LocalDate.ofInstant(drawDownAt, clock.getZone())
+                    "Accounting period for " + drawDownOn
                             + " is not open; the customer-credit relief could not be posted, so the draw-down was "
                             + "not recorded");
         }

@@ -25,7 +25,6 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
-import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.UUID;
@@ -67,11 +66,13 @@ public class AccountingPeriodServiceImpl implements AccountingPeriodService {
     private final JournalEntryRepository journalEntryRepository;
     private final AccountingAuditLogRepository auditLogRepository;
     private final BankReconciliationCloseReadiness closeReadiness;
+    private final AccountingCalendarZoneResolver zoneResolver;
 
     @Override
     @NonNull
     public String getCurrentPeriodId() {
-        YearMonth currentMonth = YearMonth.now(clock);
+        // The tenant's accounting calendar, not the clock's zone (UTC) nor the JVM's (#2558).
+        YearMonth currentMonth = zoneResolver.currentMonth();
         String periodId = currentMonth.toString(); // Format: YYYY-MM
         log.debug("Current accounting period: {}", periodId);
         return periodId;
@@ -80,7 +81,7 @@ public class AccountingPeriodServiceImpl implements AccountingPeriodService {
     @Override
     @NonNull
     public String getPeriodIdForDate(@NonNull Instant date) {
-        LocalDate localDate = date.atZone(ZoneId.systemDefault()).toLocalDate();
+        LocalDate localDate = zoneResolver.postingDate(date);
         YearMonth yearMonth = YearMonth.from(localDate);
         String periodId = yearMonth.toString(); // Format: YYYY-MM
         log.debug("Period for date {}: {}", date, periodId);
@@ -302,7 +303,7 @@ public class AccountingPeriodServiceImpl implements AccountingPeriodService {
      * A month that has not started yet cannot be closed.
      */
     private AccountingPeriod provisionForClose(YearMonth yearMonth) {
-        LocalDate today = LocalDate.now(clock);
+        LocalDate today = zoneResolver.today();
         if (yearMonth.atDay(1).isAfter(today)) {
             throw new AccountingPeriodNotFoundException(
                     yearMonth.toString(), "Period " + yearMonth + " does not exist and its month has not started");

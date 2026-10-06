@@ -65,6 +65,7 @@ Every display value is resolved from data accounting already holds — its own r
 - `POST /v1/accounting/periods/{periodCode}/reopen` — reopen a closed period with mandatory justification (permission `accounting:period:reopen`, event `ACCOUNTING_PERIOD_REOPEN`)
 - `GET /v1/accounting/periods/hard-lock` — read the org-level hard-lock date (permission `accounting:period:view`, event `ACCOUNTING_PERIOD_HARD_LOCK_VIEW`)
 - `PUT /v1/accounting/periods/hard-lock` — set/advance the hard-lock date with mandatory justification (permission `accounting:period:hard_lock`, event `ACCOUNTING_PERIOD_HARD_LOCK_SET`)
+- `PUT /v1/accounting/configuration/time-zone` — set the tenant's accounting-calendar time zone before its first close (permission `accounting:period:hard_lock`, event `ACCOUNTING_CONFIGURATION_TIME_ZONE_SET`; see [Accounting time zone](#accounting-time-zone-2558))
 - `POST /v1/accounting/export` — request a timekeeping export job
 - `GET /v1/accounting/export/status/{jobId}` — get export job status
 - `GET /v1/accounting/export/history` — list export job history
@@ -187,7 +188,8 @@ tenant (the applier holds the tenant's state row `FOR UPDATE` for the length of 
 | `AccountingTemplateStartupSweep` | every start, per `TenantIterator` tenant | The alpha default tenant has no `tenant.created` fact, so this is the path that provisions it; it also carries template additions to tenants provisioned earlier. Logs and continues past a failing tenant; never blocks startup; an empty template (Flyway off) is one ERROR line |
 | Add-on choice | `PUT /v1/accounting/tenant-template/add-ons/retread-plant` | Records the tenant's choice, audits it with the caller, reconciles the tenant |
 
-The provisioner also seeds the policy defaults (three override thresholds, one refund policy, each only when
+The provisioner also seeds the policy defaults (three override thresholds, one refund policy, the `UTC`
+accounting time zone of #2558, each only when
 the tenant has none): `DataInitializationService` is a provisioning step, no longer a startup runner, so a
 tenant receives them only through one of the three paths above. Statement lines the template creates are
 global lines (`location_id` null) that name the account by its name; a per-location override a tenant holds
@@ -285,6 +287,30 @@ Monthly periods keyed by `YYYY-MM` code with a two-state OPEN → CLOSED lifecyc
 - Errors: `PERIOD_NOT_FOUND` (404), `PERIOD_ALREADY_CLOSED` / `PERIOD_ALREADY_OPEN` (409)
 - Close and reopen are audit-logged with the acting user
 - Concurrent close/reopen of the same period is serialized by optimistic locking (`@Version`, V15)
+
+### Accounting time zone (#2558)
+
+Every posting date and every period boundary is cut in the **tenant's accounting-calendar zone**, the
+`ACCOUNTING_TIME_ZONE` row of `accounting_configuration` (an IANA region id). The `Clock` bean stays UTC and
+the JVM zone is never read: `AccountingCalendarZoneResolver` is the only place an instant becomes a business
+date (period service `getPeriodIdForDate` / `getCurrentPeriodId`, the settlement listener, automatic
+application, the payment-application and customer-credit GL handlers, customer-credit draw-downs). An
+ArchUnit rule (`posting_dates_use_the_accounting_calendar_zone`) fails on `Clock.getZone()` or
+`ZoneId.systemDefault()` in those classes.
+
+- **Seed.** V10 gives every existing tenant `UTC` (what the UTC clock dated everything in, so nothing is
+  re-cut); tenant provisioning (`DataInitializationServiceImpl`) gives every new tenant `UTC`. An
+  administrator sets the legal entity's zone before the first close.
+- **No default.** A tenant without the row posts nothing: a settled payment is held
+  `SUSPENDED / ACCOUNTING_TIME_ZONE_UNSET` (never auto-retried; reprocess after setting the zone), a GL work
+  item fails and retries, and a request answers `422 ACCOUNTING_TIME_ZONE_UNSET`.
+- **Changing it.** `PUT /v1/accounting/configuration/time-zone` `{"timeZone":"America/Chicago"}` (permission
+  `accounting:period:hard_lock`, the authority over the hard-lock date). Only IANA region ids:
+  `400 INVALID_ACCOUNTING_TIME_ZONE` for an unknown id, a fixed offset (`+05:00`, `UTC+05:00`, `Etc/GMT+5`) or
+  a `SystemV/*` id; `UTC` is accepted. Once the tenant has closed a period (even one reopened since) or set a
+  hard-lock date the zone is fixed: `409 ACCOUNTING_TIME_ZONE_LOCKED`. Each change is audited
+  (`ACCOUNTING_TIME_ZONE_SET`, old and new zone, actor). A change never re-cuts history: posted entries keep
+  their dates and periods.
 
 ### Bank reconciliation close readiness and policy (#2305)
 
@@ -483,7 +509,8 @@ result; neither writes a row.
 | b. invoice not in `ext_invoice` | not applied; the retry job tries again, sharing the module retry cap (`pos.accounting.failed-event-retry.max-retries`, default 3 passes, about 45 minutes at the default 15-minute poll). After that the row stays `SUSPENDED` and needs a manual `POST /v1/accounting/events/{eventId}/reprocess` once the invoice arrives | `SUSPENDED / INVOICE_NOT_FOUND` |
 | c. invoice not `FINALIZED` / `POSTED` | not applied; retried up to the attempt cap | `FAILED / INVOICE_NOT_ELIGIBLE` |
 | d. invoice party (UUID) missing or not the payment's customer | not applied | `SKIPPED / NOT_POSTABLE` "customer differs from invoice INV-…" |
-| e. settlement date in a closed or hard-locked period | not applied; reprocess by hand after reopening (a hard-locked date cannot be reopened: the detail says to match or credit the payment by hand) | `SUSPENDED / PERIOD_CLOSED` |
+| e0. the tenant has no accounting time zone (#2558) | not applied; reprocess by hand after setting the zone | `SUSPENDED / ACCOUNTING_TIME_ZONE_UNSET` |
+| e. settlement date (in the tenant's accounting-calendar zone) in a closed or hard-locked period | not applied; reprocess by hand after reopening (a hard-locked date cannot be reopened: the detail says to match or credit the payment by hand) | `SUSPENDED / PERIOD_CLOSED` |
 | f. payment has nothing unapplied (another path applied it) | nothing | none |
 | g. invoice has no open balance | not applied, not credited, left for a person (most likely a duplicate charge; confirmed by the Accounting Domain, 2026-10-06) | `SKIPPED / NOT_POSTABLE` |
 | h. otherwise | the whole unapplied amount applied to **that invoice only**, capped at its balance, excess kept as a customer credit (AD-003) — except on the CASH walk-in account, where the excess stays unapplied (see below) | none: the application is the evidence |
@@ -780,6 +807,9 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `PERIOD_CLOSED` | 422 | The transaction date falls in a closed accounting period |
 | `PERIOD_HARD_LOCKED` | 422 | The transaction date falls in a hard-locked accounting period |
 | `HARD_LOCK_DATE_REGRESSION` | 422 | The requested hard-lock date is earlier than the current one |
+| `ACCOUNTING_TIME_ZONE_UNSET` | 422 | The tenant has no accounting time zone, so nothing can be dated or posted (#2558) |
+| `INVALID_ACCOUNTING_TIME_ZONE` | 400 | The requested accounting time zone is not an IANA region id (#2558) |
+| `ACCOUNTING_TIME_ZONE_LOCKED` | 409 | The tenant closed a period or set a hard-lock date, so its accounting time zone can no longer change (#2558) |
 | `PERIOD_HAS_DRAFT_ENTRIES` | 422 | The period cannot close while DRAFT journal entries remain; `fieldErrors` lists each `draftJournalEntryIds` value |
 | `PERIOD_BANK_RECONCILIATION_INCOMPLETE` | 422 | The bank reconciliation close policy refuses the close: one `fieldErrors[unreconciledGlAccountIds]` entry per blocked account, message `<glAccountId> <accountCode>: <check codes>`; under `REQUIRED` an exception body adds `fieldErrors[bankReconciliationException]` (#2305) |
 | `UNBALANCED_RULES` | 422 | A posting-rule publish violates the split-group/`factorPercent` invariants; `fieldErrors` locates each offending group or line |

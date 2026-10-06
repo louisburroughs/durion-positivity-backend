@@ -18,6 +18,7 @@ import com.positivity.accounting.internal.dto.PaymentApplicationResponse;
 import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
+import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.enums.ApplicationSource;
 import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
@@ -109,7 +110,7 @@ class AutomaticPaymentApplicationServiceTest {
                 recorder,
                 new LedgerCurrency("USD"),
                 mapper,
-                CLOCK,
+                TestZoneResolvers.utc(CLOCK),
                 provider);
 
         invoice = new ExtInvoice();
@@ -337,6 +338,96 @@ class AutomaticPaymentApplicationServiceTest {
                 .doesNotContain("after reopening");
     }
 
+    // ===== #2558: the tenant's accounting-calendar zone =====
+
+    /** 2026-01-31T23:30-06:00: still January in Chicago, already February in UTC (the clock's zone). */
+    private static final Instant JAN_31_2330_CHICAGO = Instant.parse("2026-02-01T05:30:00Z");
+
+    private AutomaticPaymentApplicationService serviceWith(AccountingCalendarZoneResolver zoneResolver) {
+        @SuppressWarnings("unchecked")
+        ObjectProvider<MeterRegistry> provider = mock(ObjectProvider.class);
+        return new AutomaticPaymentApplicationService(
+                paymentApplicationService,
+                receivablePaymentRepository,
+                paymentApplicationRepository,
+                reversalRepository,
+                invoiceBalanceCalculator,
+                periodGate,
+                recorder,
+                new LedgerCurrency("USD"),
+                mapper,
+                zoneResolver,
+                provider);
+    }
+
+    private static PaymentSettledV1 factAt(Instant settledAt) {
+        PaymentSettledV1 base = fact("CARD");
+        return new PaymentSettledV1(
+                base.paymentIntentId(),
+                base.invoiceId(),
+                base.invoiceNumber(),
+                null,
+                null,
+                base.partyId(),
+                base.methodType(),
+                base.amount(),
+                base.currencyCode(),
+                "stripe",
+                "txn_1",
+                settledAt);
+    }
+
+    @Test
+    @DisplayName("#2558 e. in a Chicago calendar a settlement at 2026-01-31T23:30-06:00 is gated on 2026-01-31,"
+            + " and its held row is dated then")
+    void chicagoCalendar_gatesTheJanuaryDate() {
+        AutomaticPaymentApplicationService chicago =
+                serviceWith(TestZoneResolvers.fixed(java.time.ZoneId.of("America/Chicago"), CLOCK));
+        when(periodGate.isPostingBlocked(LocalDate.parse("2026-01-31"))).thenReturn(true);
+
+        Result result = chicago.applySettled(payment, factAt(JAN_31_2330_CHICAGO), EVENT_ID);
+
+        assertThat(result.outcome()).isEqualTo(Outcome.SUSPENDED_PERIOD);
+        assertThat(result.detail()).contains("2026-01-31");
+        verify(periodGate, never()).isPostingBlocked(LocalDate.parse("2026-02-01"));
+        verify(recorder)
+                .recordSuspended(
+                        anyString(),
+                        anyString(),
+                        eq(EVENT_ID),
+                        any(),
+                        eq(java.time.LocalDateTime.parse("2026-01-31T23:30:00")),
+                        any(),
+                        eq(AccountingEventStatus.SUSPENDED),
+                        eq("PERIOD_CLOSED"),
+                        anyString());
+    }
+
+    @Test
+    @DisplayName("#2558: without an accounting time zone the settlement is held SUSPENDED / ACCOUNTING_TIME_ZONE_UNSET;"
+            + " no period is guessed and nothing is applied")
+    void unsetZone_holdsTheSettlement() {
+        AutomaticPaymentApplicationService unset = serviceWith(TestZoneResolvers.unset(CLOCK));
+
+        Result result = unset.applySettled(payment, factAt(JAN_31_2330_CHICAGO), EVENT_ID);
+
+        assertThat(result.outcome()).isEqualTo(Outcome.SUSPENDED_TIME_ZONE);
+        assertThat(result.outcome().reason()).isEqualTo("ACCOUNTING_TIME_ZONE_UNSET");
+        verifyNoInteractions(periodGate);
+        verify(paymentApplicationService, never()).applyAutomatically(any(), any(), any(), any(), any(), any());
+        verify(recorder)
+                .recordSuspended(
+                        anyString(),
+                        anyString(),
+                        eq(EVENT_ID),
+                        any(),
+                        eq(java.time.LocalDateTime.parse("2026-02-01T05:30:00")),
+                        any(),
+                        eq(AccountingEventStatus.SUSPENDED),
+                        eq("ACCOUNTING_TIME_ZONE_UNSET"),
+                        contains("time zone"));
+    }
+
     // ===== item 6: reprocess =====
 
     @Test
@@ -369,10 +460,11 @@ class AutomaticPaymentApplicationServiceTest {
     }
 
     @Test
-    @DisplayName("only the three held reasons route a reprocess back here; a currency hold does not")
+    @DisplayName("only the four held reasons route a reprocess back here; a currency hold does not")
     void reprocessableReasons() {
         assertThat(AutomaticPaymentApplicationService.REPROCESSABLE_REASONS)
-                .containsExactlyInAnyOrder("PERIOD_CLOSED", "INVOICE_NOT_FOUND", "INVOICE_NOT_ELIGIBLE")
+                .containsExactlyInAnyOrder(
+                        "PERIOD_CLOSED", "ACCOUNTING_TIME_ZONE_UNSET", "INVOICE_NOT_FOUND", "INVOICE_NOT_ELIGIBLE")
                 .doesNotContain("CURRENCY_NOT_SUPPORTED");
     }
 

@@ -144,7 +144,10 @@ class PeriodEnforcementGateTest extends PostgresCommittingTestBase {
         sequenceRepository.deleteAll();
         periodRepository.deleteAll();
         auditLogRepository.deleteAll();
-        configurationRepository.deleteAll();
+        // Every setting but the tenant's accounting time zone, which provisioning seeded (#2558).
+        configurationRepository.deleteAll(configurationRepository.findAll().stream()
+                .filter(row -> !AccountingCalendarZoneResolver.CONFIG_KEY.equals(row.getConfigKey()))
+                .toList());
         outboxRepository.deleteAll();
         glAccountRepository.deleteById(glAccountId);
     }

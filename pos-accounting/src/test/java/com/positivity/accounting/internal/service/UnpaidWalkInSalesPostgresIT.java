@@ -116,6 +116,9 @@ class UnpaidWalkInSalesPostgresIT extends PostgresCommittingTestBase {
     private Clock clock;
 
     @Autowired
+    private AccountingCalendarZoneResolver zoneResolver;
+
+    @Autowired
     private ObjectMapper objectMapper;
 
     @Autowired
@@ -232,7 +235,8 @@ class UnpaidWalkInSalesPostgresIT extends PostgresCommittingTestBase {
                 ingestionRecorder,
                 automaticPaymentApplicationService,
                 meterRegistry,
-                transactionManager);
+                transactionManager,
+                zoneResolver);
         cashParty = nextUuid();
         locationId = nextUuid();
         invoiceId = nextUuid();

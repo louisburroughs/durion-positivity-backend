@@ -96,7 +96,15 @@ public enum PostingFailureReason {
      * fact with no {@code finalizedAt}, or a status that neither recognizes nor reverses revenue.
      * Event is recorded SKIPPED — terminal, never retried.
      */
-    NOT_POSTABLE;
+    NOT_POSTABLE,
+
+    /**
+     * The tenant has no accounting-calendar zone ({@code ACCOUNTING_TIME_ZONE}, #2558), so the fact's
+     * instant has no posting date and no period gate can decide it. There is no default zone: the
+     * fact is held {@code SUSPENDED} until an administrator sets the zone, then reprocessed by a
+     * person. The scheduled auto-retry loop skips it: the remedy is an operator action.
+     */
+    ACCOUNTING_TIME_ZONE_UNSET;
 
     /**
      * Whether an event failing for this reason ends in the terminal {@code SKIPPED} status: the
@@ -116,6 +124,7 @@ public enum PostingFailureReason {
     public boolean isExcludedFromAutoRetry() {
         return this == PERIOD_CLOSED
                 || this == CURRENCY_NOT_SUPPORTED
+                || this == ACCOUNTING_TIME_ZONE_UNSET
                 // The payload never changes, so a retry fails the same way.
                 || this == VALIDATION_ERROR
                 || this == MISSING_AMOUNT;
