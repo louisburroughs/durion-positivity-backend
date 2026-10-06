@@ -15,6 +15,7 @@ import com.positivity.accounting.internal.entity.InvoiceStatusView;
 import com.positivity.accounting.internal.entity.PaymentApplication;
 import com.positivity.accounting.internal.entity.PaymentApplicationReversal;
 import com.positivity.accounting.internal.entity.ReceivablePayment;
+import com.positivity.accounting.internal.enums.ApplicationSource;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.accounting.internal.enums.PaymentStatus;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
@@ -425,6 +426,7 @@ class InvoicePaymentStatusServiceTest extends PostgresIntegrationTestBase {
         application.setAppliedAmount(amount);
         application.setApplicationTimestamp(FIXTURE_AT);
         application.setApplicationRequestId(UUID.randomUUID().toString());
+        application.setApplicationSource(ApplicationSource.MANUAL);
         application.setCreatedAt(FIXTURE_AT);
         application.setCreatedBy("testuser");
         entityManager.persist(application);

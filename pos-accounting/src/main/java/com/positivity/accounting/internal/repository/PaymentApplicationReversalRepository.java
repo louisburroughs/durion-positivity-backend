@@ -107,4 +107,9 @@ public interface PaymentApplicationReversalRepository extends JpaRepository<Paym
     List<UUID> findReversedApplicationIds(
             @org.springframework.data.repository.query.Param("originalPaymentApplicationIds")
                     Collection<UUID> originalPaymentApplicationIds);
+
+    /** The reversals of any of the given applications, in one query (#2503). */
+    @NonNull
+    List<PaymentApplicationReversal> findByOriginalPaymentApplication_PaymentApplicationIdIn(
+            @NonNull Collection<UUID> originalPaymentApplicationIds);
 }

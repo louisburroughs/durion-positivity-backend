@@ -7,6 +7,7 @@ import com.positivity.accounting.internal.entity.PaymentApplication;
 import com.positivity.accounting.internal.entity.PaymentApplicationReversal;
 import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
+import com.positivity.accounting.internal.enums.ApplicationSource;
 import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
 import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
@@ -153,6 +154,7 @@ class PaymentApplicationReversalWindowPersistenceTest extends PostgresIntegratio
         application.setAppliedAmount(APPLIED_AMOUNT);
         application.setApplicationTimestamp(APPLIED_AT);
         application.setApplicationRequestId(UUID.randomUUID().toString());
+        application.setApplicationSource(ApplicationSource.MANUAL);
         application.setCreatedAt(APPLIED_AT);
         application.setCreatedBy("testuser");
         entityManager.persist(application);

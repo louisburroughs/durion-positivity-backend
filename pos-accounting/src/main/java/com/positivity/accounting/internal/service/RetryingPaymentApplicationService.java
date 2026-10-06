@@ -6,6 +6,7 @@ import com.positivity.accounting.internal.dto.PaymentApplicationReversalResponse
 import com.positivity.accounting.internal.dto.RemainderCreditRequest;
 import com.positivity.accounting.internal.dto.RemainderCreditResponse;
 import com.positivity.accounting.internal.entity.ReceivablePayment;
+import com.positivity.accounting.internal.enums.ApplicationSource;
 import jakarta.persistence.OptimisticLockException;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -104,6 +105,24 @@ public class RetryingPaymentApplicationService implements PaymentApplicationServ
                         secondFailure);
             }
         }
+    }
+
+    /**
+     * Not retried here: the automatic paths call it inside their own transaction (the settlement
+     * listener's handler transaction, the event processor's), where a retry would rejoin a
+     * transaction already marked rollback-only. A conflict rolls that transaction back and the
+     * caller's own redelivery or retry re-runs it; the request id makes the re-run idempotent.
+     */
+    @Override
+    @NonNull
+    public PaymentApplicationResponse applyAutomatically(
+            @NonNull UUID paymentId,
+            @NonNull UUID invoiceId,
+            @NonNull BigDecimal amount,
+            @NonNull String requestId,
+            @NonNull Instant appliedAt,
+            @NonNull ApplicationSource source) {
+        return delegate.applyAutomatically(paymentId, invoiceId, amount, requestId, appliedAt, source);
     }
 
     @Override

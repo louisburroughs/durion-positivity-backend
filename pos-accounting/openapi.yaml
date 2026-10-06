@@ -6008,6 +6008,75 @@ paths:
       - Payment Applications
       x-required-permissions:
       - accounting:analytics:view
+  /v1/accounting/payment-applications/automatic:
+    get:
+      description: 'Lists the payment applications made automatically since an instant, newest first: a settled payment applied to the invoice it was taken against, or an INVOICE_PAYMENT event applied to its invoice, each with the invoice number, the customer''s name and any credit kept.
+
+        Use this tool to review what was matched without a person and to undo one with reversePaymentApplication; use listUnappliedPayments instead for payments still waiting to be matched.
+
+        Preconditions: the caller needs accounting:payment:apply authority; UNDO is offered only to holders of accounting:payment:reverse and only while the application is not reversed.
+
+        Required inputs: since (ISO-8601 instant, at most 31 days back); page (0 or more) and size (1 to 100, default 50) are optional query parameters.
+
+        Emits an ACCOUNTING_PAYMENT_APPLICATION_AUTOMATIC_LIST_VIEW event and changes no state; totalElements counts every automatic application since the instant, reversed ones included.
+
+        Returns 400 VALIDATION_ERROR when since is missing, unparsable or more than 31 days back or size is outside 1 to 100, and 403 when the caller lacks the authority.
+
+        '
+      operationId: listAutomaticPaymentApplications
+      parameters:
+      - description: Only applications made at or after this instant (ISO-8601), at most 31 days back
+        example: '2026-10-05T00:00:00Z'
+        in: query
+        name: since
+        required: true
+        schema:
+          type: string
+      - description: Page index (0-based)
+        example: 0
+        in: query
+        name: page
+        required: false
+        schema:
+          default: 0
+          format: int32
+          type: integer
+      - description: Page size, 1 to 100
+        example: 50
+        in: query
+        name: size
+        required: false
+        schema:
+          default: 50
+          format: int32
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutomaticPaymentApplicationsPage'
+          description: A page of automatic payment applications, newest first
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VALIDATION_ERROR: since missing, unparsable or more than 31 days back, or size outside 1-100'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:payment:apply
+      security:
+      - bearerAuth:
+        - accounting:payment:apply
+      summary: List Payment Applications Made Automatically
+      tags:
+      - Payment Applications
+      x-required-permissions:
+      - accounting:payment:apply
   /v1/accounting/payment-applications/{applicationId}/reverse:
     post:
       description: 'Reverses one payment application as a new compensating record, restoring the invoice''s balance and the payment''s unapplied amount.
@@ -12521,6 +12590,131 @@ components:
           example: 12
           format: int32
           type: integer
+      type: object
+    AutomaticPaymentApplicationRow:
+      description: A payment application made automatically, with what it did and whether it was undone
+      properties:
+        actions:
+          description: 'Commands the caller may run on this row: UNDO when it is not reversed and the caller holds accounting:payment:reverse, else empty'
+          items:
+            type: string
+          type: array
+        appliedAmount:
+          description: Amount applied to the invoice
+          example: 115.0
+          type: number
+        appliedAt:
+          description: 'Application date: the settlement instant for PAYMENT_SETTLED'
+          example: '2026-10-05T14:31:07Z'
+          format: date-time
+          type: string
+        creditCreatedAmount:
+          description: Customer credit the same application created for an amount beyond the invoice's balance; null when none
+          example: 5.0
+          type:
+          - number
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          example: USD
+          type: string
+        customerDisplayName:
+          description: Customer name from accounting's customer replica; null when unknown
+          example: Rivera Trucking
+          type:
+          - string
+          - 'null'
+        customerReference:
+          description: Customer number from accounting's customer replica; null when unknown
+          example: CUST-00412
+          type:
+          - string
+          - 'null'
+        invoiceId:
+          description: Invoice the payment was applied to
+          example: 0199a000-0000-7000-8000-000000001702
+          format: uuid
+          type: string
+        invoiceNumber:
+          description: Invoice number from accounting's invoice replica; null when unknown
+          example: INV-2026-01702
+          type:
+          - string
+          - 'null'
+        paymentApplicationId:
+          description: Payment application identifier, for reversePaymentApplication
+          example: 0199a000-0000-7000-8000-000000002201
+          format: uuid
+          type: string
+        paymentId:
+          description: Receivable payment applied
+          example: 0199a000-0000-7000-8000-000000000101
+          format: uuid
+          type: string
+        reversed:
+          description: Whether the application has been undone (reversed)
+          example: false
+          type: boolean
+        reversedAt:
+          description: When the application was undone; null when it was not
+          example: '2026-10-05T16:02:44Z'
+          format: date-time
+          type:
+          - string
+          - 'null'
+        source:
+          description: 'Path that made the application: PAYMENT_SETTLED (when the payment settled) or INVOICE_PAYMENT (the INVOICE_PAYMENT accounting event)'
+          enum:
+          - MANUAL
+          - PAYMENT_SETTLED
+          - INVOICE_PAYMENT
+          example: PAYMENT_SETTLED
+          type: string
+      required:
+      - actions
+      - appliedAmount
+      - appliedAt
+      - currency
+      - invoiceId
+      - paymentApplicationId
+      - paymentId
+      - reversed
+      - source
+      type: object
+    AutomaticPaymentApplicationsPage:
+      description: A page of payment applications made automatically since a given instant, newest first
+      properties:
+        items:
+          description: Applications on this page
+          items:
+            $ref: '#/components/schemas/AutomaticPaymentApplicationRow'
+          type: array
+        page:
+          description: Page index (0-based)
+          example: 0
+          format: int32
+          type: integer
+        size:
+          description: Page size
+          example: 50
+          format: int32
+          type: integer
+        totalElements:
+          description: Number of automatic applications since the given instant, reversed ones included
+          example: 7
+          format: int64
+          type: integer
+        totalPages:
+          description: Number of pages
+          example: 1
+          format: int32
+          type: integer
+      required:
+      - items
+      - page
+      - size
+      - totalElements
+      - totalPages
       type: object
     BalanceSheetReport:
       description: Balance Sheet report response with assets, liabilities, and equity totals derived from POSTED journal entries

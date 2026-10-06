@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.entity.AccountingEvent;
@@ -10,6 +11,7 @@ import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceDepositCreditApplicationRepository;
 import com.positivity.accounting.internal.repository.ExtInvoicePaymentReversalRepository;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
+import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
 import com.positivity.domainevents.payment.PaymentSettledV1;
 import com.positivity.tenancy.TenantContext;
 import com.positivity.tenancy.testing.TenantTestSupport;
@@ -71,6 +73,12 @@ class SettlementEventsListenerTransactionTest {
     @Autowired
     private ObjectProvider<MeterRegistry> meterRegistry;
 
+    @Autowired
+    private AutomaticPaymentApplicationService automaticPaymentApplicationService;
+
+    @Autowired
+    private ReceivablePaymentRepository receivablePaymentRepository;
+
     private final ObjectMapper mapper = new ObjectMapper();
     private SettlementEventsListener listener;
     private String eventId;
@@ -81,7 +89,11 @@ class SettlementEventsListenerTransactionTest {
         TenantContext.bind(TenantTestSupport.TENANT_A);
         eventId = UUID.randomUUID().toString();
         paymentIntentId = UUID.randomUUID();
-        listener = new SettlementEventsListener(
+        listener = listenerWith(automaticPaymentApplicationService);
+    }
+
+    private SettlementEventsListener listenerWith(AutomaticPaymentApplicationService automatic) {
+        return new SettlementEventsListener(
                 Clock.systemUTC(),
                 mapper,
                 processedEventRepository,
@@ -91,6 +103,7 @@ class SettlementEventsListenerTransactionTest {
                 extInvoiceDepositCreditApplicationRepository,
                 new LedgerCurrency("USD"),
                 ingestionRecorder,
+                automatic,
                 meterRegistry,
                 transactionManager);
     }
@@ -99,6 +112,7 @@ class SettlementEventsListenerTransactionTest {
     void tearDown() {
         // Held records carry no reprocessing_attempt_history rows, so they can be deleted directly.
         accountingEventRepository.deleteAll(heldRecords());
+        receivablePaymentRepository.findById(paymentIntentId).ifPresent(receivablePaymentRepository::delete);
         processedEventRepository.deleteById(eventId);
         TenantContext.clear();
     }
@@ -130,6 +144,39 @@ class SettlementEventsListenerTransactionTest {
         assertThat(heldRecords()).hasSize(1);
     }
 
+    @Test
+    @DisplayName("#2503: the payment, its automatic-application outcome row and the processed mark commit together")
+    void settledPaymentAndOutcomeCommitTogether() {
+        // The invoice is not replicated, so the automatic application holds it: SUSPENDED / INVOICE_NOT_FOUND.
+        listener.onPaymentEvent(settled("USD"));
+
+        assertThat(processedEventRepository.existsById(eventId)).isTrue();
+        assertThat(receivablePaymentRepository.findById(paymentIntentId)).isPresent();
+        assertThat(heldRecords()).singleElement().satisfies(record -> {
+            assertThat(record.getStatus()).isEqualTo(AccountingEventStatus.SUSPENDED);
+            assertThat(record.getFailureReasonCode()).isEqualTo("INVOICE_NOT_FOUND");
+            assertThat(record.getSourceSystem()).isEqualTo("pos-invoice");
+        });
+    }
+
+    @Test
+    @DisplayName("#2503: a failing automatic application rolls the recorded payment back and leaves the event"
+            + " unmarked, for redelivery")
+    void failingAutomaticApplicationRollsEverythingBack() {
+        AutomaticPaymentApplicationService failing = org.mockito.Mockito.mock(AutomaticPaymentApplicationService.class);
+        org.mockito.Mockito.when(failing.applySettled(
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenThrow(new IllegalStateException("optimistic lock"));
+
+        assertThatThrownBy(() -> listenerWith(failing).onPaymentEvent(settled("USD")))
+                .hasMessageContaining("optimistic lock");
+
+        assertThat(processedEventRepository.existsById(eventId)).isFalse();
+        assertThat(receivablePaymentRepository.findById(paymentIntentId)).isEmpty();
+    }
+
     private List<AccountingEvent> heldRecords() {
         return accountingEventRepository.findAll().stream()
                 .filter(e -> PaymentSettledV1.EVENT_TYPE.equals(e.getEventType()))
@@ -138,6 +185,10 @@ class SettlementEventsListenerTransactionTest {
     }
 
     private String eurSettled() {
+        return settled("EUR");
+    }
+
+    private String settled(String currency) {
         PaymentSettledV1 payload = new PaymentSettledV1(
                 paymentIntentId,
                 UUID.randomUUID(),
@@ -147,7 +198,7 @@ class SettlementEventsListenerTransactionTest {
                 UUID.randomUUID().toString(),
                 "CARD",
                 new BigDecimal("150.00"),
-                "EUR",
+                currency,
                 "stripe",
                 "txn_2324",
                 Instant.parse("2026-08-27T00:00:00Z"));

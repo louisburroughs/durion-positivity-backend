@@ -5,6 +5,7 @@ import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.entity.ExtInvoiceDepositCreditApplication;
 import com.positivity.accounting.internal.entity.ExtInvoicePaymentReversal;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
+import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.internal.repository.ExtInvoiceDepositCreditApplicationRepository;
 import com.positivity.accounting.internal.repository.ExtInvoicePaymentReversalRepository;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
@@ -39,8 +40,9 @@ import tools.jackson.databind.ObjectMapper;
  * {@code payment.payment.settled} fact that materializes the AR-available {@link
  * com.positivity.accounting.internal.entity.ReceivablePayment} that the now-removed {@code
  * payment.cleared.v1} listener used to create. {@code PaymentApplicationServiceImpl
- * #handlePaymentCleared} is reused unchanged — this class only translates the envelope into its
- * existing parameters and inherits its {@code existsBySourceEventId} idempotency.
+ * #handlePaymentCleared} records it (idempotent on the event id); since #2503 (CAP:550 S2, AW14)
+ * {@link AutomaticPaymentApplicationService#applySettled} then applies it, in the same transaction,
+ * to the invoice it was taken against when the rules allow, and records why when they do not.
  *
  * <p><strong>Why extended, not a sibling listener:</strong> both facts arrive on {@code
  * payment.events.v1}. A second {@code @KafkaListener} on the same topic runs its own consumer
@@ -92,8 +94,8 @@ import tools.jackson.databind.ObjectMapper;
 public class SettlementEventsListener {
 
     /**
-     * Event type codes this listener records an {@code accounting_event} row for: only a settled
-     * payment held for its currency (#2433, #2436).
+     * Event type codes this listener records an {@code accounting_event} row for: a settled payment
+     * held for its currency (#2433, #2436), or not applied automatically (#2503).
      */
     public static final java.util.List<String> RECORDED_EVENT_TYPES =
             AccountingEventTypeRegistry.kafkaCodes(AccountingEventTypeRegistry.DOMAIN_PAYMENT);
@@ -110,6 +112,7 @@ public class SettlementEventsListener {
     private final ExtInvoiceDepositCreditApplicationRepository extInvoiceDepositCreditApplicationRepository;
     private final LedgerCurrency ledgerCurrency;
     private final KafkaFactIngestionRecorder ingestionRecorder;
+    private final AutomaticPaymentApplicationService automaticPaymentApplicationService;
     private final Counter payloadRejectedCounter;
     private final Counter paymentSettledUnmappableCounter;
 
@@ -126,6 +129,7 @@ public class SettlementEventsListener {
             ExtInvoiceDepositCreditApplicationRepository extInvoiceDepositCreditApplicationRepository,
             LedgerCurrency ledgerCurrency,
             KafkaFactIngestionRecorder ingestionRecorder,
+            AutomaticPaymentApplicationService automaticPaymentApplicationService,
             ObjectProvider<MeterRegistry> meterRegistry,
             PlatformTransactionManager transactionManager) {
         this.clock = clock;
@@ -137,6 +141,7 @@ public class SettlementEventsListener {
         this.extInvoiceDepositCreditApplicationRepository = extInvoiceDepositCreditApplicationRepository;
         this.ledgerCurrency = ledgerCurrency;
         this.ingestionRecorder = ingestionRecorder;
+        this.automaticPaymentApplicationService = automaticPaymentApplicationService;
         this.handlerTransaction = new TransactionTemplate(transactionManager);
         this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         MeterRegistry registry = meterRegistry.getIfAvailable();
@@ -307,8 +312,11 @@ public class SettlementEventsListener {
             return;
         }
 
+        // Record the payment, then apply it to the invoice it was taken against when the rules allow
+        // (#2503, AW14): the payment, its application or outcome row, and the processed mark commit
+        // together, so a failure anywhere rolls all three back and the record is redelivered.
         handlerTransaction.executeWithoutResult(_ -> {
-            paymentApplicationService.handlePaymentCleared(
+            ReceivablePayment payment = paymentApplicationService.handlePaymentCleared(
                     payload.paymentIntentId(),
                     customerId,
                     payload.currencyCode(),
@@ -317,6 +325,7 @@ public class SettlementEventsListener {
                     eventUuid,
                     payload.invoiceId(),
                     payload.methodType());
+            automaticPaymentApplicationService.applySettled(payment, payload, eventId);
             markProcessed(eventId);
         });
     }

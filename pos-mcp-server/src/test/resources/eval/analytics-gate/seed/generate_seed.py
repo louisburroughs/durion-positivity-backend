@@ -883,10 +883,10 @@ def gen_accounting_db():
             ["payment_application_id", "payment_id", "invoice_id", "customer_id",
              "currency", "applied_amount", "invoice_balance_before",
              "invoice_balance_after", "application_timestamp", "created_at",
-             "created_by", "application_request_id"],
+             "created_by", "application_request_id", "application_source"],
             [q(uid("pa", pk)), q(rp_id), q(inv_by_key[inv_key]["id"]), q(CUST_ID[cust]),
              q(CCY), money(amount), money(before), money(after), q(cleared_ts),
-             q(cleared_ts), q(SEED_USER), q("%s-APP-%04d" % (MARK, napp))],
+             q(cleared_ts), q(SEED_USER), q("%s-APP-%04d" % (MARK, napp)), q("MANUAL")],
         )
 
     # the one application reversal (movement-basis D7 scenario)

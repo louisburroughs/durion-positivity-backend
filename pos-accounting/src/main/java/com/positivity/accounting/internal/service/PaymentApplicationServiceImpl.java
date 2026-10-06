@@ -16,6 +16,7 @@ import com.positivity.accounting.internal.entity.PaymentApplicationReversal;
 import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
 import com.positivity.accounting.internal.enums.AllocationStrategy;
+import com.positivity.accounting.internal.enums.ApplicationSource;
 import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.accounting.internal.exception.CurrencyNotSupportedException;
 import com.positivity.accounting.internal.exception.IdempotencyConflictException;
@@ -74,6 +75,9 @@ public class PaymentApplicationServiceImpl
     private static final String PAYMENT_APPLICATION_NOT_FOUND_PREFIX = "Payment application not found: ";
 
     private static final String PAYMENT_NOT_FOUND = "Payment not found: ";
+
+    /** The module's system actor (ADR-0018): who an automatic application is recorded as made by. */
+    static final String SYSTEM_ACTOR = "SYSTEM";
 
     /**
      * Namespace of the request id a credit issued by {@link #applyPaymentToInvoices} records (CAP:550
@@ -194,64 +198,71 @@ public class PaymentApplicationServiceImpl
     }
 
     /**
-     * Apply a payment to one or more invoices atomically.
+     * Apply a payment to one or more invoices atomically, as the calling person, dated now.
      *
-     * <p>
-     * <strong>Atomicity Guarantee:</strong> This operation ensures atomicity across
-     * all invoice
-     * applications through compensating reversals. If any invoice service call
-     * fails, all previously
-     * successful invoice mutations are reversed before the local DB transaction
-     * rolls back. This
-     * prevents the Accounting and Invoice services from becoming out of sync.
+     * <p><strong>Atomicity:</strong> every mutation is accounting-local (ADR-0044, #842; the invoice
+     * balance is derived from accounting's own records): a failure rolls the whole transaction back,
+     * so nothing is ever half-applied and no call to pos-invoice, or compensation of one, is needed.
      *
-     * <p>
-     * <strong>Idempotency Requirement:</strong> The Invoice service MUST implement
-     * idempotent
-     * payment application using {@code paymentApplicationId} as the idempotency
-     * key. This allows
-     * safe retries and prevents duplicate applications if the same
-     * {@code paymentApplicationId}
-     * is sent multiple times.
+     * <p><strong>Idempotency (AD-010):</strong> a request whose {@code applicationRequestId} was
+     * already processed returns the recorded result and writes nothing.
      *
-     * <p>
-     * <strong>Failure Handling:</strong>
-     * <ul>
-     * <li>If validation fails, throws exception before any mutations occur</li>
-     * <li>If an invoice service call fails, performs compensating reversals on all
-     * successfully
-     * applied invoices, then rethrows the exception to trigger DB transaction
-     * rollback</li>
-     * <li>All compensating reversals are logged for audit trail and debugging</li>
-     * </ul>
-     *
-     * Main Success Scenario (from Issue #114):
-     * 1. Validate payment is AVAILABLE with sufficient funds
-     * 2. Validate each invoice is applicable (not PaidInFull/Voided/Cancelled)
-     * 3. Validate requested amounts
-     * 4. Create immutable PaymentApplication records
-     * 5. Update invoice balances and statuses (with compensating reversal on
-     * failure)
-     * 6. Update payment unappliedAmount
-     * 7. Handle overpayment (create CustomerCredit)
-     * 8. Emit events for downstream consumers
+     * <p>Main success scenario (issue #114):
+     * <ol>
+     * <li>Validate the payment is AVAILABLE, in the ledger currency, with sufficient funds</li>
+     * <li>Validate each invoice is in the replica, AR-eligible and still owes a balance</li>
+     * <li>Cap each amount at the invoice's balance due</li>
+     * <li>Create immutable PaymentApplication records (source MANUAL)</li>
+     * <li>Update the payment's unapplied amount</li>
+     * <li>Keep any excess as a CustomerCredit (AD-003)</li>
+     * <li>Enqueue the GL work items in the same transaction (transactional outbox)</li>
+     * </ol>
      *
      * @param paymentId payment to apply
      * @param request   application request with invoices, amounts, and optional
      *                  allocation strategy (see
      *                  {@link #orderApplicationsForAllocation(PaymentApplicationRequest)})
      * @return application response with details
-     * @throws ResponseStatusException with NOT_FOUND if payment not found
+     * @throws ResponseStatusException with NOT_FOUND if the payment or an invoice is not found
      * @throws ResponseStatusException with BAD_REQUEST if validation fails or
      *                                 insufficient funds
      * @throws CurrencyNotSupportedException (422 CURRENCY_NOT_SUPPORTED) if the payment is in a
      *                                 currency other than the ledger's; nothing is written
      * @throws ResponseStatusException with CONFLICT if an invoice is not applicable
-     * @throws ResponseStatusException with SERVICE_UNAVAILABLE if invoice service
-     *                                 call fails (after compensating reversals)
      */
     public PaymentApplicationResponse applyPaymentToInvoices(
             @NonNull UUID paymentId, @NonNull PaymentApplicationRequest request) {
+        // Capture current user early to avoid issues in exception handler
+        return apply(paymentId, request, Instant.now(clock), getCurrentUser(), ApplicationSource.MANUAL);
+    }
+
+    @Override
+    public @NonNull PaymentApplicationResponse applyAutomatically(
+            @NonNull UUID paymentId,
+            @NonNull UUID invoiceId,
+            @NonNull BigDecimal amount,
+            @NonNull String requestId,
+            @NonNull Instant appliedAt,
+            @NonNull ApplicationSource source) {
+        if (source == ApplicationSource.MANUAL) {
+            throw new IllegalArgumentException("applyAutomatically is for the automatic paths, not MANUAL");
+        }
+        PaymentApplicationRequest request = new PaymentApplicationRequest(
+                requestId, List.of(new PaymentApplicationRequest.InvoiceApplication(invoiceId, amount)), null);
+        return apply(paymentId, request, appliedAt, SYSTEM_ACTOR, source);
+    }
+
+    /**
+     * The apply logic shared by {@link #applyPaymentToInvoices} (a person, now) and {@link
+     * #applyAutomatically} (the system, at the date it names): {@code applicationTimestamp} dates the
+     * applications, any excess credit and both GL work items.
+     */
+    private PaymentApplicationResponse apply(
+            UUID paymentId,
+            PaymentApplicationRequest request,
+            Instant applicationTimestamp,
+            String currentUser,
+            ApplicationSource source) {
 
         // Idempotency check
         if (paymentApplicationRepository.existsByApplicationRequestId(request.getApplicationRequestId())) {
@@ -267,12 +278,8 @@ public class PaymentApplicationServiceImpl
         validateSufficientFunds(payment, totalApplicationAmount);
         InvoiceApplicationValidation validation = validateAndCapApplications(request);
 
-        // Capture current user early to avoid issues in exception handler
-        String currentUser = getCurrentUser();
-        Instant applicationTimestamp = Instant.now(clock);
-
         List<PaymentApplicationResponse.ApplicationDetail> applicationDetails = createApplicationsAndUpdateInvoices(
-                paymentId, request, payment, validation.cappedAmounts(), currentUser, applicationTimestamp);
+                paymentId, request, payment, validation.cappedAmounts(), currentUser, applicationTimestamp, source);
 
         // 6. Capture unapplied amount before applying, for overpayment credit
         // calculation
@@ -280,7 +287,7 @@ public class PaymentApplicationServiceImpl
 
         // 7. Update payment unappliedAmount (apply actual applied amount)
         payment.applyAmount(validation.actualTotalApplicationAmount());
-        payment.setUpdatedAt(applicationTimestamp);
+        payment.setUpdatedAt(Instant.now(clock));
         payment.setModifiedBy(currentUser);
 
         // 8. Handle overpayment - create CustomerCredit if there's overpayment
@@ -293,8 +300,8 @@ public class PaymentApplicationServiceImpl
             BigDecimal unappliedAfterApplication = payment.getUnappliedAmount();
 
             String creditRequestId = APPLY_REQUEST_ID_PREFIX + request.getApplicationRequestId();
-            creditInfo =
-                    createCustomerCredit(payment, unappliedAfterApplication, applicationTimestamp, creditRequestId);
+            creditInfo = createCustomerCredit(
+                    payment, unappliedAfterApplication, applicationTimestamp, creditRequestId, currentUser);
 
             // Enqueue the credit-issuance GL posting work item in the SAME
             // transaction as the CustomerCredit insert (transactional outbox,
@@ -461,7 +468,7 @@ public class PaymentApplicationServiceImpl
             ReceivablePayment payment, BigDecimal unapplied, String creditRequestId) {
         Instant timestamp = Instant.now(clock);
         PaymentApplicationResponse.CustomerCreditInfo creditInfo =
-                createCustomerCredit(payment, unapplied, timestamp, creditRequestId);
+                createCustomerCredit(payment, unapplied, timestamp, creditRequestId, getCurrentUser());
         // Same transaction as the CustomerCredit insert (transactional outbox, #975): the issuance
         // leg posts Dr Undeposited Funds / Cr Customer Credit Liability for the whole amount.
         enqueueCustomerCreditIssuanceGLPostingWorkItem(
@@ -997,7 +1004,8 @@ public class PaymentApplicationServiceImpl
             ReceivablePayment payment,
             Map<UUID, BigDecimal> cappedAmounts,
             String currentUser,
-            Instant applicationTimestamp) {
+            Instant applicationTimestamp,
+            ApplicationSource source) {
         List<PaymentApplicationResponse.ApplicationDetail> applicationDetails = new ArrayList<>();
         List<PaymentApplication> successfulApplications = new ArrayList<>();
 
@@ -1011,6 +1019,7 @@ public class PaymentApplicationServiceImpl
                             payment,
                             currentUser,
                             applicationTimestamp,
+                            source,
                             successfulApplications,
                             applicationDetails),
                     new SingleInvoiceApplicationInput(
@@ -1104,6 +1113,7 @@ public class PaymentApplicationServiceImpl
                         amountToApply,
                         invoiceId,
                         context.applicationTimestamp(),
+                        context.source(),
                         context.currentUser(),
                         balanceBefore,
                         balanceAfter,
@@ -1133,6 +1143,7 @@ public class PaymentApplicationServiceImpl
         application.setInvoiceStatus(input.statusAfter());
         application.setApplicationTimestamp(input.applicationTimestamp());
         application.setApplicationRequestId(input.applicationRequestId());
+        application.setApplicationSource(input.source());
         application.setCreatedAt(input.applicationTimestamp());
         application.setCreatedBy(input.currentUser());
         return application;
@@ -1149,6 +1160,7 @@ public class PaymentApplicationServiceImpl
             ReceivablePayment payment,
             String currentUser,
             Instant applicationTimestamp,
+            ApplicationSource source,
             List<PaymentApplication> successfulApplications,
             List<PaymentApplicationResponse.ApplicationDetail> applicationDetails) {}
 
@@ -1162,6 +1174,7 @@ public class PaymentApplicationServiceImpl
             BigDecimal amountToApply,
             UUID invoiceId,
             Instant applicationTimestamp,
+            ApplicationSource source,
             String currentUser,
             BigDecimal balanceBefore,
             BigDecimal balanceAfter,
@@ -1185,7 +1198,7 @@ public class PaymentApplicationServiceImpl
     }
 
     private PaymentApplicationResponse.CustomerCreditInfo createCustomerCredit(
-            ReceivablePayment payment, BigDecimal amount, Instant timestamp, String creditRequestId) {
+            ReceivablePayment payment, BigDecimal amount, Instant timestamp, String creditRequestId, String actor) {
 
         CustomerCredit credit = new CustomerCredit();
         credit.setCustomerId(payment.getCustomerId());
@@ -1194,7 +1207,7 @@ public class PaymentApplicationServiceImpl
         credit.setSourcePaymentId(payment.getPaymentId());
         credit.setRequestId(creditRequestId);
         credit.setCreatedAt(timestamp);
-        credit.setCreatedBy(getCurrentUser());
+        credit.setCreatedBy(actor);
 
         CustomerCredit saved = customerCreditRepository.save(credit);
 
@@ -1302,6 +1315,6 @@ public class PaymentApplicationServiceImpl
      * @return username or "SYSTEM" as fallback
      */
     private String getCurrentUser() {
-        return SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM");
+        return SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR);
     }
 }

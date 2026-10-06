@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.entity;
 
 import static jakarta.persistence.FetchType.LAZY;
 
+import com.positivity.accounting.internal.enums.ApplicationSource;
 import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.tenancy.TenantScopedEntity;
@@ -122,6 +123,11 @@ public class PaymentApplication extends TenantScopedEntity {
      */
     @Column(name = "application_request_id", length = 100, nullable = false, updatable = false)
     private String applicationRequestId;
+
+    /** The path that created the application (#2503); set at creation, never changed. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "application_source", length = 20, nullable = false, updatable = false)
+    private ApplicationSource applicationSource;
 
     @Column(name = "trace_id", length = 100, updatable = false)
     private String traceId;

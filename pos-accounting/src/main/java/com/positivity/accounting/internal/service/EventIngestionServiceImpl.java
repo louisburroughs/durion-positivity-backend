@@ -113,6 +113,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
     private final PostingEngineOrchestrator postingEngineOrchestrator;
     private final AccountingSequenceLocker sequenceLocker;
     private final EventPayloadReferenceProjector eventPayloadReferenceProjector;
+    private final AutomaticPaymentApplicationService automaticPaymentApplicationService;
 
     /** Scope-key prefix for the per-month {@code accounting_event.eventReference} counter. */
     private static final String EVENT_REFERENCE_SCOPE_PREFIX = "AE-";
@@ -365,6 +366,13 @@ public class EventIngestionServiceImpl implements EventIngestionService {
             return AccountingEventMapper.toEventResponse(accountingEventRepository.save(event));
         }
 
+        // A settled payment held by its automatic application (#2503) re-runs that decision from the
+        // stored fact, never the posting engine; a currency hold keeps the engine path below.
+        if (PaymentSettledV1.EVENT_TYPE.equals(event.getEventType())
+                && AutomaticPaymentApplicationService.REPROCESSABLE_REASONS.contains(event.getFailureReasonCode())) {
+            return reapplySettledPayment(event, triggeredByUserId);
+        }
+
         // Increment attempt count
         Integer currentAttemptCount = event.getAttemptCount();
         int nextAttemptCount = (currentAttemptCount == null ? 0 : currentAttemptCount) + 1;
@@ -431,6 +439,54 @@ public class EventIngestionServiceImpl implements EventIngestionService {
                 .orElseThrow(() -> new EventNotFoundException("Event not found after reprocessing: " + eventId));
 
         return AccountingEventMapper.toEventResponse(event);
+    }
+
+    /**
+     * Item 6 of #2503: re-run the automatic application of a held {@code payment.payment.settled} fact
+     * from its stored payload, in this transaction. The payment is never recorded again. An
+     * application, or a payment another path already settled, makes the row {@code PROCESSED / NEW};
+     * a party mismatch or a paid invoice makes it {@code SKIPPED / NOT_POSTABLE}; another hold keeps it
+     * held with the new reason. Every attempt counts and writes its history row.
+     */
+    private AccountingEventResponse reapplySettledPayment(
+            @NonNull AccountingEvent event, @NonNull String triggeredByUserId) {
+        int attempts = (event.getAttemptCount() == null ? 0 : event.getAttemptCount()) + 1;
+        event.setAttemptCount(attempts);
+        event.setResolvedByUserId(triggeredByUserId);
+
+        AutomaticPaymentApplicationService.Result result =
+                automaticPaymentApplicationService.reapply(event.getPayload());
+        AutomaticPaymentApplicationService.Outcome outcome = result.outcome();
+        event.setStatus(outcome.status());
+        if (outcome.isSettled()) {
+            event.setIdempotencyOutcome(IdempotencyOutcome.NEW.name());
+            event.setProcessedAt(Instant.now(clock));
+            event.setFailureReasonCode(null);
+            event.setFailureDetails(null);
+            event.setErrorMessage(null);
+        } else {
+            event.setFailureReasonCode(outcome.reason());
+            event.setFailureDetails(result.detail());
+            event.setErrorMessage(result.detail());
+            if (outcome.status() == AccountingEventStatus.SKIPPED) {
+                event.setProcessedAt(Instant.now(clock));
+            }
+        }
+
+        ReprocessingAttemptHistory attempt = new ReprocessingAttemptHistory();
+        attempt.setAccountingEvent(event);
+        attempt.setTriggeredByUserId(triggeredByUserId);
+        attempt.setAttemptedAt(Instant.now(clock));
+        attempt.setOutcome(outcome.isSettled() ? ReprocessingOutcome.SUCCESS : ReprocessingOutcome.FAILURE);
+        attempt.setOutcomeDetails(
+                "Automatic application of the settled payment: " + outcome.tag() + " (" + result.detail() + ")");
+        reprocessingAttemptHistoryRepository.save(attempt);
+        log.info(
+                "Reprocessed settled payment event {} by its automatic application: {} -> {}",
+                event.getEventId(),
+                outcome.tag(),
+                outcome.status());
+        return AccountingEventMapper.toEventResponse(accountingEventRepository.save(event));
     }
 
     /**
@@ -775,10 +831,19 @@ public class EventIngestionServiceImpl implements EventIngestionService {
                 FactPostingKeyDescriptor.builder()
                         .sourceSystem(SettlementEventsListener.PAYMENT_SETTLED_SOURCE_SYSTEM)
                         .eventTypes(List.of(PaymentSettledV1.EVENT_TYPE))
-                        .postingKey("Event type + paymentIntentId of a currency hold")
+                        .postingKey("Application request id PAYMENT_SETTLED:<paymentIntentId> (the application,"
+                                + " any excess credit and their journal entries); event type + paymentIntentId +"
+                                + " reason of a held fact")
                         .postsJournalEntry(false)
-                        .onDuplicate("Only a payment in a non-ledger currency writes a row (SUSPENDED / "
-                                + "CURRENCY_NOT_SUPPORTED); a re-emitted fact already held writes no second row.")
+                        .onDuplicate("An automatic application writes no row: the application record (source"
+                                + " PAYMENT_SETTLED) is the evidence, and a re-emitted fact finds it and applies"
+                                + " nothing again, even after an undo. A fact not applied writes one row: SKIPPED /"
+                                + " NOT_POSTABLE (method not CASH or CARD, customer differs from the invoice, or the"
+                                + " invoice has no open balance), SUSPENDED / INVOICE_NOT_FOUND, SUSPENDED /"
+                                + " PERIOD_CLOSED, FAILED / INVOICE_NOT_ELIGIBLE, or SUSPENDED /"
+                                + " CURRENCY_NOT_SUPPORTED; a re-emitted fact already held for the same reason"
+                                + " writes no second row, and reprocessing a held row re-runs the automatic"
+                                + " application instead of the posting engine.")
                         .build());
     }
 

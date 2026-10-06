@@ -26,6 +26,7 @@ import com.positivity.accounting.internal.entity.PaymentApplicationReversal;
 import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
 import com.positivity.accounting.internal.enums.AllocationStrategy;
+import com.positivity.accounting.internal.enums.ApplicationSource;
 import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.accounting.internal.exception.CurrencyNotSupportedException;
 import com.positivity.accounting.internal.exception.IdempotencyConflictException;
@@ -1183,6 +1184,7 @@ class PaymentApplicationServiceTest {
         application.setAppliedAmount(new BigDecimal("500.00"));
         application.setCurrency("USD");
         application.setApplicationRequestId(testApplicationRequestId);
+        application.setApplicationSource(ApplicationSource.MANUAL);
         application.setApplicationTimestamp(Instant.now(TEST_CLOCK));
 
         testPayment.setUnappliedAmount(new BigDecimal("500.00"));
@@ -1286,6 +1288,7 @@ class PaymentApplicationServiceTest {
         application.setAppliedAmount(new BigDecimal("500.00"));
         application.setCurrency("USD");
         application.setApplicationRequestId(testApplicationRequestId);
+        application.setApplicationSource(ApplicationSource.MANUAL);
         application.setApplicationTimestamp(Instant.now(TEST_CLOCK));
 
         testPayment.setUnappliedAmount(new BigDecimal("500.00")); // Already had some applied
@@ -1342,6 +1345,7 @@ class PaymentApplicationServiceTest {
         application.setAppliedAmount(new BigDecimal("500.00"));
         application.setCurrency("USD");
         application.setApplicationRequestId(testApplicationRequestId);
+        application.setApplicationSource(ApplicationSource.MANUAL);
         application.setApplicationTimestamp(Instant.now(TEST_CLOCK));
 
         testPayment.setUnappliedAmount(new BigDecimal("500.00"));
@@ -1402,6 +1406,7 @@ class PaymentApplicationServiceTest {
         application.setAppliedAmount(new BigDecimal("500.00"));
         application.setCurrency("USD");
         application.setApplicationRequestId(testApplicationRequestId);
+        application.setApplicationSource(ApplicationSource.MANUAL);
         application.setApplicationTimestamp(Instant.now(TEST_CLOCK));
 
         testPayment.setUnappliedAmount(new BigDecimal("500.00"));
@@ -1480,6 +1485,7 @@ class PaymentApplicationServiceTest {
         application.setAppliedAmount(new BigDecimal("500.00"));
         application.setCurrency("USD");
         application.setApplicationRequestId(testApplicationRequestId);
+        application.setApplicationSource(ApplicationSource.MANUAL);
         application.setApplicationTimestamp(Instant.now(TEST_CLOCK));
         // Note: No isReversed field - check via repository
 
@@ -1506,6 +1512,7 @@ class PaymentApplicationServiceTest {
         application.setInvoiceId(testInvoiceId);
         application.setAppliedAmount(new BigDecimal("500.00"));
         application.setApplicationRequestId(testApplicationRequestId);
+        application.setApplicationSource(ApplicationSource.MANUAL);
         PaymentApplication sibling = new PaymentApplication();
         sibling.setPaymentApplicationId(siblingId);
         sibling.setApplicationRequestId(testApplicationRequestId);
@@ -1539,6 +1546,7 @@ class PaymentApplicationServiceTest {
         application.setAppliedAmount(new BigDecimal("500.00"));
         application.setCurrency("USD");
         application.setApplicationRequestId(testApplicationRequestId);
+        application.setApplicationSource(ApplicationSource.MANUAL);
         application.setApplicationTimestamp(Instant.now(TEST_CLOCK));
 
         when(paymentApplicationReversalRepository.existsByOriginalPaymentApplication_PaymentApplicationId(

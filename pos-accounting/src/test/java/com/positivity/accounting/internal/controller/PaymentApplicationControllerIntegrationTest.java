@@ -13,6 +13,7 @@ import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.PaymentApplication;
 import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
+import com.positivity.accounting.internal.enums.ApplicationSource;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
@@ -135,6 +136,7 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
         application.setAppliedAmount(new BigDecimal("100.00"));
         application.setCurrency("USD");
         application.setApplicationRequestId(nextUuid().toString());
+        application.setApplicationSource(ApplicationSource.MANUAL);
         application.setApplicationTimestamp(Instant.now(TEST_CLOCK));
         application.setCreatedBy("testuser");
         application.setCreatedAt(Instant.now(TEST_CLOCK));
@@ -160,6 +162,7 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
         application.setAppliedAmount(new BigDecimal("300.00"));
         application.setCurrency("USD");
         application.setApplicationRequestId(nextUuid().toString());
+        application.setApplicationSource(ApplicationSource.MANUAL);
         application.setApplicationTimestamp(Instant.now(TEST_CLOCK));
         application.setCreatedBy("testuser");
         application.setCreatedAt(Instant.now(TEST_CLOCK));
@@ -499,6 +502,7 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
         application.setAppliedAmount(new BigDecimal("500.00"));
         application.setCurrency("USD");
         application.setApplicationRequestId(nextUuid().toString());
+        application.setApplicationSource(ApplicationSource.MANUAL);
         application.setApplicationTimestamp(Instant.now(TEST_CLOCK));
         application.setCreatedBy("testuser");
         application.setCreatedAt(Instant.now(TEST_CLOCK));
