@@ -86,6 +86,14 @@ baseline flatten are the per-module `V2__seed_<module>.sql` files (formerly
 `V34__processing_return_workflow_seed.sql` and their successors). These are schema-adjacent configuration each
 service owns outright; no other service ever hears about them, so no event is missing.
 
+One Tier 1 seed is not tenant data: `R__seed_reference_accounting.sql` writes the **accounting tenant
+template** into the platform tenant (`01900000-0000-7000-8000-000000000000`) and into no other tenant
+(ADR-0062 §6; backend #2526). A tenant's chart of accounts, GL mapping defaults and statement lines are
+copied from that template by pos-accounting itself, add-only and never overwriting: on the tenant's
+`tenant.created` fact, and at each start for the tenants of the registry, which is how the alpha default
+tenant receives them on a reset database. Template content is added to that file; no Flyway seed writes an
+accounting row for a tenant (`pos-accounting/README.md`, "Tenant provisioning").
+
 ### Tier 2 — API-driven seed pipeline (new): alpha demo data
 
 All `*_operational_*` seed data (and catalog items — see §2) moves out of Flyway into an
@@ -166,7 +174,7 @@ replicas.
 |---|---|---|
 | pos-security-service `R__seed_role_permissions.sql`, `R__seed_reference_security.sql` | 1 | Keep in Flyway |
 | pos-security-service `R__seed_security_operational_data.sql` | 2 | **Converted** — `scripts/fixtures/seed/alpha/security/users.csv` (usernames + roles only) driven through the hardened `POST /v1/users`; **deleted 2026-09-12** (#1968). Accounts load awaiting activation with credentials expired, holding the bcrypt hash in `SECURITY_STARTER_PASSWORD_HASH` when one is configured — a shared starter password that cannot authenticate (login checks account state before comparing a password) and can only be traded, once per account, at `POST /v1/auth/activate-starter`. `admin.alpha` stays in the tier 1 `R__seed_reference_security.sql`, which is what keeps a rebuilt database reachable. User→person links replay via the new `PUT /v1/users/{id}/person-link` (people-contact command channel); the scoped `role_assignments` row is deliberately not replayed (authorization-redundant with the direct role) |
-| pos-accounting `R__seed_reference_accounting.sql`, `V3__seed_labor_overhead_mapping.sql` | 1 | Keep |
+| pos-accounting `R__seed_reference_accounting.sql`, `V3__seed_labor_overhead_mapping.sql` | 1 | Keep. Since #2526 the repeatable seed is the tenant template in the platform tenant; tenants are provisioned from it at `tenant.created` and at startup, never seeded by Flyway |
 | pos-invoice `R__seed_reference_invoice.sql` | 1 | Keep |
 | pos-price `R__seed_reference_price.sql` | 1 | Keep (verify nothing in it is published on a topic) |
 | pos-price `R__seed_reference_price_labor_rates.sql` | 2 | **Deleted, converted in the same PR** (#1575 Tier 0) — `scripts/fixtures/seed/alpha/price/labor-rates.csv` and `labor-rate-adjustments.csv` through two new bulk-ingest endpoints. The seed's shop ids were placeholders that matched no site, so the shop-scoped rates could never have answered for a real location; the files name sites by location code and the loader resolves them |

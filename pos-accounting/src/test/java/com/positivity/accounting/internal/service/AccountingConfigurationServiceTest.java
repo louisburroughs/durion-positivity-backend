@@ -62,8 +62,15 @@ class AccountingConfigurationServiceTest extends PostgresIntegrationTestBase {
     @AfterTransaction
     void verifyRollbackCleanliness() {
         // Transactional test: configuration writes roll back with the test
-        // transaction, keeping the shared H2 database pristine.
-        assertThat(configurationRepository.count()).isZero();
+        // transaction, keeping the shared database pristine. Counted by key: the
+        // tenant holds other settings (its RETREAD_PLANT_ADD_ON choice, #2526).
+        assertThat(hardLockRows()).isZero();
+    }
+
+    private long hardLockRows() {
+        return configurationRepository.findAll().stream()
+                .filter(row -> "HARD_LOCK_DATE".equals(row.getConfigKey()))
+                .count();
     }
 
     private List<AccountingAuditLog> hardLockAuditRows() {
@@ -106,7 +113,7 @@ class AccountingConfigurationServiceTest extends PostgresIntegrationTestBase {
         configurationService.setHardLockDate(LocalDate.of(2019, 1, 1), "Fiscal 2018 close");
 
         assertThat(configurationService.getHardLockDate()).contains(LocalDate.of(2019, 1, 1));
-        assertThat(configurationRepository.count())
+        assertThat(hardLockRows())
                 .as("single HARD_LOCK_DATE row is updated in place")
                 .isEqualTo(1);
 

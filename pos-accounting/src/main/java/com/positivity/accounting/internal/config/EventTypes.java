@@ -16,7 +16,9 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 131 event types (includes +4 from the reconciliation approval workflow
+     * Total: 133 event types (includes +2 from tenant template provisioning (CAP:550 S37, Issue #2526):
+     * ACCOUNTING_TENANT_TEMPLATE_STATUS_VIEW, ACCOUNTING_TENANT_TEMPLATE_ADD_ON_ENABLE,
+     * +4 from the reconciliation approval workflow
      * (SPEC-manual-bank-reconciliation story S5, Issue #2304): ACCOUNTING_RECONCILIATION_SUBMIT,
      * ACCOUNTING_RECONCILIATION_RETURN, ACCOUNTING_RECONCILIATION_SUPERSEDE, ACCOUNTING_RECONCILIATION_CANCEL,
      * +11 from the reconciliation core (SPEC-manual-bank-reconciliation
@@ -92,6 +94,16 @@ public final class EventTypes {
                 EventTypeRegistration.write(
                                 "ACCOUNTING_JOURNAL_ENTRY_REVERSE",
                                 "Reverse a posted journal entry (original flips to REVERSED)")
+                        .build(),
+
+                // TenantTemplateController - 2 events (CAP:550 S37, #2526)
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_TENANT_TEMPLATE_STATUS_VIEW",
+                                "View where the tenant stands against the accounting template")
+                        .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_TENANT_TEMPLATE_ADD_ON_ENABLE",
+                                "Turn the retread-plant accounting template add-on on for the tenant")
                         .build(),
 
                 // GLAccountController - 6 events

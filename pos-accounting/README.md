@@ -46,6 +46,8 @@ General-ledger accounting service for the Durion Positivity ETSMS platform. Mana
 - `POST /v1/payment-applications` — apply a payment to an invoice
 - `POST /v1/ap-payments` — record an accounts-payable payment
 - `POST /v1/credit-memos` — create a credit memo
+- `GET /v1/accounting/tenant-template/status` — where the caller's tenant stands against the accounting template (permission `accounting:coa:view`, event `ACCOUNTING_TENANT_TEMPLATE_STATUS_VIEW`; see [Tenant provisioning](#tenant-provisioning-the-accounting-template-2526))
+- `PUT /v1/accounting/tenant-template/add-ons/retread-plant` — turn the retread-plant add-on on for the caller's tenant (permission `accounting:coa:create`, event `ACCOUNTING_TENANT_TEMPLATE_ADD_ON_ENABLE`)
 
 ### Display references on responses
 
@@ -109,10 +111,121 @@ GL accounts carry two metadata fields (V11):
 Both fields are exposed on the COA DTOs/OpenAPI. GL mapping creation runs a non-blocking subtype
 plausibility check: an implausible posting-category/subtype pairing logs a warning but never fails the request.
 
-The repeatable seed (`R__seed_reference_accounting.sql`) provisions a 9-account small-business COA via
-idempotent upserts: 1000 Cash, 1090 Undeposited Funds, 1200 Accounts Receivable, 2000 Accounts Payable,
-2200 Sales Tax Payable, 2300 Customer Credit Liability, 4000 Service Revenue, 5000 Cost of Goods Sold,
-6000 Payment Processor Fees.
+Every tenant receives the reference chart from the accounting template: the working small-business chart
+(1000 Cash, 1090 Undeposited Funds, 1095 Register Cash Clearing, 1200 Accounts Receivable, 1300 Inventory,
+2000 Accounts Payable, 2200 Sales Tax Payable, 2300 Customer Credit Liability, 4000 Service Revenue, 5000 Cost
+of Goods Sold, 6000 Payment Processor Fees and the settlement, bank reconciliation, shrinkage and over/short
+accounts) and the labour and overhead accounts. The template is data in the platform tenant, written by the
+repeatable seed (`R__seed_reference_accounting.sql`); the seed writes no tenant's rows. See
+[Tenant provisioning](#tenant-provisioning-the-accounting-template-2526).
+
+## Tenant provisioning: the accounting template (#2526)
+
+A tenant created through pos-tenant starts with nothing in this module. Provisioning gives it the chart of
+accounts, posting categories, mapping keys, GL mappings, default GL mappings, statement lines and policy
+defaults it needs for its first invoice to post (ADR-0062 §6–§7; SPEC-accounting-workspace §7.1 "Seed", AW30).
+
+**The template is data in the platform tenant.** `R__seed_reference_accounting.sql` binds the platform tenant
+(`01900000-0000-7000-8000-000000000000`) and writes into no other. It keeps `ON CONFLICT … DO UPDATE`, so the
+template follows the file. A template row's id is
+`md5('accounting-template:<platform tenant>:<KIND>:<natural key>')::uuid`, so it can never equal a tenant row's
+id, and every reference inside the file goes through the same expression: no literal id, and no look-up by
+account code (Flyway runs as the owner, which sees every tenant's rows).
+
+**Never overwrite.** `AccountingTemplateApplier` creates what a tenant lacks and otherwise leaves the tenant's
+rows as they are. It never renames, retypes, repoints, reactivates or deletes one, and it writes no journal
+entry. What it did with each entry is recorded in `accounting_template_entry` (one row per entry per tenant),
+and the tenant's `accounting_template_state` row holds the fingerprint of the template last applied.
+
+| Kind | Entry key | Matched in a tenant by | Adopted when |
+| --- | --- | --- | --- |
+| Account | `ACCOUNT:<code>` | account code | same type, same name (trimmed, case-insensitive), active |
+| Posting category | `CATEGORY:<name>` | category name | it exists |
+| Mapping key | `MAPPING_KEY:<category>/<key>` | category and key name | it exists |
+| GL mapping | `GL_MAPPING:<category>/<key>` | any mapping without dimensions for that key | it exists, whatever account it names |
+| Default GL mapping | `DEFAULT_GL_MAPPING:<event type>` | event type | it exists |
+| Statement line | `STATEMENT_LINE:<statement type>:<account code>` | the account's line on that statement | it exists |
+
+| Outcome | Meaning | Applied again? |
+| --- | --- | --- |
+| `CREATED` | The tenant lacked the row; it was created (UUIDv7 id, actor `tenant-template`, the template's dates) | Never |
+| `ADOPTED` | The tenant already held a match; nothing was written to it | Never |
+| `REFRESHED` | A statement line the tenant had not touched took the template's new line code, parent line code, description and display order | Never, except a further refresh while untouched |
+| `CONFLICT` | The tenant holds an account under the template's code that is another account (`ACCOUNT_DIFFERS`) or is inactive (`ACCOUNT_INACTIVE`); it is left alone | Every run, until resolved |
+| `WITHHELD` | The entry refers to an account in conflict (`DEPENDS_ON_CONFLICT`) or missing (`ACCOUNT_MISSING`); it is not created | Every run, until resolved |
+
+A settled entry (`CREATED`, `ADOPTED`, `REFRESHED`) is never applied again: later template changes do not reach
+it, and a tenant that renamed the account, deactivated the key, remapped it or deleted the row keeps its
+decision. A posting through a withheld key fails with the existing `GL_MAPPING_NOT_CONFIGURED` rather than
+reaching an account the template did not mean. An entry removed from the template leaves tenant rows alone.
+
+**Three paths, one transaction each**, all through `AccountingTenantProvisioner` and all idempotent on the
+tenant (the applier holds the tenant's state row `FOR UPDATE` for the length of a run):
+
+| Path | When | Notes |
+| --- | --- | --- |
+| `TenantEventsListener` | `tenant.created` on `tenant.events.v1` (group `pos-accounting-tenant-events`, `auto.offset.reset=earliest`) | Reads the template under the platform binding, then provisions under the new tenant's. Idempotent on eventId (`processed_events`, owner `tenant`). An empty template or a failure propagates: retry, then `tenant.events.v1.dlq`. `tenant.created` for the platform tenant is recorded and skipped |
+| `AccountingTemplateStartupSweep` | every start, per `TenantIterator` tenant | The alpha default tenant has no `tenant.created` fact, so this is the path that provisions it; it also carries template additions to tenants provisioned earlier. Logs and continues past a failing tenant; never blocks startup; an empty template (Flyway off) is one ERROR line |
+| Add-on choice | `PUT /v1/accounting/tenant-template/add-ons/retread-plant` | Records the tenant's choice, audits it with the caller, reconciles the tenant |
+
+The provisioner also seeds the policy defaults (three override thresholds, one refund policy, each only when
+the tenant has none): `DataInitializationService` is a provisioning step, no longer a startup runner, so a
+tenant receives them only through one of the three paths above. Statement lines the template creates are
+global lines (`location_id` null) that name the account by its name; a per-location override a tenant holds
+(#731) is never adopted in the global line's place and never rewritten by a refresh.
+
+**Sources.** The template is one body of rows; an `AccountingTemplateSource` says which entries are its own and
+whether a tenant receives them. `AccountingTemplateReader` is the generic source every tenant receives.
+`RetreadPlantAddOnSource` (AW30) owns accounts 6350, 6450, 6470, 6510, 6520, 6530 and 6900 (4940 after S15's
+renumbering) and their `LABOR_OVERHEAD` lines; a tenant receives them only when its `RETREAD_PLANT_ADD_ON` row
+in `accounting_configuration` is `true`. Absent means off, there is no switching off, and the alpha default
+tenant's choice is recorded on by `V5`, so its `V2` rows are adopted.
+
+**Status read.** `GET /v1/accounting/tenant-template/status` answers `state`, `lastAppliedAt`, counts by
+outcome, `retreadPlantAddOn` and `attention[]` of `{entryKey, kind, reason, templateValue, tenantValue}` in
+business text ("6295 Staff Meals & Refreshments, expense"), never ids. It takes no tenant from the request.
+
+| `state` | Meaning |
+| --- | --- |
+| `NOT_PROVISIONED` | The template has never been applied to this tenant |
+| `UP_TO_DATE` | Everything is created or adopted |
+| `PENDING` | The template is newer than the last apply; the next start brings it in |
+| `NEEDS_ATTENTION` | At least one entry is `CONFLICT` or `WITHHELD` |
+
+A request thread never switches tenant, so the status and the add-on endpoint work from the template the sweep
+or the listener already read in this process. With the sweep off and no `tenant.created` consumed since the
+start, the status cannot report `PENDING`, and a newly chosen add-on is recorded and reaches the tenant at the
+next start.
+
+**Observability.** INFO per tenant run (tenant, path `event` | `startup` | `add-on`, counts); one WARN per
+`CONFLICT` / `WITHHELD` entry key; counter `accounting.tenant_template.entries` (tags `outcome`, `path`); gauge
+`accounting.tenant_template.tenants_needing_attention`, set by the sweep; one `AccountingAuditLog` row per run
+that changed anything (operation `TENANT_TEMPLATE_APPLY`, user `tenant-template`, fingerprint and counts) and
+one per add-on choice (`TENANT_TEMPLATE_ADD_ON_ENABLE`, the caller, the justification).
+
+**Adding to the template.** Add rows to `R__seed_reference_accounting.sql` only: platform tenant, the id
+expression, references by natural key. Never seed a tenant's rows from Flyway. A new table in the template
+needs its kind, natural key and adoption rule in `TemplateEntryKind`, `AccountingTemplate` and the applier.
+Existing tenants receive an addition at their next start.
+
+**Rolling this back is not a plain revert.** The repeatable seed before #2526 looked accounts up by code with
+sub-selects that, run as the Flyway owner, see every tenant's rows; with the template in the platform tenant
+they return more than one row and the service does not start. To roll back: revert the change, delete the
+platform tenant's rows (`WHERE tenant_id = '01900000-0000-7000-8000-000000000000'`) from
+`statement_line_mappings`, `default_gl_mapping`, `gl_mapping`, `mapping_key`, `posting_category` and
+`gl_account`, in that order, and `flyway repair` (or reset the database) so Flyway forgets `V5`, which the
+reverted code does not know. `V5`'s two tables and the configuration row can stay; rows provisioned into
+tenants stay, they are ordinary tenant rows. `TenantTemplateAdoptionIT` runs the old seed in exactly that
+template-free state.
+
+**Before a second tenant is created on a cell,** the module must use the remote registry
+(`pos.tenancy.registry.mode=REMOTE`) or list its tenants in `pos.tenancy.tenants`: the sweep reaches only the
+tenants `TenantIterator` knows, so template additions would miss a tenant the registry does not list. Its own
+`tenant.created` still provisions it.
+
+Tests: `AccountingTemplateApplierTest` (each outcome, healing, never re-applied, refresh only when untouched),
+`TenantTemplateProvisioningIT` and `TenantTemplateAdoptionIT` (Testcontainers Postgres: two tenants, isolation,
+concurrency, a database that ran the old seeds).
 
 ## Journal Entry Numbering
 
@@ -515,6 +628,9 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `pos.accounting.outbox.poll-interval-ms`            | `1000`               | Kafka outbox drain interval (#1843) |
 | `pos.accounting.outbox.send-timeout-ms`             | `10000`              | Broker ack timeout per outbox row (#1843) |
 | `stripe.api-key`                                    | required             | Stripe API key for payment processing    |
+| `pos.accounting.kafka.tenant-events-topic`          | `tenant.events.v1`   | Tenant lifecycle facts; `tenant.created` provisions the new tenant from the accounting template (#2526) |
+| `pos.accounting.kafka.tenant-events-consumer-group` | `pos-accounting-tenant-events` | Consumer group of the `tenant.created` listener; reads from the earliest offset (#2526) |
+| `pos.accounting.tenant-template.startup-sweep.enabled` | `true`            | Apply the accounting template to every registry tenant at each start (#2526). The default override-policy thresholds and refund policy reach a tenant only through provisioning (this sweep, `tenant.created`, or an add-on choice), no longer from a startup runner of their own |
 | `pos.accounting.bankrec.match.date-window-days`     | `7`                  | Bank reconciliation candidate date window W (#2303) |
 | `pos.accounting.bankrec.duplicate.date-window-days` | `3`                  | Near-duplicate candidate window (#2303) |
 | `pos.accounting.bankrec.outstanding.aging-warning-days` | `90`             | Age past which an outstanding item needs a justification and an OTHER_LEDGER_TIMING item a reaffirmation (#2303) |
@@ -544,11 +660,11 @@ bound tenant by `OutboxEventWriter` and `OutboxServiceImpl`):
 | `OutboxProcessor.processPendingEvents` | platform-scoped | Polls `event_outbox` and binds each row's `tenant_id` before dispatching its Spring event, so the GL-posting handlers write that tenant's journal entries |
 | `OutboxProcessor.cleanupOldEvents` | platform-scoped | Deletes published `event_outbox` rows across tenants |
 | `WorkorderEventsListener.reapExpiredRequests` | per-tenant | `invoice_regeneration_request` is scoped; one pass per tenant of the registry |
-| `DataInitializationServiceImpl` (startup) | per-tenant | Seeds the default override-policy thresholds and refund policy for each tenant of the registry that has none, opening the transaction inside the binding |
+| `AccountingTemplateStartupSweep` (startup) | per-tenant | Applies the accounting template and the default override-policy thresholds and refund policy to each tenant of the registry, each in a transaction opened inside the binding (#2526) |
 
 Per-tenant passes iterate the static registry (`TenantIterator.forEachActiveTenant`; the default tenant until
-the `ext_tenant` replica lands per module), so a tenant created after startup is seeded on the next start
-(provisioning-time seeding is plan WS8). The two native queries carry `@TenantAudited`:
+the `ext_tenant` replica lands per module). A tenant created after startup is provisioned by its
+`tenant.created` fact (`TenantEventsListener`, #2526). The two native queries carry `@TenantAudited`:
 `VendorBillRepository.getNextBillNumberSequence` reads a platform-wide sequence, not a table, and
 `AccountingSequenceRepository.findMissingEntryNumbers` reads two scoped tables that row-level security binds to
 the calling tenant.
@@ -664,10 +780,13 @@ flattened into the baseline for ADR-0062; see `../durion/docs/architecture/deplo
   tenant-scoped keys) on every scoped table and `tenant_id` as data on the two global outbox tables
   (`event_outbox`, `kafka_event_outbox`, see Multitenancy below); edited in place while in alpha, with `V2` retained only
   for seed data (alpha databases are recreated; see `docs/runbooks/flyway-baseline-reset.md`, "Alpha Cutover")
-- `V2__seed_accounting.sql` — versioned seed data
-- `R__seed_reference_accounting.sql` — repeatable seed for reference data, including the 9-account COA; also the
-  `INVOICE_REVENUE` posting category / mapping keys (#1843), the `INVENTORY_ADJUSTMENT` posting category /
-  mapping keys (#2191), and the `INVENTORY_REVALUATION` posting category / mapping keys (#2193)
+- `V2__seed_accounting.sql` — versioned seed data: the alpha default tenant's labour and overhead accounts and
+  lines. Immutable; the template carries the same accounts for every other tenant
+- `V5__tenant_template_provisioning.sql` — `accounting_template_state` and `accounting_template_entry` (what the
+  template applier did for each tenant), and the default tenant's `RETREAD_PLANT_ADD_ON` choice (#2526)
+- `R__seed_reference_accounting.sql` — the accounting tenant template, in the **platform tenant** only: the
+  reference chart, posting categories, mapping keys, GL mappings, the default GL mapping and the statement
+  lines every tenant is provisioned from, plus the retread-plant add-on. It writes no tenant's rows (#2526)
 
 ## Development
 

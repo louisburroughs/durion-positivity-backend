@@ -87,6 +87,60 @@ class TenancySchemaConformanceIT extends PostgresTenancyTestBase {
                 .containsAll(global);
     }
 
+    /**
+     * The two tables of #2526 are introduced after the baseline, so they are named here: compliant is
+     * the tenancy schema they carry, not the file their {@code CREATE TABLE} sits in (TENANCY_SCHEMA,
+     * "Adding a table"). Beyond the generic check above: the {@code (tenant_id, pk)} key, the tenant
+     * index, and every unique constraint led by {@code tenant_id}.
+     */
+    @Test
+    void theTenantTemplateTablesCarryTheFullTenancySchema() {
+        JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
+        for (String table : List.of("accounting_template_state", "accounting_template_entry")) {
+            assertThat(owner.queryForObject(
+                            "SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = ? AND"
+                                    + " policyname = 'tenant_isolation'",
+                            Integer.class,
+                            table))
+                    .as("%s carries tenant_isolation", table)
+                    .isEqualTo(1);
+            assertThat(owner.queryForObject(
+                            "SELECT ordinal_position FROM information_schema.columns WHERE table_schema = 'public'"
+                                    + " AND table_name = ? AND column_name = 'tenant_id'",
+                            Integer.class,
+                            table))
+                    .as("%s has tenant_id first", table)
+                    .isEqualTo(1);
+            assertThat(owner.queryForObject(
+                            "SELECT count(*) FROM pg_indexes WHERE schemaname = 'public' AND indexname = ?",
+                            Integer.class,
+                            table + "_tenant_idx"))
+                    .as("%s has its tenant index", table)
+                    .isEqualTo(1);
+            List<String> uniques = owner.queryForList(
+                    "SELECT pg_get_constraintdef(c.oid) FROM pg_constraint c JOIN pg_class t ON t.oid = c.conrelid"
+                            + " WHERE t.relname = ? AND c.contype = 'u'",
+                    String.class,
+                    table);
+            assertThat(uniques)
+                    .as("%s: the (tenant_id, pk) key and the natural key", table)
+                    .hasSize(2)
+                    .allMatch(definition -> definition.startsWith("UNIQUE (tenant_id"));
+        }
+        assertThat(owner.queryForObject(
+                        "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname ="
+                                + " 'uq_accounting_template_state_tenant'",
+                        String.class))
+                .as("one state row per tenant")
+                .isEqualTo("UNIQUE (tenant_id)");
+        assertThat(owner.queryForObject(
+                        "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname ="
+                                + " 'uq_accounting_template_entry_key'",
+                        String.class))
+                .as("one record per entry per tenant")
+                .isEqualTo("UNIQUE (tenant_id, entry_key)");
+    }
+
     @Test
     void theApplicationConnectsAsANonOwnerRoleWithNoBypass() {
         JdbcTemplate app = new JdbcTemplate(applicationDataSource);

@@ -4,60 +4,43 @@ import com.positivity.accounting.internal.audit.entity.OverridePolicyThreshold;
 import com.positivity.accounting.internal.audit.entity.RefundPolicyConfig;
 import com.positivity.accounting.internal.audit.repository.OverridePolicyThresholdRepository;
 import com.positivity.accounting.internal.audit.repository.RefundPolicyConfigRepository;
-import com.positivity.tenancy.TenantIterator;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Service for initializing default policies on application startup.
+ * Seeds a tenant's default override thresholds and refund policy.
  *
- * <p>The policies are tenant data (ADR-0062), so the run seeds each tenant of the registry in turn
- * ({@link TenantIterator#forEachActiveTenant}), opening the transaction inside the binding so the
- * connection checks out bound; a tenant that already has policies is left alone. A tenant created
- * after startup is seeded on the next start (provisioning-time seeding is plan WS8).
+ * <p>The policies are tenant data (ADR-0062). They are created when the tenant is provisioned
+ * ({@link AccountingTenantProvisioner}: on {@code tenant.created}, and for registry tenants at
+ * startup), inside the provisioning transaction; a tenant that already has policies of a kind is
+ * left alone.
  */
 @Service
 @Slf4j
-public class DataInitializationServiceImpl implements CommandLineRunner, DataInitializationService {
+@RequiredArgsConstructor
+public class DataInitializationServiceImpl implements DataInitializationService {
 
     private final Clock clock;
     private final OverridePolicyThresholdRepository policyRepository;
     private final RefundPolicyConfigRepository refundPolicyRepository;
-    private final TenantIterator tenantIterator;
-    private final TransactionTemplate transaction;
-
-    public DataInitializationServiceImpl(
-            Clock clock,
-            OverridePolicyThresholdRepository policyRepository,
-            RefundPolicyConfigRepository refundPolicyRepository,
-            TenantIterator tenantIterator,
-            PlatformTransactionManager transactionManager) {
-        this.clock = clock;
-        this.policyRepository = policyRepository;
-        this.refundPolicyRepository = refundPolicyRepository;
-        this.tenantIterator = tenantIterator;
-        this.transaction = new TransactionTemplate(transactionManager);
-    }
 
     @Override
-    public void run(String... args) {
-        tenantIterator.forEachActiveTenant(tenantId -> transaction.executeWithoutResult(status -> {
-            initializeDefaultPolicies();
-            initializeRefundPolicy();
-        }));
+    @Transactional(propagation = Propagation.MANDATORY)
+    public int seedPolicyDefaults() {
+        return initializeDefaultPolicies() + initializeRefundPolicy();
     }
 
-    private void initializeDefaultPolicies() {
+    private int initializeDefaultPolicies() {
         // Check if policies already exist
         if (policyRepository.count() > 0) {
-            log.info("Override policies already exist, skipping initialization");
-            return;
+            log.debug("Override policies already exist, skipping initialization");
+            return 0;
         }
 
         log.info("Initializing default override policies");
@@ -96,13 +79,14 @@ public class DataInitializationServiceImpl implements CommandLineRunner, DataIni
         policyRepository.save(adminPolicy);
 
         log.info("Default override policies initialized");
+        return 3;
     }
 
-    private void initializeRefundPolicy() {
+    private int initializeRefundPolicy() {
         // Check if refund policy already exists
         if (refundPolicyRepository.count() > 0) {
-            log.info("Refund policy already exists, skipping initialization");
-            return;
+            log.debug("Refund policy already exists, skipping initialization");
+            return 0;
         }
 
         log.info("Initializing default refund policy");
@@ -117,5 +101,6 @@ public class DataInitializationServiceImpl implements CommandLineRunner, DataIni
         refundPolicyRepository.save(refundPolicy);
 
         log.info("Default refund policy initialized");
+        return 1;
     }
 }

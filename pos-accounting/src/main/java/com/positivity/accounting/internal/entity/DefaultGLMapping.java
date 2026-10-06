@@ -71,8 +71,14 @@ public class DefaultGLMapping extends TenantScopedEntity {
         String currentUser = SecurityContextHelper.isAuthenticated()
                 ? SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_SOURCE)
                 : SYSTEM_SOURCE;
-        this.createdBy = currentUser;
-        this.modifiedBy = currentUser;
+        // A system writer that names itself keeps its name: the tenant template applier (#2526)
+        // creates rows as "tenant-template" on threads that carry no caller, or someone else's.
+        if (this.createdBy == null) {
+            this.createdBy = currentUser;
+        }
+        if (this.modifiedBy == null) {
+            this.modifiedBy = currentUser;
+        }
     }
 
     @PreUpdate

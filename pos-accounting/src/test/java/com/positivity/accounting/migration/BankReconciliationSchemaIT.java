@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.accounting.AccountingPostgresContainer;
+import com.positivity.accounting.internal.service.AccountingTemplateStartupSweep;
 import com.positivity.tenancy.testing.TenantTestSupport;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -17,11 +18,15 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
 import javax.sql.DataSource;
-import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 
 /**
  * The bank reconciliation schema of story S1 (#2300; durion SPEC-manual-bank-reconciliation §6.4) as Flyway
@@ -34,28 +39,42 @@ import org.junit.jupiter.api.Test;
  * <p>H2 enforces none of the partial uniques or the exclusion constraint, so these run on Postgres only. Each
  * test works in its own transaction and rolls back. Requires Docker.
  */
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@ActiveProfiles("pg")
 @DisplayName("Bank reconciliation schema (story S1, #2300) on Postgres")
 class BankReconciliationSchemaIT {
 
-    private static final DataSource DATABASE =
-            AccountingPostgresContainer.ownerDataSource("bank-reconciliation-schema");
+    private static final String DATABASE_NAME = "bank-reconciliation-schema";
 
-    /** The alpha default tenant, which the seed binds (ADR-0062). */
+    private static final DataSource DATABASE = AccountingPostgresContainer.ownerDataSource(DATABASE_NAME);
+
+    /** The alpha default tenant (ADR-0062), which the startup sweep provisions from the accounting template. */
     private static final String TENANT_ID = TenantTestSupport.TENANT_A.toString();
 
-    /** Seeded {@code 1000 Cash} (R__seed_reference_accounting.sql). */
-    private static final UUID CASH_ACCOUNT_ID = UUID.fromString("5eed0acc-0000-4000-8000-000000001000");
+    /** The tenant's {@code 1000 Cash}, looked up by code once the tenant is provisioned. */
+    private static UUID cashAccountId;
 
-    /** Seeded {@code 1090 Undeposited Funds}. */
-    private static final UUID UNDEPOSITED_ACCOUNT_ID = UUID.fromString("5eed0acc-0000-4000-8000-000000001090");
+    /** The tenant's {@code 1090 Undeposited Funds}. */
+    private static UUID undepositedAccountId;
 
+    /**
+     * A database of this IT's own, built by the application: Flyway runs the whole chain on an empty
+     * Postgres, and the startup sweep then gives the tenant its chart from the template the seed put in
+     * the platform tenant (#2526). The seed itself writes no tenant's rows, so there is no fixed account
+     * id to name any more.
+     */
+    @DynamicPropertySource
+    static void database(DynamicPropertyRegistry registry) {
+        AccountingPostgresContainer.registerIsolatedDatabase(registry, DATABASE_NAME);
+        registry.add("pos.tenancy.tenants", () -> TENANT_ID);
+    }
+
+    /** The sweep parameter is what makes the context, and with it the migration and the sweep, run first. */
     @BeforeAll
-    static void migrate() {
-        Flyway.configure()
-                .dataSource(DATABASE)
-                .locations("classpath:db/migration")
-                .load()
-                .migrate();
+    static void lookUpProvisionedAccounts(@Autowired AccountingTemplateStartupSweep startupSweep) throws SQLException {
+        assertThat(startupSweep).isNotNull();
+        cashAccountId = accountId("1000");
+        undepositedAccountId = accountId("1090");
     }
 
     @Nested
@@ -278,7 +297,7 @@ class BankReconciliationSchemaIT {
                                         + " VALUES (?, ?, ?, 'FILE_IMPORT', 'POSTED', DATE '2032-02-10', 0, 'USD',"
                                         + " 'UNMATCHED', now(), 'it', now())",
                                 UUID.randomUUID(),
-                                CASH_ACCOUNT_ID,
+                                cashAccountId,
                                 statementId))
                         .isInstanceOf(SQLException.class)
                         .hasMessageContaining("bank_transaction_signed_amount_ck");
@@ -378,17 +397,14 @@ class BankReconciliationSchemaIT {
                 assertRefused(
                         c,
                         () -> insertAdjustment(
-                                c,
-                                reconciliationId,
-                                "BANK_FEE",
-                                Map.of("counter_gl_account_id", UNDEPOSITED_ACCOUNT_ID)),
+                                c, reconciliationId, "BANK_FEE", Map.of("counter_gl_account_id", undepositedAccountId)),
                         "bank_reconciliation_adjustment_counter_ck");
                 assertRefused(
                         c,
                         () -> insertAdjustment(c, reconciliationId, "RETURNED_PAYMENT", Map.of()),
                         "bank_reconciliation_adjustment_type_ck");
                 insertAdjustment(
-                        c, reconciliationId, "TRANSFER", Map.of("counter_gl_account_id", UNDEPOSITED_ACCOUNT_ID));
+                        c, reconciliationId, "TRANSFER", Map.of("counter_gl_account_id", undepositedAccountId));
                 c.rollback();
             }
         }
@@ -443,10 +459,13 @@ class BankReconciliationSchemaIT {
     @Test
     @DisplayName("the seed makes 1000 Cash reconcilable BANK_CASH and leaves 1090 as it was (G7, criterion 7)")
     void seedFixesCash() throws SQLException {
+        // The tenant's own rows, as the template gave them to it; RLS scopes the read to the bound tenant
+        // only for a non-owner, so the tenant is named.
         try (Connection c = open();
                 PreparedStatement ps =
                         c.prepareStatement("SELECT account_code, account_subtype, reconcilable FROM gl_account"
-                                + " WHERE account_code IN ('1000', '1090') ORDER BY account_code");
+                                + " WHERE tenant_id = '" + TENANT_ID + "'::uuid AND account_code IN ('1000', '1090')"
+                                + " ORDER BY account_code");
                 ResultSet rs = ps.executeQuery()) {
             assertThat(rs.next()).isTrue();
             assertThat(rs.getString(1)).isEqualTo("1000");
@@ -463,6 +482,21 @@ class BankReconciliationSchemaIT {
     // ---------------------------------------------------------------------
     // helpers
     // ---------------------------------------------------------------------
+
+    private static UUID accountId(String accountCode) throws SQLException {
+        try (Connection c = DATABASE.getConnection();
+                PreparedStatement ps = c.prepareStatement(
+                        "SELECT gl_account_id FROM gl_account WHERE tenant_id = ?::uuid AND account_code = ?")) {
+            ps.setString(1, TENANT_ID);
+            ps.setString(2, accountCode);
+            try (ResultSet rs = ps.executeQuery()) {
+                assertThat(rs.next())
+                        .as("the startup sweep gave the tenant account %s", accountCode)
+                        .isTrue();
+                return rs.getObject(1, UUID.class);
+            }
+        }
+    }
 
     private static Connection open() throws SQLException {
         Connection c = DATABASE.getConnection();
@@ -484,7 +518,7 @@ class BankReconciliationSchemaIT {
                         + " created_by, updated_at)"
                         + " VALUES (?, ?, 'FILE_IMPORT', ?, ?, 0, 0, 0, 'USD', ?, now(), 'it', now())",
                 id,
-                CASH_ACCOUNT_ID,
+                cashAccountId,
                 start,
                 end,
                 status);
@@ -501,7 +535,7 @@ class BankReconciliationSchemaIT {
                         + " VALUES (?, ?, ?, 'FILE_IMPORT', 'POSTED', DATE '2032-01-10', 25.00, 'USD', 'UNMATCHED',"
                         + " now(), 'it', now())",
                 id,
-                CASH_ACCOUNT_ID,
+                cashAccountId,
                 statementId);
         return id;
     }
@@ -516,7 +550,7 @@ class BankReconciliationSchemaIT {
                         + " VALUES (?, ?, DATE '2031-06-01', DATE '2031-06-30', 'USD', 0, 0, 0, 'IN_PROGRESS',"
                         + " now(), 'it', now())",
                 id,
-                CASH_ACCOUNT_ID);
+                cashAccountId);
         return id;
     }
 
@@ -599,7 +633,7 @@ class BankReconciliationSchemaIT {
                         + " VALUES (?, ?, 'LEDGER', ?, 'DEPOSIT_IN_TRANSIT', 40.00, DATE '2031-06-28', ?, 'it',"
                         + " now(), ?, now(), now())",
                 UUID.randomUUID(),
-                CASH_ACCOUNT_ID,
+                cashAccountId,
                 glLineId,
                 reconciliationId,
                 status);

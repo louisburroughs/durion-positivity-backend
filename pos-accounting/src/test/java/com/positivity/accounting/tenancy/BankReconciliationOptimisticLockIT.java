@@ -17,6 +17,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,8 +36,13 @@ import org.springframework.transaction.support.TransactionTemplate;
 @DisplayName("Bank reconciliation optimistic locking on Postgres (#2300)")
 class BankReconciliationOptimisticLockIT extends PostgresTenancyTestBase {
 
-    /** Seeded {@code 1000 Cash} of the default tenant, which is TENANT_A. */
-    private static final UUID CASH_ACCOUNT_ID = UUID.fromString("5eed0acc-0000-4000-8000-000000001000");
+    /** {@code 1000 Cash} of TENANT_A, provisioned from the accounting template and found by code. */
+    private UUID cashAccountId;
+
+    @BeforeEach
+    void provisionTenantA() {
+        cashAccountId = provisionedAccountId(TENANT_A, "1000");
+    }
 
     @Autowired
     private BankReconciliationRepository reconciliations;
@@ -68,7 +74,7 @@ class BankReconciliationOptimisticLockIT extends PostgresTenancyTestBase {
                 TENANT_A,
                 () -> tx.execute(status -> {
                     BankReconciliation reconciliation = new BankReconciliation();
-                    reconciliation.setGlAccount(glAccounts.getReferenceById(CASH_ACCOUNT_ID));
+                    reconciliation.setGlAccount(glAccounts.getReferenceById(cashAccountId));
                     reconciliation.setStatementStartDate(LocalDate.of(2042, 5, 1));
                     reconciliation.setStatementEndDate(LocalDate.of(2042, 5, 31));
                     reconciliation.setCurrency("USD");

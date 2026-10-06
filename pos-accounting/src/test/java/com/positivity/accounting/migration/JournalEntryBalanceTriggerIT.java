@@ -175,12 +175,19 @@ class JournalEntryBalanceTriggerIT {
         return c;
     }
 
+    /**
+     * Any account of the tenant the lines are written for. The owner sees every tenant's rows, the
+     * accounting template in the platform tenant included (#2526), so the tenant is named: a line may
+     * only reference an account of its own tenant. Flyway alone gives the default tenant accounts (V2).
+     */
     private static UUID anyGlAccountId(Connection c) throws SQLException {
-        try (PreparedStatement ps =
-                        c.prepareStatement("SELECT gl_account_id FROM gl_account ORDER BY account_code LIMIT 1");
-                ResultSet rs = ps.executeQuery()) {
-            assertThat(rs.next()).as("seed gl_account rows present").isTrue();
-            return rs.getObject(1, UUID.class);
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT gl_account_id FROM gl_account WHERE tenant_id = ?::uuid ORDER BY account_code LIMIT 1")) {
+            ps.setString(1, TENANT_ID);
+            try (ResultSet rs = ps.executeQuery()) {
+                assertThat(rs.next()).as("seed gl_account rows present").isTrue();
+                return rs.getObject(1, UUID.class);
+            }
         }
     }
 

@@ -36,6 +36,8 @@ import com.positivity.accounting.internal.dto.BankReconciliationPolicyRequest;
 import com.positivity.accounting.internal.dto.BankReconciliationPolicyResponse;
 import com.positivity.accounting.internal.entity.AccountingAuditLog;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
+import com.positivity.accounting.internal.repository.AccountingTemplateEntryRepository;
+import com.positivity.accounting.internal.repository.AccountingTemplateStateRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.service.AccountingConfigurationService;
 import com.positivity.accounting.internal.service.AccountingPeriodService;
@@ -48,6 +50,7 @@ import java.util.List;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -107,8 +110,19 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
     @Autowired
     private AccountingPeriodService periodService;
 
-    /** Seeded {@code 1000 Cash} of the default tenant, which is TENANT_A. */
-    private static final UUID CASH_ACCOUNT_ID = UUID.fromString("5eed0acc-0000-4000-8000-000000001000");
+    @Autowired
+    private AccountingTemplateStateRepository templateStates;
+
+    @Autowired
+    private AccountingTemplateEntryRepository templateEntries;
+
+    /** {@code 1000 Cash} of TENANT_A, which each test provisions from the accounting template and finds by code. */
+    private UUID cashAccountId;
+
+    @BeforeEach
+    void provisionTenantA() {
+        cashAccountId = provisionedAccountId(TENANT_A, "1000");
+    }
 
     private final List<UUID> bankRecRows = new ArrayList<>();
 
@@ -152,7 +166,7 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
                 TENANT_A,
                 () -> tx.execute(status -> {
                     BankStatement statement = new BankStatement();
-                    statement.setGlAccountId(CASH_ACCOUNT_ID);
+                    statement.setGlAccountId(cashAccountId);
                     statement.setSourceKind(SourceKind.FILE_IMPORT);
                     statement.setStartDate(LocalDate.of(2041, 3, 1));
                     statement.setEndDate(LocalDate.of(2041, 3, 31));
@@ -164,7 +178,7 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
                     UUID statementId = statements.saveAndFlush(statement).getStatementId();
 
                     BankTransaction transaction = new BankTransaction();
-                    transaction.setGlAccountId(CASH_ACCOUNT_ID);
+                    transaction.setGlAccountId(cashAccountId);
                     transaction.setStatementId(statementId);
                     transaction.setSourceKind(SourceKind.FILE_IMPORT);
                     transaction.setSourceRowNumber(1);
@@ -176,7 +190,7 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
                     UUID transactionId = transactions.saveAndFlush(transaction).getBankTransactionId();
 
                     BankReconciliation reconciliation = new BankReconciliation();
-                    reconciliation.setGlAccount(glAccounts.getReferenceById(CASH_ACCOUNT_ID));
+                    reconciliation.setGlAccount(glAccounts.getReferenceById(cashAccountId));
                     reconciliation.setStatementId(statementId);
                     reconciliation.setStatementStartDate(LocalDate.of(2041, 3, 1));
                     reconciliation.setStatementEndDate(LocalDate.of(2041, 3, 31));
@@ -189,7 +203,7 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
                             reconciliations.saveAndFlush(reconciliation).getReconciliationId();
 
                     BankImport bankImport = new BankImport();
-                    bankImport.setGlAccountId(CASH_ACCOUNT_ID);
+                    bankImport.setGlAccountId(cashAccountId);
                     bankImport.setCurrency("USD");
                     bankImport.setFormatCode("CSV");
                     bankImport.setFileSha256("a".repeat(64));
@@ -208,11 +222,11 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
                     importFiles.saveAndFlush(file);
 
                     // #2301: the bank-account profile carries the account's reconciliation baseline.
-                    BankAccountProfile profile = new BankAccountProfile(CASH_ACCOUNT_ID);
+                    BankAccountProfile profile = new BankAccountProfile(cashAccountId);
                     profile.setCurrency("USD");
                     profile.setReconciliationBaselineDate(LocalDate.of(2041, 3, 1));
                     profiles.saveAndFlush(profile);
-                    return new UUID[] {statementId, transactionId, reconciliationId, importId, CASH_ACCOUNT_ID};
+                    return new UUID[] {statementId, transactionId, reconciliationId, importId, cashAccountId};
                 }));
         bankRecRows.addAll(List.of(ids));
 
@@ -310,6 +324,48 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
         }
     }
 
+    /**
+     * The tenant template tables of #2526: what was applied to tenant A is its own. Tenant B, which
+     * has no record of its own, sees no state row and no entry through the repositories or through
+     * raw SQL on the pool, and neither does an unbound connection.
+     */
+    @Test
+    void theTemplateRecordOfOneTenantIsInvisibleToAnother() {
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+
+        asTenant(
+                TENANT_A,
+                () -> tx.executeWithoutResult(status -> {
+                    assertThat(templateStates.findCurrent()).isPresent();
+                    assertThat(templateEntries.count()).isPositive();
+                    assertThat(templateEntries.findAll()).allMatch(entry -> TENANT_A.equals(entry.getTenantId()));
+                    assertThat(jdbc.queryForObject("SELECT count(*) FROM accounting_template_entry", Integer.class))
+                            .isEqualTo((int) templateEntries.count());
+                }));
+        asTenant(
+                TENANT_B,
+                () -> tx.executeWithoutResult(status -> {
+                    assertThat(templateStates.findCurrent()).isEmpty();
+                    assertThat(templateEntries.count()).isZero();
+                    for (String table : List.of("accounting_template_state", "accounting_template_entry")) {
+                        assertThat(jdbc.queryForObject(
+                                        "SELECT count(*) FROM " + table + " WHERE tenant_id = ?",
+                                        Integer.class,
+                                        TENANT_A))
+                                .as("tenant B sees none of tenant A's %s rows through raw SQL", table)
+                                .isZero();
+                    }
+                }));
+        tx.executeWithoutResult(status -> {
+            for (String table : List.of("accounting_template_state", "accounting_template_entry")) {
+                assertThat(jdbc.queryForObject("SELECT count(*) FROM " + table, Integer.class))
+                        .as("an unbound connection sees no %s row", table)
+                        .isZero();
+            }
+        });
+    }
+
     private static int countById(JdbcTemplate jdbc, String table, String key, UUID id) {
         Integer count =
                 jdbc.queryForObject("SELECT count(*) FROM " + table + " WHERE " + key + " = ?", Integer.class, id);
@@ -354,13 +410,13 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
                 assertThat(readiness.policy()).isEqualTo(BankRecClosePolicy.REQUIRED_WITH_EXCEPTION);
                 assertThat(readiness.accounts())
                         .as("tenant A's seeded 1000 Cash is not in tenant B's readiness")
-                        .noneMatch(a -> a.glAccountId().equals(CASH_ACCOUNT_ID));
+                        .noneMatch(a -> a.glAccountId().equals(cashAccountId));
             });
 
             asTenant(TENANT_A, () -> {
                 CloseReadinessResponse readiness = tx.execute(status -> periodService.getCloseReadiness("2026-08"));
                 assertThat(readiness.policy()).isEqualTo(BankRecClosePolicy.ADVISORY);
-                assertThat(readiness.accounts()).anyMatch(a -> a.glAccountId().equals(CASH_ACCOUNT_ID));
+                assertThat(readiness.accounts()).anyMatch(a -> a.glAccountId().equals(cashAccountId));
             });
         } finally {
             JdbcTemplate owner = new JdbcTemplate(ownerDataSource());

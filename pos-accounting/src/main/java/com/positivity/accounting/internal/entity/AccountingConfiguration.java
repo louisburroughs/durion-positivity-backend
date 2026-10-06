@@ -32,8 +32,11 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * date strictly before it, with no override path. The date only moves
  * forward (monotonic), which is what makes the lock irreversible.
  *
- * <p>The table ships empty; keys appear on first write through
- * {@link com.positivity.accounting.internal.service.AccountingConfigurationService}.
+ * <p>Keys appear on first write through
+ * {@link com.positivity.accounting.internal.service.AccountingConfigurationService}. An absent key
+ * means its default. {@code RETREAD_PLANT_ADD_ON} (#2526) is a tenant's choice of the retread-plant
+ * template add-on, written by {@code TenantTemplateService}; the alpha default tenant's is set by
+ * {@code V5__tenant_template_provisioning.sql}.
  *
  * @see <a href=
  *      "domains/accounting/plan-odoo-parity-pos-accounting.md">Odoo Parity Plan -
