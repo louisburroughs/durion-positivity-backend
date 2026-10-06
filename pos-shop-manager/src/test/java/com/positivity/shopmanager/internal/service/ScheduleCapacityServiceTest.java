@@ -2502,6 +2502,35 @@ class ScheduleCapacityServiceTest {
     }
 
     @Test
+    @DisplayName("#2530 AC7 - a booking for tomorrow stays on its booked bay even while the job already sits on "
+            + "another bay today")
+    void tomorrowsBookingStaysOnTheBookedBay() {
+        UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
+        UUID bookedBay = persistBay("Bay 1", locationId);
+        UUID heldBay = persistBay("Bay 2", locationId);
+        // Booked tomorrow 09:00-11:00 on Bay 1; the car came in early and sits on Bay 2 since 10:00 today.
+        Appointment appointment = persistAppointment(
+                locationId, bookedBay, instant(TUESDAY, 9, 0), instant(TUESDAY, 11, 0), AppointmentStatus.CHECKED_IN);
+        UUID workorderId = UUIDv7Generator.generate();
+        persistWorkorderLink(workorderId, appointment, null, null);
+        persistPosition(workorderId, locationId, heldBay, instant(MONDAY, 10, 0), null);
+        flushAndClear();
+
+        ScheduleCapacityResponse response = scheduleCapacityService.getCapacity(locationId, MONDAY, TUESDAY);
+        List<ScheduleCapacityResponse.BayCapacityView> today =
+                response.getDays().get(0).getBays();
+        List<ScheduleCapacityResponse.BayCapacityView> tomorrow =
+                response.getDays().get(1).getBays();
+
+        // Today: Bay 2 held 10:00 to now (12:00); the booking has not started, so nothing more today.
+        assertThat(today.get(0).getOccupiedMinutes()).isZero();
+        assertThat(today.get(1).getOccupiedMinutes()).isEqualTo(120);
+        // Tomorrow: the booking, on the bay it was booked on, exactly as before the job arrived.
+        assertThat(tomorrow.get(0).getOccupiedMinutes()).isEqualTo(120);
+        assertThat(tomorrow.get(1).getOccupiedMinutes()).isZero();
+    }
+
+    @Test
     @DisplayName("#2530 - a bay history row on a bay this location does not list is not a bay for this read")
     void historyOnAnUnknownBayIsIgnored() {
         UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);

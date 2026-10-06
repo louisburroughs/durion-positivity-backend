@@ -65,9 +65,10 @@ import org.springframework.transaction.annotation.Transactional;
  *       (#2085). See {@code AppointmentRepository#findAppointmentsForCapacity}. The {@code EXISTS} is
  *       a subquery of that same statement, not a second one;
  *   <li>one batch workorder-actuals query for every appointment fetched by (3) — issued only when
- *       (3) returned at least one row, so a location with nothing booked still costs 3;
+ *       (3) returned at least one row;
  *   <li>one query over this module's {@code ext_workorder_position} replica for every bay held at
- *       the location during the assembly window (#2530), appointment or not;
+ *       the location during the assembly window (#2530), appointment or not — always issued, so a
+ *       location with nothing booked and nothing held costs 4;
  *   <li>one batch lookup of which of those workorders are linked to an appointment — issued only
  *       when (5) returned at least one row.
  * </ol>
@@ -187,8 +188,9 @@ import org.springframework.transaction.annotation.Transactional;
  *       and no later — a projected finish is never invented. A walk-in has nothing but these.
  *   <li><em>Appointment holds.</em> An appointment whose linked workorder has taken a bay (it has a
  *       position hold) contributes only what is still booked: the part of its planned window after
- *       now, on the bay its workorder currently holds if any, else the one it was booked on — and
- *       nothing once the workorder has completed. An appointment whose workorder has not taken a bay
+ *       now — for the rest of today on the bay its workorder currently holds, if any, and from
+ *       tomorrow on the bay it was booked on, since a future date reports what is booked for it
+ *       (AC7) — and nothing once the workorder has completed. An appointment whose workorder has not taken a bay
  *       (not started, a walk-in-less booking, or history older than #2530) contributes its effective
  *       window as before (#2021): actual start and finish where the linked workorder has them, else
  *       the planned window.
@@ -419,11 +421,11 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
                         .toList();
         Map<UUID, UUID> appointmentByWorkorder = resolveLinks(positions);
 
+        LocalDate today = zoneId == null ? null : LocalDate.ofInstant(now, zoneId);
         List<BayHold> holds = zoneId == null
                 ? List.of()
-                : buildHolds(appointmentsByBay, actualsByAppointmentId, positions, appointmentByWorkorder, now);
+                : buildHolds(appointmentsByBay, actualsByAppointmentId, positions, appointmentByWorkorder, now, zoneId);
         Map<UUID, JobContext> jobContexts = zoneId == null ? Map.of() : buildJobContexts(holds, zoneId);
-        LocalDate today = zoneId == null ? null : LocalDate.ofInstant(now, zoneId);
 
         List<ScheduleCapacityResponse.DayCapacityView> dayViews =
                 assembleDayViews(assemblies, from, today, bays, holds, jobContexts);
@@ -606,8 +608,13 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
             Map<UUID, WorkorderActuals> actualsByAppointmentId,
             List<ExtWorkorderPositionReplica> positions,
             Map<UUID, UUID> appointmentByWorkorder,
-            Instant now) {
+            Instant now,
+            ZoneId zoneId) {
         List<BayHold> holds = new ArrayList<>();
+        Instant endOfToday = LocalDate.ofInstant(now, zoneId)
+                .plusDays(1)
+                .atStartOfDay(zoneId)
+                .toInstant();
         Set<UUID> placedWorkorders = new HashSet<>();
         Map<UUID, ExtWorkorderPositionReplica> openPositionByWorkorder = new HashMap<>();
 
@@ -652,10 +659,33 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
                     if (!start.isBefore(end)) {
                         continue;
                     }
+                    // The rest of today follows the bay the job is on; from tomorrow the booking
+                    // is on the bay it was booked on, as it was before the job arrived (AC7).
                     ExtWorkorderPositionReplica open = openPositionByWorkorder.get(workorderId);
-                    UUID bayId = open != null ? open.getResourceId() : bookedBayId;
-                    holds.add(new BayHold(
-                            holds.size(), appointmentId, bayId, start, end, false, appointmentId, workorderId));
+                    Instant todayEnd = minInstant(end, endOfToday);
+                    if (start.isBefore(todayEnd)) {
+                        UUID todaysBay = open != null ? open.getResourceId() : bookedBayId;
+                        holds.add(new BayHold(
+                                holds.size(),
+                                appointmentId,
+                                todaysBay,
+                                start,
+                                todayEnd,
+                                false,
+                                appointmentId,
+                                workorderId));
+                    }
+                    if (todayEnd.isBefore(end)) {
+                        holds.add(new BayHold(
+                                holds.size(),
+                                appointmentId,
+                                bookedBayId,
+                                maxInstant(start, endOfToday),
+                                end,
+                                false,
+                                appointmentId,
+                                workorderId));
+                    }
                     continue;
                 }
                 boolean bookedOnly = actuals == null || actuals.workStartedAt() == null;

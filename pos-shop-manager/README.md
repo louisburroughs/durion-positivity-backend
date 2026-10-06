@@ -420,8 +420,9 @@ exactly one of them for any instant, so nothing is counted twice:
   stood, and a job that moved is charged to each bay for its own interval. An interval still open ends
   at the instant the view is generated and no later. A walk-in has nothing but these.
 - **Appointment holds** — an appointment whose linked workorder has taken a bay contributes only what
-  is still booked: the part of its planned window after now, on the bay its workorder currently holds
-  (else the booked one), and nothing once the workorder has completed. An appointment whose workorder
+  is still booked: the part of its planned window after now — for the rest of today on the bay its
+  workorder currently holds (else the booked one), from tomorrow on the bay it was booked on — and
+  nothing once the workorder has completed. An appointment whose workorder
   has not taken a bay (not started, or history older than #2530) contributes its effective window as
   before (#2021).
 
