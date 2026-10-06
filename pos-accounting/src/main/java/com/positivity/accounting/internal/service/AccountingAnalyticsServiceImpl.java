@@ -105,6 +105,7 @@ public class AccountingAnalyticsServiceImpl implements AccountingAnalyticsServic
     private final APPaymentRepository apPaymentRepository;
     private final VendorBillRepository vendorBillRepository;
     private final VendorRepository vendorRepository;
+    private final InvoiceBalanceCalculator invoiceBalanceCalculator;
 
     public AccountingAnalyticsServiceImpl(
             Clock clock,
@@ -117,7 +118,8 @@ public class AccountingAnalyticsServiceImpl implements AccountingAnalyticsServic
             CustomerCreditTransactionRepository customerCreditTransactionRepository,
             APPaymentRepository apPaymentRepository,
             VendorBillRepository vendorBillRepository,
-            VendorRepository vendorRepository) {
+            VendorRepository vendorRepository,
+            InvoiceBalanceCalculator invoiceBalanceCalculator) {
         this.clock = clock;
         this.extInvoiceRepository = extInvoiceRepository;
         this.paymentApplicationRepository = paymentApplicationRepository;
@@ -129,6 +131,7 @@ public class AccountingAnalyticsServiceImpl implements AccountingAnalyticsServic
         this.apPaymentRepository = apPaymentRepository;
         this.vendorBillRepository = vendorBillRepository;
         this.vendorRepository = vendorRepository;
+        this.invoiceBalanceCalculator = invoiceBalanceCalculator;
     }
 
     @Override
@@ -149,8 +152,15 @@ public class AccountingAnalyticsServiceImpl implements AccountingAnalyticsServic
         // the full workorder total — counting both would report a $500 deposit on a $2,000 job as
         // $2,500 invoiced across the two windows. Exclusion at the deposit-take document (never
         // netting the settlement) keeps the settlement's total traceable to the workorder price.
+        // Walk-in sales on the CASH house account excluded too (#2508, §4.4 item 2; the same exclusion pattern as
+        // the deposit-take rule): they are not a customer's collections, and their applications and the reversals
+        // of those leave `collected` with them. A view and measure rule only; postings are unchanged (ADR-0047).
+        Set<UUID> walkInPartyIds = invoiceBalanceCalculator.walkInPartyIds();
+        List<String> walkInParties = walkInPartyIds.stream().map(UUID::toString).toList();
+
         BigDecimal invoiced = extInvoiceRepository.findByFinalizedAtBetween(startInstant, endInstant).stream()
                 .filter(invoice -> invoice.getDepositSourceType() == null)
+                .filter(invoice -> !InvoiceBalanceCalculator.isWalkIn(invoice, walkInPartyIds))
                 .map(ExtInvoice::getTotal)
                 .map(AccountingAnalyticsServiceImpl::nullSafe)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -160,6 +170,11 @@ public class AccountingAnalyticsServiceImpl implements AccountingAnalyticsServic
                         .map(PaymentApplication::getAppliedAmount)
                         .map(AccountingAnalyticsServiceImpl::nullSafe)
                         .reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (!walkInParties.isEmpty()) {
+            applied = applied.subtract(nullSafe(
+                    paymentApplicationRepository.sumAppliedAmountByApplicationTimestampBetweenAndInvoicePartyIdIn(
+                            startInstant, endInstant, walkInParties)));
+        }
 
         // Movement basis (issue #1605): a reversal reduces the window it was RECORDED in, not the
         // window its original application landed in. A January application reversed in March keeps
@@ -171,6 +186,11 @@ public class AccountingAnalyticsServiceImpl implements AccountingAnalyticsServic
         // question rather than measuring movement in a window.
         BigDecimal applicationReversals =
                 nullSafe(paymentApplicationReversalRepository.sumAmountByReversedAtBetween(startInstant, endInstant));
+        if (!walkInParties.isEmpty()) {
+            applicationReversals = applicationReversals.subtract(
+                    nullSafe(paymentApplicationReversalRepository.sumAmountByReversedAtBetweenAndInvoicePartyIdIn(
+                            startInstant, endInstant, walkInParties)));
+        }
 
         // Not clamped at zero: a window whose reversals exceed its applications is genuinely
         // net-negative cash application, and hiding that would misstate the period.
@@ -252,7 +272,11 @@ public class AccountingAnalyticsServiceImpl implements AccountingAnalyticsServic
             amounts.put(cohort, BigDecimal.ZERO);
         }
 
-        List<ExtInvoice> invoices = extInvoiceRepository.findByFinalizedAtBetween(startInstant, endInstant);
+        // Walk-in sales on the CASH house account are not a customer's payment behaviour (#2508, §4.4 item 2).
+        Set<UUID> walkInPartyIds = invoiceBalanceCalculator.walkInPartyIds();
+        List<ExtInvoice> invoices = extInvoiceRepository.findByFinalizedAtBetween(startInstant, endInstant).stream()
+                .filter(invoice -> !InvoiceBalanceCalculator.isWalkIn(invoice, walkInPartyIds))
+                .toList();
         List<UUID> invoiceIds =
                 invoices.stream().map(ExtInvoice::getInvoiceId).distinct().toList();
         Map<UUID, List<PaymentApplication>> applicationsByInvoice = invoiceIds.isEmpty()

@@ -18,6 +18,7 @@ import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePay
 import com.positivity.accounting.internal.enums.AllocationStrategy;
 import com.positivity.accounting.internal.enums.ApplicationSource;
 import com.positivity.accounting.internal.enums.InvoiceStatus;
+import com.positivity.accounting.internal.exception.CashCustomerCreditNotAllowedException;
 import com.positivity.accounting.internal.exception.CurrencyNotSupportedException;
 import com.positivity.accounting.internal.exception.IdempotencyConflictException;
 import com.positivity.accounting.internal.exception.MultiApplicationReversalException;
@@ -59,7 +60,8 @@ import org.springframework.web.server.ResponseStatusException;
  * - Payment domain is SoR for Payment lifecycle (auth/capture/settlement)
  * - Applications are atomic across all target invoices
  * - Applications are idempotent via applicationRequestId
- * - Overpayments create CustomerCredit
+ * - Overpayments create CustomerCredit, except for the CASH walk-in account (#2508): a person is
+ *   refused (422 CASH_CUSTOMER_CREDIT_NOT_ALLOWED), an automatic path leaves the excess unapplied
  * - Reversals are compensating transactions (no deletes)
  *
  * @see <a href=
@@ -100,6 +102,7 @@ public class PaymentApplicationServiceImpl
     private final InvoiceBalanceCalculator invoiceBalanceCalculator;
     private final OutboxService outboxService;
     private final LedgerCurrency ledgerCurrency;
+    private final WalkInOverpaymentAlert walkInOverpaymentAlert;
 
     /**
      * Handle PaymentCleared event from Payment domain.
@@ -214,7 +217,10 @@ public class PaymentApplicationServiceImpl
      * <li>Cap each amount at the invoice's balance due</li>
      * <li>Create immutable PaymentApplication records (source MANUAL)</li>
      * <li>Update the payment's unapplied amount</li>
-     * <li>Keep any excess as a CustomerCredit (AD-003)</li>
+     * <li>Keep any excess as a CustomerCredit (AD-003), except on the CASH walk-in account (#2508):
+     * there a person's overpayment is refused with {@link CashCustomerCreditNotAllowedException} before
+     * anything is written, and an automatic path applies up to the balance and leaves the excess
+     * unapplied, raised by {@link WalkInOverpaymentAlert}</li>
      * <li>Enqueue the GL work items in the same transaction (transactional outbox)</li>
      * </ol>
      *
@@ -278,6 +284,16 @@ public class PaymentApplicationServiceImpl
         validateSufficientFunds(payment, totalApplicationAmount);
         InvoiceApplicationValidation validation = validateAndCapApplications(request);
 
+        // Never a customer credit on the CASH walk-in account (#2508, §4.4 item 4): it would be a liability to
+        // no identifiable person. A person is refused before anything is written; an automatic path applies up to
+        // the balance and leaves the excess unapplied, to be refunded through pos-invoice.
+        boolean walkInExcess = validation.overpaymentAmount().signum() > 0
+                && invoiceBalanceCalculator.walkInPartyIds().contains(payment.getCustomerId());
+        if (walkInExcess && source == ApplicationSource.MANUAL) {
+            throw new CashCustomerCreditNotAllowedException("payment " + paymentId + " is the CASH walk-in"
+                    + " account's and " + validation.overpaymentAmount() + " is more than the invoices owe");
+        }
+
         List<PaymentApplicationResponse.ApplicationDetail> applicationDetails = createApplicationsAndUpdateInvoices(
                 paymentId, request, payment, validation.cappedAmounts(), currentUser, applicationTimestamp, source);
 
@@ -293,7 +309,9 @@ public class PaymentApplicationServiceImpl
         // 8. Handle overpayment - create CustomerCredit if there's overpayment
         PaymentApplicationResponse.CustomerCreditInfo creditInfo = null;
 
-        if (validation.overpaymentAmount().compareTo(BigDecimal.ZERO) > 0) {
+        if (walkInExcess) {
+            walkInOverpaymentAlert.excessLeftUnapplied(payment, payment.getUnappliedAmount(), source);
+        } else if (validation.overpaymentAmount().compareTo(BigDecimal.ZERO) > 0) {
             // Explicit overpayment: payment amount exceeded what was needed for invoices
             // The unapplied amount after application is the credit amount
             // (overpaymentAmount represents what couldn't be applied due to balance limits)
@@ -387,6 +405,11 @@ public class PaymentApplicationServiceImpl
                     "Payment " + paymentId + " is not available (status: " + payment.getStatus() + ")");
         }
         validateSameCurrency(payment);
+        if (invoiceBalanceCalculator.walkInPartyIds().contains(payment.getCustomerId())) {
+            // No customer credit on the CASH walk-in account (#2508): the excess stays unapplied and is raised.
+            walkInOverpaymentAlert.excessLeftUnapplied(payment, unapplied, ApplicationSource.INVOICE_PAYMENT);
+            return null;
+        }
 
         return issueRemainderCredit(payment, unapplied, creditRequestId);
     }
@@ -438,6 +461,10 @@ public class PaymentApplicationServiceImpl
                     "Payment " + paymentId + " is not available (status: " + payment.getStatus() + ")");
         }
         validateSameCurrency(payment);
+        if (invoiceBalanceCalculator.walkInPartyIds().contains(payment.getCustomerId())) {
+            throw new CashCustomerCreditNotAllowedException(
+                    "payment " + paymentId + " is the CASH walk-in account's; refund its remainder instead");
+        }
         BigDecimal unapplied = payment.getUnappliedAmount() != null ? payment.getUnappliedAmount() : BigDecimal.ZERO;
         if (unapplied.compareTo(request.getExpectedAmount()) != 0) {
             throw new PaymentRemainderChangedException("Payment " + paymentId + " has " + unapplied

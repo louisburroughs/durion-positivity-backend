@@ -16,7 +16,8 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 142 event types (includes +1 from the automatic payment applications read (CAP:550 S2,
+     * Total: 143 event types (includes +1 from the unpaid walk-in sales read (CAP:550 S11, Issue #2508):
+     * ACCOUNTING_UNPAID_WALK_IN_SALES_VIEW, +1 from the automatic payment applications read (CAP:550 S2,
      * Issue #2503): ACCOUNTING_PAYMENT_APPLICATION_AUTOMATIC_LIST_VIEW, +2 from the receivables worklist
      * reads (CAP:550 S1, Issue #2502):
      * ACCOUNTING_RECEIVABLE_PAYMENT_LIST_VIEW, ACCOUNTING_CUSTOMER_OPEN_INVOICES_VIEW, +2 from tenant
@@ -635,6 +636,12 @@ public final class EventTypes {
                 EventTypeRegistration.search(
                                 "ACCOUNTING_PAYMENT_APPLICATION_AUTOMATIC_LIST_VIEW",
                                 "List payment applications made automatically, with Undo")
+                        .build(),
+
+                // UnpaidWalkInSalesController — 1 event (CAP:550 S11, #2508)
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_UNPAID_WALK_IN_SALES_VIEW",
+                                "Read the CASH walk-in balance and the day-end needs-attention item")
                         .build());
     }
 }

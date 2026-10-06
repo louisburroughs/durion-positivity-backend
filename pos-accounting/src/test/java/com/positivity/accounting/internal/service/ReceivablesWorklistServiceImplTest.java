@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -95,7 +96,13 @@ class ReceivablesWorklistServiceImplTest {
     @BeforeEach
     void setUp() {
         InvoiceBalanceCalculator calculator = new InvoiceBalanceCalculator(
-                invoices, applications, reversals, creditMemos, creditTransactions, depositApplications);
+                invoices,
+                applications,
+                reversals,
+                creditMemos,
+                creditTransactions,
+                depositApplications,
+                mock(com.positivity.accounting.internal.repository.ExtCustomerPartyRepository.class));
         service = new ReceivablesWorklistServiceImpl(
                 payments,
                 invoices,

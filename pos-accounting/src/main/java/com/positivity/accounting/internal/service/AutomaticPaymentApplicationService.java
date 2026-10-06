@@ -62,7 +62,10 @@ import tools.jackson.databind.ObjectMapper;
  *       may be right);
  *   <li>otherwise the payment's whole unapplied amount is applied to that invoice only (BR-1), dated
  *       {@code settledAt}, keyed {@code PAYMENT_SETTLED:<paymentIntentId>} (BR-4), capped at the
- *       balance with any excess kept as a customer credit (AD-003).
+ *       balance with any excess kept as a customer credit (AD-003) — except on the CASH walk-in account
+ *       (S11, #2508; §4.4 item 4): there the excess stays unapplied on the payment, which stays {@code
+ *       AVAILABLE}, is raised by {@code accounting.walk_in.overpayment} and listed by the unpaid walk-in
+ *       sales read for a refund. {@code PaymentApplicationServiceImpl} enforces it for every path.
  * </ol>
  *
  * <p>An application, or case f, writes no {@code accounting_event} row: the application record is the
@@ -75,7 +78,7 @@ public class AutomaticPaymentApplicationService {
     /** Namespace of the request id of an automatic application: {@code PAYMENT_SETTLED:<paymentIntentId>}. */
     static final String REQUEST_ID_PREFIX = ApplicationSource.PAYMENT_SETTLED.name() + ":";
 
-    /** The methods applied automatically; S11 adds the CASH house-account rule. */
+    /** The methods applied automatically; the CASH house-account excess rule (S11) is in case h. */
     static final Set<String> AUTO_APPLIED_METHODS = Set.of("CASH", "CARD");
 
     /** The held reasons a reprocess of a {@code payment.payment.settled} row routes back here. */
@@ -346,10 +349,19 @@ public class AutomaticPaymentApplicationService {
                 ApplicationSource.PAYMENT_SETTLED);
         return new Result(
                 Outcome.APPLIED,
-                "applied " + response.getAppliedAmount() + " to invoice " + invoiceNumber
-                        + (response.getCustomerCredit() == null
-                                ? ""
-                                : "; " + response.getCustomerCredit().getAmount() + " kept as customer credit"));
+                "applied " + response.getAppliedAmount() + " to invoice " + invoiceNumber + excessDetail(response));
+    }
+
+    /** What became of an excess: a customer credit, or, on the CASH walk-in account, left unapplied (#2508). */
+    private static String excessDetail(PaymentApplicationResponse response) {
+        if (response.getCustomerCredit() != null) {
+            return "; " + response.getCustomerCredit().getAmount() + " kept as customer credit";
+        }
+        BigDecimal remaining = response.getRemainingAmount();
+        if (remaining != null && remaining.signum() > 0) {
+            return "; " + remaining + " left unapplied (walk-in excess: refunded, never credited)";
+        }
+        return "";
     }
 
     private void counter(Outcome outcome) {

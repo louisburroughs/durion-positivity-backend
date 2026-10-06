@@ -42,7 +42,9 @@ import org.springframework.transaction.annotation.Transactional;
  * application record (AD-002), the Undeposited Funds debit stays matchable by settlement
  * reconciliation, and a later {@code payment.events.v1} fact for the same {@code paymentId} finds
  * the payment already recorded instead of booking it twice. An amount beyond the invoice's balance,
- * or a payment for an invoice already paid in full, becomes a {@code CustomerCredit} (AD-003).
+ * or a payment for an invoice already paid in full, becomes a {@code CustomerCredit} (AD-003) — except
+ * on the CASH walk-in account (#2508, §4.4 item 4), where it stays unapplied on the payment, is raised
+ * as a walk-in overpayment and listed by the unpaid walk-in sales read; the event is still processed.
  *
  * <p>Payload (the submitted event's {@code payload} object): {@code paymentId}, {@code invoiceId},
  * {@code amountPaid} (&gt; 0), {@code currency} (the ledger's) and {@code paidAt} (ISO-8601 instant)
@@ -154,7 +156,8 @@ public class InvoicePaymentEventProcessor {
         String requestId = REQUEST_ID_PREFIX + event.getEventId();
         if (invoiceBalanceCalculator.balanceDue(invoice).compareTo(BigDecimal.ZERO) > 0) {
             // Capped at the balance due; any excess becomes a CustomerCredit inside the application,
-            // which records this path as its source (#2503).
+            // which records this path as its source (#2503) — or stays unapplied on a CASH walk-in
+            // payment (#2508).
             paymentApplicationService.applyAutomatically(
                     payment.paymentId(),
                     payment.invoiceId(),

@@ -66,7 +66,8 @@ public class AccountingAnalyticsController {
             summary = "Get Invoiced Vs Collected Analytics",
             description = """
                     Returns one aggregate row for a single date window: invoiced (the sum of ExtInvoice \
-                    totals for invoices finalized in the window), collected, applicationReversals, \
+                    totals for invoices finalized in the window, leaving out deposit-take invoices and walk-in \
+                    sales on the CASH house account), collected, applicationReversals, \
                     refunded, netCashCollected, received, nonCashSettled, settled, and the server-derived \
                     collectionRatePct and settlementRatePct.
                     collected is payment amounts applied to accounts receivable within the window, net of \
@@ -75,7 +76,9 @@ public class AccountingAnalyticsController {
                     restates January, so collected may be negative in a heavy-reversal window and is \
                     deliberately not clamped; applicationReversals reports that gross reversal amount as a \
                     positive number so a dip in collected can be attributed without a second call. \
-                    Deposit-credit and customer-credit settlement is excluded from collected, because that \
+                    Applications to walk-in sales on the CASH house account, and their reversals, are left out \
+                    of collected and applicationReversals; deposit-credit and customer-credit settlement is \
+                    excluded from collected, because that \
                     cash was received when the deposit was taken rather than when the credit was drawn \
                     down, so collectionRatePct is understated for a window in which deposit-funded \
                     invoices finalize; as a basis guide, so the right figure gets picked for a question: received is \
@@ -156,7 +159,7 @@ public class AccountingAnalyticsController {
                     Generates payment-lag cohorts for invoices issued (finalized) in a date window: exactly \
                     four cohorts (<=30, 31-60, 61-90, unpaid) each with an invoice count and total invoice \
                     amount, where issuedFrom/issuedTo anchor on invoice issue date (ExtInvoice.finalizedAt) \
-                    rather than payment date.
+                    rather than payment date, leaving out walk-in sales on the CASH house account.
                     Use this tool for AR collection-speed distribution across invoices; do not use \
                     getCollectionsAnalytics instead, which reports a period cash total rather than a \
                     per-invoice speed distribution.

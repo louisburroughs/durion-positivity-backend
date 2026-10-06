@@ -93,6 +93,24 @@ public interface PaymentApplicationReversalRepository extends JpaRepository<Paym
             @org.springframework.data.repository.query.Param("end") java.time.Instant end);
 
     /**
+     * Total reversed, within the inclusive instant range, of applications to invoices of the given
+     * parties (#2508): the walk-in reversals the collections measure leaves out with their applications.
+     *
+     * @param start    inclusive lower bound
+     * @param end      inclusive upper bound
+     * @param partyIds parties as {@code ext_invoice.party_id} stores them (canonical UUID strings)
+     * @return total reversed; zero when there is none
+     */
+    @org.springframework.data.jpa.repository.Query("SELECT COALESCE(SUM(r.amount), 0) FROM PaymentApplicationReversal r"
+            + " WHERE r.reversedAt BETWEEN :start AND :end"
+            + " AND r.originalPaymentApplication.invoiceId IN"
+            + " (SELECT i.invoiceId FROM ExtInvoice i WHERE i.partyId IN :partyIds)")
+    java.math.@NonNull BigDecimal sumAmountByReversedAtBetweenAndInvoicePartyIdIn(
+            @Param("start") java.time.@NonNull Instant start,
+            @Param("end") java.time.@NonNull Instant end,
+            @Param("partyIds") @NonNull Collection<String> partyIds);
+
+    /**
      * Bulk-resolve which of the given payment application ids have a reversal. Used by the
      * payment-application list endpoint (Wave 2 E10, issue #1598) with {@code
      * includeReversed=true} to flag each row's {@code reversed} field in one round trip instead

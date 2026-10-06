@@ -212,6 +212,58 @@ class CustomerEventsListenerTest {
     }
 
     @Test
+    @DisplayName("#2508: the party's houseAccount flag is replicated; other parties carry null")
+    void replicatesHouseAccountFlag() {
+        when(processedEvents.existsById("e-party-6")).thenReturn(false);
+        when(partyReplica.findById(PARTY_ID)).thenReturn(Optional.empty());
+
+        listener.onCustomerEvent(houseAccountEvent("e-party-6", 1, "\"CASH_SALE\""));
+
+        ArgumentCaptor<ExtCustomerParty> saved = ArgumentCaptor.forClass(ExtCustomerParty.class);
+        verify(partyReplica).save(saved.capture());
+        assertThat(saved.getValue().getHouseAccount()).isEqualTo("CASH_SALE");
+        assertThat(saved.getValue().getCustomerNumber()).isEqualTo("CASH");
+
+        // An ordinary party: the fact omits the flag, the replica stores null.
+        listener.onCustomerEvent(partyUpdatedEvent("e-party-7", 2, "Northside Fleet Services", "C-10427"));
+        verify(partyReplica, org.mockito.Mockito.times(2)).save(saved.capture());
+        assertThat(saved.getValue().getHouseAccount()).isNull();
+    }
+
+    @Test
+    @DisplayName("#2508: a party-fact replay at the held version fills the flag on an existing row")
+    void replayAtEqualVersionFillsTheFlag() {
+        when(processedEvents.existsById("e-replay-1")).thenReturn(false);
+        ExtCustomerParty held = ExtCustomerParty.builder()
+                .partyId(PARTY_ID)
+                .partyType("COMMERCIAL")
+                .displayName("Walk-in customer")
+                .customerNumber("CASH")
+                .status("ACTIVE")
+                .aggregateVersion(4)
+                .updatedAt(Instant.now(TEST_CLOCK))
+                .build();
+        when(partyReplica.findById(PARTY_ID)).thenReturn(Optional.of(held));
+
+        listener.onCustomerEvent(houseAccountEvent("e-replay-1", 4, "\"CASH_SALE\""));
+
+        ArgumentCaptor<ExtCustomerParty> saved = ArgumentCaptor.forClass(ExtCustomerParty.class);
+        verify(partyReplica).save(saved.capture());
+        assertThat(saved.getValue().getHouseAccount()).isEqualTo("CASH_SALE");
+        assertThat(saved.getValue().getAggregateVersion()).isEqualTo(4);
+    }
+
+    private String houseAccountEvent(String eventId, long version, String houseAccountJson) {
+        return """
+                {"eventId":"%s","eventType":"customer.party.updated","schemaVersion":1,
+                 "aggregateId":"%s","aggregateVersion":%d,
+                 "payload":{"partyId":"%s","partyType":"COMMERCIAL","customerNumber":"CASH",
+                            "displayName":"Walk-in customer","status":"ACTIVE","requirementsMet":true,
+                            "houseAccount":%s}}
+                """.formatted(eventId, PARTY_ID, version, PARTY_ID, houseAccountJson);
+    }
+
+    @Test
     @DisplayName("A party-deleted event drops the replica row (issue #1779)")
     void deletesPartyReplicaRow() {
         when(processedEvents.existsById("e-party-4")).thenReturn(false);

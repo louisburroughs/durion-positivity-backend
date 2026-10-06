@@ -57,6 +57,13 @@ public class ExtLocationReplica extends TenantScopedEntity {
     @Column(name = "active", nullable = false)
     private boolean active;
 
+    /**
+     * The owner's IANA time zone id ({@code LocationUpdatedV1.timezone}, #2508): where a walk-in sale's
+     * business day ends. Null until the owner's next fact for the location; readers fall back to UTC.
+     */
+    @Column(name = "timezone", length = 64)
+    private String timezone;
+
     @Column(name = "aggregate_version", nullable = false)
     private long aggregateVersion;
 

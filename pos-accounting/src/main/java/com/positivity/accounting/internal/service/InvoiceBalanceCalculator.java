@@ -1,16 +1,19 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.entity.ExtCustomerParty;
 import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.accounting.internal.enums.CustomerCreditTransactionType;
 import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
 import com.positivity.accounting.internal.repository.CustomerCreditTransactionRepository;
+import com.positivity.accounting.internal.repository.ExtCustomerPartyRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceDepositCreditApplicationRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.repository.InvoiceAmount;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
+import com.positivity.domainevents.customer.CustomerPartyUpdatedV1;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
@@ -25,6 +28,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -73,6 +77,7 @@ public class InvoiceBalanceCalculator {
     private final CreditMemoRepository creditMemoRepository;
     private final CustomerCreditTransactionRepository creditTransactionRepository;
     private final ExtInvoiceDepositCreditApplicationRepository depositCreditApplicationRepository;
+    private final ExtCustomerPartyRepository customerPartyRepository;
 
     public Optional<ExtInvoice> findInvoice(@NonNull UUID invoiceId) {
         return extInvoiceRepository.findById(invoiceId);
@@ -147,6 +152,40 @@ public class InvoiceBalanceCalculator {
     public static LocalDate receivableAgingDate(@NonNull ExtInvoice invoice) {
         LocalDate dueDate = invoice.getDueDate();
         return dueDate != null ? dueDate : receivableDocumentDate(invoice);
+    }
+
+    /**
+     * The bound tenant's CASH walk-in house account (#2508, AW12): the parties the customer replica
+     * flags {@code houseAccount = CASH_SALE} — one once pos-customer's party facts have been replayed,
+     * none before. The flag is the only key, never the customer number or name.
+     *
+     * <p>The one walk-in rule every customer view and measure shares: aged receivables, collections and
+     * payment-lag cohorts leave these parties' invoices out (§4.4 item 2), the unpaid walk-in sales read
+     * shows only them, and no customer credit is ever created for them (§4.4 item 4). The ledger itself
+     * is never filtered (ADR-0047).
+     */
+    @NonNull
+    public Set<UUID> walkInPartyIds() {
+        return customerPartyRepository.findByHouseAccount(CustomerPartyUpdatedV1.HOUSE_ACCOUNT_CASH_SALE).stream()
+                .map(ExtCustomerParty::getPartyId)
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    /**
+     * Whether {@code invoice} is a walk-in sale: its party, read as a UUID, is one of {@code
+     * walkInPartyIds} ({@link #walkInPartyIds()}). A missing or non-UUID party is not.
+     */
+    public static boolean isWalkIn(@NonNull ExtInvoice invoice, @NonNull Set<UUID> walkInPartyIds) {
+        if (walkInPartyIds.isEmpty()
+                || invoice.getPartyId() == null
+                || invoice.getPartyId().isBlank()) {
+            return false;
+        }
+        try {
+            return walkInPartyIds.contains(UUID.fromString(invoice.getPartyId().trim()));
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 
     /** True when the replica's lifecycle status allows AR activity (payments, credits). */

@@ -13,6 +13,7 @@ import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedEx
 import com.positivity.accounting.internal.exception.AccountingPeriodNotFoundException;
 import com.positivity.accounting.internal.exception.AccountingPeriodStateException;
 import com.positivity.accounting.internal.exception.AdjustmentSignInvalidException;
+import com.positivity.accounting.internal.exception.CashCustomerCreditNotAllowedException;
 import com.positivity.accounting.internal.exception.CurrencyNotSupportedException;
 import com.positivity.accounting.internal.exception.DefaultGLMappingNotFoundException;
 import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
@@ -524,6 +525,16 @@ public class AccountingExceptionHandler {
     public ResponseEntity<ApiError> handlePaymentRemainderChanged(
             PaymentRemainderChangedException ex, HttpServletRequest request) {
         return build(HttpStatus.UNPROCESSABLE_CONTENT, "PAYMENT_REMAINDER_CHANGED", ex.getMessage(), request);
+    }
+
+    /**
+     * A person's command would keep a CASH walk-in payment's money as a customer credit (CAP:550 S11,
+     * #2508; §4.4 item 4): 422, the refusal is about the payment's customer. Nothing was written.
+     */
+    @ExceptionHandler(CashCustomerCreditNotAllowedException.class)
+    public ResponseEntity<ApiError> handleCashCustomerCreditNotAllowed(
+            CashCustomerCreditNotAllowedException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNPROCESSABLE_CONTENT, "CASH_CUSTOMER_CREDIT_NOT_ALLOWED", ex.getMessage(), request);
     }
 
     /**

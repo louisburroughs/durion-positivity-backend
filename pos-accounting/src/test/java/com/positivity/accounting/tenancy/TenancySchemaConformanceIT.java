@@ -158,6 +158,40 @@ class TenancySchemaConformanceIT extends PostgresTenancyTestBase {
                 .endsWith("WHERE (request_id IS NOT NULL)");
     }
 
+    /**
+     * The replica columns of #2508 (V9): nullable, sized as the story states, on tables that keep their
+     * tenancy schema (the generic check above covers RLS and the policy; this pins the columns).
+     */
+    @Test
+    void theWalkInReplicaColumnsAreNullableOnTenantScopedTables() {
+        JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
+        for (Object[] column : List.of(
+                new Object[] {"ext_customer_party", "house_account", 20},
+                new Object[] {"ext_location", "timezone", 64})) {
+            Map<String, Object> definition = owner.queryForMap(
+                    "SELECT data_type, character_maximum_length, is_nullable FROM information_schema.columns"
+                            + " WHERE table_schema = 'public' AND table_name = ? AND column_name = ?",
+                    column[0],
+                    column[1]);
+            assertThat(definition.get("data_type"))
+                    .as("%s.%s type", column[0], column[1])
+                    .isEqualTo("character varying");
+            assertThat(((Number) definition.get("character_maximum_length")).intValue())
+                    .as("%s.%s length", column[0], column[1])
+                    .isEqualTo(column[2]);
+            assertThat(definition.get("is_nullable"))
+                    .as("%s.%s nullable", column[0], column[1])
+                    .isEqualTo("YES");
+            assertThat(owner.queryForObject(
+                            "SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = ? AND"
+                                    + " policyname = 'tenant_isolation'",
+                            Integer.class,
+                            column[0]))
+                    .as("%s keeps tenant_isolation", column[0])
+                    .isEqualTo(1);
+        }
+    }
+
     @Test
     void theApplicationConnectsAsANonOwnerRoleWithNoBypass() {
         JdbcTemplate app = new JdbcTemplate(applicationDataSource);

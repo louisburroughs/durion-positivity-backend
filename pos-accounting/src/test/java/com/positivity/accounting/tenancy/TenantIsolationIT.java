@@ -34,13 +34,20 @@ import com.positivity.accounting.internal.bankrec.repository.BankStatementReposi
 import com.positivity.accounting.internal.bankrec.repository.BankTransactionRepository;
 import com.positivity.accounting.internal.dto.BankReconciliationPolicyRequest;
 import com.positivity.accounting.internal.dto.BankReconciliationPolicyResponse;
+import com.positivity.accounting.internal.dto.UnpaidWalkInSalesResponse;
 import com.positivity.accounting.internal.entity.AccountingAuditLog;
+import com.positivity.accounting.internal.entity.ExtCustomerParty;
+import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.AccountingTemplateEntryRepository;
 import com.positivity.accounting.internal.repository.AccountingTemplateStateRepository;
+import com.positivity.accounting.internal.repository.ExtCustomerPartyRepository;
+import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.service.AccountingConfigurationService;
 import com.positivity.accounting.internal.service.AccountingPeriodService;
+import com.positivity.accounting.internal.service.PaymentApplicationService;
+import com.positivity.accounting.internal.service.UnpaidWalkInSalesService;
 import com.positivity.tenancy.TenantContext;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -115,6 +122,18 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
 
     @Autowired
     private AccountingTemplateEntryRepository templateEntries;
+
+    @Autowired
+    private ExtCustomerPartyRepository customerParties;
+
+    @Autowired
+    private ExtInvoiceRepository invoices;
+
+    @Autowired
+    private PaymentApplicationService paymentApplicationService;
+
+    @Autowired
+    private UnpaidWalkInSalesService unpaidWalkInSalesService;
 
     /** {@code 1000 Cash} of TENANT_A, which each test provisions from the accounting template and finds by code. */
     private UUID cashAccountId;
@@ -364,6 +383,76 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
                         .isZero();
             }
         });
+    }
+
+    /**
+     * The unpaid walk-in sales read of #2508 (AC10, ADR-0062): tenant A's CASH account, walk-in invoice and
+     * unapplied walk-in payment never reach tenant B's read, which has no CASH account of its own.
+     */
+    @Test
+    void theUnpaidWalkInSalesReadIsTenantScoped() {
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+        UUID cash = UUID.fromString("00000000-0000-7000-8000-0000002508a1");
+        UUID invoiceId = UUID.fromString("00000000-0000-7000-8000-0000002508a2");
+        UUID paymentId = UUID.fromString("00000000-0000-7000-8000-0000002508a3");
+        Instant soldAt = Instant.parse("2026-09-01T15:00:00Z");
+        try {
+            asTenant(
+                    TENANT_A,
+                    () -> tx.executeWithoutResult(status -> {
+                        customerParties.save(ExtCustomerParty.builder()
+                                .partyId(cash)
+                                .partyType("COMMERCIAL")
+                                .displayName("Walk-in customer")
+                                .customerNumber("CASH")
+                                .houseAccount("CASH_SALE")
+                                .status("ACTIVE")
+                                .aggregateVersion(1L)
+                                .updatedAt(soldAt)
+                                .build());
+                        invoices.save(ExtInvoice.builder()
+                                .invoiceId(invoiceId)
+                                .invoiceNumber("INV-W-1")
+                                .partyId(cash.toString())
+                                .status("FINALIZED")
+                                .total(new BigDecimal("40.00"))
+                                .invoiceCreatedAt(soldAt)
+                                .finalizedAt(soldAt)
+                                .aggregateVersion(1L)
+                                .updatedAt(soldAt)
+                                .build());
+                        paymentApplicationService.handlePaymentCleared(
+                                paymentId,
+                                cash,
+                                "USD",
+                                new BigDecimal("5.00"),
+                                soldAt,
+                                UUID.fromString("00000000-0000-7000-8000-0000002508a4"),
+                                invoiceId,
+                                "CASH");
+                    }));
+
+            UnpaidWalkInSalesResponse ownRead = asTenant(TENANT_A, unpaidWalkInSalesService::read);
+            assertThat(ownRead.isHouseAccountKnown()).isTrue();
+            assertThat(ownRead.getBalance()).isEqualByComparingTo("40.00");
+            assertThat(ownRead.getOpenInvoices())
+                    .singleElement()
+                    .satisfies(open -> assertThat(open.getInvoiceId()).isEqualTo(invoiceId));
+            assertThat(ownRead.getUnappliedPayments())
+                    .singleElement()
+                    .satisfies(unapplied -> assertThat(unapplied.getPaymentId()).isEqualTo(paymentId));
+
+            UnpaidWalkInSalesResponse otherRead = asTenant(TENANT_B, unpaidWalkInSalesService::read);
+            assertThat(otherRead.isHouseAccountKnown()).isFalse();
+            assertThat(otherRead.getBalance()).isEqualByComparingTo("0.00");
+            assertThat(otherRead.getOpenInvoices()).isEmpty();
+            assertThat(otherRead.getUnappliedPayments()).isEmpty();
+        } finally {
+            JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
+            owner.update("DELETE FROM receivable_payment WHERE payment_id = ?", paymentId);
+            owner.update("DELETE FROM ext_invoice WHERE invoice_id = ?", invoiceId);
+            owner.update("DELETE FROM ext_customer_party WHERE party_id = ?", cash);
+        }
     }
 
     private static int countById(JdbcTemplate jdbc, String table, String key, UUID id) {

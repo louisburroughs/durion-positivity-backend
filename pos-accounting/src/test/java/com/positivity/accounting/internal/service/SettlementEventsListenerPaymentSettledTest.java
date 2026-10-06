@@ -10,6 +10,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
 import com.positivity.accounting.internal.entity.ReceivablePayment;
@@ -22,6 +26,8 @@ import com.positivity.accounting.internal.repository.PaymentApplicationReversalR
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
 import com.positivity.domainevents.payment.PaymentSettledV1;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -29,6 +35,7 @@ import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -37,6 +44,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 
 /**
@@ -102,6 +110,118 @@ class SettlementEventsListenerPaymentSettledTest {
                 "stripe",
                 "txn_abc123",
                 Instant.parse("2026-08-27T00:00:00Z"));
+    }
+
+    /**
+     * A settled payment without a usable party (#2508, §4.4 item 1): skipped either way, never given an
+     * invented customer; the envelope's schema version decides the severity.
+     */
+    @Nested
+    @DisplayName("party-missing severity by schema version (#2508)")
+    class PartyMissingSeverity {
+
+        @Mock
+        private PaymentApplicationService paymentApplicationService;
+
+        private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        private final ListAppender<ILoggingEvent> logs = new ListAppender<>();
+        private final Logger listenerLogger = (Logger) LoggerFactory.getLogger(SettlementEventsListener.class);
+
+        @BeforeEach
+        void setUp() {
+            when(processedEventRepository.existsById(anyString())).thenReturn(false);
+            logs.start();
+            listenerLogger.addAppender(logs);
+        }
+
+        @AfterEach
+        void tearDown() {
+            listenerLogger.detachAppender(logs);
+        }
+
+        @SuppressWarnings("unchecked")
+        private SettlementEventsListener listener() {
+            ObjectProvider<MeterRegistry> provider = mock(ObjectProvider.class);
+            when(provider.getIfAvailable()).thenReturn(registry);
+            return new SettlementEventsListener(
+                    CLOCK,
+                    mapper,
+                    processedEventRepository,
+                    reconciliationService,
+                    paymentApplicationService,
+                    extInvoicePaymentReversalRepository,
+                    extInvoiceDepositCreditApplicationRepository,
+                    new LedgerCurrency("USD"),
+                    ingestionRecorder,
+                    automaticPaymentApplicationService,
+                    provider,
+                    org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class));
+        }
+
+        private String versioned(int schemaVersion, PaymentSettledV1 payload) {
+            Map<String, Object> envelope = new java.util.HashMap<>();
+            envelope.put("eventType", PaymentSettledV1.EVENT_TYPE);
+            envelope.put("eventId", EVENT_ID);
+            envelope.put("schemaVersion", schemaVersion);
+            envelope.put("payload", payload);
+            return mapper.writeValueAsString(envelope);
+        }
+
+        private double count(String name) {
+            return registry.find(name).counters().stream()
+                    .mapToDouble(io.micrometer.core.instrument.Counter::count)
+                    .sum();
+        }
+
+        @Test
+        @DisplayName("AC6: schemaVersion 2 with no party: no receivable, an ERROR naming the payment and invoice,"
+                + " and payment.settled.party_missing_defect increments")
+        void versionTwoWithoutPartyIsADefect() {
+            listener().onPaymentEvent(versioned(2, settled(null)));
+
+            verify(paymentApplicationService, never())
+                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
+            verify(processedEventRepository).save(any(ProcessedEvent.class));
+            assertThat(count("payment.settled.party_missing_defect")).isEqualTo(1.0);
+            assertThat(count("payment.settled.unmappable")).isZero();
+            assertThat(logs.list)
+                    .filteredOn(event -> event.getLevel() == Level.ERROR)
+                    .singleElement()
+                    .satisfies(event -> assertThat(event.getFormattedMessage())
+                            .contains(PAYMENT_INTENT_ID.toString())
+                            .contains("INV-1001"));
+        }
+
+        @Test
+        @DisplayName("schemaVersion 2 with a non-UUID party is the same defect")
+        void versionTwoWithUnusablePartyIsADefect() {
+            listener().onPaymentEvent(versioned(2, settled("not-a-uuid")));
+
+            assertThat(count("payment.settled.party_missing_defect")).isEqualTo(1.0);
+            assertThat(count("payment.settled.unmappable")).isZero();
+        }
+
+        @Test
+        @DisplayName("AC6: schemaVersion 1 with no party keeps the legacy WARN and payment.settled.unmappable")
+        void versionOneWithoutPartyIsLegacy() {
+            listener().onPaymentEvent(versioned(1, settled(null)));
+
+            verify(paymentApplicationService, never())
+                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
+            assertThat(count("payment.settled.unmappable")).isEqualTo(1.0);
+            assertThat(count("payment.settled.party_missing_defect")).isZero();
+            assertThat(logs.list).noneMatch(event -> event.getLevel() == Level.ERROR);
+            assertThat(logs.list).anyMatch(event -> event.getLevel() == Level.WARN);
+        }
+
+        @Test
+        @DisplayName("an envelope without schemaVersion reads as version 1 (legacy)")
+        void missingVersionIsLegacy() {
+            listener().onPaymentEvent(envelope(EVENT_ID, settled(null)));
+
+            assertThat(count("payment.settled.unmappable")).isEqualTo(1.0);
+            assertThat(count("payment.settled.party_missing_defect")).isZero();
+        }
     }
 
     /** Dispatch/mapping unit tests against a mocked {@link PaymentApplicationService}. */
@@ -380,7 +500,8 @@ class SettlementEventsListenerPaymentSettledTest {
                     reversalRepository,
                     invoiceBalanceCalculator,
                     outboxService,
-                    new LedgerCurrency("USD"));
+                    new LedgerCurrency("USD"),
+                    new WalkInOverpaymentAlert(mock(ObjectProvider.class)));
             when(processedEventRepository.existsById(anyString())).thenReturn(false);
         }
 

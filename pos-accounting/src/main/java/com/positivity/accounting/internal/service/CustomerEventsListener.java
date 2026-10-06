@@ -248,6 +248,7 @@ public class CustomerEventsListener {
                 .displayName(payload.displayName())
                 .customerNumber(payload.customerNumber())
                 .status(payload.status())
+                .houseAccount(payload.houseAccount())
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());
