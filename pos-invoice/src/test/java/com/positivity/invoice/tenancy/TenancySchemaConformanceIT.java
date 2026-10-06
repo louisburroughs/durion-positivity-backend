@@ -110,6 +110,24 @@ class TenancySchemaConformanceIT extends PostgresTenancyTestBase {
                 .isTrue();
     }
 
+    /**
+     * CAP:550 S9 (V3): the customer-party replica carries the owner's house-account flag as a
+     * nullable varchar(20), on a table whose tenancy schema the test above already proves.
+     */
+    @Test
+    void extCustomerPartyCarriesTheNullableHouseAccountColumn() {
+        JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
+        Map<String, Object> column = owner.queryForMap("""
+                SELECT data_type, character_maximum_length, is_nullable
+                  FROM information_schema.columns
+                 WHERE table_schema = 'public' AND table_name = 'ext_customer_party'
+                   AND column_name = 'house_account'
+                """);
+        assertThat(column.get("data_type")).isEqualTo("character varying");
+        assertThat(column.get("character_maximum_length")).isEqualTo(20);
+        assertThat(column.get("is_nullable")).isEqualTo("YES");
+    }
+
     private static Set<String> globalTables() throws IOException {
         return new ClassPathResource(GLOBAL_TABLES)
                 .getContentAsString(StandardCharsets.UTF_8)

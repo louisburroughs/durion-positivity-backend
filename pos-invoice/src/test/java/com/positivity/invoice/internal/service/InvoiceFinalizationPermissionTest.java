@@ -285,11 +285,13 @@ class InvoiceFinalizationPermissionTest {
         return req;
     }
 
+    /** A DRAFT invoice that names a customer, as every finalizable invoice must (CAP:550 S9). */
     private Invoice draftInvoice(UUID workorderId, BigDecimal total) {
         Invoice invoice = new Invoice();
         invoice.setWorkorderId(workorderId);
         invoice.setStatus(InvoiceStatus.DRAFT);
         invoice.setTotal(total);
+        invoice.setPartyId("00000000-0000-0000-0000-0000000000aa");
         return invoice;
     }
 

@@ -3,6 +3,7 @@ package com.positivity.invoice.internal.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.positivity.invoice.internal.exception.InvalidPaymentStateException;
+import com.positivity.invoice.internal.exception.InvoicePartyRequiredException;
 import com.positivity.invoice.internal.exception.PaymentDeclinedException;
 import com.positivity.invoice.internal.exception.PaymentIdempotencyConflictException;
 import com.positivity.invoice.internal.exception.PaymentIntentNotFoundException;
@@ -70,7 +71,10 @@ class PaymentExceptionHandlerTest {
                     Named.of("handlePaymentDeclined", (HandlerInvocation) request ->
                             handler.handlePaymentDeclined(new PaymentDeclinedException("card declined"), request)),
                     Named.of("handleForbidden", (HandlerInvocation)
-                            request -> handler.handleForbidden(new AccessDeniedException("denied"), request)));
+                            request -> handler.handleForbidden(new AccessDeniedException("denied"), request)),
+                    Named.of("handleInvoicePartyRequired", (HandlerInvocation)
+                            request -> handler.handleInvoicePartyRequired(
+                                    new InvoicePartyRequiredException("This invoice has no customer"), request)));
         }
 
         @ParameterizedTest

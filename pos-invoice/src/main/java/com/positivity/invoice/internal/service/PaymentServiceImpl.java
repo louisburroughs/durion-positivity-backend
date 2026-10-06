@@ -12,6 +12,7 @@ import com.positivity.invoice.internal.enums.PaymentIntentStatus;
 import com.positivity.invoice.internal.enums.RefundStatus;
 import com.positivity.invoice.internal.exception.InvalidPaymentStateException;
 import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
+import com.positivity.invoice.internal.exception.InvoicePartyRequiredException;
 import com.positivity.invoice.internal.exception.PaymentDeclinedException;
 import com.positivity.invoice.internal.exception.PaymentIdempotencyConflictException;
 import com.positivity.invoice.internal.exception.PaymentIntentNotFoundException;
@@ -32,6 +33,8 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,6 +46,12 @@ public class PaymentServiceImpl implements PaymentService {
     private static final BigDecimal PAYMENT_LIMIT_THRESHOLD = new BigDecimal("500.00");
 
     private static final String MISSING_AUTHORITY = "Missing authority: ";
+
+    private static final Logger log = LoggerFactory.getLogger(PaymentServiceImpl.class);
+
+    /** CAP:550 S9: the refusal text for a payment against an invoice without a bill-to party. */
+    static final String PARTY_REQUIRED_MESSAGE =
+            "This invoice has no customer; set the customer before taking a payment";
 
     private final PaymentGatewayPort gatewayPort;
     private final InvoiceRepository invoiceRepository;
@@ -127,6 +136,10 @@ public class PaymentServiceImpl implements PaymentService {
                     "Payment intent must be in AUTHORIZED status for capture, but was " + paymentIntent.getStatus());
         }
 
+        // CAP:550 S9 (spec §4.4 item 1, AW12): after the state check and before the gateway
+        // capture, so a refused capture moves no money and the intent stays AUTHORIZED.
+        requireParty(paymentIntent.getInvoice(), "capture");
+
         String originalGatewayReference = paymentIntent.getGatewayReference();
         paymentIntent.setStatus(PaymentIntentStatus.PENDING);
         PaymentIntent pendingPaymentIntent = paymentIntentRepository.save(paymentIntent);
@@ -173,6 +186,13 @@ public class PaymentServiceImpl implements PaymentService {
         // ADR-0061 §3 (#2393): after the existence check and before anything is saved or sent to
         // the gateway.
         requirePaymentLocationInReach(invoice, request);
+
+        // CAP:550 S9 (spec §4.4 item 1, AW12): no payment intent is created or captured against an
+        // invoice without a bill-to party — the backstop behind S8's checkout customer requirement
+        // (gap G6). Before the intent is saved and before any gateway call, so a refused request
+        // leaves no PaymentIntent row and moves no money. A replay of an existing intent never
+        // reaches here: initiatePayment hands back the stored intent unchanged.
+        requireParty(invoice, "initiate");
 
         PaymentIntent paymentIntent = new PaymentIntent();
         paymentIntent.setInvoice(invoice);
@@ -401,5 +421,21 @@ public class PaymentServiceImpl implements PaymentService {
         response.setGatewayProvider(paymentIntent.getGatewayProvider());
         response.setGatewayResponse(paymentIntent.getGatewayResponse());
         return response;
+    }
+
+    /** CAP:550 S9: refuses with 422 {@code INVOICE_PARTY_REQUIRED} when the invoice has no bill-to party. */
+    private static void requireParty(@NonNull Invoice invoice, @NonNull String operation) {
+        String partyId = invoice.getPartyId();
+        if (partyId == null || partyId.isBlank()) {
+            // ADR-0018: the refusal names its actor from the security context, never from the request.
+            log.info(
+                    "Refusing payment {} on invoice {} ({}) by {}: {}",
+                    operation,
+                    invoice.getInvoiceNumber(),
+                    invoice.getId(),
+                    SecurityContextHelper.getCurrentUsernameOrDefault("system"),
+                    InvoicePartyRequiredException.CODE);
+            throw new InvoicePartyRequiredException(PARTY_REQUIRED_MESSAGE);
+        }
     }
 }

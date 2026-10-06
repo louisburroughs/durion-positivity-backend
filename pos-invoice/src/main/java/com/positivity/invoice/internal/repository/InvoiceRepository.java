@@ -112,6 +112,11 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID>, JpaSpec
      * $2,000 job as $2,500 of revenue. Exclusion at the deposit-take document (never netting the
      * settlement) is the Accounting ruling on #1623.
      *
+     * <p>Invoices whose party is a house account (CAP:550 S9, spec §4.4 item 2, AW12) are excluded
+     * too: the tenant's CASH walk-in account is not a customer and would top every ranking. The
+     * exclusion keys on the replica's owner-published {@code houseAccount} flag, never on a name
+     * or customer number; a party the replica does not hold counts as an ordinary customer.
+     *
      * @param start           window start (inclusive), UTC instant
      * @param end             window end (inclusive), UTC instant
      * @param revenueStatuses invoice statuses counted as recognized revenue
@@ -126,6 +131,9 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID>, JpaSpec
               AND i.status IN :revenueStatuses
               AND i.depositSourceType IS NULL
               AND i.createdAt >= :start AND i.createdAt <= :end
+              AND NOT EXISTS (SELECT 1 FROM ExtCustomerPartyReplica r
+                              WHERE r.houseAccount IS NOT NULL
+                                AND CAST(r.partyId AS string) = i.partyId)
             GROUP BY i.partyId
             ORDER BY SUM(i.total) DESC
             """)

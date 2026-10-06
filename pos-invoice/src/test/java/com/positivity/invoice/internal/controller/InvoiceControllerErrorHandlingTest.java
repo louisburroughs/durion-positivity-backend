@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.invoice.ControllerSliceConfig;
 import com.positivity.invoice.internal.exception.ExcessiveAdjustmentException;
 import com.positivity.invoice.internal.exception.InvalidManagerApprovalException;
+import com.positivity.invoice.internal.exception.InvoicePartyRequiredException;
 import com.positivity.invoice.internal.exception.InvoiceRequestValidationException;
 import com.positivity.invoice.internal.exception.ManagerApprovalRequiredException;
 import com.positivity.invoice.internal.security.InvoicePermissions;
@@ -111,6 +112,28 @@ class InvoiceControllerErrorHandlingTest {
                 .andExpect(jsonPath("$.code").value("MANAGER_APPROVAL_REQUIRED"))
                 .andExpect(
                         jsonPath("$.nextAction").value(org.hamcrest.Matchers.containsString("elevateManagerApproval")))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty())
+                .andExpect(header().exists("X-Correlation-Id"));
+    }
+
+    /** CAP:550 S9 AC1: a party-less invoice answers the documented 422 INVOICE_PARTY_REQUIRED. */
+    @Test
+    @DisplayName("finalizing an invoice without a customer answers 422 INVOICE_PARTY_REQUIRED")
+    void finalizeWithoutPartyAnswers422InvoicePartyRequired() throws Exception {
+        when(invoiceFinalizationService.completeInvoice(any(), any()))
+                .thenThrow(new InvoicePartyRequiredException(
+                        "This invoice has no customer; set the customer before finalizing"));
+
+        mockMvc.perform(withAuth(
+                        post("/v1/invoices/{invoiceId}/finalize", INVOICE_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{}"),
+                        InvoicePermissions.FINALIZE))
+                .andExpect(status().is(422))
+                .andExpect(jsonPath("$.code").value("INVOICE_PARTY_REQUIRED"))
+                .andExpect(
+                        jsonPath("$.message").value("This invoice has no customer; set the customer before finalizing"))
+                .andExpect(jsonPath("$.status").value(422))
                 .andExpect(jsonPath("$.correlationId").isNotEmpty())
                 .andExpect(header().exists("X-Correlation-Id"));
     }

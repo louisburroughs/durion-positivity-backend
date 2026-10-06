@@ -3,7 +3,9 @@ package com.positivity.invoice.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.invoice.internal.dto.FinalizationEligibilityResult;
@@ -16,6 +18,7 @@ import com.positivity.invoice.internal.enums.InvoiceAdjustmentType;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
 import com.positivity.invoice.internal.exception.InvalidInvoiceStateException;
 import com.positivity.invoice.internal.exception.InvalidManagerApprovalException;
+import com.positivity.invoice.internal.exception.InvoicePartyRequiredException;
 import com.positivity.invoice.internal.exception.ManagerApprovalRequiredException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.security.common.GatewaySecurityConstants;
@@ -402,6 +405,99 @@ class InvoiceFinalizationServiceTest {
         FinalizationRequest request = shopManagerRequest();
 
         assertThatThrownBy(() -> service.completeInvoice(invoiceId, request)).isInstanceOf(IllegalStateException.class);
+    }
+
+    // -------------------------------------------------------------------------
+    // CAP:550 S9 — party backstop (spec §4.4 item 1, §9.4, AW12)
+    // -------------------------------------------------------------------------
+
+    /**
+     * S9 AC1: a DRAFT invoice with a null party is refused with INVOICE_PARTY_REQUIRED. It stays
+     * DRAFT, no invoice fact is published, and no committable tax document is created — the
+     * guard sits before the permission matrix and the tax call.
+     */
+    @Test
+    void finalize_refusesNullParty_beforeTaxAndPermissions() {
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-0000000000f1");
+        // Above the cap with no approval: proves the party refusal precedes the permission matrix.
+        Invoice draft = draftInvoice(UUID.fromString("00000000-0000-0000-0000-0000000000f2"), new BigDecimal("900.00"));
+        draft.setId(invoiceId);
+        draft.setPartyId(null);
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draft));
+
+        assertThatThrownBy(() -> service.completeInvoice(invoiceId, serviceAdvisorRequest(null)))
+                .isInstanceOf(InvoicePartyRequiredException.class)
+                .hasMessage("This invoice has no customer; set the customer before finalizing");
+
+        assertThat(draft.getStatus()).isEqualTo(InvoiceStatus.DRAFT);
+        assertThat(draft.getFinalizedAt()).isNull();
+        verify(invoiceRepository, never()).save(any());
+        verifyNoInteractions(invoiceTaxCalculator);
+        verifyNoInteractions(invoiceEventPublisher);
+        verifyNoInteractions(taxLifecycleClient);
+        verifyNoInteractions(elevationTokenService);
+    }
+
+    /** S9: a blank party is as missing as a null one. */
+    @Test
+    void finalize_refusesBlankParty() {
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-0000000000f3");
+        Invoice draft = draftInvoice(UUID.fromString("00000000-0000-0000-0000-0000000000f4"), new BigDecimal("10.00"));
+        draft.setId(invoiceId);
+        draft.setPartyId("   ");
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draft));
+
+        assertThatThrownBy(() -> service.completeInvoice(invoiceId, shopManagerRequest()))
+                .isInstanceOf(InvoicePartyRequiredException.class);
+
+        assertThat(draft.getStatus()).isEqualTo(InvoiceStatus.DRAFT);
+        verifyNoInteractions(invoiceTaxCalculator);
+        verifyNoInteractions(invoiceEventPublisher);
+    }
+
+    /** S9: the DRAFT check still precedes the party check — a FINALIZED party-less invoice answers CONFLICT. */
+    @Test
+    void finalize_draftCheckPrecedesPartyCheck() {
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-0000000000f5");
+        Invoice finalized = finalizedInvoice(UUID.fromString("00000000-0000-0000-0000-0000000000f6"));
+        finalized.setPartyId(null);
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(finalized));
+
+        assertThatThrownBy(() -> service.completeInvoice(invoiceId, shopManagerRequest()))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    /** S9: the detail page agrees with the finalize endpoint — eligibility reports the same reason. */
+    @Test
+    void checkEligibility_returnsIneligible_whenPartyMissing() {
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-0000000000f7");
+        Invoice draft = draftInvoice(UUID.fromString("00000000-0000-0000-0000-0000000000f8"), new BigDecimal("900.00"));
+        draft.setPartyId(null);
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draft));
+
+        FinalizationEligibilityResult result = service.checkEligibility(invoiceId);
+
+        assertThat(result.eligible()).isFalse();
+        assertThat(result.reason()).isEqualTo("This invoice has no customer; set the customer before finalizing");
+        assertThat(result.requiresManagerApproval()).isFalse();
+    }
+
+    /** S9 AC4: the CASH house account is a valid party — finalization proceeds. */
+    @Test
+    void finalize_succeeds_forCashHouseAccountParty() {
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-0000000000f9");
+        withShopManagerContext();
+        Invoice draft = draftInvoice(UUID.fromString("00000000-0000-0000-0000-0000000000fa"), new BigDecimal("42.00"));
+        draft.setId(invoiceId);
+        draft.setPartyId("00000000-0000-0000-0000-0000000000ca");
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draft));
+        when(invoiceRepository.save(any(Invoice.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        InvoiceDetailsResponse response = service.completeInvoice(invoiceId, shopManagerRequest());
+
+        assertThat(response.getStatus()).isEqualTo(InvoiceStatus.FINALIZED);
+        assertThat(draft.getPartyId()).isEqualTo("00000000-0000-0000-0000-0000000000ca");
+        verify(invoiceEventPublisher).publishInvoiceUpdated(any(Invoice.class));
     }
 
     // -------------------------------------------------------------------------
@@ -914,11 +1010,13 @@ class InvoiceFinalizationServiceTest {
                 .hasMessageMatching("(?i).*tax has not been calculated.*");
     }
 
+    /** A DRAFT invoice that names a customer, as every finalizable invoice must (CAP:550 S9). */
     private Invoice draftInvoice(UUID workorderId, BigDecimal total) {
         Invoice invoice = new Invoice();
         invoice.setWorkorderId(workorderId);
         invoice.setStatus(InvoiceStatus.DRAFT);
         invoice.setTotal(total);
+        invoice.setPartyId("00000000-0000-0000-0000-0000000000aa");
         return invoice;
     }
 

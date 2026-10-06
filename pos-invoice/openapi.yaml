@@ -330,7 +330,7 @@ paths:
       - invoice:analytics:view
   /v1/invoices/analytics/revenue-by-customer:
     get:
-      description: 'Returns per-customer revenue for invoices in [startDate, endDate], anchored on Invoice.createdAt — this invoice''s own draft-creation timestamp, not finalizedAt, which can be null for a non-finalized invoice — ordered by revenue descending and bounded to `limit` rows — the top N by revenue, with no pagination to walk. Only revenue-recognized invoices count (status FINALIZED or POSTED); DRAFT invoices have not been billed and CANCELLED/ERROR invoices never will be. Deposit-take invoices — the document a deposit-take order renders for the down-payment itself — are excluded (#1623): a deposit is a contract liability, not a sale, and the later settlement invoice already carries the full gross amount, so counting both would overstate revenue by every deposit taken. Each row''s avgInvoiceValue is revenue / invoiceCount, computed here rather than left to the caller, and lastInvoiceDate is that customer''s most recent contributing invoice in the window.
+      description: 'Returns per-customer revenue for invoices in [startDate, endDate], anchored on Invoice.createdAt — this invoice''s own draft-creation timestamp, not finalizedAt, which can be null for a non-finalized invoice — ordered by revenue descending and bounded to `limit` rows — the top N by revenue, with no pagination to walk. Only revenue-recognized invoices count (status FINALIZED or POSTED); DRAFT invoices have not been billed and CANCELLED/ERROR invoices never will be. Deposit-take invoices — the document a deposit-take order renders for the down-payment itself — are excluded (#1623): a deposit is a contract liability, not a sale, and the later settlement invoice already carries the full gross amount, so counting both would overstate revenue by every deposit taken; invoices whose party is a house account (the tenant''s CASH walk-in account) are excluded as well, since the CASH account is not a customer and would top every ranking. Each row''s avgInvoiceValue is revenue / invoiceCount, computed here rather than left to the caller, and lastInvoiceDate is that customer''s most recent contributing invoice in the window.
 
         Use this tool to find the highest-revenue customers in a period; the response''s `truncated` flag tells you when more customers had revenue than `limit` allowed through, without a second call.
 
@@ -1196,13 +1196,13 @@ paths:
 
         Use this tool when the sale is ready to issue; do not use revertInvoice, which undoes a finalization, and mint the managerApprovalCode with elevateManagerApproval when one is needed.
 
-        Preconditions: the invoice must be DRAFT with tax already calculated; callers without invoice:finalize:override (or a manager/admin role) need a valid elevation token as managerApprovalCode when the stored total exceeds 500.00.
+        Preconditions: the invoice must be DRAFT with tax already calculated and must name a customer (partyId); callers without invoice:finalize:override (or a manager/admin role) need a valid elevation token as managerApprovalCode when the stored total exceeds 500.00.
 
         Required inputs: invoiceId (UUID) as a path parameter; managerApprovalCode and overrideReason in the body are optional below the cap and for override holders.
 
         Emits an INVOICE_FINALIZED event and publishes the invoice.invoice.updated fact (status FINALIZED); pos-accounting consumes it and posts the revenue journal entry, and the invoice becomes POSTED asynchronously when the accounting.invoice.gl-posted fact from pos-accounting arrives. The tax commit tolerates a provider outage by recording PENDING_COMMIT in pos-tax for the re-commit job, and is skipped entirely when nothing is taxable.
 
-        Returns 200 with the finalized invoice, 404 when the invoice does not exist, 409 when the invoice is not DRAFT or tax has not been calculated, and 403 with MANAGER_APPROVAL_REQUIRED or MANAGER_APPROVAL_INVALID when a required managerApprovalCode is missing, invalid, or expired (a step-up credential the caller lacks; nextAction points at elevateManagerApproval), and 503 with a Retry-After header and LOCATION_REPLICATION_PENDING when the invoice''s location has not replicated yet (the invoice stays DRAFT; retry).
+        Returns 200 with the finalized invoice, 404 when the invoice does not exist, 409 when the invoice is not DRAFT or tax has not been calculated, 422 with INVOICE_PARTY_REQUIRED when the invoice has no customer (it stays DRAFT and no tax document is created; set the customer and retry), and 403 with MANAGER_APPROVAL_REQUIRED or MANAGER_APPROVAL_INVALID when a required managerApprovalCode is missing, invalid, or expired (a step-up credential the caller lacks; nextAction points at elevateManagerApproval), and 503 with a Retry-After header and LOCATION_REPLICATION_PENDING when the invoice''s location has not replicated yet (the invoice stays DRAFT; retry).
 
         '
       operationId: finalizeInvoice
@@ -1239,6 +1239,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: 'MANAGER_APPROVAL_REQUIRED or MANAGER_APPROVAL_INVALID: a required managerApprovalCode is missing, invalid, or expired'
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'INVOICE_PARTY_REQUIRED: the invoice has no customer; it stays DRAFT and no provider tax document is created'
         '503':
           content:
             application/json:
@@ -1315,13 +1321,13 @@ paths:
 
         Use this tool to take card tender; do not use capturePayment, which settles an existing AUTH_ONLY hold rather than starting a new payment.
 
-        Preconditions: the invoice must exist; the caller needs the invoice:payment:process authority (scoped to the invoice''s location, ADR-0061), and must also hold invoice:payment:limit_override when the amount exceeds 500.00 and invoice:payment:flow_select to choose AUTH_ONLY, each for that location.
+        Preconditions: the invoice must exist and must name a customer (partyId); the caller needs the invoice:payment:process authority (scoped to the invoice''s location, ADR-0061), and must also hold invoice:payment:limit_override when the amount exceeds 500.00 and invoice:payment:flow_select to choose AUTH_ONLY, each for that location.
 
         Required inputs: paymentFlow (SALE_CAPTURE or AUTH_ONLY), amount (positive), idempotencyKey and paymentToken (tokenised card reference, never a PAN); a replayed idempotencyKey with an identical payload returns the existing intent instead of charging twice.
 
         Emits an INVOICE_PAYMENT_INITIATE event and records the gateway result on the intent.
 
-        Returns 201 with the intent, 403 when invoice:payment:process or a conditional authority the request needs is missing or the invoice''s location is outside the caller''s reach, 404 when the invoice does not exist, 409 when the idempotencyKey was already used with a different payload, and 422 when the gateway declines.
+        Returns 201 with the intent, 403 when invoice:payment:process or a conditional authority the request needs is missing or the invoice''s location is outside the caller''s reach, 404 when the invoice does not exist, 409 when the idempotencyKey was already used with a different payload, 422 with INVOICE_PARTY_REQUIRED when the invoice has no customer (no intent is created and the gateway is not called), and 422 with PAYMENT_DECLINED when the gateway declines.
 
         '
       operationId: initiatePayment
@@ -1371,7 +1377,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Payment method declined
+          description: PAYMENT_DECLINED when the gateway declines; INVOICE_PARTY_REQUIRED when the invoice has no customer (no intent is created and the gateway is not called)
         '503':
           content:
             application/json:
@@ -1446,13 +1452,13 @@ paths:
 
         Use this tool to settle an existing AUTHORIZED intent; do not use initiatePayment, which starts a new payment, and use voidPayment instead to release the hold without taking funds.
 
-        Preconditions: the payment intent must belong to the invoice and be in AUTHORIZED status; the caller needs the invoice:payment:capture authority (scoped to the invoice''s location, ADR-0061).
+        Preconditions: the payment intent must belong to the invoice and be in AUTHORIZED status, and the invoice must name a customer (partyId); the caller needs the invoice:payment:capture authority (scoped to the invoice''s location, ADR-0061).
 
         Required inputs: amount (positive, up to the authorized amount) and captureIdempotencyKey, which is forwarded to the gateway so a retried capture settles at most once.
 
         Emits an INVOICE_PAYMENT_CAPTURE event; the intent moves to CAPTURED on success or CAPTURE_FAILED on decline, and an ambiguous gateway response is resolved by a status inquiry before failing.
 
-        Returns 200 with the captured intent, 403 when invoice:payment:capture is missing or the invoice''s location is outside the caller''s reach, 404 when the intent does not exist under the invoice, 409 when the intent is not AUTHORIZED, and 422 when the gateway declines the capture.
+        Returns 200 with the captured intent, 403 when invoice:payment:capture is missing or the invoice''s location is outside the caller''s reach, 404 when the intent does not exist under the invoice, 409 when the intent is not AUTHORIZED, 422 with INVOICE_PARTY_REQUIRED when the invoice has no customer (the hold stays AUTHORIZED and the gateway is not called), and 422 with PAYMENT_DECLINED when the gateway declines the capture.
 
         '
       operationId: capturePayment
@@ -1501,6 +1507,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Payment intent not found
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: PAYMENT_DECLINED when the gateway declines the capture; INVOICE_PARTY_REQUIRED when the invoice has no customer (the hold stays AUTHORIZED and the gateway is not called)
       security:
       - bearerAuth: []
       summary: Capture Authorized Payment Hold
