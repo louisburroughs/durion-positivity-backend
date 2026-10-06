@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -53,6 +54,32 @@ public interface ReceivablePaymentRepository extends JpaRepository<ReceivablePay
      * @return list of payments
      */
     List<ReceivablePayment> findByStatus(ReceivablePaymentStatus status);
+
+    /**
+     * A page of payments in {@code status}, for the unapplied-payments list (#2502); the caller
+     * supplies the order.
+     */
+    @NonNull
+    Page<ReceivablePayment> findByStatus(@NonNull ReceivablePaymentStatus status, @NonNull Pageable pageable);
+
+    /** A page of one customer's payments in {@code status} (#2502); the caller supplies the order. */
+    @NonNull
+    Page<ReceivablePayment> findByStatusAndCustomerId(
+            @NonNull ReceivablePaymentStatus status, @NonNull UUID customerId, @NonNull Pageable pageable);
+
+    /** Count and unapplied total of every payment in {@code status} (#2502). */
+    @Query("SELECT new com.positivity.accounting.internal.repository.ReceivablePaymentTotals(COUNT(rp),"
+            + " COALESCE(SUM(rp.unappliedAmount), 0)) FROM ReceivablePayment rp WHERE rp.status = :status")
+    @NonNull
+    ReceivablePaymentTotals totalsByStatus(@Param("status") @NonNull ReceivablePaymentStatus status);
+
+    /** Count and unapplied total of one customer's payments in {@code status} (#2502). */
+    @Query("SELECT new com.positivity.accounting.internal.repository.ReceivablePaymentTotals(COUNT(rp),"
+            + " COALESCE(SUM(rp.unappliedAmount), 0)) FROM ReceivablePayment rp"
+            + " WHERE rp.status = :status AND rp.customerId = :customerId")
+    @NonNull
+    ReceivablePaymentTotals totalsByStatusAndCustomerId(
+            @Param("status") @NonNull ReceivablePaymentStatus status, @Param("customerId") @NonNull UUID customerId);
 
     /**
      * Check if a payment exists by source event ID (idempotency check).

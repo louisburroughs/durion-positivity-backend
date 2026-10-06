@@ -6,6 +6,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -149,4 +150,14 @@ public interface PaymentApplicationRepository extends JpaRepository<PaymentAppli
      */
     @Query("SELECT COALESCE(SUM(pa.appliedAmount), 0) FROM PaymentApplication pa WHERE pa.invoiceId = :invoiceId")
     java.math.BigDecimal sumAppliedAmountByInvoiceId(UUID invoiceId);
+
+    /**
+     * Applied amounts summed per invoice, for many invoices in one query (#2502); invoices with no
+     * application are absent.
+     */
+    @Query(
+            "SELECT new com.positivity.accounting.internal.repository.InvoiceAmount(pa.invoiceId, SUM(pa.appliedAmount)) FROM PaymentApplication pa"
+                    + " WHERE pa.invoiceId IN :invoiceIds GROUP BY pa.invoiceId")
+    @NonNull
+    List<InvoiceAmount> sumAppliedAmountByInvoiceIdIn(@Param("invoiceIds") @NonNull Collection<UUID> invoiceIds);
 }

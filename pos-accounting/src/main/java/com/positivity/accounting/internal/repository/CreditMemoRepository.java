@@ -4,13 +4,16 @@ import com.positivity.accounting.internal.entity.CreditMemo;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.repository.query.Param;
 
 /**
  * Repository for CreditMemo entity.
@@ -118,6 +121,19 @@ public interface CreditMemoRepository extends JpaRepository<CreditMemo, UUID> {
             "SELECT COALESCE(SUM(cm.creditAmount + cm.taxAmountReversed), 0) FROM CreditMemo cm"
                     + " WHERE cm.originalInvoiceId = :originalInvoiceId AND cm.status = :status")
     java.math.BigDecimal sumCreditedAmountByInvoiceIdAndStatus(UUID originalInvoiceId, CreditMemoStatus status);
+
+    /**
+     * Credited amounts (credit plus reversed tax) summed per original invoice for memos in
+     * {@code status}, for many invoices in one query (#2502); invoices with no such memo are absent.
+     */
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT new com.positivity.accounting.internal.repository.InvoiceAmount(cm.originalInvoiceId, SUM(cm.creditAmount + cm.taxAmountReversed))"
+                    + " FROM CreditMemo cm WHERE cm.originalInvoiceId IN :invoiceIds AND cm.status = :status"
+                    + " GROUP BY cm.originalInvoiceId")
+    @NonNull
+    List<InvoiceAmount> sumCreditedAmountByInvoiceIdInAndStatus(
+            @Param("invoiceIds") @NonNull Collection<UUID> invoiceIds,
+            @Param("status") @NonNull CreditMemoStatus status);
 
     /**
      * Sum of credit amounts (revenue portion only, excluding reversed tax) for an invoice in a

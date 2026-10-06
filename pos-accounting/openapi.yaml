@@ -44,10 +44,10 @@ tags:
   name: Accounting Events
 - description: Audit trail operations for tracking accounting exceptions and overrides
   name: Audit Trail
-- description: Manage timekeeping and generic data export jobs.
-  name: Accounting Exports
 - description: Manage payment applications to invoices (AR)
   name: Payment Applications
+- description: Manage timekeeping and generic data export jobs.
+  name: Accounting Exports
 - description: Apply payments and query invoice status.
   name: Invoice Payments
 - description: Manage mapping keys for GL mapping taxonomy
@@ -3149,6 +3149,76 @@ paths:
       - Customer Credits
       x-required-permissions:
       - accounting:customer-credit:refund
+  /v1/accounting/customers/{customerId}/open-invoices:
+    get:
+      description: 'Lists a customer''s open invoices oldest first, each with the balance still due after payment applications, customer credits, posted credit memos and deposits, and whether it is overdue.
+
+        Use this tool to choose the invoices a payment of this customer pays; do not use pos-invoice search for this, because it does not net credits, credit memos or deposits.
+
+        Preconditions: the caller needs accounting:payment:apply authority; an invoice is open when it is FINALIZED or POSTED and its balance due is above zero.
+
+        Required inputs: customerId (UUID) as a path parameter; page (0 or more) and size (1 to 200, default 100) are optional query parameters.
+
+        Emits an ACCOUNTING_CUSTOMER_OPEN_INVOICES_VIEW event and changes no state; a customer with nothing open, or unknown to accounting, gets 200 with no rows.
+
+        Returns 400 VALIDATION_ERROR when customerId is malformed or size is outside 1 to 200, and 403 when the caller lacks the authority.
+
+        '
+      operationId: listCustomerOpenInvoices
+      parameters:
+      - description: Customer identifier
+        example: 0198a000-0000-7000-8000-000000000412
+        in: path
+        name: customerId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: Page index (0-based)
+        example: 0
+        in: query
+        name: page
+        required: false
+        schema:
+          default: 0
+          format: int32
+          type: integer
+      - description: Page size, 1 to 200
+        example: 100
+        in: query
+        name: size
+        required: false
+        schema:
+          default: 100
+          format: int32
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerOpenInvoicesPage'
+          description: A page of the customer's open invoices with a summary
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VALIDATION_ERROR: malformed customerId, or size outside 1-200'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:payment:apply
+      security:
+      - bearerAuth:
+        - accounting:payment:apply
+      summary: List a Customer's Open Invoices
+      tags:
+      - Payment Applications
+      x-required-permissions:
+      - accounting:payment:apply
   /v1/accounting/default-mappings:
     get:
       description: 'Lists all default GL mappings as a paginated projection, including inactive ones.
@@ -7473,6 +7543,84 @@ paths:
       - Posting Rules
       x-required-permissions:
       - accounting:posting_rules:view
+  /v1/accounting/receivable-payments:
+    get:
+      description: 'Lists the customer payments still waiting to be matched, oldest cleared first, each with the open invoices it most likely pays, the reasons, and what would be left over as credit.
+
+        Use this tool to choose a payment to match; then apply it with applyPaymentToInvoices, and do not treat a suggestion as applied, because the list is advisory and the apply command validates again.
+
+        Preconditions: the caller needs accounting:payment:apply authority; only payments with an unapplied amount (status AVAILABLE) are listed.
+
+        Required inputs: none; status (only AVAILABLE), customerId (UUID), page (0 or more) and size (1 to 100, default 25) are optional query parameters.
+
+        Emits an ACCOUNTING_RECEIVABLE_PAYMENT_LIST_VIEW event and changes no state; the summary totals cover every payment matching the filter, not only the page.
+
+        Returns 400 VALIDATION_ERROR when status is not AVAILABLE, customerId is malformed or size is outside 1 to 100, and 403 when the caller lacks the authority.
+
+        '
+      operationId: listUnappliedPayments
+      parameters:
+      - description: Payment status; only AVAILABLE is supported
+        example: AVAILABLE
+        in: query
+        name: status
+        required: false
+        schema:
+          default: AVAILABLE
+          type: string
+      - description: Only this customer's payments
+        example: 0198a000-0000-7000-8000-000000000412
+        in: query
+        name: customerId
+        required: false
+        schema:
+          format: uuid
+          type: string
+      - description: Page index (0-based)
+        example: 0
+        in: query
+        name: page
+        required: false
+        schema:
+          default: 0
+          format: int32
+          type: integer
+      - description: Page size, 1 to 100
+        example: 25
+        in: query
+        name: size
+        required: false
+        schema:
+          default: 25
+          format: int32
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnappliedPaymentsPage'
+          description: A page of unapplied payments with suggestions and a summary
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VALIDATION_ERROR: status other than AVAILABLE, malformed customerId, or size outside 1-100'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:payment:apply
+      security:
+      - bearerAuth:
+        - accounting:payment:apply
+      summary: List Unapplied Customer Payments
+      tags:
+      - Payment Applications
+      x-required-permissions:
+      - accounting:payment:apply
   /v1/accounting/reconciliations:
     get:
       description: 'Lists bank reconciliation headers most recent first as a paginated projection, optionally filtered by GL account, status, attribution period (periodCode, YYYY-MM) and a from/to window on the statement end date; each row carries the terms its last mutation stored.
@@ -15242,6 +15390,44 @@ components:
           - REFUND
           type: string
       type: object
+    CustomerOpenInvoicesPage:
+      description: A page of the customer's open invoices, oldest first, with a served summary
+      properties:
+        items:
+          description: Open invoices on this page
+          items:
+            $ref: '#/components/schemas/OpenInvoiceRow'
+          type: array
+        page:
+          description: Page index (0-based)
+          example: 0
+          format: int32
+          type: integer
+        size:
+          description: Page size
+          example: 100
+          format: int32
+          type: integer
+        summary:
+          $ref: '#/components/schemas/OpenInvoicesSummary'
+        totalElements:
+          description: Number of open invoices
+          example: 2
+          format: int64
+          type: integer
+        totalPages:
+          description: Number of pages
+          example: 1
+          format: int32
+          type: integer
+      required:
+      - items
+      - page
+      - size
+      - summary
+      - totalElements
+      - totalPages
+      type: object
     DefaultGLMappingListResponse:
       description: Paginated list of default GL account mappings
       properties:
@@ -17726,6 +17912,112 @@ components:
       - ruleVersionId
       - versionNumber
       type: object
+    OpenInvoiceRow:
+      description: An open invoice of the customer with its derived balance due
+      properties:
+        arStatus:
+          description: 'Accounting''s receivable state: OPEN (nothing settled yet) or PARTIALLY_PAID'
+          example: OPEN
+          type: string
+        balanceDue:
+          description: What is still owed after applications, credits, credit memos and deposits
+          example: 4615.0
+          type: number
+        currency:
+          description: 'Currency (ISO 4217): the ledger currency'
+          example: USD
+          type: string
+        daysOverdue:
+          description: Days past the aging date; 0 when not due
+          example: 0
+          format: int64
+          type: integer
+        documentDate:
+          description: Invoice document date
+          example: '2026-09-04'
+          format: date
+          type: string
+        dueDate:
+          description: Due date frozen at finalization; null when the replica holds none
+          example: '2026-10-04'
+          format: date
+          type:
+          - string
+          - 'null'
+        invoiceId:
+          description: Invoice identifier
+          example: 0199a000-0000-7000-8000-000000001702
+          format: uuid
+          type: string
+        invoiceNumber:
+          description: Invoice number; null when the replica holds none
+          example: INV-2026-01702
+          type:
+          - string
+          - 'null'
+        overdue:
+          description: True when the aging date (due date, else document date) is before today
+          example: false
+          type: boolean
+        total:
+          description: Invoice total
+          example: 4615.0
+          type: number
+        workorderId:
+          description: Originating workorder, for a link only; null for invoices with no workorder
+          example: 0199a000-0000-7000-8000-000000000777
+          format: uuid
+          type:
+          - string
+          - 'null'
+      required:
+      - arStatus
+      - balanceDue
+      - currency
+      - daysOverdue
+      - documentDate
+      - invoiceId
+      - overdue
+      - total
+      type: object
+    OpenInvoicesSummary:
+      description: Totals over every open invoice of the customer, whatever the page
+      properties:
+        asOf:
+          description: When the totals were computed
+          example: '2026-10-06T08:00:00Z'
+          format: date-time
+          type: string
+        count:
+          description: Number of open invoices
+          example: 2
+          format: int64
+          type: integer
+        currency:
+          description: 'Currency of the totals: the ledger currency (ISO 4217)'
+          example: USD
+          type: string
+        overdueBalanceDue:
+          description: Sum of the overdue balances due
+          example: 280.0
+          type: number
+        overdueCount:
+          description: Number of overdue open invoices
+          example: 1
+          format: int64
+          type: integer
+        totalBalanceDue:
+          description: Sum of their balances due
+          example: 4895.0
+          type: number
+      required:
+      - asOf
+      - count
+      - currency
+      - overdueBalanceDue
+      - overdueCount
+      - totalBalanceDue
+      type: object
     Outcome:
       description: Outcome for one invoice
       properties:
@@ -18396,6 +18688,34 @@ components:
       - issuedFrom
       - issuedTo
       - truncated
+      type: object
+    PaymentMatchSuggestion:
+      description: The invoices a payment most likely pays, the reasons, and what would be left over
+      properties:
+        invoices:
+          description: Suggested invoices in allocation order (oldest first); empty when none is suggested
+          items:
+            $ref: '#/components/schemas/SuggestedInvoice'
+          type: array
+        leftOver:
+          description: 'Unapplied amount minus the suggested total: what would become a customer credit (AD-003)'
+          example: 0.0
+          type: number
+        reasons:
+          description: 'Why these invoices are suggested. Served values: REMITTANCE_REFERENCE (the payment was taken against this invoice), SAME_CUSTOMER (the invoices belong to the payment''s customer), EXACT_TOTAL (the suggested balances add up exactly to the unapplied amount). A client renders an unknown value as Unknown. Empty when the customer has no open invoice.'
+          items:
+            example: SAME_CUSTOMER
+            type: string
+          type: array
+        suggestedTotal:
+          description: Sum of the suggested amounts; never more than the unapplied amount
+          example: 4615.0
+          type: number
+      required:
+      - invoices
+      - leftOver
+      - reasons
+      - suggestedTotal
       type: object
     PeriodCloseRequest:
       description: Optional close request carrying a bank reconciliation exception
@@ -19958,6 +20278,33 @@ components:
       - endDateTime
       - startDateTime
       type: object
+    SuggestedInvoice:
+      description: An open invoice suggested for a payment, with the amount the suggestion applies to it
+      properties:
+        balanceDue:
+          description: What is still owed on the invoice after applications, credits, credit memos and deposits
+          example: 4615.0
+          type: number
+        invoiceId:
+          description: Invoice identifier
+          example: 0199a000-0000-7000-8000-000000001702
+          format: uuid
+          type: string
+        invoiceNumber:
+          description: Invoice number; null when the replica holds none
+          example: INV-2026-01702
+          type:
+          - string
+          - 'null'
+        suggestedAmount:
+          description: Amount the suggestion applies to this invoice; never more than its balance due
+          example: 4615.0
+          type: number
+      required:
+      - balanceDue
+      - invoiceId
+      - suggestedAmount
+      type: object
     TaxLiabilityReconciliation:
       description: Reconciliation of report net tax against the Sales-Tax Payable (2200) GL account period activity
       properties:
@@ -20493,6 +20840,143 @@ components:
       - balance
       - totalCredit
       - totalDebit
+      type: object
+    UnappliedPaymentRow:
+      description: A customer payment with an unapplied amount, and the invoices it most likely pays
+      properties:
+        currency:
+          description: Payment currency (ISO 4217)
+          example: USD
+          type: string
+        customerDisplayName:
+          description: Customer name from accounting's customer replica; null when unknown
+          example: Rivera Trucking
+          type:
+          - string
+          - 'null'
+        customerId:
+          description: Customer the payment belongs to
+          example: 0198a000-0000-7000-8000-000000000412
+          format: uuid
+          type: string
+        customerReference:
+          description: Customer number from accounting's customer replica; null when unknown
+          example: CUST-00412
+          type:
+          - string
+          - 'null'
+        paymentId:
+          description: Receivable payment identifier
+          example: 0199a000-0000-7000-8000-000000000101
+          format: uuid
+          type: string
+        paymentMethod:
+          description: Settlement method as the payment fact sent it (CASH, CARD, ON_ACCOUNT, OTHER); null when the recording path carried none
+          example: CARD
+          type:
+          - string
+          - 'null'
+        receivedAt:
+          description: When the payment cleared
+          example: '2026-10-04T15:12:09Z'
+          format: date-time
+          type: string
+        sourceInvoiceId:
+          description: Invoice the payment was taken against (its remittance reference); null when unknown
+          example: 0199a000-0000-7000-8000-000000001702
+          format: uuid
+          type:
+          - string
+          - 'null'
+        sourceInvoiceNumber:
+          description: Number of the invoice the payment was taken against; null when unknown
+          example: INV-2026-01702
+          type:
+          - string
+          - 'null'
+        suggestion:
+          $ref: '#/components/schemas/PaymentMatchSuggestion'
+        totalAmount:
+          description: Amount the payment cleared for
+          example: 4615.0
+          type: number
+        unappliedAmount:
+          description: Amount not yet applied or credited
+          example: 4615.0
+          type: number
+      required:
+      - currency
+      - customerId
+      - paymentId
+      - receivedAt
+      - suggestion
+      - totalAmount
+      - unappliedAmount
+      type: object
+    UnappliedPaymentsPage:
+      description: A page of customer payments waiting to be matched, oldest first, with a served summary
+      properties:
+        items:
+          description: Payments on this page
+          items:
+            $ref: '#/components/schemas/UnappliedPaymentRow'
+          type: array
+        page:
+          description: Page index (0-based)
+          example: 0
+          format: int32
+          type: integer
+        size:
+          description: Page size
+          example: 25
+          format: int32
+          type: integer
+        summary:
+          $ref: '#/components/schemas/UnappliedPaymentsSummary'
+        totalElements:
+          description: Number of payments matching the filter
+          example: 3
+          format: int64
+          type: integer
+        totalPages:
+          description: Number of pages
+          example: 1
+          format: int32
+          type: integer
+      required:
+      - items
+      - page
+      - size
+      - summary
+      - totalElements
+      - totalPages
+      type: object
+    UnappliedPaymentsSummary:
+      description: Totals over every payment matching the filter, whatever the page
+      properties:
+        asOf:
+          description: When the totals were computed
+          example: '2026-10-06T08:00:00Z'
+          format: date-time
+          type: string
+        count:
+          description: Number of matching payments
+          example: 3
+          format: int64
+          type: integer
+        currency:
+          description: 'Currency of the total: the ledger currency (ISO 4217)'
+          example: USD
+          type: string
+        totalUnappliedAmount:
+          description: Sum of their unapplied amounts
+          example: 5265.0
+          type: number
+      required:
+      - asOf
+      - count
+      - currency
+      - totalUnappliedAmount
       type: object
     Unresolved:
       description: Unresolved items, late arrivals first

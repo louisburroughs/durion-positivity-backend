@@ -216,7 +216,9 @@ class InvoicePaymentEventDrainIT extends PostgresCommittingTestBase {
                 "USD",
                 new BigDecimal("100.00"),
                 Instant.parse("2026-09-15T10:00:00Z"),
-                settlementEventId);
+                settlementEventId,
+                null,
+                "CARD");
 
         UUID eventId = submit(payload(paymentId, "100.00"));
         assertThat(drainer.drainBoundTenant()).isEqualTo(1);
@@ -233,7 +235,7 @@ class InvoicePaymentEventDrainIT extends PostgresCommittingTestBase {
 
         // The other order: a settlement fact arriving after the event reuses the recorded payment.
         ReceivablePayment reused = paymentApplicationService.handlePaymentCleared(
-                paymentId, customerId, "USD", new BigDecimal("100.00"), Instant.now(), nextUuid());
+                paymentId, customerId, "USD", new BigDecimal("100.00"), Instant.now(), nextUuid(), null, null);
         assertThat(reused.getPaymentId()).isEqualTo(paymentId);
         assertThat(receivablePaymentRepository.count()).isEqualTo(1);
     }

@@ -314,7 +314,9 @@ public class SettlementEventsListener {
                     payload.currencyCode(),
                     payload.amount(),
                     payload.settledAt(),
-                    eventUuid);
+                    eventUuid,
+                    payload.invoiceId(),
+                    payload.methodType());
             markProcessed(eventId);
         });
     }

@@ -5,9 +5,11 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.repository.query.Param;
 
 /**
  * Repository for PaymentApplicationReversal entity.
@@ -59,6 +61,17 @@ public interface PaymentApplicationReversalRepository extends JpaRepository<Paym
     @org.springframework.data.jpa.repository.Query("SELECT COALESCE(SUM(r.amount), 0) FROM PaymentApplicationReversal r"
             + " WHERE r.originalPaymentApplication.invoiceId = :invoiceId")
     java.math.BigDecimal sumReversedAmountByInvoiceId(UUID invoiceId);
+
+    /**
+     * Reversed amounts summed per invoice of the reversed application, for many invoices in one
+     * query (#2502); invoices with no reversal are absent.
+     */
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT new com.positivity.accounting.internal.repository.InvoiceAmount(r.originalPaymentApplication.invoiceId, SUM(r.amount))"
+                    + " FROM PaymentApplicationReversal r WHERE r.originalPaymentApplication.invoiceId IN :invoiceIds"
+                    + " GROUP BY r.originalPaymentApplication.invoiceId")
+    @NonNull
+    List<InvoiceAmount> sumReversedAmountByInvoiceIdIn(@Param("invoiceIds") @NonNull Collection<UUID> invoiceIds);
 
     /**
      * Sum of reversal amounts whose {@code reversedAt} falls in the inclusive instant range. Used

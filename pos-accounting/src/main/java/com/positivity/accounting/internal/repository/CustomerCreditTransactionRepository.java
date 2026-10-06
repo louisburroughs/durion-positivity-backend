@@ -4,9 +4,11 @@ import com.positivity.accounting.internal.entity.CustomerCreditTransaction;
 import com.positivity.accounting.internal.enums.CustomerCreditTransactionType;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -44,6 +46,18 @@ public interface CustomerCreditTransactionRepository extends JpaRepository<Custo
     @Query("SELECT COALESCE(SUM(t.amount), 0) FROM CustomerCreditTransaction t"
             + " WHERE t.invoiceId = :invoiceId AND t.transactionType = :type")
     BigDecimal sumAmountByInvoiceIdAndType(UUID invoiceId, CustomerCreditTransactionType type);
+
+    /**
+     * Credit draw-downs of {@code type} summed per invoice, for many invoices in one query (#2502);
+     * invoices with none are absent.
+     */
+    @Query(
+            "SELECT new com.positivity.accounting.internal.repository.InvoiceAmount(t.invoiceId, SUM(t.amount)) FROM CustomerCreditTransaction t"
+                    + " WHERE t.invoiceId IN :invoiceIds AND t.transactionType = :type GROUP BY t.invoiceId")
+    @NonNull
+    List<InvoiceAmount> sumAmountByInvoiceIdInAndType(
+            @Param("invoiceIds") @NonNull Collection<UUID> invoiceIds,
+            @Param("type") @NonNull CustomerCreditTransactionType type);
 
     /**
      * Sum of draw-down amounts of the given type whose {@code createdAt} falls in the inclusive

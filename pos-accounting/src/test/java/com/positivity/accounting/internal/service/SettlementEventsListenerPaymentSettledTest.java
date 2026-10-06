@@ -130,9 +130,10 @@ class SettlementEventsListenerPaymentSettledTest {
         }
 
         @Test
-        @DisplayName("maps a payment.payment.settled event onto handlePaymentCleared's exact legacy arguments")
+        @DisplayName(
+                "maps a payment.payment.settled event onto handlePaymentCleared, with its invoice and method (#2502)")
         void mapsAndDelegates() {
-            when(paymentApplicationService.handlePaymentCleared(any(), any(), any(), any(), any(), any()))
+            when(paymentApplicationService.handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any()))
                     .thenReturn(new ReceivablePayment());
 
             listener().onPaymentEvent(envelope(EVENT_ID, settled(PARTY_UUID.toString())));
@@ -145,7 +146,9 @@ class SettlementEventsListenerPaymentSettledTest {
                             org.mockito.ArgumentMatchers.eq("USD"),
                             amountCaptor.capture(),
                             org.mockito.ArgumentMatchers.eq(Instant.parse("2026-08-27T00:00:00Z")),
-                            org.mockito.ArgumentMatchers.eq(UUID.fromString(EVENT_ID)));
+                            org.mockito.ArgumentMatchers.eq(UUID.fromString(EVENT_ID)),
+                            org.mockito.ArgumentMatchers.eq(INVOICE_ID),
+                            org.mockito.ArgumentMatchers.eq("CARD"));
             // BigDecimal.equals() is scale-sensitive; the JSON round-trip through the envelope is not
             // guaranteed to preserve trailing zeros, so amount equivalence is asserted by value.
             assertThat(amountCaptor.getValue()).isEqualByComparingTo("150.00");
@@ -159,7 +162,8 @@ class SettlementEventsListenerPaymentSettledTest {
 
             listener().onPaymentEvent(envelope(EVENT_ID, eur));
 
-            verify(paymentApplicationService, never()).handlePaymentCleared(any(), any(), any(), any(), any(), any());
+            verify(paymentApplicationService, never())
+                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
             verify(ingestionRecorder)
                     .recordCurrencyHeld(
                             org.mockito.ArgumentMatchers.eq("pos-invoice"),
@@ -179,7 +183,8 @@ class SettlementEventsListenerPaymentSettledTest {
 
             listener().onPaymentEvent(envelope(EVENT_ID, settled(PARTY_UUID.toString())));
 
-            verify(paymentApplicationService, never()).handlePaymentCleared(any(), any(), any(), any(), any(), any());
+            verify(paymentApplicationService, never())
+                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
             verify(processedEventRepository, never()).save(any(ProcessedEvent.class));
         }
 
@@ -188,7 +193,8 @@ class SettlementEventsListenerPaymentSettledTest {
         void skipsWhenNoPartyId() {
             listener().onPaymentEvent(envelope(EVENT_ID, settled(null)));
 
-            verify(paymentApplicationService, never()).handlePaymentCleared(any(), any(), any(), any(), any(), any());
+            verify(paymentApplicationService, never())
+                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
             verify(processedEventRepository).save(any(ProcessedEvent.class));
         }
 
@@ -197,7 +203,8 @@ class SettlementEventsListenerPaymentSettledTest {
         void skipsWhenPartyIdNotUuid() {
             listener().onPaymentEvent(envelope(EVENT_ID, settled("not-a-uuid")));
 
-            verify(paymentApplicationService, never()).handlePaymentCleared(any(), any(), any(), any(), any(), any());
+            verify(paymentApplicationService, never())
+                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
             verify(processedEventRepository).save(any(ProcessedEvent.class));
         }
 
@@ -228,7 +235,8 @@ class SettlementEventsListenerPaymentSettledTest {
 
             listener().onPaymentEvent(msg);
 
-            verify(paymentApplicationService, never()).handlePaymentCleared(any(), any(), any(), any(), any(), any());
+            verify(paymentApplicationService, never())
+                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
             verify(processedEventRepository).save(any(ProcessedEvent.class));
         }
 
@@ -240,7 +248,8 @@ class SettlementEventsListenerPaymentSettledTest {
 
             listener().onPaymentEvent(envelope(nonUuidEventId, settled(PARTY_UUID.toString())));
 
-            verify(paymentApplicationService, never()).handlePaymentCleared(any(), any(), any(), any(), any(), any());
+            verify(paymentApplicationService, never())
+                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
             ArgumentCaptor<ProcessedEvent> captor = ArgumentCaptor.forClass(ProcessedEvent.class);
             verify(processedEventRepository).save(captor.capture());
             assertThat(captor.getValue().getEventId()).isEqualTo(nonUuidEventId);
@@ -251,7 +260,7 @@ class SettlementEventsListenerPaymentSettledTest {
         void propagatesServiceFailureUnmarked() {
             doThrow(new RuntimeException("db unavailable"))
                     .when(paymentApplicationService)
-                    .handlePaymentCleared(any(), any(), any(), any(), any(), any());
+                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
 
             assertThatThrownBy(() -> listener().onPaymentEvent(envelope(EVENT_ID, settled(PARTY_UUID.toString()))))
                     .isInstanceOf(RuntimeException.class)

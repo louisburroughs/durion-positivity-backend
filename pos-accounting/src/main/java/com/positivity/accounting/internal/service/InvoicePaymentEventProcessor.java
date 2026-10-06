@@ -141,7 +141,9 @@ public class InvoicePaymentEventProcessor {
                     payment.currency(),
                     payment.amountPaid(),
                     payment.paidAt(),
-                    event.getEventId());
+                    event.getEventId(),
+                    payment.invoiceId(),
+                    null);
         }
 
         // Deterministic per event, so a replay never applies or credits twice (AD-010).

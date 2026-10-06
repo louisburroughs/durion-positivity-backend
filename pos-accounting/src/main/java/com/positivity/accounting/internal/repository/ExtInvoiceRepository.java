@@ -7,6 +7,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -36,6 +37,19 @@ public interface ExtInvoiceRepository extends JpaRepository<ExtInvoice, UUID> {
      * @return matching invoices (unordered; the report orders by customer)
      */
     List<ExtInvoice> findByStatusIn(Collection<String> statuses);
+
+    /**
+     * Replicated invoices of the given parties in the given lifecycle statuses (#2502): the
+     * candidates for a customer's open invoices, served by {@code idx_ext_invoice_party_status}.
+     * The party is matched as stored, so callers pass the canonical UUID string.
+     *
+     * @param partyIds parties (canonical UUID strings)
+     * @param statuses lifecycle status values to include
+     * @return matching invoices (unordered; the open balance is derived by the caller)
+     */
+    @NonNull
+    List<ExtInvoice> findByPartyIdInAndStatusIn(
+            @NonNull Collection<String> partyIds, @NonNull Collection<String> statuses);
 
     /**
      * Load one replicated invoice under a row-level write lock held for the rest of the

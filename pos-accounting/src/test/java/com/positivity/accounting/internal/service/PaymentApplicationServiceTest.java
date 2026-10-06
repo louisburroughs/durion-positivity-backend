@@ -51,6 +51,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.InjectMocks;
@@ -71,6 +73,7 @@ import org.springframework.web.server.ResponseStatusException;
 class PaymentApplicationServiceTest {
 
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+    private static final UUID REMITTANCE_INVOICE_ID = UUID.fromString("0199a000-0000-7000-8000-0000000025a2");
 
     @Spy
     private Clock clock = TEST_CLOCK;
@@ -276,6 +279,44 @@ class PaymentApplicationServiceTest {
     }
 
     @Test
+    @DisplayName("#2524 AC9 race: a request that finds the payment already credited by its concurrent twin returns"
+            + " the twin's credit instead of PAYMENT_NOT_AVAILABLE")
+    void creditPaymentRemainder_lostRaceToSameRequestId_returnsWinnersCredit() {
+        CustomerCredit winner = new CustomerCredit();
+        winner.setCreditId(UUID.fromString("00000000-0000-0000-0000-0000000c2526"));
+        winner.setAmount(new BigDecimal("12.50"));
+        winner.setCurrency("USD");
+        winner.setRequestId("REMAINDER:remainder-1");
+        winner.setSourcePaymentId(testPaymentId);
+        winner.setCreatedAt(Instant.now(TEST_CLOCK));
+        // The twin commits between this request's idempotency lookup and its read of the payment.
+        when(customerCreditRepository.findByRequestId("REMAINDER:remainder-1"))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(winner));
+        testPayment.setStatus(ReceivablePaymentStatus.FULLY_APPLIED);
+        testPayment.setUnappliedAmount(BigDecimal.ZERO);
+        when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+
+        RemainderCreditResponse response =
+                service.creditPaymentRemainder(testPaymentId, remainder("remainder-1", "12.50"));
+
+        assertThat(response.getCreditId()).isEqualTo(winner.getCreditId());
+        verify(customerCreditRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("#2524: a payment that is not AVAILABLE and was credited by no request with this id is still refused")
+    void creditPaymentRemainder_notAvailableWithoutTwin_stillRefused() {
+        when(customerCreditRepository.findByRequestId("REMAINDER:remainder-1")).thenReturn(Optional.empty());
+        testPayment.setStatus(ReceivablePaymentStatus.FULLY_APPLIED);
+        testPayment.setUnappliedAmount(BigDecimal.ZERO);
+        when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+
+        assertThatThrownBy(() -> service.creditPaymentRemainder(testPaymentId, remainder("remainder-1", "12.50")))
+                .isInstanceOf(PaymentNotAvailableException.class);
+    }
+
+    @Test
     @DisplayName("#2524 AC9: the same requestId on another payment is IDEMPOTENCY_CONFLICT")
     void creditPaymentRemainder_requestIdOnAnotherPayment_conflicts() {
         CustomerCredit existing = new CustomerCredit();
@@ -370,9 +411,15 @@ class PaymentApplicationServiceTest {
                 "USD",
                 new BigDecimal("1000.00"),
                 Instant.now(TEST_CLOCK),
-                testSourceEventId);
+                testSourceEventId,
+                REMITTANCE_INVOICE_ID,
+                "CARD");
 
         // Assert
+        ArgumentCaptor<ReceivablePayment> saved = ArgumentCaptor.forClass(ReceivablePayment.class);
+        verify(receivablePaymentRepository).save(saved.capture());
+        assertThat(saved.getValue().getSourceInvoiceId()).isEqualTo(REMITTANCE_INVOICE_ID);
+        assertThat(saved.getValue().getPaymentMethod()).isEqualTo("CARD");
         assertThat(result).isNotNull();
         assertThat(result.getPaymentId()).isEqualTo(testPaymentId);
         assertThat(result.getCustomerId()).isEqualTo(testCustomerId);
@@ -382,6 +429,39 @@ class PaymentApplicationServiceTest {
 
         verify(receivablePaymentRepository).existsBySourceEventId(testSourceEventId);
         verify(receivablePaymentRepository).save(any(ReceivablePayment.class));
+    }
+
+    @ParameterizedTest(name = "method \"{0}\" is stored as {1}")
+    @CsvSource(
+            value = {
+                "CASH, CASH",
+                "CARD, CARD",
+                "ON_ACCOUNT, ON_ACCOUNT",
+                "OTHER, OTHER",
+                "' card ', CARD",
+                "CHEQUE, NULL",
+                "A_METHOD_NAME_LONGER_THAN_TWENTY_CHARACTERS, NULL",
+                "'', NULL",
+                "NULL, NULL"
+            },
+            nullValues = "NULL")
+    @DisplayName("Only a known settlement method is stored; anything else is recorded as no method (#2502)")
+    void testHandlePaymentCleared_storesKnownMethodsOnly(String sent, String stored) {
+        when(receivablePaymentRepository.existsBySourceEventId(testSourceEventId))
+                .thenReturn(false);
+        when(receivablePaymentRepository.save(any(ReceivablePayment.class))).thenAnswer(call -> call.getArgument(0));
+
+        ReceivablePayment result = service.handlePaymentCleared(
+                testPaymentId,
+                testCustomerId,
+                "USD",
+                new BigDecimal("1000.00"),
+                Instant.now(TEST_CLOCK),
+                testSourceEventId,
+                REMITTANCE_INVOICE_ID,
+                sent);
+
+        assertThat(result.getPaymentMethod()).isEqualTo(stored);
     }
 
     @Test
@@ -399,7 +479,9 @@ class PaymentApplicationServiceTest {
                 "USD",
                 new BigDecimal("1000.00"),
                 Instant.now(TEST_CLOCK),
-                testSourceEventId);
+                testSourceEventId,
+                null,
+                null);
 
         // Assert
         assertThat(result).isEqualTo(testPayment);
@@ -415,9 +497,19 @@ class PaymentApplicationServiceTest {
         when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
 
         ReceivablePayment result = service.handlePaymentCleared(
-                testPaymentId, testCustomerId, "usd", new BigDecimal("1000.0"), Instant.now(TEST_CLOCK), otherEventId);
+                testPaymentId,
+                testCustomerId,
+                "usd",
+                new BigDecimal("1000.0"),
+                Instant.now(TEST_CLOCK),
+                otherEventId,
+                REMITTANCE_INVOICE_ID,
+                "CARD");
 
+        // The first writer wins (#2502): the recorded row keeps its own remittance values.
         assertThat(result).isSameAs(testPayment);
+        assertThat(result.getSourceInvoiceId()).isNull();
+        assertThat(result.getPaymentMethod()).isNull();
         verify(receivablePaymentRepository, never()).save(any());
     }
 
@@ -434,7 +526,9 @@ class PaymentApplicationServiceTest {
                         "USD",
                         new BigDecimal("999.00"),
                         Instant.now(TEST_CLOCK),
-                        otherEventId))
+                        otherEventId,
+                        null,
+                        null))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("different amount");
         verify(receivablePaymentRepository, never()).save(any());

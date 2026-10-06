@@ -14,6 +14,15 @@ import org.jspecify.annotations.Nullable;
 
 public interface PaymentApplicationService {
 
+    /**
+     * Record a cleared customer payment as an {@code AVAILABLE} receivable payment. Idempotent on
+     * {@code sourceEventId}; a payment already recorded by another path keeps its values, including
+     * the remittance fields (the first writer wins, #2502).
+     *
+     * @param sourceInvoiceId invoice the payment was taken against, when the recording fact names one
+     * @param paymentMethod   settlement method as the fact sends it ({@code CASH}, {@code CARD},
+     *                        {@code ON_ACCOUNT}, {@code OTHER}), when the path carries one
+     */
     @NonNull
     ReceivablePayment handlePaymentCleared(
             @NonNull UUID paymentId,
@@ -21,7 +30,9 @@ public interface PaymentApplicationService {
             @NonNull String currency,
             @NonNull BigDecimal totalAmount,
             @NonNull Instant clearedAt,
-            @NonNull UUID sourceEventId);
+            @NonNull UUID sourceEventId,
+            @Nullable UUID sourceInvoiceId,
+            @Nullable String paymentMethod);
 
     /**
      * Apply a payment across the requested invoices.
