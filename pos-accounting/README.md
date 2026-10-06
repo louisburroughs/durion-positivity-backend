@@ -403,8 +403,7 @@ counts, `PAID` and `CURRENCY_HOLD` included.
   transaction. One bounded exception: a create that loses the race under the unique index *inside a caller's
   transaction* reads the original on one extra connection while the aborted transaction still holds the lock;
   if the pool has none, that read fails after the pool's connection timeout and the create fails with that
-  error instead of 409. No bill is created either way. `recordVendor`, in a transaction of its own, remains
-  for a caller that holds no lock; the goods-receipt create no longer uses it.
+  error instead of 409. No bill is created either way.
 - **Observability**: one `accounting.vendor_bill.duplicate` increment per event, tagged `channel`
   (`goods_receipt`, `match`, `edi`) and `outcome` (`refused`, `flagged`, `ignored`, `retried`), and one log
   line: WARN for a refusal or a flag, DEBUG for an ignored duplicate (overlapping fetch windows republish by

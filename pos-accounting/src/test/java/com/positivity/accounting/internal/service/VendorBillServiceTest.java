@@ -694,7 +694,6 @@ class VendorBillServiceTest {
             verify(billRepository, never()).save(any());
             verify(billLineRepository, never()).save(any());
             verify(eventPublisher, never()).publishEvent(any(Object.class));
-            verify(vendorDirectoryService, never()).recordVendor(any(), any());
             verify(vendorDirectoryService, never()).recordVendorInCurrentTransaction(any(), any());
             // The number was drawn from the tenant's counter in the same transaction as the refused
             // bill; that transaction rolls back, and the increment with it (Postgres IT).
@@ -733,7 +732,6 @@ class VendorBillServiceTest {
                             refused -> assertThat(refused.getOriginalBillId()).isEqualTo(originalId));
 
             verify(eventPublisher, never()).publishEvent(any(Object.class));
-            verify(vendorDirectoryService, never()).recordVendor(any(), any());
             verify(vendorDirectoryService, never()).recordVendorInCurrentTransaction(any(), any());
         }
 
