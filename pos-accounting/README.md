@@ -69,8 +69,9 @@ Every display value is resolved from data accounting already holds — its own r
 - `GET /v1/accounting/export/status/{jobId}` — get export job status
 - `GET /v1/accounting/export/history` — list export job history
 - `GET /v1/accounting/reports/financial/general-ledger` — general ledger report (story G2)
-- `GET /v1/accounting/reports/financial/aged-receivables` — aged receivables buckets (story G2)
-- `GET /v1/accounting/reports/financial/aged-payables` — aged payables buckets (story G2)
+- `GET /v1/accounting/reports/financial/aged-receivables` — aged receivables by due state: `notYetDue`, `days1To30`, `days31To60`, `days61To90`, `days90Plus`, `overdue`, `totalOutstanding`; rows carry `customerName` / `customerReference` from the customer replica, ordered by name then id (story G2; CAP:550 S35, #2524)
+- `GET /v1/accounting/reports/financial/aged-payables` — aged payables with the same buckets over APPROVED bills only; bills not yet approved (`PENDING_RECEIPT_MATCH`, `MATCH_EXCEPTION`) are reported unaged as `unapproved`, `unapprovedBillCount`, `totalIncludingUnapproved` per row and beside `totals` (AW11; CAP:550 S35, #2524)
+- `POST /v1/accounting/payments/{paymentId}/remainder-credit` — keep a payment's whole unapplied remainder as a customer credit (AD-003): one transaction creates the credit, enqueues Dr 1090 / Cr 2300, and the payment becomes `FULLY_APPLIED`; idempotent on `requestId`, guarded by `expectedAmount` (permission `accounting:payment:apply`, event `ACCOUNTING_PAYMENT_REMAINDER_CREDIT`, CAP:550 S35, #2524)
 - `GET /v1/accounting/settlements/{settlementId}/lines` — list settlement lines, optional `unmatchedOnly` filter (permission `accounting:reconciliation:view`, event `ACCOUNTING_SETTLEMENT_LINES_LIST`, story F1c)
 - `POST /v1/accounting/settlements/lines/{lineId}/match` — manually match an unmatched line to a receivable payment (permission `accounting:reconciliation:adjust`, event `ACCOUNTING_SETTLEMENT_LINE_MATCH`, story F1c)
 - `POST /v1/accounting/settlements/lines/{lineId}/write-off` — write off a small unmatched line with mandatory reason (permission `accounting:reconciliation:adjust`, event `ACCOUNTING_SETTLEMENT_LINE_WRITE_OFF`, story F1c)
@@ -100,6 +101,20 @@ holding its own posting lifecycle (`gl_journal_entry_id` / `gl_posted_at`), beca
 relieved many times and each relief must be independently idempotent and traceable. The invoice
 balance derivation subtracts applied credits, so a credit-settled invoice is no longer shown as
 outstanding.
+
+**Request ids on credits (CAP:550 S35, #2524).** `customer_credit.request_id` records the command that
+issued the credit, namespaced: `APPLY:<applicationRequestId>` from `applyPayment`,
+`REMAINDER:<requestId>` from `creditPaymentRemainder`, and the invoice-payment event's own prefix for
+credits issued from settled payments. It is unique per tenant (`uq_customer_credit_request_id`, V6), the
+same namespaced value keys the credit-issuance GL posting (so an apply key equal to a remainder key never
+collides), and a replay of the issuing command returns the credit: an `applyPayment` replay carries the
+`customerCredit` it issued, a remainder-credit replay the same `creditId`. The remainder path refuses a
+payment that is not `AVAILABLE` (409 `PAYMENT_NOT_AVAILABLE`), in another currency (422
+`CURRENCY_NOT_SUPPORTED`) or whose unapplied amount no longer equals `expectedAmount` (422
+`PAYMENT_REMAINDER_CHANGED`), writing nothing; the same `requestId` on another payment is 409
+`IDEMPOTENCY_CONFLICT`. It runs through `RetryingPaymentApplicationService` with apply's one retry, which also covers a lost race on `uq_customer_credit_request_id` (two
+simultaneous requests with one key: the retry replays the winner's credit); a second conflict is 409 `OPTIMISTIC_LOCK`. The report-export request carries no `organizationId`: the tenant
+comes from the caller's context (ADR-0062).
 
 ## Chart of Accounts
 
@@ -419,9 +434,30 @@ the sign and the totals; the statement line code is a label only and carries no 
   sales). It is not rejected: the line shows the combined amount and each account still goes to its own total.
   An asset, liability or equity account mapped onto the income statement shows on its line and joins neither
   total (logged at WARN).
-- **Only mapped accounts count.** The shipped seed (`R__seed_reference_accounting.sql`) maps one income
-  statement line, `REVENUE` over 4000 Service Revenue, and no balance sheet line; no expense account is mapped,
-  so on the seed alone `totalExpenses` is zero and `netIncome` equals revenue.
+- **Every posted balance counts (CAP:550 S35, #2524).** An account with a non-zero balance (as of the date on the
+  balance sheet, for the period on the income statement) and no mapping for that statement lands on a computed
+  line, so the totals cover every account and `balanced` means something: on the balance sheet `BS_IN_THE_BANK`
+  for a `BANK_CASH` asset (AW9), else `BS_OTHER_ASSETS`, `BS_OTHER_LIABILITIES`, `BS_OTHER_EQUITY`, and revenue
+  less expenses on `BS_PROFIT_NOT_YET_CLOSED`; on the income statement `IS_OTHER_INCOME` and `IS_OTHER_EXPENSES`.
+  Computed lines appear only when non-empty; named lines appear even at zero. Balances come from one grouped
+  query per statement; the report logs at INFO which account codes fell on computed lines. A mapping moves an
+  account off a computed line, never duplicates it.
+- **Named lines.** The template (`R__seed_reference_accounting.sql`, applied per tenant, see "Tenant
+  provisioning") carries the balance sheet lines `BS_IN_THE_BANK` (1000), `BS_WAITING_TO_BE_DEPOSITED` (1090,
+  1095), `BS_CUSTOMERS_OWE_YOU` (1200), `BS_INVENTORY` (1300), `BS_BILLS_FROM_VENDORS` (2000),
+  `BS_SALES_TAX_COLLECTED` (2200), `BS_CUSTOMER_CREDITS` (2300) and the income statement lines `IS_SALES` (4000,
+  formerly `REVENUE`), `IS_COST_OF_PARTS_SOLD` (5000, and 5100 Inventory Shrinkage: cost of inventory consumed sits above gross margin), `IS_CARD_PROCESSING_FEES` (6000). `BS_KEPT_IN_DRAWERS`
+  (1080), `BS_OWNER_EQUITY` (3000) and `BS_OPENING_BALANCE_EQUITY` (3900) are reserved for S15; 1250 and 1260
+  for S32. Until then those accounts fall on computed lines.
+- **Drill-down.** `GET /reports/financial/drilldown/accounts/{statementLineCode}` lists every account on the
+  line, mapped or collected by a computed code, with `accountCode`, `accountType` and the GL account's own name.
+  A balance-sheet line reports as-of balances at `endDate`; an income-statement line reports period movement; in
+  both cases the rows add up to the line.
+- **Normal side on ledger reads.** General-ledger sections carry `accountType`, `normalSide` (`DEBIT` for
+  assets and expenses, `CREDIT` for liabilities, equity and revenue), `normalOpeningBalance` and
+  `normalClosingBalance`; lines carry `direction` (`INCREASE` / `DECREASE`) and `normalRunningBalance`; the GL
+  account balance carries `accountType`, `normalSide` and `normalBalance`. Signed (debit-positive) fields are
+  unchanged. `NormalSide` is the one rule.
 
 ## Payment Application Concurrency
 
@@ -584,12 +620,15 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `TAX_SNAPSHOT_NOT_FOUND` | 404 | Referenced tax snapshot does not exist |
 | `SETTLEMENT_LINE_NOT_FOUND` | 404 | Referenced settlement line does not exist |
 | `RECEIVABLE_PAYMENT_NOT_FOUND` | 404 | Referenced receivable payment does not exist |
+| `PAYMENT_NOT_FOUND` | 404 | The payment named by a remainder-credit command does not exist (#2524) |
 | `RECONCILIATION_NOT_FOUND` | 404 | Referenced bank reconciliation does not exist |
 | `EVENT_NOT_FOUND` | 404 | Referenced AP payment event does not exist |
 | `EXPORT_JOB_NOT_FOUND` | 404 | Referenced report export job does not exist |
 | `DUPLICATE_EVENT` | 409 | Event with this ID has already been processed |
 | `EVENT_NOT_RETRYABLE` | 409 | Retry of an accounting event that is not `FAILED`; the event is left unchanged (#2411) |
-| `IDEMPOTENCY_CONFLICT` | 409 | An AP payment idempotency key was reused with a different payload |
+| `IDEMPOTENCY_CONFLICT` | 409 | An AP payment idempotency key was reused with a different payload; a remainder-credit `requestId` reused on another payment (#2524) |
+| `PAYMENT_NOT_AVAILABLE` | 409 | Remainder credit on a payment that is not `AVAILABLE` (already fully applied or credited); nothing is written (#2524) |
+| `PAYMENT_REMAINDER_CHANGED` | 422 | The remainder-credit `expectedAmount` no longer matches the payment's unapplied amount (an application intervened); nothing is written, re-read the payment (#2524) |
 | `GL_POSTING_FAILED` | 409 | General ledger posting failed |
 | `DUPLICATE_ACCOUNT_CODE` | 409 | Chart of accounts code already exists |
 | `AP_BILL_DUPLICATE` | 409 | A live vendor bill (any status except `VOIDED` or `REJECTED`) already has the same vendor, normalised bill number and bill date; `referenceId` is that bill's `vendorBillId` and `nextAction` is `Open the existing bill.` Raised by vendor-bill create and match (#2501) |

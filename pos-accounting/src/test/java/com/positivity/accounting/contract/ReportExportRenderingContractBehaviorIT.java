@@ -311,7 +311,9 @@ class ReportExportRenderingContractBehaviorIT extends BaseContractIntegrationTes
         assertEquals("Report,As-Of Date", lines[0]);
         assertEquals("AGED_RECEIVABLES," + END, lines[1]);
         assertEquals(
-                "Customer ID,Customer Name,Current (0-30),31-60 Days,61-90 Days,90+ Days,Total Outstanding", lines[3]);
+                "Customer ID,Customer Name,Customer Number,Not Yet Due,1-30 Days,31-60 Days,61-90 Days,90+ Days,"
+                        + "Overdue,Total Outstanding",
+                lines[3]);
 
         JsonNode rows = json.get("rows");
         assertFalse(rows.isEmpty(), "expected seeded open receivables");
@@ -319,17 +321,21 @@ class ReportExportRenderingContractBehaviorIT extends BaseContractIntegrationTes
         for (JsonNode jsonRow : rows) {
             String[] parts = splitCsv(lines[row++]);
             assertEquals(jsonRow.get("customerId").asText(), parts[0]);
-            assertMoneyEquals(jsonRow.get("current"), parts[2]);
-            assertMoneyEquals(jsonRow.get("days31To60"), parts[3]);
-            assertMoneyEquals(jsonRow.get("days61To90"), parts[4]);
-            assertMoneyEquals(jsonRow.get("days90Plus"), parts[5]);
-            assertMoneyEquals(jsonRow.get("totalOutstanding"), parts[6]);
+            assertMoneyEquals(jsonRow.get("notYetDue"), parts[3]);
+            assertMoneyEquals(jsonRow.get("days1To30"), parts[4]);
+            assertMoneyEquals(jsonRow.get("days31To60"), parts[5]);
+            assertMoneyEquals(jsonRow.get("days61To90"), parts[6]);
+            assertMoneyEquals(jsonRow.get("days90Plus"), parts[7]);
+            assertMoneyEquals(jsonRow.get("overdue"), parts[8]);
+            assertMoneyEquals(jsonRow.get("totalOutstanding"), parts[9]);
         }
         String[] total = splitCsv(lines[row]);
         assertEquals("TOTAL", total[0]);
-        assertMoneyEquals(json.get("totals").get("current"), total[2]);
-        assertMoneyEquals(json.get("totals").get("days31To60"), total[3]);
-        assertMoneyEquals(json.get("totals").get("totalOutstanding"), total[6]);
+        assertMoneyEquals(json.get("totals").get("notYetDue"), total[3]);
+        assertMoneyEquals(json.get("totals").get("days1To30"), total[4]);
+        assertMoneyEquals(json.get("totals").get("days31To60"), total[5]);
+        assertMoneyEquals(json.get("totals").get("overdue"), total[8]);
+        assertMoneyEquals(json.get("totals").get("totalOutstanding"), total[9]);
 
         assertEquals(csv, exportCsv("AGED_RECEIVABLES"));
     }
@@ -345,7 +351,10 @@ class ReportExportRenderingContractBehaviorIT extends BaseContractIntegrationTes
 
         assertEquals("Report,As-Of Date", lines[0]);
         assertEquals("AGED_PAYABLES," + END, lines[1]);
-        assertEquals("Vendor ID,Vendor Name,Current (0-30),31-60 Days,61-90 Days,90+ Days,Total Outstanding", lines[3]);
+        assertEquals(
+                "Vendor ID,Vendor Name,Not Yet Due,1-30 Days,31-60 Days,61-90 Days,90+ Days,Overdue,"
+                        + "Total Outstanding,Unapproved,Unapproved Bills,Total Incl. Unapproved",
+                lines[3]);
 
         JsonNode rows = json.get("rows");
         assertFalse(rows.isEmpty(), "expected seeded open payables");
@@ -353,14 +362,21 @@ class ReportExportRenderingContractBehaviorIT extends BaseContractIntegrationTes
         for (JsonNode jsonRow : rows) {
             String[] parts = splitCsv(lines[row++]);
             assertEquals(jsonRow.get("vendorId").asText(), parts[0]);
-            assertMoneyEquals(jsonRow.get("current"), parts[2]);
-            assertMoneyEquals(jsonRow.get("days61To90"), parts[4]);
-            assertMoneyEquals(jsonRow.get("totalOutstanding"), parts[6]);
+            assertMoneyEquals(jsonRow.get("notYetDue"), parts[2]);
+            assertMoneyEquals(jsonRow.get("days61To90"), parts[5]);
+            assertMoneyEquals(jsonRow.get("overdue"), parts[7]);
+            assertMoneyEquals(jsonRow.get("totalOutstanding"), parts[8]);
+            assertMoneyEquals(jsonRow.get("unapproved"), parts[9]);
+            assertEquals(jsonRow.get("unapprovedBillCount").asText(), parts[10]);
+            assertMoneyEquals(jsonRow.get("totalIncludingUnapproved"), parts[11]);
         }
         String[] total = splitCsv(lines[row]);
         assertEquals("TOTAL", total[0]);
-        assertMoneyEquals(json.get("totals").get("days61To90"), total[4]);
-        assertMoneyEquals(json.get("totals").get("totalOutstanding"), total[6]);
+        assertMoneyEquals(json.get("totals").get("days61To90"), total[5]);
+        assertMoneyEquals(json.get("totals").get("totalOutstanding"), total[8]);
+        assertMoneyEquals(json.get("unapproved"), total[9]);
+        assertEquals(json.get("unapprovedBillCount").asText(), total[10]);
+        assertMoneyEquals(json.get("totalIncludingUnapproved"), total[11]);
 
         assertEquals(csv, exportCsv("AGED_PAYABLES"));
     }
@@ -419,8 +435,7 @@ class ReportExportRenderingContractBehaviorIT extends BaseContractIntegrationTes
                   "reportType": "%s",
                   %s
                   "startDate": "%s",
-                  "endDate": "%s",
-                  "organizationId": "d10217f9-3ec6-46b9-9c87-e7066c100c24"
+                  "endDate": "%s"
                 }
                 """.formatted(format, reportType, extraFields, START, END);
         return mockMvc.perform(withAuth(post("/v1/accounting/reports/export"), "accounting:report:export")

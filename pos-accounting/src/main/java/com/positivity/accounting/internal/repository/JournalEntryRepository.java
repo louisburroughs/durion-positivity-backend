@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -135,28 +136,6 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
     java.math.BigDecimal sumPostedBalanceForAccount(UUID glAccountId, LocalDateTime startDate, LocalDateTime endDate);
 
     /**
-     * Sum net balance for a GL account as of a specific date over POSTED and
-     * REVERSED entries, never DRAFT (issue #2308). Used for balance sheet generation.
-     *
-     * @param glAccountId GL account ID (UUID)
-     * @param asOfDate    reporting date (inclusive)
-     * @return net balance (sum of debits - sum of credits), or 0 if no entries
-     */
-    @Query("""
-                SELECT COALESCE(
-                    SUM(CASE WHEN jel.debitAmount IS NOT NULL THEN jel.debitAmount ELSE 0 END) -
-                    SUM(CASE WHEN jel.creditAmount IS NOT NULL THEN jel.creditAmount ELSE 0 END),
-                    0
-                )
-                FROM JournalEntry je
-                JOIN je.lines jel
-                WHERE je.status IN ('POSTED', 'REVERSED')
-                  AND jel.glAccount.glAccountId = :glAccountId
-                  AND je.transactionDate <= :asOfDate
-            """)
-    java.math.BigDecimal sumPostedBalanceAsOf(UUID glAccountId, LocalDateTime asOfDate);
-
-    /**
      * Aggregate ledger journal lines (POSTED and REVERSED entries, never DRAFT;
      * issue #2308) up to and including the as-of instant into
      * per-account debit/credit totals, ordered by chart-of-accounts code.
@@ -183,6 +162,36 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
             """)
     List<com.positivity.accounting.internal.dto.TrialBalanceAccountTotal> sumPostedDebitsCreditsByAccountAsOf(
             LocalDateTime asOfDate);
+
+    /**
+     * Aggregate ledger journal lines (POSTED and REVERSED entries, never DRAFT) with a transaction
+     * date inside the inclusive window into per-account debit/credit totals, ordered by
+     * chart-of-accounts code. The income statement's one grouped query (CAP:550 S35, #2524): every
+     * account with activity in the period comes back, mapped or not, so no posted balance is left
+     * off the statement.
+     *
+     * @param startDate period start (inclusive; pass start-of-day)
+     * @param endDate   period end (inclusive; pass end-of-day)
+     * @return one aggregate per account with activity in the window, ordered by account code
+     */
+    @Query("""
+                SELECT new com.positivity.accounting.internal.dto.TrialBalanceAccountTotal(
+                    jel.glAccount.glAccountId,
+                    jel.glAccount.accountCode,
+                    jel.glAccount.accountName,
+                    COALESCE(SUM(CASE WHEN jel.debitAmount IS NOT NULL THEN jel.debitAmount ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN jel.creditAmount IS NOT NULL THEN jel.creditAmount ELSE 0 END), 0))
+                FROM JournalEntry je
+                JOIN je.lines jel
+                WHERE je.status IN ('POSTED', 'REVERSED')
+                  AND je.transactionDate >= :startDate
+                  AND je.transactionDate <= :endDate
+                GROUP BY jel.glAccount.glAccountId, jel.glAccount.accountCode, jel.glAccount.accountName
+                ORDER BY jel.glAccount.accountCode
+            """)
+    @NonNull
+    List<com.positivity.accounting.internal.dto.TrialBalanceAccountTotal> sumPostedDebitsCreditsByAccountInRange(
+            @NonNull LocalDateTime startDate, @NonNull LocalDateTime endDate);
 
     /**
      * Find all ledger journal entries (POSTED and REVERSED, never DRAFT; issue

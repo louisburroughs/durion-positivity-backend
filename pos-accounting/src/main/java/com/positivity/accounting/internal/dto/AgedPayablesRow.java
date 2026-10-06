@@ -12,14 +12,21 @@ import org.jspecify.annotations.NonNull;
 /**
  * One per-vendor row of the Aged Payables report.
  *
- * Buckets the vendor's open (unpaid) vendor-bill balances by days past due as of
- * the report date. "Past due" is measured from the bill's DUE date, falling back
- * to the bill date when no due date is recorded. Aged Receivables applies the same
- * rule with the invoice date as its fallback. A bill not yet due has a negative age
- * and is reported in {@code current}; a bill dated after the report date did not yet
- * exist and is not reported at all. Open balance per bill is the bill total minus
- * applied {@code APPaymentAllocation} amounts. All bucket amounts are non-negative;
- * {@code totalOutstanding} is their sum.
+ * Buckets the vendor's open (unpaid) APPROVED vendor-bill balances by days past due
+ * as of the report date (AW11; CAP:550 S35, #2524). "Past due" is measured from the
+ * bill's DUE date, falling back to the bill date when no due date is recorded. Aged
+ * Receivables applies the same rule with the invoice date as its fallback. A bill due
+ * today or later is {@code notYetDue}; the four late buckets hold overdue money and
+ * {@code overdue} is their sum. A bill dated after the report date did not yet exist
+ * and is not reported at all. Open balance per bill is the bill total minus applied
+ * {@code APPaymentAllocation} amounts. All bucket amounts are non-negative;
+ * {@code totalOutstanding} = {@code notYetDue} + {@code overdue}.
+ *
+ * <p>Bills not yet approved ({@code PENDING_RECEIPT_MATCH}, {@code MATCH_EXCEPTION})
+ * never reach a bucket: their open amount is reported beside the buckets as
+ * {@code unapproved}, with {@code unapprovedBillCount} and
+ * {@code totalIncludingUnapproved}. A vendor with only unapproved bills has a row
+ * with zero buckets.
  */
 @Data
 @Builder
@@ -27,8 +34,8 @@ import org.jspecify.annotations.NonNull;
 @AllArgsConstructor
 @Schema(
         description = "Per-vendor aged payables row with bucketed open vendor-bill balances. Age is measured "
-                + "from the bill due date, falling back to the bill date when no due date is recorded; "
-                + "not-yet-due bills are reported in the current bucket.")
+                + "from the bill due date, falling back to the bill date when no due date is recorded; only "
+                + "APPROVED bills are aged, unapproved bills are reported separately and unaged.")
 public class AgedPayablesRow {
 
     /**
@@ -45,14 +52,21 @@ public class AgedPayablesRow {
     private String vendorName;
 
     /**
-     * Outstanding 0-30 days past due (includes not-yet-due).
+     * Approved bills outstanding not yet due: due today or later (due today is not overdue).
      */
     @Schema(
-            description = "Outstanding 0-30 days past due (includes not-yet-due)",
-            example = "3200.00",
+            description = "Approved bills outstanding not yet due: due today or later (due today is not overdue)",
+            example = "2500.00",
             requiredMode = REQUIRED)
     @NonNull
-    private BigDecimal current;
+    private BigDecimal notYetDue;
+
+    /**
+     * Approved bills outstanding 1-30 days past due.
+     */
+    @Schema(description = "Approved bills outstanding 1-30 days past due", example = "700.00", requiredMode = REQUIRED)
+    @NonNull
+    private BigDecimal days1To30;
 
     /**
      * Outstanding 31-60 days past due.
@@ -76,12 +90,45 @@ public class AgedPayablesRow {
     private BigDecimal days90Plus;
 
     /**
-     * Total outstanding for the vendor across all buckets.
+     * Overdue: the sum of the four late buckets.
      */
     @Schema(
-            description = "Total outstanding for the vendor across all buckets",
+            description = "Overdue: the sum of days1To30, days31To60, days61To90 and days90Plus",
+            example = "1450.00",
+            requiredMode = REQUIRED)
+    @NonNull
+    private BigDecimal overdue;
+
+    /**
+     * Total outstanding on approved bills: notYetDue + overdue.
+     */
+    @Schema(
+            description = "Total outstanding on approved bills: notYetDue + overdue",
             example = "3950.00",
             requiredMode = REQUIRED)
     @NonNull
     private BigDecimal totalOutstanding;
+
+    /**
+     * Open amount on bills not yet approved (PENDING_RECEIPT_MATCH, MATCH_EXCEPTION); never aged.
+     */
+    @Schema(
+            description = "Open amount on bills not yet approved (PENDING_RECEIPT_MATCH, MATCH_EXCEPTION); never aged",
+            example = "300.00",
+            requiredMode = REQUIRED)
+    @NonNull
+    private BigDecimal unapproved;
+
+    /**
+     * Number of open bills not yet approved.
+     */
+    @Schema(description = "Number of open bills not yet approved", example = "2", requiredMode = REQUIRED)
+    private int unapprovedBillCount;
+
+    /**
+     * totalOutstanding + unapproved.
+     */
+    @Schema(description = "totalOutstanding + unapproved", example = "4250.00", requiredMode = REQUIRED)
+    @NonNull
+    private BigDecimal totalIncludingUnapproved;
 }

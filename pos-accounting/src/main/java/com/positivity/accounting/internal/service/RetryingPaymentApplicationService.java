@@ -3,6 +3,8 @@ package com.positivity.accounting.internal.service;
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.dto.PaymentApplicationResponse;
 import com.positivity.accounting.internal.dto.PaymentApplicationReversalResponse;
+import com.positivity.accounting.internal.dto.RemainderCreditRequest;
+import com.positivity.accounting.internal.dto.RemainderCreditResponse;
 import com.positivity.accounting.internal.entity.ReceivablePayment;
 import jakarta.persistence.OptimisticLockException;
 import java.math.BigDecimal;
@@ -13,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.annotation.Primary;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -49,6 +52,13 @@ import org.springframework.web.server.ResponseStatusException;
 @Primary
 @RequiredArgsConstructor
 public class RetryingPaymentApplicationService implements PaymentApplicationService {
+
+    /**
+     * The unique index on a credit's namespaced request id (V6, #2524). Two simultaneous remainder-credit
+     * requests with the same key both pass the replay lookup; the loser's insert fails on this index. That
+     * is a lost race, not an error: the retry finds the winner's credit and replays it (AC9).
+     */
+    static final String CREDIT_REQUEST_ID_INDEX = "uq_customer_credit_request_id";
 
     private final PaymentApplicationServiceImpl delegate;
 
@@ -99,6 +109,41 @@ public class RetryingPaymentApplicationService implements PaymentApplicationServ
         return delegate.creditUnappliedPayment(paymentId, creditRequestId);
     }
 
+    /**
+     * Same one-retry rule as {@link #applyPaymentToInvoices} (CAP:550 S35, #2524), applied to an
+     * optimistic-lock conflict and to a lost race on {@link #CREDIT_REQUEST_ID_INDEX}: the retry re-runs
+     * the idempotency lookup, so a request that lost a race returns the credit the winner issued; a
+     * second conflict is 409 OPTIMISTIC_LOCK.
+     */
+    @Override
+    @NonNull
+    public RemainderCreditResponse creditPaymentRemainder(
+            @NonNull UUID paymentId, @NonNull RemainderCreditRequest request) {
+        try {
+            return delegate.creditPaymentRemainder(paymentId, request);
+        } catch (RuntimeException firstFailure) {
+            if (!isOptimisticLockConflict(firstFailure) && !isRequestIdRace(firstFailure)) {
+                throw firstFailure;
+            }
+            log.warn(
+                    "Concurrent update crediting the remainder of payment {} (request {}); retrying once",
+                    paymentId,
+                    request.getRequestId(),
+                    firstFailure);
+            try {
+                return delegate.creditPaymentRemainder(paymentId, request);
+            } catch (RuntimeException secondFailure) {
+                if (!isOptimisticLockConflict(secondFailure)) {
+                    throw secondFailure;
+                }
+                // 409 OPTIMISTIC_LOCK (AccountingExceptionHandler#handleOptimisticLock), the code the
+                // story names; the apply path keeps its older REQUEST_FAILED envelope.
+                throw new OptimisticLockingFailureException(
+                        "Payment " + paymentId + " was modified concurrently; please retry the request", secondFailure);
+            }
+        }
+    }
+
     @Override
     public void voidPayment(@NonNull UUID paymentId) {
         delegate.voidPayment(paymentId);
@@ -126,6 +171,24 @@ public class RetryingPaymentApplicationService implements PaymentApplicationServ
      * @param failure thrown exception
      * @return true if the failure is an optimistic-lock conflict
      */
+    /**
+     * Whether the failure is an integrity violation of {@link #CREDIT_REQUEST_ID_INDEX}: a
+     * {@link DataIntegrityViolationException} somewhere in the cause chain, and the index named by it or
+     * by one of its causes (the driver's message names the constraint). Any other integrity violation is
+     * a real error and is not retried.
+     */
+    static boolean isRequestIdRace(@NonNull Throwable failure) {
+        boolean integrityViolation = false;
+        boolean namesIndex = false;
+        for (Throwable current = failure; current != null; ) {
+            integrityViolation |= current instanceof DataIntegrityViolationException;
+            namesIndex |= String.valueOf(current.getMessage()).contains(CREDIT_REQUEST_ID_INDEX);
+            Throwable cause = current.getCause();
+            current = (cause == current) ? null : cause;
+        }
+        return integrityViolation && namesIndex;
+    }
+
     static boolean isOptimisticLockConflict(@NonNull Throwable failure) {
         for (Throwable current = failure; current != null; ) {
             if (current instanceof OptimisticLockingFailureException || current instanceof OptimisticLockException) {

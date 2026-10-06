@@ -8,6 +8,8 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.dto.PaymentApplicationResponse;
+import com.positivity.accounting.internal.dto.RemainderCreditRequest;
+import com.positivity.accounting.internal.dto.RemainderCreditResponse;
 import jakarta.persistence.OptimisticLockException;
 import jakarta.persistence.RollbackException;
 import java.math.BigDecimal;
@@ -21,6 +23,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.transaction.TransactionSystemException;
@@ -181,6 +184,101 @@ class RetryingPaymentApplicationServiceTest {
         verify(delegate)
                 .handlePaymentCleared(
                         PAYMENT_ID, customerId, "USD", new BigDecimal("1000.00"), clearedAt, sourceEventId);
+        verifyNoMoreInteractions(delegate);
+    }
+
+    // ===== Remainder credit (CAP:550 S35, #2524): apply's one retry =====
+
+    private static RemainderCreditRequest remainderRequest() {
+        return RemainderCreditRequest.builder()
+                .requestId("remainder-1")
+                .expectedAmount(new BigDecimal("12.50"))
+                .build();
+    }
+
+    @Test
+    @DisplayName("#2524: creditPaymentRemainder retries once on an optimistic-lock conflict and returns the retry's"
+            + " result")
+    void creditPaymentRemainder_firstConflict_retriesOnce() {
+        RemainderCreditRequest request = remainderRequest();
+        RemainderCreditResponse credited = RemainderCreditResponse.builder()
+                .paymentId(PAYMENT_ID)
+                .requestId("remainder-1")
+                .creditId(UUID.fromString("00000000-0000-0000-0000-00000000c4c1"))
+                .amount(new BigDecimal("12.50"))
+                .remainingAmount(BigDecimal.ZERO)
+                .createdAt(Instant.parse("2026-10-06T00:00:00Z"))
+                .build();
+        when(delegate.creditPaymentRemainder(PAYMENT_ID, request))
+                .thenThrow(conflict())
+                .thenReturn(credited);
+
+        RemainderCreditResponse result = retryingService.creditPaymentRemainder(PAYMENT_ID, request);
+
+        assertThat(result).isSameAs(credited);
+        verify(delegate, org.mockito.Mockito.times(2)).creditPaymentRemainder(PAYMENT_ID, request);
+    }
+
+    @Test
+    @DisplayName(
+            "#2524: a second conflict on creditPaymentRemainder surfaces as OPTIMISTIC_LOCK (409), not a third try")
+    void creditPaymentRemainder_bothAttemptsConflict_isOptimisticLock() {
+        RemainderCreditRequest request = remainderRequest();
+        when(delegate.creditPaymentRemainder(PAYMENT_ID, request))
+                .thenThrow(conflict())
+                .thenThrow(conflict());
+
+        assertThatThrownBy(() -> retryingService.creditPaymentRemainder(PAYMENT_ID, request))
+                .isInstanceOf(OptimisticLockingFailureException.class);
+        verify(delegate, org.mockito.Mockito.times(2)).creditPaymentRemainder(PAYMENT_ID, request);
+    }
+
+    @Test
+    @DisplayName("#2524: a concurrent request that inserted the same requestId first (uq_customer_credit_request_id)"
+            + " is retried once, so the retry replays the winner's credit")
+    void creditPaymentRemainder_requestIdRace_retriesAndReplays() {
+        RemainderCreditRequest request = remainderRequest();
+        RemainderCreditResponse winner = RemainderCreditResponse.builder()
+                .paymentId(PAYMENT_ID)
+                .requestId("remainder-1")
+                .creditId(UUID.fromString("00000000-0000-0000-0000-00000000c4c2"))
+                .amount(new BigDecimal("12.50"))
+                .remainingAmount(BigDecimal.ZERO)
+                .build();
+        when(delegate.creditPaymentRemainder(PAYMENT_ID, request))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException(
+                        "could not execute statement",
+                        new RuntimeException("ERROR: duplicate key value violates unique constraint"
+                                + " \"uq_customer_credit_request_id\"")))
+                .thenReturn(winner);
+
+        assertThat(retryingService.creditPaymentRemainder(PAYMENT_ID, request)).isSameAs(winner);
+        verify(delegate, org.mockito.Mockito.times(2)).creditPaymentRemainder(PAYMENT_ID, request);
+    }
+
+    @Test
+    @DisplayName("#2524: any other integrity violation on creditPaymentRemainder is not retried")
+    void creditPaymentRemainder_otherIntegrityViolation_notRetried() {
+        RemainderCreditRequest request = remainderRequest();
+        when(delegate.creditPaymentRemainder(PAYMENT_ID, request))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException(
+                        "chk_customer_credit_consumed_within_amount"));
+
+        assertThatThrownBy(() -> retryingService.creditPaymentRemainder(PAYMENT_ID, request))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+        verify(delegate).creditPaymentRemainder(PAYMENT_ID, request);
+    }
+
+    @Test
+    @DisplayName("#2524: a business refusal on creditPaymentRemainder is not retried")
+    void creditPaymentRemainder_businessFailure_notRetried() {
+        RemainderCreditRequest request = remainderRequest();
+        when(delegate.creditPaymentRemainder(PAYMENT_ID, request))
+                .thenThrow(new com.positivity.accounting.internal.exception.PaymentRemainderChangedException("stale"));
+
+        assertThatThrownBy(() -> retryingService.creditPaymentRemainder(PAYMENT_ID, request))
+                .isInstanceOf(com.positivity.accounting.internal.exception.PaymentRemainderChangedException.class);
+        verify(delegate).creditPaymentRemainder(PAYMENT_ID, request);
         verifyNoMoreInteractions(delegate);
     }
 }

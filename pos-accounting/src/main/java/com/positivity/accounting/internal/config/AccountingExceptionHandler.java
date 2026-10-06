@@ -28,6 +28,9 @@ import com.positivity.accounting.internal.exception.JournalEntryNotFoundExceptio
 import com.positivity.accounting.internal.exception.JournalEntryNotReversibleException;
 import com.positivity.accounting.internal.exception.MatchAmountMismatchException;
 import com.positivity.accounting.internal.exception.MultiApplicationReversalException;
+import com.positivity.accounting.internal.exception.PaymentNotAvailableException;
+import com.positivity.accounting.internal.exception.PaymentNotFoundException;
+import com.positivity.accounting.internal.exception.PaymentRemainderChangedException;
 import com.positivity.accounting.internal.exception.PeriodBankReconciliationIncompleteException;
 import com.positivity.accounting.internal.exception.PeriodCloseBlockedException;
 import com.positivity.accounting.internal.exception.PeriodCloseExceptionNotPermittedException;
@@ -491,6 +494,36 @@ public class AccountingExceptionHandler {
     public ResponseEntity<ApiError> handleCurrencyNotSupported(
             CurrencyNotSupportedException ex, HttpServletRequest request) {
         return build(HttpStatus.UNPROCESSABLE_CONTENT, "CURRENCY_NOT_SUPPORTED", ex.getMessage(), request);
+    }
+
+    /**
+     * Crediting a payment's remainder (CAP:550 S35, #2524): the payment named by the command does
+     * not exist.
+     */
+    @ExceptionHandler(PaymentNotFoundException.class)
+    public ResponseEntity<ApiError> handlePaymentNotFound(PaymentNotFoundException ex, HttpServletRequest request) {
+        return build(HttpStatus.NOT_FOUND, "PAYMENT_NOT_FOUND", ex.getMessage(), request);
+    }
+
+    /**
+     * Crediting a payment's remainder (CAP:550 S35, #2524): the payment is no longer {@code
+     * AVAILABLE}. 409: the conflict is with the payment's current state.
+     */
+    @ExceptionHandler(PaymentNotAvailableException.class)
+    public ResponseEntity<ApiError> handlePaymentNotAvailable(
+            PaymentNotAvailableException ex, HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, "PAYMENT_NOT_AVAILABLE", ex.getMessage(), request);
+    }
+
+    /**
+     * Crediting a payment's remainder (CAP:550 S35, #2524): the expected amount no longer matches
+     * the payment's unapplied amount; nothing was written and the client re-reads. 422 (ADR-0017
+     * §2).
+     */
+    @ExceptionHandler(PaymentRemainderChangedException.class)
+    public ResponseEntity<ApiError> handlePaymentRemainderChanged(
+            PaymentRemainderChangedException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNPROCESSABLE_CONTENT, "PAYMENT_REMAINDER_CHANGED", ex.getMessage(), request);
     }
 
     /**

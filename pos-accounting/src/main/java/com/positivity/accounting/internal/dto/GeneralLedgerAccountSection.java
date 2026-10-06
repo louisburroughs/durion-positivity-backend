@@ -1,7 +1,10 @@
 package com.positivity.accounting.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
+import com.positivity.accounting.internal.enums.AccountType;
+import com.positivity.accounting.internal.enums.NormalSide;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.util.List;
@@ -14,7 +17,10 @@ import org.jspecify.annotations.NonNull;
  * Contains the account's opening balance (net POSTED activity strictly before
  * the report start date), the chronological in-period POSTED lines with running
  * balance, the period debit/credit totals, and the closing balance
- * ({@code openingBalance} plus in-period net activity).
+ * ({@code openingBalance} plus in-period net activity). Signed balances are debit
+ * positive; the {@code normal*} balances put the same figures on the account's
+ * normal side (positive when the account holds its usual balance), so a reader
+ * can say "went up" without knowing the side (CAP:550 S35, #2524; AW3).
  */
 @Data
 @Builder
@@ -48,6 +54,24 @@ public class GeneralLedgerAccountSection {
     private String accountName;
 
     /**
+     * Type of the GL account; null when the account could not be loaded.
+     */
+    @Schema(description = "Type of the GL account", example = "LIABILITY", requiredMode = NOT_REQUIRED)
+    private AccountType accountType;
+
+    /**
+     * The side the account usually carries its balance on: DEBIT for assets and expenses, CREDIT
+     * for liabilities, equity and revenue.
+     */
+    @Schema(
+            description = "Normal side of the account: DEBIT for assets and expenses, CREDIT for liabilities,"
+                    + " equity and revenue",
+            example = "CREDIT",
+            requiredMode = REQUIRED)
+    @NonNull
+    private NormalSide normalSide;
+
+    /**
      * Signed net balance (debit positive) of POSTED activity strictly before the
      * report start date.
      */
@@ -57,6 +81,18 @@ public class GeneralLedgerAccountSection {
             requiredMode = REQUIRED)
     @NonNull
     private BigDecimal openingBalance;
+
+    /**
+     * Opening balance on the account's normal side: positive when the account holds its usual
+     * balance.
+     */
+    @Schema(
+            description = "Opening balance on the account's normal side (positive when the account holds its usual"
+                    + " balance)",
+            example = "50000.00",
+            requiredMode = REQUIRED)
+    @NonNull
+    private BigDecimal normalOpeningBalance;
 
     /**
      * Chronological in-period POSTED lines, each carrying a running balance.
@@ -94,4 +130,16 @@ public class GeneralLedgerAccountSection {
             requiredMode = REQUIRED)
     @NonNull
     private BigDecimal closingBalance;
+
+    /**
+     * Closing balance on the account's normal side: positive when the account holds its usual
+     * balance.
+     */
+    @Schema(
+            description = "Closing balance on the account's normal side (positive when the account holds its usual"
+                    + " balance)",
+            example = "80000.00",
+            requiredMode = REQUIRED)
+    @NonNull
+    private BigDecimal normalClosingBalance;
 }

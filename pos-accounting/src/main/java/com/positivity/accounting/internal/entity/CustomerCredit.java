@@ -81,6 +81,15 @@ public class CustomerCredit extends TenantScopedEntity {
     private String traceId;
 
     /**
+     * Namespaced id of the command that issued this credit (CAP:550 S35, #2524): {@code
+     * APPLY:<applicationRequestId>}, {@code REMAINDER:<requestId>} or the invoice-payment event's
+     * prefix. Unique per tenant ({@code uq_customer_credit_request_id}); a replay of the issuing
+     * command finds the credit by it. Null on credits issued before the column existed.
+     */
+    @Column(name = "request_id", length = 120, updatable = false)
+    private String requestId;
+
+    /**
      * Consumption state derived from {@link #appliedAmount} / {@link #refundedAmount}
      * (issue #992). Maintained by the service on every draw-down; never set directly.
      */

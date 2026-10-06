@@ -456,6 +456,22 @@ class GLAccountServiceTest {
         assertThat(result.getAccountCode()).isEqualTo("1000");
     }
 
+    @Test
+    @DisplayName("getAccountBalance - a liability with a credit balance reads LIABILITY / CREDIT with a positive"
+            + " normalBalance while balance stays negative (#2524 AC13)")
+    void getAccountBalance_creditNormalAccount() {
+        testAccount.setAccountType(AccountType.LIABILITY);
+        when(glAccountRepository.findById(testAccountId)).thenReturn(Optional.of(testAccount));
+        when(journalEntryLineRepository.getAccountBalance(testAccountId)).thenReturn(new BigDecimal("-750.00"));
+
+        GLAccountBalanceResponse result = service.getAccountBalance(testAccountId);
+
+        assertThat(result.getAccountType()).isEqualTo(AccountType.LIABILITY);
+        assertThat(result.getNormalSide()).isEqualTo(com.positivity.accounting.internal.enums.NormalSide.CREDIT);
+        assertThat(result.getBalance()).isEqualByComparingTo("-750.00");
+        assertThat(result.getNormalBalance()).isEqualByComparingTo("750.00");
+    }
+
     // ===== LIST =====
 
     @Test

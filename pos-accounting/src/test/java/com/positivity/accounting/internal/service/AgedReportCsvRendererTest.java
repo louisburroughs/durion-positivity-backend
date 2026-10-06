@@ -36,9 +36,9 @@ class AgedReportCsvRendererTest {
                 Report,As-Of Date
                 AGED_RECEIVABLES,2026-06-30
 
-                Customer ID,Customer Name,Current (0-30),31-60 Days,61-90 Days,90+ Days,Total Outstanding
-                d10217f9-3ec6-46b9-9c87-e7066c100c24,Acme Fleet Services,1250.00,500.00,0.00,0.00,1750.00
-                TOTAL,,1250.00,500.00,0.00,0.00,1750.00
+                Customer ID,Customer Name,Customer Number,Not Yet Due,1-30 Days,31-60 Days,61-90 Days,90+ Days,Overdue,Total Outstanding
+                d10217f9-3ec6-46b9-9c87-e7066c100c24,Acme Fleet Services,C-10042,1000.00,250.00,500.00,0.00,0.00,750.00,1750.00
+                TOTAL,,,1000.00,250.00,500.00,0.00,0.00,750.00,1750.00
                 """;
         assertEquals(expected, renderer.render(receivables()));
     }
@@ -50,9 +50,9 @@ class AgedReportCsvRendererTest {
                 Report,As-Of Date
                 AGED_PAYABLES,2026-06-30
 
-                Vendor ID,Vendor Name,Current (0-30),31-60 Days,61-90 Days,90+ Days,Total Outstanding
-                d10217f9-3ec6-46b9-9c87-e7066c100c25,Global Parts Supply,3200.00,750.00,0.00,0.00,3950.00
-                TOTAL,,3200.00,750.00,0.00,0.00,3950.00
+                Vendor ID,Vendor Name,Not Yet Due,1-30 Days,31-60 Days,61-90 Days,90+ Days,Overdue,Total Outstanding,Unapproved,Unapproved Bills,Total Incl. Unapproved
+                d10217f9-3ec6-46b9-9c87-e7066c100c25,Global Parts Supply,2500.00,700.00,750.00,0.00,0.00,1450.00,3950.00,300.00,2,4250.00
+                TOTAL,,2500.00,700.00,750.00,0.00,0.00,1450.00,3950.00,300.00,2,4250.00
                 """;
         assertEquals(expected, renderer.render(payables()));
     }
@@ -66,7 +66,7 @@ class AgedReportCsvRendererTest {
         String csv = renderer.render(report);
 
         assertTrue(
-                csv.contains(",\"Acme, Inc. \"\"Fleet\"\"\",1250.00"),
+                csv.contains(",\"Acme, Inc. \"\"Fleet\"\"\",C-10042,1000.00"),
                 "commas and quotes must be contained inside a quoted, quote-escaped field");
     }
 
@@ -85,15 +85,15 @@ class AgedReportCsvRendererTest {
     void neutralizesFormulaLeadingPartyNames() {
         AgedReceivablesReport receivables = receivables();
         receivables.getRows().getFirst().setCustomerName("=HYPERLINK(\"http://evil\",\"click\")");
-        receivables.getRows().getFirst().setCurrent(new BigDecimal("-123.45"));
+        receivables.getRows().getFirst().setNotYetDue(new BigDecimal("-123.45"));
         AgedPayablesReport payables = payables();
         payables.getRows().getFirst().setVendorName("+Global @Parts");
 
         String arCsv = renderer.render(receivables);
         String apCsv = renderer.render(payables);
 
-        assertTrue(arCsv.contains(",\"'=HYPERLINK(\"\"http://evil\"\",\"\"click\"\")\",-123.45"));
-        assertTrue(apCsv.contains(",'+Global @Parts,3200.00"));
+        assertTrue(arCsv.contains(",\"'=HYPERLINK(\"\"http://evil\"\",\"\"click\"\")\",C-10042,-123.45"));
+        assertTrue(apCsv.contains(",'+Global @Parts,2500.00"));
     }
 
     private static AgedReceivablesReport receivables() {
@@ -103,17 +103,22 @@ class AgedReportCsvRendererTest {
                 .rows(List.of(AgedReceivablesRow.builder()
                         .customerId(CUSTOMER_ID)
                         .customerName("Acme Fleet Services")
-                        .current(new BigDecimal("1250.00"))
+                        .customerReference("C-10042")
+                        .notYetDue(new BigDecimal("1000.00"))
+                        .days1To30(new BigDecimal("250.00"))
                         .days31To60(new BigDecimal("500.00"))
                         .days61To90(new BigDecimal("0.00"))
                         .days90Plus(new BigDecimal("0.00"))
+                        .overdue(new BigDecimal("750.00"))
                         .totalOutstanding(new BigDecimal("1750.00"))
                         .build()))
                 .totals(AgingSummary.builder()
-                        .current(new BigDecimal("1250.00"))
+                        .notYetDue(new BigDecimal("1000.00"))
+                        .days1To30(new BigDecimal("250.00"))
                         .days31To60(new BigDecimal("500.00"))
                         .days61To90(new BigDecimal("0.00"))
                         .days90Plus(new BigDecimal("0.00"))
+                        .overdue(new BigDecimal("750.00"))
                         .totalOutstanding(new BigDecimal("1750.00"))
                         .build())
                 .build();
@@ -126,19 +131,29 @@ class AgedReportCsvRendererTest {
                 .rows(List.of(AgedPayablesRow.builder()
                         .vendorId(VENDOR_ID)
                         .vendorName("Global Parts Supply")
-                        .current(new BigDecimal("3200.00"))
+                        .notYetDue(new BigDecimal("2500.00"))
+                        .days1To30(new BigDecimal("700.00"))
                         .days31To60(new BigDecimal("750.00"))
                         .days61To90(new BigDecimal("0.00"))
                         .days90Plus(new BigDecimal("0.00"))
+                        .overdue(new BigDecimal("1450.00"))
                         .totalOutstanding(new BigDecimal("3950.00"))
+                        .unapproved(new BigDecimal("300.00"))
+                        .unapprovedBillCount(2)
+                        .totalIncludingUnapproved(new BigDecimal("4250.00"))
                         .build()))
                 .totals(AgingSummary.builder()
-                        .current(new BigDecimal("3200.00"))
+                        .notYetDue(new BigDecimal("2500.00"))
+                        .days1To30(new BigDecimal("700.00"))
                         .days31To60(new BigDecimal("750.00"))
                         .days61To90(new BigDecimal("0.00"))
                         .days90Plus(new BigDecimal("0.00"))
+                        .overdue(new BigDecimal("1450.00"))
                         .totalOutstanding(new BigDecimal("3950.00"))
                         .build())
+                .unapproved(new BigDecimal("300.00"))
+                .unapprovedBillCount(2)
+                .totalIncludingUnapproved(new BigDecimal("4250.00"))
                 .build();
     }
 }

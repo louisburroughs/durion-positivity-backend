@@ -7,6 +7,7 @@ import com.positivity.accounting.internal.dto.GLAccountResponse;
 import com.positivity.accounting.internal.dto.GLAccountUpdateRequest;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.enums.GLAccountStatus;
+import com.positivity.accounting.internal.enums.NormalSide;
 import com.positivity.accounting.internal.exception.AccountNotInactiveException;
 import com.positivity.accounting.internal.exception.AccountNotZeroBalanceException;
 import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
@@ -319,7 +320,8 @@ public class GLAccountServiceImpl implements GLAccountService {
     }
 
     /**
-     * Retrieves current balance (sum of posted debit/credit lines) for account.
+     * Retrieves current balance (sum of posted debit/credit lines) for account, debits minus credits,
+     * and the same figure on the account's normal side (CAP:550 S35, #2524).
      *
      * @param glAccountId account identifier
      * @return account balance response
@@ -335,11 +337,15 @@ public class GLAccountServiceImpl implements GLAccountService {
 
         BigDecimal balance = journalEntryLineRepository.getAccountBalance(glAccountId);
 
+        NormalSide normalSide = NormalSide.of(account.getAccountType());
         GLAccountBalanceResponse response = new GLAccountBalanceResponse();
         response.setGlAccountId(account.getGlAccountId());
         response.setAccountCode(account.getAccountCode());
         response.setAccountName(account.getAccountName());
+        response.setAccountType(account.getAccountType());
+        response.setNormalSide(normalSide);
         response.setBalance(balance);
+        response.setNormalBalance(normalSide.normalBalance(balance));
         response.setAsOfDate(Instant.now(clock));
 
         return response;

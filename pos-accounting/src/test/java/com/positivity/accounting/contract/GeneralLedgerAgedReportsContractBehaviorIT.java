@@ -120,7 +120,7 @@ class GeneralLedgerAgedReportsContractBehaviorIT extends BaseContractIntegration
     @Test
     @DisplayName("Aged Receivables reconciles open invoice balances into age buckets")
     void agedReceivablesReconciles() throws Exception {
-        saveInvoice("INV-1", "POSTED", new BigDecimal("1000.00"), AS_OF.minusDays(15)); // current
+        saveInvoice("INV-1", "POSTED", new BigDecimal("1000.00"), AS_OF.minusDays(15)); // 1-30
         saveInvoice("INV-2", "FINALIZED", new BigDecimal("500.00"), AS_OF.minusDays(45)); // 31-60
 
         mockMvc.perform(withAuth(get("/v1/accounting/reports/financial/aged-receivables"))
@@ -130,11 +130,16 @@ class GeneralLedgerAgedReportsContractBehaviorIT extends BaseContractIntegration
                 .andExpect(jsonPath("$.asOfDate").value("2026-06-30"))
                 .andExpect(jsonPath("$.rows.length()").value(1))
                 .andExpect(jsonPath("$.rows[0].customerId").value(CUSTOMER_ID.toString()))
-                .andExpect(jsonPath("$.rows[0].current").value(1000.00))
+                .andExpect(jsonPath("$.rows[0].current").doesNotExist())
+                .andExpect(jsonPath("$.rows[0].notYetDue").value(0))
+                .andExpect(jsonPath("$.rows[0].days1To30").value(1000.00))
                 .andExpect(jsonPath("$.rows[0].days31To60").value(500.00))
+                .andExpect(jsonPath("$.rows[0].overdue").value(1500.00))
                 .andExpect(jsonPath("$.rows[0].totalOutstanding").value(1500.00))
-                .andExpect(jsonPath("$.totals.current").value(1000.00))
+                .andExpect(jsonPath("$.totals.current").doesNotExist())
+                .andExpect(jsonPath("$.totals.days1To30").value(1000.00))
                 .andExpect(jsonPath("$.totals.days31To60").value(500.00))
+                .andExpect(jsonPath("$.totals.overdue").value(1500.00))
                 .andExpect(jsonPath("$.totals.totalOutstanding").value(1500.00));
     }
 
@@ -152,9 +157,16 @@ class GeneralLedgerAgedReportsContractBehaviorIT extends BaseContractIntegration
                 .andExpect(jsonPath("$.rows[0].vendorId").value(VENDOR_ID.toString()))
                 .andExpect(jsonPath("$.rows[0].vendorName").value("Global Parts Supply"))
                 .andExpect(jsonPath("$.rows[0].days61To90").value(800.00))
+                .andExpect(jsonPath("$.rows[0].overdue").value(800.00))
                 .andExpect(jsonPath("$.rows[0].totalOutstanding").value(800.00))
+                .andExpect(jsonPath("$.rows[0].unapproved").value(0))
+                .andExpect(jsonPath("$.rows[0].unapprovedBillCount").value(0))
+                .andExpect(jsonPath("$.rows[0].totalIncludingUnapproved").value(800.00))
                 .andExpect(jsonPath("$.totals.days61To90").value(800.00))
-                .andExpect(jsonPath("$.totals.totalOutstanding").value(800.00));
+                .andExpect(jsonPath("$.totals.totalOutstanding").value(800.00))
+                .andExpect(jsonPath("$.unapproved").value(0))
+                .andExpect(jsonPath("$.unapprovedBillCount").value(0))
+                .andExpect(jsonPath("$.totalIncludingUnapproved").value(800.00));
     }
 
     @Test
@@ -166,8 +178,7 @@ class GeneralLedgerAgedReportsContractBehaviorIT extends BaseContractIntegration
                       "format": "CSV",
                       "reportType": "%s",
                       "startDate": "2026-06-01",
-                      "endDate": "2026-06-30",
-                      "organizationId": "d10217f9-3ec6-46b9-9c87-e7066c100c24"
+                      "endDate": "2026-06-30"
                     }
                     """.formatted(reportType);
 

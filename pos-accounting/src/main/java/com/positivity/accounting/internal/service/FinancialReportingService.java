@@ -139,18 +139,16 @@ public interface FinancialReportingService {
      * account number.
      *
      * <p>
-     * <b>Line selection and status semantics (must match the trial-balance /
-     * drilldown queries — Story C2 note).</b> Only journal lines whose parent
-     * entry status is {@code POSTED} are included. An A3-REVERSED original entry
-     * (status {@code REVERSED}) is <em>excluded</em>, while its POSTED reversing
-     * entry <em>is</em> included; the reversing pair therefore nets to zero in
-     * both the running balance and the section totals. The domain slice MUST NOT
-     * special-case reversal linkage — filtering strictly on {@code POSTED} status
-     * yields the correct net-zero behavior for reversed/reversing pairs.
+     * <b>Line selection and status semantics (the same rule as the trial-balance /
+     * drilldown queries; issue #2308).</b> Journal lines of {@code POSTED} and
+     * {@code REVERSED} entries are included, each at its own transaction date, never
+     * {@code DRAFT}. A reversed original therefore stays visible beside its POSTED
+     * reversing entry, and the pair nets to zero in both the running balance and the
+     * section totals with no reversal-linkage special-casing.
      *
      * <p>
      * <b>Balances.</b> {@code openingBalance} is the signed net (debit positive)
-     * of POSTED activity strictly before {@code startDate}. Each line's
+     * of ledger activity (POSTED and REVERSED entries) strictly before {@code startDate}. Each line's
      * {@code runningBalance} is the opening balance plus the cumulative signed net
      * of in-period lines up to and including that line, ordered by transaction
      * date then entry number. {@code closingBalance} equals opening balance plus
@@ -158,8 +156,8 @@ public interface FinancialReportingService {
      * sections.
      *
      * <p>
-     * Returns empty {@code accounts} with zero grand totals when no POSTED
-     * activity exists in the range for the filter.
+     * Returns empty {@code accounts} with zero grand totals when no ledger
+     * activity (POSTED or REVERSED) exists in the range for the filter.
      *
      * @param accountId optional GL account UUID filter; {@code null} spans all
      *                  accounts

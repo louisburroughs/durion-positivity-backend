@@ -368,7 +368,7 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
 
         IncomeStatementReport report = asTenant(t2, () -> financialReportingService.generateIncomeStatement(day, day));
         assertThat(report.getTotalRevenue()).isEqualByComparingTo("1000.00");
-        assertThat(report.getLineItems().get("REVENUE")).isEqualByComparingTo("1000.00");
+        assertThat(report.getLineItems().get("IS_SALES")).isEqualByComparingTo("1000.00");
     }
 
     @Test
@@ -708,9 +708,10 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
                     statementLines.save(line);
                 }));
 
-        // S35 recodes the template's income-statement line for 4000 from REVENUE to IS_SALES.
+        // The seed ships 4000 on IS_SALES (S35, #2524); a later recode of that line, as S35 itself did
+        // from REVENUE, must reach only the untouched tenant.
         AccountingTemplate.StatementLine recoded = new AccountingTemplate.StatementLine(
-                StatementType.INCOME_STATEMENT, "4000", "IS_SALES", null, "Sales", 10, OperationType.SUM);
+                StatementType.INCOME_STATEMENT, "4000", "IS_REVENUE", null, "Revenue", 10, OperationType.SUM);
         AccountingTemplate recodedTemplate = AccountingTemplate.of(snapshot.entries().stream()
                 .map(entry -> entry.entryKey().equals(recoded.entryKey()) ? recoded : entry)
                 .toList());
@@ -721,15 +722,15 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
                 untouched,
                 () -> tx.executeWithoutResult(status -> {
                     StatementLineMapping line = incomeLine("4000");
-                    assertThat(line.getStatementLineCode()).isEqualTo("IS_SALES");
-                    assertThat(line.getLineDescription()).isEqualTo("Sales");
+                    assertThat(line.getStatementLineCode()).isEqualTo("IS_REVENUE");
+                    assertThat(line.getLineDescription()).isEqualTo("Revenue");
                     assertThat(line.getDisplayOrder()).isEqualTo(10);
                 }));
         asTenant(
                 renamed,
                 () -> tx.executeWithoutResult(status -> {
                     StatementLineMapping line = incomeLine("4000");
-                    assertThat(line.getStatementLineCode()).isEqualTo("REVENUE");
+                    assertThat(line.getStatementLineCode()).isEqualTo("IS_SALES");
                     assertThat(line.getLineDescription()).isEqualTo("Shop sales");
                 }));
         for (UUID tenant : List.of(untouched, renamed)) {
@@ -817,7 +818,7 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
         assertThat(platformBefore.get("mapping_key")).isEqualTo(31);
         assertThat(platformBefore.get("gl_mapping")).isEqualTo(31);
         assertThat(platformBefore.get("default_gl_mapping")).isEqualTo(1);
-        assertThat(platformBefore.get("statement_line_mappings")).isEqualTo(43);
+        assertThat(platformBefore.get("statement_line_mappings")).isEqualTo(54); // 42 Labor & Overhead + 12 (#2524)
     }
 
     // ------------------------------------------------------------------------------------------

@@ -86,6 +86,9 @@ class FinancialReportingServiceImplTest {
     @Mock
     private DatabaseDialectSupport databaseDialectSupport;
 
+    @Mock
+    private DisplayReferenceResolver displayReferenceResolver;
+
     private FinancialReportingServiceImpl service;
 
     @BeforeEach
@@ -103,6 +106,7 @@ class FinancialReportingServiceImplTest {
                 apPaymentAllocationRepository,
                 invoiceBalanceCalculator,
                 databaseDialectSupport,
+                displayReferenceResolver,
                 Clock.fixed(FIXED_NOW, ZoneOffset.UTC),
                 new com.positivity.accounting.internal.config.LedgerCurrency("USD"));
     }

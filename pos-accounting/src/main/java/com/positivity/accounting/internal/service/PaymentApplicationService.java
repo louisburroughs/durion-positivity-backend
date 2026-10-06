@@ -3,6 +3,8 @@ package com.positivity.accounting.internal.service;
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.dto.PaymentApplicationResponse;
 import com.positivity.accounting.internal.dto.PaymentApplicationReversalResponse;
+import com.positivity.accounting.internal.dto.RemainderCreditRequest;
+import com.positivity.accounting.internal.dto.RemainderCreditResponse;
 import com.positivity.accounting.internal.entity.ReceivablePayment;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -46,11 +48,26 @@ public interface PaymentApplicationService {
      * nothing.
      *
      * @param paymentId an {@code AVAILABLE} receivable payment
-     * @param creditRequestId idempotency key for the credit leg
-     * @return the credit issued, or {@code null} when the payment had nothing left to credit
+     * @param creditRequestId idempotency key for the credit leg; the credit records it (#2524), so a
+     *                        replay returns the credit it issued
+     * @return the credit issued (or issued earlier under this key), or {@code null} when the payment
+     *         had nothing left to credit
      */
     PaymentApplicationResponse.@Nullable CustomerCreditInfo creditUnappliedPayment(
             @NonNull UUID paymentId, @NonNull String creditRequestId);
+
+    /**
+     * Keep a payment's whole unapplied remainder as a customer credit on request (AD-003; CAP:550 S35,
+     * #2524). Idempotent on {@code requestId}; refused, writing nothing, when the payment is not
+     * {@code AVAILABLE}, is in another currency, or no longer carries exactly
+     * {@code expectedAmount} unapplied.
+     *
+     * @param paymentId the payment whose remainder to credit
+     * @param request   idempotency key and the remainder the caller expects
+     * @return the credit issued, or the one issued earlier under the same key
+     */
+    @NonNull
+    RemainderCreditResponse creditPaymentRemainder(@NonNull UUID paymentId, @NonNull RemainderCreditRequest request);
 
     void voidPayment(@NonNull UUID paymentId);
 

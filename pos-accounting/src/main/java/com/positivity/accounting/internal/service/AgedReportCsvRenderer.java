@@ -7,7 +7,6 @@ import com.positivity.accounting.internal.dto.AgedReceivablesRow;
 import com.positivity.accounting.internal.dto.AgingSummary;
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.List;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Component;
 
@@ -19,8 +18,9 @@ import org.springframework.stereotype.Component;
  * <p>Column and row order are fixed: metadata block (the export request's
  * {@code endDate} is used as the as-of date), per-party rows in the
  * deterministic order produced by the report DTO, with the aging-bucket columns
- * defined by the report DTOs (current / 31-60 / 61-90 / 90+), each row's total,
- * and a grand-total row.
+ * defined by the report DTOs (not yet due / 1-30 / 31-60 / 61-90 / 90+ / overdue),
+ * each row's total, and a grand-total row; receivables carry the customer name and
+ * number, payables the unaged bills not yet approved (CAP:550 S35, #2524).
  * All figures are emitted with {@link BigDecimal#toPlainString()} so the CSV
  * matches the JSON report to the cent. The volatile {@code generatedAt}
  * timestamp is intentionally excluded so identical report data always renders
@@ -29,7 +29,11 @@ import org.springframework.stereotype.Component;
 @Component
 public class AgedReportCsvRenderer {
 
-    private static final String BUCKET_COLUMNS = "Current (0-30),31-60 Days,61-90 Days,90+ Days,Total Outstanding";
+    private static final String BUCKET_COLUMNS =
+            "Not Yet Due,1-30 Days,31-60 Days,61-90 Days,90+ Days,Overdue,Total Outstanding";
+
+    /** Payables add the unaged bills not yet approved beside the buckets (AW11; CAP:550 S35, #2524). */
+    private static final String UNAPPROVED_COLUMNS = "Unapproved,Unapproved Bills,Total Incl. Unapproved";
 
     /**
      * Render the aged receivables report to CSV.
@@ -39,10 +43,32 @@ public class AgedReportCsvRenderer {
      */
     @NonNull
     public String render(@NonNull AgedReceivablesReport report) {
-        List<PartyAgingRow> rows =
-                report.getRows().stream().map(AgedReportCsvRenderer::toPartyRow).toList();
-        return renderAging(
-                "AGED_RECEIVABLES", "Customer ID,Customer Name", report.getAsOfDate(), rows, report.getTotals());
+        StringBuilder csv = header("AGED_RECEIVABLES", report.getAsOfDate());
+        csv.append("Customer ID,Customer Name,Customer Number,")
+                .append(BUCKET_COLUMNS)
+                .append('\n');
+        for (AgedReceivablesRow row : report.getRows()) {
+            csv.append(CsvFormat.escapeText(row.getCustomerId().toString()))
+                    .append(',')
+                    .append(CsvFormat.escapeText(row.getCustomerName()))
+                    .append(',')
+                    .append(CsvFormat.escapeText(row.getCustomerReference()))
+                    .append(',');
+            appendBuckets(
+                    csv,
+                    row.getNotYetDue(),
+                    row.getDays1To30(),
+                    row.getDays31To60(),
+                    row.getDays61To90(),
+                    row.getDays90Plus(),
+                    row.getOverdue(),
+                    row.getTotalOutstanding());
+            csv.append('\n');
+        }
+        csv.append("TOTAL,,,");
+        appendTotals(csv, report.getTotals());
+        csv.append('\n');
+        return csv.toString();
     }
 
     /**
@@ -53,83 +79,90 @@ public class AgedReportCsvRenderer {
      */
     @NonNull
     public String render(@NonNull AgedPayablesReport report) {
-        List<PartyAgingRow> rows =
-                report.getRows().stream().map(AgedReportCsvRenderer::toPartyRow).toList();
-        return renderAging("AGED_PAYABLES", "Vendor ID,Vendor Name", report.getAsOfDate(), rows, report.getTotals());
-    }
-
-    private static PartyAgingRow toPartyRow(AgedReceivablesRow row) {
-        return new PartyAgingRow(
-                row.getCustomerId().toString(),
-                row.getCustomerName(),
-                row.getCurrent(),
-                row.getDays31To60(),
-                row.getDays61To90(),
-                row.getDays90Plus(),
-                row.getTotalOutstanding());
-    }
-
-    private static PartyAgingRow toPartyRow(AgedPayablesRow row) {
-        return new PartyAgingRow(
-                row.getVendorId().toString(),
-                row.getVendorName(),
-                row.getCurrent(),
-                row.getDays31To60(),
-                row.getDays61To90(),
-                row.getDays90Plus(),
-                row.getTotalOutstanding());
-    }
-
-    private static String renderAging(
-            String reportKey, String partyHeader, LocalDate asOfDate, List<PartyAgingRow> rows, AgingSummary totals) {
-        StringBuilder csv = new StringBuilder();
-
-        csv.append("Report,As-Of Date\n");
-        csv.append(reportKey).append(',').append(asOfDate).append("\n\n");
-
-        csv.append(partyHeader).append(',').append(BUCKET_COLUMNS).append('\n');
-        for (PartyAgingRow row : rows) {
-            csv.append(CsvFormat.escapeText(row.partyId()))
+        StringBuilder csv = header("AGED_PAYABLES", report.getAsOfDate());
+        csv.append("Vendor ID,Vendor Name,")
+                .append(BUCKET_COLUMNS)
+                .append(',')
+                .append(UNAPPROVED_COLUMNS)
+                .append('\n');
+        for (AgedPayablesRow row : report.getRows()) {
+            csv.append(CsvFormat.escapeText(row.getVendorId().toString()))
                     .append(',')
-                    .append(CsvFormat.escapeText(row.partyName()))
+                    .append(CsvFormat.escapeText(row.getVendorName()))
+                    .append(',');
+            appendBuckets(
+                    csv,
+                    row.getNotYetDue(),
+                    row.getDays1To30(),
+                    row.getDays31To60(),
+                    row.getDays61To90(),
+                    row.getDays90Plus(),
+                    row.getOverdue(),
+                    row.getTotalOutstanding());
+            csv.append(',')
+                    .append(amount(row.getUnapproved()))
                     .append(',')
-                    .append(amount(row.current()))
+                    .append(row.getUnapprovedBillCount())
                     .append(',')
-                    .append(amount(row.days31To60()))
-                    .append(',')
-                    .append(amount(row.days61To90()))
-                    .append(',')
-                    .append(amount(row.days90Plus()))
-                    .append(',')
-                    .append(amount(row.totalOutstanding()))
+                    .append(amount(row.getTotalIncludingUnapproved()))
                     .append('\n');
         }
-        csv.append("TOTAL,,")
-                .append(amount(totals.getCurrent()))
+        csv.append("TOTAL,,");
+        appendTotals(csv, report.getTotals());
+        csv.append(',')
+                .append(amount(report.getUnapproved()))
                 .append(',')
-                .append(amount(totals.getDays31To60()))
+                .append(report.getUnapprovedBillCount())
                 .append(',')
-                .append(amount(totals.getDays61To90()))
-                .append(',')
-                .append(amount(totals.getDays90Plus()))
-                .append(',')
-                .append(amount(totals.getTotalOutstanding()))
+                .append(amount(report.getTotalIncludingUnapproved()))
                 .append('\n');
-
         return csv.toString();
+    }
+
+    private static StringBuilder header(String reportKey, LocalDate asOfDate) {
+        StringBuilder csv = new StringBuilder();
+        csv.append("Report,As-Of Date\n");
+        csv.append(reportKey).append(',').append(asOfDate).append("\n\n");
+        return csv;
+    }
+
+    private static void appendTotals(StringBuilder csv, AgingSummary totals) {
+        appendBuckets(
+                csv,
+                totals.getNotYetDue(),
+                totals.getDays1To30(),
+                totals.getDays31To60(),
+                totals.getDays61To90(),
+                totals.getDays90Plus(),
+                totals.getOverdue(),
+                totals.getTotalOutstanding());
+    }
+
+    private static void appendBuckets(
+            StringBuilder csv,
+            BigDecimal notYetDue,
+            BigDecimal days1To30,
+            BigDecimal days31To60,
+            BigDecimal days61To90,
+            BigDecimal days90Plus,
+            BigDecimal overdue,
+            BigDecimal totalOutstanding) {
+        csv.append(amount(notYetDue))
+                .append(',')
+                .append(amount(days1To30))
+                .append(',')
+                .append(amount(days31To60))
+                .append(',')
+                .append(amount(days61To90))
+                .append(',')
+                .append(amount(days90Plus))
+                .append(',')
+                .append(amount(overdue))
+                .append(',')
+                .append(amount(totalOutstanding));
     }
 
     private static String amount(BigDecimal value) {
         return CsvFormat.amount(value);
     }
-
-    /** Common shape of one aged AR/AP row: party identity plus the aging buckets. */
-    private record PartyAgingRow(
-            String partyId,
-            String partyName,
-            BigDecimal current,
-            BigDecimal days31To60,
-            BigDecimal days61To90,
-            BigDecimal days90Plus,
-            BigDecimal totalOutstanding) {}
 }

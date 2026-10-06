@@ -4,6 +4,8 @@ import com.positivity.accounting.internal.dto.PaymentApplicationListRow;
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.dto.PaymentApplicationResponse;
 import com.positivity.accounting.internal.dto.PaymentApplicationReversalRequest;
+import com.positivity.accounting.internal.dto.RemainderCreditRequest;
+import com.positivity.accounting.internal.dto.RemainderCreditResponse;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.PaymentApplicationQueryService;
 import com.positivity.accounting.internal.service.PaymentApplicationService;
@@ -45,6 +47,8 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * Endpoints:
  * - POST /payments/{paymentId}/applications - Apply payment to invoices
+ * - POST /payments/{paymentId}/remainder-credit - Keep a payment's unapplied remainder as a customer
+ *   credit (CAP:550 S35, #2524)
  * - POST /payment-applications/{applicationId}/reverse - Reverse application
  * - GET  /payment-applications - List applications by applied-date window (Wave 2 E10, issue
  *   #1598)
@@ -277,6 +281,84 @@ public class PaymentApplicationController {
                 response.getAppliedAmount(),
                 response.getApplications().size());
 
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    /**
+     * Keep a payment's unapplied remainder as a customer credit (AD-003; CAP:550 S35, #2524).
+     *
+     * <p>Behind {@code accounting:payment:apply}: crediting the leftover is a step of cash application
+     * on the payment, and apply already issues credits under this permission. Money leaving the shop
+     * stays behind {@code accounting:customer-credit:refund}.
+     */
+    @PostMapping("/payments/{paymentId}/remainder-credit")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:payment:apply"})
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.PAYMENT_APPLY + "')")
+    @Operation(
+            operationId = "creditPaymentRemainder",
+            summary = "Keep Payment Remainder As Customer Credit",
+            description = """
+                    Converts the whole unapplied remainder of a receivable payment into a customer credit in one \
+                    transaction: the credit is created, the Dr Undeposited Funds / Cr Customer Credit Liability \
+                    issuance is enqueued, and the payment becomes FULLY_APPLIED.
+                    Use this tool after applyPayment when the customer keeps the leftover on account, or when the \
+                    credit will be refunded next with refundCustomerCredit; do not use applyCustomerCredit, which \
+                    draws down a credit that already exists.
+                    Preconditions: the payment must be AVAILABLE, in the ledger currency, and still carry exactly \
+                    expectedAmount unapplied; a replay with the same requestId returns the credit it issued and \
+                    writes nothing.
+                    Required inputs: paymentId (UUID) as a path parameter, requestId (max 100 chars, the \
+                    idempotency key) and expectedAmount (the unapplied amount the caller read, min 0.01).
+                    Emits an ACCOUNTING_PAYMENT_REMAINDER_CREDIT event; the credit's creator and the issuance \
+                    entry's actor come from the security context.
+                    Returns 201 with the credit, 404 PAYMENT_NOT_FOUND when the payment does not exist, 409 \
+                    PAYMENT_NOT_AVAILABLE when it is already fully applied, 409 IDEMPOTENCY_CONFLICT when the \
+                    requestId was used on another payment, 409 OPTIMISTIC_LOCK after a second concurrent \
+                    update, 422 PAYMENT_REMAINDER_CHANGED when expectedAmount no longer matches (re-read the \
+                    payment), and 422 CURRENCY_NOT_SUPPORTED for a payment in another currency.
+                    """,
+            tags = {"Payment Applications"})
+    @ApiResponse(responseCode = "201", description = "Remainder credited; a replay returns the same credit")
+    @ApiResponse(
+            responseCode = "400",
+            description = "VALIDATION_ERROR: requestId missing or too long, expectedAmount missing or below 0.01",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "PAYMENT_NOT_FOUND",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "PAYMENT_NOT_AVAILABLE, IDEMPOTENCY_CONFLICT or OPTIMISTIC_LOCK",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "PAYMENT_REMAINDER_CHANGED or CURRENCY_NOT_SUPPORTED; nothing is written",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @EmitEvent(id = "ACCOUNTING_PAYMENT_REMAINDER_CREDIT", apiVersion = "1")
+    public ResponseEntity<RemainderCreditResponse> creditPaymentRemainder(
+            @Parameter(description = "Payment identifier") @PathVariable UUID paymentId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Idempotency key and the unapplied amount the caller expects to credit.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Keep 12.50 as credit",
+                                                            value =
+                                                                    "{\"requestId\":\"remainder-2026-10-06-017\",\"expectedAmount\":12.50}")))
+                    @Valid
+                    @RequestBody
+                    RemainderCreditRequest request) {
+        log.info(
+                "Crediting the remainder of payment(mask) {} (request(mask): {})",
+                maskForLog(paymentId),
+                maskForLog(request.getRequestId()));
+        RemainderCreditResponse response = paymentApplicationService.creditPaymentRemainder(paymentId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 

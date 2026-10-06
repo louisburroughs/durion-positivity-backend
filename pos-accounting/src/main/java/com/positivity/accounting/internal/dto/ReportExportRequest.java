@@ -15,7 +15,8 @@ import lombok.*;
 /**
  * Request to export a financial report asynchronously.
  *
- * Supports CSV and PDF formats for v1.0.
+ * Supports CSV and PDF formats for v1.0. The tenant comes from the caller's context, never from the
+ * body (ADR-0062; CAP:550 S35, #2524).
  */
 @Data
 @Builder
@@ -60,16 +61,6 @@ public class ReportExportRequest {
             example = "2026-03-31",
             requiredMode = REQUIRED)
     private LocalDate endDate;
-
-    /**
-     * Organization (tenant) scope for the export.
-     */
-    @NotNull(message = "organizationId is required")
-    @Schema(
-            description = "Organization UUID to scope the export",
-            example = "d10217f9-3ec6-46b9-9c87-e7066c100c24",
-            requiredMode = REQUIRED)
-    private UUID organizationId;
 
     /**
      * Optional GL account filter for GENERAL_LEDGER exports.

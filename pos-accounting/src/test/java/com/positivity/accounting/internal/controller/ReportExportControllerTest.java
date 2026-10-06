@@ -55,7 +55,6 @@ class ReportExportControllerTest extends BaseIntegrationTest {
     private static final String TEST_USER = "test-user";
 
     private static final UUID EXPORT_ID = UUID.fromString("a10217f9-3ec6-46b9-9c87-e7066c100c24");
-    private static final UUID ORG_ID = UUID.fromString("b10217f9-3ec6-46b9-9c87-e7066c100c24");
     private static final Instant REQUESTED_AT = Instant.parse("2025-01-01T10:00:00Z");
 
     @MockitoBean
@@ -71,7 +70,6 @@ class ReportExportControllerTest extends BaseIntegrationTest {
                 .reportType("JOURNAL_LINES")
                 .startDate(LocalDate.of(2025, 1, 1))
                 .endDate(LocalDate.of(2025, 3, 31))
-                .organizationId(ORG_ID)
                 .build();
 
         exportResponse = ReportExportResponse.builder()
@@ -124,7 +122,6 @@ class ReportExportControllerTest extends BaseIntegrationTest {
                     .reportType("JOURNAL_LINES")
                     .startDate(LocalDate.of(2025, 3, 31))
                     .endDate(LocalDate.of(2025, 1, 1))
-                    .organizationId(ORG_ID)
                     .build();
 
             mockMvc.perform(post(BASE_URL)

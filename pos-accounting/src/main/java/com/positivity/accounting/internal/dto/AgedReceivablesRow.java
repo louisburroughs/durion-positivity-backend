@@ -16,10 +16,11 @@ import org.jspecify.annotations.NonNull;
  * the report date. "Past due" is measured from the invoice's DUE date, falling
  * back to the invoice date when no due date is recorded (drafts, and replica rows
  * built from events predating due-date enrichment). Aged Payables applies the same
- * rule with the bill date as its fallback. An invoice not yet due has a negative
- * age and is reported in {@code current}; an invoice dated after the report date
- * did not yet exist and is not reported at all. All bucket amounts are
- * non-negative; {@code totalOutstanding} is their sum.
+ * rule with the bill date as its fallback. An invoice due today or later is
+ * {@code notYetDue}; the four late buckets hold overdue money and {@code overdue}
+ * is their sum (CAP:550 S35, #2524). An invoice dated after the report date did
+ * not yet exist and is not reported at all. All bucket amounts are non-negative;
+ * {@code totalOutstanding} = {@code notYetDue} + {@code overdue}.
  */
 @Data
 @Builder
@@ -28,7 +29,7 @@ import org.jspecify.annotations.NonNull;
 @Schema(
         description = "Per-customer aged receivables row with bucketed open invoice balances. Age is measured "
                 + "from the invoice due date, falling back to the invoice date when no due date is recorded; "
-                + "not-yet-due invoices are reported in the current bucket.")
+                + "invoices due today or later are notYetDue, the four late buckets are overdue money.")
 public class AgedReceivablesRow {
 
     /**
@@ -42,25 +43,41 @@ public class AgedReceivablesRow {
     private UUID customerId;
 
     /**
-     * Customer display name. Always {@code null} on this report today — the generator performs no
-     * directory lookup (see {@code FinancialReportingServiceImpl.generateAgedReceivables}).
-     * Consumers must resolve names from the customer directory by {@code customerId}.
+     * Customer display name from accounting's customer replica (ADR-0044 R3); null when the replica
+     * has not seen the party. Never an identifier (P8).
      */
     @Schema(
-            description = "Customer display name. Always null on this report — no directory lookup is "
-                    + "performed; resolve the name from the customer directory using customerId.",
+            description = "Customer display name from the customer replica; null when the party is not yet known",
+            example = "Acme Fleet Services",
             requiredMode = NOT_REQUIRED)
     private String customerName;
 
     /**
-     * Outstanding 0-30 days past due (includes not-yet-due).
+     * Customer number from accounting's customer replica; null when the replica has not seen the
+     * party. Never an identifier (P8).
      */
     @Schema(
-            description = "Outstanding 0-30 days past due (includes not-yet-due)",
-            example = "1250.00",
+            description = "Customer number from the customer replica; null when the party is not yet known",
+            example = "C-10042",
+            requiredMode = NOT_REQUIRED)
+    private String customerReference;
+
+    /**
+     * Outstanding not yet due: due today or later (due today is not overdue).
+     */
+    @Schema(
+            description = "Outstanding not yet due: due today or later (due today is not overdue)",
+            example = "1000.00",
             requiredMode = REQUIRED)
     @NonNull
-    private BigDecimal current;
+    private BigDecimal notYetDue;
+
+    /**
+     * Outstanding 1-30 days past due.
+     */
+    @Schema(description = "Outstanding 1-30 days past due", example = "250.00", requiredMode = REQUIRED)
+    @NonNull
+    private BigDecimal days1To30;
 
     /**
      * Outstanding 31-60 days past due.
@@ -84,10 +101,20 @@ public class AgedReceivablesRow {
     private BigDecimal days90Plus;
 
     /**
-     * Total outstanding for the customer across all buckets.
+     * Overdue: the sum of the four late buckets.
      */
     @Schema(
-            description = "Total outstanding for the customer across all buckets",
+            description = "Overdue: the sum of days1To30, days31To60, days61To90 and days90Plus",
+            example = "750.00",
+            requiredMode = REQUIRED)
+    @NonNull
+    private BigDecimal overdue;
+
+    /**
+     * Total outstanding for the customer: notYetDue + overdue.
+     */
+    @Schema(
+            description = "Total outstanding for the customer: notYetDue + overdue",
             example = "1750.00",
             requiredMode = REQUIRED)
     @NonNull

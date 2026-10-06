@@ -2,7 +2,9 @@ package com.positivity.accounting.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.config.DatabaseDialectSupport;
@@ -10,8 +12,10 @@ import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.dto.AccountDrilldownResponse;
 import com.positivity.accounting.internal.dto.BalanceSheetReport;
 import com.positivity.accounting.internal.dto.IncomeStatementReport;
+import com.positivity.accounting.internal.dto.TrialBalanceAccountTotal;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.entity.StatementLineMapping;
+import com.positivity.accounting.internal.enums.AccountSubtype;
 import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.accounting.internal.enums.OperationType;
 import com.positivity.accounting.internal.enums.StatementType;
@@ -31,7 +35,10 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -47,8 +54,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * (issue #2394): a line shows each account on its normal side, and the statement totals follow the
  * account's type rather than the statement line code.
  *
- * <p>Ledger balances are stubbed as the repository returns them, debits minus credits, so a
- * credit-normal account with activity is a negative number going in.
+ * <p>Ledger balances are stubbed as the grouped repository query returns them, debits minus
+ * credits, so a credit-normal account with activity is a negative number going in. Accounts with a
+ * balance and no mapping land on the computed lines (CAP:550 S35, #2524).
  */
 @ExtendWith(MockitoExtension.class)
 class FinancialReportingStatementClassificationTest {
@@ -92,10 +100,15 @@ class FinancialReportingStatementClassificationTest {
     @Mock
     private DatabaseDialectSupport databaseDialectSupport;
 
+    @Mock
+    private DisplayReferenceResolver displayReferenceResolver;
+
     private FinancialReportingServiceImpl service;
 
     private final List<GLAccount> accounts = new ArrayList<>();
     private final List<StatementLineMapping> mappings = new ArrayList<>();
+    /** Ledger balance per account, debits minus credits, as the grouped query reports it. */
+    private final Map<GLAccount, BigDecimal> balances = new LinkedHashMap<>();
 
     @BeforeEach
     void setUp() {
@@ -112,8 +125,19 @@ class FinancialReportingStatementClassificationTest {
                 apPaymentAllocationRepository,
                 invoiceBalanceCalculator,
                 databaseDialectSupport,
+                displayReferenceResolver,
                 Clock.fixed(Instant.parse("2026-09-01T12:00:00Z"), ZoneOffset.UTC),
                 new LedgerCurrency("USD"));
+        // The chart lookup answers for whichever ids the service asks about.
+        lenient().when(glAccountRepository.findAllById(any())).thenAnswer(invocation -> {
+            Collection<UUID> ids = new ArrayList<>();
+            for (UUID id : invocation.<Iterable<UUID>>getArgument(0)) {
+                ids.add(id);
+            }
+            return accounts.stream()
+                    .filter(account -> ids.contains(account.getGlAccountId()))
+                    .toList();
+        });
     }
 
     @Test
@@ -212,12 +236,7 @@ class FinancialReportingStatementClassificationTest {
         asOfAccount(AccountType.EQUITY, "-500.00", "CAPITAL", OperationType.NEGATE);
         asOfAccount(AccountType.REVENUE, "-1000.00", "CURRENT_EARNINGS", OperationType.SUM);
         asOfAccount(AccountType.EXPENSE, "400.00", "CURRENT_EARNINGS", OperationType.SUBTRACT);
-        when(statementLineMappingRepository.findByStatementTypeOrderByDisplayOrderAscStatementLineCodeAsc(
-                        StatementType.BALANCE_SHEET))
-                .thenReturn(mappings);
-        when(glAccountRepository.findAllById(any())).thenReturn(accounts);
-
-        BalanceSheetReport report = service.generateBalanceSheet(END);
+        BalanceSheetReport report = balanceSheet();
 
         assertThat(report.getLineItems().get("CASH")).isEqualByComparingTo("1500.00");
         assertThat(report.getLineItems().get("PAYABLES")).isEqualByComparingTo("400.00");
@@ -230,19 +249,155 @@ class FinancialReportingStatementClassificationTest {
     }
 
     @Test
+    @DisplayName("Balance sheet: an account with a balance and no mapping lands on the computed line for its type,"
+            + " a BANK_CASH asset on BS_IN_THE_BANK, revenue less expenses on BS_PROFIT_NOT_YET_CLOSED (#2524 AC1,"
+            + " AC3)")
+    void balanceSheetCollectsUnmappedAccountsOnComputedLines() {
+        // Named: 1000 on BS_IN_THE_BANK, 2000 on BS_BILLS_FROM_VENDORS.
+        asOfAccount(AccountType.ASSET, "1500.00", "BS_IN_THE_BANK", OperationType.SUM);
+        asOfAccount(AccountType.LIABILITY, "-400.00", "BS_BILLS_FROM_VENDORS", OperationType.SUM);
+        // Unmapped, with balances: a second bank account, a suspense liability, 2350-style, capital, and
+        // the period's revenue and expense.
+        GLAccount secondBank = unmapped(AccountType.ASSET, AccountSubtype.BANK_CASH, "250.00");
+        GLAccount receivable = unmapped(AccountType.ASSET, AccountSubtype.RECEIVABLE, "300.00");
+        GLAccount suspense = unmapped(AccountType.LIABILITY, AccountSubtype.CURRENT_LIABILITY, "-50.00");
+        GLAccount capital = unmapped(AccountType.EQUITY, null, "-500.00");
+        GLAccount sales = unmapped(AccountType.REVENUE, AccountSubtype.SALES, "-1400.00");
+        GLAccount rent = unmapped(AccountType.EXPENSE, AccountSubtype.OPERATING_EXPENSE, "300.00");
+        // Unmapped with a zero net balance: never lands anywhere.
+        GLAccount settled = unmapped(AccountType.LIABILITY, null, "0.00");
+
+        BalanceSheetReport report = balanceSheet();
+
+        assertThat(report.getLineItems())
+                .containsOnlyKeys(
+                        "BS_IN_THE_BANK",
+                        "BS_BILLS_FROM_VENDORS",
+                        "BS_OTHER_ASSETS",
+                        "BS_OTHER_LIABILITIES",
+                        "BS_OTHER_EQUITY",
+                        "BS_PROFIT_NOT_YET_CLOSED");
+        assertThat(report.getLineItems().get("BS_IN_THE_BANK")).isEqualByComparingTo("1750.00");
+        assertThat(report.getLineItems().get("BS_OTHER_ASSETS")).isEqualByComparingTo("300.00");
+        assertThat(report.getLineItems().get("BS_OTHER_LIABILITIES")).isEqualByComparingTo("50.00");
+        assertThat(report.getLineItems().get("BS_OTHER_EQUITY")).isEqualByComparingTo("500.00");
+        assertThat(report.getLineItems().get("BS_PROFIT_NOT_YET_CLOSED")).isEqualByComparingTo("1100.00");
+        assertThat(report.getTotalAssets()).isEqualByComparingTo("2050.00");
+        assertThat(report.getTotalLiabilities()).isEqualByComparingTo("450.00");
+        assertThat(report.getTotalEquity()).isEqualByComparingTo("1600.00");
+        assertThat(report.getBalanced()).isTrue();
+        assertThat(List.of(secondBank, receivable, suspense, capital, sales, rent, settled))
+                .hasSize(7);
+    }
+
+    @Test
+    @DisplayName("Balance sheet: computed lines appear only when non-empty; a mapped account without activity keeps"
+            + " its named line at zero")
+    void balanceSheetOmitsEmptyComputedLines() {
+        GLAccount cash = account(AccountType.ASSET);
+        map(cash, StatementType.BALANCE_SHEET, "BS_IN_THE_BANK", OperationType.SUM);
+
+        BalanceSheetReport report = balanceSheet();
+
+        assertThat(report.getLineItems()).containsOnlyKeys("BS_IN_THE_BANK");
+        assertThat(report.getLineItems().get("BS_IN_THE_BANK")).isEqualByComparingTo("0");
+        assertThat(report.getBalanced()).isTrue();
+    }
+
+    @Test
+    @DisplayName("Income statement: unmapped revenue lands on IS_OTHER_INCOME, unmapped expenses on IS_OTHER_EXPENSES,"
+            + " and net income covers them (#2524 AC2)")
+    void incomeStatementCollectsUnmappedAccountsOnComputedLines() {
+        periodAccount(AccountType.REVENUE, "-1000.00", "IS_SALES", OperationType.SUM);
+        periodAccount(AccountType.EXPENSE, "300.00", "IS_COST_OF_PARTS_SOLD", OperationType.SUM);
+        unmapped(AccountType.REVENUE, AccountSubtype.OTHER, "-40.00"); // 4930 Cash Over
+        unmapped(AccountType.REVENUE, null, "-60.00"); // 4940 Rubber Dust Sales: income, never an expense
+        unmapped(AccountType.EXPENSE, AccountSubtype.OPERATING_EXPENSE, "25.00"); // 6040 Cash Short
+        unmapped(AccountType.ASSET, AccountSubtype.BANK_CASH, "900.00"); // not this statement's kind
+
+        IncomeStatementReport report = incomeStatement();
+
+        assertThat(report.getLineItems())
+                .containsOnlyKeys("IS_SALES", "IS_COST_OF_PARTS_SOLD", "IS_OTHER_INCOME", "IS_OTHER_EXPENSES");
+        assertThat(report.getLineItems().get("IS_OTHER_INCOME")).isEqualByComparingTo("100.00");
+        assertThat(report.getLineItems().get("IS_OTHER_EXPENSES")).isEqualByComparingTo("25.00");
+        assertThat(report.getTotalRevenue()).isEqualByComparingTo("1100.00");
+        assertThat(report.getTotalExpenses()).isEqualByComparingTo("325.00");
+        assertThat(report.getNetIncome()).isEqualByComparingTo("775.00");
+    }
+
+    @Test
+    @DisplayName("Drill-down of a computed line lists the accounts it collected with code and type; a named"
+            + " BS_IN_THE_BANK drill-down adds the unmapped BANK_CASH accounts (#2524 AC3)")
+    void drilldownOfComputedLinesListsTheirAccounts() {
+        GLAccount cash = account(AccountType.ASSET);
+        cash.setAccountCode("1000");
+        cash.setAccountName("Cash");
+        balances.put(cash, new BigDecimal("1500.00"));
+        map(cash, StatementType.BALANCE_SHEET, "BS_IN_THE_BANK", OperationType.SUM);
+        GLAccount secondBank = unmapped(AccountType.ASSET, AccountSubtype.BANK_CASH, "250.00");
+        secondBank.setAccountCode("1010");
+        secondBank.setAccountName("Savings");
+        GLAccount receivable = unmapped(AccountType.ASSET, AccountSubtype.RECEIVABLE, "300.00");
+        receivable.setAccountCode("1250");
+        receivable.setAccountName("GST Recoverable");
+        GLAccount suspense = unmapped(AccountType.LIABILITY, AccountSubtype.CURRENT_LIABILITY, "-50.00");
+        suspense.setAccountCode("2350");
+        suspense.setAccountName("Settlement Suspense");
+        stubAsOfBalances();
+        when(statementLineMappingRepository.findByStatementLineCode("BS_IN_THE_BANK"))
+                .thenReturn(mappings);
+        when(statementLineMappingRepository.findByStatementLineCode("BS_OTHER_ASSETS"))
+                .thenReturn(List.of());
+        when(statementLineMappingRepository.findByStatementLineCode("BS_OTHER_LIABILITIES"))
+                .thenReturn(List.of());
+        when(statementLineMappingRepository.findByStatementTypeOrderByDisplayOrderAscStatementLineCodeAsc(
+                        StatementType.BALANCE_SHEET))
+                .thenReturn(mappings);
+
+        List<AccountDrilldownResponse> bank = service.drilldownToAccounts("BS_IN_THE_BANK", START, END);
+        List<AccountDrilldownResponse> otherAssets = service.drilldownToAccounts("BS_OTHER_ASSETS", START, END);
+        List<AccountDrilldownResponse> otherLiabilities =
+                service.drilldownToAccounts("BS_OTHER_LIABILITIES", START, END);
+
+        assertThat(bank).extracting(AccountDrilldownResponse::getAccountCode).containsExactly("1000", "1010");
+        assertThat(bank).extracting(AccountDrilldownResponse::getAccountName).containsExactly("Cash", "Savings");
+        assertThat(bank).extracting(AccountDrilldownResponse::getAccountType).containsOnly(AccountType.ASSET);
+        assertThat(bank.stream().map(AccountDrilldownResponse::getBalance).reduce(BigDecimal.ZERO, BigDecimal::add))
+                .isEqualByComparingTo("1750.00");
+        assertThat(otherAssets).singleElement().satisfies(row -> {
+            assertThat(row.getAccountCode()).isEqualTo("1250");
+            assertThat(row.getAccountType()).isEqualTo(AccountType.ASSET);
+            assertThat(row.getBalance()).isEqualByComparingTo("300.00");
+        });
+        assertThat(otherLiabilities).singleElement().satisfies(row -> {
+            assertThat(row.getAccountCode()).isEqualTo("2350");
+            assertThat(row.getAccountType()).isEqualTo(AccountType.LIABILITY);
+            assertThat(row.getBalance()).isEqualByComparingTo("50.00");
+        });
+        // A balance-sheet drill-down reads as-of balances, never period movement.
+        verify(journalEntryRepository, never()).sumPostedDebitsCreditsByAccountInRange(any(), any());
+    }
+
+    @Test
     @DisplayName("Drill-down rows carry the amount the account contributes to its line")
     void drilldownMatchesTheLine() {
         GLAccount revenue = account(AccountType.REVENUE);
+        revenue.setAccountCode("4000");
+        revenue.setAccountName("Service Revenue");
         stubPeriodBalance(revenue, "-1000.00");
-        map(revenue, StatementType.INCOME_STATEMENT, "REVENUE", OperationType.SUM);
-        when(statementLineMappingRepository.findByStatementLineCode("REVENUE")).thenReturn(mappings);
-        when(glAccountRepository.findAllById(any())).thenReturn(accounts);
+        map(revenue, StatementType.INCOME_STATEMENT, "IS_SALES", OperationType.SUM);
+        stubPeriodBalances();
+        when(statementLineMappingRepository.findByStatementLineCode("IS_SALES")).thenReturn(mappings);
 
-        List<AccountDrilldownResponse> rows = service.drilldownToAccounts("REVENUE", START, END);
+        List<AccountDrilldownResponse> rows = service.drilldownToAccounts("IS_SALES", START, END);
 
-        assertThat(rows)
-                .singleElement()
-                .satisfies(row -> assertThat(row.getBalance()).isEqualByComparingTo("1000.00"));
+        assertThat(rows).singleElement().satisfies(row -> {
+            assertThat(row.getBalance()).isEqualByComparingTo("1000.00");
+            assertThat(row.getAccountCode()).isEqualTo("4000");
+            assertThat(row.getAccountName()).isEqualTo("Service Revenue");
+            assertThat(row.getAccountType()).isEqualTo(AccountType.REVENUE);
+        });
     }
 
     /**
@@ -293,8 +448,53 @@ class FinancialReportingStatementClassificationTest {
         when(statementLineMappingRepository.findByStatementTypeOrderByDisplayOrderAscStatementLineCodeAsc(
                         StatementType.INCOME_STATEMENT))
                 .thenReturn(mappings);
-        when(glAccountRepository.findAllById(any())).thenReturn(accounts);
+        stubPeriodBalances();
         return service.generateIncomeStatement(START, END);
+    }
+
+    private BalanceSheetReport balanceSheet() {
+        when(statementLineMappingRepository.findByStatementTypeOrderByDisplayOrderAscStatementLineCodeAsc(
+                        StatementType.BALANCE_SHEET))
+                .thenReturn(mappings);
+        stubAsOfBalances();
+        return service.generateBalanceSheet(END);
+    }
+
+    /** The one grouped period query: every account with a stubbed balance, as the database returns it. */
+    private void stubPeriodBalances() {
+        when(journalEntryRepository.sumPostedDebitsCreditsByAccountInRange(any(), any()))
+                .thenReturn(totals());
+    }
+
+    /** The one grouped as-of query. */
+    private void stubAsOfBalances() {
+        when(journalEntryRepository.sumPostedDebitsCreditsByAccountAsOf(any())).thenReturn(totals());
+    }
+
+    private List<TrialBalanceAccountTotal> totals() {
+        return balances.entrySet().stream()
+                .map(entry -> {
+                    BigDecimal balance = entry.getValue();
+                    BigDecimal debit = balance.signum() >= 0 ? balance : BigDecimal.ZERO;
+                    BigDecimal credit = balance.signum() < 0 ? balance.negate() : BigDecimal.ZERO;
+                    return new TrialBalanceAccountTotal(
+                            entry.getKey().getGlAccountId(),
+                            entry.getKey().getAccountCode(),
+                            entry.getKey().getAccountName(),
+                            debit,
+                            credit);
+                })
+                .toList();
+    }
+
+    /** An account with a balance and no mapping on any statement. */
+    private GLAccount unmapped(AccountType type, AccountSubtype subtype, String debitsMinusCredits) {
+        GLAccount account = account(type);
+        account.setAccountSubtype(subtype);
+        account.setAccountCode(String.valueOf(1000 + accounts.size()));
+        account.setAccountName(type + " " + accounts.size());
+        balances.put(account, new BigDecimal(debitsMinusCredits));
+        return account;
     }
 
     /** An account with period activity, mapped onto one income statement line. */
@@ -307,8 +507,7 @@ class FinancialReportingStatementClassificationTest {
     /** An account with an as-of balance, mapped onto one balance sheet line. */
     private void asOfAccount(AccountType type, String debitsMinusCredits, String lineCode, OperationType operation) {
         GLAccount account = account(type);
-        when(journalEntryRepository.sumPostedBalanceAsOf(eq(account.getGlAccountId()), any()))
-                .thenReturn(new BigDecimal(debitsMinusCredits));
+        balances.put(account, new BigDecimal(debitsMinusCredits));
         map(account, StatementType.BALANCE_SHEET, lineCode, operation);
     }
 
@@ -320,8 +519,7 @@ class FinancialReportingStatementClassificationTest {
     }
 
     private void stubPeriodBalance(GLAccount account, String debitsMinusCredits) {
-        when(journalEntryRepository.sumPostedBalanceForAccount(eq(account.getGlAccountId()), any(), any()))
-                .thenReturn(new BigDecimal(debitsMinusCredits));
+        balances.put(account, new BigDecimal(debitsMinusCredits));
     }
 
     private void map(GLAccount account, StatementType statementType, String lineCode, OperationType operation) {

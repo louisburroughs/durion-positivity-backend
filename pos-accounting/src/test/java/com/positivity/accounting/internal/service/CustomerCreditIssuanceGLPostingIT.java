@@ -1,23 +1,34 @@
 package com.positivity.accounting.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.accounting.AccountingPostgresContainer;
 import com.positivity.accounting.internal.config.TestSecurityConfig;
 import com.positivity.accounting.internal.dto.CustomerCreditIssuanceGLPostingEvent;
+import com.positivity.accounting.internal.dto.CustomerCreditRefundRequest;
+import com.positivity.accounting.internal.dto.CustomerCreditReliefGLPostingEvent;
 import com.positivity.accounting.internal.dto.PaymentApplicationGLPostingEvent;
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
+import com.positivity.accounting.internal.dto.PaymentApplicationResponse;
+import com.positivity.accounting.internal.dto.RemainderCreditRequest;
+import com.positivity.accounting.internal.dto.RemainderCreditResponse;
 import com.positivity.accounting.internal.entity.EventOutbox;
 import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
+import com.positivity.accounting.internal.exception.IdempotencyConflictException;
+import com.positivity.accounting.internal.exception.PaymentNotAvailableException;
+import com.positivity.accounting.internal.exception.PaymentRemainderChangedException;
 import com.positivity.accounting.internal.handler.CustomerCreditIssuanceGLPostingEventHandler;
+import com.positivity.accounting.internal.handler.CustomerCreditReliefGLPostingEventHandler;
 import com.positivity.accounting.internal.handler.PaymentApplicationGLPostingEventHandler;
 import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.CustomerCreditRepository;
+import com.positivity.accounting.internal.repository.CustomerCreditTransactionRepository;
 import com.positivity.accounting.internal.repository.EventOutboxRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
@@ -85,6 +96,19 @@ class CustomerCreditIssuanceGLPostingIT {
     private PaymentApplicationServiceImpl paymentApplicationService;
 
     @Autowired
+    private CustomerCreditService customerCreditService;
+
+    /** The {@code @Primary} retrying decorator, the bean the controller calls. */
+    @Autowired
+    private PaymentApplicationService retryingPaymentApplicationService;
+
+    @Autowired
+    private CustomerCreditReliefGLPostingEventHandler reliefHandler;
+
+    @Autowired
+    private CustomerCreditTransactionRepository creditTransactionRepository;
+
+    @Autowired
     private PaymentApplicationGLPostingEventHandler cashReceiptHandler;
 
     @Autowired
@@ -138,6 +162,7 @@ class CustomerCreditIssuanceGLPostingIT {
         sequenceRepository.deleteAll();
         outboxRepository.deleteAll();
         idempotencyKeyRepository.deleteAll();
+        creditTransactionRepository.deleteAll();
         customerCreditRepository.deleteAll();
         paymentApplicationRepository.deleteAll();
         receivablePaymentRepository.deleteAll();
@@ -235,6 +260,189 @@ class CustomerCreditIssuanceGLPostingIT {
         assertThat(journalEntryRepository.count()).isEqualTo(1);
     }
 
+    // ===== Remainder credit (CAP:550 S35, #2524) =====
+
+    @Test
+    @DisplayName("#2524 AC8: crediting a 12.50 remainder issues one credit, posts Dr 1090 / Cr 2300, moves the payment"
+            + " to FULLY_APPLIED, and a later refund posts Dr 2300 / Cr 1090")
+    void remainderCredit_postsIssuanceAndLaterRefundRelief() {
+        UUID invoiceId = seedFinalizedInvoice(new BigDecimal("100.00"));
+        UUID paymentId = seedAvailablePayment(new BigDecimal("112.50"));
+        paymentApplicationService.applyPaymentToInvoices(
+                paymentId, request(UUID.randomUUID().toString(), invoiceId, new BigDecimal("100.00")));
+        assertThat(receivablePaymentRepository.findById(paymentId).orElseThrow().getUnappliedAmount())
+                .isEqualByComparingTo("12.50");
+
+        RemainderCreditResponse response = paymentApplicationService.creditPaymentRemainder(
+                paymentId, remainder("remainder-ac8", new BigDecimal("12.50")));
+
+        assertThat(response.getAmount()).isEqualByComparingTo("12.50");
+        assertThat(response.getRemainingAmount()).isEqualByComparingTo("0");
+        assertThat(response.getCurrency()).isEqualTo("USD");
+        assertThat(response.getPaymentId()).isEqualTo(paymentId);
+        assertThat(response.getRequestId()).isEqualTo("remainder-ac8");
+        ReceivablePayment payment =
+                receivablePaymentRepository.findById(paymentId).orElseThrow();
+        assertThat(payment.getStatus()).isEqualTo(ReceivablePaymentStatus.FULLY_APPLIED);
+        assertThat(payment.getUnappliedAmount()).isEqualByComparingTo("0");
+        assertThat(customerCreditRepository.findById(response.getCreditId()))
+                .get()
+                .satisfies(credit -> {
+                    assertThat(credit.getAmount()).isEqualByComparingTo("12.50");
+                    assertThat(credit.getRequestId()).isEqualTo("REMAINDER:remainder-ac8");
+                    assertThat(credit.getSourcePaymentId()).isEqualTo(paymentId);
+                });
+
+        drainOutbox();
+
+        UUID undepositedFunds = accountId("1090");
+        UUID creditLiability = accountId("2300");
+        Map<UUID, BigDecimal> debits = new HashMap<>();
+        Map<UUID, BigDecimal> credits = new HashMap<>();
+        sumLines(debits, credits);
+        // Cash receipt: Dr 1090 100 / Cr 1200 100. Issuance: Dr 1090 12.50 / Cr 2300 12.50.
+        assertThat(debits.getOrDefault(undepositedFunds, BigDecimal.ZERO)).isEqualByComparingTo("112.50");
+        assertThat(credits.getOrDefault(creditLiability, BigDecimal.ZERO)).isEqualByComparingTo("12.50");
+        assertThat(journalEntryRepository.count()).isEqualTo(2);
+
+        // The refund path on that creditId (EXISTING refundCustomerCredit): Dr 2300 / Cr 1090.
+        customerCreditService.refundCredit(
+                response.getCreditId(),
+                CustomerCreditRefundRequest.builder()
+                        .requestId("refund-ac8")
+                        .amount(new BigDecimal("12.50"))
+                        .build(),
+                "s35-it");
+        drainOutbox();
+        Map<UUID, BigDecimal> debitsAfterRefund = new HashMap<>();
+        Map<UUID, BigDecimal> creditsAfterRefund = new HashMap<>();
+        sumLines(debitsAfterRefund, creditsAfterRefund);
+        assertThat(debitsAfterRefund.getOrDefault(creditLiability, BigDecimal.ZERO))
+                .isEqualByComparingTo("12.50");
+        assertThat(creditsAfterRefund.getOrDefault(undepositedFunds, BigDecimal.ZERO))
+                .isEqualByComparingTo("12.50");
+        assertThat(journalEntryRepository.count()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("#2524 AC9: a replay returns the same credit and writes nothing; the requestId on another payment is"
+            + " IDEMPOTENCY_CONFLICT; an apply key equal to a remainder key posts both issuance entries; an apply"
+            + " replay returns its customerCredit")
+    void remainderCredit_idempotencyAndNamespacing() {
+        // An apply whose key equals the remainder key below, overpaying so it issues a credit.
+        UUID invoiceId = seedFinalizedInvoice(new BigDecimal("40.00"));
+        UUID overpaid = seedAvailablePayment(new BigDecimal("100.00"));
+        PaymentApplicationResponse applied = paymentApplicationService.applyPaymentToInvoices(
+                overpaid, request("shared-key", invoiceId, new BigDecimal("100.00")));
+        assertThat(applied.getCustomerCredit()).isNotNull();
+
+        // A payment with nothing to apply, credited whole under the same key.
+        UUID idle = seedAvailablePayment(new BigDecimal("12.50"));
+        RemainderCreditResponse first = paymentApplicationService.creditPaymentRemainder(
+                idle, remainder("shared-key", new BigDecimal("12.50")));
+        long creditsAfterFirst = customerCreditRepository.count();
+        long outboxAfterFirst = outboxRepository.count();
+
+        // Replay: same credit, nothing written.
+        RemainderCreditResponse replay = paymentApplicationService.creditPaymentRemainder(
+                idle, remainder("shared-key", new BigDecimal("12.50")));
+        assertThat(replay.getCreditId()).isEqualTo(first.getCreditId());
+        assertThat(customerCreditRepository.count()).isEqualTo(creditsAfterFirst);
+        assertThat(outboxRepository.count()).isEqualTo(outboxAfterFirst);
+
+        // The same requestId on another payment is refused.
+        UUID other = seedAvailablePayment(new BigDecimal("5.00"));
+        assertThatThrownBy(() -> paymentApplicationService.creditPaymentRemainder(
+                        other, remainder("shared-key", new BigDecimal("5.00"))))
+                .isInstanceOf(IdempotencyConflictException.class);
+        assertThat(receivablePaymentRepository.findById(other).orElseThrow().getStatus())
+                .isEqualTo(ReceivablePaymentStatus.AVAILABLE);
+
+        // Both issuance work items post: the keys are namespaced (APPLY: vs REMAINDER:).
+        drainOutbox();
+        UUID creditLiability = accountId("2300");
+        Map<UUID, BigDecimal> credits = new HashMap<>();
+        sumLines(new HashMap<>(), credits);
+        assertThat(credits.getOrDefault(creditLiability, BigDecimal.ZERO)).isEqualByComparingTo("72.50"); // 60 + 12.50
+        assertThat(journalEntryRepository.count()).isEqualTo(3); // cash receipt + two issuances
+
+        // An apply replay returns the credit it issued.
+        PaymentApplicationResponse appliedReplay = paymentApplicationService.applyPaymentToInvoices(
+                overpaid, request("shared-key", invoiceId, new BigDecimal("100.00")));
+        assertThat(appliedReplay.getCustomerCredit()).isNotNull();
+        assertThat(appliedReplay.getCustomerCredit().getCreditId())
+                .isEqualTo(applied.getCustomerCredit().getCreditId());
+        assertThat(customerCreditRepository.findById(applied.getCustomerCredit().getCreditId()))
+                .get()
+                .satisfies(credit -> assertThat(credit.getRequestId()).isEqualTo("APPLY:shared-key"));
+    }
+
+    @Test
+    @DisplayName("#2524 AC10: a stale expectedAmount is PAYMENT_REMAINDER_CHANGED and a FULLY_APPLIED payment"
+            + " PAYMENT_NOT_AVAILABLE; nothing is written")
+    void remainderCredit_refusals() {
+        UUID paymentId = seedAvailablePayment(new BigDecimal("12.50"));
+
+        assertThatThrownBy(() -> paymentApplicationService.creditPaymentRemainder(
+                        paymentId, remainder("stale", new BigDecimal("10.00"))))
+                .isInstanceOf(PaymentRemainderChangedException.class);
+        assertThat(customerCreditRepository.count()).isZero();
+        assertThat(outboxRepository.count()).isZero();
+
+        paymentApplicationService.creditPaymentRemainder(paymentId, remainder("fresh", new BigDecimal("12.50")));
+        assertThatThrownBy(() -> paymentApplicationService.creditPaymentRemainder(
+                        paymentId, remainder("again", new BigDecimal("12.50"))))
+                .isInstanceOf(PaymentNotAvailableException.class);
+        assertThat(customerCreditRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("#2524 AC9 under concurrency: two simultaneous requests with the same requestId both return the same"
+            + " credit, and exactly one credit and one issuance work item exist")
+    void remainderCredit_concurrentSameRequestId_replaysTheWinner() throws Exception {
+        for (int round = 0; round < 5; round++) {
+            UUID paymentId = seedAvailablePayment(new BigDecimal("12.50"));
+            String requestId = "race-" + round + "-" + UUID.randomUUID();
+            java.util.concurrent.CyclicBarrier start = new java.util.concurrent.CyclicBarrier(2);
+            java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+            try {
+                java.util.concurrent.Callable<RemainderCreditResponse> call = () -> {
+                    start.await();
+                    return retryingPaymentApplicationService.creditPaymentRemainder(
+                            paymentId, remainder(requestId, new BigDecimal("12.50")));
+                };
+                java.util.concurrent.Future<RemainderCreditResponse> first = pool.submit(call);
+                java.util.concurrent.Future<RemainderCreditResponse> second = pool.submit(call);
+                RemainderCreditResponse a = first.get(30, java.util.concurrent.TimeUnit.SECONDS);
+                RemainderCreditResponse b = second.get(30, java.util.concurrent.TimeUnit.SECONDS);
+
+                assertThat(a.getCreditId())
+                        .as("round %s: both callers get the same credit", round)
+                        .isEqualTo(b.getCreditId());
+                assertThat(customerCreditRepository.findBySourcePaymentId(paymentId))
+                        .as("round %s: one credit row", round)
+                        .hasSize(1);
+                assertThat(outboxRepository.findAll().stream()
+                                .filter(o -> CustomerCreditIssuanceGLPostingEvent.class
+                                        .getName()
+                                        .equals(o.getEventType()))
+                                .filter(o -> o.getPayload().contains("REMAINDER:" + requestId))
+                                .count())
+                        .as("round %s: one issuance work item", round)
+                        .isEqualTo(1);
+            } finally {
+                pool.shutdownNow();
+            }
+        }
+    }
+
+    private static RemainderCreditRequest remainder(String requestId, BigDecimal expectedAmount) {
+        return RemainderCreditRequest.builder()
+                .requestId(requestId)
+                .expectedAmount(expectedAmount)
+                .build();
+    }
+
     // ===== helpers =====
 
     /** Drain all pending outbox work items through their handlers (deterministic, no scheduler). */
@@ -253,6 +461,9 @@ class CustomerCreditIssuanceGLPostingIT {
             } else if (CustomerCreditIssuanceGLPostingEvent.class.getName().equals(type)) {
                 issuanceHandler.onCustomerCreditIssuanceGLPosting(
                         objectMapper.readValue(outbox.getPayload(), CustomerCreditIssuanceGLPostingEvent.class));
+            } else if (CustomerCreditReliefGLPostingEvent.class.getName().equals(type)) {
+                reliefHandler.onCustomerCreditReliefGLPosting(
+                        objectMapper.readValue(outbox.getPayload(), CustomerCreditReliefGLPostingEvent.class));
             } else {
                 throw new IllegalStateException("Unexpected outbox event type: " + type);
             }
