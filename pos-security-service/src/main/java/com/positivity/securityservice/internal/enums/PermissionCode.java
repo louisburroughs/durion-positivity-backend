@@ -1032,13 +1032,19 @@ public enum PermissionCode {
     // scripts/generate-permissions.sh --sync cannot discover them — hand assigned here immediately
     // after the batch --sync just registered, as #2226 did for bits 540-541.
     INVOICE__PAYMENT__FLOW_SELECT(546, "invoice:payment:flow_select"),
-    INVOICE__PAYMENT__LIMIT_OVERRIDE(547, "invoice:payment:limit_override");
+    INVOICE__PAYMENT__LIMIT_OVERRIDE(547, "invoice:payment:limit_override"),
+    // ── Accounting (new) ───────────────────────────────────────────────────────
+    // CAP:550 S3 (#2504): registered ahead of its endpoint (AD-004, depends on OI-8) and granted to
+    // no role until that endpoint enforces it. No @PreAuthorize names it yet, so
+    // scripts/generate-permissions.sh --sync cannot discover it — assigned with the script's own
+    // catalog-sync functions, as bits 540-541 and 546-547 were hand assigned.
+    ACCOUNTING__PAYMENT__ASSIGN_CUSTOMER(548, "accounting:payment:assign-customer");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 96;
+    public static final int CATALOG_VERSION = 97;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

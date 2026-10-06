@@ -645,7 +645,7 @@
       "fixture_id": "ws-accounting-postjournalentry-23",
       "utterance": "Post journal entry JE-4000.",
       "actor": {
-        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "role": "ROLE_ACCOUNTING_CLERK",
         "permission_codes": [
           "accounting:je:post"
         ]
@@ -673,7 +673,7 @@
       "fixture_id": "ws-accounting-closeperiod-24",
       "utterance": "Close the current accounting period.",
       "actor": {
-        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "role": "ROLE_ACCOUNTING_CLERK",
         "permission_codes": [
           "accounting:period:close"
         ]
@@ -787,7 +787,7 @@
       "fixture_id": "ws-tax-settaxmode-28",
       "utterance": "Set the tax mode for this location to inclusive.",
       "actor": {
-        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "role": "ROLE_ACCOUNTING_CLERK",
         "permission_codes": [
           "tax:mode:manage"
         ]

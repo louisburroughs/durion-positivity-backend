@@ -357,7 +357,7 @@
       "fixture_id": "ts-accountingfacadetool-pos-1",
       "utterance": "Show the chart of accounts.",
       "actor": {
-        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "role": "ROLE_ACCOUNTING_CLERK",
         "permission_codes": [
           "accounting:coa:view",
           "accounting:je:view"
@@ -380,7 +380,7 @@
       "fixture_id": "ts-accountingfacadetool-pos-2",
       "utterance": "Look up journal entry JE-4000.",
       "actor": {
-        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "role": "ROLE_ACCOUNTING_CLERK",
         "permission_codes": [
           "accounting:coa:view",
           "accounting:je:view"
@@ -403,7 +403,7 @@
       "fixture_id": "ts-accountingfacadetool-pos-3",
       "utterance": "What's the balance of the AR control account?",
       "actor": {
-        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "role": "ROLE_ACCOUNTING_CLERK",
         "permission_codes": [
           "accounting:coa:view",
           "accounting:je:view"
@@ -426,7 +426,7 @@
       "fixture_id": "ts-accountingfacadetool-pos-4",
       "utterance": "List the accounting periods.",
       "actor": {
-        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "role": "ROLE_ACCOUNTING_CLERK",
         "permission_codes": [
           "accounting:coa:view",
           "accounting:je:view"
@@ -1153,7 +1153,7 @@
       "fixture_id": "ts-taxfacadetool-pos-1",
       "utterance": "What's the tax mode for this location?",
       "actor": {
-        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "role": "ROLE_ACCOUNTING_CLERK",
         "permission_codes": [
           "reporting:view:financial-statements"
         ],
@@ -1175,7 +1175,7 @@
       "fixture_id": "ts-taxfacadetool-pos-2",
       "utterance": "Show the tax rate for parts.",
       "actor": {
-        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "role": "ROLE_ACCOUNTING_CLERK",
         "permission_codes": [
           "reporting:view:financial-statements"
         ],
@@ -1197,7 +1197,7 @@
       "fixture_id": "ts-taxfacadetool-pos-3",
       "utterance": "How is labor taxed in this jurisdiction?",
       "actor": {
-        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "role": "ROLE_ACCOUNTING_CLERK",
         "permission_codes": [
           "reporting:view:financial-statements"
         ],
@@ -1219,7 +1219,7 @@
       "fixture_id": "ts-taxfacadetool-pos-4",
       "utterance": "List the configured tax categories.",
       "actor": {
-        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "role": "ROLE_ACCOUNTING_CLERK",
         "permission_codes": [
           "reporting:view:financial-statements"
         ],

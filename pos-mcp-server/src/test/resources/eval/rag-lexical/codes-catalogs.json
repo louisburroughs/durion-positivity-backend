@@ -41,7 +41,7 @@
     {
       "fixture_id": "rag-lexical-accounting-codes-manual-je-reasons",
       "query": "ACCRUAL_ADJUSTMENT ERROR_CORRECTION RECLASSIFICATION",
-      "actor": { "role": "ROLE_ACCOUNTING_ASSOCIATE", "permission_codes": ["accounting:je:view"] },
+      "actor": { "role": "ROLE_ACCOUNTING_CLERK", "permission_codes": ["accounting:je:view"] },
       "expected": { "doc_ids": ["accounting.codes"], "k": 5 },
       "rag_scope": "accounting",
       "tags": ["positive", "lexical", "exact-code", "bare-token", "gated"],
@@ -50,7 +50,7 @@
     {
       "fixture_id": "rag-lexical-accounting-je-error-tokens",
       "query": "JE_ALREADY_REVERSED PERIOD_HARD_LOCKED",
-      "actor": { "role": "ROLE_ACCOUNTING_ASSOCIATE", "permission_codes": ["accounting:je:view"] },
+      "actor": { "role": "ROLE_ACCOUNTING_CLERK", "permission_codes": ["accounting:je:view"] },
       "expected": { "doc_ids": ["accounting.journal-entries"], "k": 5 },
       "rag_scope": "accounting",
       "tags": ["positive", "lexical", "exact-code", "bare-token", "gated"],

@@ -6,12 +6,14 @@ import static com.positivity.tenancy.testing.TenantTestSupport.asTenant;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.securityservice.internal.dto.RoleTemplateReconcileResponse;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.exception.TemplateRoleImmutableException;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
 import com.positivity.securityservice.internal.service.RoleManagementService;
 import com.positivity.securityservice.internal.service.RoleTemplateEntry;
+import com.positivity.securityservice.internal.service.RoleTemplateReconciliationService;
 import com.positivity.securityservice.internal.service.RoleTemplateService;
 import com.positivity.securityservice.internal.service.TenantProvisioningService;
 import com.positivity.tenancy.PlatformTenant;
@@ -35,11 +37,17 @@ import org.springframework.jdbc.core.JdbcTemplate;
  */
 class TenantProvisioningIT extends PostgresTenancyTestBase {
 
-    /** The six floor roles plus SUPPORT, the read-only role an impersonation token carries (WS2b-4). */
+    /**
+     * The six floor roles plus SUPPORT, the read-only role an impersonation token carries (WS2b-4),
+     * plus the two accounting-workspace roles of CAP:550 S3 (#2504, AW4): ACCOUNTING_CLERK and
+     * GENERAL_MANAGER. Sorted by name, as {@code RoleTemplateService.snapshot} returns them.
+     */
     private static final List<String> FLOOR = List.of(
+            "ACCOUNTING_CLERK",
             "ADMIN",
             "CONTROLLER",
             "DISPATCHER",
+            "GENERAL_MANAGER",
             "SELF_SERVICE_CUSTOMER",
             "SHOP_MANAGER",
             "SUPPORT",
@@ -62,6 +70,9 @@ class TenantProvisioningIT extends PostgresTenancyTestBase {
 
     @Autowired
     private RoleManagementService roleManagementService;
+
+    @Autowired
+    private RoleTemplateReconciliationService reconciliationService;
 
     @Autowired
     private RoleRepository roles;
@@ -160,6 +171,125 @@ class TenantProvisioningIT extends PostgresTenancyTestBase {
                                 "SELECT count(*) FROM users WHERE username = ?", Integer.class, email))
                         .as("alpha did not receive the administrator")
                         .isZero());
+    }
+
+    /**
+     * CAP:550 S3 criteria 1, 2, 6 and 8 (#2504): the template carries ACCOUNTING_CLERK and
+     * GENERAL_MANAGER with the phase-1 grants, a provisioned tenant receives them with the same
+     * grants, no clerk holds {@code accounting:ap:pay} (BR-1), and both refuse delete (BR-2).
+     */
+    @Test
+    void theAccountingRolesAreTemplateRolesWithThePhaseOneGrantsAndRefuseDelete() {
+        List<RoleTemplateEntry> template = asTenant(PlatformTenant.ID, roleTemplateService::snapshot);
+        Map<String, RoleTemplateEntry> byName =
+                template.stream().collect(java.util.stream.Collectors.toMap(RoleTemplateEntry::name, e -> e));
+
+        RoleTemplateEntry clerk = byName.get("ACCOUNTING_CLERK");
+        assertThat(clerk).isNotNull();
+        assertThat(clerk.permissionNames())
+                .contains("accounting:payment:apply", "accounting:reconciliation:adjust", "accounting:ap:view")
+                .doesNotContain("accounting:ap:pay", "accounting:reconciliation:approve");
+        assertThat(clerk.mcpPersonaEligible()).isTrue();
+        assertThat(clerk.personaTitle()).isEqualTo("accounting clerk");
+        assertThat(byName.get("GENERAL_MANAGER").permissionNames())
+                .contains("accounting:payment:apply", "accounting:ap:pay", "accounting:ap:view");
+        assertThat(byName.get("CONTROLLER").permissionNames())
+                .contains("accounting:payment:apply", "accounting:ap:pay", "accounting:reconciliation:approve");
+
+        // Alpha (the template's source) and the platform copy carry the same clerk grants.
+        JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
+        List<String> alphaClerk = owner.queryForList("""
+                SELECT p.name FROM role_permissions rp
+                  JOIN roles r ON r.id = rp.role_id JOIN permissions p ON p.id = rp.permission_id
+                 WHERE r.tenant_id = ? AND r.name = 'ACCOUNTING_CLERK' ORDER BY p.name
+                """, String.class, TENANT_A);
+        assertThat(alphaClerk).containsExactlyInAnyOrderElementsOf(clerk.permissionNames());
+        assertThat(owner.queryForList(
+                        "SELECT template_key FROM roles WHERE tenant_id = ? AND name IN ('ACCOUNTING_CLERK', 'GENERAL_MANAGER')",
+                        String.class,
+                        TENANT_A))
+                .containsExactlyInAnyOrder("ACCOUNTING_CLERK", "GENERAL_MANAGER");
+
+        UUID tenant = UUID.randomUUID();
+        String email = "owner-" + UUID.randomUUID() + "@acme.example";
+        asTenant(tenant, () -> provisioningService.provision(tenant, email, template));
+        asTenant(tenant, () -> {
+            for (String name : List.of("ACCOUNTING_CLERK", "GENERAL_MANAGER")) {
+                Role role = roles.findByName(name).orElseThrow();
+                assertThat(role.getTemplateKey()).isEqualTo(name);
+                assertThat(role.getPermissions())
+                        .hasSize(byName.get(name).permissionNames().size());
+                assertThatThrownBy(() -> roleManagementService.deleteRole(role.getId()))
+                        .as("%s is a template role: 409 ROLE_TEMPLATE_IMMUTABLE", name)
+                        .isInstanceOf(TemplateRoleImmutableException.class);
+            }
+        });
+    }
+
+    /**
+     * CAP:550 S3 criterion 7 (#2504): a tenant provisioned before this story holds the seven older
+     * template roles and a CONTROLLER without {@code accounting:payment:apply}; one
+     * {@code reconcile-template} run gives it both accounting roles and CONTROLLER's new grant, and
+     * a second run changes nothing. This is the post-deployment step the operator runs for every
+     * existing tenant other than alpha.
+     */
+    @Test
+    void reconcilingAnExistingTenantAddsTheAccountingRolesAndControllersNewGrant() {
+        UUID tenant = UUID.randomUUID();
+        JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
+        owner.update(
+                "INSERT INTO ext_tenant (tenant_id, slug, display_name, status, aggregate_version, updated_at) "
+                        + "VALUES (?, ?, 'Pre-S3 tenant', 'ACTIVE', 1, now())",
+                tenant,
+                "pre-s3-" + tenant.toString().substring(0, 8));
+
+        // The template as it was before S3: no accounting roles, CONTROLLER without payment:apply.
+        List<RoleTemplateEntry> template = asTenant(PlatformTenant.ID, roleTemplateService::snapshot);
+        List<RoleTemplateEntry> before = template.stream()
+                .filter(e -> !e.name().equals("ACCOUNTING_CLERK") && !e.name().equals("GENERAL_MANAGER"))
+                .map(e -> e.name().equals("CONTROLLER")
+                        ? new RoleTemplateEntry(
+                                e.templateKey(),
+                                e.name(),
+                                e.description(),
+                                e.personaTitle(),
+                                e.personaFocus(),
+                                e.personaTone(),
+                                e.mcpPersonaRank(),
+                                e.mcpPersonaEligible(),
+                                e.locationScope(),
+                                e.locationHierarchy(),
+                                e.permissionNames().stream()
+                                        .filter(p -> !p.equals("accounting:payment:apply"))
+                                        .collect(java.util.stream.Collectors.toSet()))
+                        : e)
+                .toList();
+        String email = "owner-" + UUID.randomUUID() + "@acme.example";
+        asTenant(tenant, () -> provisioningService.provision(tenant, email, before));
+
+        RoleTemplateReconcileResponse first =
+                asTenant(PlatformTenant.ID, () -> reconciliationService.reconcile(tenant));
+        RoleTemplateReconcileResponse again =
+                asTenant(PlatformTenant.ID, () -> reconciliationService.reconcile(tenant));
+
+        assertThat(first.rolesCreated()).containsExactlyInAnyOrder("ACCOUNTING_CLERK", "GENERAL_MANAGER");
+        assertThat(first.grantsAdded())
+                .containsExactly(
+                        new RoleTemplateReconcileResponse.GrantAdded("CONTROLLER", "accounting:payment:apply"));
+        assertThat(first.templateKeysAssigned()).isEmpty();
+        assertThat(again.rolesCreated()).isEmpty();
+        assertThat(again.grantsAdded()).isEmpty();
+        assertThat(again.templateKeysAssigned()).isEmpty();
+
+        asTenant(tenant, () -> {
+            assertThat(roles.findByTemplateKeyIsNotNullOrderByNameAsc())
+                    .extracting(Role::getName)
+                    .containsExactlyElementsOf(FLOOR);
+            assertThat(roles.findByName("ACCOUNTING_CLERK").orElseThrow().getPermissions())
+                    .extracting(p -> p.getName())
+                    .contains("accounting:payment:apply", "accounting:reconciliation:adjust")
+                    .doesNotContain("accounting:ap:pay");
+        });
     }
 
     /**

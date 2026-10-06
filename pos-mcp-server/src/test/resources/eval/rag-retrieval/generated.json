@@ -905,7 +905,7 @@
       "fixture_id": "rag-tax-guide-pos-1",
       "query": "how is tax calculated",
       "actor": {
-        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "role": "ROLE_ACCOUNTING_CLERK",
         "permission_codes": [
           "tax:mode:view"
         ]
@@ -927,7 +927,7 @@
       "fixture_id": "rag-tax-guide-pos-2",
       "query": "what tax modes exist",
       "actor": {
-        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "role": "ROLE_ACCOUNTING_CLERK",
         "permission_codes": [
           "tax:mode:view"
         ]
@@ -949,7 +949,7 @@
       "fixture_id": "rag-tax-guide-pos-3",
       "query": "how is labor taxed",
       "actor": {
-        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "role": "ROLE_ACCOUNTING_CLERK",
         "permission_codes": [
           "tax:mode:view"
         ]
@@ -971,7 +971,7 @@
       "fixture_id": "rag-tax-guide-pos-4",
       "query": "how are tax categories configured",
       "actor": {
-        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "role": "ROLE_ACCOUNTING_CLERK",
         "permission_codes": [
           "tax:mode:view"
         ]

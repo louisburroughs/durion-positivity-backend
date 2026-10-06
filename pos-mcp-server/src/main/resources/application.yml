@@ -256,7 +256,7 @@ mcp:
           source-path: "classpath:rag/accounting-journal-entries-rag.md"
           rag-scope: "accounting"
           entities: [journal-entry]
-          # #1525: dual-listed — accounting:je:view keeps the ACCOUNTING_ASSOCIATE audience on the
+          # #1525: dual-listed — accounting:je:view keeps the ACCOUNTING_CLERK audience on the
           # direct JE endpoints; reporting:view:financial-statements covers facade callers, whose JE
           # surface was reshaped to the general-ledger report (#1519 Wave 4, V37).
           required-permissions: ["accounting:je:view", "reporting:view:financial-statements"]
@@ -274,7 +274,7 @@ mcp:
           source-path: "classpath:rag/accounting-codes-rag.md"
           rag-scope: "accounting"
           entities: [journal-entry, gl-account, financial-report]
-          # #1525: dual-listed — accounting:je:view keeps the ACCOUNTING_ASSOCIATE audience on the
+          # #1525: dual-listed — accounting:je:view keeps the ACCOUNTING_CLERK audience on the
           # direct JE endpoints; reporting:view:financial-statements covers facade callers, whose JE
           # surface was reshaped to the general-ledger report (#1519 Wave 4, V37).
           required-permissions: ["accounting:je:view", "reporting:view:financial-statements"]

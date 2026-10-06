@@ -7,7 +7,7 @@ The functionality described here spans two services that work together:
 - **pos-shop-manager** — appointments, scheduling, bay/mobile unit configuration, conflict detection, and workorder operational context.
 - **pos-workorder** — estimates, work order lifecycle, technician assignment, labor tracking, parts usage, change requests, and invoicing.
 
-Security note: the permissions and roles below reflect the current built-in mappings in `pos-security-service`. Shop and workorder access is now mainly split across `SERVICE_ADVISOR`, `LOCATION_MANAGER`, and `TECHNICIAN`, with `ADMIN` retaining full access. `ACCOUNTING_ASSOCIATE` and `ACCOUNT_MANAGER` are mostly out of scope for the shop/workorder APIs documented here, except where separate invoice-service permissions apply. Rows marked `Any authenticated user` require authentication but no specific permission.
+Security note: the permissions and roles below reflect the current built-in mappings in `pos-security-service`. Shop and workorder access is now mainly split across `SERVICE_ADVISOR`, `LOCATION_MANAGER`, and `TECHNICIAN`, with `ADMIN` retaining full access. `ACCOUNTING_CLERK` and `ACCOUNT_MANAGER` are mostly out of scope for the shop/workorder APIs documented here, except where separate invoice-service permissions apply. Rows marked `Any authenticated user` require authentication but no specific permission.
 
 ---
 

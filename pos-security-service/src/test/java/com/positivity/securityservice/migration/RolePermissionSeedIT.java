@@ -255,9 +255,29 @@ class RolePermissionSeedIT {
                 .contains("shop:schedule:edit", "appointments:create", "workorder:workorder:assign-technician")
                 .doesNotContain("invoice:manage", "accounting:ap:pay");
 
-        assertThat(grantedTo("ACCOUNTING_ASSOCIATE"))
-                .contains("accounting:ap:view", "accounting:ap:pay")
-                .doesNotContain("accounting:je:post");
+        // CAP:550 S3 (#2504) criteria 1-3: the clerk matches payments and prepares the bank check-up
+        // but never pays bills; controllers and general managers match payments; general managers pay.
+        assertThat(grantedTo("ACCOUNTING_CLERK"))
+                .contains("accounting:ap:view", "accounting:payment:apply", "accounting:reconciliation:adjust")
+                .doesNotContain("accounting:ap:pay", "accounting:je:post", "accounting:reconciliation:approve");
+        assertThat(grantedTo("CONTROLLER")).contains("accounting:payment:apply", "accounting:ap:pay");
+        assertThat(grantedTo("GENERAL_MANAGER"))
+                .contains("accounting:payment:apply", "accounting:ap:pay", "accounting:ap:view");
+        assertThat(grantedTo("SYSTEM_ADMINISTRATOR")).noneMatch(p -> p.startsWith("accounting:"));
+        assertThat(jdbc().queryForList(
+                                "SELECT r.name FROM roles r JOIN role_permissions rp ON rp.role_id = r.id "
+                                        + "JOIN permissions p ON p.id = rp.permission_id "
+                                        + "WHERE p.name = 'accounting:ap:pay' AND r.tenant_id = app_current_tenant() "
+                                        + "ORDER BY r.name",
+                                String.class))
+                .as("BR-3: accounting:ap:pay holders after the seeds and the bulk-load baseline")
+                .containsExactly("ADMIN", "CONTROLLER", "GENERAL_MANAGER");
+        assertThat(jdbc().queryForList(
+                                "SELECT name FROM roles WHERE tenant_id = app_current_tenant() "
+                                        + "AND name IN ('ACCOUNTING_CLERK', 'GENERAL_MANAGER') AND template_key = name",
+                                String.class))
+                .as("criterion 1: both accounting roles are alpha template roles after Flyway alone")
+                .containsExactlyInAnyOrder("ACCOUNTING_CLERK", "GENERAL_MANAGER");
 
         assertThat(grantedTo("CUSTOMER"))
                 .as("customer-facing roles receive the assistant entrypoints and nothing else")
@@ -326,8 +346,13 @@ class RolePermissionSeedIT {
                 .doesNotContain("accounting:je:post", "catalog:product:delete");
 
         assertThat(effectivePermissionsOf("olivia.chen"))
-                .as("olivia.chen is an ACCOUNTING_ASSOCIATE")
-                .contains("accounting:ap:view", "accounting:ap:pay");
+                .as("olivia.chen is an ACCOUNTING_CLERK (CAP:550 S3 criterion 13): matches payments, never pays bills")
+                .contains("accounting:ap:view", "accounting:payment:apply")
+                .doesNotContain("accounting:ap:pay");
+        assertThat(effectivePermissionsOf("harold.sanders"))
+                .as("harold.sanders is an ACCOUNTING_CLERK too")
+                .contains("accounting:payment:apply")
+                .doesNotContain("accounting:ap:pay");
 
         assertThat(effectivePermissionsOf("gloria.mendez"))
                 .as("gloria.mendez is an INVENTORY_LEAD: receiving and PO entry (#1439), no PO approval")

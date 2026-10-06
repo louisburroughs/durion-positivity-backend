@@ -6,7 +6,8 @@
 -- scope (R__seed_role_location_scope) exist. It does three things:
 --
 --   1. Marks alpha's Flyway floor roles (and SUPPORT, the read-only role an operator impersonation
---      token carries, plan WS2b-4) with template_key, so they reject delete exactly like the
+--      token carries, plan WS2b-4, plus the CAP:550 S3 accounting roles ACCOUNTING_CLERK and
+--      GENERAL_MANAGER) with template_key, so they reject delete exactly like the
 --      copies every later tenant receives (section 6: canonical names are immutable per tenant).
 --   2. Holds the role template as data in the platform tenant: a copy of the floor roles, their
 --      grants and their ADR-0061 location-scope attributes, keyed by template_key.
@@ -36,10 +37,13 @@ SET TIME ZONE 'UTC';
 -- ---------------------------------------------------------------------------
 SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', true);
 
+-- ACCOUNTING_CLERK and GENERAL_MANAGER joined the template in CAP:550 S3 (#2504, AW4): every
+-- tenant gets an accounting clerk and a general manager with the phase-1 accounting grants.
 UPDATE roles SET template_key = name
  WHERE template_key IS NULL
    AND name IN ('ADMIN', 'SYSTEM_ADMINISTRATOR', 'DISPATCHER', 'SHOP_MANAGER',
-                'SELF_SERVICE_CUSTOMER', 'CONTROLLER', 'SUPPORT');
+                'SELF_SERVICE_CUSTOMER', 'CONTROLLER', 'SUPPORT',
+                'ACCOUNTING_CLERK', 'GENERAL_MANAGER');
 
 -- ---------------------------------------------------------------------------
 -- 2. The template: alpha's floor roles copied into the platform tenant.
@@ -180,8 +184,8 @@ DECLARE
     platform_grants integer;
 BEGIN
     SELECT count(*) INTO template_roles FROM roles WHERE template_key IS NOT NULL;
-    IF template_roles < 7 THEN
-        RAISE EXCEPTION 'platform role template holds % roles, expected the six floor roles plus SUPPORT', template_roles;
+    IF template_roles < 9 THEN
+        RAISE EXCEPTION 'platform role template holds % roles, expected the six floor roles plus SUPPORT, ACCOUNTING_CLERK and GENERAL_MANAGER', template_roles;
     END IF;
 
     SELECT count(*) INTO platform_grants

@@ -65,9 +65,11 @@ class RoleBaselineDriftTest {
      * SUPPORT (ADR-0062 §7, WS2b-4) is the read-only role a platform operator's impersonation token
      * carries, and it joins the platform role template through {@code R__seed_tenant_template.sql},
      * which copies alpha's template roles — so it has to be a Flyway floor role, and its grants
-     * stay in the SQL seed. The baseline file lists it too, as for the residue.
+     * stay in the SQL seed. ACCOUNTING_CLERK and GENERAL_MANAGER (CAP:550 S3, #2504; AW4) are the
+     * accounting-workspace roles every tenant receives from the same template, so they are floor
+     * roles for the same reason. The baseline file lists them too, as for the residue.
      */
-    private static final Set<String> TEMPLATE_FLOOR = Set.of("SUPPORT");
+    private static final Set<String> TEMPLATE_FLOOR = Set.of("SUPPORT", "ACCOUNTING_CLERK", "GENERAL_MANAGER");
 
     /**
      * Every role the platform is expected to have. Pinned here because after the move no single
@@ -76,7 +78,7 @@ class RoleBaselineDriftTest {
      * addition this issue exists to prevent.
      */
     private static final Set<String> EXPECTED_ROLES = Set.of(
-            "ACCOUNTING_ASSOCIATE",
+            "ACCOUNTING_CLERK",
             "ACCOUNT_MANAGER",
             "ADMIN",
             "CONTROLLER",

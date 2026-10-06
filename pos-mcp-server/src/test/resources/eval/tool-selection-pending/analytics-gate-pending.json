@@ -80,7 +80,7 @@
       "fixture_id": "q11-weekly-invoiced-vs-collected",
       "utterance": "How much did we invoice versus collect each week for the last twelve weeks, and what is the collection rate?",
       "actor": {
-        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "role": "ROLE_ACCOUNTING_CLERK",
         "permission_codes": [
           "invoice:manage",
           "accounting:coa:view",
@@ -106,7 +106,7 @@
       "fixture_id": "q12-payment-lag-cohorts",
       "utterance": "Of the invoices we issued in the last six months, how many were paid within 30 days, 31 to 60 days, 61 to 90 days, or are still unpaid?",
       "actor": {
-        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "role": "ROLE_ACCOUNTING_CLERK",
         "permission_codes": [
           "invoice:manage",
           "accounting:coa:view"
@@ -130,7 +130,7 @@
       "fixture_id": "q16-vendor-bills-due-next-14-days",
       "utterance": "Which vendor bills are due in the next 14 days, and how much cash do we need each day to cover them?",
       "actor": {
-        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "role": "ROLE_ACCOUNTING_CLERK",
         "permission_codes": [
           "accounting:coa:view",
           "accounting:ap:view",
@@ -155,7 +155,7 @@
       "fixture_id": "q18-weekly-cash-in-vs-out",
       "utterance": "Show weekly cash in versus cash out for the last quarter and flag any week where we were cash negative.",
       "actor": {
-        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "role": "ROLE_ACCOUNTING_CLERK",
         "permission_codes": [
           "invoice:manage",
           "accounting:coa:view",

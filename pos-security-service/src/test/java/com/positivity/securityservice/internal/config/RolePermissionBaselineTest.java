@@ -23,6 +23,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -72,6 +73,13 @@ import org.junit.jupiter.api.Test;
  * purely additive) then paired 15 of the codes gated by pos-catalog/pos-price/pos-vehicle-inventory/
  * pos-vehicle-fitment's new {@code @PreAuthorize} checks with the role grants their personas need,
  * adding rows only and touching no legacy-baseline fixture row.
+ *
+ * <p><b>CAP:550 S3 (#2504, 2026-10).</b> The alpha fixture role the switch expanded as
+ * ACCOUNTING_ASSOCIATE was retired in favour of the floor role ACCOUNTING_CLERK
+ * ({@code V10__retire_accounting_associate.sql} renames it in place), so the fixture's seven rows for
+ * it were relabeled to ACCOUNTING_CLERK and its {@code accounting:ap:pay} row was deleted outright:
+ * clerks never pay bills (SPEC-accounting-workspace §4.3, AW6), the one deliberate revocation of that
+ * story. Intentional, not drift.
  */
 @DisplayName("role_permissions baseline seed")
 class RolePermissionBaselineTest {
@@ -572,7 +580,7 @@ class RolePermissionBaselineTest {
         assertThat(holders)
                 .as("roles holding invoice:invoice:view")
                 .containsExactly(
-                        "ACCOUNTING_ASSOCIATE",
+                        "ACCOUNTING_CLERK",
                         "ACCOUNT_MANAGER",
                         "ADMIN",
                         "CONTROLLER",
@@ -620,7 +628,7 @@ class RolePermissionBaselineTest {
         assertThat(piiView)
                 .as("the operational roles keep the structural reads and lose the contact block")
                 .doesNotContain(
-                        "ACCOUNTING_ASSOCIATE",
+                        "ACCOUNTING_CLERK",
                         "ACCOUNT_MANAGER",
                         "CONTROLLER",
                         "INVENTORY_CONTROLLER",
@@ -631,6 +639,145 @@ class RolePermissionBaselineTest {
         assertThat(employeeView)
                 .as("the structural reads are untouched, so the employee picker still works")
                 .contains("SERVICE_ADVISOR", "TECHNICIAN");
+    }
+
+    /**
+     * CAP:550 S3 (#2504; SPEC-accounting-workspace §2.3, §4.3, §7.3; AW4, AW6, AW7; Security
+     * sign-off OI-5 2026-10-05). The holder sets are pinned with equality, not containment: the
+     * story's separation of duties is that clerks match payments and prepare the bank check-up but
+     * never pay bills, controllers and general managers match payments, and general managers pay
+     * bills — widening any of these is as much a regression as losing one.
+     */
+    @Nested
+    @DisplayName("CAP:550 S3 accounting roles")
+    class AccountingWorkspaceRoles {
+
+        @Test
+        @DisplayName("BR-1: no ACCOUNTING_CLERK holds accounting:ap:pay (AW6, clerks never pay bills)")
+        void clerkNeverPaysBills() {
+            assertThat(seededGrants.get("ACCOUNTING_CLERK"))
+                    .as("ACCOUNTING_CLERK grants")
+                    .isNotEmpty()
+                    .doesNotContain("accounting:ap:pay");
+            assertThat(sqlSeededGrants.get("ACCOUNTING_CLERK"))
+                    .as("the SQL seed's own ACCOUNTING_CLERK grants")
+                    .isNotEmpty()
+                    .doesNotContain("accounting:ap:pay");
+        }
+
+        @Test
+        @DisplayName("criterion 2: the clerk's grants are the associate's former set without ap:pay, "
+                + "plus payment:apply and reconciliation:adjust")
+        void clerkGrantsAreTheAssociatesSetWithoutApPayPlusTheTwoDerivedGrants() {
+            // The associate's former set, as the alpha fixture held it before CAP:550 S3.
+            Set<String> associate = Set.of(
+                    "accounting:ap:pay",
+                    "accounting:ap:view",
+                    "accounting:coa:view",
+                    "accounting:customer-credit:view",
+                    "accounting:events:view",
+                    "accounting:export:view",
+                    "accounting:je:view",
+                    "accounting:period:view",
+                    "accounting:posting_rules:view",
+                    "accounting:reconciliation:view",
+                    "catalog:product:view",
+                    "crm:party:view",
+                    "inventory:availability:read",
+                    "invoice:invoice:view",
+                    "location:read",
+                    "mcp:chat:execute",
+                    "mcp:chat:stream",
+                    "nlti:request:read",
+                    "nlti:request:submit",
+                    "order:order:view",
+                    "people:employee:view",
+                    "people:self:view",
+                    "reporting:view:financial-statements",
+                    "vehicle-inventory:registry:view",
+                    "workorder:workorder:view");
+            Set<String> expected = new TreeSet<>(associate);
+            expected.remove("accounting:ap:pay");
+            expected.add("accounting:payment:apply");
+            expected.add("accounting:reconciliation:adjust");
+
+            assertThat(sqlSeededGrants.get("ACCOUNTING_CLERK"))
+                    .as("ACCOUNTING_CLERK grants in the SQL seed")
+                    .containsExactlyInAnyOrderElementsOf(expected);
+            assertThat(seededGrants.get("ACCOUNTING_CLERK"))
+                    .as("ACCOUNTING_CLERK grants, SQL seed and bulk-load baseline together")
+                    .containsExactlyInAnyOrderElementsOf(expected);
+        }
+
+        @Test
+        @DisplayName("BR-3: accounting:payment:apply is held by exactly ACCOUNT_MANAGER, ACCOUNTING_CLERK, "
+                + "ADMIN, CONTROLLER and GENERAL_MANAGER (G13)")
+        void paymentApplyHolders() {
+            assertThat(holdersOf("accounting:payment:apply"))
+                    .containsExactly("ACCOUNTING_CLERK", "ACCOUNT_MANAGER", "ADMIN", "CONTROLLER", "GENERAL_MANAGER");
+        }
+
+        @Test
+        @DisplayName("BR-3: accounting:ap:pay is held by exactly ADMIN, CONTROLLER and GENERAL_MANAGER (AW6, AW7)")
+        void apPayHolders() {
+            assertThat(holdersOf("accounting:ap:pay")).containsExactly("ADMIN", "CONTROLLER", "GENERAL_MANAGER");
+        }
+
+        @Test
+        @DisplayName("BR-3: accounting:ap:view is held by exactly ACCOUNTING_CLERK, ADMIN, CONTROLLER, "
+                + "GENERAL_MANAGER and SUPPORT")
+        void apViewHolders() {
+            assertThat(holdersOf("accounting:ap:view"))
+                    .containsExactly("ACCOUNTING_CLERK", "ADMIN", "CONTROLLER", "GENERAL_MANAGER", "SUPPORT");
+        }
+
+        @Test
+        @DisplayName("BR-3: accounting:reconciliation:adjust is held by exactly ACCOUNTING_CLERK, ADMIN and "
+                + "CONTROLLER; the approver grant stays with CONTROLLER (BR-7)")
+        void reconciliationAdjustHolders() {
+            assertThat(holdersOf("accounting:reconciliation:adjust"))
+                    .containsExactly("ACCOUNTING_CLERK", "ADMIN", "CONTROLLER");
+            assertThat(seededGrants.get("ACCOUNTING_CLERK"))
+                    .as("the clerk prepares the bank check-up; CONTROLLER approves it")
+                    .doesNotContain("accounting:reconciliation:approve");
+        }
+
+        @Test
+        @DisplayName("BR-3: accounting:payment:assign-customer is granted to no role until its endpoint exists")
+        void assignCustomerIsHeldByNoRole() {
+            assertThat(PermissionCode.fromCode("accounting:payment:assign-customer"))
+                    .as("registered in the catalog at bit 548")
+                    .isPresent()
+                    .get()
+                    .extracting(PermissionCode::bitIndex)
+                    .isEqualTo(548);
+            assertThat(holdersOf("accounting:payment:assign-customer")).isEmpty();
+        }
+
+        @Test
+        @DisplayName("the two grants the sign-off left open are not granted to the clerk")
+        void openQuestionsAreNotGranted() {
+            assertThat(seededGrants.get("ACCOUNTING_CLERK"))
+                    .doesNotContain("accounting:payment:reverse", "accounting:customer-credit:refund");
+        }
+
+        @Test
+        @DisplayName("BR-6: SYSTEM_ADMINISTRATOR holds no accounting: code")
+        void systemAdministratorHoldsNoAccountingCode() {
+            assertThat(seededGrants.get("SYSTEM_ADMINISTRATOR")).noneMatch(p -> p.startsWith("accounting:"));
+        }
+
+        @Test
+        @DisplayName("GENERAL_MANAGER's SQL grants are the fixture's former set plus payment:apply, ap:pay and ap:view")
+        void generalManagerGainsExactlyTheThree() {
+            Set<String> sql = sqlSeededGrants.get("GENERAL_MANAGER");
+            assertThat(sql)
+                    .isNotEmpty()
+                    .contains("accounting:payment:apply", "accounting:ap:pay", "accounting:ap:view");
+            assertThat(seededGrants.get("GENERAL_MANAGER"))
+                    .as("the bulk-load baseline mirrors the SQL seed for a floor role")
+                    .containsExactlyInAnyOrderElementsOf(sql);
+        }
     }
 
     @Test

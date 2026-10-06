@@ -3,7 +3,7 @@ package com.positivity.gateway.config;
 public final class GatewayPermissionCatalog {
     private GatewayPermissionCatalog() {}
 
-    public static final int CATALOG_VERSION = 96;
+    public static final int CATALOG_VERSION = 97;
 
     protected static final String[] AUTHORITY_BY_BIT = {
         "PERM_accounting:je:view",
@@ -731,7 +731,11 @@ public final class GatewayPermissionCatalog {
         // @PreAuthorize annotation, and these two are enforced only via an in-body
         // SecurityContextHelper.hasAuthority check ──────────────────────────────
         "PERM_invoice:payment:flow_select", // 546
-        "PERM_invoice:payment:limit_override" // 547
+        "PERM_invoice:payment:limit_override", // 547
+
+        // ── catalog v97 (CAP:550 S3, #2504): accounting:payment:assign-customer, registered
+        // ahead of its endpoint (AD-004) and granted to no role yet ─────────────
+        "PERM_accounting:payment:assign-customer" // 548
     };
 
     public static String authorityForBit(int bitIndex) {
