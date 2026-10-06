@@ -106,9 +106,11 @@ acquire its party through `InvoicePartyIdBackfillService` before finalization, a
 attempt before the backfill fills it is refused until the retry succeeds. The CASH house account
 is a valid party for finalization and payment. Nothing back-assigns past invoices (AW13), and
 reassigning a finalized invoice to another customer is not built (spec §12 OI-5). Each refused
-attempt is still recorded by the `INVOICE_FINALIZED` / `INVOICE_PAYMENT_INITIATE` /
-`INVOICE_PAYMENT_CAPTURE` audit events with its actor (ADR-0018) and logged at INFO with the invoice
-number and the code.
+attempt is logged at INFO with the invoice number, the code and the actor from the security context
+(ADR-0018), and the `@EmitEvent` wrapper around `INVOICE_FINALIZED` / `INVOICE_PAYMENT_INITIATE` /
+`INVOICE_PAYMENT_CAPTURE` writes its `[EVENT-ERROR]` line; those events themselves are published
+only when the operation succeeds (`EventEmissionService`), so a refusal does not reach the event
+receiver. A failure-audit emission is a platform decision recorded for S34.
 
 **Rollout check.** Orders checked out before S8 can still be `PENDING_PAYMENT` with a party-less
 `DRAFT` invoice; once this backstop ships their payment is refused and the session-close guard then
@@ -117,15 +119,22 @@ void each hit (re-ring a voided order under S8's rules). The alpha tenant is exp
 
 ```sql
 -- party-less DRAFT invoices that front an open order
+-- (the bill-to party is stored in invoices.customer_id; the guard treats whitespace as missing)
 SELECT id, invoice_number, order_id, created_at
   FROM invoices
- WHERE status = 'DRAFT' AND (party_id IS NULL OR party_id = '') AND order_id IS NOT NULL;
+ WHERE status = 'DRAFT' AND btrim(coalesce(customer_id, '')) = '' AND order_id IS NOT NULL;
 
 -- AUTHORIZED holds on party-less invoices
 SELECT p.id AS payment_intent_id, p.invoice_id, i.invoice_number, p.authorized_amount
   FROM payment_intents p JOIN invoices i ON i.id = p.invoice_id
- WHERE p.status = 'AUTHORIZED' AND (i.party_id IS NULL OR i.party_id = '');
+ WHERE p.status = 'AUTHORIZED' AND btrim(coalesce(i.customer_id, '')) = '';
 ```
+
+**After deploy, replay the customer party facts per tenant** (pos-customer
+`POST /v1/crm/accounts/facts/replay`): builds before S9 ignored `CustomerPartyUpdatedV1.houseAccount`,
+so an existing CASH row has `ext_customer_party.house_account` NULL until a replay at the same
+aggregate version fills it (the listener applies equal versions). Without the replay, revenue-by-customer
+still ranks the CASH account (AC7 does not hold).
 
 ## Kafka error handling and dead-lettering (ADR-0044 §4, #2483)
 
@@ -164,11 +173,16 @@ pos-order's completion handshake is the first consumer (order parity story C3).
 
 `payment.payment.settled` is published at **`schemaVersion` 2** (CAP:550 S9): `partyId` is always
 present, because the backstops above never let a party-less invoice reach a capture. The bump is in
-place on `payment.events.v1` (ADR-0044 §4, like `catalog.service.updated`), not a new topic; the
-`PaymentSettledV1` record keeps no constructor rejection of null, so version-1 facts published before
-go-live still deserialise on redelivery or replay (AW13). Consumers keep their defensive handling and
-tell legacy from defect by `schemaVersion`; `payment.payment.reversed` keeps a nullable party because
-reversals of pre-go-live payments must still flow.
+place on `payment.events.v1` under ADR-0044 §3 "Event contract standard" (like
+`catalog.service.updated`), not a new `.v2` topic: §3 allows only additive changes within a topic
+version, and this one adds no field and only tightens a guarantee — every version-2 message is a valid
+version-1 message, so a version-1 consumer reads it unchanged. The `PaymentSettledV1` record keeps no
+constructor rejection of null, so version-1 facts published before go-live still deserialise on
+redelivery or replay (AW13). Today's consumers (pos-accounting `SettlementEventsListener`, pos-order
+`PaymentEventsListener`) keep their defensive null handling and do not read `schemaVersion`; telling a
+legacy null from a version-2 defect by `schemaVersion` is S11's accounting alert (#2508).
+`payment.payment.reversed` keeps a nullable party because reversals of pre-go-live payments must still
+flow.
 
 Should a captured intent ever reach `PaymentEventPublisher` without a party, the fact is still queued
 (the capture has happened; dropping it would leave pos-order unable to complete the order), logged at

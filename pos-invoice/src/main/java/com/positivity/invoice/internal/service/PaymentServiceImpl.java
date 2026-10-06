@@ -424,14 +424,16 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     /** CAP:550 S9: refuses with 422 {@code INVOICE_PARTY_REQUIRED} when the invoice has no bill-to party. */
-    private static void requireParty(@Nullable Invoice invoice, @NonNull String operation) {
-        String partyId = invoice == null ? null : invoice.getPartyId();
+    private static void requireParty(@NonNull Invoice invoice, @NonNull String operation) {
+        String partyId = invoice.getPartyId();
         if (partyId == null || partyId.isBlank()) {
+            // ADR-0018: the refusal names its actor from the security context, never from the request.
             log.info(
-                    "Refusing payment {} on invoice {} ({}): {}",
+                    "Refusing payment {} on invoice {} ({}) by {}: {}",
                     operation,
-                    invoice == null ? null : invoice.getInvoiceNumber(),
-                    invoice == null ? null : invoice.getId(),
+                    invoice.getInvoiceNumber(),
+                    invoice.getId(),
+                    SecurityContextHelper.getCurrentUsernameOrDefault("system"),
                     InvoicePartyRequiredException.CODE);
             throw new InvoicePartyRequiredException(PARTY_REQUIRED_MESSAGE);
         }

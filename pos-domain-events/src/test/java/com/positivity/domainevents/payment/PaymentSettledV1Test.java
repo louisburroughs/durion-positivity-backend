@@ -56,7 +56,7 @@ class PaymentSettledV1Test {
     }
 
     @Test
-    @DisplayName("a version-1 envelope payload with \"partyId\": null still deserialises (AW13, ADR-0044 §4)")
+    @DisplayName("a version-1 envelope payload with \"partyId\": null still deserialises (AW13, ADR-0044 §3)")
     void versionOnePayloadWithNullPartyStillParses() {
         String legacyJson = """
                 {"paymentIntentId":"01980a58-0000-7000-8000-0000000000b1",

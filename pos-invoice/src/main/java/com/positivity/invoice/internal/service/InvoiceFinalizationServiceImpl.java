@@ -174,10 +174,12 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
             // invoice creates no provider document. A workorder draft whose party has not arrived
             // from the backfill is refused until it does; the retry then succeeds.
             if (!hasParty(existing)) {
+                // ADR-0018: the refusal names its actor from the security context.
                 log.info(
-                        "Refusing finalization of invoice {} ({}): {}",
+                        "Refusing finalization of invoice {} ({}) by {}: {}",
                         existing.getInvoiceNumber(),
                         invoiceId,
+                        SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM),
                         InvoicePartyRequiredException.CODE);
                 throw new InvoicePartyRequiredException(PARTY_REQUIRED_MESSAGE);
             }
