@@ -149,4 +149,13 @@ public interface PaymentApplicationRepository extends JpaRepository<PaymentAppli
      */
     @Query("SELECT COALESCE(SUM(pa.appliedAmount), 0) FROM PaymentApplication pa WHERE pa.invoiceId = :invoiceId")
     java.math.BigDecimal sumAppliedAmountByInvoiceId(UUID invoiceId);
+
+    /**
+     * Applied amounts summed per invoice, for many invoices in one query (#2502); invoices with no
+     * application are absent.
+     */
+    @Query(
+            "SELECT new com.positivity.accounting.internal.repository.InvoiceAmount(pa.invoiceId, SUM(pa.appliedAmount)) FROM PaymentApplication pa"
+                    + " WHERE pa.invoiceId IN :invoiceIds GROUP BY pa.invoiceId")
+    List<InvoiceAmount> sumAppliedAmountByInvoiceIdIn(@Param("invoiceIds") Collection<UUID> invoiceIds);
 }

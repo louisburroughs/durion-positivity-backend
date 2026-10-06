@@ -8,14 +8,23 @@ import com.positivity.accounting.internal.repository.CreditMemoRepository;
 import com.positivity.accounting.internal.repository.CustomerCreditTransactionRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceDepositCreditApplicationRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
+import com.positivity.accounting.internal.repository.InvoiceAmount;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
 /**
@@ -53,7 +62,7 @@ import org.springframework.stereotype.Component;
 public class InvoiceBalanceCalculator {
 
     /** Lifecycle states (pos-invoice's) in which an invoice participates in AR. */
-    private static final Set<String> AR_ELIGIBLE_STATUSES = Set.of("FINALIZED", "POSTED");
+    public static final Set<String> AR_ELIGIBLE_STATUSES = Set.of("FINALIZED", "POSTED");
 
     private final ExtInvoiceRepository extInvoiceRepository;
     private final PaymentApplicationRepository paymentApplicationRepository;
@@ -64,6 +73,27 @@ public class InvoiceBalanceCalculator {
 
     public Optional<ExtInvoice> findInvoice(@NonNull UUID invoiceId) {
         return extInvoiceRepository.findById(invoiceId);
+    }
+
+    /**
+     * {@code OLDEST_FIRST} order (#993): ascending {@link #oldestFirstKey}, invoices with no key
+     * last, ties by invoice id. Payment allocation and the receivables worklist (#2502) share it.
+     */
+    public static final Comparator<ExtInvoice> OLDEST_FIRST = Comparator.comparing(
+                    InvoiceBalanceCalculator::oldestFirstKey, Comparator.nullsLast(Comparator.naturalOrder()))
+            .thenComparing(ExtInvoice::getInvoiceId);
+
+    /**
+     * The {@code OLDEST_FIRST} aging key (#993): the due date (as UTC start-of-day, aging is
+     * calendar-based) when present, else the finalization instant — cheap defense against a
+     * producer that projected no due date, not a transition mechanism.
+     */
+    @Nullable
+    public static Instant oldestFirstKey(@NonNull ExtInvoice invoice) {
+        if (invoice.getDueDate() != null) {
+            return invoice.getDueDate().atStartOfDay(ZoneOffset.UTC).toInstant();
+        }
+        return invoice.getFinalizedAt();
     }
 
     /** True when the replica's lifecycle status allows AR activity (payments, credits). */
@@ -88,6 +118,44 @@ public class InvoiceBalanceCalculator {
                 .subtract(credited)
                 .subtract(creditApplied)
                 .subtract(depositApplied);
+    }
+
+    /**
+     * Batch form of {@link #balanceDue}: the same formula for many invoices with one grouped query
+     * per term — five per call, whatever the number of invoices (#2502, BR-3). Every invoice given
+     * is in the result, keyed by id, in the order given.
+     *
+     * @param invoices replica rows to price; duplicates are ignored
+     * @return balance due by invoice id
+     */
+    @NonNull
+    public Map<UUID, BigDecimal> balancesDue(@NonNull Collection<ExtInvoice> invoices) {
+        Map<UUID, BigDecimal> balances = new LinkedHashMap<>();
+        for (ExtInvoice invoice : invoices) {
+            balances.putIfAbsent(
+                    invoice.getInvoiceId(), invoice.getTotal() == null ? BigDecimal.ZERO : invoice.getTotal());
+        }
+        if (balances.isEmpty()) {
+            return balances;
+        }
+        List<UUID> ids = List.copyOf(balances.keySet());
+        subtract(balances, paymentApplicationRepository.sumAppliedAmountByInvoiceIdIn(ids));
+        for (InvoiceAmount reversed : reversalRepository.sumReversedAmountByInvoiceIdIn(ids)) {
+            balances.computeIfPresent(reversed.invoiceId(), (id, balance) -> balance.add(reversed.amount()));
+        }
+        subtract(balances, creditMemoRepository.sumCreditedAmountByInvoiceIdInAndStatus(ids, CreditMemoStatus.POSTED));
+        subtract(
+                balances,
+                creditTransactionRepository.sumAmountByInvoiceIdInAndType(
+                        ids, CustomerCreditTransactionType.APPLICATION));
+        subtract(balances, depositCreditApplicationRepository.sumAmountAppliedByInvoiceIdIn(ids));
+        return balances;
+    }
+
+    private static void subtract(Map<UUID, BigDecimal> balances, List<InvoiceAmount> amounts) {
+        for (InvoiceAmount amount : amounts) {
+            balances.computeIfPresent(amount.invoiceId(), (id, balance) -> balance.subtract(amount.amount()));
+        }
     }
 
     /**

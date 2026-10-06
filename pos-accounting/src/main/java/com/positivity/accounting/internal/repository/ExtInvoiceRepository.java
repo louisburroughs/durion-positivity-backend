@@ -38,6 +38,17 @@ public interface ExtInvoiceRepository extends JpaRepository<ExtInvoice, UUID> {
     List<ExtInvoice> findByStatusIn(Collection<String> statuses);
 
     /**
+     * Replicated invoices of the given parties in the given lifecycle statuses (#2502): the
+     * candidates for a customer's open invoices, served by {@code idx_ext_invoice_party_status}.
+     * The party is matched as stored, so callers pass the canonical UUID string.
+     *
+     * @param partyIds parties (canonical UUID strings)
+     * @param statuses lifecycle status values to include
+     * @return matching invoices (unordered; the open balance is derived by the caller)
+     */
+    List<ExtInvoice> findByPartyIdInAndStatusIn(Collection<String> partyIds, Collection<String> statuses);
+
+    /**
      * Load one replicated invoice under a row-level write lock held for the rest of the
      * caller's transaction (issue #992).
      *

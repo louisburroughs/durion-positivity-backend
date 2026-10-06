@@ -71,6 +71,7 @@ import org.springframework.web.server.ResponseStatusException;
 class PaymentApplicationServiceTest {
 
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+    private static final UUID REMITTANCE_INVOICE_ID = UUID.fromString("0199a000-0000-7000-8000-0000000025a2");
 
     @Spy
     private Clock clock = TEST_CLOCK;
@@ -370,9 +371,15 @@ class PaymentApplicationServiceTest {
                 "USD",
                 new BigDecimal("1000.00"),
                 Instant.now(TEST_CLOCK),
-                testSourceEventId);
+                testSourceEventId,
+                REMITTANCE_INVOICE_ID,
+                "CARD");
 
         // Assert
+        ArgumentCaptor<ReceivablePayment> saved = ArgumentCaptor.forClass(ReceivablePayment.class);
+        verify(receivablePaymentRepository).save(saved.capture());
+        assertThat(saved.getValue().getSourceInvoiceId()).isEqualTo(REMITTANCE_INVOICE_ID);
+        assertThat(saved.getValue().getPaymentMethod()).isEqualTo("CARD");
         assertThat(result).isNotNull();
         assertThat(result.getPaymentId()).isEqualTo(testPaymentId);
         assertThat(result.getCustomerId()).isEqualTo(testCustomerId);
@@ -399,7 +406,9 @@ class PaymentApplicationServiceTest {
                 "USD",
                 new BigDecimal("1000.00"),
                 Instant.now(TEST_CLOCK),
-                testSourceEventId);
+                testSourceEventId,
+                null,
+                null);
 
         // Assert
         assertThat(result).isEqualTo(testPayment);
@@ -415,9 +424,19 @@ class PaymentApplicationServiceTest {
         when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
 
         ReceivablePayment result = service.handlePaymentCleared(
-                testPaymentId, testCustomerId, "usd", new BigDecimal("1000.0"), Instant.now(TEST_CLOCK), otherEventId);
+                testPaymentId,
+                testCustomerId,
+                "usd",
+                new BigDecimal("1000.0"),
+                Instant.now(TEST_CLOCK),
+                otherEventId,
+                REMITTANCE_INVOICE_ID,
+                "CARD");
 
+        // The first writer wins (#2502): the recorded row keeps its own remittance values.
         assertThat(result).isSameAs(testPayment);
+        assertThat(result.getSourceInvoiceId()).isNull();
+        assertThat(result.getPaymentMethod()).isNull();
         verify(receivablePaymentRepository, never()).save(any());
     }
 
@@ -434,7 +453,9 @@ class PaymentApplicationServiceTest {
                         "USD",
                         new BigDecimal("999.00"),
                         Instant.now(TEST_CLOCK),
-                        otherEventId))
+                        otherEventId,
+                        null,
+                        null))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("different amount");
         verify(receivablePaymentRepository, never()).save(any());

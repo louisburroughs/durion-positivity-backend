@@ -3,6 +3,8 @@ package com.positivity.accounting.internal.repository;
 import com.positivity.accounting.internal.entity.ExtInvoiceDepositCreditApplication;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -57,4 +59,14 @@ public interface ExtInvoiceDepositCreditApplicationRepository
     @Query("SELECT COALESCE(SUM(a.amountApplied), 0) FROM ExtInvoiceDepositCreditApplication a"
             + " WHERE a.invoiceId = :invoiceId")
     BigDecimal sumAmountAppliedByInvoiceId(@Param("invoiceId") @NonNull UUID invoiceId);
+
+    /**
+     * Deposit-credit draw-downs summed per invoice, for many invoices in one query (#2502); invoices
+     * with none are absent.
+     */
+    @NonNull
+    @Query(
+            "SELECT new com.positivity.accounting.internal.repository.InvoiceAmount(a.invoiceId, SUM(a.amountApplied)) FROM ExtInvoiceDepositCreditApplication a"
+                    + " WHERE a.invoiceId IN :invoiceIds GROUP BY a.invoiceId")
+    List<InvoiceAmount> sumAmountAppliedByInvoiceIdIn(@Param("invoiceIds") @NonNull Collection<UUID> invoiceIds);
 }

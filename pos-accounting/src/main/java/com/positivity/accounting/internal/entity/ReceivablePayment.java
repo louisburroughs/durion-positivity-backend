@@ -135,6 +135,22 @@ public class ReceivablePayment extends TenantScopedEntity implements Persistable
     private UUID sourceEventId; // PaymentCleared event ID (idempotency)
 
     /**
+     * Invoice the payment was taken against, when the recording fact names one (#2502): the
+     * remittance reference the unapplied-payments list matches first. Written once by the path
+     * that records the payment; null on rows recorded before V7.
+     */
+    @Column(name = "source_invoice_id", columnDefinition = "UUID")
+    private UUID sourceInvoiceId;
+
+    /**
+     * Settlement method as the {@code payment.payment.settled} fact sends it ({@code CASH},
+     * {@code CARD}, {@code ON_ACCOUNT}, {@code OTHER}; #2502). Null when the recording path
+     * carries no method.
+     */
+    @Column(name = "payment_method", length = 20)
+    private String paymentMethod;
+
+    /**
      * Optimistic-lock version (Story C4, issue #936). Every mutation of this
      * row (application, reversal, void) bumps the version, so two concurrent
      * transactions updating {@code unappliedAmount} cannot both commit —

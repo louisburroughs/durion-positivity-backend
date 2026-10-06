@@ -55,6 +55,28 @@ public interface ReceivablePaymentRepository extends JpaRepository<ReceivablePay
     List<ReceivablePayment> findByStatus(ReceivablePaymentStatus status);
 
     /**
+     * A page of payments in {@code status}, for the unapplied-payments list (#2502); the caller
+     * supplies the order.
+     */
+    Page<ReceivablePayment> findByStatus(ReceivablePaymentStatus status, Pageable pageable);
+
+    /** A page of one customer's payments in {@code status} (#2502); the caller supplies the order. */
+    Page<ReceivablePayment> findByStatusAndCustomerId(
+            ReceivablePaymentStatus status, UUID customerId, Pageable pageable);
+
+    /** Count and unapplied total of every payment in {@code status} (#2502). */
+    @Query("SELECT new com.positivity.accounting.internal.repository.ReceivablePaymentTotals(COUNT(rp),"
+            + " COALESCE(SUM(rp.unappliedAmount), 0)) FROM ReceivablePayment rp WHERE rp.status = :status")
+    ReceivablePaymentTotals totalsByStatus(@Param("status") ReceivablePaymentStatus status);
+
+    /** Count and unapplied total of one customer's payments in {@code status} (#2502). */
+    @Query("SELECT new com.positivity.accounting.internal.repository.ReceivablePaymentTotals(COUNT(rp),"
+            + " COALESCE(SUM(rp.unappliedAmount), 0)) FROM ReceivablePayment rp"
+            + " WHERE rp.status = :status AND rp.customerId = :customerId")
+    ReceivablePaymentTotals totalsByStatusAndCustomerId(
+            @Param("status") ReceivablePaymentStatus status, @Param("customerId") UUID customerId);
+
+    /**
      * Check if a payment exists by source event ID (idempotency check).
      *
      * @param sourceEventId PaymentCleared event ID

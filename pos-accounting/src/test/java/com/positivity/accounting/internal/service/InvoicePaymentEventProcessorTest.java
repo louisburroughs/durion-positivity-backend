@@ -84,7 +84,9 @@ class InvoicePaymentEventProcessorTest {
                         "USD",
                         new BigDecimal("100.00"),
                         Instant.parse("2026-10-02T15:30:00Z"),
-                        EVENT_ID);
+                        EVENT_ID,
+                        INVOICE_ID,
+                        null);
         ArgumentCaptor<PaymentApplicationRequest> request = ArgumentCaptor.forClass(PaymentApplicationRequest.class);
         verify(paymentApplicationService).applyPaymentToInvoices(eq(PAYMENT_ID), request.capture());
         assertThat(request.getValue().getApplicationRequestId()).isEqualTo("INVOICE_PAYMENT:" + EVENT_ID);
@@ -127,7 +129,8 @@ class InvoicePaymentEventProcessorTest {
 
         processor.process(event);
 
-        verify(paymentApplicationService, never()).handlePaymentCleared(any(), any(), any(), any(), any(), any());
+        verify(paymentApplicationService, never())
+                .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
         verify(paymentApplicationService, never()).applyPaymentToInvoices(any(), any());
         assertThat(event.getStatus()).isEqualTo(AccountingEventStatus.PROCESSED);
         assertThat(event.getIdempotencyOutcome()).isEqualTo("DUPLICATE_IGNORED");
@@ -144,7 +147,8 @@ class InvoicePaymentEventProcessorTest {
 
         processor.process(event);
 
-        verify(paymentApplicationService, never()).handlePaymentCleared(any(), any(), any(), any(), any(), any());
+        verify(paymentApplicationService, never())
+                .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
         ArgumentCaptor<PaymentApplicationRequest> request = ArgumentCaptor.forClass(PaymentApplicationRequest.class);
         verify(paymentApplicationService).applyPaymentToInvoices(eq(PAYMENT_ID), request.capture());
         assertThat(request.getValue().getApplications())
@@ -163,7 +167,8 @@ class InvoicePaymentEventProcessorTest {
 
         processor.process(event);
 
-        verify(paymentApplicationService, never()).handlePaymentCleared(any(), any(), any(), any(), any(), any());
+        verify(paymentApplicationService, never())
+                .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
         verify(paymentApplicationService).applyPaymentToInvoices(eq(PAYMENT_ID), any());
         assertThat(event.getIdempotencyOutcome()).isEqualTo("NEW");
     }
@@ -186,7 +191,8 @@ class InvoicePaymentEventProcessorTest {
         payload.remove("paymentId");
 
         assertRejected(event(payload), AccountingEventStatus.FAILED, InvoicePaymentEventProcessor.INVALID_PAYLOAD);
-        verify(paymentApplicationService, never()).handlePaymentCleared(any(), any(), any(), any(), any(), any());
+        verify(paymentApplicationService, never())
+                .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test

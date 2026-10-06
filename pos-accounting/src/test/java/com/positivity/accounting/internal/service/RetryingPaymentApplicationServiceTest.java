@@ -175,15 +175,30 @@ class RetryingPaymentApplicationServiceTest {
         retryingService.voidPayment(PAYMENT_ID);
         retryingService.reversePayment(PAYMENT_ID, "Customer requested reversal");
         retryingService.reversePaymentApplication(applicationId, "Customer disputed the charge");
+        UUID sourceInvoiceId = UUID.fromString("00000000-0000-0000-0000-00000000c406");
         retryingService.handlePaymentCleared(
-                PAYMENT_ID, customerId, "USD", new BigDecimal("1000.00"), clearedAt, sourceEventId);
+                PAYMENT_ID,
+                customerId,
+                "USD",
+                new BigDecimal("1000.00"),
+                clearedAt,
+                sourceEventId,
+                sourceInvoiceId,
+                "CARD");
 
         verify(delegate).voidPayment(PAYMENT_ID);
         verify(delegate).reversePayment(PAYMENT_ID, "Customer requested reversal");
         verify(delegate).reversePaymentApplication(applicationId, "Customer disputed the charge");
         verify(delegate)
                 .handlePaymentCleared(
-                        PAYMENT_ID, customerId, "USD", new BigDecimal("1000.00"), clearedAt, sourceEventId);
+                        PAYMENT_ID,
+                        customerId,
+                        "USD",
+                        new BigDecimal("1000.00"),
+                        clearedAt,
+                        sourceEventId,
+                        sourceInvoiceId,
+                        "CARD");
         verifyNoMoreInteractions(delegate);
     }
 

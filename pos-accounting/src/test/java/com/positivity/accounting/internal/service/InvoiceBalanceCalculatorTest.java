@@ -2,6 +2,10 @@ package com.positivity.accounting.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.config.DatabaseDialectSupport;
@@ -19,6 +23,7 @@ import com.positivity.accounting.internal.repository.ExtInvoiceDepositCreditAppl
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceTaxRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
+import com.positivity.accounting.internal.repository.InvoiceAmount;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
@@ -29,7 +34,10 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Random;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -175,6 +183,130 @@ class InvoiceBalanceCalculatorTest {
                 .status("POSTED")
                 .total(total)
                 .build();
+    }
+
+    /**
+     * The batch form (#2502, item 7): the same formula for many invoices, with one grouped query per
+     * term whatever the number of invoices.
+     */
+    @Nested
+    @DisplayName("balancesDue — the batch form (#2502)")
+    class BatchBalances {
+
+        @Test
+        @DisplayName("equals balanceDue per invoice over a randomised fixture")
+        void batchEqualsSingle() {
+            Random random = new Random(2502);
+            List<ExtInvoice> invoices = new ArrayList<>();
+            List<InvoiceAmount> applied = new ArrayList<>();
+            List<InvoiceAmount> reversed = new ArrayList<>();
+            List<InvoiceAmount> credited = new ArrayList<>();
+            List<InvoiceAmount> creditApplied = new ArrayList<>();
+            List<InvoiceAmount> depositApplied = new ArrayList<>();
+            for (int n = 1; n <= 40; n++) {
+                UUID id = UUID.fromString(String.format("00000000-0000-7000-8000-%012d", n));
+                BigDecimal total = random.nextInt(10) == 0 ? null : cents(random, 100_000);
+                invoices.add(ExtInvoice.builder()
+                        .invoiceId(id)
+                        .status("POSTED")
+                        .total(total)
+                        .build());
+                BigDecimal a = term(random, applied, id);
+                BigDecimal r = term(random, reversed, id);
+                BigDecimal c = term(random, credited, id);
+                BigDecimal cc = term(random, creditApplied, id);
+                BigDecimal d = term(random, depositApplied, id);
+                when(paymentApplicationRepository.sumAppliedAmountByInvoiceId(id))
+                        .thenReturn(a);
+                when(reversalRepository.sumReversedAmountByInvoiceId(id)).thenReturn(r);
+                when(creditMemoRepository.sumCreditedAmountByInvoiceIdAndStatus(id, CreditMemoStatus.POSTED))
+                        .thenReturn(c);
+                when(creditTransactionRepository.sumAmountByInvoiceIdAndType(
+                                id, CustomerCreditTransactionType.APPLICATION))
+                        .thenReturn(cc);
+                when(depositCreditApplicationRepository.sumAmountAppliedByInvoiceId(id))
+                        .thenReturn(d);
+            }
+            when(paymentApplicationRepository.sumAppliedAmountByInvoiceIdIn(anyCollection()))
+                    .thenReturn(applied);
+            when(reversalRepository.sumReversedAmountByInvoiceIdIn(anyCollection()))
+                    .thenReturn(reversed);
+            when(creditMemoRepository.sumCreditedAmountByInvoiceIdInAndStatus(
+                            anyCollection(), eq(CreditMemoStatus.POSTED)))
+                    .thenReturn(credited);
+            when(creditTransactionRepository.sumAmountByInvoiceIdInAndType(
+                            anyCollection(), eq(CustomerCreditTransactionType.APPLICATION)))
+                    .thenReturn(creditApplied);
+            when(depositCreditApplicationRepository.sumAmountAppliedByInvoiceIdIn(anyCollection()))
+                    .thenReturn(depositApplied);
+
+            Map<UUID, BigDecimal> batch = calculator.balancesDue(invoices);
+
+            assertThat(batch).hasSize(invoices.size());
+            assertThat(batch.keySet())
+                    .containsExactlyElementsOf(
+                            invoices.stream().map(ExtInvoice::getInvoiceId).toList());
+            for (ExtInvoice invoice : invoices) {
+                assertThat(batch.get(invoice.getInvoiceId()))
+                        .as("invoice %s", invoice.getInvoiceId())
+                        .isEqualByComparingTo(calculator.balanceDue(invoice));
+            }
+        }
+
+        @Test
+        @DisplayName("prices 100 invoices with five queries, one per term, and none per invoice")
+        void fiveQueriesWhateverTheCount() {
+            List<ExtInvoice> invoices = new ArrayList<>();
+            for (int n = 1; n <= 100; n++) {
+                invoices.add(ExtInvoice.builder()
+                        .invoiceId(UUID.fromString(String.format("00000000-0000-7000-8000-%012d", n)))
+                        .status("POSTED")
+                        .total(new BigDecimal("10.00"))
+                        .build());
+            }
+
+            Map<UUID, BigDecimal> batch = calculator.balancesDue(invoices);
+
+            assertThat(batch.values()).allSatisfy(balance -> assertThat(balance).isEqualByComparingTo("10.00"));
+            verify(paymentApplicationRepository).sumAppliedAmountByInvoiceIdIn(anyCollection());
+            verify(reversalRepository).sumReversedAmountByInvoiceIdIn(anyCollection());
+            verify(creditMemoRepository).sumCreditedAmountByInvoiceIdInAndStatus(anyCollection(), any());
+            verify(creditTransactionRepository).sumAmountByInvoiceIdInAndType(anyCollection(), any());
+            verify(depositCreditApplicationRepository).sumAmountAppliedByInvoiceIdIn(anyCollection());
+            verifyNoMoreInteractions(
+                    paymentApplicationRepository,
+                    reversalRepository,
+                    creditMemoRepository,
+                    creditTransactionRepository,
+                    depositCreditApplicationRepository,
+                    extInvoiceRepository);
+        }
+
+        @Test
+        @DisplayName("an empty collection issues no query")
+        void emptyIssuesNoQuery() {
+            assertThat(calculator.balancesDue(List.of())).isEmpty();
+            verifyNoMoreInteractions(
+                    paymentApplicationRepository,
+                    reversalRepository,
+                    creditMemoRepository,
+                    creditTransactionRepository,
+                    depositCreditApplicationRepository);
+        }
+
+        /** A random term for {@code id}: absent from the grouped rows (zero) about a third of the time. */
+        private BigDecimal term(Random random, List<InvoiceAmount> rows, UUID id) {
+            if (random.nextInt(3) == 0) {
+                return BigDecimal.ZERO;
+            }
+            BigDecimal amount = cents(random, 20_000);
+            rows.add(new InvoiceAmount(id, amount));
+            return amount;
+        }
+
+        private static BigDecimal cents(Random random, int maxCents) {
+            return BigDecimal.valueOf(1 + random.nextInt(maxCents), 2);
+        }
     }
 
     /**

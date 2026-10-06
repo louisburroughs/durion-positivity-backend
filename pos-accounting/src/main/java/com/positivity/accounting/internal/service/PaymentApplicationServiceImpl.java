@@ -32,7 +32,6 @@ import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -105,15 +104,20 @@ public class PaymentApplicationServiceImpl
      * @param totalAmount   cleared payment amount
      * @param clearedAt     settlement timestamp
      * @param sourceEventId PaymentCleared event ID (idempotency key)
-     * @return created or existing ReceivablePayment
+     * @param sourceInvoiceId invoice the payment was taken against, when known (#2502)
+     * @param paymentMethod settlement method, when the recording path carries one (#2502)
+     * @return created or existing ReceivablePayment; an existing one keeps its recorded values
      */
+    @Override
     public ReceivablePayment handlePaymentCleared(
             @NonNull UUID paymentId,
             @NonNull UUID customerId,
             @NonNull String currency,
             @NonNull BigDecimal totalAmount,
             @NonNull Instant clearedAt,
-            @NonNull UUID sourceEventId) {
+            @NonNull UUID sourceEventId,
+            @Nullable UUID sourceInvoiceId,
+            @Nullable String paymentMethod) {
 
         // Idempotency check
         if (receivablePaymentRepository.existsBySourceEventId(sourceEventId)) {
@@ -155,6 +159,8 @@ public class PaymentApplicationServiceImpl
         payment.setStatus(ReceivablePaymentStatus.AVAILABLE);
         payment.setClearedAt(clearedAt);
         payment.setSourceEventId(sourceEventId);
+        payment.setSourceInvoiceId(sourceInvoiceId);
+        payment.setPaymentMethod(paymentMethod);
         payment.setCreatedBy(getCurrentUser()); // From PaymentCleared event
 
         ReceivablePayment saved = receivablePaymentRepository.save(payment);
@@ -1021,7 +1027,7 @@ public class PaymentApplicationServiceImpl
                         invoiceId,
                         invoiceBalanceCalculator
                                 .findInvoice(invoiceId)
-                                .map(PaymentApplicationServiceImpl::agingKey)
+                                .map(InvoiceBalanceCalculator::oldestFirstKey)
                                 .orElse(null));
             }
         }
@@ -1031,19 +1037,6 @@ public class PaymentApplicationServiceImpl
                         Comparator.nullsLast(Comparator.naturalOrder()))
                 .thenComparing(PaymentApplicationRequest.InvoiceApplication::getInvoiceId);
         return applications.stream().sorted(byAgingKeyThenId).toList();
-    }
-
-    /**
-     * The {@code OLDEST_FIRST} aging key (#993): the due date (as UTC start-of-day, aging is
-     * calendar-based) when present, else the finalization instant — cheap defense against a
-     * producer that projected no due date, not a transition mechanism.
-     */
-    @Nullable
-    private static Instant agingKey(@NonNull ExtInvoice invoice) {
-        if (invoice.getDueDate() != null) {
-            return invoice.getDueDate().atStartOfDay(ZoneOffset.UTC).toInstant();
-        }
-        return invoice.getFinalizedAt();
     }
 
     private void applySingleInvoiceApplication(
