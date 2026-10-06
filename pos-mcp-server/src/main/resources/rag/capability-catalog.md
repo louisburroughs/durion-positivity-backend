@@ -62,8 +62,8 @@ An account manager asks about commercial accounts, invoices, billing readiness, 
 | "Why didn't this customer get billed?" | Workorder completion, invoice generation, finalization, or missing account/billing-rule context. |
 | "What does this claim code refer to?" | Identifier interpretation if the code format is known; TODO if the claim-code source is not verified. |
 
-## Accounting associate examples
-An accounting associate asks about journal entries, AP, reconciliation, invoice posting, double-entry impacts, and exceptions.
+## Accounting clerk examples
+An accounting clerk asks about journal entries, AP, reconciliation, invoice posting, double-entry impacts, and exceptions.
 
 | Staff phrasing | Expected answer |
 |---|---|

@@ -12,13 +12,17 @@
 --     grants, same role_assignments — and set the clerk's description and persona (the precedent of
 --     V8__rename_employee_deactivate_to_activation.sql: the row is keyed by id, so nothing that
 --     references it has to move).
---   * Both present: move the associate's role_assignments to the clerk, skipping a user that already
---     holds the clerk, then delete the associate's grants and its row.
---   * Then delete the clerk's accounting:ap:pay grant. Grants are additive in the repeatable seeds
---     (R__seed_role_permissions.sql "Grants are additive"), so a revoke needs this versioned
---     migration; the seeds that run after it no longer grant it.
+--   * Both present: move the associate's role_assignments to the clerk, skipping a user whose clerk
+--     assignment is active (not revoked, inside its effective window — an ended or revoked clerk
+--     assignment is history, not a grant, so that user's active associate assignment moves), then
+--     delete the associate's grants and its row.
+--   * Only a clerk present (a hand-made one that predates this story): nothing to rename or merge.
+--   * Whenever a clerk exists afterwards, delete its accounting:ap:pay grant (BR-1: no clerk in any
+--     tenant holds it). Grants are additive in the repeatable seeds (R__seed_role_permissions.sql
+--     "Grants are additive"), so a revoke needs this versioned migration; the seeds that run after
+--     it no longer grant it.
 --
--- A tenant without the associate — every fresh database: versioned migrations run before the
+-- A tenant with neither role — every fresh database: versioned migrations run before the
 -- repeatable seeds, and bulk-loaded roles arrive after startup — is left untouched. One NOTICE per
 -- tenant says which case applied. Changes are stamped 'retire-accounting-associate'.
 --
@@ -41,13 +45,16 @@ BEGIN
         SELECT id INTO associate FROM roles WHERE tenant_id = tenant.tenant_id AND name = 'ACCOUNTING_ASSOCIATE';
         SELECT id INTO clerk     FROM roles WHERE tenant_id = tenant.tenant_id AND name = 'ACCOUNTING_CLERK';
 
-        IF associate IS NULL THEN
-            RAISE NOTICE 'retire-accounting-associate: tenant % (%): ACCOUNTING_ASSOCIATE absent, nothing to do',
+        IF associate IS NULL AND clerk IS NULL THEN
+            RAISE NOTICE 'retire-accounting-associate: tenant % (%): neither ACCOUNTING_ASSOCIATE nor ACCOUNTING_CLERK present, nothing to do',
                 tenant.slug, tenant.tenant_id;
             CONTINUE;
         END IF;
 
-        IF clerk IS NULL THEN
+        IF associate IS NULL THEN
+            RAISE NOTICE 'retire-accounting-associate: tenant % (%): ACCOUNTING_ASSOCIATE absent, ACCOUNTING_CLERK % present; revoking only',
+                tenant.slug, tenant.tenant_id, clerk;
+        ELSIF clerk IS NULL THEN
             UPDATE roles
                SET name = 'ACCOUNTING_CLERK',
                    description = 'Accounting clerk: clears the accounting to-do list, matches customer payments, checks bills and prepares the bank check-up; never pays bills',
@@ -74,7 +81,9 @@ BEGIN
                AND NOT EXISTS (SELECT 1 FROM role_assignments held
                                 WHERE held.tenant_id = ra.tenant_id
                                   AND held.user_id = ra.user_id
-                                  AND held.role_id = clerk);
+                                  AND held.role_id = clerk
+                                  AND held.revoked_at IS NULL
+                                  AND (held.effective_end_date IS NULL OR held.effective_end_date > now()));
             GET DIAGNOSTICS moved = ROW_COUNT;
             DELETE FROM role_assignments WHERE tenant_id = tenant.tenant_id AND role_id = associate;
             DELETE FROM role_permissions WHERE tenant_id = tenant.tenant_id AND role_id = associate;

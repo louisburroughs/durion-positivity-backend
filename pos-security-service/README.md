@@ -723,8 +723,9 @@ Flyway on the owner credential (`SPRING_FLYWAY_USER` / `SPRING_FLYWAY_PASSWORD`)
   (`ADMIN`, `SYSTEM_ADMINISTRATOR`, `DISPATCHER`, `SHOP_MANAGER`, `SELF_SERVICE_CUSTOMER`, `CONTROLLER`),
   `SUPPORT`, the read-only role an impersonation token carries (WS2b-4), and the two accounting-workspace
   roles `ACCOUNTING_CLERK` and `GENERAL_MANAGER` (CAP:550 S3, #2504) carry `template_key` in alpha and are
-  copied, grants and scope included, into the platform tenant as the template. The template is therefore
-  exactly those nine roles (`TenantProvisioningIT`, `RoleBaselineDriftTest.TEMPLATE_FLOOR`).
+  copied, grants and scope included, into the platform tenant as the template. Those nine are the template's built-in floor
+  (`TenantProvisioningIT`, `RoleBaselineDriftTest.TEMPLATE_FLOOR`); a platform bulk load can add template roles on
+  top of it, which is why the seed's guard checks for at least nine rather than exactly nine.
   **After deploying CAP:550 S3** a platform operator runs `reconcile-template` (below) once for every
   existing tenant other than alpha (alpha's floor *is* the template's source): each gains `ACCOUNTING_CLERK`
   and `GENERAL_MANAGER` (or `template_key` on a `GENERAL_MANAGER` it already holds) and `CONTROLLER`'s new

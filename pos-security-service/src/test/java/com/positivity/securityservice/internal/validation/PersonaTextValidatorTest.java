@@ -172,7 +172,7 @@ class PersonaTextValidatorTest {
                         "controller",
                         "GL configuration, journal entries, the close cycle, reconciliation, and accounts payable",
                         "audit-aware, control-minded, and precise about posting impact",
-                        "accounting associate",
+                        "accounting clerk",
                         "ledger-facing context, reconciliation, and financial accuracy",
                         "audit-aware, posting-precise, and careful with financial claims",
                         "inventory controller",

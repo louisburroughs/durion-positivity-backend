@@ -59,10 +59,12 @@ class RetireAccountingAssociateMigrationIT {
 
     private static final UUID ALPHA = UUID.fromString("01900000-0000-7000-8000-000000000001");
     private static final UUID OTHER = UUID.fromString("01900000-0000-7000-8000-00000000c550");
+    private static final UUID CLERK_ONLY_TENANT = UUID.fromString("01900000-0000-7000-8000-00000000c551");
 
     private static final UUID ALPHA_ASSOCIATE = UUID.fromString("01990550-0000-7000-8000-000000000a01");
     private static final UUID OTHER_ASSOCIATE = UUID.fromString("01990550-0000-7000-8000-000000000b01");
     private static final UUID OTHER_CLERK = UUID.fromString("01990550-0000-7000-8000-000000000b02");
+    private static final UUID STANDALONE_CLERK = UUID.fromString("01990550-0000-7000-8000-000000000c01");
 
     @TempDir
     static Path versionedOnly;
@@ -111,7 +113,8 @@ class RetireAccountingAssociateMigrationIT {
         permission("accounting:ap:view", 3);
         permission("accounting:coa:view", 5);
         jdbc.execute("INSERT INTO ext_tenant (tenant_id, slug, display_name, status, aggregate_version, updated_at)"
-                + " VALUES ('" + OTHER + "', 'other', 'Other', 'ACTIVE', 1, now())");
+                + " VALUES ('" + OTHER + "', 'other', 'Other', 'ACTIVE', 1, now()),"
+                + " ('" + CLERK_ONLY_TENANT + "', 'clerk-only', 'Clerk only', 'ACTIVE', 1, now())");
         bind(ALPHA);
         role(ALPHA_ASSOCIATE, "ACCOUNTING_ASSOCIATE", "Canonical persona: Accounting Associate");
         grant(ALPHA_ASSOCIATE, "accounting:ap:pay");
@@ -130,6 +133,19 @@ class RetireAccountingAssociateMigrationIT {
         user("clerk.only", OTHER_CLERK);
         user("holds.both", OTHER_ASSOCIATE);
         user("holds.both", OTHER_CLERK);
+        // Effective-dated history: a clerk assignment that ended, or was revoked, is not "holding the
+        // clerk" — only an active associate assignment keeps these two users in accounting.
+        user("expired.clerk", OTHER_ASSOCIATE);
+        assignment("expired.clerk", OTHER_CLERK, "now() - interval '400 days'", "now() - interval '30 days'", null);
+        user("revoked.clerk", OTHER_ASSOCIATE);
+        assignment("revoked.clerk", OTHER_CLERK, "now() - interval '400 days'", null, "now() - interval '30 days'");
+
+        // A tenant that only ever had a clerk (hand-made before S3), holding ap:pay: BR-1 still applies.
+        bind(CLERK_ONLY_TENANT);
+        role(STANDALONE_CLERK, "ACCOUNTING_CLERK", "hand-made clerk, no associate");
+        grant(STANDALONE_CLERK, "accounting:ap:pay");
+        grant(STANDALONE_CLERK, "accounting:coa:view");
+        user("standalone.clerk", STANDALONE_CLERK);
 
         // 3. Deploy: V10, then the repeatable seeds.
         Flyway.configure()
@@ -222,15 +238,28 @@ class RetireAccountingAssociateMigrationIT {
         assertThat(grantsOf(OTHER, OTHER_CLERK)).containsExactly("accounting:coa:view");
 
         for (String username : List.of("associate.only", "clerk.only", "holds.both")) {
-            assertThat(jdbc.queryForList(
-                            "SELECT r.name FROM role_assignments ra JOIN roles r ON r.id = ra.role_id"
-                                    + " JOIN users u ON u.id = ra.user_id WHERE u.tenant_id = ? AND u.username = ?",
-                            String.class,
-                            OTHER,
-                            username))
+            assertThat(assignmentsOf(OTHER, username, false))
                     .as("assignments of %s", username)
                     .containsExactly("ACCOUNTING_CLERK");
         }
+        for (String username : List.of("expired.clerk", "revoked.clerk")) {
+            assertThat(assignmentsOf(OTHER, username, true))
+                    .as(
+                            "%s held the clerk only in the past, so the active associate assignment moves to the clerk",
+                            username)
+                    .containsExactly("ACCOUNTING_CLERK");
+            assertThat(assignmentsOf(OTHER, username, false))
+                    .as("the ended or revoked history row of %s is kept", username)
+                    .containsExactly("ACCOUNTING_CLERK", "ACCOUNTING_CLERK");
+        }
+    }
+
+    @Test
+    @DisplayName("BR-1: a tenant holding only a clerk, no associate, still has the clerk's ap:pay revoked")
+    void clerkOnlyTenantHasApPayRevoked() {
+        bind(CLERK_ONLY_TENANT);
+        assertThat(grantsOf(CLERK_ONLY_TENANT, STANDALONE_CLERK)).containsExactly("accounting:coa:view");
+        assertThat(assignmentsOf(CLERK_ONLY_TENANT, "standalone.clerk", true)).containsExactly("ACCOUNTING_CLERK");
     }
 
     @Test
@@ -305,15 +334,37 @@ class RetireAccountingAssociateMigrationIT {
     }
 
     private static void user(String username, UUID roleId) {
+        assignment(username, roleId, "now()", null, null);
+    }
+
+    /** An assignment with explicit effective window and revocation (SQL expressions or null). */
+    private static void assignment(String username, UUID roleId, String start, String end, String revokedAt) {
         jdbc.update(
                 "INSERT INTO users (id, username, password, enabled) VALUES (gen_random_uuid(), ?, 'x', true)"
                         + " ON CONFLICT (tenant_id, username) DO NOTHING",
                 username);
         jdbc.update(
-                "INSERT INTO role_assignments (id, user_id, role_id, effective_start_date, created_at, created_by)"
-                        + " SELECT gen_random_uuid(), u.id, ?, now(), now(), 'it' FROM users u"
+                "INSERT INTO role_assignments (id, user_id, role_id, effective_start_date, effective_end_date,"
+                        + " revoked_at, created_at, created_by)"
+                        + " SELECT gen_random_uuid(), u.id, ?, " + start + ", " + (end == null ? "NULL" : end) + ", "
+                        + (revokedAt == null ? "NULL" : revokedAt) + ", now(), 'it' FROM users u"
                         + " WHERE u.username = ? AND u.tenant_id = app_current_tenant()",
                 roleId,
+                username);
+    }
+
+    /** Role names a user is assigned to in a tenant; {@code activeOnly} applies the effective window and revocation. */
+    private static List<String> assignmentsOf(UUID tenant, String username, boolean activeOnly) {
+        return jdbc.queryForList(
+                "SELECT r.name FROM role_assignments ra JOIN roles r ON r.id = ra.role_id"
+                        + " JOIN users u ON u.id = ra.user_id WHERE u.tenant_id = ? AND u.username = ?"
+                        + (activeOnly
+                                ? " AND ra.revoked_at IS NULL AND ra.effective_start_date <= now()"
+                                        + " AND (ra.effective_end_date IS NULL OR ra.effective_end_date > now())"
+                                : "")
+                        + " ORDER BY r.name",
+                String.class,
+                tenant,
                 username);
     }
 
