@@ -12115,7 +12115,7 @@ components:
           description: IANA region id of the tenant's accounting calendar, such as America/Chicago. Every settlement, application and posting is dated, and every period is cut, in this zone. Fixed offsets (+05:00, UTC+05:00, Etc/GMT+5) and SystemV ids are rejected; UTC is accepted.
           example: America/Chicago
           maxLength: 64
-          minLength: 0
+          minLength: 1
           type: string
       required:
       - timeZone
