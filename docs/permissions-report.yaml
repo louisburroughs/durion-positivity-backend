@@ -1,9 +1,9 @@
-generatedAt: "2026-10-06T17:20:39.731492+00:00"
+generatedAt: "2026-10-06T21:02:49.485563+00:00"
 root: "."
 summary:
   manifestCount: 24
-  permissionCount: 513
-  uniquePermissionCount: 513
+  permissionCount: 517
+  uniquePermissionCount: 517
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -923,7 +923,7 @@ manifests:
     domain: "supplier"
     serviceName: "pos-supplier"
     version: "1.0"
-    permissionCount: 14
+    permissionCount: 18
     permissions:
       - name: "supplier:audit:read"
         description: "Read supplier exchange audit records"
@@ -953,6 +953,14 @@ manifests:
         description: "View and clear fleet workorder authorizations parked for manual review"
       - name: "supplier:mktcat:import"
         description: "Run a marketing-catalogue (MKCAT) import on demand and read staged enrichment"
+      - name: "supplier:vendor:read"
+        description: "View vendors (the vendor master) and their remit-to change requests"
+      - name: "supplier:vendor:write"
+        description: "Create and edit vendors, deactivate or reactivate them, and request a remit-to change"
+      - name: "supplier:vendor_remit:approve"
+        description: "Approve or reject a vendor remit-to change requested by someone else"
+      - name: "supplier:fact:replay"
+        description: "Re-emit the tenant's supplier.vendor.updated facts to seed or repair a replica"
   - module: "pos-tax"
     path: "pos-tax/src/main/resources/permissions.yaml"
     domain: "tax"
@@ -3650,6 +3658,12 @@ permissions:
     serviceName: "pos-supplier"
     module: "pos-supplier"
     source: "pos-supplier/src/main/resources/permissions.yaml"
+  - name: "supplier:fact:replay"
+    description: "Re-emit the tenant's supplier.vendor.updated facts to seed or repair a replica"
+    domain: "supplier"
+    serviceName: "pos-supplier"
+    module: "pos-supplier"
+    source: "pos-supplier/src/main/resources/permissions.yaml"
   - name: "supplier:invoice:fetch"
     description: "Run a vendor invoice fetch on demand"
     domain: "supplier"
@@ -3712,6 +3726,24 @@ permissions:
     source: "pos-supplier/src/main/resources/permissions.yaml"
   - name: "supplier:transmission:resolve"
     description: "Resolve a purchase-order transmission awaiting manual review (confirm with vendor reference, mark not received, or cancel)"
+    domain: "supplier"
+    serviceName: "pos-supplier"
+    module: "pos-supplier"
+    source: "pos-supplier/src/main/resources/permissions.yaml"
+  - name: "supplier:vendor:read"
+    description: "View vendors (the vendor master) and their remit-to change requests"
+    domain: "supplier"
+    serviceName: "pos-supplier"
+    module: "pos-supplier"
+    source: "pos-supplier/src/main/resources/permissions.yaml"
+  - name: "supplier:vendor:write"
+    description: "Create and edit vendors, deactivate or reactivate them, and request a remit-to change"
+    domain: "supplier"
+    serviceName: "pos-supplier"
+    module: "pos-supplier"
+    source: "pos-supplier/src/main/resources/permissions.yaml"
+  - name: "supplier:vendor_remit:approve"
+    description: "Approve or reject a vendor remit-to change requested by someone else"
     domain: "supplier"
     serviceName: "pos-supplier"
     module: "pos-supplier"
