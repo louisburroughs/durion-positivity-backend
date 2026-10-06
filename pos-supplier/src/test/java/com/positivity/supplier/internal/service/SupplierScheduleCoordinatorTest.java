@@ -10,11 +10,13 @@ import com.positivity.supplier.internal.domain.model.ProtocolFamily;
 import com.positivity.supplier.internal.domain.model.SupplierCapability;
 import com.positivity.supplier.internal.entity.SupplierEndpointBindingEntity;
 import com.positivity.supplier.internal.entity.SupplierProfileEntity;
+import com.positivity.supplier.internal.entity.SupplierProfilePersistenceFixtures;
 import com.positivity.supplier.internal.entity.SupplierScheduleLeaseEntity;
 import com.positivity.supplier.internal.enums.ProfileSourceOfTruth;
 import com.positivity.supplier.internal.repository.SupplierEndpointBindingRepository;
 import com.positivity.supplier.internal.repository.SupplierProfileRepository;
 import com.positivity.supplier.internal.repository.SupplierScheduleLeaseRepository;
+import com.positivity.supplier.internal.repository.SupplierVendorRepository;
 import java.sql.Connection;
 import java.sql.Statement;
 import java.time.Instant;
@@ -57,6 +59,9 @@ class SupplierScheduleCoordinatorTest extends PostgresSliceTestBase {
     private SupplierProfileRepository profileRepository;
 
     @Autowired
+    private SupplierVendorRepository vendorRepository;
+
+    @Autowired
     private SupplierEndpointBindingRepository bindingRepository;
 
     @Autowired
@@ -67,6 +72,7 @@ class SupplierScheduleCoordinatorTest extends PostgresSliceTestBase {
     @BeforeEach
     void setUp() {
         SupplierProfileEntity profile = new SupplierProfileEntity();
+        profile.setVendorId(SupplierProfilePersistenceFixtures.vendor(vendorRepository));
         profile.setSupplierRef("michelin-" + UUID.randomUUID());
         profile.setDisplayName("Michelin");
         profile.setEnabled(true);
@@ -102,6 +108,7 @@ class SupplierScheduleCoordinatorTest extends PostgresSliceTestBase {
             statement.executeUpdate("DELETE FROM supplier_schedule_lease");
             statement.executeUpdate("DELETE FROM supplier_endpoint_binding");
             statement.executeUpdate("DELETE FROM supplier_profile");
+            statement.executeUpdate("DELETE FROM supplier_vendor");
         }
     }
 

@@ -1,5 +1,6 @@
 package com.positivity.supplier.internal.client;
 
+import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.supplier.internal.audit.SupplierCorrelationContext;
 import com.positivity.supplier.internal.entity.SupplierEndpointBindingEntity;
 import com.positivity.supplier.internal.entity.SupplierProfileEntity;
@@ -30,6 +31,7 @@ import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.function.Supplier;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -605,6 +607,9 @@ public class SupplierBaseClient {
             @NonNull Map<String, String> responseHeaders) {
         ResolvedBinding binding = request.binding();
         Duration duration = Duration.between(started, finished);
+        // Assigned here rather than by the audit insert, so the caller can name the exchange a document
+        // came from (#2516) without reading the audit trail back.
+        UUID exchangeId = UUIDv7Generator.generate();
         SupplierHttpResponse response = new SupplierHttpResponse(
                 outcome,
                 httpStatus,
@@ -613,10 +618,12 @@ public class SupplierBaseClient {
                 attemptNumber,
                 duration,
                 failureDetail,
-                responseHeaders);
+                responseHeaders,
+                exchangeId);
 
         try {
             exchangeObserver.onExchange(new ExchangeContext(
+                    exchangeId,
                     binding.profile().getVendorProfileId(),
                     binding.profile().getSupplierRef(),
                     binding.capability(),
@@ -656,7 +663,8 @@ public class SupplierBaseClient {
                 attempts,
                 Duration.between(callStarted, Instant.now(clock)),
                 response.failureDetail(),
-                response.responseHeaders());
+                response.responseHeaders(),
+                response.exchangeId());
     }
 
     /**

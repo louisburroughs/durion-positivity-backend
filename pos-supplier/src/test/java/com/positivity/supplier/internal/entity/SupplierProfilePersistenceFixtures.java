@@ -6,6 +6,7 @@ import com.positivity.supplier.internal.enums.ProfileSourceOfTruth;
 import com.positivity.supplier.internal.enums.RetryBackoff;
 import com.positivity.supplier.internal.enums.SupplierAccountRole;
 import com.positivity.supplier.internal.enums.SupplierAuthType;
+import com.positivity.supplier.internal.repository.SupplierVendorRepository;
 import java.util.UUID;
 
 /** Shared entity fixtures for the ADR-0050 vendor profile persistence/service tests. */
@@ -13,6 +14,30 @@ public final class SupplierProfilePersistenceFixtures {
 
     private SupplierProfilePersistenceFixtures() {
         // fixtures
+    }
+
+    /**
+     * Persists an ACTIVE vendor of the bound tenant and returns its id: every profile belongs to one
+     * (#2516, {@code supplier_profile.vendor_id NOT NULL}).
+     */
+    public static UUID vendor(SupplierVendorRepository vendorRepository) {
+        String number = "T-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(java.util.Locale.ROOT);
+        return vendorRepository
+                .saveAndFlush(SupplierVendorEntity.builder()
+                        .vendorNumber(number)
+                        .legalName("Vendor " + number)
+                        .displayName("Vendor " + number)
+                        .defaultPaymentTerms("NET30")
+                        .defaultCurrency("EUR")
+                        .status(com.positivity.supplier.internal.enums.VendorStatus.ACTIVE)
+                        .build())
+                .getVendorId();
+    }
+
+    public static SupplierProfileEntity profile(String supplierRef, UUID vendorId) {
+        SupplierProfileEntity profile = profile(supplierRef);
+        profile.setVendorId(vendorId);
+        return profile;
     }
 
     public static SupplierProfileEntity profile(String supplierRef) {

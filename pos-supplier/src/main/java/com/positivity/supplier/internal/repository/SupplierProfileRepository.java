@@ -21,4 +21,8 @@ public interface SupplierProfileRepository extends JpaRepository<SupplierProfile
     /** YAML reconciliation scan (ADR-0050 §6). */
     @NonNull
     List<SupplierProfileEntity> findBySourceOfTruth(@NonNull ProfileSourceOfTruth sourceOfTruth);
+
+    /** The profiles of one vendor, ordered by {@code supplierRef} (#2516 profile list filter). */
+    @NonNull
+    List<SupplierProfileEntity> findByVendorIdOrderBySupplierRefAsc(@NonNull UUID vendorId);
 }

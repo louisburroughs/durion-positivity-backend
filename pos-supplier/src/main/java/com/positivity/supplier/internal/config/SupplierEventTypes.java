@@ -165,6 +165,34 @@ public final class SupplierEventTypes {
                         .build(),
                 EventTypeRegistration.fastRead(
                                 "SUPPLIER_MKTCAT_VARIANT_LIST", "List staged marketing-catalogue enrichment")
+                        .build(),
+                // Vendor master (#2516, ADR-0070 Decision 2). Remit-to decisions are approval-grade: they
+                // decide where the shop's money is sent.
+                EventTypeRegistration.fastRead("SUPPLIER_VENDOR_LIST", "List vendors")
+                        .build(),
+                EventTypeRegistration.fastRead("SUPPLIER_VENDOR_GET", "Get a vendor")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "SUPPLIER_VENDOR_REMIT_CHANGE_LIST", "List a vendor's remit-to change requests")
+                        .build(),
+                EventTypeRegistration.write("SUPPLIER_VENDOR_CREATE", "Create a vendor")
+                        .build(),
+                EventTypeRegistration.write("SUPPLIER_VENDOR_UPDATE", "Update a vendor")
+                        .build(),
+                EventTypeRegistration.write("SUPPLIER_VENDOR_DEACTIVATE", "Deactivate a vendor")
+                        .build(),
+                EventTypeRegistration.write("SUPPLIER_VENDOR_REACTIVATE", "Reactivate a vendor")
+                        .build(),
+                EventTypeRegistration.write(
+                                "SUPPLIER_VENDOR_REMIT_CHANGE_REQUEST", "Request a change to a vendor's remit-to")
+                        .build(),
+                EventTypeRegistration.write(
+                                "SUPPLIER_VENDOR_FACT_REPLAY", "Re-emit one page of the tenant's vendor facts")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "SUPPLIER_VENDOR_REMIT_CHANGE_APPROVE", "Approve a vendor remit-to change")
+                        .build(),
+                EventTypeRegistration.approval("SUPPLIER_VENDOR_REMIT_CHANGE_REJECT", "Reject a vendor remit-to change")
                         .build());
     }
 }

@@ -34,6 +34,8 @@ import org.jspecify.annotations.Nullable;
  * body element, this is where it would surface — so treat these two fields as untrusted content,
  * not as pre-sanitized text.
  *
+ * @param exchangeId identity of this attempt, assigned by the transport before the observer runs and
+ *     stored as the exchange-audit row's id, so the caller can name the exchange as provenance (#2516)
  * @param vendorProfileId platform identity of the profile that owns the binding
  * @param supplierRef configuration alias at the time of the exchange; descriptive only
  * @param capability the supplier capability being exercised
@@ -57,6 +59,7 @@ import org.jspecify.annotations.Nullable;
  *     redirect {@code Location} carrying a signed URL; the audit writer redacts embedded URL credentials
  */
 public record ExchangeContext(
+        @NonNull UUID exchangeId,
         @NonNull UUID vendorProfileId,
         @NonNull String supplierRef,
         @NonNull SupplierCapability capability,
@@ -80,6 +83,7 @@ public record ExchangeContext(
     // violation here is this module's own defect and belongs on the platform 500 fallback, not a
     // client 4xx.
     public ExchangeContext {
+        Objects.requireNonNull(exchangeId, "exchangeId must not be null");
         Objects.requireNonNull(vendorProfileId, "vendorProfileId must not be null");
         Objects.requireNonNull(supplierRef, "supplierRef must not be null");
         Objects.requireNonNull(capability, "capability must not be null");

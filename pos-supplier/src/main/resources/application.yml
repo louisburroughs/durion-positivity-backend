@@ -231,6 +231,10 @@ pos:
     outbox:
       poll-interval-ms: ${SUPPLIER_OUTBOX_POLL_INTERVAL_MS:1000}
       send-timeout-ms: ${SUPPLIER_OUTBOX_SEND_TIMEOUT_MS:10000}
+      replay:
+        # supplier.outbox.replay-requested (#2516, ADR-0044 §4): how far back a requested window may
+        # start; an older request is logged and dropped. The pos-customer value.
+        max-lookback: ${SUPPLIER_OUTBOX_REPLAY_MAX_LOOKBACK:P30D}
     mktcat:
       # Full catalogue sweep. The mode that always works: change subscription is better where a
       # catalogue offers it, but a subscription the vendor has silently forgotten produces no error,

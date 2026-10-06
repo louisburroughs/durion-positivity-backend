@@ -49,6 +49,12 @@ public class SupplierNotFoundException extends RuntimeException {
      */
     public static final String PRODUCT_CODES_NOT_FOUND = "SUPPLIER_PRODUCT_CODES_NOT_FOUND";
 
+    /** No vendor with that id in the caller's tenant (#2516). */
+    public static final String VENDOR_NOT_FOUND = "SUPPLIER_VENDOR_NOT_FOUND";
+
+    /** No remit-to change with that id on the addressed vendor (#2516). */
+    public static final String VENDOR_REMIT_CHANGE_NOT_FOUND = "SUPPLIER_VENDOR_REMIT_CHANGE_NOT_FOUND";
+
     private final String code;
 
     public SupplierNotFoundException(String code, String message) {

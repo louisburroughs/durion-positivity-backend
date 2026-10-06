@@ -6,13 +6,17 @@ import com.positivity.supplier.internal.entity.SupplierAccountEntity;
 import com.positivity.supplier.internal.entity.SupplierAuthConfigEntity;
 import com.positivity.supplier.internal.entity.SupplierEndpointBindingEntity;
 import com.positivity.supplier.internal.entity.SupplierProfileEntity;
+import com.positivity.supplier.internal.entity.SupplierVendorEntity;
+import com.positivity.supplier.internal.enums.VendorStatus;
 import com.positivity.supplier.internal.exception.SupplierConflictException;
 import com.positivity.supplier.internal.exception.SupplierNotFoundException;
+import com.positivity.supplier.internal.exception.SupplierUnprocessableException;
 import com.positivity.supplier.internal.exception.SupplierValidationException;
 import com.positivity.supplier.internal.repository.SupplierAccountRepository;
 import com.positivity.supplier.internal.repository.SupplierAuthConfigRepository;
 import com.positivity.supplier.internal.repository.SupplierEndpointBindingRepository;
 import com.positivity.supplier.internal.repository.SupplierProfileRepository;
+import com.positivity.supplier.internal.repository.SupplierVendorRepository;
 import com.positivity.supplier.internal.service.model.AuthConfigRequest;
 import com.positivity.supplier.internal.service.model.AuthConfigView;
 import com.positivity.supplier.internal.service.model.CommercialAccountRequest;
@@ -28,8 +32,11 @@ import com.positivity.supplier.internal.service.model.VendorProfileRequest;
 import com.positivity.supplier.internal.service.model.VendorProfileView;
 import com.positivity.supplier.internal.spi.SupplierAuthConfigChanged;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -59,6 +66,7 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
     private final SupplierAuthConfigRepository authConfigRepository;
     private final SupplierAccountRepository accountRepository;
     private final SupplierEndpointBindingRepository bindingRepository;
+    private final SupplierVendorRepository vendorRepository;
 
     /** Supplies the legal secret-reference scheme allowlist (ADR-0050 §4). */
     private final SecretSchemeRegistry secretSchemeRegistry;
@@ -86,10 +94,12 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
     public VendorProfileView createProfile(@NonNull VendorProfileRequest request) {
         Objects.requireNonNull(request, REQUEST_REQUIRED);
         requireSupplierRefFree(request.supplierRef(), null);
+        SupplierVendorEntity vendor = resolveVendor(request.vendorId());
+        requireActive(vendor, "a new profile must name an active vendor");
         SupplierProfileEntity profile = new SupplierProfileEntity();
         applyProfile(profile, request);
         profile.setSourceOfTruth(com.positivity.supplier.internal.enums.ProfileSourceOfTruth.ADMIN);
-        return toProfileView(profileRepository.save(profile));
+        return toProfileView(profileRepository.save(profile), vendor);
     }
 
     @Override
@@ -98,8 +108,15 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
         Objects.requireNonNull(request, REQUEST_REQUIRED);
         SupplierProfileEntity profile = loadAdminManagedProfile(vendorProfileId);
         requireSupplierRefFree(request.supplierRef(), vendorProfileId);
+        // Re-pointing an ADMIN profile to another vendor is allowed (#2516), but, as on create, only to an
+        // ACTIVE one. Keeping a vendor that has since gone inactive is allowed: the profile is not being
+        // newly attached to it.
+        SupplierVendorEntity vendor = resolveVendor(request.vendorId());
+        if (!vendor.getVendorId().equals(profile.getVendorId())) {
+            requireActive(vendor, "a profile can only be re-pointed to an active vendor");
+        }
         applyProfile(profile, request);
-        return toProfileView(profileRepository.save(profile));
+        return toProfileView(profileRepository.save(profile), vendor);
     }
 
     @Override
@@ -126,15 +143,25 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
     @NonNull
     @Transactional(readOnly = true)
     public VendorProfileView getProfile(@NonNull UUID vendorProfileId) {
-        return toProfileView(loadProfile(vendorProfileId));
+        SupplierProfileEntity profile = loadProfile(vendorProfileId);
+        return toProfileView(profile, loadVendorOf(profile));
     }
 
     @Override
     @NonNull
     @Transactional(readOnly = true)
-    public List<VendorProfileView> listProfiles() {
-        return profileRepository.findAllByOrderBySupplierRefAsc().stream()
-                .map(SupplierProfileAdminServiceImpl::toProfileView)
+    public List<VendorProfileView> listProfiles(@Nullable UUID vendorId) {
+        List<SupplierProfileEntity> profiles = vendorId == null
+                ? profileRepository.findAllByOrderBySupplierRefAsc()
+                : profileRepository.findByVendorIdOrderBySupplierRefAsc(vendorId);
+        Map<UUID, SupplierVendorEntity> vendors = vendorRepository
+                .findAllById(profiles.stream()
+                        .map(SupplierProfileEntity::getVendorId)
+                        .collect(Collectors.toSet()))
+                .stream()
+                .collect(Collectors.toMap(SupplierVendorEntity::getVendorId, Function.identity()));
+        return profiles.stream()
+                .map(profile -> toProfileView(profile, requireVendorOf(profile, vendors.get(profile.getVendorId()))))
                 .toList();
     }
 
@@ -335,6 +362,44 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
                         "Vendor profile " + vendorProfileId + " does not exist"));
     }
 
+    /**
+     * The vendor a profile request names (#2516). A vendor the caller's tenant does not have — absent,
+     * or another tenant's, which row-level security makes the same thing — is a 422: the profile exists
+     * or is being created; what its body names does not qualify.
+     */
+    @NonNull
+    private SupplierVendorEntity resolveVendor(@NonNull UUID vendorId) {
+        return vendorRepository
+                .findById(vendorId)
+                .orElseThrow(() -> new SupplierUnprocessableException(
+                        SupplierUnprocessableException.VENDOR_NOT_FOUND, "Vendor " + vendorId + " does not exist"));
+    }
+
+    private static void requireActive(@NonNull SupplierVendorEntity vendor, @NonNull String rule) {
+        if (vendor.getStatus() == VendorStatus.INACTIVE) {
+            throw new SupplierUnprocessableException(
+                    SupplierUnprocessableException.VENDOR_INACTIVE,
+                    "Vendor " + vendor.getVendorNumber() + " is inactive; " + rule);
+        }
+    }
+
+    @NonNull
+    private SupplierVendorEntity loadVendorOf(@NonNull SupplierProfileEntity profile) {
+        return requireVendorOf(
+                profile, vendorRepository.findById(profile.getVendorId()).orElse(null));
+    }
+
+    /** The foreign key guarantees the vendor; its absence here is this module's own defect. */
+    @NonNull
+    private static SupplierVendorEntity requireVendorOf(
+            @NonNull SupplierProfileEntity profile, @Nullable SupplierVendorEntity vendor) {
+        if (vendor == null) {
+            throw new IllegalStateException(
+                    "Vendor " + profile.getVendorId() + " of profile " + profile.getVendorProfileId() + " is missing");
+        }
+        return vendor;
+    }
+
     /** Loads the profile and rejects {@code YAML}-managed ones for mutation (ADR-0050 §6). */
     @NonNull
     private SupplierProfileEntity loadAdminManagedProfile(@NonNull UUID vendorProfileId) {
@@ -509,6 +574,7 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
 
     private static void applyProfile(@NonNull SupplierProfileEntity profile, @NonNull VendorProfileRequest request) {
         profile.setSupplierRef(request.supplierRef());
+        profile.setVendorId(request.vendorId());
         profile.setDisplayName(request.displayName());
         profile.setEnabled(request.enabled());
         profile.setSandbox(request.sandbox());
@@ -582,7 +648,8 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
     }
 
     @NonNull
-    private static VendorProfileView toProfileView(@NonNull SupplierProfileEntity profile) {
+    private static VendorProfileView toProfileView(
+            @NonNull SupplierProfileEntity profile, @NonNull SupplierVendorEntity vendor) {
         return new VendorProfileView(
                 profile.getVendorProfileId(),
                 profile.getSupplierRef(),
@@ -596,7 +663,10 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
                 profile.getSandboxBaseUrlOverride(),
                 profile.getRetryBackoff() == null
                         ? null
-                        : RetryBackoff.valueOf(profile.getRetryBackoff().name()));
+                        : RetryBackoff.valueOf(profile.getRetryBackoff().name()),
+                vendor.getVendorId(),
+                vendor.getVendorNumber(),
+                vendor.getDisplayName());
     }
 
     @NonNull

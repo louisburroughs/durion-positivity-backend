@@ -11,11 +11,13 @@ import com.positivity.supplier.internal.entity.AuditPayloadCipher;
 import com.positivity.supplier.internal.entity.ExchangeAuditEntity;
 import com.positivity.supplier.internal.entity.SupplierEndpointBindingEntity;
 import com.positivity.supplier.internal.entity.SupplierProfileEntity;
+import com.positivity.supplier.internal.entity.SupplierProfilePersistenceFixtures;
 import com.positivity.supplier.internal.enums.PayloadCaptureLevel;
 import com.positivity.supplier.internal.enums.ProfileSourceOfTruth;
 import com.positivity.supplier.internal.repository.ExchangeAuditRepository;
 import com.positivity.supplier.internal.repository.SupplierEndpointBindingRepository;
 import com.positivity.supplier.internal.repository.SupplierProfileRepository;
+import com.positivity.supplier.internal.repository.SupplierVendorRepository;
 import com.positivity.supplier.internal.spi.ExchangeContext;
 import com.positivity.supplier.internal.spi.ExchangeOutcome;
 import jakarta.persistence.EntityManager;
@@ -53,6 +55,9 @@ class ExchangeAuditObserverTest extends PostgresSliceTestBase {
     private SupplierProfileRepository profileRepository;
 
     @Autowired
+    private SupplierVendorRepository vendorRepository;
+
+    @Autowired
     private EntityManager entityManager;
 
     @Autowired
@@ -69,6 +74,7 @@ class ExchangeAuditObserverTest extends PostgresSliceTestBase {
         // ExchangeAuditWriterTest, which is the only place a rolled-back caller is observable.
         observer = new ExchangeAuditWriter(auditRepository, bindingRepository, "REDACTED");
         SupplierProfileEntity profile = new SupplierProfileEntity();
+        profile.setVendorId(SupplierProfilePersistenceFixtures.vendor(vendorRepository));
         profile.setSupplierRef("michelin-eu");
         profile.setDisplayName("Michelin EU");
         profile.setEnabled(true);
@@ -92,6 +98,7 @@ class ExchangeAuditObserverTest extends PostgresSliceTestBase {
 
     private ExchangeContext context(UUID bindingId, ExchangeOutcome outcome, String requestBody) {
         return new ExchangeContext(
+                com.positivity.shared.id.UUIDv7Generator.generate(),
                 profileId,
                 "michelin-eu",
                 SupplierCapability.STOCK_INQUIRY,
@@ -235,6 +242,7 @@ class ExchangeAuditObserverTest extends PostgresSliceTestBase {
         for (int attempt = 1; attempt <= 3; attempt++) {
             ExchangeContext base = context(bindingId, ExchangeOutcome.PRE_SEND_FAILURE, REQUEST_DOC);
             observer.write(new ExchangeContext(
+                    com.positivity.shared.id.UUIDv7Generator.generate(),
                     base.vendorProfileId(),
                     base.supplierRef(),
                     base.capability(),

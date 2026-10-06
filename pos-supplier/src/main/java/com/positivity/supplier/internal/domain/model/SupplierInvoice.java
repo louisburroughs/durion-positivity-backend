@@ -25,6 +25,11 @@ import org.jspecify.annotations.Nullable;
  * @param totalTaxAmount total tax amount, verbatim
  * @param totalGrossAmount total gross amount, verbatim
  * @param lines invoice lines, verbatim
+ * @param dueDate payment due date the document states; {@code null} when it states none
+ *     (EDIWheel B3.3 never does)
+ * @param paymentTerms payment terms the document states, verbatim; {@code null} when none
+ * @param taxes tax amounts by tax type as the document states them; {@code null} when the document
+ *     does not split its tax by type (#2516)
  */
 public record SupplierInvoice(
         @NonNull String vendorInvoiceNumber,
@@ -34,11 +39,27 @@ public record SupplierInvoice(
         @Nullable BigDecimal totalNetAmount,
         @Nullable BigDecimal totalTaxAmount,
         @Nullable BigDecimal totalGrossAmount,
-        @NonNull List<Line> lines) {
+        @NonNull List<Line> lines,
+        @Nullable LocalDate dueDate,
+        @Nullable String paymentTerms,
+        @Nullable List<Tax> taxes) {
 
     public enum Type {
         INVOICE,
         CREDIT_NOTE
+    }
+
+    /**
+     * One tax amount of the document by tax type, verbatim (#2516).
+     *
+     * @param taxType the tax type as the document names it; never blank
+     * @param amount the amount of that tax
+     */
+    public record Tax(@NonNull String taxType, @NonNull BigDecimal amount) {
+        public Tax {
+            Objects.requireNonNull(taxType, "taxType must not be null");
+            Objects.requireNonNull(amount, "amount must not be null");
+        }
     }
 
     /**
@@ -85,5 +106,6 @@ public record SupplierInvoice(
             throw new IllegalArgumentException("currency must not be blank");
         }
         lines = List.copyOf(lines);
+        taxes = taxes == null ? null : List.copyOf(taxes);
     }
 }

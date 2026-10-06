@@ -3,6 +3,7 @@ package com.positivity.supplier.internal.service.model;
 import com.positivity.supplier.internal.exception.SupplierValidationException;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Objects;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -31,6 +32,8 @@ import org.jspecify.annotations.Nullable;
  *     unchanged. Never blank when present — a blank override would silently resolve to no host
  * @param retryBackoff default retry backoff strategy for the profile's bindings; {@code null}
  *     means the deployment default
+ * @param vendorId the vendor this connection belongs to (#2516, ADR-0070 Decision 7); required, a
+ *     vendor of the caller's tenant, and {@code ACTIVE} for a new profile
  */
 @Schema(
         description =
@@ -90,7 +93,14 @@ public record VendorProfileRequest(
                 description = "Default retry backoff strategy. Omit to use the deployment default.",
                 example = "EXPONENTIAL")
         @Nullable
-        RetryBackoff retryBackoff) {
+        RetryBackoff retryBackoff,
+
+        @Schema(
+                description =
+                        "The vendor this connection belongs to (UUIDv7). Required; must be a vendor of the caller's tenant, and ACTIVE when creating a profile.",
+                example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c")
+        @NonNull
+        UUID vendorId) {
 
     public VendorProfileRequest {
         Objects.requireNonNull(supplierRef, "supplierRef must not be null");
@@ -122,6 +132,9 @@ public record VendorProfileRequest(
             throw new SupplierValidationException(
                     SupplierValidationException.VALIDATION_ERROR,
                     "sandboxBaseUrlOverride must not be blank when present");
+        }
+        if (vendorId == null) {
+            throw new SupplierValidationException(SupplierValidationException.VALIDATION_ERROR, "vendorId is required");
         }
     }
 }
