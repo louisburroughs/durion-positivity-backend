@@ -86,6 +86,9 @@ class VendorMasterMigrationIT {
         UUID michelinDuplicateA;
         UUID oddRefA;
         UUID michelinB;
+        UUID acme;
+        UUID acmeUpper;
+        UUID acmeTwo;
         try (Connection connection = database.getConnection();
                 Statement statement = connection.createStatement()) {
             michelinA = profile(statement, TENANT_A, "michelin-eu", "Michelin Europe");
@@ -95,6 +98,10 @@ class VendorMasterMigrationIT {
             oddRefA = profile(statement, TENANT_A, "_legacy", "Legacy Supplier");
             // The same supplierRef in another tenant: numbers are unique per tenant only.
             michelinB = profile(statement, TENANT_B, "michelin-eu", "Michelin Europe");
+            // Review case: ACME and acme fold to ACME; the second must not take ACME-2, which acme-2 holds.
+            acme = profile(statement, TENANT_A, "acme", "Acme");
+            acmeUpper = profile(statement, TENANT_A, "ACME", "Acme (upper)");
+            acmeTwo = profile(statement, TENANT_A, "acme-2", "Acme Two");
             statement.execute("INSERT INTO supplier_exchange_audit (tenant_id, exchange_audit_id, vendor_profile_id,"
                     + " supplier_ref, capability, protocol_family, protocol_version, http_method, endpoint_uri,"
                     + " attempt, correlation_id, outcome, started_at, duration_ms, capture_level, created_at)"
@@ -125,7 +132,13 @@ class VendorMasterMigrationIT {
                     numbers.put((UUID) rows.getObject("vendor_profile_id"), rows.getString("vendor_number"));
                 }
             }
-            assertThat(numbers).hasSize(4);
+            assertThat(numbers).hasSize(7);
+            assertThat(numbers.get(acmeTwo))
+                    .as("a literal base keeps its own number")
+                    .isEqualTo("ACME-2");
+            assertThat(java.util.Set.of(numbers.get(acme), numbers.get(acmeUpper)))
+                    .as("the duplicate skips the suffix a literal base already holds")
+                    .containsExactlyInAnyOrder("ACME", "ACME-3");
             assertThat(numbers.get(michelinA)).isIn("MICHELIN-EU", "MICHELIN-EU-2");
             assertThat(numbers.get(michelinDuplicateA)).isIn("MICHELIN-EU", "MICHELIN-EU-2");
             assertThat(numbers.get(michelinA)).isNotEqualTo(numbers.get(michelinDuplicateA));

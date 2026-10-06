@@ -406,8 +406,30 @@ class SupplierCommandListenerTest {
         listener.onSupplierCommand(replayCommand(null, null));
         listener.onSupplierCommand(replayCommand("yesterday", null));
         listener.onSupplierCommand(replayCommand("2026-08-14T10:00:00Z", "later"));
+        // An inverted or empty window is malformed too: it must not widen into "since until now".
+        listener.onSupplierCommand(replayCommand("2026-08-14T10:00:00Z", "2026-08-14T09:00:00Z"));
+        listener.onSupplierCommand(replayCommand("2026-08-14T10:00:00Z", "2026-08-14T10:00:00Z"));
 
         verifyNoInteractions(outboxReplayService);
+    }
+
+    @Test
+    @DisplayName("a missing until replays from since up to now")
+    void missingUntilReplaysToNow() {
+        listener.onSupplierCommand(replayCommand("2026-08-14T10:00:00Z", null));
+
+        verify(outboxReplayService)
+                .replayEventsBetween(Instant.parse("2026-08-14T09:59:59Z"), Instant.parse("2026-08-14T12:00:01Z"));
+    }
+
+    @Test
+    @DisplayName("a dropped database connection during replay propagates for the container to retry")
+    void droppedConnectionDuringReplayPropagates() {
+        when(outboxReplayService.replayEventsBetween(any(), any()))
+                .thenThrow(new DataAccessResourceFailureException("connection refused"));
+
+        assertThatThrownBy(() -> listener.onSupplierCommand(replayCommand("2026-08-14T10:00:00Z", null)))
+                .isInstanceOf(DataAccessResourceFailureException.class);
     }
 
     @Test

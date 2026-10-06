@@ -878,4 +878,28 @@ class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
         assertThat(rebound.isEnabled()).isTrue();
         assertThat(rebound.getVendorId()).isEqualTo(renamedId);
     }
+
+    @Test
+    void yamlVendorNumberOfTheWrongShapeFailsStartup() {
+        ProfileSpec base = michelinSpec();
+        for (String malformed : List.of("michelin", "-MICHELIN", "MICHELIN EU", "M".repeat(31))) {
+            ProfileSpec spec = new ProfileSpec(
+                    base.key(),
+                    base.displayName(),
+                    base.enabled(),
+                    base.protocolDefaults(),
+                    base.accounts(),
+                    base.auth(),
+                    base.bindings(),
+                    base.sandbox(),
+                    malformed);
+
+            assertThatThrownBy(() -> bootstrap.reconcile(properties(spec)))
+                    .as(malformed)
+                    .isInstanceOf(SupplierConfigurationException.class)
+                    .hasFieldOrPropertyWithValue("code", SupplierConfigurationException.YAML_BOOTSTRAP_INVALID)
+                    .hasMessageContaining("vendorNumber");
+        }
+        assertThat(profileRepository.findBySupplierRef("michelin-eu")).isEmpty();
+    }
 }

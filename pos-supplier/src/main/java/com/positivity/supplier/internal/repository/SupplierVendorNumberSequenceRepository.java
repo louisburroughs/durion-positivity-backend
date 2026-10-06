@@ -40,5 +40,8 @@ public interface SupplierVendorNumberSequenceRepository
                     VALUES (:tenantId, :id, 1, :now)
                     ON CONFLICT DO NOTHING
                     """, nativeQuery = true)
-    int insertIfAbsent(@Param("tenantId") UUID tenantId, @Param("id") UUID id, @Param("now") Instant now);
+    int insertIfAbsent(
+            @Param("tenantId") @NonNull UUID tenantId,
+            @Param("id") @NonNull UUID id,
+            @Param("now") @NonNull Instant now);
 }

@@ -214,7 +214,7 @@ public class SupplierProfileAdminController {
                     configuration instead.
                     Preconditions: the profile must exist, must be ADMIN-managed, the supplierRef in the body
                     must not belong to a different profile, and vendorId must name a vendor of the caller's
-                    tenant; the profile may be re-pointed to another vendor.
+                    tenant; the profile may be re-pointed to another vendor, which must then be ACTIVE.
                     Required inputs: vendorProfileId (UUIDv7) path parameter plus the full body, because every field
                     is replaced; omitting an optional field resets it to the deployment default rather than leaving
                     the stored value.
@@ -222,12 +222,14 @@ public class SupplierProfileAdminController {
                     resolve to a typed not-configured outcome.
                     Returns 404 when the profile does not exist, 409 when it is YAML-managed or the supplierRef is
                     taken, 400 when a required field is blank or a timeout is not greater than zero, and 422
-                    SUPPLIER_VENDOR_NOT_FOUND when vendorId names no vendor of the tenant.
+                    SUPPLIER_VENDOR_NOT_FOUND when vendorId names no vendor of the tenant or
+                    SUPPLIER_VENDOR_INACTIVE when it re-points the profile to an inactive vendor.
                     """)
     @ApiResponse(responseCode = "200", description = "Profile updated.")
     @ApiResponse(
             responseCode = "422",
-            description = "SUPPLIER_VENDOR_NOT_FOUND: vendorId names no vendor of the tenant.",
+            description = "SUPPLIER_VENDOR_NOT_FOUND: vendorId names no vendor of the tenant;"
+                    + " SUPPLIER_VENDOR_INACTIVE: the profile is re-pointed to an inactive vendor.",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "400",

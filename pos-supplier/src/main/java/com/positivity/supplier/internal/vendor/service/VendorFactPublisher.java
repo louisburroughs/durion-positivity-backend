@@ -22,8 +22,9 @@ import org.springframework.transaction.annotation.Transactional;
  * published without its committed state, and never committed without its fact.
  *
  * <p>The vendor must be flushed first, so {@code version} is the one the change produced: it is the
- * envelope's {@code aggregateVersion}, which strictly advances, and consumers apply facts under
- * {@code ReplicaVersionGuard}. The record key is {@code vendorId}. No bank details exist to publish
+ * envelope's {@code aggregateVersion}. It advances with every committed change (a no-op update
+ * publishes nothing); a replay re-sends the current version, so consumers apply a fact unless they
+ * already hold a <em>newer</em> one ({@code ReplicaVersionGuard}: equal versions re-apply). The record key is {@code vendorId}. No bank details exist to publish
  * (OI-14), and a pending remit-to change is never on the vendor row, so it cannot leak here.
  */
 @Component

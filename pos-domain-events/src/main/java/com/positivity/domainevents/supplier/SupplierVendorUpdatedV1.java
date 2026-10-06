@@ -16,8 +16,10 @@ import org.jspecify.annotations.Nullable;
  * {@code vendorId}. Every committed create, update, status change and approved remit-to change
  * queues one, carrying the vendor's whole current state, so a consumer replica (pos-accounting,
  * pos-order) is a straight overwrite. The envelope's {@code aggregateVersion} is the vendor's
- * optimistic-lock version, which strictly advances: consumers apply a fact only when it is newer
- * than what they hold ({@code ReplicaVersionGuard}).
+ * optimistic-lock version, which advances with every committed change. Consumers skip a fact only
+ * when they already hold a <em>newer</em> version ({@code ReplicaVersionGuard.isStale}); an
+ * <em>equal</em> version is re-applied, because a replay re-sends the current version and must be
+ * able to repair a drifted replica.
  *
  * <h2>What is never here</h2>
  *

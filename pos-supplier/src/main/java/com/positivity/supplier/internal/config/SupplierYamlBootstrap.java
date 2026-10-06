@@ -95,6 +95,10 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
     /** Counter of YAML profiles whose {@code vendorNumber} did not resolve in a tenant (#2516). */
     public static final String VENDOR_UNRESOLVED_METRIC = "supplier.yaml.profile.vendor_unresolved";
 
+    /** The vendor-number shape the vendor master enforces ({@code chk_svendor_number}, #2516). */
+    private static final java.util.regex.Pattern VENDOR_NUMBER =
+            java.util.regex.Pattern.compile("^[A-Z0-9][A-Z0-9-]{0,29}$");
+
     private static final Logger log = LoggerFactory.getLogger(SupplierYamlBootstrap.class);
 
     private final SupplierProfileProperties properties;
@@ -363,6 +367,10 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
             if (spec.vendorNumber() == null || spec.vendorNumber().isBlank()) {
                 throw invalid(PROFILE_PREFIX + spec.key() + "': vendorNumber is required — every profile belongs to"
                         + " a vendor of the vendor master (ADR-0050 amendment, #2516)");
+            }
+            if (!VENDOR_NUMBER.matcher(spec.vendorNumber()).matches()) {
+                throw invalid(PROFILE_PREFIX + spec.key() + "': vendorNumber '" + spec.vendorNumber()
+                        + "' must be 1 to 30 upper-case letters, digits or hyphens, starting with a letter or digit");
             }
             validateProtocolDefaults(spec);
             Set<String> authNames = validateAuthSpecs(spec);

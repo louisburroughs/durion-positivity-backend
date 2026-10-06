@@ -1211,7 +1211,7 @@ paths:
 
         must not belong to a different profile, and vendorId must name a vendor of the caller''s
 
-        tenant; the profile may be re-pointed to another vendor.
+        tenant; the profile may be re-pointed to another vendor, which must then be ACTIVE.
 
         Required inputs: vendorProfileId (UUIDv7) path parameter plus the full body, because every field
 
@@ -1227,7 +1227,9 @@ paths:
 
         taken, 400 when a required field is blank or a timeout is not greater than zero, and 422
 
-        SUPPLIER_VENDOR_NOT_FOUND when vendorId names no vendor of the tenant.
+        SUPPLIER_VENDOR_NOT_FOUND when vendorId names no vendor of the tenant or
+
+        SUPPLIER_VENDOR_INACTIVE when it re-points the profile to an inactive vendor.
 
         '
       operationId: updateVendorProfile
@@ -1298,7 +1300,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'SUPPLIER_VENDOR_NOT_FOUND: vendorId names no vendor of the tenant.'
+          description: 'SUPPLIER_VENDOR_NOT_FOUND: vendorId names no vendor of the tenant; SUPPLIER_VENDOR_INACTIVE: the profile is re-pointed to an inactive vendor.'
       security:
       - bearerAuth: []
       summary: Update vendor profile

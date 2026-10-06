@@ -17,7 +17,8 @@
 --    as its vendor_id (a UUIDv7 already, and it makes the profile-to-vendor link a plain copy). Its number is
 --    upper(supplier_ref) with characters outside [A-Z0-9-] replaced by '-', cut to 30; a number that would
 --    not start with a letter or digit is prefixed with 'V', and a second profile of one tenant whose ref
---    folds to the same number gets a '-<n>' suffix so the per-tenant unique key holds. Exchange-audit,
+--    folds to the same number gets the lowest '-<n>' suffix that is neither taken nor another ref's base, so
+--    the per-tenant unique key holds (see the two passes below). Exchange-audit,
 --    invoice and transmission rows reference the profile, not the vendor, so they stay attached untouched.
 -- 5. supplier_invoice.vendor_id: the fetching profile's vendor, set on every invoice imported from now on;
 --    null for documents fetched before this migration (no backfill).
@@ -162,43 +163,58 @@ ALTER TABLE public.supplier_profile ADD COLUMN vendor_id uuid;
 ALTER TABLE public.supplier_profile NO FORCE ROW LEVEL SECURITY;
 ALTER TABLE public.supplier_vendor NO FORCE ROW LEVEL SECURITY;
 
-WITH folded AS (
-    SELECT p.tenant_id,
-           p.vendor_profile_id,
-           p.display_name,
-           CASE
-               WHEN left(regexp_replace(upper(p.supplier_ref), '[^A-Z0-9-]', '-', 'g'), 30) ~ '^[A-Z0-9]'
-                   THEN left(regexp_replace(upper(p.supplier_ref), '[^A-Z0-9-]', '-', 'g'), 30)
-               ELSE left('V' || regexp_replace(upper(p.supplier_ref), '[^A-Z0-9-]', '-', 'g'), 30)
-           END AS base_number
-    FROM public.supplier_profile p
-),
-numbered AS (
-    SELECT f.*,
+-- Two passes so a suffix never lands on a number some profile's own ref folds to (refs acme, ACME and
+-- acme-2 in one tenant: the second ACME must become ACME-3, not ACME-2). Pass 1 gives the first profile of
+-- every distinct base its base number, reserving all bases; pass 2 gives each remaining duplicate the
+-- lowest -<n> (n >= 2) still free in its tenant.
+DO $backfill$
+DECLARE
+    p record;
+    n integer;
+    candidate character varying(30);
+BEGIN
+    CREATE TEMPORARY TABLE v3_folded ON COMMIT DROP AS
+    SELECT f.tenant_id,
+           f.vendor_profile_id,
+           f.display_name,
+           f.base_number,
            row_number() OVER (PARTITION BY f.tenant_id, f.base_number ORDER BY f.vendor_profile_id) AS rn
-    FROM folded f
-)
-INSERT INTO public.supplier_vendor (tenant_id, vendor_id, vendor_number, legal_name, display_name,
-                                    tax_registrations, remit_to, remit_to_version, status, created_at,
-                                    updated_at, created_by, updated_by, version)
-SELECT n.tenant_id,
-       n.vendor_profile_id,
-       CASE
-           WHEN n.rn = 1 THEN n.base_number
-           ELSE left(n.base_number, 30 - length(n.rn::text) - 1) || '-' || n.rn::text
-       END,
-       n.display_name,
-       n.display_name,
-       '[]'::jsonb,
-       NULL,
-       0,
-       'ACTIVE',
-       now(),
-       now(),
-       'system:flyway-v3',
-       'system:flyway-v3',
-       0
-FROM numbered n;
+    FROM (
+        SELECT pr.tenant_id,
+               pr.vendor_profile_id,
+               pr.display_name,
+               CASE
+                   WHEN left(regexp_replace(upper(pr.supplier_ref), '[^A-Z0-9-]', '-', 'g'), 30) ~ '^[A-Z0-9]'
+                       THEN left(regexp_replace(upper(pr.supplier_ref), '[^A-Z0-9-]', '-', 'g'), 30)
+                   ELSE left('V' || regexp_replace(upper(pr.supplier_ref), '[^A-Z0-9-]', '-', 'g'), 30)
+               END AS base_number
+        FROM public.supplier_profile pr
+    ) f;
+
+    FOR p IN SELECT * FROM v3_folded ORDER BY (rn > 1), tenant_id, base_number, rn LOOP
+        IF p.rn = 1 THEN
+            candidate := p.base_number;
+        ELSE
+            n := 2;
+            LOOP
+                candidate := left(p.base_number, 30 - length(n::text) - 1) || '-' || n::text;
+                EXIT WHEN NOT EXISTS (
+                    SELECT 1 FROM public.supplier_vendor v
+                    WHERE v.tenant_id = p.tenant_id AND v.vendor_number = candidate)
+                    AND NOT EXISTS (
+                    SELECT 1 FROM v3_folded b
+                    WHERE b.tenant_id = p.tenant_id AND b.base_number = candidate);
+                n := n + 1;
+            END LOOP;
+        END IF;
+        INSERT INTO public.supplier_vendor (tenant_id, vendor_id, vendor_number, legal_name, display_name,
+                                            tax_registrations, remit_to, remit_to_version, status, created_at,
+                                            updated_at, created_by, updated_by, version)
+        VALUES (p.tenant_id, p.vendor_profile_id, candidate, p.display_name, p.display_name, '[]'::jsonb,
+                NULL, 0, 'ACTIVE', now(), now(), 'system:flyway-v3', 'system:flyway-v3', 0);
+    END LOOP;
+END
+$backfill$;
 
 UPDATE public.supplier_profile SET vendor_id = vendor_profile_id;
 

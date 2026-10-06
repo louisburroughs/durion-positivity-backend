@@ -37,6 +37,7 @@ permissions:
       - CONTROLLER
       - ACCOUNTING_CLERK
       - GENERAL_MANAGER
+      - SUPPORT
   - name: "supplier:vendor:write"
     description: "Create and edit vendors, deactivate or reactivate them, and request a remit-to change"
     grantTo:

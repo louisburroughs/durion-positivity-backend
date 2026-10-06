@@ -331,10 +331,14 @@ SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', 
 --   Side effect: void and reverse of a receivable payment are gated by accounting:ap:pay
 --   (PaymentApplicationController), so a clerk can no longer use them; this story does not regate
 --   them.
--- * CAP:550 S23 (#2516, ADR-0070 Decision 7, Security sign-off OI-5 2026-10-05, AW31): the pos-supplier
---   vendor master keys (bits 549-552).
---     supplier:vendor:read           -> ADMIN, CONTROLLER, ACCOUNTING_CLERK, GENERAL_MANAGER (+ SUPPORT,
---                                       the read-only ceiling's rule for every floor read)
+-- * CAP:550 S23 (#2516, ADR-0070 Decision 7): the pos-supplier vendor master keys (bits 549-552). The
+--   grants below to ADMIN, CONTROLLER, ACCOUNTING_CLERK and GENERAL_MANAGER are the ones signed off by
+--   Security (OI-5, 2026-10-05, AW31).
+--     supplier:vendor:read           -> ADMIN, CONTROLLER, ACCOUNTING_CLERK, GENERAL_MANAGER
+--       SUPPORT also receives supplier:vendor:read. That grant is NOT part of the OI-5 sign-off: it follows
+--       the ADR-0062 section 7 SUPPORT read-only-ceiling rule (SUPPORT holds every view/read a floor role
+--       holds), which RolePermissionBaselineTest#supportIsReadOnly enforces. Pending Security owner
+--       confirmation.
 --     supplier:vendor:write          -> ADMIN, CONTROLLER, ACCOUNTING_CLERK
 --     supplier:vendor_remit:approve  -> ADMIN, CONTROLLER, GENERAL_MANAGER (never the requester: the
 --                                       service refuses self-approval whatever the grant)

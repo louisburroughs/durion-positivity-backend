@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.UUID;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
@@ -834,5 +835,124 @@ class SupplierProfileAdminServiceImplTest extends PostgresSliceTestBase {
                 adminService.createProfile(profileRequest("michelin-eu")).vendorProfileId();
         adminService.createAuthConfig(profileId, bearerAuthRequest("s2s-bearer"));
         return profileId;
+    }
+
+    // ── Profiles belong to one vendor (#2516 AC 6, ADR-0070 Decision 7) ─────────────
+
+    @Nested
+    class VendorBinding {
+
+        private UUID inactiveVendor() {
+            UUID id = SupplierProfilePersistenceFixtures.vendor(vendorRepository);
+            var vendor = vendorRepository.findById(id).orElseThrow();
+            vendor.setStatus(com.positivity.supplier.internal.enums.VendorStatus.INACTIVE);
+            vendorRepository.saveAndFlush(vendor);
+            return id;
+        }
+
+        private VendorProfileRequest request(String supplierRef, UUID vendor) {
+            return new VendorProfileRequest(
+                    supplierRef, "Display " + supplierRef, true, false, 5000, 30000, 3, null, null, vendor);
+        }
+
+        private void assertUnprocessable(org.assertj.core.api.ThrowableAssert.ThrowingCallable call, String code) {
+            assertThatThrownBy(call)
+                    .isInstanceOf(com.positivity.supplier.internal.exception.SupplierUnprocessableException.class)
+                    .hasFieldOrPropertyWithValue("code", code);
+        }
+
+        @Test
+        void unknownVendorIs422NotFoundNotAForeignKeyFailure() {
+            assertUnprocessable(
+                    () -> adminService.createProfile(request("ghost-vendor", UUID.randomUUID())),
+                    com.positivity.supplier.internal.exception.SupplierUnprocessableException.VENDOR_NOT_FOUND);
+        }
+
+        @Test
+        void anotherTenantsVendorIs422NotFound() {
+            // A vendor that exists — but in tenant B. Written through the owner, which bypasses RLS.
+            UUID foreign = UUID.randomUUID();
+            org.springframework.jdbc.core.JdbcTemplate owner = new org.springframework.jdbc.core.JdbcTemplate(
+                    com.positivity.supplier.SupplierPostgresContainer.ownerDataSource());
+            owner.update(
+                    "INSERT INTO supplier_vendor (tenant_id, vendor_id, vendor_number, legal_name, display_name,"
+                            + " status, created_at, updated_at, created_by, version)"
+                            + " VALUES (?, ?, ?, 'Other', 'Other', 'ACTIVE', now(), now(), 'test', 0)",
+                    com.positivity.tenancy.testing.TenantTestSupport.TENANT_B,
+                    foreign,
+                    "B-" + foreign.toString().substring(0, 8).toUpperCase(java.util.Locale.ROOT));
+            try {
+                assertUnprocessable(
+                        () -> adminService.createProfile(request("cross-tenant", foreign)),
+                        com.positivity.supplier.internal.exception.SupplierUnprocessableException.VENDOR_NOT_FOUND);
+            } finally {
+                owner.update("DELETE FROM supplier_vendor WHERE vendor_id = ?", foreign);
+            }
+        }
+
+        @Test
+        void inactiveVendorOnCreateIs422Inactive() {
+            UUID inactive = inactiveVendor();
+
+            assertUnprocessable(
+                    () -> adminService.createProfile(request("new-on-inactive", inactive)),
+                    com.positivity.supplier.internal.exception.SupplierUnprocessableException.VENDOR_INACTIVE);
+            assertThat(profileRepository.findBySupplierRef("new-on-inactive")).isEmpty();
+        }
+
+        @Test
+        void updateKeepsAnInactiveCurrentVendorButCannotRepointToAnInactiveOne() {
+            VendorProfileView created = adminService.createProfile(request("keeps-vendor", vendorId));
+            var current = vendorRepository.findById(vendorId).orElseThrow();
+            current.setStatus(com.positivity.supplier.internal.enums.VendorStatus.INACTIVE);
+            vendorRepository.saveAndFlush(current);
+
+            // Its own vendor went inactive: the profile can still be edited.
+            VendorProfileView edited = adminService.updateProfile(
+                    created.vendorProfileId(),
+                    new VendorProfileRequest(
+                            "keeps-vendor", "Edited", true, false, 5000, 30000, 3, null, null, vendorId));
+            assertThat(edited.displayName()).isEqualTo("Edited");
+            assertThat(edited.vendorId()).isEqualTo(vendorId);
+
+            // Re-pointing to another ACTIVE vendor works.
+            UUID active = SupplierProfilePersistenceFixtures.vendor(vendorRepository);
+            VendorProfileView repointed =
+                    adminService.updateProfile(created.vendorProfileId(), request("keeps-vendor", active));
+            assertThat(repointed.vendorId()).isEqualTo(active);
+
+            // Re-pointing to an INACTIVE vendor is refused, like naming one on create.
+            UUID inactive = inactiveVendor();
+            assertUnprocessable(
+                    () -> adminService.updateProfile(created.vendorProfileId(), request("keeps-vendor", inactive)),
+                    com.positivity.supplier.internal.exception.SupplierUnprocessableException.VENDOR_INACTIVE);
+            // And a vendor the tenant does not have is 422 NOT_FOUND on update too.
+            assertUnprocessable(
+                    () -> adminService.updateProfile(
+                            created.vendorProfileId(), request("keeps-vendor", UUID.randomUUID())),
+                    com.positivity.supplier.internal.exception.SupplierUnprocessableException.VENDOR_NOT_FOUND);
+            assertThat(profileRepository
+                            .findById(created.vendorProfileId())
+                            .orElseThrow()
+                            .getVendorId())
+                    .isEqualTo(active);
+        }
+
+        @Test
+        void listFiltersByVendorAndTheViewNamesTheVendor() {
+            UUID other = SupplierProfilePersistenceFixtures.vendor(vendorRepository);
+            adminService.createProfile(request("mine-b", vendorId));
+            adminService.createProfile(request("mine-a", vendorId));
+            adminService.createProfile(request("theirs", other));
+
+            assertThat(adminService.listProfiles(vendorId))
+                    .extracting(VendorProfileView::supplierRef)
+                    .containsExactly("mine-a", "mine-b");
+            assertThat(adminService.listProfiles(other)).singleElement().satisfies(view -> {
+                assertThat(view.vendorId()).isEqualTo(other);
+                assertThat(view.vendorNumber()).startsWith("T-");
+            });
+            assertThat(adminService.listProfiles(null)).hasSize(3);
+        }
     }
 }

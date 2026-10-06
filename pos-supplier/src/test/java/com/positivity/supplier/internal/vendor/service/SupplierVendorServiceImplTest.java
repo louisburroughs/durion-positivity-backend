@@ -374,6 +374,25 @@ class SupplierVendorServiceImplTest extends PostgresSliceTestBase {
         }
 
         @Test
+        @DisplayName("an update that changes nothing publishes no fact: the version did not move")
+        void noOpUpdatePublishesNothing() {
+            VendorView vendor = as("clerk.a", () -> service.createVendor(create("MICHELIN", null)));
+            int factsBefore = vendorFacts(vendor.vendorId()).size();
+            VendorUpdateRequest same = new VendorUpdateRequest(
+                    vendor.legalName(),
+                    vendor.displayName(),
+                    vendor.taxRegistrations(),
+                    vendor.defaultPaymentTerms(),
+                    vendor.defaultCurrency(),
+                    vendor.version());
+
+            VendorView unchanged = as("clerk.a", () -> service.updateVendor(vendor.vendorId(), same));
+
+            assertThat(unchanged.version()).isEqualTo(vendor.version());
+            assertThat(vendorFacts(vendor.vendorId())).hasSize(factsBefore);
+        }
+
+        @Test
         @DisplayName("an unknown vendor is 404 SUPPLIER_VENDOR_NOT_FOUND")
         void unknownVendorIsNotFound() {
             assertThatThrownBy(() -> service.getVendor(UUID.randomUUID()))

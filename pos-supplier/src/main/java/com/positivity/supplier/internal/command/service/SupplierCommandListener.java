@@ -233,9 +233,13 @@ public class SupplierCommandListener {
         JsonNode payload = command.path("payload");
         Instant since = parseInstant(payload, "since");
         Instant until = parseInstant(payload, "until");
-        if (since == null || (payload.hasNonNull("until") && until == null)) {
+        if (since == null
+                || (payload.hasNonNull("until") && until == null)
+                || (until != null && !until.isAfter(since))) {
+            // An inverted or empty window is malformed too: widening it to "since until now" would replay far
+            // more than was asked for.
             log.error(
-                    "Dropping malformed supplier outbox replay command (since/until missing or unparsable): {}",
+                    "Dropping malformed supplier outbox replay command (since/until missing, unparsable or inverted): {}",
                     command);
             return;
         }
@@ -249,7 +253,7 @@ public class SupplierCommandListener {
                     lookbackLimit);
             return;
         }
-        Instant end = until != null && until.isAfter(since) ? until : now;
+        Instant end = until != null ? until : now;
         try {
             int queued = outboxReplayService.replayEventsBetween(
                     since.minus(REPLAY_WINDOW_SLACK), end.plus(REPLAY_WINDOW_SLACK));

@@ -66,14 +66,14 @@ connection profile belongs to exactly one vendor. No endpoint deletes a vendor.
   `aggregateVersion` = the vendor's `@Version`: queued through the outbox in the transaction of every
   create, update, status change and remit-to approval. It carries every vendor field plus
   `remitToChangedAt`, `remitToRequestedBy`, `remitToApprovedBy` (security-context principal names),
-  `createdBy`, `createdAt`, `occurredAt`. Consumers apply it under `ReplicaVersionGuard`.
+  `createdBy`, `createdAt`, `occurredAt`. Consumers apply it under `ReplicaVersionGuard`: skip only when they hold a newer version; an equal version (a replay) re-applies. A no-op update publishes nothing.
 - **Replay (ADR-0044 §4).** `POST /v1/supplier/vendors/facts/replay` re-emits one page (limit clamped to
   1–1000, default 200) of the caller's tenant's vendors at their current version. The
   `supplier.outbox.replay-requested` command on `supplier.commands.v1`
   (`{"commandType":"supplier.outbox.replay-requested","payload":{"since":…,"until":…}}`, tenant from the
   record header) re-queues that tenant's published `supplier.events.v1` rows of the window with their
   original event ids; a window older than `pos.supplier.outbox.replay.max-lookback` (default `P30D`) is
-  logged and dropped.
+  logged and dropped, and an inverted or empty window is logged at error and dropped.
 - **Not yet:** the per-tenant reconciliation manifest on `supplier.manifest.v1`. `TopicInventoryTest`
   refuses a `*.manifest.v1` topic without a production consumer, so the manifest publisher ships with
   S24's first `supplier.manifest.v1` listener (durion-positivity-backend#2517).
@@ -82,7 +82,8 @@ connection profile belongs to exactly one vendor. No endpoint deletes a vendor.
 
 Every profile names its vendor: `vendorId` is required on create and update (a vendor of the caller's
 tenant — **422 `SUPPLIER_VENDOR_NOT_FOUND`** otherwise — and `ACTIVE` on create, **422
-`SUPPLIER_VENDOR_INACTIVE`**); an ADMIN profile may be re-pointed to another vendor. The view carries
+`SUPPLIER_VENDOR_INACTIVE`**); an ADMIN profile may be re-pointed to another **active** vendor (422 `SUPPLIER_VENDOR_INACTIVE`
+otherwise), and stays editable when its own vendor goes inactive. The view carries
 `vendorId`, `vendorNumber` and `vendorDisplayName`; `GET …/profiles?vendorId=` lists one vendor's
 profiles.
 

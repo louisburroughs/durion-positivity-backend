@@ -95,11 +95,7 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
         Objects.requireNonNull(request, REQUEST_REQUIRED);
         requireSupplierRefFree(request.supplierRef(), null);
         SupplierVendorEntity vendor = resolveVendor(request.vendorId());
-        if (vendor.getStatus() == VendorStatus.INACTIVE) {
-            throw new SupplierUnprocessableException(
-                    SupplierUnprocessableException.VENDOR_INACTIVE,
-                    "Vendor " + vendor.getVendorNumber() + " is inactive; a new profile must name an active vendor");
-        }
+        requireActive(vendor, "a new profile must name an active vendor");
         SupplierProfileEntity profile = new SupplierProfileEntity();
         applyProfile(profile, request);
         profile.setSourceOfTruth(com.positivity.supplier.internal.enums.ProfileSourceOfTruth.ADMIN);
@@ -112,8 +108,13 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
         Objects.requireNonNull(request, REQUEST_REQUIRED);
         SupplierProfileEntity profile = loadAdminManagedProfile(vendorProfileId);
         requireSupplierRefFree(request.supplierRef(), vendorProfileId);
-        // Re-pointing an ADMIN profile to another vendor is allowed (#2516), to any vendor of the tenant.
+        // Re-pointing an ADMIN profile to another vendor is allowed (#2516), but, as on create, only to an
+        // ACTIVE one. Keeping a vendor that has since gone inactive is allowed: the profile is not being
+        // newly attached to it.
         SupplierVendorEntity vendor = resolveVendor(request.vendorId());
+        if (!vendor.getVendorId().equals(profile.getVendorId())) {
+            requireActive(vendor, "a profile can only be re-pointed to an active vendor");
+        }
         applyProfile(profile, request);
         return toProfileView(profileRepository.save(profile), vendor);
     }
@@ -372,6 +373,14 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
                 .findById(vendorId)
                 .orElseThrow(() -> new SupplierUnprocessableException(
                         SupplierUnprocessableException.VENDOR_NOT_FOUND, "Vendor " + vendorId + " does not exist"));
+    }
+
+    private static void requireActive(@NonNull SupplierVendorEntity vendor, @NonNull String rule) {
+        if (vendor.getStatus() == VendorStatus.INACTIVE) {
+            throw new SupplierUnprocessableException(
+                    SupplierUnprocessableException.VENDOR_INACTIVE,
+                    "Vendor " + vendor.getVendorNumber() + " is inactive; " + rule);
+        }
     }
 
     @NonNull

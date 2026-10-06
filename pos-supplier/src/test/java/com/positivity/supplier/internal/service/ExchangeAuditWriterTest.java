@@ -128,6 +128,19 @@ class ExchangeAuditWriterTest extends PostgresSliceTestBase {
      * auditing, and no test noticed because every test was already inside a rolled-back transaction.
      */
     @Test
+    void theStoredRowCarriesTheTransportsExchangeId() {
+        // #2516 AC 9: the invoice fact names the exchange by this id, so the row must be stored under it.
+        ExchangeContext context = context("exchange-id-provenance");
+
+        observer.onExchange(context);
+
+        assertThat(auditRepository.findAll())
+                .singleElement()
+                .extracting(com.positivity.supplier.internal.entity.ExchangeAuditEntity::getExchangeAuditId)
+                .isEqualTo(context.exchangeId());
+    }
+
+    @Test
     void auditRowSurvivesARolledBackCallerTransaction() {
         transactionTemplate.executeWithoutResult(status -> {
             observer.onExchange(context("rolled-back-caller"));

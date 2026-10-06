@@ -162,8 +162,12 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
         try {
             vendor = vendorRepository.saveAndFlush(vendor);
         } catch (DataIntegrityViolationException e) {
-            // A concurrent create took the number between the check and the insert.
-            throw numberTaken(vendorNumber);
+            if (isVendorNumberTaken(e)) {
+                // A concurrent create took the number between the check and the insert.
+                throw numberTaken(vendorNumber);
+            }
+            // Any other integrity failure is a defect, not a taken number: surface it as one.
+            throw e;
         }
         factPublisher.publish(vendor, now, actor);
         log.info("Created vendor {} ({})", vendor.getVendorNumber(), vendor.getVendorId());
@@ -187,7 +191,15 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
         replaceTaxRegistrations(vendor, toEntity(request.taxRegistrations()));
         vendor.setDefaultPaymentTerms(request.defaultPaymentTerms());
         vendor.setDefaultCurrency(request.defaultCurrency());
-        return commitAndPublish(vendor);
+        Long versionBefore = vendor.getVersion();
+        SupplierVendorEntity saved = vendorRepository.saveAndFlush(vendor);
+        if (Objects.equals(saved.getVersion(), versionBefore)) {
+            // Nothing changed, so there is no new state to publish: a fact here would repeat the last one
+            // under the same aggregateVersion.
+            return toView(saved);
+        }
+        factPublisher.publish(saved, Instant.now(clock), currentActor());
+        return toView(saved);
     }
 
     @Override
@@ -349,6 +361,19 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────────────
+
+    /** The unique key on {@code (tenant_id, vendor_number)} in {@code V3__vendor_master.sql}. */
+    static final String VENDOR_NUMBER_KEY = "supplier_vendor_number_key";
+
+    /** Whether an integrity violation is the vendor-number key — and only that — being hit. */
+    static boolean isVendorNumberTaken(@NonNull DataIntegrityViolationException failure) {
+        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+            if (cause instanceof org.hibernate.exception.ConstraintViolationException violation) {
+                return VENDOR_NUMBER_KEY.equalsIgnoreCase(violation.getConstraintName());
+            }
+        }
+        return false;
+    }
 
     private VendorView commitAndPublish(SupplierVendorEntity vendor) {
         SupplierVendorEntity saved = vendorRepository.saveAndFlush(vendor);
