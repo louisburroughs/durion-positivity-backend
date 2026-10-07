@@ -7,6 +7,7 @@ import com.positivity.accounting.internal.dto.VendorBillResponse;
 import com.positivity.accounting.internal.dto.VendorInvoiceReceivedEvent;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.security.AccountingPermissions;
+import com.positivity.accounting.internal.service.VendorBillApprovalService;
 import com.positivity.accounting.internal.service.VendorBillService;
 import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
@@ -20,7 +21,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -63,6 +63,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class VendorBillController {
 
     private final VendorBillService vendorBillService;
+    private final VendorBillApprovalService approvalService;
 
     /**
      * Create a vendor bill from a goods received event.
@@ -82,24 +83,24 @@ public class VendorBillController {
             operationId = "createVendorBillFromGoodsReceived",
             summary = "Create Vendor Bill From Goods Received",
             description = """
-                    Creates a vendor bill in PENDING_RECEIPT_MATCH status from a goods-received event, \
-                    totaling the received line items and syncing the vendor into the AP vendor directory.
-                    Use this tool when goods arrive against a purchase order; do not use matchVendorInvoice, \
-                    which is the later step that matches the vendor's invoice against this pending bill.
-                    Preconditions: none; a duplicate eventId is ignored and the existing bill is returned \
-                    instead of creating a second one.
-                    Required inputs: eventId, organizationId, purchaseOrderId and vendorId (UUIDs), \
-                    receivedDate, and lineItems each with productId, description, quantity and unitPrice; \
-                    vendorName and dimensions are optional.
-                    Emits an ACCOUNTING_VENDOR_BILL_CREATE event; a vendor-directory sync failure is logged \
-                    and never fails bill creation.
-                    Returns 201 with the created (or already-existing) bill, and 400 when the payload fails \
-                    validation.
-                    Returns 409 AP_BILL_DUPLICATE when a live bill (any status except VOIDED or REJECTED) \
-                    already holds the same vendor, bill date and bill number, compared ignoring case, \
-                    spacing, punctuation and leading zeros; referenceId is the existing bill's vendorBillId \
-                    and nothing is created. A replayed eventId is never a duplicate.
-                    """,
+                Creates a vendor bill in PENDING_RECEIPT_MATCH status from a goods-received event, \
+                totaling the received line items and syncing the vendor into the AP vendor directory.
+                Use this tool when goods arrive against a purchase order; do not use matchVendorInvoice, \
+                which is the later step that matches the vendor's invoice against this pending bill.
+                Preconditions: none; a duplicate eventId is ignored and the existing bill is returned \
+                instead of creating a second one.
+                Required inputs: eventId, organizationId, purchaseOrderId and vendorId (UUIDs), \
+                receivedDate, and lineItems each with productId, description, quantity and unitPrice; \
+                vendorName and dimensions are optional.
+                Emits an ACCOUNTING_VENDOR_BILL_CREATE event; a vendor-directory sync failure is logged \
+                and never fails bill creation. Nothing is posted: a bill posts once, at approval.
+                Returns 201 with the created (or already-existing) bill, and 400 when the payload fails \
+                validation.
+                Returns 409 AP_BILL_DUPLICATE when a live bill (any status except VOIDED or REJECTED) \
+                already holds the same vendor, bill date and bill number, compared ignoring case, \
+                spacing, punctuation and leading zeros; referenceId is the existing bill's vendorBillId \
+                and nothing is created. A replayed eventId is never a duplicate.
+                """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
             responseCode = "201",
@@ -122,18 +123,18 @@ public class VendorBillController {
                                     @Content(
                                             mediaType = "application/json",
                                             examples = @ExampleObject(name = "Goods received", value = """
-                                                                    {"eventId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
-                                                                     "organizationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c",
-                                                                     "purchaseOrderId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5d",
-                                                                     "vendorId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5e",
-                                                                     "vendorName":"Acme Parts Co",
-                                                                     "receivedDate":"2026-08-13T09:30:00",
-                                                                     "lineItems":[
-                                                                       {"productId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5f",
-                                                                        "description":"Brake pads",
-                                                                        "quantity":10,
-                                                                        "unitPrice":24.99}]}
-                                                                    """)))
+                                                {"eventId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+                                                 "organizationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c",
+                                                 "purchaseOrderId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5d",
+                                                 "vendorId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5e",
+                                                 "vendorName":"Acme Parts Co",
+                                                 "receivedDate":"2026-08-13T09:30:00",
+                                                 "lineItems":[
+                                                   {"productId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5f",
+                                                    "description":"Brake pads",
+                                                    "quantity":10,
+                                                    "unitPrice":24.99}]}
+                                                """)))
                     @NonNull
                     @Valid
                     @RequestBody
@@ -166,29 +167,33 @@ public class VendorBillController {
             operationId = "matchVendorInvoice",
             summary = "Match Vendor Invoice",
             description = """
-                    Runs the three-way match of a received vendor invoice against pending goods-received \
-                    bills: a HIGH_CONFIDENCE match with consistent quantities and prices auto-approves the \
-                    bill, while a discrepancy, a MEDIUM confidence score or an AMBIGUOUS match parks it in \
-                    MATCH_EXCEPTION.
-                    Use this tool when a vendor invoice arrives; do not use \
-                    createVendorBillFromGoodsReceived, which records the receipt, and use \
-                    resolveVendorBillMatchException or selectVendorBillMatchCandidate to clear exceptions.
-                    Preconditions: a bill in PENDING_RECEIPT_MATCH must exist for the vendor; an ambiguous \
-                    outcome persists scored candidates for later operator selection.
-                    Required inputs: eventId, organizationId and vendorId (UUIDs), invoiceReference, \
-                    invoiceDate and lineItems; dueDate is optional.
-                    Emits an ACCOUNTING_VENDOR_BILL_MATCH event; the returned bill's status conveys the \
-                    outcome (APPROVED or MATCH_EXCEPTION), so callers must inspect it rather than assume \
-                    approval.
-                    Returns 400 when no pending receipt matches the invoice or the payload fails validation.
-                    Returns 409 AP_BILL_DUPLICATE when the matched bill would take an invoiceReference that \
-                    another live bill (any status except VOIDED or REJECTED) of the same vendor already \
-                    holds on the same bill date, compared ignoring case, spacing, punctuation and leading \
-                    zeros; referenceId is that bill's vendorBillId and the match changes nothing.
-                    A match that loses a concurrent race for the same number between that check and its \
-                    commit answers the generic 409 DUPLICATE_RESOURCE instead, with no referenceId; the \
-                    match is rolled back and no second bill holds the number.
-                    """,
+                Runs the three-way match of a received vendor invoice against pending goods-received \
+                bills. A HIGH match (score 70 or more) with consistent quantities and prices sends the bill \
+                to AWAITING_APPROVAL with submittedBy SYSTEM; it never approves it. A MEDIUM score or a \
+                discrepancy parks it in MATCH_EXCEPTION; an AMBIGUOUS match keeps the scored candidates for \
+                a person to select one. No outcome writes an approval field, and nothing is posted.
+                Every routed match keeps what the vendor billed: the bill's total becomes the billed total, \
+                each received line keeps the billed quantity and price, and an append-only evidence record \
+                keeps the score, the points per criterion (amount 40, products 30, date 20, purchase \
+                order 5) and the line comparison.
+                Use this tool when a vendor invoice arrives; do not use \
+                createVendorBillFromGoodsReceived, which records the receipt, and use \
+                resolveVendorBillMatchException or selectVendorBillMatchCandidate to clear exceptions.
+                Preconditions: a bill in PENDING_RECEIPT_MATCH must exist for the vendor.
+                Required inputs: eventId, organizationId and vendorId (UUIDs), invoiceReference, \
+                invoiceDate and lineItems; dueDate is optional.
+                Emits an ACCOUNTING_VENDOR_BILL_MATCH event and writes a VENDOR_BILL_MATCH_ROUTED audit \
+                row; the returned bill's status conveys the outcome (AWAITING_APPROVAL or \
+                MATCH_EXCEPTION).
+                Returns 400 when no pending receipt matches the invoice or the payload fails validation.
+                Returns 409 AP_BILL_DUPLICATE when the matched bill would take an invoiceReference that \
+                another live bill (any status except VOIDED or REJECTED) of the same vendor already \
+                holds on the same bill date, compared ignoring case, spacing, punctuation and leading \
+                zeros; referenceId is that bill's vendorBillId and the match changes nothing.
+                A match that loses a concurrent race for the same number between that check and its \
+                commit answers the generic 409 DUPLICATE_RESOURCE instead, with no referenceId; the \
+                match is rolled back and no second bill holds the number.
+                """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
             responseCode = "201",
@@ -212,18 +217,18 @@ public class VendorBillController {
                                     @Content(
                                             mediaType = "application/json",
                                             examples = @ExampleObject(name = "Vendor invoice received", value = """
-                                                                    {"eventId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a60",
-                                                                     "organizationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c",
-                                                                     "vendorId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5e",
-                                                                     "invoiceReference":"INV-88421",
-                                                                     "invoiceDate":"2026-08-12T00:00:00",
-                                                                     "dueDate":"2026-09-11T00:00:00",
-                                                                     "lineItems":[
-                                                                       {"productId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5f",
-                                                                        "description":"Brake pads",
-                                                                        "quantity":10,
-                                                                        "unitPrice":24.99}]}
-                                                                    """)))
+                                                {"eventId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a60",
+                                                 "organizationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c",
+                                                 "vendorId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5e",
+                                                 "invoiceReference":"INV-88421",
+                                                 "invoiceDate":"2026-08-12T00:00:00",
+                                                 "dueDate":"2026-09-11T00:00:00",
+                                                 "lineItems":[
+                                                   {"productId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5f",
+                                                    "description":"Brake pads",
+                                                    "quantity":10,
+                                                    "unitPrice":24.99}]}
+                                                """)))
                     @NonNull
                     @Valid
                     @RequestBody
@@ -236,78 +241,6 @@ public class VendorBillController {
         VendorBillResponse response = vendorBillService.handleVendorInvoiceReceivedEvent(event);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
-
-    /**
-     * Resolve a bill match exception (ACCEPT/VOID/CORRECT).
-     *
-     * POST /v1/accounting/vendor-bills/{billId}/resolve-exception
-     *
-     * @param billId  the vendor bill ID
-     * @param request the exception resolution request
-     * @return updated bill response with new status
-     */
-    @PostMapping("/{billId}/resolve-exception")
-    @EmitEvent(id = "ACCOUNTING_VENDOR_BILL_MATCH_EXCEPTION_RESOLVE", apiVersion = "1")
-    @SecurityRequirement(
-            name = "bearerAuth",
-            scopes = {"accounting:ap:pay"})
-    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_PAY + "')")
-    @Operation(
-            operationId = "resolveVendorBillMatchException",
-            summary = "Resolve Vendor Bill Match Exception",
-            description = """
-                    Resolves a vendor bill parked in MATCH_EXCEPTION with an operator decision: ACCEPT \
-                    approves the bill despite the discrepancy, VOID rejects it, and CORRECT sends it back for \
-                    correction.
-                    Use this tool for quantity, price or medium-confidence exceptions on one identified bill; \
-                    do not use selectVendorBillMatchCandidate, which resolves an ambiguous match by picking \
-                    among several candidate bills.
-                    Preconditions: the bill must exist and be in MATCH_EXCEPTION status.
-                    Required inputs: billId (UUID) as a path parameter, resolutionAction (ACCEPT, VOID or \
-                    CORRECT), reason and operatorId, all recorded for audit.
-                    Emits an ACCOUNTING_VENDOR_BILL_MATCH_EXCEPTION_RESOLVE event.
-                    Returns 400 when the bill is not found, is not in MATCH_EXCEPTION status, or the action \
-                    is not one of ACCEPT, VOID or CORRECT.
-                    """,
-            tags = {"Vendor Bill API"})
-    @ApiResponse(
-            responseCode = "200",
-            description = "Exception resolved",
-            content = @Content(schema = @Schema(implementation = VendorBillResponse.class)))
-    @ApiResponse(
-            responseCode = "404",
-            description = "Vendor bill not found",
-            content = @Content(schema = @Schema(implementation = ApiError.class)))
-    public ResponseEntity<VendorBillResponse> resolveMatchException(
-            @Parameter(description = "Vendor bill identifier", example = "550e8400-e29b-41d4-a716-446655440001")
-                    @NonNull
-                    @PathVariable
-                    UUID billId,
-            @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description = "Operator decision (ACCEPT, VOID or CORRECT) with the audit reason.",
-                            required = true,
-                            content =
-                                    @Content(
-                                            mediaType = "application/json",
-                                            examples = @ExampleObject(name = "Accept variance", value = """
-                                                                    {"resolutionAction":"ACCEPT",
-                                                                     "reason":"Invoice variance approved by manager",
-                                                                     "operatorId":"manager-001"}
-                                                                    """)))
-                    @NonNull
-                    @Valid
-                    @RequestBody
-                    ExceptionResolutionRequest request) {
-        log.info(
-                "Received request to resolve match exception | billId={} | action={}",
-                billId,
-                request.getResolutionAction());
-
-        VendorBillResponse response = vendorBillService.resolveMatchException(
-                billId, request.getResolutionAction(), request.getReason(), request.getOperatorId());
-
-        return ResponseEntity.ok(response);
     }
 
     /**
@@ -328,15 +261,20 @@ public class VendorBillController {
             operationId = "getVendorBillById",
             summary = "Get Vendor Bill By Id",
             description = """
-                    Returns one vendor bill with its status, amounts, match metadata and approval history.
-                    Use this tool when the bill id is already known; use getVendorBillByOriginEventId \
-                    instead when only the goods-received event id is available, or listApBills to browse \
-                    APPROVED bills.
-                    Preconditions: the vendor bill must exist.
-                    Required inputs: billId (UUID) as a path parameter; there is no request body.
-                    Emits an ACCOUNTING_VENDOR_BILL_GET audit event; no state changes.
-                    Returns 404 when no vendor bill exists for the supplied id.
-                    """,
+                Returns one vendor bill as the review screen reads it: status, amounts and open amount, \
+                channel, the submission and (once approved) the approval, the rejection, the status \
+                explanation, the latest match evidence with any open candidates, the received lines with \
+                what was billed, the checks MATCHED_TO_DELIVERY and WITHIN_PRICE_TOLERANCE, the decisions the \
+                caller may take now (availableActions) and the posting (journalEntryReference, postingDate, \
+                postingDateRule, reversalReference).
+                Use this tool when the bill id is already known; use getVendorBillByOriginEventId \
+                instead when only the goods-received event id is available, or listVendorBillsByStage to \
+                browse a stage.
+                Preconditions: the vendor bill must exist.
+                Required inputs: billId (UUID) as a path parameter; there is no request body.
+                Emits an ACCOUNTING_VENDOR_BILL_GET audit event; no state changes.
+                Returns 404 VENDOR_BILL_NOT_FOUND when no vendor bill exists for the supplied id.
+                """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
             responseCode = "200",
@@ -344,7 +282,7 @@ public class VendorBillController {
             content = @Content(schema = @Schema(implementation = VendorBillResponse.class)))
     @ApiResponse(
             responseCode = "404",
-            description = "Vendor bill not found",
+            description = "VENDOR_BILL_NOT_FOUND",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<VendorBillResponse> getBillById(
             @Parameter(description = "Vendor bill identifier", example = "550e8400-e29b-41d4-a716-446655440001")
@@ -353,10 +291,7 @@ public class VendorBillController {
                     UUID billId) {
         log.info("Received request to retrieve vendor bill | billId={}", billId);
 
-        return vendorBillService
-                .getBillById(billId)
-                .map(ResponseEntity::ok)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Vendor bill not found"));
+        return ResponseEntity.ok(approvalService.getBill(billId));
     }
 
     /**
@@ -377,16 +312,16 @@ public class VendorBillController {
             operationId = "getVendorBillByOriginEventId",
             summary = "Get Vendor Bill By Origin Event",
             description = """
-                    Returns the vendor bill created from a specific goods-received event, using the event id \
-                    recorded at bill creation.
-                    Use this tool to check whether a goods-received event was already billed, for example \
-                    before replaying it; use getVendorBillById instead when the bill id is known.
-                    Preconditions: a bill must have been created from the event.
-                    Required inputs: eventId (UUID of the origin GoodsReceivedEvent) as a path parameter; \
-                    there is no request body.
-                    Emits an ACCOUNTING_VENDOR_BILL_GET_BY_EVENT audit event; no state changes.
-                    Returns 404 when no vendor bill originates from the supplied event id.
-                    """,
+                Returns the vendor bill created from a specific goods-received event, using the event id \
+                recorded at bill creation.
+                Use this tool to check whether a goods-received event was already billed, for example \
+                before replaying it; use getVendorBillById instead when the bill id is known.
+                Preconditions: a bill must have been created from the event.
+                Required inputs: eventId (UUID of the origin GoodsReceivedEvent) as a path parameter; \
+                there is no request body.
+                Emits an ACCOUNTING_VENDOR_BILL_GET_BY_EVENT audit event; no state changes.
+                Returns 404 when no vendor bill originates from the supplied event id.
+                """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
             responseCode = "200",
@@ -427,18 +362,18 @@ public class VendorBillController {
             operationId = "listVendorBillMatchCandidates",
             summary = "List Vendor Bill Match Candidates",
             description = """
-                    Lists the unresolved, scored candidate bills persisted when an invoice match came back \
-                    AMBIGUOUS, ordered by score descending.
-                    Use this tool to review the choices before calling selectVendorBillMatchCandidate; do \
-                    not use resolveVendorBillMatchException, which handles single-bill discrepancies rather \
-                    than ambiguity.
-                    Preconditions: a matchVendorInvoice call for this invoice event must have produced an \
-                    AMBIGUOUS outcome.
-                    Required inputs: invoiceEventId (UUID of the triggering invoice event) as a path \
-                    parameter; there is no request body.
-                    Emits an ACCOUNTING_VENDOR_BILL_MATCH_CANDIDATES_LIST audit event; no state changes.
-                    Returns 200 with an empty list when no unresolved candidates exist for the event.
-                    """,
+                Lists the unresolved, scored candidate bills persisted when an invoice match came back \
+                AMBIGUOUS, ordered by score descending.
+                Use this tool to review the choices before calling selectVendorBillMatchCandidate; do \
+                not use resolveVendorBillMatchException, which handles single-bill discrepancies rather \
+                than ambiguity.
+                Preconditions: a matchVendorInvoice call for this invoice event must have produced an \
+                AMBIGUOUS outcome.
+                Required inputs: invoiceEventId (UUID of the triggering invoice event) as a path \
+                parameter; there is no request body.
+                Emits an ACCOUNTING_VENDOR_BILL_MATCH_CANDIDATES_LIST audit event; no state changes.
+                Returns 200 with an empty list when no unresolved candidates exist for the event.
+                """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
             responseCode = "200",
@@ -481,20 +416,20 @@ public class VendorBillController {
             operationId = "listVendorBills",
             summary = "List Vendor Bills By Due Date",
             description = """
-                    Lists vendor bills whose due date falls in [dueFrom, dueTo], optionally filtered by \
-                    status, ordered by due date ascending.
-                    Use this tool to browse or triage upcoming/overdue payables across vendors; do not use \
-                    listApBills for this, which is scoped to APPROVED-only bills sorted for payment \
-                    selection, and use getVendorBillById when the bill id is already known.
-                    Preconditions: none beyond the caller holding accounting:analytics:view.
-                    Required inputs: dueFrom and dueTo (ISO dates, dueTo on or after dueFrom); the window \
-                    cannot exceed 366 days, to bound the scan. status is an optional filter (PENDING_RECEIPT_MATCH, \
-                    MATCH_EXCEPTION, CURRENCY_HOLD, APPROVED, REJECTED, PAID, VOIDED); page/size/sort are standard, though \
-                    the due-date-ascending sort is server-controlled and any caller-supplied sort is ignored.
-                    Emits an ACCOUNTING_VENDOR_BILL_LIST_VIEW audit event; no state changes.
-                    Returns 400 when dueTo is before dueFrom, the window exceeds 366 days, or status is not \
-                    a recognized VendorBillStatus value.
-                    """,
+                Lists vendor bills whose due date falls in [dueFrom, dueTo], optionally filtered by \
+                status, ordered by due date ascending.
+                Use this tool to browse or triage upcoming/overdue payables across vendors; do not use \
+                listApBills for this, which is scoped to APPROVED-only bills sorted for payment \
+                selection, and use getVendorBillById when the bill id is already known.
+                Preconditions: none beyond the caller holding accounting:analytics:view.
+                Required inputs: dueFrom and dueTo (ISO dates, dueTo on or after dueFrom); the window \
+                cannot exceed 366 days, to bound the scan. status is an optional filter (PENDING_RECEIPT_MATCH, \
+                MATCH_EXCEPTION, CURRENCY_HOLD, APPROVED, REJECTED, PAID, VOIDED); page/size/sort are standard, though \
+                the due-date-ascending sort is server-controlled and any caller-supplied sort is ignored.
+                Emits an ACCOUNTING_VENDOR_BILL_LIST_VIEW audit event; no state changes.
+                Returns 400 when dueTo is before dueFrom, the window exceeds 366 days, or status is not \
+                a recognized VendorBillStatus value.
+                """,
             tags = {"Vendor Bill API"})
     @ApiResponse(responseCode = "200", description = "Vendor bills retrieved successfully")
     @ApiResponse(
@@ -519,164 +454,5 @@ public class VendorBillController {
 
         Page<VendorBillListRow> bills = vendorBillService.listByDueDateWindow(dueFrom, dueTo, status, pageable);
         return ResponseEntity.ok(bills);
-    }
-
-    /**
-     * Select a match candidate to approve the corresponding vendor bill.
-     *
-     * POST /v1/accounting/vendor-bills/match-candidates/{candidateId}/select
-     *
-     * @param candidateId the candidate to select
-     * @param request     selection request with operator ID
-     * @return updated vendor bill response
-     */
-    @PostMapping("/match-candidates/{candidateId}/select")
-    @EmitEvent(id = "ACCOUNTING_VENDOR_BILL_MATCH_CANDIDATE_SELECT", apiVersion = "1")
-    @SecurityRequirement(
-            name = "bearerAuth",
-            scopes = {"accounting:ap:pay"})
-    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_PAY + "')")
-    @Operation(
-            operationId = "selectVendorBillMatchCandidate",
-            summary = "Select Vendor Bill Match Candidate",
-            description = """
-                    Selects one candidate from an ambiguous invoice match, approving the corresponding \
-                    vendor bill and marking the candidate set resolved.
-                    Use this tool after reviewing listVendorBillMatchCandidates; do not use \
-                    resolveVendorBillMatchException, which handles discrepancy exceptions on a single bill.
-                    Preconditions: the candidate must exist and must not already be resolved.
-                    Required inputs: candidateId (UUID) as a path parameter and operatorId in the body, \
-                    recorded as the approver.
-                    Emits an ACCOUNTING_VENDOR_BILL_MATCH_CANDIDATE_SELECT event.
-                    Returns 400 when the candidate is missing or already resolved (mapped as \
-                    VALIDATION_ERROR, not 404).
-                    """,
-            tags = {"Vendor Bill API"})
-    @ApiResponse(
-            responseCode = "200",
-            description = "Candidate selected",
-            content = @Content(schema = @Schema(implementation = VendorBillResponse.class)))
-    @ApiResponse(
-            responseCode = "404",
-            description = "Candidate not found",
-            content = @Content(schema = @Schema(implementation = ApiError.class)))
-    public ResponseEntity<VendorBillResponse> selectMatchCandidate(
-            @Parameter(description = "Match candidate identifier", example = "550e8400-e29b-41d4-a716-446655440030")
-                    @NonNull
-                    @PathVariable
-                    UUID candidateId,
-            @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description = "Operator making the candidate selection, recorded as the approver.",
-                            required = true,
-                            content =
-                                    @Content(
-                                            mediaType = "application/json",
-                                            examples =
-                                                    @ExampleObject(
-                                                            name = "Select candidate",
-                                                            value = "{\"operatorId\":\"advisor-001\"}")))
-                    @NonNull
-                    @Valid
-                    @RequestBody
-                    CandidateSelectionRequest request) {
-        log.info(
-                "Received request to select match candidate | candidateId={} | operator={}",
-                candidateId,
-                request.getOperatorId());
-
-        VendorBillResponse response = vendorBillService.selectMatchCandidate(candidateId, request.getOperatorId());
-        return ResponseEntity.ok(response);
-    }
-
-    /**
-     * DTO for match candidate selection requests.
-     */
-    @Schema(description = "Request payload for selecting a match candidate")
-    public static class CandidateSelectionRequest {
-        @Schema(
-                description = "Operator identifier performing selection",
-                example = "advisor-001",
-                requiredMode = Schema.RequiredMode.REQUIRED)
-        @NotBlank
-        private String operatorId;
-
-        public CandidateSelectionRequest() {}
-
-        public CandidateSelectionRequest(@NonNull String operatorId) {
-            this.operatorId = operatorId;
-        }
-
-        @NonNull
-        public String getOperatorId() {
-            return operatorId;
-        }
-
-        public void setOperatorId(@NonNull String operatorId) {
-            this.operatorId = operatorId;
-        }
-    }
-
-    /**
-     * DTO for exception resolution requests.
-     */
-    @Schema(description = "Request payload for resolving a vendor bill match exception")
-    public static class ExceptionResolutionRequest {
-        @Schema(
-                description = "Resolution action",
-                example = "ACCEPT",
-                allowableValues = {"ACCEPT", "VOID", "CORRECT"},
-                requiredMode = Schema.RequiredMode.REQUIRED)
-        @NotBlank
-        private String resolutionAction; // ACCEPT, VOID, CORRECT
-
-        @Schema(
-                description = "Reason for chosen resolution",
-                example = "Invoice variance approved by manager",
-                requiredMode = Schema.RequiredMode.REQUIRED)
-        @NotBlank
-        private String reason;
-
-        @Schema(
-                description = "Operator identifier performing resolution",
-                example = "manager-001",
-                requiredMode = Schema.RequiredMode.REQUIRED)
-        @NotBlank
-        private String operatorId;
-
-        public ExceptionResolutionRequest() {}
-
-        public ExceptionResolutionRequest(
-                @NonNull String resolutionAction, @NonNull String reason, @NonNull String operatorId) {
-            this.resolutionAction = resolutionAction;
-            this.reason = reason;
-            this.operatorId = operatorId;
-        }
-
-        @NonNull
-        public String getResolutionAction() {
-            return resolutionAction;
-        }
-
-        public void setResolutionAction(@NonNull String resolutionAction) {
-            this.resolutionAction = resolutionAction;
-        }
-
-        @NonNull
-        public String getReason() {
-            return reason;
-        }
-
-        public void setReason(@NonNull String reason) {
-            this.reason = reason;
-        }
-
-        @NonNull
-        public String getOperatorId() {
-            return operatorId;
-        }
-
-        public void setOperatorId(@NonNull String operatorId) {
-            this.operatorId = operatorId;
-        }
     }
 }

@@ -77,18 +77,18 @@ public class EventIngestionController {
             operationId = "listAccountingEvents",
             summary = "List Accounting Events",
             description = """
-                    Lists ingested accounting events as a paginated projection with rich optional filters: \
-                    event type, idempotency outcome, received-at range, event id, ingestion id, domain \
-                    key, invoice id and processing status.
-                    Use this tool to monitor or triage the event pipeline; do not use getAccountingEvent, \
-                    which fetches one event by its known id.
-                    Preconditions: none beyond the caller holding accounting:events:view; an unrecognized \
-                    status value is silently ignored rather than rejected.
-                    Required inputs: none; all filters are optional and the page defaults to 20 items sorted \
-                    by receivedAt descending.
-                    Emits an ACCOUNTING_EVENT_LIST audit event; no state changes.
-                    Returns 200 with an empty page when nothing matches the filters.
-                    """,
+                Lists ingested accounting events as a paginated projection with rich optional filters: \
+                event type, idempotency outcome, received-at range, event id, ingestion id, domain \
+                key, invoice id and processing status.
+                Use this tool to monitor or triage the event pipeline; do not use getAccountingEvent, \
+                which fetches one event by its known id.
+                Preconditions: none beyond the caller holding accounting:events:view; an unrecognized \
+                status value is silently ignored rather than rejected.
+                Required inputs: none; all filters are optional and the page defaults to 20 items sorted \
+                by receivedAt descending.
+                Emits an ACCOUNTING_EVENT_LIST audit event; no state changes.
+                Returns 200 with an empty page when nothing matches the filters.
+                """,
             tags = {"Accounting Events"})
     @ApiResponse(responseCode = "200", description = "Events listed")
     @ApiResponse(
@@ -160,23 +160,24 @@ public class EventIngestionController {
             operationId = "listAccountingEventTypes",
             summary = "List Accounting Event Types",
             description = """
-                    Lists every accounting event type the deployed code records, each with its code, display \
-                    name, source domain, ingestion path (KAFKA or API) and whether a fact of that type can \
-                    produce a journal entry. KAFKA types are recorded by the module's topic listeners; API \
-                    types are the ones the module's own code submits through submitEvent (INVOICE_PAYMENT, \
-                    VENDOR_BILL_GL_POSTING, AP_PAYMENT_GL_POSTING).
-                    submitEvent checks only that eventType is present and accepts any string, so a caller \
-                    can record a type this list does not hold; such an event is posted only when an active \
-                    posting rule set or default GL mapping resolves its type, and is otherwise suspended.
-                    Use this tool to discover the valid values of the eventType filter of \
-                    listAccountingEvents, including types with no traffic yet; do not use \
-                    listAccountingEvents itself, which lists ingested event instances, or getEventContract, \
-                    which describes the submit envelope.
-                    Preconditions: none beyond the caller holding accounting:events:view.
-                    Required inputs: none; there is no request body and no filter.
-                    Emits an ACCOUNTING_EVENT_TYPE_LIST audit event; no state changes.
-                    Returns 200 with the full registry; the list is fixed by the deployed code, never empty.
-                    """,
+                Lists every accounting event type the deployed code records, each with its code, display \
+                name, source domain, ingestion path (KAFKA or API) and whether a fact of that type can \
+                produce a journal entry. KAFKA types are recorded by the module's topic listeners; API \
+                types are the ones the module's own code submits through submitEvent (INVOICE_PAYMENT, \
+                AP_PAYMENT_GL_POSTING). Vendor bills post at approval through the VENDOR_BILL posting \
+                category; VENDOR_BILL_GL_POSTING is retired.
+                submitEvent checks only that eventType is present and accepts any string, so a caller \
+                can record a type this list does not hold; such an event is posted only when an active \
+                posting rule set or default GL mapping resolves its type, and is otherwise suspended.
+                Use this tool to discover the valid values of the eventType filter of \
+                listAccountingEvents, including types with no traffic yet; do not use \
+                listAccountingEvents itself, which lists ingested event instances, or getEventContract, \
+                which describes the submit envelope.
+                Preconditions: none beyond the caller holding accounting:events:view.
+                Required inputs: none; there is no request body and no filter.
+                Emits an ACCOUNTING_EVENT_TYPE_LIST audit event; no state changes.
+                Returns 200 with the full registry; the list is fixed by the deployed code, never empty.
+                """,
             tags = {"Accounting Events"})
     @ApiResponse(responseCode = "200", description = "Event types listed")
     @ApiResponse(
@@ -197,22 +198,22 @@ public class EventIngestionController {
             operationId = "getAccountingEvent",
             summary = "Get Accounting Event",
             description = """
-                    Returns one ingested accounting event with its payload, processing status and idempotency \
-                    outcome.
-                    Use this tool when the event id is already known; use listAccountingEvents instead when \
-                    searching by type, status or time range.
-                    Preconditions: the event must exist.
-                    Required inputs: eventId (UUID) as a path parameter; there is no request body.
-                    No events are emitted and no state changes; this is a read-only projection.
-                    The payload is returned unchanged for audit; payloadReferences adds a display projection of \
-                    the reference values recognized inside it: UUID-backed invoice, customer, journal-entry, \
-                    vendor and vendor-bill ids, plus the code-keyed accounting location \
-                    (locationId / location_id, matched case-insensitively against the location profile code). \
-                    Each entry carries rawValue as written and id only when that value is a UUID; displayName \
-                    and displayReference are null when accounting cannot resolve the reference and are never \
-                    the identifier rendered as text. listAccountingEvents omits payloadReferences.
-                    Returns 404 EVENT_NOT_FOUND when no accounting event exists for the supplied id.
-                    """,
+                Returns one ingested accounting event with its payload, processing status and idempotency \
+                outcome.
+                Use this tool when the event id is already known; use listAccountingEvents instead when \
+                searching by type, status or time range.
+                Preconditions: the event must exist.
+                Required inputs: eventId (UUID) as a path parameter; there is no request body.
+                No events are emitted and no state changes; this is a read-only projection.
+                The payload is returned unchanged for audit; payloadReferences adds a display projection of \
+                the reference values recognized inside it: UUID-backed invoice, customer, journal-entry, \
+                vendor and vendor-bill ids, plus the code-keyed accounting location \
+                (locationId / location_id, matched case-insensitively against the location profile code). \
+                Each entry carries rawValue as written and id only when that value is a UUID; displayName \
+                and displayReference are null when accounting cannot resolve the reference and are never \
+                the identifier rendered as text. listAccountingEvents omits payloadReferences.
+                Returns 404 EVENT_NOT_FOUND when no accounting event exists for the supplied id.
+                """,
             tags = {"Accounting Events"})
     @ApiResponse(responseCode = "200", description = "Event returned")
     @ApiResponse(
@@ -235,24 +236,24 @@ public class EventIngestionController {
             operationId = "submitAccountingEvent",
             summary = "Submit Accounting Event",
             description = """
-                    Injects a source-system business event into the accounting pipeline on behalf of its \
-                    producer, where the posting engine converts it into journal entries via published posting \
-                    rules or default GL mappings.
-                    Use this endpoint as the source system that owns the event (Billing and the other source \
-                    domains publish their own facts) or as an operator replaying a producer's event; do not use \
-                    it for a manual posting, which is createJournalEntry, or to re-run a FAILED or SUSPENDED \
-                    event, which is retryAccountingEvent or reprocessSuspendedEvent, and use resolveTestMapping \
-                    to preview the rules first.
-                    Preconditions: no event with the same eventId may already be ingested; duplicates are \
-                    rejected rather than reprocessed.
-                    Required inputs: eventType (max 100 chars) and payload (JSON object); eventId, \
-                    sourceSystem and transactionDate (ISO-8601) are optional, eventId being generated when \
-                    omitted.
-                    Emits an ACCOUNTING_EVENT_SUBMIT event and returns 202 while processing continues \
-                    asynchronously; callers poll getAccountingEvent for the outcome.
-                    Returns 409 DUPLICATE_EVENT when the eventId was already ingested, and 400 when required \
-                    fields are missing or the transactionDate is not valid ISO-8601.
-                    """,
+                Injects a source-system business event into the accounting pipeline on behalf of its \
+                producer, where the posting engine converts it into journal entries via published posting \
+                rules or default GL mappings.
+                Use this endpoint as the source system that owns the event (Billing and the other source \
+                domains publish their own facts) or as an operator replaying a producer's event; do not use \
+                it for a manual posting, which is createJournalEntry, or to re-run a FAILED or SUSPENDED \
+                event, which is retryAccountingEvent or reprocessSuspendedEvent, and use resolveTestMapping \
+                to preview the rules first.
+                Preconditions: no event with the same eventId may already be ingested; duplicates are \
+                rejected rather than reprocessed.
+                Required inputs: eventType (max 100 chars) and payload (JSON object); eventId, \
+                sourceSystem and transactionDate (ISO-8601) are optional, eventId being generated when \
+                omitted.
+                Emits an ACCOUNTING_EVENT_SUBMIT event and returns 202 while processing continues \
+                asynchronously; callers poll getAccountingEvent for the outcome.
+                Returns 409 DUPLICATE_EVENT when the eventId was already ingested, and 400 when required \
+                fields are missing or the transactionDate is not valid ISO-8601.
+                """,
             tags = {"Accounting Events"})
     @ApiResponse(responseCode = "202", description = "Event accepted for processing")
     @ApiResponse(
@@ -268,12 +269,12 @@ public class EventIngestionController {
                                     @Content(
                                             mediaType = "application/json",
                                             examples = @ExampleObject(name = "Invoice finalized event", value = """
-                                                                    {"eventId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
-                                                                     "eventType":"INVOICE_FINALIZED",
-                                                                     "sourceSystem":"POS",
-                                                                     "transactionDate":"2026-08-13T10:15:00",
-                                                                     "payload":{"invoiceId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5d","totalAmount":150.00}}
-                                                                    """)))
+                                                {"eventId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+                                                 "eventType":"INVOICE_FINALIZED",
+                                                 "sourceSystem":"POS",
+                                                 "transactionDate":"2026-08-13T10:15:00",
+                                                 "payload":{"invoiceId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5d","totalAmount":150.00}}
+                                                """)))
                     @Valid
                     @RequestBody
                     AccountingEventSubmitRequest request) {
@@ -291,20 +292,20 @@ public class EventIngestionController {
             operationId = "retryAccountingEvent",
             summary = "Retry Accounting Event Processing",
             description = """
-                    Re-runs posting for a FAILED accounting event through the posting engine using its \
-                    original payload and the current rules; the event ends PROCESSED, FAILED, SUSPENDED or SKIPPED (the engine's terminal \
-                    outcome for an event that posts nothing, e.g. no amount).
-                    Use this tool for transient failures; do not use reprocessSuspendedEvent, which is the \
-                    audited path for SUSPENDED events after a mapping or rule correction.
-                    Preconditions: the event must exist and be in status FAILED; any other status is \
-                    rejected and the event is left unchanged. The previous failure detail stays on the \
-                    event until the new outcome replaces it.
-                    Required inputs: eventId (UUID) as a path parameter; the request body is optional and \
-                    ignored.
-                    Emits an ACCOUNTING_EVENT_RETRY event and returns 202 with the event in its new status.
-                    Returns 404 EVENT_NOT_FOUND when the event does not exist, and 409 EVENT_NOT_RETRYABLE \
-                    when the event is not FAILED.
-                    """,
+                Re-runs posting for a FAILED accounting event through the posting engine using its \
+                original payload and the current rules; the event ends PROCESSED, FAILED, SUSPENDED or SKIPPED (the engine's terminal \
+                outcome for an event that posts nothing, e.g. no amount).
+                Use this tool for transient failures; do not use reprocessSuspendedEvent, which is the \
+                audited path for SUSPENDED events after a mapping or rule correction.
+                Preconditions: the event must exist and be in status FAILED; any other status is \
+                rejected and the event is left unchanged. The previous failure detail stays on the \
+                event until the new outcome replaces it.
+                Required inputs: eventId (UUID) as a path parameter; the request body is optional and \
+                ignored.
+                Emits an ACCOUNTING_EVENT_RETRY event and returns 202 with the event in its new status.
+                Returns 404 EVENT_NOT_FOUND when the event does not exist, and 409 EVENT_NOT_RETRYABLE \
+                when the event is not FAILED.
+                """,
             tags = {"Accounting Events"})
     @ApiResponse(responseCode = "202", description = "Retry ran; the event carries its new status")
     @ApiResponse(
@@ -341,22 +342,22 @@ public class EventIngestionController {
             operationId = "reprocessSuspendedEvent",
             summary = "Reprocess Suspended Event",
             description = """
-                    Reprocesses a SUSPENDED accounting event after a mapping or rule correction, recording an \
-                    audited reprocessing attempt with the authenticated caller as the triggering user.
-                    Use this tool once the underlying mapping gap is fixed; do not use retryAccountingEvent, \
-                    which is the unaudited retry for transient failures.
-                    Preconditions: the event must exist and be SUSPENDED; an event already PROCESSED is \
-                    rejected to preserve idempotency. A fact held for its currency (failureReasonCode \
-                    CURRENCY_NOT_SUPPORTED, ADR-0067 PC-9) is released here too; while its currency is still \
-                    not the ledger's it stays SUSPENDED with that reason and nothing is posted.
-                    Required inputs: eventId (UUID) as a path parameter; the body is optional and may carry mappingVersionToUse \
-                    (a UUID) and reprocessingNotes. The triggering user is the authenticated caller; any user field \
-                    in the body is ignored.
-                    Emits an ACCOUNTING_EVENT_REPROCESS event; a successful synchronous outcome returns 200 \
-                    with status PROCESSED while 202 means processing continues.
-                    Returns 404 EVENT_NOT_FOUND when the event does not exist, 409 when it is already \
-                    PROCESSED, and 400 when the request is invalid.
-                    """,
+                Reprocesses a SUSPENDED accounting event after a mapping or rule correction, recording an \
+                audited reprocessing attempt with the authenticated caller as the triggering user.
+                Use this tool once the underlying mapping gap is fixed; do not use retryAccountingEvent, \
+                which is the unaudited retry for transient failures.
+                Preconditions: the event must exist and be SUSPENDED; an event already PROCESSED is \
+                rejected to preserve idempotency. A fact held for its currency (failureReasonCode \
+                CURRENCY_NOT_SUPPORTED, ADR-0067 PC-9) is released here too; while its currency is still \
+                not the ledger's it stays SUSPENDED with that reason and nothing is posted.
+                Required inputs: eventId (UUID) as a path parameter; the body is optional and may carry mappingVersionToUse \
+                (a UUID) and reprocessingNotes. The triggering user is the authenticated caller; any user field \
+                in the body is ignored.
+                Emits an ACCOUNTING_EVENT_REPROCESS event; a successful synchronous outcome returns 200 \
+                with status PROCESSED while 202 means processing continues.
+                Returns 404 EVENT_NOT_FOUND when the event does not exist, 409 when it is already \
+                PROCESSED, and 400 when the request is invalid.
+                """,
             tags = {"Accounting Events"})
     @ApiResponse(responseCode = "202", description = "Reprocessing accepted")
     @ApiResponse(
@@ -376,16 +377,17 @@ public class EventIngestionController {
             @Parameter(description = "Event identifier") @PathVariable UUID eventId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description =
-                                    "Audited reprocessing trigger with optional mapping version pin and notes. May be omitted.",
+                                    "Audited reprocessing trigger with optional mapping version pin and notes. May be"
+                                            + " omitted.",
                             required = false,
                             content =
                                     @Content(
                                             mediaType = "application/json",
                                             examples =
                                                     @ExampleObject(name = "Reprocess after mapping fix", value = """
-                                                                    {"mappingVersionToUse":"0198a1b2-7c3d-7e4f-8a9b-0c1d2e3f4a5c",
-                                                                     "reprocessingNotes":"Default mapping added for CASH_SALE"}
-                                                                    """)))
+                                                        {"mappingVersionToUse":"0198a1b2-7c3d-7e4f-8a9b-0c1d2e3f4a5c",
+                                                         "reprocessingNotes":"Default mapping added for CASH_SALE"}
+                                                        """)))
                     @Valid
                     @RequestBody(required = false)
                     ReprocessEventRequest request) {
@@ -407,15 +409,15 @@ public class EventIngestionController {
             operationId = "getEventReprocessingHistory",
             summary = "Get Event Reprocessing History",
             description = """
-                    Returns every recorded reprocessing attempt for an accounting event, including who \
-                    triggered each attempt and its outcome.
-                    Use this tool when auditing a suspended event's correction history; use \
-                    getEventProcessingLog instead for the step-by-step pipeline log of a single run.
-                    Preconditions: none; an unknown event yields an empty list rather than an error.
-                    Required inputs: eventId (UUID) as a path parameter; there is no request body.
-                    No events are emitted and no state changes; this is a read-only projection.
-                    Returns 200 with an empty list when the event does not exist or was never reprocessed.
-                    """,
+                Returns every recorded reprocessing attempt for an accounting event, including who \
+                triggered each attempt and its outcome.
+                Use this tool when auditing a suspended event's correction history; use \
+                getEventProcessingLog instead for the step-by-step pipeline log of a single run.
+                Preconditions: none; an unknown event yields an empty list rather than an error.
+                Required inputs: eventId (UUID) as a path parameter; there is no request body.
+                No events are emitted and no state changes; this is a read-only projection.
+                Returns 200 with an empty list when the event does not exist or was never reprocessed.
+                """,
             tags = {"Accounting Events"})
     @ApiResponse(responseCode = "200", description = "Reprocessing history returned (may be empty list)")
     public ResponseEntity<List<ReprocessingAttemptHistoryResponse>> getReprocessingHistory(
@@ -434,15 +436,15 @@ public class EventIngestionController {
             operationId = "getEventProcessingLog",
             summary = "Get Event Processing Log",
             description = """
-                    Returns the structured, step-by-step processing audit log for one accounting event, \
-                    covering rule matching, mapping resolution and posting outcomes.
-                    Use this tool to diagnose why an event suspended or failed; use \
-                    getEventReprocessingHistory instead for the list of manual reprocessing attempts.
-                    Preconditions: none; an event with no log yields an empty list.
-                    Required inputs: eventId (UUID) as a path parameter; there is no request body.
-                    No events are emitted and no state changes; this is a read-only projection.
-                    Returns 200 with an empty list when the event has no processing log.
-                    """,
+                Returns the structured, step-by-step processing audit log for one accounting event, \
+                covering rule matching, mapping resolution and posting outcomes.
+                Use this tool to diagnose why an event suspended or failed; use \
+                getEventReprocessingHistory instead for the list of manual reprocessing attempts.
+                Preconditions: none; an event with no log yields an empty list.
+                Required inputs: eventId (UUID) as a path parameter; there is no request body.
+                No events are emitted and no state changes; this is a read-only projection.
+                Returns 200 with an empty list when the event has no processing log.
+                """,
             tags = {"Accounting Events"})
     @ApiResponse(responseCode = "200", description = "Processing log returned")
     public ResponseEntity<List<EventProcessingLogEntry>> getEventProcessingLog(
@@ -460,16 +462,16 @@ public class EventIngestionController {
             operationId = "getEventContract",
             summary = "Get Event Envelope Contract",
             description = """
-                    Returns the current accounting event envelope schema contract, which SDKs use to \
-                    validate events before submission.
-                    Use this tool to fetch the authoritative envelope shape before calling \
-                    submitAccountingEvent; do not use submitAccountingEvent itself to probe validation \
-                    rules.
-                    Preconditions: none.
-                    Required inputs: none; there are no parameters and no request body.
-                    No events are emitted and no state changes; this is a read-only projection.
-                    Returns 200 with the contract document.
-                    """,
+                Returns the current accounting event envelope schema contract, which SDKs use to \
+                validate events before submission.
+                Use this tool to fetch the authoritative envelope shape before calling \
+                submitAccountingEvent; do not use submitAccountingEvent itself to probe validation \
+                rules.
+                Preconditions: none.
+                Required inputs: none; there are no parameters and no request body.
+                No events are emitted and no state changes; this is a read-only projection.
+                Returns 200 with the contract document.
+                """,
             tags = {"Accounting Events"})
     @ApiResponse(responseCode = "200", description = "Contract returned")
     @ApiResponse(
@@ -490,17 +492,17 @@ public class EventIngestionController {
             operationId = "listAccountingEventStatuses",
             summary = "List Accounting Event Statuses",
             description = """
-                    Returns every accounting event status (code, label, meaning, whether it is terminal, \
-                    whether retry/reprocess applies) and every idempotency outcome, generated from the \
-                    enums so the set cannot drift.
-                    Use this tool to populate the status and idempotency-outcome filters of \
-                    listAccountingEvents; the code is the value that filter accepts. Do not use it to \
-                    find events in a given status; use listAccountingEvents with that status instead.
-                    Preconditions: none.
-                    Required inputs: none; there are no parameters and no request body.
-                    Emits an ACCOUNTING_EVENT_STATUS_LIST audit event; no state changes.
-                    Returns 200 with the catalog.
-                    """,
+                Returns every accounting event status (code, label, meaning, whether it is terminal, \
+                whether retry/reprocess applies) and every idempotency outcome, generated from the \
+                enums so the set cannot drift.
+                Use this tool to populate the status and idempotency-outcome filters of \
+                listAccountingEvents; the code is the value that filter accepts. Do not use it to \
+                find events in a given status; use listAccountingEvents with that status instead.
+                Preconditions: none.
+                Required inputs: none; there are no parameters and no request body.
+                Emits an ACCOUNTING_EVENT_STATUS_LIST audit event; no state changes.
+                Returns 200 with the catalog.
+                """,
             tags = {"Accounting Events"})
     @ApiResponse(responseCode = "200", description = "Statuses returned")
     @ApiResponse(

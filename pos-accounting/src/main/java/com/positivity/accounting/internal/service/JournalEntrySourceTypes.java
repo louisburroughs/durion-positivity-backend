@@ -43,6 +43,12 @@ public final class JournalEntrySourceTypes {
     /** One drawer cash movement of a closed register session, posted at close (CAP:550 S17, #2513). */
     public static final String REGISTER_CASH_MOVEMENT = "REGISTER_CASH_MOVEMENT";
 
+    /**
+     * A vendor bill or credit note posted at its approval (CAP:550 S12, #2509; AW37); its void reverses the entry
+     * under the same source.
+     */
+    public static final String VENDOR_BILL = "VENDOR_BILL";
+
     public static final String INVOICE_REVENUE = "INVOICE_REVENUE";
     public static final String INVOICE_REVENUE_REVERSAL = "INVOICE_REVENUE_REVERSAL";
 

@@ -20,6 +20,22 @@ public final class AccountingPermissions {
     /** View Wave 2 read-only accounting analytics (invoiced-vs-collected, payment-lag cohorts). */
     public static final String ANALYTICS_VIEW = "accounting:analytics:view";
 
+    /**
+     * Send a vendor bill for approval, correct a match exception and select a match candidate; approve within the
+     * clerk limit once S13 adds it (#2509; SPEC-accounting-workspace §4.3, AW4, AW5, AW31): ACCOUNTING_CLERK,
+     * CONTROLLER, GENERAL_MANAGER, ADMIN.
+     */
+    public static final String AP_APPROVE = "accounting:ap:approve";
+
+    /**
+     * Approve a vendor bill over the clerk limit, which until S13 is every bill, including ACCEPT of a match
+     * exception and the void of an approved bill (#2509; AW4, AW5): CONTROLLER, GENERAL_MANAGER, ADMIN.
+     */
+    public static final String AP_APPROVE_OVER_LIMIT = "accounting:ap:approve_over_limit";
+
+    /** Reject a vendor bill awaiting approval, void a match exception or an approved bill (#2509): as AP_APPROVE. */
+    public static final String AP_REJECT = "accounting:ap:reject";
+
     /** Process payments. */
     public static final String AP_PAY = "accounting:ap:pay";
 

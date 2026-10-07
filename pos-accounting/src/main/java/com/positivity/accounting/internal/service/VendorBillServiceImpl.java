@@ -2,26 +2,26 @@ package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.dto.BillMatchResult;
 import com.positivity.accounting.internal.dto.GoodsReceivedEvent;
-import com.positivity.accounting.internal.dto.VendorBillGLPostingEvent;
 import com.positivity.accounting.internal.dto.VendorBillListRow;
 import com.positivity.accounting.internal.dto.VendorBillMatchCandidateResponse;
 import com.positivity.accounting.internal.dto.VendorBillResponse;
 import com.positivity.accounting.internal.dto.VendorInvoiceReceivedEvent;
+import com.positivity.accounting.internal.entity.AccountingAuditLog;
 import com.positivity.accounting.internal.entity.AccountingSequence;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.entity.VendorBillLine;
 import com.positivity.accounting.internal.entity.VendorBillMatchCandidate;
+import com.positivity.accounting.internal.entity.VendorBillMatchEvidence;
 import com.positivity.accounting.internal.enums.MatchConfidence;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.InvalidDateRangeException;
 import com.positivity.accounting.internal.exception.VendorBillDuplicateException;
 import com.positivity.accounting.internal.exception.VendorBillMatchNotFoundException;
-import com.positivity.accounting.internal.exception.VendorBillOperatorActionException;
+import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.VendorBillLineRepository;
 import com.positivity.accounting.internal.repository.VendorBillMatchCandidateRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.security.common.SecurityContextHelper;
-import com.positivity.shared.id.UUIDv7Generator;
 import java.io.Serial;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -34,7 +34,6 @@ import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -42,7 +41,6 @@ import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -54,16 +52,18 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Implementation of Vendor Bill lifecycle management (Issue #130).
+ * Implementation of Vendor Bill lifecycle management (Issue #130), up to the point a person decides (#2509).
  *
  * <p>
  * Receipt Accrual Workflow:
  * <ol>
- * <li>GoodsReceivedEvent → createsBill in PENDING_RECEIPT_MATCH</li>
- * <li>VendorInvoiceReceivedEvent → three-way match → APPROVED (on success) or
- * MATCH_EXCEPTION (on discrepancy)</li>
- * <li>Manual resolution (if MATCH_EXCEPTION) → APPROVED</li>
- * <li>Payment → PAID</li>
+ * <li>GoodsReceivedEvent → creates a bill in PENDING_RECEIPT_MATCH; nothing posts (AW37)</li>
+ * <li>VendorInvoiceReceivedEvent → three-way match → AWAITING_APPROVAL for a HIGH match (submitted by SYSTEM; the
+ * automatic limit is 0 until S13), MATCH_EXCEPTION for a MEDIUM match or a discrepancy, the candidates kept for an
+ * ambiguous one. No match writes an approval field (G12); every match keeps what the vendor billed and its evidence
+ * (AW39)</li>
+ * <li>Approve, reject, resolve, select and void: {@link VendorBillApprovalServiceImpl}; the bill posts at approval
+ * ({@link VendorBillPostingService})</li>
  * </ol>
  *
  * @see <a href=
@@ -83,10 +83,12 @@ public class VendorBillServiceImpl implements VendorBillService {
     private final VendorBillRepository billRepository;
     private final VendorBillLineRepository billLineRepository;
     private final VendorBillMatchCandidateRepository matchCandidateRepository;
-    private final ApplicationEventPublisher eventPublisher;
     private final VendorDirectoryService vendorDirectoryService;
     private final VendorBillDuplicateGuard duplicateGuard;
     private final AccountingSequenceLocker sequenceLocker;
+    private final VendorBillInvoiceMatcher matcher;
+    private final VendorBillReader reader;
+    private final AccountingAuditLogRepository auditLogs;
 
     private final AccountingCalendarZoneResolver zoneResolver;
 
@@ -103,38 +105,31 @@ public class VendorBillServiceImpl implements VendorBillService {
             VendorBillRepository billRepository,
             VendorBillLineRepository billLineRepository,
             VendorBillMatchCandidateRepository matchCandidateRepository,
-            ApplicationEventPublisher eventPublisher,
             VendorDirectoryService vendorDirectoryService,
             VendorBillDuplicateGuard duplicateGuard,
             AccountingSequenceLocker sequenceLocker,
             PlatformTransactionManager transactionManager,
-            AccountingCalendarZoneResolver zoneResolver) {
+            AccountingCalendarZoneResolver zoneResolver,
+            VendorBillInvoiceMatcher matcher,
+            VendorBillReader reader,
+            AccountingAuditLogRepository auditLogs) {
         this.zoneResolver = zoneResolver;
         this.clock = clock;
         this.billRepository = billRepository;
         this.billLineRepository = billLineRepository;
         this.matchCandidateRepository = matchCandidateRepository;
-        this.eventPublisher = eventPublisher;
         this.vendorDirectoryService = vendorDirectoryService;
         this.duplicateGuard = duplicateGuard;
         this.sequenceLocker = sequenceLocker;
+        this.matcher = matcher;
+        this.reader = reader;
+        this.auditLogs = auditLogs;
         this.goodsReceiptTransaction = new TransactionTemplate(transactionManager);
     }
 
     private String getCurrentUser() {
         return SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_USER);
     }
-
-    private Map<String, String> normalizeDimensions(Map<String, String> dimensions) {
-        if (dimensions == null || dimensions.isEmpty()) {
-            return Map.of();
-        }
-        return Map.copyOf(dimensions);
-    }
-
-    // Tolerance thresholds for three-way matching
-    private static final BigDecimal QUANTITY_TOLERANCE_PERCENT = new BigDecimal("0.001"); // 0.1%
-    private static final BigDecimal PRICE_TOLERANCE_PERCENT = new BigDecimal("0.05"); // 5%
 
     /**
      * Hard cap on page size for {@link #listByDueDateWindow}; also the default when the caller's
@@ -166,8 +161,8 @@ public class VendorBillServiceImpl implements VendorBillService {
      * made on the bill's connection with a conflict-tolerant insert
      * ({@link VendorDirectoryService#recordVendorInCurrentTransaction}), so it commits with the bill
      * and a refused or rolled-back create writes no directory row. Nothing else between the number
-     * and the commit leaves the bill's connection: the duplicate check, the bill and its lines, and
-     * the GL posting event's handler and event ingestion all join this transaction.
+     * and the commit leaves the bill's connection: the duplicate check, the bill and its lines all join this
+     * transaction. Nothing is posted (AW37).
      *
      * <p>One exception remains, on the collision path only. When this method runs inside a caller's
      * transaction and the unique index refuses the insert, that transaction is aborted but still
@@ -232,7 +227,7 @@ public class VendorBillServiceImpl implements VendorBillService {
         Optional<VendorBill> existingBill = billRepository.findByOriginEventId(event.getEventId());
         if (existingBill.isPresent()) {
             log.warn("Duplicate GoodsReceivedEvent ignored | eventId={}", event.getEventId());
-            return toResponse(existingBill.get());
+            return reader.read(existingBill.get());
         }
 
         // Step 2: Create vendor bill
@@ -305,40 +300,9 @@ public class VendorBillServiceImpl implements VendorBillService {
                 event.getLineItems().size(),
                 savedBill.getStatus());
 
-        // Step 6: Emit GL posting event for journal entry creation
-        // Dr Inventory (for inventory items) or Dr Expense (for non-inventory)
-        // Cr Accounts Payable
-        VendorBillGLPostingEvent glPostingEvent = VendorBillGLPostingEvent.builder()
-                .eventId(UUIDv7Generator.generate())
-                .vendorBillId(savedBill.getVendorBillId())
-                .vendorId(savedBill.getVendorId())
-                .organizationId(event.getOrganizationId())
-                .vendorName(savedBill.getVendorName())
-                .purchaseOrderId(savedBill.getPurchaseOrderId())
-                .billNumber(savedBill.getBillNumber())
-                .billDate(savedBill.getBillDate())
-                .totalAmount(savedBill.getTotalAmount())
-                .dimensions(normalizeDimensions(event.getDimensions()))
-                .lineItems(event.getLineItems().stream()
-                        .map(line -> VendorBillGLPostingEvent.BillLineItem.builder()
-                                .productId(line.getProductId())
-                                .description(line.getDescription())
-                                .quantity(line.getQuantity())
-                                .unitPrice(line.getUnitPrice())
-                                .lineTotal(line.getQuantity().multiply(line.getUnitPrice()))
-                                .isInventoryItem(line.isInventoryItem())
-                                .build())
-                        .toList())
-                .build();
-
-        eventPublisher.publishEvent(glPostingEvent);
-        log.info(
-                "GL posting event emitted | billId={} | eventId={} | totalAmount={}",
-                savedBill.getVendorBillId(),
-                glPostingEvent.getEventId(),
-                totalAmount);
-
-        return toResponse(savedBill);
+        // Nothing posts at creation (AW37): the receipt's own accrual is S41's, and the bill posts once, at
+        // approval (VendorBillPostingService).
+        return reader.read(savedBill);
     }
 
     @Override
@@ -351,6 +315,7 @@ public class VendorBillServiceImpl implements VendorBillService {
                 event.getInvoiceReference());
 
         String currentUser = getCurrentUser();
+        List<VendorBillInvoiceMatcher.InvoiceLine> invoiceLines = invoiceLines(event);
 
         // Step 1: Find and match pending bill using enhanced scoring algorithm
         BillMatchResult matchResult = findBestMatchingBillWithConfidence(event);
@@ -373,21 +338,35 @@ public class VendorBillServiceImpl implements VendorBillService {
                     event.getInvoiceReference(),
                     matchResult.getAlternativeCandidates().size(),
                     matchResult.getMatchingDetails());
-            // Persist all candidates for manual selection by operator
-            persistMatchCandidates(event.getEventId(), event.getVendorId(), matchResult.getAlternativeCandidates());
+            // Persist all candidates, with their points and the invoice, for a person to select one.
+            persistMatchCandidates(event, invoiceLines, matchResult.getAlternativeCandidates());
 
             // Mark best-match bill as MATCH_EXCEPTION awaiting operator selection
-            VendorBill bill = matchResult.getBestMatch();
+            BillMatchResult.ScoredBill best =
+                    matchResult.getAlternativeCandidates().get(0);
+            VendorBill bill = best.getBill();
             bill.setStatus(VendorBillStatus.MATCH_EXCEPTION);
             bill.setRejectionReason("Ambiguous match - multiple candidates found. "
                     + "Use /match-candidates/{invoiceEventId} to list and select. "
                     + matchResult.getMatchingDetails());
             bill.setModifiedBy(currentUser);
             billRepository.save(bill);
-            return toResponse(bill);
+            VendorBillMatchEvidence evidence = matcher.record(
+                    bill,
+                    event.getEventId(),
+                    VendorBillMatchEvidence.Source.MATCH,
+                    MatchConfidence.AMBIGUOUS,
+                    points(best),
+                    event.getInvoiceReference(),
+                    event.getInvoiceDate(),
+                    matcher.compare(bill, invoiceLines),
+                    currentUser);
+            auditRouted(bill, evidence, "AMBIGUOUS");
+            return reader.read(bill);
         }
 
-        VendorBill bill = matchResult.getBestMatch();
+        BillMatchResult.ScoredBill best = Objects.requireNonNull(matchResult.getBestScored());
+        VendorBill bill = best.getBill();
 
         // Log match confidence
         log.info(
@@ -398,214 +377,119 @@ public class VendorBillServiceImpl implements VendorBillService {
                 matchResult.getBestScore(),
                 matchResult.getMatchingDetails());
 
-        // Step 2: Perform three-way match validation
-        boolean hasDiscrepancy = validateMatchConsistency(bill, event);
+        // Step 2: Three-way match validation, before anything changes: the tolerance check compares the
+        // invoice with what was received.
+        VendorBillInvoiceMatcher.Comparison comparison = matcher.compare(bill, invoiceLines);
+        boolean hasDiscrepancy = !comparison.withinTolerance();
 
+        if (!hasDiscrepancy) {
+            // The bill is about to take the vendor's invoice reference as its number: the duplicate rule
+            // (#2501) is checked first, the bill itself excluded, so a refusal leaves it untouched.
+            duplicateGuard.refuseIfDuplicate(
+                    VendorBillDuplicateGuard.Channel.MATCH,
+                    bill.getVendorId(),
+                    event.getInvoiceReference(),
+                    bill.getBillDate(),
+                    bill.getVendorBillId());
+        }
+
+        // Step 3: Keep what the vendor billed (AW39): the billed lines and total, whatever the routing.
+        matcher.applyBilled(bill, invoiceLines);
+
+        String outcome;
         if (hasDiscrepancy) {
-            // Transition to MATCH_EXCEPTION
             bill.setStatus(VendorBillStatus.MATCH_EXCEPTION);
             bill.setRejectionReason("Quantity or price mismatch detected during three-way match");
-            bill.setModifiedBy(currentUser);
-            billRepository.save(bill);
-
+            outcome = "DISCREPANCY";
             log.warn(
                     "Three-way match exception | billId={} | invoiceRef={}",
                     bill.getVendorBillId(),
                     event.getInvoiceReference());
-
-            return toResponse(bill);
-        }
-
-        // The bill is about to take the vendor's invoice reference as its number: the duplicate rule
-        // (#2501) is checked first, the bill itself excluded, so a refusal leaves it untouched.
-        duplicateGuard.refuseIfDuplicate(
-                VendorBillDuplicateGuard.Channel.MATCH,
-                bill.getVendorId(),
-                event.getInvoiceReference(),
-                bill.getBillDate(),
-                bill.getVendorBillId());
-
-        // Step 3: Auto-approve based on confidence
-        if (matchResult.getConfidence() == MatchConfidence.HIGH_CONFIDENCE) {
-            // Auto-approve high confidence matches
-            bill.setStatus(VendorBillStatus.APPROVED);
-            bill.setApprovalJustification(
-                    "Auto-approved: high confidence match (score=" + matchResult.getBestScore() + ")");
+        } else if (matchResult.getConfidence() == MatchConfidence.HIGH_CONFIDENCE) {
+            // A HIGH match goes to approval, never approves (G12): the automatic limit is 0 until S13.
+            bill.setStatus(VendorBillStatus.AWAITING_APPROVAL);
+            bill.setSubmittedBy(SYSTEM_USER);
+            bill.setSubmittedAt(Instant.now(clock));
+            bill.setSubmissionJustification(
+                    "Matched to its delivery: score " + matchResult.getBestScore() + " (HIGH confidence)");
+            outcome = "HIGH";
         } else {
             // Medium confidence - require manual review
             bill.setStatus(VendorBillStatus.MATCH_EXCEPTION);
             bill.setRejectionReason(
                     "Medium confidence match - requires review (score=" + matchResult.getBestScore() + ")");
+            outcome = "MEDIUM";
         }
-
-        bill.setBillNumber(event.getInvoiceReference());
-        bill.setDueDate(event.getDueDate());
+        if (!hasDiscrepancy) {
+            bill.setBillNumber(event.getInvoiceReference());
+            bill.setDueDate(event.getDueDate());
+        }
         bill.setModifiedBy(currentUser);
-        bill.setApprovedBy(currentUser);
-        bill.setApprovedAt(Instant.now(clock));
-        bill.setApprovalJustification("Auto-approved: three-way match successful");
         billRepository.save(bill);
 
-        log.info(
-                "Three-way match successful | billId={} | invoiceRef={} | status=APPROVED",
-                bill.getVendorBillId(),
-                event.getInvoiceReference());
+        VendorBillMatchEvidence evidence = matcher.record(
+                bill,
+                event.getEventId(),
+                VendorBillMatchEvidence.Source.MATCH,
+                matchResult.getConfidence(),
+                points(best),
+                event.getInvoiceReference(),
+                event.getInvoiceDate(),
+                comparison,
+                currentUser);
+        auditRouted(bill, evidence, outcome);
 
-        return toResponse(bill);
+        log.info(
+                "Three-way match routed | billId={} | invoiceRef={} | status={}",
+                bill.getVendorBillId(),
+                event.getInvoiceReference(),
+                bill.getStatus());
+
+        return reader.read(bill);
     }
 
-    @Override
-    @Transactional
-    public @NonNull VendorBillResponse resolveMatchException(
-            @NonNull UUID billId,
-            @NonNull String resolutionAction,
-            @NonNull String reason,
-            @NonNull String operatorId) {
+    /**
+     * One {@code VENDOR_BILL_MATCH_ROUTED} audit row per routed match, written as the system's (#2509): where the
+     * match sent the bill, its score and evidence. Nothing is approved here.
+     */
+    private void auditRouted(VendorBill bill, VendorBillMatchEvidence evidence, String outcome) {
+        AccountingAuditLog row = new AccountingAuditLog();
+        row.setEntityType("VENDOR_BILL");
+        row.setEntityId(bill.getVendorBillId());
+        row.setOperation("VENDOR_BILL_MATCH_ROUTED");
+        row.setUserId(SYSTEM_USER);
+        row.setNewValue("billNumber=" + bill.getBillNumber() + ";outcome=" + outcome + ";status=" + bill.getStatus()
+                + ";totalAmount=" + bill.getTotalAmount().toPlainString() + ";currencyCode="
+                + evidence.getCurrencyCode() + ";matchScore=" + evidence.getScore() + ";evidenceId="
+                + evidence.getMatchEvidenceId() + ";requestedBy=" + getCurrentUser());
+        auditLogs.save(row);
+    }
 
-        VendorBill bill = billRepository
-                .findById(billId)
-                .orElseThrow(() -> new VendorBillOperatorActionException("Vendor bill not found: " + billId));
+    private static VendorBillInvoiceMatcher.Points points(BillMatchResult.ScoredBill scored) {
+        return new VendorBillInvoiceMatcher.Points(
+                scored.getAmountPoints(),
+                scored.getProductPoints(),
+                scored.getDatePoints(),
+                scored.getPurchaseOrderPoints());
+    }
 
-        if (bill.getStatus() != VendorBillStatus.MATCH_EXCEPTION) {
-            throw new VendorBillOperatorActionException("Bill is not in MATCH_EXCEPTION status: " + bill.getStatus());
-        }
-
-        switch (resolutionAction.toUpperCase()) {
-            case "ACCEPT":
-                // Operator accepts discrepancy - approve bill
-                bill.setStatus(VendorBillStatus.APPROVED);
-                bill.setApprovedBy(operatorId);
-                bill.setApprovedAt(Instant.now(clock));
-                bill.setApprovalJustification("Match exception accepted: " + reason);
-                bill.setModifiedBy(operatorId);
-                break;
-
-            case "VOID":
-                // Void bill - requires reversal of GL posting
-                bill.setStatus(VendorBillStatus.VOIDED);
-                bill.setRejectedBy(operatorId);
-                bill.setRejectedAt(Instant.now(clock));
-                bill.setRejectionReason("Match exception voided: " + reason);
-                bill.setModifiedBy(operatorId);
-                break;
-
-            case "CORRECT":
-                // Return to PENDING_RECEIPT_MATCH for manual correction
-                // In production, would update line items here
-                bill.setStatus(VendorBillStatus.PENDING_RECEIPT_MATCH);
-                bill.setModifiedBy(operatorId);
-                break;
-
-            default:
-                throw new VendorBillOperatorActionException("Invalid resolution action: " + resolutionAction);
-        }
-
-        VendorBill savedBill = billRepository.save(bill);
-        log.info(
-                "Match exception resolved | billId={} | action={} | newStatus={} | operator={}",
-                billId,
-                resolutionAction,
-                savedBill.getStatus(),
-                operatorId);
-
-        return toResponse(savedBill);
+    private static List<VendorBillInvoiceMatcher.InvoiceLine> invoiceLines(VendorInvoiceReceivedEvent event) {
+        return event.getLineItems().stream()
+                .map(line -> new VendorBillInvoiceMatcher.InvoiceLine(
+                        line.getProductId(), line.getDescription(), line.getQuantity(), line.getUnitPrice()))
+                .toList();
     }
 
     @Override
     @Transactional(readOnly = true)
     public @NonNull Optional<VendorBillResponse> getBillById(@NonNull UUID billId) {
-        return billRepository.findById(billId).map(this::toResponse);
+        return billRepository.findById(billId).map(reader::read);
     }
 
     @Override
     @Transactional(readOnly = true)
     public @NonNull Optional<VendorBillResponse> getBillByOriginEventId(@NonNull UUID originEventId) {
-        return billRepository.findByOriginEventId(originEventId).map(this::toResponse);
-    }
-
-    /**
-     * Validates three-way match consistency between bill and invoice.
-     * Performs line-by-line comparison with quantity and price tolerances.
-     *
-     * @param bill  Existing vendor bill (from GoodsReceivedEvent)
-     * @param event Vendor invoice event
-     * @return true if discrepancy detected, false if match successful
-     */
-    private boolean validateMatchConsistency(@NonNull VendorBill bill, @NonNull VendorInvoiceReceivedEvent event) {
-        // Load persisted bill line items from goods receipt
-        List<VendorBillLine> persistedBillLines =
-                billLineRepository.findByVendorBill_VendorBillIdOrderByLineNumber(bill.getVendorBillId());
-        var invoiceLineItems = event.getLineItems();
-
-        // Check line count match
-        if (persistedBillLines.size() != invoiceLineItems.size()) {
-            log.warn(
-                    "Line item count mismatch | billLines={} | invoiceLines={}",
-                    persistedBillLines.size(),
-                    invoiceLineItems.size());
-            return true;
-        }
-
-        // Line-by-line validation (billLines already sorted by line number from query)
-        for (int i = 0; i < persistedBillLines.size(); i++) {
-            VendorBillLine billLine = persistedBillLines.get(i);
-            var invoiceLine = invoiceLineItems.get(i);
-
-            // Validate quantity within tolerance (0.1%)
-            BigDecimal quantityDifference =
-                    billLine.getQuantity().subtract(invoiceLine.getQuantity()).abs();
-            BigDecimal quantityTolerance = billLine.getQuantity().multiply(QUANTITY_TOLERANCE_PERCENT);
-
-            if (quantityDifference.compareTo(quantityTolerance) > 0) {
-                log.warn(
-                        "Quantity mismatch at line {} | billQty={} | invoiceQty={} | difference={} | tolerance={}",
-                        billLine.getLineNumber(),
-                        billLine.getQuantity(),
-                        invoiceLine.getQuantity(),
-                        quantityDifference,
-                        quantityTolerance);
-                return true;
-            }
-
-            // Validate unit price within tolerance (5%)
-            BigDecimal priceDifference =
-                    billLine.getUnitPrice().subtract(invoiceLine.getUnitPrice()).abs();
-            BigDecimal priceTolerance = billLine.getUnitPrice().multiply(PRICE_TOLERANCE_PERCENT);
-
-            if (priceDifference.compareTo(priceTolerance) > 0) {
-                log.warn(
-                        "Price mismatch at line {} | billPrice={} | invoicePrice={} | difference={} | tolerance={}",
-                        billLine.getLineNumber(),
-                        billLine.getUnitPrice(),
-                        invoiceLine.getUnitPrice(),
-                        priceDifference,
-                        priceTolerance);
-                return true;
-            }
-        }
-
-        // Overall total amount validation as final check
-        BigDecimal billTotalAmount = bill.getTotalAmount();
-        BigDecimal invoiceTotalAmount = invoiceLineItems.stream()
-                .map(line -> line.getQuantity().multiply(line.getUnitPrice()))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        BigDecimal totalDifference =
-                billTotalAmount.subtract(invoiceTotalAmount).abs();
-        BigDecimal totalTolerance = billTotalAmount.multiply(PRICE_TOLERANCE_PERCENT);
-
-        if (totalDifference.compareTo(totalTolerance) > 0) {
-            log.warn(
-                    "Total amount mismatch | billTotal={} | invoiceTotal={} | difference={} | tolerance={}",
-                    billTotalAmount,
-                    invoiceTotalAmount,
-                    totalDifference,
-                    totalTolerance);
-            return true;
-        }
-
-        log.info("Three-way match validation passed | lineItemsValidated={}", persistedBillLines.size());
-        return false;
+        return billRepository.findByOriginEventId(originEventId).map(reader::read);
     }
 
     /**
@@ -614,17 +498,17 @@ public class VendorBillServiceImpl implements VendorBillService {
      * Returns BillMatchResult with confidence level for appropriate workflow
      * routing.
      *
-     * Scoring algorithm:
+     * Scoring algorithm (P3):
      * - Amount match (within 10% tolerance): 40 points
      * - Line item overlap (Jaccard similarity): 30 points
-     * - Date proximity (within 30 days): 20 points
-     * - PO reference match: 10 points
+     * - Date proximity (within 7 days 20, within 30 days 10): 20 points
+     * - Purchase order present on the receipt: 5 points
      *
      * Confidence levels:
-     * - HIGH_CONFIDENCE: Single candidate > 70 points (auto-approve)
-     * - MEDIUM_CONFIDENCE: Single candidate 50-70 points (manual review)
-     * - AMBIGUOUS: Multiple candidates > 50 points (select from list)
-     * - NO_MATCH: No candidates > 50 points (procurement exception)
+     * - HIGH_CONFIDENCE: Single candidate with 70 points or more (sent for approval, #2509; never approves)
+     * - MEDIUM_CONFIDENCE: Single candidate with 50 to 69 points (manual review)
+     * - AMBIGUOUS: Multiple candidates with 50 points or more (select from list)
+     * - NO_MATCH: No candidate with 50 points or more (refused)
      *
      * @param event Vendor invoice received event
      * @return BillMatchResult with best match and confidence level
@@ -669,9 +553,9 @@ public class VendorBillServiceImpl implements VendorBillService {
         if (qualifiedCandidates.size() == 1) {
             BillMatchResult.ScoredBill best = qualifiedCandidates.get(0);
             if (best.getTotalScore() >= 70) {
-                return BillMatchResult.highConfidence(best.getBill(), best.getTotalScore(), best.getScoreBreakdown());
+                return BillMatchResult.highConfidence(best);
             } else {
-                return BillMatchResult.mediumConfidence(best.getBill(), best.getTotalScore(), best.getScoreBreakdown());
+                return BillMatchResult.mediumConfidence(best);
             }
         }
 
@@ -687,12 +571,17 @@ public class VendorBillServiceImpl implements VendorBillService {
     private BillMatchResult.ScoredBill scoreBillMatch(
             VendorBill bill, VendorInvoiceReceivedEvent event, BigDecimal invoiceTotal) {
         int score = 0;
+        int amountPoints = 0;
+        int productPoints = 0;
+        int datePoints = 0;
+        int purchaseOrderPoints = 0;
         StringBuilder details = new StringBuilder();
 
         // 1. Amount matching (40 points)
         BigDecimal amountDiff = bill.getTotalAmount().subtract(invoiceTotal).abs();
         BigDecimal tolerance = bill.getTotalAmount().multiply(new BigDecimal("0.10")); // 10%
         if (amountDiff.compareTo(tolerance) <= 0) {
+            amountPoints = 40;
             score += 40;
             details.append("amount_match(40);");
         } else {
@@ -705,6 +594,7 @@ public class VendorBillServiceImpl implements VendorBillService {
         if (!billLines.isEmpty()) {
             double similarity = calculateLineItemSimilarity(billLines, event.getLineItems());
             int lineItemScore = (int) Math.round(30 * similarity);
+            productPoints = lineItemScore;
             score += lineItemScore;
             details.append(String.format("line_item_similarity(%.2f=%d);", similarity, lineItemScore));
         } else {
@@ -716,21 +606,24 @@ public class VendorBillServiceImpl implements VendorBillService {
         long daysDiff = Math.abs(java.time.temporal.ChronoUnit.DAYS.between(
                 bill.getBillDate().toLocalDate(), event.getInvoiceDate().toLocalDate()));
         if (daysDiff <= 7) {
+            datePoints = 20;
             score += 20;
             details.append("date_match(20);");
         } else if (daysDiff <= 30) {
+            datePoints = 10;
             score += 10;
             details.append("date_close(10);");
         } else {
             details.append(String.format("date_far(%dd);", daysDiff));
         }
 
-        // 4. PO reference match (10 points)
+        // 4. PO reference (5 points, P3)
         // Note: VendorInvoiceReceivedEvent doesn't have poId - matching by vendorId
         // only
         // In future, add poId to invoice event for full three-way match
         if (bill.getPurchaseOrderId() != null) {
             // Award partial credit if PO is present (validates receipt came from real PO)
+            purchaseOrderPoints = 5;
             score += 5;
             details.append(String.format("po_present(%s=5);", bill.getPurchaseOrderId()));
         } else {
@@ -741,6 +634,10 @@ public class VendorBillServiceImpl implements VendorBillService {
                 .bill(bill)
                 .totalScore(score)
                 .scoreBreakdown(details.toString())
+                .amountPoints(amountPoints)
+                .productPoints(productPoints)
+                .datePoints(datePoints)
+                .purchaseOrderPoints(purchaseOrderPoints)
                 .build();
     }
 
@@ -811,25 +708,38 @@ public class VendorBillServiceImpl implements VendorBillService {
     // ===== Match Candidate Persistence & Selection =====
 
     /**
-     * Persist all scored candidates for an ambiguous invoice match.
+     * Persist all scored candidates for an ambiguous invoice match, with their points and the invoice they were
+     * scored against (#2509), so a selection keeps what the vendor billed and writes the same evidence.
      * Denormalizes key bill fields for efficient listing without joins.
      */
     private void persistMatchCandidates(
-            @NonNull UUID invoiceEventId,
-            @NonNull UUID vendorId,
+            @NonNull VendorInvoiceReceivedEvent event,
+            @NonNull List<VendorBillInvoiceMatcher.InvoiceLine> invoiceLines,
             @NonNull List<BillMatchResult.ScoredBill> candidates) {
+        BigDecimal invoiceTotal = invoiceLines.stream()
+                .map(VendorBillInvoiceMatcher.InvoiceLine::net)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
         for (BillMatchResult.ScoredBill scored : candidates) {
             VendorBillMatchCandidate candidate = new VendorBillMatchCandidate();
-            candidate.setInvoiceEventId(invoiceEventId);
+            candidate.setInvoiceEventId(event.getEventId());
             candidate.setVendorBillId(scored.getBill().getVendorBillId());
-            candidate.setVendorId(vendorId);
+            candidate.setVendorId(event.getVendorId());
             candidate.setBillNumber(scored.getBill().getBillNumber());
             candidate.setBillTotalAmount(scored.getBill().getTotalAmount());
             candidate.setMatchScore(scored.getTotalScore());
             candidate.setScoreBreakdown(scored.getScoreBreakdown());
+            candidate.setAmountPoints(scored.getAmountPoints());
+            candidate.setProductPoints(scored.getProductPoints());
+            candidate.setDatePoints(scored.getDatePoints());
+            candidate.setPurchaseOrderPoints(scored.getPurchaseOrderPoints());
+            candidate.setInvoiceReference(event.getInvoiceReference());
+            candidate.setInvoiceDate(event.getInvoiceDate());
+            candidate.setInvoiceDueDate(event.getDueDate());
+            candidate.setInvoiceTotalAmount(invoiceTotal);
+            candidate.setInvoiceLines(VendorBillInvoiceMatcher.toJson(invoiceLines));
             matchCandidateRepository.save(candidate);
         }
-        log.info("Persisted {} match candidates | invoiceEventId={}", candidates.size(), invoiceEventId);
+        log.info("Persisted {} match candidates | invoiceEventId={}", candidates.size(), event.getEventId());
     }
 
     @Override
@@ -838,62 +748,6 @@ public class VendorBillServiceImpl implements VendorBillService {
         List<VendorBillMatchCandidate> candidates =
                 matchCandidateRepository.findByInvoiceEventIdAndResolvedFalseOrderByMatchScoreDesc(invoiceEventId);
         return candidates.stream().map(this::toCandidateResponse).toList();
-    }
-
-    @Override
-    @Transactional
-    public @NonNull VendorBillResponse selectMatchCandidate(@NonNull UUID candidateId, @NonNull String operatorId) {
-
-        // Step 1: Load and validate the selected candidate
-        VendorBillMatchCandidate selected = matchCandidateRepository
-                .findById(candidateId)
-                .orElseThrow(() -> new VendorBillOperatorActionException("Match candidate not found: " + candidateId));
-
-        if (selected.isResolved()) {
-            throw new VendorBillOperatorActionException("Match candidate already resolved: " + candidateId);
-        }
-
-        // Step 2: Mark all candidates for this invoice event as resolved
-        List<VendorBillMatchCandidate> allCandidates =
-                matchCandidateRepository.findByInvoiceEventIdAndResolvedFalseOrderByMatchScoreDesc(
-                        selected.getInvoiceEventId());
-
-        Instant now = Instant.now(clock);
-        for (VendorBillMatchCandidate candidate : allCandidates) {
-            candidate.setResolved(true);
-            candidate.setResolvedBy(operatorId);
-            candidate.setResolvedAt(now);
-            candidate.setSelected(candidate.getCandidateId().equals(candidateId));
-            matchCandidateRepository.save(candidate);
-        }
-
-        // Step 3: Transition the selected bill from MATCH_EXCEPTION to APPROVED
-        // (d) Defensive/internal invariant: selected.getVendorBillId() is a foreign key to an
-        // existing VendorBill row, so this lookup cannot genuinely miss under normal
-        // operation — data corruption, not a client error, if it ever does.
-        VendorBill bill = billRepository
-                .findById(selected.getVendorBillId())
-                .orElseThrow(
-                        () -> new IllegalArgumentException("Vendor bill not found: " + selected.getVendorBillId()));
-
-        bill.setStatus(VendorBillStatus.APPROVED);
-        bill.setApprovedBy(operatorId);
-        bill.setApprovedAt(now);
-        bill.setApprovalJustification(String.format(
-                "Manually selected from %d candidates (score=%d). %s",
-                allCandidates.size(), selected.getMatchScore(), selected.getScoreBreakdown()));
-        bill.setModifiedBy(operatorId);
-        VendorBill savedBill = billRepository.save(bill);
-
-        log.info(
-                "Match candidate selected | candidateId={} | billId={} | operator={} | score={} | totalCandidates={}",
-                candidateId,
-                selected.getVendorBillId(),
-                operatorId,
-                selected.getMatchScore(),
-                allCandidates.size());
-
-        return toResponse(savedBill);
     }
 
     @Override
@@ -965,31 +819,6 @@ public class VendorBillServiceImpl implements VendorBillService {
                 .resolved(candidate.isResolved())
                 .selected(candidate.isSelected())
                 .createdAt(candidate.getCreatedAt())
-                .build();
-    }
-
-    /**
-     * Map VendorBill entity to VendorBillResponse DTO.
-     */
-    private @NonNull VendorBillResponse toResponse(@NonNull VendorBill bill) {
-        return VendorBillResponse.builder()
-                .vendorBillId(bill.getVendorBillId())
-                .vendorId(bill.getVendorId())
-                .vendorName(bill.getVendorName())
-                .billNumber(bill.getBillNumber())
-                .billDate(bill.getBillDate())
-                .dueDate(bill.getDueDate())
-                .totalAmount(bill.getTotalAmount())
-                .currency(bill.getCurrency())
-                .status(bill.getStatus())
-                .originEventId(bill.getOriginEventId())
-                .originEventType(bill.getOriginEventType())
-                .journalEntryId(bill.getJournalEntryId())
-                .paymentTransactionId(bill.getPaymentTransactionId())
-                .createdAt(bill.getCreatedAt())
-                .createdBy(bill.getCreatedBy())
-                .approvalJustification(bill.getApprovalJustification())
-                .rejectionReason(bill.getRejectionReason())
                 .build();
     }
 }

@@ -55,6 +55,7 @@ import com.positivity.accounting.internal.exception.TaxSnapshotNotFoundException
 import com.positivity.accounting.internal.exception.TaxSnapshotPeriodNotClosedException;
 import com.positivity.accounting.internal.exception.UnbalancedRulesException;
 import com.positivity.accounting.internal.exception.VendorBillDuplicateException;
+import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.EntityNotFoundException;
@@ -216,6 +217,15 @@ public class AccountingExceptionHandler {
     public ResponseEntity<ApiError> handleAccountNotInactive(
             AccountNotInactiveException ex, HttpServletRequest request) {
         return build(HttpStatus.CONFLICT, "ACCOUNT_NOT_INACTIVE", ex.getMessage(), request);
+    }
+
+    /**
+     * Vendor-bill command refusals (#2509): the exception carries its code and status (404
+     * {@code VENDOR_BILL_NOT_FOUND}, 409 {@code AP_BILL_NOT_APPROVABLE}, 422 {@code AP_BILL_UNCLASSIFIED}, ...).
+     */
+    @ExceptionHandler(VendorBillException.class)
+    public ResponseEntity<ApiError> handleVendorBill(VendorBillException ex, HttpServletRequest request) {
+        return build(ex.getCode().status(), ex.getCode().name(), ex.getMessage(), request);
     }
 
     /**

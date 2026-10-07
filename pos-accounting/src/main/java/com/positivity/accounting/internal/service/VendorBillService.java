@@ -21,13 +21,12 @@ import org.springframework.data.domain.Pageable;
  * <p>
  * Receipt Accrual Workflow:
  * <ol>
- * <li>GoodsReceivedEvent creates bill in PENDING_RECEIPT_MATCH status</li>
- * <li>GL posting: Dr Inventory/Expense, Cr AP (provisional)</li>
+ * <li>GoodsReceivedEvent creates bill in PENDING_RECEIPT_MATCH status; nothing posts (AW37)</li>
  * <li>VendorInvoiceReceivedEvent triggers three-way match validation</li>
- * <li>If matched: bill auto-transitions to APPROVED</li>
- * <li>If discrepancy: bill transitions to MATCH_EXCEPTION for manual
- * resolution</li>
+ * <li>A HIGH match goes to AWAITING_APPROVAL (submitted by SYSTEM); it never approves (#2509, G12)</li>
+ * <li>A MEDIUM match or a discrepancy goes to MATCH_EXCEPTION for a person to resolve</li>
  * </ol>
+ * The decisions themselves (submit, approve, reject, resolve, select, void) are {@link VendorBillApprovalService}'s.
  *
  * @see <a href=
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/130">Issue
@@ -42,10 +41,8 @@ public interface VendorBillService {
      * Business rules:
      * <ul>
      * <li>Idempotent by eventId: duplicate events ignored</li>
-     * <li>Validates PO and vendor exist</li>
      * <li>Initial status: PENDING_RECEIPT_MATCH</li>
-     * <li>GL posting: Dr Inventory/Expense, Cr AP</li>
-     * <li>Traceability: links eventId → bill → journalEntryId</li>
+     * <li>No GL posting: the bill posts at approval (AW37)</li>
      * </ul>
      *
      * @param event GoodsReceivedEvent from inventory/purchasing system
@@ -61,10 +58,11 @@ public interface VendorBillService {
      * <p>
      * Matching logic:
      * <ul>
-     * <li>Finds bill by vendor + invoice reference</li>
+     * <li>Scores the vendor's pending bills (P3) and picks the best</li>
      * <li>Validates quantities (±0.1% tolerance) and prices (±5% tolerance)</li>
-     * <li>If matched: bill auto-transitions to APPROVED</li>
-     * <li>If discrepancy: bill transitions to MATCH_EXCEPTION</li>
+     * <li>HIGH match: AWAITING_APPROVAL, submitted by SYSTEM; never approved here (#2509)</li>
+     * <li>MEDIUM match or discrepancy: MATCH_EXCEPTION</li>
+     * <li>Every routed match keeps the billed lines and total and writes its evidence (AW39)</li>
      * </ul>
      *
      * @param event VendorInvoiceReceivedEvent from vendor/AP system
@@ -73,19 +71,6 @@ public interface VendorBillService {
      */
     @NonNull
     VendorBillResponse handleVendorInvoiceReceivedEvent(@NonNull VendorInvoiceReceivedEvent event);
-
-    /**
-     * Resolve match exception (accept, correct, or void).
-     *
-     * @param billId           Vendor bill UUID
-     * @param resolutionAction Action: ACCEPT, CORRECT, VOID
-     * @param reason           Justification for resolution
-     * @param operatorId       User resolving exception
-     * @return Updated bill response
-     */
-    @NonNull
-    VendorBillResponse resolveMatchException(
-            @NonNull UUID billId, @NonNull String resolutionAction, @NonNull String reason, @NonNull String operatorId);
 
     /**
      * Get vendor bill by ID.
@@ -119,24 +104,6 @@ public interface VendorBillService {
      */
     @NonNull
     List<VendorBillMatchCandidateResponse> listMatchCandidates(@NonNull UUID invoiceEventId);
-
-    /**
-     * Select a specific match candidate for an ambiguous invoice match.
-     *
-     * <p>
-     * Operator picks one candidate from the list. The selected bill is
-     * transitioned from MATCH_EXCEPTION and the three-way match validation
-     * proceeds. All other candidates for the same invoice are marked as
-     * resolved (not selected).
-     * </p>
-     *
-     * @param candidateId the candidate record ID to select
-     * @param operatorId  the operator performing the selection
-     * @return the updated vendor bill response
-     * @throws IllegalArgumentException if candidate not found or already resolved
-     */
-    @NonNull
-    VendorBillResponse selectMatchCandidate(@NonNull UUID candidateId, @NonNull String operatorId);
 
     /**
      * List vendor bills due in a date window, optionally filtered by status (Wave 2 E9, issue

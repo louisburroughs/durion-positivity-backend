@@ -31,7 +31,9 @@ SET TIME ZONE 'UTC';
 
 -- GL accounts: the working small-business chart (stories H1 #934, C1 #954, F1c #963, F2 #965,
 -- parity-C1 #975, #1043, G3 #1083, #1843). Posting never names an account: it resolves one through a
--- posting category and mapping key below.
+-- posting category and mapping key below. 2100, 5050 and 5060 are AW38's (CAP:550 S12 #2509 and S41 #2602,
+-- whichever lands first): what a delivery put on the books and its bill has not yet cleared, the difference
+-- between a receipt's price and the billed price (and US tax on goods, AW39), and freight on purchases.
 INSERT INTO gl_account (gl_account_id, account_code, account_name, account_type, account_subtype, reconcilable, activation_date, version, created_at, created_by, modified_at, modified_by)
 SELECT md5('accounting-template:01900000-0000-7000-8000-000000000000:ACCOUNT:' || t.code)::uuid, t.code, t.name, t.type, t.subtype, t.reconcilable, TIMESTAMP '2020-01-01 00:00:00', 0, NOW(), 'seed-generator', NOW(), 'seed-generator'
 FROM (VALUES
@@ -42,6 +44,7 @@ FROM (VALUES
     ('1200', 'Accounts Receivable', 'ASSET', 'RECEIVABLE', TRUE),
     ('1300', 'Inventory', 'ASSET', 'CURRENT_ASSET', FALSE),
     ('2000', 'Accounts Payable', 'LIABILITY', 'PAYABLE', TRUE),
+    ('2100', 'Goods Received Not Yet Billed', 'LIABILITY', 'CURRENT_LIABILITY', FALSE),
     ('2200', 'Sales Tax Payable', 'LIABILITY', 'TAX_PAYABLE', FALSE),
     ('2300', 'Customer Credit Liability', 'LIABILITY', 'CURRENT_LIABILITY', FALSE),
     ('2350', 'Settlement Suspense', 'LIABILITY', 'CURRENT_LIABILITY', FALSE),
@@ -53,6 +56,8 @@ FROM (VALUES
     ('4920', 'Interest Income', 'REVENUE', 'OTHER', FALSE),
     ('4930', 'Cash Over', 'REVENUE', 'OTHER', FALSE),
     ('5000', 'Cost of Goods Sold', 'EXPENSE', 'COST_OF_SALES', FALSE),
+    ('5050', 'Purchase Price Differences', 'EXPENSE', 'COST_OF_SALES', FALSE),
+    ('5060', 'Freight on Purchases', 'EXPENSE', 'COST_OF_SALES', FALSE),
     ('5100', 'Inventory Shrinkage', 'EXPENSE', 'COST_OF_SALES', FALSE),
     ('6000', 'Payment Processor Fees', 'EXPENSE', 'OPERATING_EXPENSE', FALSE),
     ('6020', 'NSF Fees', 'EXPENSE', 'OPERATING_EXPENSE', FALSE),
@@ -143,7 +148,9 @@ FROM (VALUES
     ('REGISTER_CASH_MOVEMENT', 'Drawer cash paid out or in: petty expenses, vendor cash on delivery (#2511, S17)'),
     ('BANK_DEPOSIT', 'Drawer cash taken to the bank (#2511, S18; the bank side is chosen per deposit)'),
     ('REGISTER_FLOAT', 'Register change float: go-live against opening balance equity, changes against a bank account (#2511, AW16-AW17)'),
-    ('OPENING_BALANCE', 'A bank account''s opening balance at cutover, against opening balance equity (#2572, OI-10)')
+    ('OPENING_BALANCE', 'A bank account''s opening balance at cutover, against opening balance equity (#2572, OI-10)'),
+    ('GOODS_RECEIPT', 'A delivery received into stock: Dr inventory / Cr goods received not yet billed / price difference (AW38, S41)'),
+    ('VENDOR_BILL', 'A vendor bill or credit note at approval: Cr accounts payable / Dr by line class (AW37-AW40, S12)')
 ) AS t(name, description)
 ON CONFLICT (tenant_id, posting_category_id) DO UPDATE SET
     category_name = EXCLUDED.category_name,
@@ -202,7 +209,23 @@ FROM (VALUES
     ('BANK_DEPOSIT', 'CASH_CLEARING', 'Register cash clearing taken to the bank (S18)'),
     ('REGISTER_FLOAT', 'REGISTER_FLOAT', 'The drawers'' change float (1080, AW16)'),
     ('REGISTER_FLOAT', 'OPENING_BALANCE_EQUITY', 'Counter side of a go-live float (3900, AW17)'),
-    ('OPENING_BALANCE', 'OPENING_BALANCE_EQUITY', 'Counter side of a bank opening balance (3900, #2572)')
+    ('OPENING_BALANCE', 'OPENING_BALANCE_EQUITY', 'Counter side of a bank opening balance (3900, #2572)'),
+    ('GOODS_RECEIPT', 'INVENTORY_ASSET', 'Stock received, at inventory''s cost basis (1300, AW38)'),
+    ('GOODS_RECEIPT', 'GOODS_RECEIVED_NOT_BILLED', 'Delivered and not yet billed (2100, AW38)'),
+    ('GOODS_RECEIPT', 'PURCHASE_PRICE_DIFFERENCE', 'Difference between cost basis and accrued value (5050, AW38)'),
+    ('VENDOR_BILL', 'ACCOUNTS_PAYABLE', 'Credit side of an approved bill: the billed gross (2000, AW39)'),
+    ('VENDOR_BILL', 'GOODS_RECEIVED_NOT_BILLED', 'Receipt-matched and unmatched goods lines (2100, AW39)'),
+    ('VENDOR_BILL', 'PURCHASE_PRICE_DIFFERENCE', 'Billed minus received price, US tax on goods, price allowances (5050, AW39)'),
+    ('VENDOR_BILL', 'FREIGHT_IN', 'Freight stated separately on a bill (5060, AW39)'),
+    ('VENDOR_BILL', 'EXPENSE_SHOP_SUPPLIES', 'Shop supplies (AW18, AW30)'),
+    ('VENDOR_BILL', 'EXPENSE_SMALL_TOOLS', 'Small tools (AW18, AW30)'),
+    ('VENDOR_BILL', 'EXPENSE_OFFICE_SUPPLIES', 'Office supplies (AW18, AW30)'),
+    ('VENDOR_BILL', 'EXPENSE_BUILDING_REPAIRS', 'Building repairs (AW18, AW30)'),
+    ('VENDOR_BILL', 'EXPENSE_EQUIPMENT_REPAIRS', 'Equipment repairs (AW18, AW30)'),
+    ('VENDOR_BILL', 'EXPENSE_POSTAGE_SHIPPING', 'Postage and shipping (AW18, AW30)'),
+    ('VENDOR_BILL', 'EXPENSE_CLEANING_JANITORIAL', 'Cleaning and janitorial (AW18, AW30)'),
+    ('VENDOR_BILL', 'EXPENSE_STAFF_MEALS', 'Staff meals (AW18, AW30)'),
+    ('VENDOR_BILL', 'EXPENSE_VEHICLE_FUEL', 'Vehicle fuel (AW18, AW30)')
 ) AS t(category, key_name, description)
 ON CONFLICT (tenant_id, mapping_key_id) DO UPDATE SET
     posting_category_id = EXCLUDED.posting_category_id,
@@ -262,7 +285,23 @@ FROM (VALUES
     ('BANK_DEPOSIT', 'CASH_CLEARING', 'ACCOUNTING', 'BANK_DEPOSIT_CASH_CLEARING', '1095'),
     ('REGISTER_FLOAT', 'REGISTER_FLOAT', 'ACCOUNTING', 'REGISTER_FLOAT_REGISTER_FLOAT', '1080'),
     ('REGISTER_FLOAT', 'OPENING_BALANCE_EQUITY', 'ACCOUNTING', 'REGISTER_FLOAT_OPENING_BALANCE_EQUITY', '3900'),
-    ('OPENING_BALANCE', 'OPENING_BALANCE_EQUITY', 'ACCOUNTING', 'OPENING_BALANCE_OPENING_BALANCE_EQUITY', '3900')
+    ('OPENING_BALANCE', 'OPENING_BALANCE_EQUITY', 'ACCOUNTING', 'OPENING_BALANCE_OPENING_BALANCE_EQUITY', '3900'),
+    ('GOODS_RECEIPT', 'INVENTORY_ASSET', 'ACCOUNTING', 'GOODS_RECEIPT_INVENTORY_ASSET', '1300'),
+    ('GOODS_RECEIPT', 'GOODS_RECEIVED_NOT_BILLED', 'ACCOUNTING', 'GOODS_RECEIPT_GOODS_RECEIVED_NOT_BILLED', '2100'),
+    ('GOODS_RECEIPT', 'PURCHASE_PRICE_DIFFERENCE', 'ACCOUNTING', 'GOODS_RECEIPT_PURCHASE_PRICE_DIFFERENCE', '5050'),
+    ('VENDOR_BILL', 'ACCOUNTS_PAYABLE', 'ACCOUNTING', 'VENDOR_BILL_ACCOUNTS_PAYABLE', '2000'),
+    ('VENDOR_BILL', 'GOODS_RECEIVED_NOT_BILLED', 'ACCOUNTING', 'VENDOR_BILL_GOODS_RECEIVED_NOT_BILLED', '2100'),
+    ('VENDOR_BILL', 'PURCHASE_PRICE_DIFFERENCE', 'ACCOUNTING', 'VENDOR_BILL_PURCHASE_PRICE_DIFFERENCE', '5050'),
+    ('VENDOR_BILL', 'FREIGHT_IN', 'ACCOUNTING', 'VENDOR_BILL_FREIGHT_IN', '5060'),
+    ('VENDOR_BILL', 'EXPENSE_SHOP_SUPPLIES', 'ACCOUNTING', 'VENDOR_BILL_EXPENSE_SHOP_SUPPLIES', '6340'),
+    ('VENDOR_BILL', 'EXPENSE_SMALL_TOOLS', 'ACCOUNTING', 'VENDOR_BILL_EXPENSE_SMALL_TOOLS', '6430'),
+    ('VENDOR_BILL', 'EXPENSE_OFFICE_SUPPLIES', 'ACCOUNTING', 'VENDOR_BILL_EXPENSE_OFFICE_SUPPLIES', '6370'),
+    ('VENDOR_BILL', 'EXPENSE_BUILDING_REPAIRS', 'ACCOUNTING', 'VENDOR_BILL_EXPENSE_BUILDING_REPAIRS', '6210'),
+    ('VENDOR_BILL', 'EXPENSE_EQUIPMENT_REPAIRS', 'ACCOUNTING', 'VENDOR_BILL_EXPENSE_EQUIPMENT_REPAIRS', '6410'),
+    ('VENDOR_BILL', 'EXPENSE_POSTAGE_SHIPPING', 'ACCOUNTING', 'VENDOR_BILL_EXPENSE_POSTAGE_SHIPPING', '6380'),
+    ('VENDOR_BILL', 'EXPENSE_CLEANING_JANITORIAL', 'ACCOUNTING', 'VENDOR_BILL_EXPENSE_CLEANING_JANITORIAL', '6375'),
+    ('VENDOR_BILL', 'EXPENSE_STAFF_MEALS', 'ACCOUNTING', 'VENDOR_BILL_EXPENSE_STAFF_MEALS', '6295'),
+    ('VENDOR_BILL', 'EXPENSE_VEHICLE_FUEL', 'ACCOUNTING', 'VENDOR_BILL_EXPENSE_VEHICLE_FUEL', '6250')
 ) AS t(category, key_name, source_system, external_code, account_code)
 ON CONFLICT (tenant_id, gl_mapping_id) DO UPDATE SET
     source_system = EXCLUDED.source_system,
@@ -301,7 +340,7 @@ ON CONFLICT (tenant_id, mapping_id) DO UPDATE SET
 -- drawers for change, never BANK_CASH and never reconciled), BS_OWNER_EQUITY (3000) and
 -- BS_OPENING_BALANCE_EQUITY (3900) are S15's (#2511); equity accounts have lines of their own, so neither
 -- counts toward BS_PROFIT_NOT_YET_CLOSED, which collects revenue and expense accounts only. 1250 and 1260
--- are S32's.
+-- are S32's. BS_DELIVERIES_NOT_BILLED (2100) and 5050 / 5060 on IS_COST_OF_PARTS_SOLD are AW38's (S12, S41).
 INSERT INTO statement_line_mappings (mapping_id, gl_account_id, account_name, statement_type, statement_line_code, parent_line_code, line_description, display_order, operation)
 SELECT md5('accounting-template:01900000-0000-7000-8000-000000000000:STATEMENT_LINE:' || t.statement_type || ':' || t.code)::uuid, md5('accounting-template:01900000-0000-7000-8000-000000000000:ACCOUNT:' || t.code)::uuid, t.code, t.statement_type, t.line_code, t.parent_line_code, t.line_description, t.display_order, t.operation
 FROM (VALUES
@@ -312,12 +351,15 @@ FROM (VALUES
     ('BALANCE_SHEET', '1200', 'BS_CUSTOMERS_OWE_YOU', NULL::text, 'Money customers owe you', 4, 'SUM'),
     ('BALANCE_SHEET', '1300', 'BS_INVENTORY', NULL::text, 'Tires and parts on your shelves', 5, 'SUM'),
     ('BALANCE_SHEET', '2000', 'BS_BILLS_FROM_VENDORS', NULL::text, 'Bills from vendors', 6, 'SUM'),
+    ('BALANCE_SHEET', '2100', 'BS_DELIVERIES_NOT_BILLED', NULL::text, 'Deliveries not yet billed', 6, 'SUM'),
     ('BALANCE_SHEET', '2200', 'BS_SALES_TAX_COLLECTED', NULL::text, 'Sales tax collected, not yet paid', 7, 'SUM'),
     ('BALANCE_SHEET', '2300', 'BS_CUSTOMER_CREDITS', NULL::text, 'Credits customers can still use', 8, 'SUM'),
     ('BALANCE_SHEET', '3000', 'BS_OWNER_EQUITY', NULL::text, 'Owner''s equity', 9, 'SUM'),
     ('BALANCE_SHEET', '3900', 'BS_OPENING_BALANCE_EQUITY', NULL::text, 'Opening balances not yet cleared to owner''s equity', 10, 'SUM'),
     ('INCOME_STATEMENT', '4000', 'IS_SALES', NULL::text, 'Sales', 1, 'SUM'),
     ('INCOME_STATEMENT', '5000', 'IS_COST_OF_PARTS_SOLD', NULL::text, 'Cost of tires and parts sold', 2, 'SUM'),
+    ('INCOME_STATEMENT', '5050', 'IS_COST_OF_PARTS_SOLD', NULL::text, 'Cost of tires and parts sold', 2, 'SUM'),
+    ('INCOME_STATEMENT', '5060', 'IS_COST_OF_PARTS_SOLD', NULL::text, 'Cost of tires and parts sold', 2, 'SUM'),
     ('INCOME_STATEMENT', '5100', 'IS_COST_OF_PARTS_SOLD', NULL::text, 'Cost of tires and parts sold', 2, 'SUM'),
     ('INCOME_STATEMENT', '6000', 'IS_CARD_PROCESSING_FEES', NULL::text, 'Card processing fees', 3, 'SUM')
 ) AS t(statement_type, code, line_code, parent_line_code, line_description, display_order, operation)

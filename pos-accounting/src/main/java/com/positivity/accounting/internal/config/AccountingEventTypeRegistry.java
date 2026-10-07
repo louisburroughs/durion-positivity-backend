@@ -16,10 +16,11 @@ import org.jspecify.annotations.NonNull;
 /**
  * Code-first registry of the accounting event types this module records (#2436). The Kafka
  * listeners derive their {@code RECORDED_EVENT_TYPES} from it, and every type the module's own code
- * submits through the API path ({@link #INVOICE_PAYMENT}, {@link #VENDOR_BILL_GL_POSTING}, {@link
- * #AP_PAYMENT_GL_POSTING}) is declared here and referenced by its submitter, so {@code GET
- * /v1/accounting/events/types} lists types with no traffic yet and cannot drift from what the code
- * records.
+ * submits through the API path ({@link #INVOICE_PAYMENT}, {@link #AP_PAYMENT_GL_POSTING}) is declared
+ * here and referenced by its submitter, so {@code GET /v1/accounting/events/types} lists types with no
+ * traffic yet and cannot drift from what the code records. {@code VENDOR_BILL_GL_POSTING} is retired
+ * (CAP:550 S12, #2509; AW40): a vendor bill posts at approval through the {@code VENDOR_BILL} posting
+ * category, and V17 closed the events of that type SKIPPED / {@code RETIRED_EVENT_TYPE}.
  *
  * <p>The API submit path ({@code POST /v1/accounting/events}) validates only that {@code eventType}
  * is present: it persists any string as a {@code RECEIVED} event without checking it against this
@@ -34,12 +35,6 @@ public final class AccountingEventTypeRegistry {
 
     /** Event type of a payment applied to an invoice, submitted through the REST API. */
     public static final String INVOICE_PAYMENT = "INVOICE_PAYMENT";
-
-    /**
-     * Event type of an approved vendor bill, submitted in-process by {@code
-     * VendorBillGLPostingEventHandler} and posted by the posting engine (Dr Inventory/Expense, Cr AP).
-     */
-    public static final String VENDOR_BILL_GL_POSTING = "VENDOR_BILL_GL_POSTING";
 
     /**
      * Event type of an AP payment, submitted in-process by {@code APPaymentGLPostingEventHandler} and
@@ -122,12 +117,6 @@ public final class AccountingEventTypeRegistry {
                     Ingestion.KAFKA,
                     false),
             new Entry(INVOICE_PAYMENT, "Invoice payment (AR subledger)", DOMAIN_PAYMENT, Ingestion.API, false),
-            new Entry(
-                    VENDOR_BILL_GL_POSTING,
-                    "Vendor bill GL posting (accounts payable)",
-                    DOMAIN_ACCOUNTING,
-                    Ingestion.API,
-                    true),
             new Entry(
                     AP_PAYMENT_GL_POSTING,
                     "AP payment GL posting (accounts payable)",

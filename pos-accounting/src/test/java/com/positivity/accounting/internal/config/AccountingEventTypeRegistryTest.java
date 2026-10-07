@@ -102,7 +102,7 @@ class AccountingEventTypeRegistryTest {
         assertThat(AccountingEventTypeRegistry.entries())
                 .filteredOn(e -> e.ingestion() == Ingestion.API)
                 .extracting(Entry::code)
-                .containsExactlyInAnyOrder("INVOICE_PAYMENT", "VENDOR_BILL_GL_POSTING", "AP_PAYMENT_GL_POSTING");
+                .containsExactlyInAnyOrder("INVOICE_PAYMENT", "AP_PAYMENT_GL_POSTING");
     }
 
     @Test

@@ -106,7 +106,15 @@ public enum PostingFailureReason {
      * first facts (the startup sweep), so the hold clears by itself once the row exists. After the cap
      * it is reprocessed by a person.
      */
-    ACCOUNTING_TIME_ZONE_UNSET;
+    ACCOUNTING_TIME_ZONE_UNSET,
+
+    /**
+     * The event's type is retired and nothing posts it any more (CAP:550 S12, #2509): {@code VENDOR_BILL_GL_POSTING},
+     * which goods-receipt bills used to submit at creation and the engine always failed ({@link #NO_RULE_VERSION}).
+     * A vendor bill posts once, at approval, through the {@code VENDOR_BILL} posting category (AW37, AW40). V17
+     * closed every such event SKIPPED with this reason: terminal, never retried.
+     */
+    RETIRED_EVENT_TYPE;
 
     /**
      * Whether an event failing for this reason ends in the terminal {@code SKIPPED} status: the
@@ -114,7 +122,11 @@ public enum PostingFailureReason {
      * operator fixes and reprocesses ({@code SUSPENDED}).
      */
     public boolean isTerminalSkip() {
-        return this == UNCOSTED_FACT || this == MISSING_AMOUNT || this == ZERO_AMOUNT || this == NOT_POSTABLE;
+        return this == UNCOSTED_FACT
+                || this == MISSING_AMOUNT
+                || this == ZERO_AMOUNT
+                || this == NOT_POSTABLE
+                || this == RETIRED_EVENT_TYPE;
     }
 
     /**

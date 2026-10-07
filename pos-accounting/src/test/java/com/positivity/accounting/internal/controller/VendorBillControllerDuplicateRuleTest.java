@@ -13,6 +13,7 @@ import com.positivity.accounting.BaseControllerSliceTest;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.VendorBillDuplicateException;
+import com.positivity.accounting.internal.service.VendorBillApprovalService;
 import com.positivity.accounting.internal.service.VendorBillService;
 import com.positivity.security.common.GatewaySecurityConfig;
 import com.positivity.web.common.WebCommonErrorAutoConfiguration;
@@ -43,36 +44,39 @@ class VendorBillControllerDuplicateRuleTest extends BaseControllerSliceTest {
             Pattern.compile("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
 
     private static final String GOODS_RECEIVED = """
-            {"eventId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
-             "organizationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c",
-             "purchaseOrderId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5d",
-             "vendorId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5e",
-             "vendorName":"Acme Tire",
-             "receivedDate":"2026-10-01T09:30:00",
-             "lineItems":[
-               {"productId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5f",
-                "description":"Brake pads",
-                "quantity":10,
-                "unitPrice":24.99,
-                "isInventoryItem":true}]}
-            """;
+        {"eventId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+         "organizationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c",
+         "purchaseOrderId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5d",
+         "vendorId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5e",
+         "vendorName":"Acme Tire",
+         "receivedDate":"2026-10-01T09:30:00",
+         "lineItems":[
+           {"productId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5f",
+            "description":"Brake pads",
+            "quantity":10,
+            "unitPrice":24.99,
+            "isInventoryItem":true}]}
+        """;
 
     private static final String VENDOR_INVOICE = """
-            {"eventId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a60",
-             "organizationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c",
-             "vendorId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5e",
-             "invoiceReference":"inv 00123",
-             "invoiceDate":"2026-10-01T00:00:00",
-             "dueDate":"2026-10-31T00:00:00",
-             "lineItems":[
-               {"productId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5f",
-                "description":"Brake pads",
-                "quantity":10,
-                "unitPrice":24.99}]}
-            """;
+        {"eventId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a60",
+         "organizationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c",
+         "vendorId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5e",
+         "invoiceReference":"inv 00123",
+         "invoiceDate":"2026-10-01T00:00:00",
+         "dueDate":"2026-10-31T00:00:00",
+         "lineItems":[
+           {"productId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5f",
+            "description":"Brake pads",
+            "quantity":10,
+            "unitPrice":24.99}]}
+        """;
 
     @MockitoBean
     private VendorBillService vendorBillService;
+
+    @MockitoBean
+    private VendorBillApprovalService approvalService;
 
     private static VendorBillDuplicateException duplicateOf(String vendorName) {
         VendorBill original = new VendorBill(ORIGINAL_ID);
@@ -84,8 +88,8 @@ class VendorBillControllerDuplicateRuleTest extends BaseControllerSliceTest {
     }
 
     @Test
-    @DisplayName(
-            "criterion 4: POST /vendor-bills answers 409 AP_BILL_DUPLICATE naming the original, with its id as referenceId")
+    @DisplayName("criterion 4: POST /vendor-bills answers 409 AP_BILL_DUPLICATE naming the original, with its id as"
+            + " referenceId")
     void createAnswers409WithTheOriginal() throws Exception {
         when(vendorBillService.handleGoodsReceivedEvent(any())).thenThrow(duplicateOf("Acme Tire"));
 
@@ -114,8 +118,8 @@ class VendorBillControllerDuplicateRuleTest extends BaseControllerSliceTest {
     }
 
     @Test
-    @DisplayName(
-            "criterion 6: POST /vendor-bills/match answers the same 409, and says this vendor when the bill has no vendor name")
+    @DisplayName("criterion 6: POST /vendor-bills/match answers the same 409, and says this vendor when the bill has no"
+            + " vendor name")
     void matchAnswers409WithTheOriginal() throws Exception {
         when(vendorBillService.handleVendorInvoiceReceivedEvent(any())).thenThrow(duplicateOf(null));
 

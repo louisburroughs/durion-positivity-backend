@@ -565,13 +565,15 @@ public enum PermissionCode {
 
     // ── Accounting (batch 3) ─────────────────────────────────────────────────
     /**
-     * Superseded by {@link #ACCOUNTING__AP__PAY} — the only AP action
-     * pos-accounting actually enforces. Audit doc §3.
+     * Send a vendor bill for approval, correct a match exception, select a match candidate; approve within the clerk
+     * limit once S13 adds it. Reinstated by SPEC-accounting-workspace §4.3 (CAP:550 S12, #2509; AW4, AW5, Security
+     * sign-off AW31): pos-accounting enforces it.
      */
-    @Deprecated
     ACCOUNTING__AP__APPROVE(262, "accounting:ap:approve"),
-    /** @deprecated see {@link #ACCOUNTING__AP__APPROVE} */
-    @Deprecated
+    /**
+     * Reject a vendor bill awaiting approval, void a match exception or an approved bill. Reinstated by
+     * SPEC-accounting-workspace §4.3 (CAP:550 S12, #2509; AW31).
+     */
     ACCOUNTING__AP__REJECT(263, "accounting:ap:reject"),
     ACCOUNTING__COA__DEACTIVATE(264, "accounting:coa:deactivate"),
     ACCOUNTING__JE__REVERSE(265, "accounting:je:reverse"),
@@ -1048,13 +1050,16 @@ public enum PermissionCode {
     ACCOUNTING__FLOAT__MANAGE(553, "accounting:float:manage"),
     // ── Order (new) ────────────────────────────────────────────────────────────
     ORDER__SESSION_POLICY__MANAGE(554, "order:session_policy:manage"),
-    ORDER__SESSION__APPROVE_CASH_MOVEMENT(555, "order:session:approve_cash_movement");
+    ORDER__SESSION__APPROVE_CASH_MOVEMENT(555, "order:session:approve_cash_movement"),
+    // ── Accounting (new) ───────────────────────────────────────────────────────
+    /** Approve a vendor bill over the clerk limit (CAP:550 S12, #2509; SPEC-accounting-workspace §4.3, AW4, AW5). */
+    ACCOUNTING__AP__APPROVE_OVER_LIMIT(556, "accounting:ap:approve_over_limit");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 100;
+    public static final int CATALOG_VERSION = 101;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

@@ -703,6 +703,9 @@ class RolePermissionBaselineTest {
             // CAP:550 S23 (#2516): clerks keep the vendor master and request remit-to changes.
             expected.add("supplier:vendor:read");
             expected.add("supplier:vendor:write");
+            // CAP:550 S12 (#2509): clerks send bills for approval and reject them; they never approve over the limit.
+            expected.add("accounting:ap:approve");
+            expected.add("accounting:ap:reject");
 
             assertThat(sqlSeededGrants.get("ACCOUNTING_CLERK"))
                     .as("ACCOUNTING_CLERK grants in the SQL seed")
@@ -768,6 +771,18 @@ class RolePermissionBaselineTest {
         @DisplayName("BR-6: SYSTEM_ADMINISTRATOR holds no accounting: code")
         void systemAdministratorHoldsNoAccountingCode() {
             assertThat(seededGrants.get("SYSTEM_ADMINISTRATOR")).noneMatch(p -> p.startsWith("accounting:"));
+        }
+
+        @Test
+        @DisplayName("CAP:550 S12: ap:approve and ap:reject are held by exactly ACCOUNTING_CLERK, ADMIN, CONTROLLER and"
+                + " GENERAL_MANAGER; ap:approve_over_limit by ADMIN, CONTROLLER and GENERAL_MANAGER (AW4, AW31)")
+        void billApprovalHolders() {
+            assertThat(holdersOf("accounting:ap:approve"))
+                    .containsExactly("ACCOUNTING_CLERK", "ADMIN", "CONTROLLER", "GENERAL_MANAGER");
+            assertThat(holdersOf("accounting:ap:reject"))
+                    .containsExactly("ACCOUNTING_CLERK", "ADMIN", "CONTROLLER", "GENERAL_MANAGER");
+            assertThat(holdersOf("accounting:ap:approve_over_limit"))
+                    .containsExactly("ADMIN", "CONTROLLER", "GENERAL_MANAGER");
         }
 
         @Test

@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.entity;
 
+import com.positivity.accounting.internal.enums.VendorBillDebitClass;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.tenancy.TenantScopedEntity;
@@ -33,7 +34,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 /**
  * Vendor Bill (Accounts Payable) entity.
  *
- * Lifecycle: PENDING_REVIEW → APPROVED → PAID (or REJECTED/CANCELLED)
+ * Lifecycle (#2509): PENDING_RECEIPT_MATCH | MATCH_EXCEPTION → AWAITING_APPROVAL → APPROVED | REJECTED; an
+ * APPROVED bill is posted in the approval's transaction and may be VOIDED while nothing is allocated (AW37, AW42).
  *
  * Traceability: originEventId → vendorBill → journalEntryId →
  * paymentTransactionId
@@ -145,7 +147,38 @@ public class VendorBill extends TenantScopedEntity {
     @Column(name = "modified_by", length = 50, nullable = false)
     private String modifiedBy;
 
+    /**
+     * The net the vendor's document states (EDI, AW39), signed like {@link #totalAmount}; null when the source
+     * states no header amounts (a goods-receipt bill posts from its lines).
+     */
+    @Column(name = "net_amount", precision = 19, scale = 4)
+    private BigDecimal netAmount;
+
+    /** The tax the vendor's document states, never recalculated (AW39); null or zero when none is stated. */
+    @Column(name = "tax_amount", precision = 19, scale = 4)
+    private BigDecimal taxAmount;
+
     // Status transition audit
+    /** When the bill was sent for approval (#2509): by a person, a HIGH match or a candidate selection. */
+    @Column(name = "submitted_at")
+    private Instant submittedAt;
+
+    /** Who sent it: the caller from the security context, or {@code SYSTEM} for a HIGH match. */
+    @Column(name = "submitted_by", length = 50)
+    private String submittedBy;
+
+    @Column(name = "submission_justification", length = 1000)
+    private String submissionJustification;
+
+    /** The class proposed at submission (AW39); the approver's own classification wins. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "proposed_debit_class", length = 30)
+    private VendorBillDebitClass proposedDebitClass;
+
+    /** The {@code VENDOR_BILL} expense key proposed at submission. */
+    @Column(name = "proposed_expense_mapping_key", length = 100)
+    private String proposedExpenseMappingKey;
+
     @Column(name = "approved_at")
     private Instant approvedAt;
 
