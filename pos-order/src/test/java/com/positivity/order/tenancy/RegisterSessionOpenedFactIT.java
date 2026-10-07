@@ -10,6 +10,7 @@ import com.positivity.domainevents.order.RegisterSessionOpenedV1;
 import com.positivity.order.internal.config.OrderDomainEventPublisher;
 import com.positivity.order.internal.entity.ExtAccountingRegisterFloat;
 import com.positivity.order.internal.entity.OutboxEvent;
+import com.positivity.order.internal.exception.CurrencyNotSupportedException;
 import com.positivity.order.internal.exception.RegisterFloatLocationMismatchException;
 import com.positivity.order.internal.exception.RegisterSessionConflictException;
 import com.positivity.order.internal.repository.ExtAccountingRegisterFloatRepository;
@@ -121,14 +122,17 @@ class RegisterSessionOpenedFactIT extends PostgresTenancyTestBase {
     }
 
     @Test
-    @DisplayName("AC2: a 409 second open and a 422 float-location mismatch queue nothing")
+    @DisplayName("AC2: a 409 second open, a 422 float-location mismatch and a 422 CURRENCY_NOT_SUPPORTED (#2577)"
+            + " queue nothing")
     void refusedOpensQueueNothing() {
         String register = "T-" + UUID.randomUUID();
         String elsewhere = "T-" + UUID.randomUUID();
+        String foreign = "T-" + UUID.randomUUID();
         UUID shop = UUID.randomUUID();
         asTenant(TENANT_A, () -> {
             floats.saveAndFlush(floatCopy(register, shop));
             floats.saveAndFlush(floatCopy(elsewhere, shop));
+            floats.saveAndFlush(floatCopy(foreign, shop, "CAD"));
             registerSessionService.openSession(new OpenSessionCommand(register, shop));
         });
         assertThat(openedFactCount(register)).isEqualTo(1);
@@ -139,10 +143,14 @@ class RegisterSessionOpenedFactIT extends PostgresTenancyTestBase {
             assertThatThrownBy(() ->
                             registerSessionService.openSession(new OpenSessionCommand(elsewhere, UUID.randomUUID())))
                     .isInstanceOf(RegisterFloatLocationMismatchException.class);
+            // #2577: the copy is in CAD, the drawer counts USD.
+            assertThatThrownBy(() -> registerSessionService.openSession(new OpenSessionCommand(foreign, shop)))
+                    .isInstanceOf(CurrencyNotSupportedException.class);
         });
 
         assertThat(openedFactCount(register)).isEqualTo(1);
         assertThat(openedFactCount(elsewhere)).isZero();
+        assertThat(openedFactCount(foreign)).isZero();
     }
 
     @Test
@@ -208,11 +216,17 @@ class RegisterSessionOpenedFactIT extends PostgresTenancyTestBase {
     }
 
     private static ExtAccountingRegisterFloat floatCopy(String register, UUID location) {
+        return floatCopy(register, location, "USD");
+    }
+
+    /** #2577: the copy states its currency (V5, NOT NULL); the drawer opens only on a float in its own. */
+    private static ExtAccountingRegisterFloat floatCopy(String register, UUID location, String currencyCode) {
         return ExtAccountingRegisterFloat.builder()
                 .registerFloatId(UUID.randomUUID())
                 .registerId(register)
                 .locationId(location)
                 .amount(new BigDecimal("200.00"))
+                .currencyCode(currencyCode)
                 .effectiveDate(LocalDate.of(2026, 10, 7))
                 .aggregateVersion(1L)
                 .syncedAt(Instant.parse("2026-10-07T12:00:00Z"))

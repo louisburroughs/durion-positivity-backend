@@ -355,6 +355,8 @@ class RegisterSessionServiceImplTest {
                 .hasMessageContaining("CAD")
                 .hasMessageContaining("USD");
         verify(registerSessionRepository, never()).save(any());
+        // S40 (#2578): a refused open queues no order.session.opened.
+        verify(domainEventPublisher, never()).publishRegisterSessionOpened(any());
     }
 
     @Test
