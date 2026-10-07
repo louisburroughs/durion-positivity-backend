@@ -142,7 +142,8 @@ FROM (VALUES
     ('INVOICE_REVENUE', 'Invoice revenue recognition on finalization (Dr AR / Cr Service Revenue / Cr Sales Tax Payable, #1843)'),
     ('REGISTER_CASH_MOVEMENT', 'Drawer cash paid out or in: petty expenses, vendor cash on delivery (#2511, S17)'),
     ('BANK_DEPOSIT', 'Drawer cash taken to the bank (#2511, S18; the bank side is chosen per deposit)'),
-    ('REGISTER_FLOAT', 'Register change float: go-live against opening balance equity, changes against a bank account (#2511, AW16-AW17)')
+    ('REGISTER_FLOAT', 'Register change float: go-live against opening balance equity, changes against a bank account (#2511, AW16-AW17)'),
+    ('OPENING_BALANCE', 'A bank account''s opening balance at cutover, against opening balance equity (#2572, OI-10)')
 ) AS t(name, description)
 ON CONFLICT (tenant_id, posting_category_id) DO UPDATE SET
     category_name = EXCLUDED.category_name,
@@ -200,7 +201,8 @@ FROM (VALUES
     ('BANK_DEPOSIT', 'UNDEPOSITED_FUNDS', 'Undeposited funds taken to the bank (S18)'),
     ('BANK_DEPOSIT', 'CASH_CLEARING', 'Register cash clearing taken to the bank (S18)'),
     ('REGISTER_FLOAT', 'REGISTER_FLOAT', 'The drawers'' change float (1080, AW16)'),
-    ('REGISTER_FLOAT', 'OPENING_BALANCE_EQUITY', 'Counter side of a go-live float (3900, AW17)')
+    ('REGISTER_FLOAT', 'OPENING_BALANCE_EQUITY', 'Counter side of a go-live float (3900, AW17)'),
+    ('OPENING_BALANCE', 'OPENING_BALANCE_EQUITY', 'Counter side of a bank opening balance (3900, #2572)')
 ) AS t(category, key_name, description)
 ON CONFLICT (tenant_id, mapping_key_id) DO UPDATE SET
     posting_category_id = EXCLUDED.posting_category_id,
@@ -259,7 +261,8 @@ FROM (VALUES
     ('BANK_DEPOSIT', 'UNDEPOSITED_FUNDS', 'ACCOUNTING', 'BANK_DEPOSIT_UNDEPOSITED_FUNDS', '1090'),
     ('BANK_DEPOSIT', 'CASH_CLEARING', 'ACCOUNTING', 'BANK_DEPOSIT_CASH_CLEARING', '1095'),
     ('REGISTER_FLOAT', 'REGISTER_FLOAT', 'ACCOUNTING', 'REGISTER_FLOAT_REGISTER_FLOAT', '1080'),
-    ('REGISTER_FLOAT', 'OPENING_BALANCE_EQUITY', 'ACCOUNTING', 'REGISTER_FLOAT_OPENING_BALANCE_EQUITY', '3900')
+    ('REGISTER_FLOAT', 'OPENING_BALANCE_EQUITY', 'ACCOUNTING', 'REGISTER_FLOAT_OPENING_BALANCE_EQUITY', '3900'),
+    ('OPENING_BALANCE', 'OPENING_BALANCE_EQUITY', 'ACCOUNTING', 'OPENING_BALANCE_OPENING_BALANCE_EQUITY', '3900')
 ) AS t(category, key_name, source_system, external_code, account_code)
 ON CONFLICT (tenant_id, gl_mapping_id) DO UPDATE SET
     source_system = EXCLUDED.source_system,

@@ -150,6 +150,35 @@ class ReconciliationOutstandingItemServiceTest {
         }
 
         @Test
+        @DisplayName("#2572: a bank opening's item line registers with the item's own date, not the cutover date the"
+                + " entry is dated on; an aged one then needs a justification")
+        void openingItemKeepsItsOwnDate() {
+            JournalEntryLine check = ledgerLine("-450.00", LocalDate.of(2026, 9, 30));
+            check.setDimensions(java.util.Map.of(
+                    "outstandingItemType", "OUTSTANDING_CHECK", "reference", "1043", "itemDate", "2026-09-28"));
+
+            assertThat(service.register(RECON_ID, onLine(check, OutstandingItemKind.OUTSTANDING_CHECK, null))
+                            .getItemDate())
+                    .isEqualTo(LocalDate.of(2026, 9, 28));
+
+            JournalEntryLine aged = ledgerLine("-75.00", LocalDate.of(2026, 9, 30));
+            aged.setDimensions(java.util.Map.of(
+                    "outstandingItemType", "OUTSTANDING_CHECK", "reference", "0991", "itemDate", "2026-05-01"));
+            assertThatThrownBy(
+                            () -> service.register(RECON_ID, onLine(aged, OutstandingItemKind.OUTSTANDING_CHECK, null)))
+                    .isInstanceOfSatisfying(
+                            BankRecException.class,
+                            e -> assertThat(e.code()).isEqualTo(BankRecErrorCode.JUSTIFICATION_REQUIRED));
+
+            // A date that is not an opening item's, or one after the entry's, leaves the entry's date.
+            JournalEntryLine other = ledgerLine("60.00", LocalDate.of(2026, 9, 30));
+            other.setDimensions(java.util.Map.of("itemDate", "2026-09-01"));
+            assertThat(service.register(RECON_ID, onLine(other, OutstandingItemKind.DEPOSIT_IN_TRANSIT, null))
+                            .getItemDate())
+                    .isEqualTo(LocalDate.of(2026, 9, 30));
+        }
+
+        @Test
         @DisplayName("an OUTSTANDING_CHECK on a debit, or a DEPOSIT_IN_TRANSIT on a credit, is not eligible (§8.3)")
         void signMustFitTheKind() {
             JournalEntryLine debit = ledgerLine("200.00", LocalDate.of(2026, 9, 20));

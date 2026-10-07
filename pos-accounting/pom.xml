@@ -208,6 +208,12 @@
             <artifactId>pos-domain-events</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- ADR-0067 R-3: @IsoCurrencyCode, the platform's ISO 4217 check, until it moves to pos-shared-dtos (#2572) -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-tax-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
 
         <!-- Stripe Payment Gateway -->
         <dependency>

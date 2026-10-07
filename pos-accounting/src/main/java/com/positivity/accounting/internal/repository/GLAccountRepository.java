@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.repository;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.enums.AccountSubtype;
 import com.positivity.accounting.internal.enums.AccountType;
+import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -11,6 +12,7 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -28,6 +30,15 @@ public interface GLAccountRepository extends JpaRepository<GLAccount, UUID> {
      * Find a GL account by account code.
      */
     Optional<GLAccount> findByAccountCode(String accountCode);
+
+    /**
+     * The account, row-locked to the end of the transaction: two bank opening balance commands on one account
+     * serialize here (#2572), so the second sees the first's standing opening.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT g FROM GLAccount g WHERE g.glAccountId = :glAccountId")
+    @NonNull
+    Optional<GLAccount> lockById(@Param("glAccountId") @NonNull UUID glAccountId);
 
     /**
      * Find all GL accounts ordered by account code.

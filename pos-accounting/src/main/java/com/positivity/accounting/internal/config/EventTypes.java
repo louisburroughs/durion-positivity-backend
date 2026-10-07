@@ -118,6 +118,12 @@ public final class EventTypes {
                 EventTypeRegistration.write("ACCOUNTING_REGISTER_FLOAT_CHANGE", "Change a register's float")
                         .build(),
 
+                // BankOpeningBalanceController - 1 event (CAP:550, #2572)
+                EventTypeRegistration.write(
+                                "ACCOUNTING_BANK_OPENING_BALANCE_ESTABLISH",
+                                "Establish a bank account's opening balance at cutover")
+                        .build(),
+
                 // PettyExpenseCategoryController - 5 events (CAP:550 S15, #2511)
                 EventTypeRegistration.fastRead(
                                 "ACCOUNTING_PETTY_EXPENSE_CATEGORY_LIST", "List petty-expense categories")
