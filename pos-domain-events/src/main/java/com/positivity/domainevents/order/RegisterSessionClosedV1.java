@@ -86,11 +86,14 @@ public record RegisterSessionClosedV1(
      *     reasons (its free text is not carried)
      * @param direction {@code IN} or {@code OUT}; theoretical cash adds the amount signed by it
      * @param amount the positive amount moved
+     * @param currencyCode ISO 4217 code of {@code amount} (ADR-0067 R-1): the session's functional currency
      * @param categoryCode the petty-expense category, for {@code PETTY_EXPENSE}
      * @param vendorId the vendor paid, for {@code VENDOR_COD}
      * @param bagNumber the deposit bag, for {@code BANK_DROP}
      * @param receiptReference the receipt, for {@code PETTY_EXPENSE}
-     * @param clerkId the cashier who recorded it, from the security context (ADR-0018)
+     * @param clerkId the cashier who recorded it, from the security context (ADR-0018): the sign-in
+     *     name
+     * @param clerkUserId the cashier's stable user id, when the sign-in carried one
      * @param approvedBy the user id of the manager whose approval token it used, or null
      * @param occurredAt when it was recorded
      */
@@ -99,12 +102,14 @@ public record RegisterSessionClosedV1(
             @Nullable String reason,
             @NonNull String direction,
             @NonNull BigDecimal amount,
+            @NonNull String currencyCode,
             @Nullable String categoryCode,
             @Nullable UUID vendorId,
             @Nullable String bagNumber,
             @Nullable String receiptReference,
             @NonNull String clerkId,
-            @Nullable String approvedBy,
+            @Nullable UUID clerkUserId,
+            @Nullable UUID approvedBy,
             @NonNull Instant occurredAt) {
 
         /** Cash into the drawer. */

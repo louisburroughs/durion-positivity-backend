@@ -49,11 +49,13 @@ class RegisterSessionClosedV1Test {
                         "PETTY_EXPENSE",
                         RegisterSessionClosedV1.Movement.OUT,
                         new BigDecimal("30.00"),
+                        "USD",
                         "SHOP_SUPPLIES",
                         null,
                         null,
                         "R-100",
                         "cashier",
+                        UUID.fromString("01980a58-0000-7000-8000-0000000000c3"),
                         null,
                         OPENED.plusSeconds(60))));
     }
@@ -76,6 +78,7 @@ class RegisterSessionClosedV1Test {
         assertThat(read.movements()).singleElement().satisfies(movement -> {
             assertThat(movement.reason()).isEqualTo("PETTY_EXPENSE");
             assertThat(movement.categoryCode()).isEqualTo("SHOP_SUPPLIES");
+            assertThat(movement.currencyCode()).isEqualTo("USD");
             assertThat(movement.clerkId()).isEqualTo("cashier");
         });
     }

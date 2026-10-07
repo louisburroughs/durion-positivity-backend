@@ -103,9 +103,9 @@ class OrderEventsListenerTest {
                 .replace("\"closedAt\":\"2026-07-23T18:30:00Z\"}", """
                         "closedAt":"2026-07-23T18:30:00Z",
                          "movements":[{"movementId":"00000000-0000-0000-0000-0000000000f1",
-                                       "reason":"PETTY_EXPENSE","direction":"OUT","amount":12.50,
+                                       "reason":"PETTY_EXPENSE","direction":"OUT","amount":12.50,"currencyCode":"USD",
                                        "categoryCode":"SHOP_SUPPLIES","vendorId":null,"bagNumber":null,
-                                       "receiptReference":"R-1","clerkId":"clerk-1","approvedBy":null,
+                                       "receiptReference":"R-1","clerkId":"clerk-1","clerkUserId":null,"approvedBy":null,
                                        "occurredAt":"2026-07-23T10:00:00Z"}]}""");
 
         listener.onOrderEvent(message);
