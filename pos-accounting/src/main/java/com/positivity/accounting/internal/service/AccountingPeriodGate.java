@@ -75,6 +75,7 @@ public class AccountingPeriodGate {
     private final AccountingPeriodRepository periodRepository;
     private final AccountingConfigurationService configurationService;
     private final AccountingAuditLogRepository auditLogRepository;
+    private final AccountingCalendarZoneResolver zoneResolver;
 
     /**
      * Assert that a journal entry dated {@code transactionDate} may be
@@ -91,10 +92,15 @@ public class AccountingPeriodGate {
      *         override)
      * @throws AccountingPeriodClosedException if the date's period is CLOSED
      *         and no valid override applies (422: PERIOD_CLOSED)
+     * @throws com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetException if the tenant has no
+     *         accounting time zone (422: ACCOUNTING_TIME_ZONE_UNSET, #2558)
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void assertPostingAllowed(
             @NonNull LocalDate transactionDate, @NonNull UUID journalEntryId, @Nullable String overrideJustification) {
+        // Fail closed (#2558 ruling): the gate refuses every posting while the tenant has no accounting time zone,
+        // whether or not its date was derived through the resolver (an explicit date, an open original period).
+        zoneResolver.zone();
         assertNotHardLocked(transactionDate);
 
         String periodCode = YearMonth.from(transactionDate).toString();
@@ -140,6 +146,7 @@ public class AccountingPeriodGate {
      * @return true when posting would be rejected (hard-locked or CLOSED)
      */
     public boolean isPostingBlocked(@NonNull LocalDate transactionDate) {
+        zoneResolver.zone(); // fail closed without an accounting time zone (#2558)
         return isHardLocked(transactionDate) || !accountingPeriodService.isPeriodOpen(transactionDate);
     }
 
