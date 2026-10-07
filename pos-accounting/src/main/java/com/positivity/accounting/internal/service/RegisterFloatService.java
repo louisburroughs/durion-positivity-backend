@@ -43,7 +43,8 @@ public interface RegisterFloatService {
      *
      * @throws com.positivity.accounting.internal.exception.CashSetupException 404 {@code
      *     FLOAT_REGISTER_NOT_FOUND}, 422 {@code FLOAT_REGISTER_LOCATION_MISMATCH}, 422 {@code
-     *     FLOAT_RELOCATION_SAME_LOCATION}, 422 {@code FLOAT_RELOCATION_DATE_INVALID}, 422 {@code
+     *     FLOAT_RELOCATION_SAME_LOCATION}, 422 {@code FLOAT_REGISTER_SESSION_OPEN} (#2573: the register's
+     *     latest-opened pos-order session is open), 422 {@code FLOAT_RELOCATION_DATE_INVALID}, 422 {@code
      *     FLOAT_AMOUNT_NEGATIVE}, 409 {@code IDEMPOTENCY_CONFLICT}
      */
     @NonNull

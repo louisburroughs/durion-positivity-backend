@@ -21,12 +21,14 @@ import com.positivity.accounting.internal.dto.RegisterFloatChangeRequest;
 import com.positivity.accounting.internal.dto.RegisterFloatGoLiveRequest;
 import com.positivity.accounting.internal.dto.RegisterFloatRelocationRequest;
 import com.positivity.accounting.internal.entity.AccountingAuditLog;
+import com.positivity.accounting.internal.entity.ExtOrderRegisterSession;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.entity.RegisterFloat;
 import com.positivity.accounting.internal.entity.RegisterFloatChange;
 import com.positivity.accounting.internal.enums.AccountSubtype;
 import com.positivity.accounting.internal.enums.RegisterFloatChangeKind;
 import com.positivity.accounting.internal.enums.RegisterFloatRelocationReason;
+import com.positivity.accounting.internal.enums.RegisterSessionStatus;
 import com.positivity.accounting.internal.exception.CashSetupException;
 import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
@@ -74,6 +76,7 @@ class RegisterFloatServiceImplTest {
     private final AccountingCalendarZoneResolver zoneResolver = mock(AccountingCalendarZoneResolver.class);
     private final BankAccountCurrencies currencies = mock(BankAccountCurrencies.class);
     private final OutboxEventWriter writer = mock(OutboxEventWriter.class);
+    private final RegisterSessionReplica sessions = mock(RegisterSessionReplica.class);
     private final List<RegisterFloatChange> standing = new ArrayList<>();
     private RegisterFloat registerFloat;
     private RegisterFloatServiceImpl service;
@@ -96,7 +99,8 @@ class RegisterFloatServiceImplTest {
                 zoneResolver,
                 new LedgerCurrency("USD"),
                 currencies,
-                facts);
+                facts,
+                sessions);
 
         when(floats.lockByRegisterId("T-1")).thenAnswer(invocation -> Optional.ofNullable(registerFloat));
         when(floats.saveAndFlush(any())).thenAnswer(invocation -> {
@@ -814,6 +818,81 @@ class RegisterFloatServiceImplTest {
                     .isInstanceOf(InvalidRequestParameterException.class);
         }
         verify(floats, never()).lockByRegisterId(any());
+    }
+
+    @Test
+    @DisplayName("#2573: an open session on the register is 422 FLOAT_REGISTER_SESSION_OPEN naming the session, never"
+            + " its location, for either reason and with an override; nothing posts and no fact is queued")
+    void openSessionBlocksTheMove() {
+        when(zoneResolver.today()).thenReturn(TODAY);
+        service.establishGoLive("T-1", goLive("200.00", UUID.randomUUID()));
+        ExtOrderRegisterSession open = new ExtOrderRegisterSession();
+        open.setSessionId(UUID.fromString("019a0000-0000-7000-8000-0000000000c1"));
+        open.setTerminalId("T-1");
+        open.setLocationId(LOCATION);
+        open.setStatus(RegisterSessionStatus.OPEN);
+        open.setOpenedAt(java.time.Instant.parse("2026-10-20T08:00:00Z"));
+        when(sessions.openSessionOf("T-1")).thenReturn(Optional.of(open));
+        int rowsBefore = standing.size();
+
+        for (RegisterFloatRelocationReason reason :
+                List.of(RegisterFloatRelocationReason.MOVED, RegisterFloatRelocationReason.ENTERED_IN_ERROR)) {
+            RegisterFloatRelocationRequest overridden = new RegisterFloatRelocationRequest(
+                    LOCATION,
+                    SHOP_B,
+                    reason,
+                    MOVE_DAY,
+                    "Drawer 1 moved to the new shop",
+                    UUID.randomUUID(),
+                    "Moved on the last day of the closed month");
+            assertThatThrownBy(() -> service.relocate("T-1", overridden))
+                    .isInstanceOf(CashSetupException.class)
+                    .satisfies(e -> {
+                        CashSetupException refused = (CashSetupException) e;
+                        assertThat(refused.getCode()).isEqualTo(CashSetupException.Code.FLOAT_REGISTER_SESSION_OPEN);
+                        assertThat(refused.getCode().status().value()).isEqualTo(422);
+                        assertThat(refused.getReferenceId())
+                                .isEqualTo(open.getSessionId().toString());
+                        assertThat(refused.getMessage())
+                                .contains("2026-10-20T08:00:00Z")
+                                .doesNotContain(LOCATION.toString());
+                    });
+        }
+
+        assertThat(capturedEntries()).hasSize(1);
+        assertThat(standing).hasSize(rowsBefore);
+        assertThat(registerFloat.getLocationId()).isEqualTo(LOCATION);
+        verify(writer, org.mockito.Mockito.times(1)).publish(any(), any());
+    }
+
+    @Test
+    @DisplayName("#2573: a replay of a move that succeeded answers 200 with the first result after a session opened")
+    void replayIgnoresALaterSession() {
+        when(zoneResolver.today()).thenReturn(TODAY);
+        service.establishGoLive("T-1", goLive("200.00", UUID.randomUUID()));
+        UUID requestId = UUID.randomUUID();
+        RegisterFloatService.Outcome first =
+                service.relocate("T-1", relocation(RegisterFloatRelocationReason.MOVED, MOVE_DAY, requestId));
+        RegisterFloatChange row = standing.get(standing.size() - 1);
+        ExtOrderRegisterSession open = new ExtOrderRegisterSession();
+        open.setSessionId(UUID.randomUUID());
+        open.setStatus(RegisterSessionStatus.OPEN);
+        open.setOpenedAt(java.time.Instant.parse("2026-10-20T08:00:00Z"));
+        when(sessions.openSessionOf("T-1")).thenReturn(Optional.of(open));
+        // The duplicate passes the pre-lock check and finds the first row only after the lock.
+        when(changes.findByRequestId(requestId)).thenReturn(Optional.empty(), Optional.of(row));
+        when(journalEntries.getJournalEntry(row.getJournalEntryId()))
+                .thenReturn(JournalEntryResponse.builder()
+                        .entryNumber("JE-202610-000001")
+                        .build());
+
+        RegisterFloatService.Outcome replay =
+                service.relocate("T-1", relocation(RegisterFloatRelocationReason.MOVED, MOVE_DAY, requestId));
+
+        assertThat(replay.replayed()).isTrue();
+        assertThat(replay.response().journalEntryId())
+                .isEqualTo(first.response().journalEntryId());
+        verify(sessions, org.mockito.Mockito.times(1)).openSessionOf("T-1");
     }
 
     private static RegisterFloatRelocationRequest relocation(

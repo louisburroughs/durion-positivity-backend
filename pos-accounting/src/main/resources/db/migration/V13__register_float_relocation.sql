@@ -9,6 +9,11 @@
 --
 -- register_float_change gains the RELOCATION kind, the origin location and the reason, and its entry
 -- becomes optional for that kind only.
+--
+-- A register does not move while it has an open pos-order session (#2573, Order Domain ruling): the new
+-- ext_order_register_session replica holds pos-order's sessions per terminal, written only by the
+-- order.session.opened and order.session.closed facts, and the relocation refuses a register whose
+-- latest-opened session is OPEN. It carries the full tenancy schema of TENANCY_SCHEMA.md "Adding a table".
 
 ALTER TABLE public.register_float_change DROP CONSTRAINT register_float_change_kind_check;
 ALTER TABLE public.register_float_change
@@ -42,3 +47,41 @@ COMMENT ON TABLE public.register_float IS
     'The change float of one register (#2511; AW16): a fixed amount kept in its drawer, held on 1080 Register '
     'Float. Set and changed only by the go-live and Change float commands (or their reversal); its location '
     'changes only by a relocation (#2571; AW32).';
+
+-- The replica of pos-order's register sessions (#2571/#2573; ADR-0044 R3). A terminal has at most one active
+-- session, and a session never reopens: a closed fact for an unknown session inserts a CLOSED row, so a late
+-- opened fact cannot reopen it. aggregate_version is the session's envelope version (ReplicaVersionGuard).
+CREATE TABLE public.ext_order_register_session (
+    tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,
+    session_id uuid NOT NULL,
+    terminal_id character varying(100) NOT NULL,
+    location_id uuid,
+    status character varying(10) NOT NULL,
+    opened_at timestamp(6) with time zone NOT NULL,
+    closed_at timestamp(6) with time zone,
+    aggregate_version bigint DEFAULT 0 NOT NULL,
+    synced_at timestamp(6) with time zone NOT NULL,
+    CONSTRAINT ext_order_register_session_status_check
+        CHECK ((status)::text = ANY (ARRAY['OPEN'::text, 'CLOSED'::text])),
+    CONSTRAINT ext_order_register_session_closed_check
+        CHECK (((status)::text = 'CLOSED'::text) = (closed_at IS NOT NULL))
+);
+
+COMMENT ON TABLE public.ext_order_register_session IS
+    'Read-only replica of pos-order register sessions (#2571, #2573), written only by the order.session.opened '
+    'and order.session.closed facts. A register whose latest-opened session is OPEN is not relocated.';
+
+ALTER TABLE ONLY public.ext_order_register_session
+    ADD CONSTRAINT ext_order_register_session_pkey PRIMARY KEY (session_id);
+ALTER TABLE ONLY public.ext_order_register_session
+    ADD CONSTRAINT ext_order_register_session_tenant_key UNIQUE (tenant_id, session_id);
+CREATE INDEX ext_order_register_session_tenant_idx ON public.ext_order_register_session USING btree (tenant_id);
+-- The relocation guard reads a terminal's latest-opened session.
+CREATE INDEX ext_order_register_session_terminal_idx ON public.ext_order_register_session
+    USING btree (tenant_id, terminal_id, opened_at DESC);
+
+ALTER TABLE public.ext_order_register_session ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ext_order_register_session FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON public.ext_order_register_session
+    USING (tenant_id = public.app_current_tenant())
+    WITH CHECK (tenant_id = public.app_current_tenant());

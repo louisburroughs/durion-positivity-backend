@@ -104,6 +104,7 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
     private final LedgerCurrency ledgerCurrency;
     private final BankAccountCurrencies bankAccountCurrencies;
     private final RegisterFloatFacts facts;
+    private final RegisterSessionReplica sessions;
 
     @Override
     public @NonNull Outcome establishGoLive(@NonNull String registerId, @NonNull RegisterFloatGoLiveRequest request) {
@@ -465,12 +466,14 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
 
     /**
      * Every refusal that reads the register's locked state before a move (AW32): it is held at {@code from} (422
-     * FLOAT_REGISTER_LOCATION_MISMATCH), its float is not negative (422 FLOAT_AMOUNT_NEGATIVE), and the move does not
-     * predate its latest float change (422 FLOAT_RELOCATION_DATE_INVALID). Runs under the row lock, after the
-     * requestId re-check, so a further state guard on the register belongs here.
+     * FLOAT_REGISTER_LOCATION_MISMATCH), no pos-order session is open on it (422 FLOAT_REGISTER_SESSION_OPEN), its
+     * float is not negative (422 FLOAT_AMOUNT_NEGATIVE), and the move does not predate its latest float change (422
+     * FLOAT_RELOCATION_DATE_INVALID). Runs under the row lock, after the requestId re-check, so a replay of a move
+     * that succeeded answers with the first result and never re-runs these.
      */
     private void requireMovable(RegisterFloat registerFloat, UUID from, LocalDate date) {
         requireRegisterLocation(registerFloat, from);
+        requireNoOpenSession(registerFloat);
         if (registerFloat.getAmount().signum() < 0) {
             throw new CashSetupException(
                     CashSetupException.Code.FLOAT_AMOUNT_NEGATIVE,
@@ -483,6 +486,29 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
                     CashSetupException.Code.FLOAT_RELOCATION_DATE_INVALID,
                     "The move date " + date + " is before the register's latest float change, on " + floor.get());
         }
+    }
+
+    /**
+     * A register does not move while it has an open pos-order session (#2573, Order Domain ruling): the drawer's
+     * close posts at the session's location. Read from the session replica, so a session whose opened fact has not
+     * arrived yet does not block (the accepted race; no synchronous call, ADR-0044 R1). The details name the session
+     * and when it opened, never its location, which is logged.
+     */
+    private void requireNoOpenSession(RegisterFloat registerFloat) {
+        sessions.openSessionOf(registerFloat.getRegisterId()).ifPresent(session -> {
+            log.warn(
+                    "Refused to move register {}: session {} opened at {} is open at location {}",
+                    registerFloat.getRegisterId(),
+                    session.getSessionId(),
+                    session.getOpenedAt(),
+                    session.getLocationId());
+            throw new CashSetupException(
+                    CashSetupException.Code.FLOAT_REGISTER_SESSION_OPEN,
+                    "Register " + registerFloat.getRegisterId() + " has an open session " + session.getSessionId()
+                            + ", opened at " + session.getOpenedAt() + "; close it before moving the register",
+                    session.getSessionId().toString(),
+                    "Close the register's session, then move the register again.");
+        });
     }
 
     /**

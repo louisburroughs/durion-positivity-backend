@@ -213,20 +213,24 @@ public class RegisterFloatController {
             description = """
                     Moves a register, and its change float, from one location to another: posts Dr 1080 \
                     Register Float at toLocationId / Cr 1080 at fromLocationId for the register's current float, \
-                    dated the effective date, both lines carrying the register. The float itself is unchanged; \
+                    dated the effective date, both lines carrying the register; the float itself is unchanged, \
                     there is no bank line and no 3900 line, and earlier periods keep the location they were \
                     posted at. A register whose float is zero moves without an entry (journalEntryId null), \
                     which is how a go-live made under a mistyped location is fixed: reverse the go-live, move \
                     the register, run go-live again.
                     Use this tool when a register was set up under the wrong location (reason \
-                    ENTERED_IN_ERROR) or its drawer physically moved (reason MOVED); both post the same entry. \
-                    Do not use changeRegisterFloat, which changes the amount, and do not reverse the relocation \
+                    ENTERED_IN_ERROR) or its drawer physically moved (reason MOVED), both posting the same entry; \
+                    do not use changeRegisterFloat, which changes the amount, and do not reverse the relocation \
                     entry (409 FLOAT_RELOCATION_NOT_REVERSIBLE): correct a wrong move by moving again.
                     Preconditions: caller holds accounting:float:manage and has both fromLocationId and \
                     toLocationId in its location scope (403 LOCATION_SCOPE_DENIED); the register has a float \
                     (404 FLOAT_REGISTER_NOT_FOUND) held at fromLocationId (422 \
                     FLOAT_REGISTER_LOCATION_MISMATCH); toLocationId differs (422 \
-                    FLOAT_RELOCATION_SAME_LOCATION); the float is not negative (422 FLOAT_AMOUNT_NEGATIVE, fix \
+                    FLOAT_RELOCATION_SAME_LOCATION); no pos-order session is open on the register (422 \
+                    FLOAT_REGISTER_SESSION_OPEN, whose referenceId is the open session and whose message says \
+                    when it opened; close the session first; neither reason nor an override bypasses it, and a \
+                    session whose opened fact has not reached accounting yet does not block); the float is not \
+                    negative (422 FLOAT_AMOUNT_NEGATIVE, fix \
                     it with changeRegisterFloat first); the effective date is not after today and not before \
                     the register's latest float change (422 FLOAT_RELOCATION_DATE_INVALID); the date passes the \
                     period gate (a CLOSED period needs accounting:period:override and overrideJustification). \
@@ -263,7 +267,8 @@ public class RegisterFloatController {
     @ApiResponse(
             responseCode = "422",
             description = "FLOAT_REGISTER_LOCATION_MISMATCH (the register is not held at fromLocationId),"
-                    + " FLOAT_RELOCATION_SAME_LOCATION, FLOAT_RELOCATION_DATE_INVALID, FLOAT_AMOUNT_NEGATIVE,"
+                    + " FLOAT_RELOCATION_SAME_LOCATION, FLOAT_REGISTER_SESSION_OPEN (a pos-order session is open on the"
+                    + " register; referenceId names it), FLOAT_RELOCATION_DATE_INVALID, FLOAT_AMOUNT_NEGATIVE,"
                     + " PERIOD_CLOSED, PERIOD_HARD_LOCKED, ACCOUNTING_TIME_ZONE_UNSET or GL_MAPPING_NOT_CONFIGURED",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_REGISTER_FLOAT_RELOCATE", apiVersion = "1")

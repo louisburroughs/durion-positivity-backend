@@ -31,6 +31,9 @@ import com.positivity.accounting.internal.service.GLMappingResolver;
 import com.positivity.accounting.internal.service.JournalEntryService;
 import com.positivity.accounting.internal.service.PettyExpenseCategoryService;
 import com.positivity.accounting.internal.service.RegisterFloatService;
+import com.positivity.accounting.internal.service.RegisterSessionReplica;
+import com.positivity.domainevents.order.RegisterSessionClosedV1;
+import com.positivity.domainevents.order.RegisterSessionOpenedV1;
 import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.tenancy.TenantContext;
@@ -93,6 +96,9 @@ class CashSetupPostgresIT extends PostgresTenancyTestBase {
 
     @Autowired
     private java.time.Clock clock;
+
+    @Autowired
+    private RegisterSessionReplica sessionReplica;
 
     private final List<UUID> tenants = new ArrayList<>();
 
@@ -396,6 +402,123 @@ class CashSetupPostgresIT extends PostgresTenancyTestBase {
                                 SHOP_B,
                                 reversedOn))
                 .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("#2573: an open session blocks the move (422 FLOAT_REGISTER_SESSION_OPEN, nothing posts); once closed"
+            + " it moves; a closed fact before its opened fact keeps the session closed; an older session stuck OPEN"
+            + " under a newer closed one does not block")
+    void openSessionBlocksTheMove() {
+        UUID tenant = tenant();
+        provisionAccounting(tenant);
+        signIn("controller.cfo", "accounting:float:manage", "accounting:period:override");
+        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        asTenant(tenant, () -> floats.establishGoLive("T-1", goLiveAt(LOCATION, "200.00", today.minusDays(10))));
+        java.time.Instant morning = java.time.Instant.parse("2026-10-07T08:00:00Z");
+        UUID first = UUIDv7Generator.generate();
+        asTenant(tenant, () -> {
+            sessionReplica.opened(new RegisterSessionOpenedV1(first, "T-1", LOCATION, morning), 1);
+            return null;
+        });
+        int entries = entryCount(tenant);
+
+        assertThatThrownBy(() -> asTenant(
+                        tenant,
+                        () -> floats.relocate(
+                                "T-1",
+                                new RegisterFloatRelocationRequest(
+                                        LOCATION,
+                                        SHOP_B,
+                                        RegisterFloatRelocationReason.ENTERED_IN_ERROR,
+                                        today,
+                                        "Drawer 1 moved to the new shop",
+                                        UUIDv7Generator.generate(),
+                                        "The override does not bypass the session"))))
+                .isInstanceOf(CashSetupException.class)
+                .satisfies(e ->
+                        assertThat(((CashSetupException) e).getReferenceId()).isEqualTo(first.toString()))
+                .extracting(e -> ((CashSetupException) e).getCode())
+                .isEqualTo(CashSetupException.Code.FLOAT_REGISTER_SESSION_OPEN);
+        assertThat(entryCount(tenant)).isEqualTo(entries);
+        assertThat(asTenant(
+                        tenant,
+                        () -> floatRows.findByRegisterId("T-1").orElseThrow().getLocationId()))
+                .isEqualTo(LOCATION);
+
+        // Closed: the move goes through and updates the single float row in place.
+        UUID floatId = asTenant(
+                tenant, () -> floatRows.findByRegisterId("T-1").orElseThrow().getRegisterFloatId());
+        asTenant(tenant, () -> {
+            sessionReplica.closed(sessionClosed(first, morning, morning.plusSeconds(3600)), 2);
+            return null;
+        });
+        var moved = asTenant(
+                tenant,
+                () -> floats.relocate(
+                        "T-1",
+                        relocation(
+                                LOCATION,
+                                SHOP_B,
+                                RegisterFloatRelocationReason.MOVED,
+                                today,
+                                UUIDv7Generator.generate())));
+        assertThat(moved.response().locationId()).isEqualTo(SHOP_B);
+        assertThat(count(tenant, "register_float")).isEqualTo(1);
+        assertThat(asTenant(
+                        tenant,
+                        () -> floatRows.findByRegisterId("T-1").orElseThrow().getRegisterFloatId()))
+                .isEqualTo(floatId);
+
+        // Closed before opened: the late opened fact cannot reopen the session.
+        UUID second = UUIDv7Generator.generate();
+        java.time.Instant noon = morning.plusSeconds(4 * 3600);
+        asTenant(tenant, () -> {
+            sessionReplica.closed(sessionClosed(second, noon, noon.plusSeconds(3600)), 2);
+            sessionReplica.opened(new RegisterSessionOpenedV1(second, "T-1", SHOP_B, noon), 1);
+            return null;
+        });
+        assertThat(asTenant(
+                        tenant,
+                        () -> floats.relocate(
+                                        "T-1",
+                                        relocation(
+                                                SHOP_B,
+                                                SHOP_C,
+                                                RegisterFloatRelocationReason.MOVED,
+                                                today,
+                                                UUIDv7Generator.generate()))
+                                .response()
+                                .locationId()))
+                .isEqualTo(SHOP_C);
+
+        // An older session stuck OPEN under the newer closed one does not block: the latest-opened decides.
+        UUID stuck = UUIDv7Generator.generate();
+        asTenant(tenant, () -> {
+            sessionReplica.opened(new RegisterSessionOpenedV1(stuck, "T-1", LOCATION, morning.minusSeconds(86_400)), 1);
+            return null;
+        });
+        assertThat(asTenant(
+                        tenant,
+                        () -> floats.relocate(
+                                        "T-1",
+                                        relocation(
+                                                SHOP_C,
+                                                LOCATION,
+                                                RegisterFloatRelocationReason.MOVED,
+                                                today,
+                                                UUIDv7Generator.generate()))
+                                .response()
+                                .locationId()))
+                .isEqualTo(LOCATION);
+        assertThat(new JdbcTemplate(ownerDataSource())
+                        .queryForList(
+                                "SELECT status FROM ext_order_register_session WHERE tenant_id = ? ORDER BY opened_at",
+                                String.class,
+                                tenant))
+                .containsExactly("OPEN", "CLOSED", "CLOSED");
+        // Two-tenant isolation (ADR-0062): another tenant sees none of these sessions.
+        UUID other = tenant();
+        assertThat(asTenant(other, () -> sessionReplica.openSessionOf("T-1"))).isEmpty();
     }
 
     @Test
@@ -868,6 +991,26 @@ class CashSetupPostgresIT extends PostgresTenancyTestBase {
                 date,
                 "Counted float in drawer 1 at go-live",
                 UUIDv7Generator.generate());
+    }
+
+    private static RegisterSessionClosedV1 sessionClosed(
+            UUID session, java.time.Instant opened, java.time.Instant closed) {
+        return new RegisterSessionClosedV1(
+                session,
+                "T-1",
+                LOCATION,
+                "clerk-1",
+                "clerk-2",
+                new BigDecimal("200.00"),
+                new BigDecimal("200.00"),
+                new BigDecimal("200.00"),
+                BigDecimal.ZERO,
+                false,
+                "USD",
+                List.of(),
+                BigDecimal.ZERO,
+                opened,
+                closed);
     }
 
     private static RegisterFloatRelocationRequest relocation(

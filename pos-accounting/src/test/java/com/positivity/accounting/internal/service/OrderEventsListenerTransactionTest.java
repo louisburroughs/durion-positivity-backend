@@ -59,6 +59,9 @@ class OrderEventsListenerTransactionTest {
     @Autowired
     private KafkaFactIngestionRecorder ingestionRecorder;
 
+    @Autowired
+    private RegisterSessionReplica sessionReplica;
+
     private OrderEventsListener listener;
     private String eventId;
 
@@ -75,7 +78,8 @@ class OrderEventsListenerTransactionTest {
                 ingestionRecorder,
                 meterRegistry,
                 transactionManager,
-                com.positivity.accounting.internal.service.TestZoneResolvers.utc(java.time.Clock.systemUTC()));
+                com.positivity.accounting.internal.service.TestZoneResolvers.utc(java.time.Clock.systemUTC()),
+                sessionReplica);
     }
 
     @AfterEach
