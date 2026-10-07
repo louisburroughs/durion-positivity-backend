@@ -305,14 +305,19 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
     /**
      * A register belongs to the location of its first float command. The controller's location-scope gate judges
      * the request's {@code locationId}, so a command naming another location must not reach (or move) this
-     * register: 422 FLOAT_REGISTER_LOCATION_MISMATCH, nothing posted.
+     * register: 422 FLOAT_REGISTER_LOCATION_MISMATCH, nothing posted. The register's own location is for the log,
+     * never the response: the caller may be outside its scope.
      */
     private static void requireRegisterLocation(RegisterFloat registerFloat, UUID locationId) {
         if (!registerFloat.getLocationId().equals(locationId)) {
+            log.warn(
+                    "Float command for register {} named location {}; the register belongs to location {}",
+                    registerFloat.getRegisterId(),
+                    locationId,
+                    registerFloat.getLocationId());
             throw new CashSetupException(
                     CashSetupException.Code.FLOAT_REGISTER_LOCATION_MISMATCH,
-                    "Register " + registerFloat.getRegisterId() + " belongs to location "
-                            + registerFloat.getLocationId() + ", not " + locationId);
+                    "Register " + registerFloat.getRegisterId() + " belongs to another location");
         }
     }
 
