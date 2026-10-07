@@ -53,6 +53,9 @@ class DefaultGLMappingServiceSubtypeWarningTest {
     @Spy
     private Clock clock = Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC);
 
+    @Spy
+    AccountingCalendarZoneResolver zoneResolver = TestZoneResolvers.utc(Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC));
+
     @Mock
     private DefaultGLMappingRepository repository;
 

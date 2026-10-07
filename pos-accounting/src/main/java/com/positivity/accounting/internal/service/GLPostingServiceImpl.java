@@ -42,6 +42,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class GLPostingServiceImpl implements GLPostingService {
     private final Clock clock;
+    private final AccountingCalendarZoneResolver zoneResolver;
 
     private final JournalEntryService journalEntryService;
 
@@ -123,7 +124,7 @@ public class GLPostingServiceImpl implements GLPostingService {
         lines.add(lineRequest(arAccountId, BigDecimal.ZERO, totalAmount, "AR Reduction - CM#" + creditMemoId));
 
         JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
-                .transactionDate(LocalDateTime.now(clock))
+                .transactionDate(zoneResolver.postingDateTime(clock.instant()))
                 .description(description + (isPriorPeriod ? " [PRIOR PERIOD: " + originalPeriodId + "]" : ""))
                 .sourceEventId(creditMemoId)
                 .sourceEventType(JournalEntrySourceTypes.CREDIT_MEMO_REVERSAL)
@@ -173,7 +174,7 @@ public class GLPostingServiceImpl implements GLPostingService {
                 taxPayableAccountId, BigDecimal.ZERO, taxReversed, "Tax Restoration - CM VOID#" + creditMemoId));
 
         JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
-                .transactionDate(LocalDateTime.now(clock))
+                .transactionDate(zoneResolver.postingDateTime(clock.instant()))
                 .description(description)
                 .sourceEventId(creditMemoId)
                 .sourceEventType(JournalEntrySourceTypes.CREDIT_MEMO_VOID)

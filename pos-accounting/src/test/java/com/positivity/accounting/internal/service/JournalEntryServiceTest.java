@@ -119,9 +119,14 @@ class JournalEntryServiceTest {
         // closed-period tests stub findWithLockByPeriodCode explicitly.
         lenient().when(configurationService.getHardLockDate()).thenReturn(Optional.empty());
         AccountingPeriodGate accountingPeriodGate = new AccountingPeriodGate(
-                accountingPeriodService, periodRepository, configurationService, auditLogRepository);
+                accountingPeriodService,
+                periodRepository,
+                configurationService,
+                auditLogRepository,
+                TestZoneResolvers.utc(clock));
         service = new JournalEntryServiceImpl(
                 clock,
+                TestZoneResolvers.utc(clock),
                 journalEntryRepository,
                 glAccountService,
                 glAccountRepository,
@@ -835,6 +840,65 @@ class JournalEntryServiceTest {
         assertThat(reversal.getTransactionDate()).isEqualTo(LocalDateTime.now(TEST_CLOCK));
         assertThat(reversal.getEntryNumber()).isEqualTo("JE-202401-7");
         verify(accountingPeriodService).ensurePeriodExists(LocalDate.now(TEST_CLOCK));
+    }
+
+    @Test
+    @DisplayName(
+            "#2558: the default reversal date (original's period closed) is today in the tenant's Chicago calendar:"
+                    + " 2026-01-31T23:30, not the UTC clock's February 1")
+    void reverseJournalEntry_defaultDate_isTenantCalendarNow() {
+        Clock utc = Clock.fixed(TestZoneResolvers.JAN_31_2330_CHICAGO, ZoneOffset.UTC);
+        AccountingPeriodGate gate = new AccountingPeriodGate(
+                accountingPeriodService,
+                periodRepository,
+                configurationService,
+                auditLogRepository,
+                TestZoneResolvers.fixed(TestZoneResolvers.CHICAGO, utc));
+        JournalEntryServiceImpl chicago = new JournalEntryServiceImpl(
+                utc,
+                TestZoneResolvers.fixed(TestZoneResolvers.CHICAGO, utc),
+                journalEntryRepository,
+                glAccountService,
+                glAccountRepository,
+                sequenceLocker,
+                accountingPeriodService,
+                gate,
+                auditLogRepository,
+                outboxService,
+                eventPublisher);
+        JournalEntry original = arrangePostedOriginalForReversal();
+        original.setTransactionDate(LocalDateTime.of(2025, 11, 15, 10, 30));
+        when(accountingPeriodService.isPeriodOpen(LocalDate.of(2025, 11, 15))).thenReturn(false);
+        when(journalEntryRepository.save(any(JournalEntry.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(journalEntryRepository.markReversed(
+                        eq(testJournalEntryId), any(JournalEntry.class), any(Instant.class), eq("SYSTEM")))
+                .thenReturn(1);
+        AccountingSequence january = new AccountingSequence();
+        january.setScopeKey("JE-202601");
+        january.setNextValue(1L);
+        when(sequenceLocker.lockOrProvision("JE-202601")).thenReturn(january);
+
+        JournalEntryResponse reversal = chicago.reverseJournalEntry(testJournalEntryId, "CORRECTION", null);
+
+        assertThat(reversal.getTransactionDate()).isEqualTo(LocalDateTime.of(2026, 1, 31, 23, 30));
+        verify(accountingPeriodService).ensurePeriodExists(LocalDate.of(2026, 1, 31));
+    }
+
+    @Test
+    @DisplayName("#2558: without an accounting time zone the gate refuses a manual post with an explicit date and a"
+            + " reversal into an open original period")
+    void unsetZone_gateRefusesExplicitDates() {
+        AccountingPeriodGate unsetGate = new AccountingPeriodGate(
+                accountingPeriodService,
+                periodRepository,
+                configurationService,
+                auditLogRepository,
+                TestZoneResolvers.unset(clock));
+
+        assertThatThrownBy(() -> unsetGate.assertPostingAllowed(LocalDate.of(2024, 1, 1), testJournalEntryId, null))
+                .isInstanceOf(com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetException.class);
+        assertThatThrownBy(() -> unsetGate.isPostingBlocked(LocalDate.of(2024, 1, 1)))
+                .isInstanceOf(com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetException.class);
     }
 
     @Test

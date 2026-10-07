@@ -46,7 +46,11 @@ class InventoryRevaluationPostingServiceTest {
     @BeforeEach
     void setUp() {
         service = new InventoryRevaluationPostingService(
-                TEST_CLOCK, idempotencyService, glMappingResolver, glPostingService, journalEntryRepository);
+                com.positivity.accounting.internal.service.TestZoneResolvers.utc(TEST_CLOCK),
+                idempotencyService,
+                glMappingResolver,
+                glPostingService,
+                journalEntryRepository);
         LocalDateTime date = LocalDateTime.ofInstant(OCCURRED_AT, ZoneOffset.UTC);
         when(glMappingResolver.resolveGLAccount("INVENTORY_REVALUATION", "INVENTORY_ASSET", date))
                 .thenReturn(INVENTORY);
@@ -143,5 +147,34 @@ class InventoryRevaluationPostingServiceTest {
                 .isEqualTo("INVENTORY_REVALUATION_GL_POSTING:" + REVALUATION_ID);
         assertThat(InventoryRevaluationPostingService.toSourceEventId(REVALUATION_ID))
                 .isNotEqualTo(InventoryAdjustmentPostingService.toSourceEventId("CYCLE_COUNT", REVALUATION_ID));
+    }
+
+    @Test
+    @DisplayName("#2558: a fact at 2026-01-31T23:30-06:00 posts on 2026-01-31 in a Chicago calendar, clock in UTC")
+    void chicagoCalendar_lastEveningOfJanuaryPostsInJanuary() {
+        InventoryRevaluationPostingService service2 = new InventoryRevaluationPostingService(
+                TestZoneResolvers.fixed(TestZoneResolvers.CHICAGO, TEST_CLOCK),
+                idempotencyService,
+                glMappingResolver,
+                glPostingService,
+                journalEntryRepository);
+        when(glMappingResolver.resolveGLAccount(anyString(), anyString(), eq(LocalDateTime.of(2026, 1, 31, 23, 30))))
+                .thenReturn(UUID.fromString("00000000-0000-0000-0000-000000002558"));
+        when(glPostingService.postInventoryRevaluation(any(), any(), any(), any(), any(), any(), anyString(), any()))
+                .thenReturn(JOURNAL_ENTRY_ID);
+
+        service2.postRevaluation(TestZoneResolvers.movedTo(
+                fact("5.00", "7.25", "4"), OCCURRED_AT, TestZoneResolvers.JAN_31_2330_CHICAGO));
+
+        verify(glPostingService)
+                .postInventoryRevaluation(
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        eq(LocalDateTime.of(2026, 1, 31, 23, 30)),
+                        anyString(),
+                        any());
     }
 }

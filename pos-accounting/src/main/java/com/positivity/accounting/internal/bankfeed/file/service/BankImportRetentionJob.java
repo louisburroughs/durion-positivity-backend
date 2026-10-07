@@ -7,6 +7,7 @@ import com.positivity.tenancy.TenantIterator;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -65,7 +66,9 @@ public class BankImportRetentionJob {
      * @return how many files were deleted
      */
     public int purgeForBoundTenant() {
-        LocalDate today = LocalDate.now(clock);
+        // Intentionally UTC (#2558 ruling): retention is not an accounting date. The purge day and the stamp
+        // (BankImportServiceImpl#retentionUntil) are in the same zone, so a file is kept exactly its retention days.
+        LocalDate today = LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC);
         Instant now = Instant.now(clock);
         List<BankImport> expired = imports.findByRetentionUntilBeforeAndFilePurgedAtIsNull(today);
         int purged = 0;

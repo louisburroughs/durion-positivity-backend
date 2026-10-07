@@ -52,7 +52,8 @@ class WarrantyEventsListenerTest {
                 expectations,
                 ingestionRecorder,
                 org.mockito.Mockito.mock(ObjectProvider.class),
-                mock(PlatformTransactionManager.class));
+                mock(PlatformTransactionManager.class),
+                com.positivity.accounting.internal.service.TestZoneResolvers.utc(java.time.Clock.systemUTC()));
     }
 
     private String submitted(String eventId, long version) {
@@ -327,5 +328,26 @@ class WarrantyEventsListenerTest {
                 .isThrownBy(() -> listener.onWarrantyEvent(submitted("e-9", 1)));
 
         verify(processedEvents, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("#2558: a claim submitted at 2026-01-31T23:30-06:00 is recorded on 2026-01-31 in a Chicago calendar")
+    void recordDateIsTheTenantCalendarDate() {
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                listener, "zoneResolver", TestZoneResolvers.fixed(TestZoneResolvers.CHICAGO, TEST_CLOCK));
+        when(processedEvents.existsById("e-chi")).thenReturn(false);
+        when(expectations.findById(REIMBURSEMENT_ID)).thenReturn(Optional.empty());
+
+        listener.onWarrantyEvent(submitted("e-chi", 3).replace("2026-07-15T09:00:00Z", "2026-02-01T05:30:00Z"));
+
+        verify(ingestionRecorder)
+                .record(
+                        any(),
+                        any(),
+                        eq("e-chi"),
+                        any(),
+                        eq(java.time.LocalDateTime.of(2026, 1, 31, 23, 30)),
+                        any(),
+                        any());
     }
 }

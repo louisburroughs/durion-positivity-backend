@@ -3,9 +3,9 @@ package com.positivity.accounting.internal.bankrec.intake;
 import com.positivity.accounting.internal.bankrec.entity.BankStatement;
 import com.positivity.accounting.internal.bankrec.enums.BankStatementStatus;
 import com.positivity.accounting.internal.bankrec.repository.BankStatementRepository;
+import com.positivity.accounting.internal.bankrec.service.BankRecCalendar;
 import com.positivity.accounting.internal.bankrec.service.FunctionalCurrency;
 import com.positivity.domainevents.bankfeed.BankTransactionsObservedV1.StatementHeader;
-import java.time.Clock;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -29,11 +29,11 @@ final class StatementHeaderChecks {
     static BankIntakeLookup.@NonNull HeaderCheck check(
             @NonNull BankStatementRepository statements,
             @NonNull FunctionalCurrency functionalCurrency,
-            @NonNull Clock clock,
+            @NonNull BankRecCalendar calendar,
             @NonNull UUID glAccountId,
             @NonNull StatementHeader header,
             @Nullable String gapAcknowledgement) {
-        return check(statements, functionalCurrency, clock, glAccountId, header, gapAcknowledgement, null);
+        return check(statements, functionalCurrency, calendar, glAccountId, header, gapAcknowledgement, null);
     }
 
     /**
@@ -43,12 +43,13 @@ final class StatementHeaderChecks {
     static BankIntakeLookup.@NonNull HeaderCheck check(
             @NonNull BankStatementRepository statements,
             @NonNull FunctionalCurrency functionalCurrency,
-            @NonNull Clock clock,
+            @NonNull BankRecCalendar calendar,
             @NonNull UUID glAccountId,
             @NonNull StatementHeader header,
             @Nullable String gapAcknowledgement,
             @Nullable UUID superseded) {
-        LocalDate today = LocalDate.now(clock);
+        // Today in the tenant's accounting calendar (#2558 ruling): a statement ending tomorrow there is future.
+        LocalDate today = calendar.today();
         if (header.endDate().isAfter(today)) {
             throw BankRecException.field(
                     BankRecErrorCode.VALIDATION_ERROR,

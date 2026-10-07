@@ -15,6 +15,7 @@ import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.enums.ReprocessingOutcome;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
+import com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetException;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository;
 import java.nio.charset.StandardCharsets;
@@ -177,6 +178,16 @@ public class PostingEngineOrchestrator {
                     + "; event suspended — posting is permanently blocked and cannot be"
                     + " reprocessed (the hard lock is never reopened)";
             return suspendPeriodBlocked(event, attemptHistory, details);
+        } catch (AccountingTimeZoneUnsetException e) {
+            // Fail closed (#2558): no date and no period gate without the tenant's accounting time zone. An operator
+            // remedy, not an internal error: SUSPENDED / ACCOUNTING_TIME_ZONE_UNSET, which the retry job releases
+            // once the zone exists.
+            return suspend(
+                    event,
+                    attemptHistory,
+                    PostingFailureReason.ACCOUNTING_TIME_ZONE_UNSET,
+                    "The tenant's accounting time zone is not set; set the accounting time zone"
+                            + " (PUT /v1/accounting/configuration/time-zone), then reprocess");
         } catch (Exception e) {
             return handleUnexpectedFailure(event, attemptHistory, e);
         }
@@ -425,10 +436,20 @@ public class PostingEngineOrchestrator {
             @NonNull AccountingEvent event,
             @NonNull ReprocessingAttemptHistory attemptHistory,
             @NonNull String details) {
+        return suspend(event, attemptHistory, PostingFailureReason.PERIOD_CLOSED, details);
+    }
+
+    /** Persists SUSPENDED with {@code reason} and {@code details}, records the failed attempt, returns the failure. */
+    @NonNull
+    private PostingResult suspend(
+            @NonNull AccountingEvent event,
+            @NonNull ReprocessingAttemptHistory attemptHistory,
+            @NonNull PostingFailureReason reason,
+            @NonNull String details) {
         log.warn("Suspending event {}: {}", event.getEventId(), details);
 
         event.setStatus(AccountingEventStatus.SUSPENDED);
-        event.setFailureReasonCode(PostingFailureReason.PERIOD_CLOSED.name());
+        event.setFailureReasonCode(reason.name());
         event.setFailureDetails(details);
 
         attemptHistory.setOutcome(ReprocessingOutcome.FAILURE);
@@ -437,7 +458,7 @@ public class PostingEngineOrchestrator {
         accountingEventRepository.save(event);
         reprocessingAttemptHistoryRepository.save(attemptHistory);
 
-        return PostingResult.failure(PostingFailureReason.PERIOD_CLOSED, details);
+        return PostingResult.failure(reason, details);
     }
 
     /**

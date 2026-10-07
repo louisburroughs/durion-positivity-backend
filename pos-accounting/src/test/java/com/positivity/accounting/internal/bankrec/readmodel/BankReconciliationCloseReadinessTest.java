@@ -137,7 +137,7 @@ class BankReconciliationCloseReadinessTest {
     @BeforeEach
     void setUp() {
         service = new BankReconciliationCloseReadiness(
-                CLOCK,
+                com.positivity.accounting.internal.service.TestZoneResolvers.utc(CLOCK),
                 policy,
                 BankRecSettings.defaults(),
                 new FunctionalCurrency(new LedgerCurrency("USD")),
@@ -430,6 +430,45 @@ class BankReconciliationCloseReadinessTest {
         assertThat(cash.checks().getFirst().references())
                 .containsEntry("outstandingItemIds", List.of(stale.getOutstandingItemId()));
         assertThat(readiness.ready()).isTrue();
+    }
+
+    @Test
+    @DisplayName("#2558: at 2026-01-31T23:30-06:00 an item dated Jan 31 is 0 days old in a Chicago calendar (aging"
+            + " cap is the tenant's today, not the UTC clock's Feb 1)")
+    void agingCapIsTheTenantCalendarToday() {
+        Clock utc = Clock.fixed(
+                com.positivity.accounting.internal.service.TestZoneResolvers.JAN_31_2330_CHICAGO, ZoneOffset.UTC);
+        BankReconciliationCloseReadiness chicago = new BankReconciliationCloseReadiness(
+                com.positivity.accounting.internal.service.TestZoneResolvers.fixed(
+                        com.positivity.accounting.internal.service.TestZoneResolvers.CHICAGO, utc),
+                policy,
+                BankRecSettings.defaults(),
+                new FunctionalCurrency(new LedgerCurrency("USD")),
+                bankCashAccounts,
+                statements,
+                reconciliations,
+                transactions,
+                outstandingItems,
+                adjustments,
+                calculator,
+                ledger,
+                ledgerEntries,
+                importLookups);
+        AccountingPeriod february = new AccountingPeriod();
+        february.setPeriodId(UUID.randomUUID());
+        february.setPeriodCode("2026-02");
+        february.setStartDate(LocalDate.of(2026, 2, 1));
+        february.setEndDate(LocalDate.of(2026, 2, 28));
+        february.setStatus(AccountingPeriodStatus.OPEN);
+        when(outstandingItems.findByGlAccountIdAndItemDateLessThanEqual(eq(CASH), any()))
+                .thenReturn(List.of(item(LocalDate.of(2026, 1, 31), "-10.00")));
+
+        CloseReadinessAccount cash = cash(chicago.evaluate(february));
+
+        assertThat(cash.openOutstandingItems())
+                .singleElement()
+                .extracting(i -> i.ageDays())
+                .isEqualTo(0L);
     }
 
     private static BankReconciliationOutstandingItem item(LocalDate date, String amount) {

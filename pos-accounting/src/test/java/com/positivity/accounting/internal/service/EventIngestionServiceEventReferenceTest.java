@@ -47,6 +47,9 @@ class EventIngestionServiceEventReferenceTest {
     @Spy
     Clock clock = TEST_CLOCK;
 
+    @Spy
+    AccountingCalendarZoneResolver zoneResolver = TestZoneResolvers.utc(TEST_CLOCK);
+
     @Mock
     private AccountingEventRepository accountingEventRepository;
 

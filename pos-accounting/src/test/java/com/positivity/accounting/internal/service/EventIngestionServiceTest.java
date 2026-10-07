@@ -61,6 +61,9 @@ class EventIngestionServiceTest {
     @Spy
     Clock clock = TEST_CLOCK;
 
+    @Spy
+    AccountingCalendarZoneResolver zoneResolver = TestZoneResolvers.utc(TEST_CLOCK);
+
     @Mock
     private AccountingEventRepository accountingEventRepository;
 
@@ -282,6 +285,34 @@ class EventIngestionServiceTest {
         assertThat(result).isEmpty();
 
         verify(accountingEventRepository).findById(testEventId);
+    }
+
+    @Test
+    @DisplayName("#2558: an event submitted without a transactionDate is dated now in the tenant's Chicago calendar"
+            + " (2026-01-31T23:30), not the UTC clock's")
+    void submitEvent_defaultTransactionDate_isTenantCalendarNow() {
+        Clock utc = Clock.fixed(TestZoneResolvers.JAN_31_2330_CHICAGO, ZoneOffset.UTC);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "clock", utc);
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                service, "zoneResolver", TestZoneResolvers.fixed(TestZoneResolvers.CHICAGO, utc));
+        java.util.Map<String, Object> undated = new java.util.HashMap<>(testEventMap);
+        undated.remove("transactionDate");
+        when(idempotencyService.isKeyProcessed(any(String.class))).thenReturn(false);
+        when(accountingEventRepository.save(any(AccountingEvent.class))).thenAnswer(inv -> {
+            AccountingEvent event = inv.getArgument(0);
+            event.setReceivedAt(TestZoneResolvers.JAN_31_2330_CHICAGO);
+            return event;
+        });
+        AccountingSequence sequence = new AccountingSequence();
+        sequence.setNextValue(1L);
+        when(sequenceLocker.lockOrProvision(any(String.class))).thenReturn(sequence);
+
+        service.submitEvent(undated);
+
+        org.mockito.ArgumentCaptor<AccountingEvent> saved = org.mockito.ArgumentCaptor.forClass(AccountingEvent.class);
+        verify(accountingEventRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
+        assertThat(saved.getAllValues().getFirst().getTransactionDate())
+                .isEqualTo(LocalDateTime.of(2026, 1, 31, 23, 30));
     }
 
     @Test

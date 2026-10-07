@@ -124,7 +124,8 @@ class InvoiceRevenueEventCoverageIT extends BaseIntegrationTest {
                 invoiceRevenuePostingService,
                 ingestionRecorder,
                 noMetrics,
-                transactionManager);
+                transactionManager,
+                com.positivity.accounting.internal.service.TestZoneResolvers.utc(java.time.Clock.systemUTC()));
     }
 
     @AfterEach

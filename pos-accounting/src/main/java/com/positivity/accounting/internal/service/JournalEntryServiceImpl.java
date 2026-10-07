@@ -59,6 +59,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class JournalEntryServiceImpl implements JournalEntryService {
     private final Clock clock;
+    private final AccountingCalendarZoneResolver zoneResolver;
 
     private final JournalEntryRepository journalEntryRepository;
     private final GLAccountService glAccountService;
@@ -559,7 +560,8 @@ public class JournalEntryServiceImpl implements JournalEntryService {
         if (accountingPeriodService.isPeriodOpen(originalDate)) {
             return original.getTransactionDate();
         }
-        return LocalDateTime.now(clock);
+        // Today in the tenant's accounting calendar (#2558), not the UTC clock's.
+        return zoneResolver.postingDateTime(clock.instant());
     }
 
     /**

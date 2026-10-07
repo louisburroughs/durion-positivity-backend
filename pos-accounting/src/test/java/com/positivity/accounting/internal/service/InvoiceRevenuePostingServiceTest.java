@@ -38,9 +38,11 @@ import org.springframework.beans.factory.ObjectProvider;
  */
 class InvoiceRevenuePostingServiceTest {
 
-    // A non-UTC zone so the finalizedAt -> transactionDate conversion is observable.
+    // The tenant's accounting-calendar zone (#2558), non-UTC so the finalizedAt -> transactionDate conversion is
+    // observable; the clock stays UTC, as the Clock bean does.
     private static final ZoneId ZONE = ZoneId.of("America/Chicago");
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2026-07-23T12:00:00Z"), ZONE);
+    private static final Clock TEST_CLOCK =
+            Clock.fixed(Instant.parse("2026-07-23T12:00:00Z"), java.time.ZoneOffset.UTC);
     private static final UUID INVOICE_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID AR = UUID.fromString("00000000-0000-0000-0000-00000000000b");
     private static final UUID REVENUE = UUID.fromString("00000000-0000-0000-0000-00000000000c");
@@ -66,7 +68,12 @@ class InvoiceRevenuePostingServiceTest {
         when(writerProvider.getIfAvailable()).thenReturn(outboxEventWriter);
         when(repository.save(any(InvoiceGlPosting.class))).thenAnswer(inv -> inv.getArgument(0));
         service = new InvoiceRevenuePostingService(
-                TEST_CLOCK, glMappingResolver, glPostingService, repository, writerProvider);
+                TEST_CLOCK,
+                glMappingResolver,
+                glPostingService,
+                repository,
+                writerProvider,
+                TestZoneResolvers.fixed(ZONE, TEST_CLOCK));
     }
 
     private static InvoiceUpdatedV1 fact(
@@ -156,7 +163,7 @@ class InvoiceRevenuePostingServiceTest {
                         eq(new BigDecimal("16.53")),
                         eq(date),
                         eq("Invoice revenue recognition - INV#INV-2026-000123"));
-        // Business time in the clock's zone: 2026-07-01T03:30Z is June 30 in Chicago.
+        // Business time in the tenant's calendar zone, not the UTC clock's: 2026-07-01T03:30Z is June 30 in Chicago.
         assertThat(date).isEqualTo(LocalDateTime.of(2026, 6, 30, 22, 30));
 
         ArgumentCaptor<InvoiceGlPosting> row = ArgumentCaptor.forClass(InvoiceGlPosting.class);
@@ -340,6 +347,26 @@ class InvoiceRevenuePostingServiceTest {
 
         verify(repository).save(any(InvoiceGlPosting.class));
         verify(outboxEventWriter, never()).publish(anyString(), any());
+    }
+
+    @Test
+    @DisplayName("#2558: a revert at 2026-01-31T23:30-06:00 posts its mirror on 2026-01-31 in the Chicago calendar")
+    void reversalIsDatedInTheTenantCalendar() {
+        LocalDateTime january31 = LocalDateTime.of(2026, 1, 31, 23, 30);
+        stubAccounts(january31);
+        when(repository.findByInvoiceIdAndReversalJournalEntryIdIsNull(INVOICE_ID))
+                .thenReturn(Optional.of(openPosting()));
+        when(glPostingService.postInvoiceRevenueReversal(
+                        any(), any(), any(), any(), any(), any(), any(), any(), anyString()))
+                .thenReturn(REVERSAL_ENTRY_ID);
+
+        service.reverseRevenue(
+                fact("DRAFT", new BigDecimal("216.53"), new BigDecimal("16.53"), FINALIZED_AT, null),
+                TestZoneResolvers.JAN_31_2330_CHICAGO);
+
+        verify(glPostingService)
+                .postInvoiceRevenueReversal(
+                        any(), any(), any(), any(), any(), any(), any(), eq(january31), anyString());
     }
 
     @Test

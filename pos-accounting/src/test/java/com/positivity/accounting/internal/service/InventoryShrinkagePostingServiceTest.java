@@ -43,7 +43,10 @@ class InventoryShrinkagePostingServiceTest {
     @BeforeEach
     void setUp() {
         service = new InventoryShrinkagePostingService(
-                TEST_CLOCK, idempotencyService, glMappingResolver, glPostingService);
+                com.positivity.accounting.internal.service.TestZoneResolvers.utc(TEST_CLOCK),
+                idempotencyService,
+                glMappingResolver,
+                glPostingService);
     }
 
     private ScrapPostedV1 fact(BigDecimal unitCost) {
@@ -103,5 +106,33 @@ class InventoryShrinkagePostingServiceTest {
         assertThat(InventoryShrinkagePostingService.toSourceEventId(SCRAP_ID))
                 .isEqualTo(InventoryShrinkagePostingService.toSourceEventId(SCRAP_ID))
                 .isNotEqualTo(SCRAP_ID);
+    }
+
+    @Test
+    @DisplayName("#2558: a fact at 2026-01-31T23:30-06:00 posts on 2026-01-31 in a Chicago calendar, clock in UTC")
+    void chicagoCalendar_lastEveningOfJanuaryPostsInJanuary() {
+        InventoryShrinkagePostingService service2 = new InventoryShrinkagePostingService(
+                TestZoneResolvers.fixed(TestZoneResolvers.CHICAGO, TEST_CLOCK),
+                idempotencyService,
+                glMappingResolver,
+                glPostingService);
+        when(glMappingResolver.resolveGLAccount(anyString(), anyString(), eq(LocalDateTime.of(2026, 1, 31, 23, 30))))
+                .thenReturn(UUID.fromString("00000000-0000-0000-0000-000000002558"));
+        when(glPostingService.postInventoryShrinkage(any(), any(), any(), any(), any(), any(), anyString(), any()))
+                .thenReturn(JOURNAL_ENTRY_ID);
+
+        service2.postShrinkage(TestZoneResolvers.movedTo(
+                fact(new BigDecimal("12.50")), OCCURRED_AT, TestZoneResolvers.JAN_31_2330_CHICAGO));
+
+        verify(glPostingService)
+                .postInventoryShrinkage(
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        eq(LocalDateTime.of(2026, 1, 31, 23, 30)),
+                        anyString(),
+                        any());
     }
 }

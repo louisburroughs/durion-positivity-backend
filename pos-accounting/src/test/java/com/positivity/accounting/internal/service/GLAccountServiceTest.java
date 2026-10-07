@@ -65,6 +65,9 @@ class GLAccountServiceTest {
     @Spy
     Clock clock = TEST_CLOCK;
 
+    @Spy
+    AccountingCalendarZoneResolver zoneResolver = TestZoneResolvers.utc(TEST_CLOCK);
+
     @Mock
     private GLAccountRepository glAccountRepository;
 
@@ -671,6 +674,48 @@ class GLAccountServiceTest {
             assertThatThrownBy(() -> service.validateAccountForPosting(testAccountId, transactionDate))
                     .isInstanceOf(GLAccountNotActiveException.class)
                     .hasMessageContaining("inactive");
+        }
+    }
+
+    @Nested
+    @DisplayName("#2558: activation stamps and posting dates share the tenant's calendar")
+    class TenantCalendarStamps {
+
+        /** 10:00 CST (16:00Z), and the posting dated 10:05 CST, as the posting flows date it in Chicago. */
+        private final Clock at10Chicago = Clock.fixed(Instant.parse("2026-01-15T16:00:00Z"), ZoneOffset.UTC);
+
+        private final LocalDateTime postedAt1005 = LocalDateTime.of(2026, 1, 15, 10, 5);
+
+        private void chicago() {
+            org.springframework.test.util.ReflectionTestUtils.setField(service, "clock", at10Chicago);
+            org.springframework.test.util.ReflectionTestUtils.setField(
+                    service, "zoneResolver", TestZoneResolvers.fixed(TestZoneResolvers.CHICAGO, at10Chicago));
+            when(glAccountRepository.findById(testAccountId)).thenReturn(Optional.of(testAccount));
+            when(glAccountRepository.save(any(GLAccount.class))).thenAnswer(saved -> saved.getArgument(0));
+        }
+
+        @Test
+        @DisplayName("an account activated at 10:00 CST accepts a posting dated 10:05 CST")
+        void activatedAccountAcceptsALaterPosting() {
+            chicago();
+
+            service.activateGLAccount(testAccountId);
+
+            assertThat(testAccount.getActivationDate()).isEqualTo(LocalDateTime.of(2026, 1, 15, 10, 0));
+            service.validateAccountForPosting(testAccountId, postedAt1005);
+        }
+
+        @Test
+        @DisplayName("an account deactivated at 10:00 CST rejects a posting dated 10:05 CST")
+        void deactivatedAccountRejectsALaterPosting() {
+            chicago();
+            when(journalEntryLineRepository.getAccountBalance(testAccountId)).thenReturn(BigDecimal.ZERO);
+
+            service.deactivateGLAccount(testAccountId);
+
+            assertThat(testAccount.getDeactivationDate()).isEqualTo(LocalDateTime.of(2026, 1, 15, 10, 0));
+            assertThatThrownBy(() -> service.validateAccountForPosting(testAccountId, postedAt1005))
+                    .isInstanceOf(GLAccountNotActiveException.class);
         }
     }
 }

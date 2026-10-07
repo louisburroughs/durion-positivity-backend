@@ -9,10 +9,10 @@ import com.positivity.accounting.internal.bankrec.repository.BankTransactionRepo
 import com.positivity.accounting.internal.bankrec.service.BankCashAccounts;
 import com.positivity.accounting.internal.bankrec.service.BankCashAccounts.BankCashAccount;
 import com.positivity.accounting.internal.bankrec.service.BankRecAuditRecorder;
+import com.positivity.accounting.internal.bankrec.service.BankRecCalendar;
 import com.positivity.accounting.internal.bankrec.service.FunctionalCurrency;
 import com.positivity.accounting.internal.bankrec.service.StatementSupersession;
 import com.positivity.domainevents.bankfeed.BankTransactionsObservedV1.StatementHeader;
-import java.time.Clock;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -53,7 +53,7 @@ public class BankIntakeLookupImpl implements BankIntakeLookup {
     private final BankAccountProfileRepository profiles;
     private final BankRecAuditRecorder audit;
     private final StatementSupersession supersession;
-    private final Clock clock;
+    private final BankRecCalendar calendar;
 
     @Override
     public @NonNull BankAccountTerms requireAccount(@NonNull UUID glAccountId) {
@@ -85,7 +85,7 @@ public class BankIntakeLookupImpl implements BankIntakeLookup {
     public @NonNull HeaderCheck checkHeader(
             @NonNull UUID glAccountId, @NonNull StatementHeader header, @Nullable String gapAcknowledgement) {
         return StatementHeaderChecks.check(
-                statements, functionalCurrency, clock, glAccountId, header, gapAcknowledgement);
+                statements, functionalCurrency, calendar, glAccountId, header, gapAcknowledgement);
     }
 
     @Override
@@ -95,7 +95,13 @@ public class BankIntakeLookupImpl implements BankIntakeLookup {
             @Nullable String gapAcknowledgement,
             @Nullable UUID supersededStatementId) {
         return StatementHeaderChecks.check(
-                statements, functionalCurrency, clock, glAccountId, header, gapAcknowledgement, supersededStatementId);
+                statements,
+                functionalCurrency,
+                calendar,
+                glAccountId,
+                header,
+                gapAcknowledgement,
+                supersededStatementId);
     }
 
     @Override

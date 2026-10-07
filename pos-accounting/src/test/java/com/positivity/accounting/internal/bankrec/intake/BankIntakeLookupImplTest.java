@@ -81,7 +81,8 @@ class BankIntakeLookupImplTest {
                 profiles,
                 audit,
                 supersession,
-                CLOCK);
+                new com.positivity.accounting.internal.bankrec.service.BankRecCalendar(
+                        com.positivity.accounting.internal.service.TestZoneResolvers.utc(CLOCK)));
     }
 
     private static StatementHeader header(String start, String end, String opening) {
@@ -262,5 +263,48 @@ class BankIntakeLookupImplTest {
         assertThat(colliding).containsExactly(Map.entry(last, earlier.getBankTransactionId()));
         verify(transactions, times(3))
                 .findByGlAccountIdAndFingerprintInAndStatusNotIn(eq(ACCOUNT), anyCollection(), anyCollection());
+    }
+
+    @Test
+    @DisplayName("#2558: at 2026-01-31T23:30-06:00 in a Chicago calendar a statement ending Feb 1 is in the future;"
+            + " one ending Jan 31 is not")
+    void futureIsJudgedInTheTenantCalendar() {
+        Clock utc = Clock.fixed(
+                com.positivity.accounting.internal.service.TestZoneResolvers.JAN_31_2330_CHICAGO, ZoneOffset.UTC);
+        BankIntakeLookupImpl chicago = new BankIntakeLookupImpl(
+                bankCashAccounts,
+                new FunctionalCurrency(new LedgerCurrency("USD")),
+                statements,
+                transactions,
+                profiles,
+                audit,
+                supersession,
+                new com.positivity.accounting.internal.bankrec.service.BankRecCalendar(
+                        com.positivity.accounting.internal.service.TestZoneResolvers.fixed(
+                                com.positivity.accounting.internal.service.TestZoneResolvers.CHICAGO, utc)));
+
+        assertThatThrownBy(() -> chicago.checkHeader(ACCOUNT, header("2026-01-01", "2026-02-01", "0"), ACK))
+                .isInstanceOf(BankRecException.class)
+                .hasMessageContaining("in the future");
+        assertThat(chicago.checkHeader(ACCOUNT, header("2026-01-01", "2026-01-31", "0"), ACK))
+                .isNotNull();
+    }
+
+    @Test
+    @DisplayName("#2558: without an accounting time zone the header check answers ACCOUNTING_TIME_ZONE_UNSET (422)")
+    void unsetZoneIsAClearRefusal() {
+        BankIntakeLookupImpl unset = new BankIntakeLookupImpl(
+                bankCashAccounts,
+                new FunctionalCurrency(new LedgerCurrency("USD")),
+                statements,
+                transactions,
+                profiles,
+                audit,
+                supersession,
+                new com.positivity.accounting.internal.bankrec.service.BankRecCalendar(
+                        com.positivity.accounting.internal.service.TestZoneResolvers.unset(CLOCK)));
+
+        assertThatThrownBy(() -> unset.checkHeader(ACCOUNT, header("2026-01-01", "2026-01-31", "0"), null))
+                .isInstanceOf(com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetException.class);
     }
 }

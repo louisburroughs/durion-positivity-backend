@@ -48,7 +48,7 @@ class GLPostingInvoiceRevenueTest {
 
     @BeforeEach
     void setUp() {
-        service = new GLPostingServiceImpl(TEST_CLOCK, journalEntryService);
+        service = new GLPostingServiceImpl(TEST_CLOCK, TestZoneResolvers.utc(TEST_CLOCK), journalEntryService);
         when(journalEntryService.createJournalEntry(request.capture()))
                 .thenReturn(JournalEntryResponse.builder()
                         .journalEntryId(CREATED_ID)

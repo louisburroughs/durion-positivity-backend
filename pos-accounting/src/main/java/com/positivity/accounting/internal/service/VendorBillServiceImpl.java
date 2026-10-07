@@ -88,6 +88,8 @@ public class VendorBillServiceImpl implements VendorBillService {
     private final VendorBillDuplicateGuard duplicateGuard;
     private final AccountingSequenceLocker sequenceLocker;
 
+    private final AccountingCalendarZoneResolver zoneResolver;
+
     /**
      * The goods-receipt create, in a transaction this class can see the end of (#2501): the original
      * of a bill that lost a race under {@code uq_vendor_bill_duplicate_rule} is read after this
@@ -105,7 +107,9 @@ public class VendorBillServiceImpl implements VendorBillService {
             VendorDirectoryService vendorDirectoryService,
             VendorBillDuplicateGuard duplicateGuard,
             AccountingSequenceLocker sequenceLocker,
-            PlatformTransactionManager transactionManager) {
+            PlatformTransactionManager transactionManager,
+            AccountingCalendarZoneResolver zoneResolver) {
+        this.zoneResolver = zoneResolver;
         this.clock = clock;
         this.billRepository = billRepository;
         this.billLineRepository = billLineRepository;
@@ -708,11 +712,9 @@ public class VendorBillServiceImpl implements VendorBillService {
         }
 
         // 3. Date proximity (20 points)
-        // Convert the timezone-unaware LocalDateTime values to zone-aware ZonedDateTime (using the
-        // service Clock's zone) before computing the duration between them (java:S8700).
+        // Calendar days between the two dates as written (no zone needed: both are already local dates, #2558).
         long daysDiff = Math.abs(java.time.temporal.ChronoUnit.DAYS.between(
-                bill.getBillDate().atZone(clock.getZone()),
-                event.getInvoiceDate().atZone(clock.getZone())));
+                bill.getBillDate().toLocalDate(), event.getInvoiceDate().toLocalDate()));
         if (daysDiff <= 7) {
             score += 20;
             details.append("date_match(20);");
@@ -796,7 +798,8 @@ public class VendorBillServiceImpl implements VendorBillService {
      */
     private @NonNull String generateBillNumber(@NonNull UUID vendorId) {
         String vendorPrefix = vendorId.toString().substring(0, 8).toUpperCase(Locale.ROOT);
-        LocalDate recorded = LocalDate.now(clock);
+        // The bill's month in the tenant's accounting calendar (#2558).
+        LocalDate recorded = zoneResolver.today();
         AccountingSequence sequence = sequenceLocker.lockOrProvision(
                 String.format("%s%04d%02d", BILL_NUMBER_SCOPE_PREFIX, recorded.getYear(), recorded.getMonthValue()));
         long assigned = sequence.getNextValue();

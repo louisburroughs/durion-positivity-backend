@@ -87,6 +87,7 @@ public class InvoiceRevenuePostingService {
     private final GLPostingService glPostingService;
     private final InvoiceGlPostingRepository invoiceGlPostingRepository;
     private final ObjectProvider<OutboxEventWriter> outboxEventWriter;
+    private final AccountingCalendarZoneResolver zoneResolver;
 
     /**
      * Post revenue recognition for a finalized invoice, exactly once per {@code (invoiceId,
@@ -144,7 +145,7 @@ public class InvoiceRevenuePostingService {
 
         // Business time, not processing time: the entry lands in the invoice's month and
         // redeliveries resolve the same effective-dated mapping.
-        LocalDateTime transactionDate = LocalDateTime.ofInstant(finalizedAt, clock.getZone());
+        LocalDateTime transactionDate = zoneResolver.postingDateTime(finalizedAt);
         Accounts accounts = resolveAccounts(transactionDate);
 
         UUID journalEntryId = glPostingService.postInvoiceRevenue(
@@ -210,7 +211,7 @@ public class InvoiceRevenuePostingService {
 
         // The revert's business time: the mirror lands in the current open period (period gate
         // applies), never a restatement of the original posting period.
-        LocalDateTime transactionDate = LocalDateTime.ofInstant(occurredAt, clock.getZone());
+        LocalDateTime transactionDate = zoneResolver.postingDateTime(occurredAt);
         Accounts accounts = resolveAccounts(transactionDate);
 
         UUID reversalJournalEntryId = glPostingService.postInvoiceRevenueReversal(

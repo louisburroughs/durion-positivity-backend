@@ -79,4 +79,27 @@ public abstract class PostgresTenancyTestBase {
                         .orElseThrow()
                         .getGlAccountId());
     }
+
+    /**
+     * Gives {@code tenantId} the accounting time zone tenant provisioning seeds (#2558), without provisioning
+     * anything else: a tenant made up by a test has no row, and every dated read then fails closed. Idempotent.
+     */
+    protected static void seedAccountingTimeZone(UUID tenantId) {
+        new org.springframework.jdbc.core.JdbcTemplate(ownerDataSource())
+                .update(
+                        "INSERT INTO accounting_configuration (tenant_id, config_id, config_key, config_value,"
+                                + " created_at, created_by, modified_at, modified_by) VALUES (?, ?,"
+                                + " 'ACCOUNTING_TIME_ZONE', 'UTC', TIMESTAMPTZ '2026-10-06 00:00:00+00', 'test',"
+                                + " TIMESTAMPTZ '2026-10-06 00:00:00+00', 'test')"
+                                + " ON CONFLICT (tenant_id, config_key) DO NOTHING",
+                        tenantId,
+                        com.positivity.shared.id.UUIDv7Generator.generate());
+    }
+
+    /** A new tenant id with the provisioning seed of its accounting time zone. */
+    protected static UUID tenantWithZone() {
+        UUID tenantId = com.positivity.shared.id.UUIDv7Generator.generate();
+        seedAccountingTimeZone(tenantId);
+        return tenantId;
+    }
 }

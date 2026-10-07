@@ -294,11 +294,34 @@ Every posting date and every period boundary is cut in the **tenant's accounting
 `ACCOUNTING_TIME_ZONE` row of `accounting_configuration` (an IANA region id). The `Clock` bean stays UTC and
 the JVM zone is never read: `AccountingCalendarZoneResolver` is the only place an instant becomes a business
 date (period service `getPeriodIdForDate` / `getCurrentPeriodId`, the settlement listener, automatic
-application, the payment-application and customer-credit GL handlers, customer-credit draw-downs). An
-ArchUnit rule (`posting_dates_use_the_accounting_calendar_zone`) fails in those classes on anything that reads
-the clock's or the JVM's zone: `Clock.getZone()`, `Clock.systemDefaultZone()`, `ZoneId`/`ZoneOffset.systemDefault()`,
-`TimeZone.getDefault()`, and `now()` / `now(Clock)` on `LocalDate`, `LocalDateTime`, `LocalTime`, `YearMonth`,
-`Year`, `MonthDay`, `ZonedDateTime`, `OffsetDateTime` and `OffsetTime`.
+application, the payment-application and customer-credit GL handlers, customer-credit draw-downs, invoice
+revenue recognition and reversal, inventory adjustment / revaluation / shrinkage, register over/short, the
+ingestion-record dates of the invoice, inventory, order and warranty listeners, the vendor-bill duplicate-date
+compare and bill-number month, the default date of a journal-entry reversal, a credit-memo reversal or void, and
+an API-submitted event without a transaction date). An ArchUnit rule
+(`posting_dates_use_the_accounting_calendar_zone`) fails anywhere under `com.positivity.accounting` (the resolver
+excepted) on anything that reads the clock's or the JVM's zone: `Clock.getZone()`, `Clock.systemDefaultZone()`,
+`ZoneId`/`ZoneOffset.systemDefault()`, `TimeZone.getDefault()`, and `now()` / `now(Clock)` on `LocalDate`,
+`LocalDateTime`, `LocalTime`, `YearMonth`, `Year`, `MonthDay`, `ZonedDateTime`, `OffsetDateTime` and `OffsetTime`.
+Bank reconciliation dates follow the accounting calendar too (Accounting Domain ruling on #2558): the
+"statement end date must not be in the future" check, the close-readiness aging cap and outstanding-item aging
+all read today through the resolver (`BankRecCalendar` for the intake port, `ReconciliationSupport.today()`), and
+answer `422 ACCOUNTING_TIME_ZONE_UNSET` without a zone. Bank-import file retention stays intentionally UTC
+(retention, not accounting; the stamp and the purge use the same zone). The Kafka posting
+listeners treat an unset zone as they treat a closed period: the posting fails and the record is retried by the
+container (DLQ after the retries; Accounting Domain ruling on #2558); only the settled-payment path holds a row
+`SUSPENDED / ACCOUNTING_TIME_ZONE_UNSET`. Each failed attempt is logged with `reason=ACCOUNTING_TIME_ZONE_UNSET`
+and counted in `accounting.kafka.record.failed{reason,topic}`; a record sent to its `.dlq` is counted in
+`accounting.kafka.record.dead_lettered{reason,topic}` (every other failure is `reason=OTHER`).
+**Runbook:** set the tenant zone (`PUT /v1/accounting/configuration/time-zone`), then replay the DLQ records —
+never post manual journal entries. A replay is idempotent on the event id (`processed_events`): a failed record
+was never marked processed, and a second replay posts nothing.
+
+A tenant without the row cannot close a period or set a hard-lock date either (`422 ACCOUNTING_TIME_ZONE_UNSET`).
+GL account activation and deactivation stamps, the default-mapping validation instant, the bank-cash "active now"
+reads, the settlement reclass date fallback and the receivables worklist's "today" (days past due, as aged
+receivables and the walk-in business day) are all in the tenant's calendar, so they compare correctly with
+posting dates.
 
 - **Seed.** V10 gives every existing tenant `UTC` (what the UTC clock dated everything in, so nothing is
   re-cut); tenant provisioning (`DataInitializationServiceImpl`) gives every new tenant `UTC`. An

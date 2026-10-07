@@ -51,7 +51,7 @@ class RegisterOverShortPostingServiceTest {
     @BeforeEach
     void setUp() {
         service = new RegisterOverShortPostingService(
-                TEST_CLOCK,
+                com.positivity.accounting.internal.service.TestZoneResolvers.utc(TEST_CLOCK),
                 idempotencyService,
                 glMappingResolver,
                 glPostingService,
@@ -210,5 +210,39 @@ class RegisterOverShortPostingServiceTest {
                 fact(new BigDecimal("-10.00"), new BigDecimal("140.00"), new BigDecimal("150.00")), ENVELOPE_EVENT_ID);
 
         verify(ingestionRecorder, never()).recordCurrencyHeld(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("#2558: a fact at 2026-01-31T23:30-06:00 posts on 2026-01-31 in a Chicago calendar, clock in UTC")
+    void chicagoCalendar_lastEveningOfJanuaryPostsInJanuary() {
+        RegisterOverShortPostingService service2 = new RegisterOverShortPostingService(
+                TestZoneResolvers.fixed(TestZoneResolvers.CHICAGO, TEST_CLOCK),
+                idempotencyService,
+                glMappingResolver,
+                glPostingService,
+                new LedgerCurrency("USD"),
+                ingestionRecorder);
+        when(glMappingResolver.resolveGLAccount(anyString(), anyString(), eq(LocalDateTime.of(2026, 1, 31, 23, 30))))
+                .thenReturn(UUID.fromString("00000000-0000-0000-0000-000000002558"));
+        when(glPostingService.postRegisterOverShort(any(), any(), any(), any(), any(), any(), anyString(), any()))
+                .thenReturn(JOURNAL_ENTRY_ID);
+
+        service2.postOverShort(
+                TestZoneResolvers.movedTo(
+                        fact(new BigDecimal("-10.00"), new BigDecimal("140.00"), new BigDecimal("150.00")),
+                        CLOSED_AT,
+                        TestZoneResolvers.JAN_31_2330_CHICAGO),
+                ENVELOPE_EVENT_ID);
+
+        verify(glPostingService)
+                .postRegisterOverShort(
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        eq(LocalDateTime.of(2026, 1, 31, 23, 30)),
+                        anyString(),
+                        any());
     }
 }

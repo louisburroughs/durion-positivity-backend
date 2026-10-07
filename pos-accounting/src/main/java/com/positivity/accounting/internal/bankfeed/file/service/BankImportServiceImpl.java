@@ -57,6 +57,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -226,7 +227,9 @@ public class BankImportServiceImpl implements BankImportService {
         created.setSupersessionJustification(supersessionJustification);
         applyOptions(created, options, parsed);
         created.setCreatedBy(actor);
-        created.setRetentionUntil(LocalDate.now(clock).plusDays(retentionDays));
+        // Intentionally UTC (#2558 ruling): retention is not an accounting date; BankImportRetentionJob purges in UTC.
+        created.setRetentionUntil(
+                LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC).plusDays(retentionDays));
         created.setStatus(parsed.mappingResolved() ? BankImportStatus.VALIDATED : BankImportStatus.UPLOADED);
         created.setUpdatedAt(Instant.now(clock));
         BankImport saved;

@@ -110,7 +110,9 @@ class BankTransactionIntakeImplTest {
                 audit,
                 facts,
                 supersession,
-                CLOCK);
+                CLOCK,
+                new com.positivity.accounting.internal.bankrec.service.BankRecCalendar(
+                        com.positivity.accounting.internal.service.TestZoneResolvers.utc(CLOCK)));
         lenient()
                 .when(bankCashAccounts.requireForIntake(ACCOUNT))
                 .thenReturn(new BankCashAccount(ACCOUNT, "1000", "Cash"));

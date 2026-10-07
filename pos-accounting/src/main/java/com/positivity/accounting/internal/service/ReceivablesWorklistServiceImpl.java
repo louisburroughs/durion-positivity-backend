@@ -67,6 +67,7 @@ public class ReceivablesWorklistServiceImpl implements ReceivablesWorklistServic
     private final UnappliedPaymentSuggester suggester;
     private final LedgerCurrency ledgerCurrency;
     private final Clock clock;
+    private final AccountingCalendarZoneResolver zoneResolver;
 
     @Override
     @NonNull
@@ -164,7 +165,7 @@ public class ReceivablesWorklistServiceImpl implements ReceivablesWorklistServic
     @NonNull
     public CustomerOpenInvoicesPage listOpenInvoices(@NonNull UUID customerId, int page, int size) {
         Instant started = Instant.now(clock);
-        LocalDate today = LocalDate.now(clock);
+        LocalDate today = zoneResolver.today();
         List<ExtInvoice> candidates = extInvoiceRepository.findByPartyIdInAndStatusIn(
                 List.of(customerId.toString()), InvoiceBalanceCalculator.AR_ELIGIBLE_STATUSES);
         Map<UUID, BigDecimal> balances = invoiceBalanceCalculator.balancesDue(candidates);

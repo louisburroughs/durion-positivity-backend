@@ -62,6 +62,7 @@ public class SettlementReconciliationServiceImpl implements SettlementReconcilia
     static final String ADJUSTMENT_MAPPING_KEY = "SETTLEMENT_ADJUSTMENT";
 
     private final Clock clock;
+    private final AccountingCalendarZoneResolver zoneResolver;
     private final ProcessorSettlementRepository settlementRepository;
     private final ProcessorSettlementLineRepository lineRepository;
     private final ExtPaymentSettlementConfigRepository configRepository;
@@ -366,7 +367,7 @@ public class SettlementReconciliationServiceImpl implements SettlementReconcilia
         return settlementRepository
                 .findById(line.getSettlementId())
                 .map(s -> LocalDateTime.of(s.getSettlementDate(), LocalTime.MIDNIGHT))
-                .orElseGet(() -> LocalDateTime.now(clock));
+                .orElseGet(() -> zoneResolver.postingDateTime(clock.instant()));
     }
 
     private static UUID deterministicId(@NonNull String seed) {

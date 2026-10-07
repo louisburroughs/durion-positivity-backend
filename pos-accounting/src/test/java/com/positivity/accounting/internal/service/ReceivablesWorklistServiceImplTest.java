@@ -106,7 +106,8 @@ class ReceivablesWorklistServiceImplTest {
                 resolver,
                 new UnappliedPaymentSuggester(),
                 new LedgerCurrency("USD"),
-                Clock.fixed(NOW, ZoneOffset.UTC));
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                TestZoneResolvers.utc(Clock.fixed(NOW, ZoneOffset.UTC)));
     }
 
     private static ReceivablePayment payment(int n, UUID customer, String unapplied, Instant clearedAt) {

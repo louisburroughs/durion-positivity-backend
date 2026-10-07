@@ -103,9 +103,16 @@ class BankReconciliationServiceTest {
                 matchRepository,
                 itemRepository,
                 auditLogRepository,
-                new BankCashAccounts(glAccountRepository, clock),
+                new BankCashAccounts(
+                        glAccountRepository,
+                        clock,
+                        com.positivity.accounting.internal.service.TestZoneResolvers.utc(clock)),
                 calculator,
-                new ReconciliationSupport(reconciliationRepository, calculator, clock),
+                new ReconciliationSupport(
+                        reconciliationRepository,
+                        calculator,
+                        clock,
+                        com.positivity.accounting.internal.service.TestZoneResolvers.utc(clock)),
                 auditRecorder,
                 reviewService);
         lenient().when(calculator.compute(any())).thenReturn(snapshot(terms("0", "0")));

@@ -13,6 +13,7 @@ import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 import java.util.TimeZone;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -51,6 +52,24 @@ class AccountingCalendarZoneRuleTest {
         }
     }
 
+    static final class UsesTheJvmZoneClock {
+        Clock clock() {
+            return Clock.systemDefaultZone();
+        }
+    }
+
+    static final class ReadsTheJvmOffset {
+        ZoneId zone() {
+            return ZoneOffset.systemDefault();
+        }
+    }
+
+    static final class ReadsTheJvmZonedNow {
+        ZonedDateTime now() {
+            return ZonedDateTime.now();
+        }
+    }
+
     static final class StatesItsZone {
         LocalDate date(Instant instant) {
             return LocalDate.ofInstant(instant, ZoneOffset.UTC);
@@ -78,14 +97,18 @@ class AccountingCalendarZoneRuleTest {
     }
 
     @Test
-    @DisplayName("Clock.getZone(), ZoneId.systemDefault(), YearMonth.now(clock), LocalDateTime.now() and"
-            + " TimeZone.getDefault() violate; an explicit ZoneOffset.UTC and Instant.now(clock) do not")
+    @DisplayName("Clock.getZone(), ZoneId.systemDefault(), YearMonth.now(clock), LocalDateTime.now(),"
+            + " TimeZone.getDefault(), Clock.systemDefaultZone(), ZoneOffset.systemDefault() and ZonedDateTime.now()"
+            + " violate; an explicit ZoneOffset.UTC and Instant.now(clock) do not")
     void catchesGuessedZones() {
         assertThat(violates(ReadsTheClockZone.class)).isTrue();
         assertThat(violates(ReadsTheJvmZone.class)).isTrue();
         assertThat(violates(ReadsTheClockZoneImplicitly.class)).isTrue();
         assertThat(violates(ReadsTheJvmZoneImplicitly.class)).isTrue();
         assertThat(violates(ReadsTheJvmTimeZone.class)).isTrue();
+        assertThat(violates(UsesTheJvmZoneClock.class)).isTrue();
+        assertThat(violates(ReadsTheJvmOffset.class)).isTrue();
+        assertThat(violates(ReadsTheJvmZonedNow.class)).isTrue();
         assertThat(violates(StatesItsZone.class)).isFalse();
     }
 }

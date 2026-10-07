@@ -95,6 +95,10 @@ class AccountingPeriodServiceTest {
     void setUp() {
         now = TEST_CLOCK.instant();
         currentPeriod = YearMonth.now(TEST_CLOCK).toString();
+        // The calendar lock (#2558): the tenant's ACCOUNTING_TIME_ZONE row exists, as provisioning seeds it.
+        org.mockito.Mockito.lenient()
+                .when(configurationRepository.findWithLockByConfigKey(AccountingCalendarZoneResolver.CONFIG_KEY))
+                .thenReturn(Optional.of(new com.positivity.accounting.internal.entity.AccountingConfiguration()));
     }
 
     private static AccountingPeriod period(String code, AccountingPeriodStatus status) {
@@ -434,6 +438,17 @@ class AccountingPeriodServiceTest {
         org.mockito.InOrder order = org.mockito.Mockito.inOrder(configurationRepository, periodRepository);
         order.verify(configurationRepository).findWithLockByConfigKey(AccountingCalendarZoneResolver.CONFIG_KEY);
         order.verify(periodRepository).findWithLockByPeriodCode("2024-02");
+    }
+
+    @Test
+    @DisplayName("#2558: a close without an accounting time zone fails closed: no month is cut in no zone")
+    void closeWithoutAZoneFailsClosed() {
+        when(configurationRepository.findWithLockByConfigKey(AccountingCalendarZoneResolver.CONFIG_KEY))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.closePeriod("2024-01")).isInstanceOf(AccountingTimeZoneUnsetException.class);
+        verify(periodRepository, never()).findWithLockByPeriodCode(any());
+        verify(periodRepository, never()).save(any());
     }
 
     // ===== LIFECYCLE INPUT VALIDATION TESTS =====

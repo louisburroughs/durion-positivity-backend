@@ -90,6 +90,8 @@ public class WarrantyEventsListener {
     private final KafkaFactIngestionRecorder ingestionRecorder;
     private final Counter payloadRejectedCounter;
 
+    private final AccountingCalendarZoneResolver zoneResolver;
+
     /** The handler plus its processed mark, or a failure's mark alone, per transaction; see the class doc. */
     private final TransactionTemplate handlerTransaction;
 
@@ -100,7 +102,9 @@ public class WarrantyEventsListener {
             WarrantyReimbursementExpectationRepository expectationRepository,
             KafkaFactIngestionRecorder ingestionRecorder,
             ObjectProvider<MeterRegistry> meterRegistry,
-            PlatformTransactionManager transactionManager) {
+            PlatformTransactionManager transactionManager,
+            AccountingCalendarZoneResolver zoneResolver) {
+        this.zoneResolver = zoneResolver;
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
@@ -286,7 +290,7 @@ public class WarrantyEventsListener {
             Object fact,
             FactPostingOutcome outcome) {
         LocalDateTime transactionDate =
-                LocalDateTime.ofInstant(businessTime == null ? Instant.now(clock) : businessTime, clock.getZone());
+                zoneResolver.heldRecordDateTime(businessTime == null ? Instant.now(clock) : businessTime);
         try {
             ingestionRecorder.record(
                     SOURCE_SYSTEM, eventType, eventId, reimbursementId, transactionDate, fact, outcome);

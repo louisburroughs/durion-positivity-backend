@@ -35,6 +35,9 @@ class GLPostingSettlementTest {
     @Spy
     private Clock clock = TEST_CLOCK;
 
+    @Spy
+    AccountingCalendarZoneResolver zoneResolver = TestZoneResolvers.utc(TEST_CLOCK);
+
     @Mock
     private JournalEntryServiceImpl journalEntryService;
 
