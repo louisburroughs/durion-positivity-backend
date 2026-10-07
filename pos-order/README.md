@@ -161,7 +161,7 @@ pos-order reconciles `order.events.v1` the way every other fact owner does:
   `order.manifest.v1` (eventType `order.reconciliation.manifest`): the count, checksum and per-type counts of the
   `order.events.v1` facts that tenant published from `event_outbox` in the window, by eventId (UUIDv7)
   timestamp. Every fact type is counted (sales order, return, purchase order, register session); the
-  `supplier.commands.v1` requests queued on the same outbox are not facts and are not. Every active tenant
+  `supplier.commands.v1` requests queued on the same outbox are not facts and are not counted. Every active tenant
   gets a manifest each window, zero-count when it published nothing. The job is `@PlatformScoped` (it reads the
   global outbox) and sends directly, not through the outbox; a failed window is retried next poll.
 - **Replay.** A consumer whose processed-events log disagrees with a window sends
