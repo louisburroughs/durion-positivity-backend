@@ -767,7 +767,7 @@ class SecurityGatewayConfigTest {
     @Test
     void unknownPermVer_returns401() {
         String permBits = encodePermBits(116);
-        String token = buildToken("alice", "u1", permBits, 99);
+        String token = buildToken("alice", "u1", permBits, 999);
 
         GlobalFilter filter = new SecurityGatewayConfig(
                         TEST_SECRET,

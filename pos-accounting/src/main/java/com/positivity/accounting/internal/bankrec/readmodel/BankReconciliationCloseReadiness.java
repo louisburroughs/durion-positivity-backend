@@ -41,16 +41,13 @@ import com.positivity.accounting.internal.bankrec.service.ReconciliationChain;
 import com.positivity.accounting.internal.bankrec.service.ReconciliationLedger;
 import com.positivity.accounting.internal.dto.BankReconciliationExceptionRequest;
 import com.positivity.accounting.internal.entity.AccountingPeriod;
-import com.positivity.accounting.internal.entity.GLMapping;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.exception.PeriodBankReconciliationIncompleteException;
 import com.positivity.accounting.internal.exception.PeriodBankReconciliationIncompleteException.UnreconciledAccount;
 import com.positivity.accounting.internal.exception.PeriodCloseExceptionNotPermittedException;
-import com.positivity.accounting.internal.repository.GLMappingRepository;
-import com.positivity.accounting.internal.repository.MappingKeyRepository;
-import com.positivity.accounting.internal.repository.PostingCategoryRepository;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.AccountingCalendarZoneResolver;
+import com.positivity.accounting.internal.service.OpeningBalanceEquityAccount;
 import com.positivity.security.common.SecurityContextHelper;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -108,11 +105,6 @@ public class BankReconciliationCloseReadiness {
     /** The longest exception justification the audit row keeps (the request's documented maximum). */
     static final int MAX_JUSTIFICATION = 1000;
 
-    /** Where the go-live float's counter side posts (#2511): resolved, never a hard-coded account. */
-    static final String OPENING_BALANCE_EQUITY_CATEGORY = "REGISTER_FLOAT";
-
-    static final String OPENING_BALANCE_EQUITY_KEY = "OPENING_BALANCE_EQUITY";
-
     private static final JsonMapper SNAPSHOT_MAPPER = JsonMapper.builder().build();
 
     private static final List<ReconciliationStatus> IN_FLIGHT =
@@ -134,9 +126,7 @@ public class BankReconciliationCloseReadiness {
     private final ReconciliationLedger ledger;
     private final LedgerEntries ledgerEntries;
     private final ObjectProvider<IncompleteImportLookup> importLookups;
-    private final PostingCategoryRepository postingCategories;
-    private final MappingKeyRepository mappingKeys;
-    private final GLMappingRepository glMappings;
+    private final OpeningBalanceEquityAccount openingBalanceEquityAccount;
 
     /**
      * The close decision: whether readiness held, and whether an exception was granted to close anyway.
@@ -681,19 +671,7 @@ public class BankReconciliationCloseReadiness {
      * accountant clears them into owner's equity. Never blocks; not evaluated while the mapping is missing.
      */
     private Optional<CloseReadinessCheck> openingBalanceEquity(LocalDate end) {
-        // Looked up without the resolver: a missing mapping is not an error here, and an exception crossing a
-        // transactional bean would mark the caller's transaction (a period close) rollback-only.
-        Optional<UUID> resolved = postingCategories
-                .findByCategoryName(OPENING_BALANCE_EQUITY_CATEGORY)
-                .flatMap(category -> mappingKeys.findByPostingCategory_PostingCategoryIdAndKeyName(
-                        category.getPostingCategoryId(), OPENING_BALANCE_EQUITY_KEY))
-                .flatMap(key -> glMappings
-                        .findAllEffectiveMappings(key.getPostingCategoryId(), key.getMappingKeyId(), end.atStartOfDay())
-                        .stream()
-                        .filter(m ->
-                                m.getDimensions() == null || m.getDimensions().isEmpty())
-                        .findFirst())
-                .map(GLMapping::getGlAccountId);
+        Optional<UUID> resolved = openingBalanceEquityAccount.on(end);
         if (resolved.isEmpty()) {
             return Optional.empty();
         }

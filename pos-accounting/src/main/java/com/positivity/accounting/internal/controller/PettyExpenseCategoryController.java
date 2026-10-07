@@ -13,6 +13,7 @@ import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -130,7 +131,19 @@ public class PettyExpenseCategoryController {
             description = "PETTY_EXPENSE_CATEGORY_NOT_ALLOWED or PETTY_EXPENSE_ACCOUNT_NOT_ELIGIBLE",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_PETTY_EXPENSE_CATEGORY_CREATE", apiVersion = "1")
-    public ResponseEntity<PettyExpenseCategoryResponse> create(@RequestBody PettyExpenseCategoryCreateRequest request) {
+    public ResponseEntity<PettyExpenseCategoryResponse> create(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            required = true,
+                            description = "The new category's code, label, account and why",
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema = @Schema(implementation = PettyExpenseCategoryCreateRequest.class),
+                                            examples = @ExampleObject(name = "Tire disposal", value = """
+                                                    {"code":"TIRE_DISPOSAL","label":"Tire disposal","examples":"Scrap tire hauler fees","glAccountId":"019a0000-0000-7000-8000-00000000c000","justification":"Cashiers pay the scrap hauler","requestId":"019a0000-0000-7000-8000-000000000103"}
+                                                    """)))
+                    @RequestBody
+                    PettyExpenseCategoryCreateRequest request) {
         PettyExpenseCategoryResponse response = service.create(request);
         return ResponseEntity.status(response.replayed() ? HttpStatus.OK : HttpStatus.CREATED)
                 .body(response);
@@ -178,7 +191,18 @@ public class PettyExpenseCategoryController {
     @EmitEvent(id = "ACCOUNTING_PETTY_EXPENSE_CATEGORY_UPDATE", apiVersion = "1")
     public ResponseEntity<PettyExpenseCategoryResponse> update(
             @Parameter(description = "Permanent category code", example = "STAFF_MEALS") @PathVariable String code,
-            @RequestBody PettyExpenseCategoryUpdateRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            required = true,
+                            description = "The new label and examples, and why",
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema = @Schema(implementation = PettyExpenseCategoryUpdateRequest.class),
+                                            examples = @ExampleObject(name = "Clearer label", value = """
+                                                    {"label":"Staff meals and coffee","version":0,"justification":"Cashiers asked for a clearer label","requestId":"019a0000-0000-7000-8000-000000000104"}
+                                                    """)))
+                    @RequestBody
+                    PettyExpenseCategoryUpdateRequest request) {
         return ResponseEntity.ok(service.update(code, request));
     }
 
@@ -221,7 +245,21 @@ public class PettyExpenseCategoryController {
     @EmitEvent(id = "ACCOUNTING_PETTY_EXPENSE_CATEGORY_DEACTIVATE", apiVersion = "1")
     public ResponseEntity<PettyExpenseCategoryResponse> deactivate(
             @Parameter(description = "Permanent category code", example = "STAFF_MEALS") @PathVariable String code,
-            @RequestBody PettyExpenseCategoryDeactivateRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            required = true,
+                            description = "Why the category is retired",
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema =
+                                                    @Schema(
+                                                            implementation =
+                                                                    PettyExpenseCategoryDeactivateRequest.class),
+                                            examples = @ExampleObject(name = "Retire fuel", value = """
+                                                    {"justification":"We stopped buying fuel in cash","requestId":"019a0000-0000-7000-8000-000000000105"}
+                                                    """)))
+                    @RequestBody
+                    PettyExpenseCategoryDeactivateRequest request) {
         return ResponseEntity.ok(service.deactivate(code, request));
     }
 
@@ -270,7 +308,18 @@ public class PettyExpenseCategoryController {
     @EmitEvent(id = "ACCOUNTING_PETTY_EXPENSE_CATEGORY_REMAP", apiVersion = "1")
     public ResponseEntity<PettyExpenseCategoryResponse> remap(
             @Parameter(description = "Permanent category code", example = "SHOP_SUPPLIES") @PathVariable String code,
-            @RequestBody PettyExpenseCategoryRemapRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            required = true,
+                            description = "The new account, the date it applies from, and why",
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema = @Schema(implementation = PettyExpenseCategoryRemapRequest.class),
+                                            examples = @ExampleObject(name = "Own account from November", value = """
+                                                    {"glAccountId":"019a0000-0000-7000-8000-00000000c000","effectiveFrom":"2026-11-01","justification":"Supplies get their own account from November","requestId":"019a0000-0000-7000-8000-000000000106"}
+                                                    """)))
+                    @RequestBody
+                    PettyExpenseCategoryRemapRequest request) {
         return ResponseEntity.ok(service.remap(code, request));
     }
 }

@@ -14,6 +14,8 @@ tags:
   name: Posting Rules
 - description: Read-only cross-invoice collections and payment-lag analytics (Wave 2)
   name: Accounting Analytics
+- description: What drawer cash may be spent on, and where it posts
+  name: Accounting Petty-Expense Categories
 - description: Manage credit memos for AR corrections
   name: Credit Memos
 - description: Endpoints for creating and resolving GL mappings
@@ -22,6 +24,8 @@ tags:
   name: Journal Entries
 - description: General ledger reconciliation
   name: Accounting GL
+- description: The change float kept in each register's drawer
+  name: Accounting Register Float
 - description: Period-close-aligned freeze of the Sales-Tax Liability report
   name: Financial Reporting for Tax Liability
 - description: 'Processor settlement reconciliation review: list settlement lines, manually match an unmatched line to a receivable payment, and write off small unmatched lines.'
@@ -6917,6 +6921,338 @@ paths:
       - Accounting Periods
       x-required-permissions:
       - accounting:period:reopen
+  /v1/accounting/petty-expense-categories:
+    get:
+      description: 'Lists the tenant''s petty-expense categories, active and inactive, in code order: per category its permanent code, label, examples, status, the expense account it posts to today (id, number, name, effective from), any account that takes over on a later date, and the change history (date, actor, change old to new, justification).
+
+        Use this tool to show what cashiers may spend drawer cash on and where each category posts; do not use listMappingKeysByCategory, which shows keys without their labels, accounts or history.
+
+        Preconditions: caller holds accounting:mapping-key:view; the tenant''s accounting time zone is set (422 ACCOUNTING_TIME_ZONE_UNSET otherwise). Read-only and idempotent.
+
+        Required inputs: none.
+
+        Emits an ACCOUNTING_PETTY_EXPENSE_CATEGORY_LIST event and returns 200 with the categories.
+
+        '
+      operationId: listPettyExpenseCategories
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PettyExpenseCategoryListResponse'
+          description: The categories
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:mapping-key:view
+      security:
+      - bearerAuth:
+        - accounting:mapping-key:view
+      summary: List Petty-Expense Categories
+      tags:
+      - Accounting Petty-Expense Categories
+      x-required-permissions:
+      - accounting:mapping-key:view
+    post:
+      description: 'Adds a petty-expense category: its REGISTER_CASH_MOVEMENT mapping key PETTY_EXPENSE_<code> and a GL mapping to the chosen expense account, effective today in the tenant''s accounting time zone.
+
+        Use this tool when cashiers need a new category of drawer spending; do not use createMappingKey or createGLMapping, which refuse petty-expense keys (422 PETTY_EXPENSE_CATEGORY_MANAGED).
+
+        Preconditions: caller holds accounting:mapping-key:create and accounting:gl-mapping:create; the code is new (409 PETTY_EXPENSE_CATEGORY_EXISTS) and is not OTHER (422 PETTY_EXPENSE_CATEGORY_NOT_ALLOWED: there is no "Other"); glAccountId is an active EXPENSE account (422 PETTY_EXPENSE_ACCOUNT_NOT_ELIGIBLE).
+
+        Required inputs: code (permanent, [A-Z0-9_]{1,40}), label, glAccountId, justification (at least 10 characters) and requestId (a replay returns the first result with 200; the same requestId with another body is 409 IDEMPOTENCY_CONFLICT); examples is optional.
+
+        Emits an ACCOUNTING_PETTY_EXPENSE_CATEGORY_CREATE event, writes a history row naming the caller, queues accounting.petty-expense-category.changed, and returns 201 with the category.
+
+        '
+      operationId: createPettyExpenseCategory
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Tire disposal:
+                description: Tire disposal
+                value:
+                  code: TIRE_DISPOSAL
+                  examples: Scrap tire hauler fees
+                  glAccountId: 019a0000-0000-7000-8000-00000000c000
+                  justification: Cashiers pay the scrap hauler
+                  label: Tire disposal
+                  requestId: 019a0000-0000-7000-8000-000000000103
+            schema:
+              $ref: '#/components/schemas/PettyExpenseCategoryCreateRequest'
+        description: The new category's code, label, account and why
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PettyExpenseCategoryResponse'
+          description: A replayed requestId
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PettyExpenseCategoryResponse'
+          description: The category was created
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Missing or invalid field (VALIDATION_ERROR)
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:mapping-key:create or accounting:gl-mapping:create
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: PETTY_EXPENSE_CATEGORY_EXISTS or IDEMPOTENCY_CONFLICT
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: PETTY_EXPENSE_CATEGORY_NOT_ALLOWED or PETTY_EXPENSE_ACCOUNT_NOT_ELIGIBLE
+      security:
+      - bearerAuth:
+        - accounting:mapping-key:create
+        - accounting:gl-mapping:create
+      summary: Create Petty-Expense Category
+      tags:
+      - Accounting Petty-Expense Categories
+      x-required-permissions:
+      - accounting:mapping-key:create
+      - accounting:gl-mapping:create
+  /v1/accounting/petty-expense-categories/{code}:
+    put:
+      description: 'Changes a petty-expense category''s label and examples; the code never changes, and the mapping key''s description follows the label.
+
+        Use this tool to make a category clearer to cashiers; do not use updateMappingKey, which refuses petty-expense keys (422 PETTY_EXPENSE_CATEGORY_MANAGED) and would rename the key.
+
+        Preconditions: caller holds accounting:mapping-key:edit; the category exists (404); a version, when sent, is the current one (409 VERSION_CONFLICT).
+
+        Required inputs: code (path), label, justification (at least 10 characters) and requestId (a replay returns the first result with 200; the same requestId with another body is 409 IDEMPOTENCY_CONFLICT); examples and version are optional.
+
+        Emits an ACCOUNTING_PETTY_EXPENSE_CATEGORY_UPDATE event, writes a history row naming the caller, queues accounting.petty-expense-category.changed, and returns 200 with the category.
+
+        '
+      operationId: updatePettyExpenseCategory
+      parameters:
+      - description: Permanent category code
+        example: STAFF_MEALS
+        in: path
+        name: code
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Clearer label:
+                description: Clearer label
+                value:
+                  justification: Cashiers asked for a clearer label
+                  label: Staff meals and coffee
+                  requestId: 019a0000-0000-7000-8000-000000000104
+                  version: 0
+            schema:
+              $ref: '#/components/schemas/PettyExpenseCategoryUpdateRequest'
+        description: The new label and examples, and why
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PettyExpenseCategoryResponse'
+          description: The category was relabelled, or a replayed requestId
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Missing or invalid field (VALIDATION_ERROR)
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:mapping-key:edit
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No such category (PETTY_EXPENSE_CATEGORY_NOT_FOUND)
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: VERSION_CONFLICT or IDEMPOTENCY_CONFLICT
+      security:
+      - bearerAuth:
+        - accounting:mapping-key:edit
+      summary: Relabel Petty-Expense Category
+      tags:
+      - Accounting Petty-Expense Categories
+      x-required-permissions:
+      - accounting:mapping-key:edit
+  /v1/accounting/petty-expense-categories/{code}/account:
+    post:
+      description: 'Moves a petty-expense category to another expense account from a date: the current mapping ends the day before effectiveFrom and the new one starts on it, so a posting dated earlier still reaches the old account.
+
+        Use this tool when a category should post somewhere else from now on; do not use createGLMapping, which cannot bind a mapping to a category and key.
+
+        Preconditions: caller holds accounting:gl-mapping:create; the category exists (404); no mapping of the category starts on or after effectiveFrom (400 PETTY_EXPENSE_MAPPING_OVERLAP, the non-overlap rule); glAccountId is an active EXPENSE account (422 PETTY_EXPENSE_ACCOUNT_NOT_ELIGIBLE).
+
+        Required inputs: code (path), glAccountId, effectiveFrom, justification (at least 10 characters) and requestId (a replay returns the first result with 200; the same requestId with another body is 409 IDEMPOTENCY_CONFLICT).
+
+        Emits an ACCOUNTING_PETTY_EXPENSE_CATEGORY_REMAP event, writes a history row naming the caller, queues accounting.petty-expense-category.changed, and returns 200 with the category.
+
+        '
+      operationId: remapPettyExpenseCategory
+      parameters:
+      - description: Permanent category code
+        example: SHOP_SUPPLIES
+        in: path
+        name: code
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Own account from November:
+                description: Own account from November
+                value:
+                  effectiveFrom: '2026-11-01'
+                  glAccountId: 019a0000-0000-7000-8000-00000000c000
+                  justification: Supplies get their own account from November
+                  requestId: 019a0000-0000-7000-8000-000000000106
+            schema:
+              $ref: '#/components/schemas/PettyExpenseCategoryRemapRequest'
+        description: The new account, the date it applies from, and why
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PettyExpenseCategoryResponse'
+          description: The new account is mapped, or a replayed requestId
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: VALIDATION_ERROR or PETTY_EXPENSE_MAPPING_OVERLAP
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:gl-mapping:create
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No such category (PETTY_EXPENSE_CATEGORY_NOT_FOUND)
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: PETTY_EXPENSE_ACCOUNT_NOT_ELIGIBLE
+      security:
+      - bearerAuth:
+        - accounting:gl-mapping:create
+      summary: Change Petty-Expense Category Account
+      tags:
+      - Accounting Petty-Expense Categories
+      x-required-permissions:
+      - accounting:gl-mapping:create
+  /v1/accounting/petty-expense-categories/{code}/deactivate:
+    post:
+      description: 'Deactivates a petty-expense category so cashiers can no longer pick it. Its mapping is kept, so movements recorded before deactivation still post at close (never retroactive). There is no delete and no reactivation.
+
+        Use this tool to retire a category; do not use deactivateMappingKey, which refuses petty-expense keys (422 PETTY_EXPENSE_CATEGORY_MANAGED).
+
+        Preconditions: caller holds accounting:mapping-key:deactivate; the category exists (404) and is active (409 PETTY_EXPENSE_CATEGORY_INACTIVE).
+
+        Required inputs: code (path), justification (at least 10 characters) and requestId (a replay returns the first result with 200; the same requestId with another body is 409 IDEMPOTENCY_CONFLICT).
+
+        Emits an ACCOUNTING_PETTY_EXPENSE_CATEGORY_DEACTIVATE event, writes a history row naming the caller, queues accounting.petty-expense-category.changed, and returns 200 with the category.
+
+        '
+      operationId: deactivatePettyExpenseCategory
+      parameters:
+      - description: Permanent category code
+        example: STAFF_MEALS
+        in: path
+        name: code
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Retire fuel:
+                description: Retire fuel
+                value:
+                  justification: We stopped buying fuel in cash
+                  requestId: 019a0000-0000-7000-8000-000000000105
+            schema:
+              $ref: '#/components/schemas/PettyExpenseCategoryDeactivateRequest'
+        description: Why the category is retired
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PettyExpenseCategoryResponse'
+          description: The category is inactive, or a replayed requestId
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:mapping-key:deactivate
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No such category (PETTY_EXPENSE_CATEGORY_NOT_FOUND)
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: PETTY_EXPENSE_CATEGORY_INACTIVE or IDEMPOTENCY_CONFLICT
+      security:
+      - bearerAuth:
+        - accounting:mapping-key:deactivate
+      summary: Deactivate Petty-Expense Category
+      tags:
+      - Accounting Petty-Expense Categories
+      x-required-permissions:
+      - accounting:mapping-key:deactivate
   /v1/accounting/posting-categories:
     get:
       description: 'Lists posting categories as a paginated projection, optionally filtered by active flag.
@@ -9582,6 +9918,173 @@ paths:
       - Bank Reconciliation
       x-required-permissions:
       - accounting:reconciliation:approve
+  /v1/accounting/registers/{registerId}/float:
+    post:
+      description: 'Sets a register''s change float to a new amount. The difference posts against the chosen bank account: an increase Dr 1080 Register Float / Cr bank, a decrease Dr bank / Cr 1080. A register with no float yet starts at zero, so a register added after go-live is funded from the bank.
+
+        Use this tool when the shop decides a drawer should hold more or less change; do not use establishGoLiveRegisterFloat, which is once per register against opening balance equity, and do not use a drawer cash movement, which is not a float.
+
+        Preconditions: caller holds accounting:float:manage; bankGlAccountId is an active BANK_CASH account in functional currency (422 FLOAT_BANK_ACCOUNT_NOT_ELIGIBLE); the new amount differs from the current one (422 FLOAT_AMOUNT_UNCHANGED); the effective date passes the period gate (a CLOSED period needs accounting:period:override and overrideJustification). Idempotent on requestId: a replay returns the first result with 200, another body with the same requestId is 409 IDEMPOTENCY_CONFLICT.
+
+        Required inputs: registerId (path), locationId, amount (zero or more), bankGlAccountId, justification (at least 10 characters), requestId; effectiveDate defaults to today in the tenant''s accounting time zone.
+
+        Emits an ACCOUNTING_REGISTER_FLOAT_CHANGE event, queues accounting.float.changed, writes an audit row naming the caller, and returns 201 with the previous and new amount and the journal entry id and number.
+
+        '
+      operationId: changeRegisterFloat
+      parameters:
+      - description: 'The register: pos-order''s terminalId'
+        example: T-1
+        in: path
+        name: registerId
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              More change for drawer 1:
+                description: More change for drawer 1
+                value:
+                  amount: 300.0
+                  bankGlAccountId: 019a0000-0000-7000-8000-00000000b000
+                  effectiveDate: '2026-10-15'
+                  justification: More change needed for the weekend rush
+                  locationId: 019a0000-0000-7000-8000-00000000a001
+                  requestId: 019a0000-0000-7000-8000-000000000102
+            schema:
+              $ref: '#/components/schemas/RegisterFloatChangeRequest'
+        description: The new float, the bank account and why
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterFloatResponse'
+          description: 'A replayed requestId: the first result'
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterFloatResponse'
+          description: The change was posted
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Missing or invalid field (VALIDATION_ERROR)
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:float:manage
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: IDEMPOTENCY_CONFLICT
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: FLOAT_AMOUNT_UNCHANGED, FLOAT_BANK_ACCOUNT_NOT_ELIGIBLE, PERIOD_CLOSED, PERIOD_HARD_LOCKED, ACCOUNTING_TIME_ZONE_UNSET or GL_MAPPING_NOT_CONFIGURED
+      security:
+      - bearerAuth:
+        - accounting:float:manage
+      summary: Change Register Float
+      tags:
+      - Accounting Register Float
+      x-required-permissions:
+      - accounting:float:manage
+  /v1/accounting/registers/{registerId}/float/go-live:
+    post:
+      description: 'Puts a register''s change float on the books at go-live: posts Dr 1080 Register Float / Cr 3900 Opening Balance Equity for the amount, dated the go-live date, the 1080 line carrying the register and its location.
+
+        Use this tool once per register, when the shop starts using the system with cash already in the drawer; do not use changeRegisterFloat, which moves the difference to or from a bank account, and do not use createJournalEntry, which records no float.
+
+        Preconditions: caller holds accounting:float:manage; the go-live date falls in an OPEN period, with no override path (422 PERIOD_CLOSED or PERIOD_HARD_LOCKED otherwise); the register has no standing go-live and no standing float change (409 FLOAT_ALREADY_ESTABLISHED; correct a mistake by reversing the entry and running go-live again). Idempotent on requestId: a replay returns the first result with 200, another body with the same requestId is 409 IDEMPOTENCY_CONFLICT.
+
+        Required inputs: registerId (path, pos-order''s terminalId), locationId, amount (more than zero, functional currency), goLiveDate, justification (at least 10 characters), requestId.
+
+        Emits an ACCOUNTING_REGISTER_FLOAT_GO_LIVE event, queues accounting.float.changed, writes an audit row naming the caller, and returns 201 with the previous and new amount and the journal entry id and number.
+
+        '
+      operationId: establishGoLiveRegisterFloat
+      parameters:
+      - description: 'The register: pos-order''s terminalId'
+        example: T-1
+        in: path
+        name: registerId
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Drawer 1 at go-live:
+                description: Drawer 1 at go-live
+                value:
+                  amount: 200.0
+                  goLiveDate: '2026-10-01'
+                  justification: Counted float in drawer 1 at go-live
+                  locationId: 019a0000-0000-7000-8000-00000000a001
+                  requestId: 019a0000-0000-7000-8000-000000000101
+            schema:
+              $ref: '#/components/schemas/RegisterFloatGoLiveRequest'
+        description: The go-live float and why
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterFloatResponse'
+          description: 'A replayed requestId: the first result'
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterFloatResponse'
+          description: The go-live float was posted
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Missing or invalid field (VALIDATION_ERROR)
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:float:manage
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: FLOAT_ALREADY_ESTABLISHED or IDEMPOTENCY_CONFLICT
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: PERIOD_CLOSED, PERIOD_HARD_LOCKED, or GL_MAPPING_NOT_CONFIGURED
+      security:
+      - bearerAuth:
+        - accounting:float:manage
+      summary: Establish Go-Live Register Float
+      tags:
+      - Accounting Register Float
+      x-required-permissions:
+      - accounting:float:manage
   /v1/accounting/reports/export:
     get:
       description: 'Lists all asynchronous report export jobs as a paginated projection, most recent first.
@@ -15134,6 +15637,7 @@ components:
           - INCOMPLETE_IMPORTS
           - OUTSTANDING_ITEMS_AGING
           - CLEARING_BALANCE_AGING
+          - OPENING_BALANCE_EQUITY_NOT_CLEARED
           - LATE_BANK_TRANSACTIONS
           - RECONCILED_AFTER_CLOSE
           example: RECONCILIATION_IN_FLIGHT
@@ -16511,6 +17015,7 @@ components:
           - COST_OF_SALES
           - OPERATING_EXPENSE
           - OTHER
+          - CASH_ON_HAND
           example: UNDEPOSITED_FUNDS
           type: string
         accountType:
@@ -16609,6 +17114,7 @@ components:
           - COST_OF_SALES
           - OPERATING_EXPENSE
           - OTHER
+          - CASH_ON_HAND
           example: UNDEPOSITED_FUNDS
           type: string
         accountType:
@@ -16708,6 +17214,7 @@ components:
           - COST_OF_SALES
           - OPERATING_EXPENSE
           - OTHER
+          - CASH_ON_HAND
           example: BANK_CASH
           type: string
         description:
@@ -19039,6 +19546,217 @@ components:
         bankReconciliationException:
           $ref: '#/components/schemas/BankReconciliationExceptionRequest'
       type: object
+    PettyExpenseCategoryAccount:
+      description: An expense account of a petty-expense category
+      properties:
+        accountCode:
+          description: Account number
+          example: '6295'
+          type: string
+        accountName:
+          description: Account name
+          example: Staff Meals & Refreshments
+          type: string
+        effectiveFrom:
+          description: First day the account applies
+          format: date
+          type: string
+        glAccountId:
+          description: GL account id
+          format: uuid
+          type: string
+      type: object
+    PettyExpenseCategoryCreateRequest:
+      description: 'A new petty-expense category: a permanent code, the cashier''s label and the expense account'
+      properties:
+        code:
+          description: Permanent code, upper case letters, digits and underscores; never OTHER
+          example: TIRE_DISPOSAL
+          pattern: ^[A-Z0-9_]{1,40}$
+          type: string
+        examples:
+          description: What belongs in the category
+          example: Disposal fees for scrap tires
+          maxLength: 500
+          type: string
+        glAccountId:
+          description: An active EXPENSE account the category posts to
+          format: uuid
+          type: string
+        justification:
+          description: Why the category is added (at least 10 characters); kept in its history
+          example: Cashiers pay the scrap hauler from the drawer
+          maxLength: 1000
+          minLength: 10
+          type: string
+        label:
+          description: The label the cashier sees
+          example: Tire disposal
+          maxLength: 100
+          type: string
+        requestId:
+          description: Caller-generated UUIDv7 naming this request; a replay returns the first result
+          format: uuid
+          type: string
+      required:
+      - code
+      - glAccountId
+      - justification
+      - label
+      - requestId
+      type: object
+    PettyExpenseCategoryDeactivateRequest:
+      description: Why a petty-expense category is deactivated
+      properties:
+        justification:
+          description: Why (at least 10 characters); kept in its history
+          example: Folded into shop supplies
+          maxLength: 1000
+          minLength: 10
+          type: string
+        requestId:
+          description: Caller-generated UUIDv7 naming this request; a replay returns the first result
+          format: uuid
+          type: string
+      required:
+      - justification
+      - requestId
+      type: object
+    PettyExpenseCategoryHistoryItem:
+      description: One change of a petty-expense category
+      properties:
+        actor:
+          description: Who made it (from the security context)
+          type: string
+        changeType:
+          description: What changed
+          enum:
+          - CREATE
+          - RELABEL
+          - DEACTIVATE
+          - REMAP
+          type: string
+        changedAt:
+          description: When the change was made
+          format: date-time
+          type: string
+        justification:
+          description: Why
+          type: string
+        newValue:
+          description: The value after
+          type: string
+        oldValue:
+          description: The value before
+          type: string
+      type: object
+    PettyExpenseCategoryListResponse:
+      description: The tenant's petty-expense categories
+      properties:
+        categories:
+          description: Every category, active and inactive, in code order
+          items:
+            $ref: '#/components/schemas/PettyExpenseCategoryResponse'
+          type: array
+      type: object
+    PettyExpenseCategoryRemapRequest:
+      description: A petty-expense category's new account and the date it takes effect
+      properties:
+        effectiveFrom:
+          description: The first day the new account applies; the current mapping ends the day before
+          example: '2026-11-01'
+          format: date
+          type: string
+        glAccountId:
+          description: An active EXPENSE account
+          format: uuid
+          type: string
+        justification:
+          description: Why the account changes (at least 10 characters); kept in its history
+          example: Supplies get their own account from November
+          maxLength: 1000
+          minLength: 10
+          type: string
+        requestId:
+          description: Caller-generated UUIDv7 naming this request; a replay returns the first result
+          format: uuid
+          type: string
+      required:
+      - effectiveFrom
+      - glAccountId
+      - justification
+      - requestId
+      type: object
+    PettyExpenseCategoryResponse:
+      description: A petty-expense category with its accounts and history
+      properties:
+        code:
+          description: Permanent code
+          example: STAFF_MEALS
+          type: string
+        currentAccount:
+          $ref: '#/components/schemas/PettyExpenseCategoryAccount'
+        examples:
+          description: What belongs in the category
+          type: string
+        history:
+          description: Every change, oldest first
+          items:
+            $ref: '#/components/schemas/PettyExpenseCategoryHistoryItem'
+          type: array
+        label:
+          description: The label the cashier sees
+          example: Staff meals
+          type: string
+        laterAccount:
+          $ref: '#/components/schemas/PettyExpenseCategoryAccount'
+        replayed:
+          description: True when this answers a replayed requestId
+          type: boolean
+        status:
+          description: ACTIVE or INACTIVE (terminal)
+          enum:
+          - ACTIVE
+          - INACTIVE
+          type: string
+        version:
+          description: The category's version, for an update's optimistic check
+          example: 0
+          format: int32
+          type: integer
+      type: object
+    PettyExpenseCategoryUpdateRequest:
+      description: A petty-expense category's new label and examples
+      properties:
+        examples:
+          description: What belongs in the category
+          maxLength: 500
+          type: string
+        justification:
+          description: Why the label changes (at least 10 characters); kept in its history
+          example: Cashiers asked for a clearer label
+          maxLength: 1000
+          minLength: 10
+          type: string
+        label:
+          description: The label the cashier sees
+          example: Staff meals and coffee
+          maxLength: 100
+          type: string
+        requestId:
+          description: Caller-generated UUIDv7 naming this request; a replay returns the first result
+          format: uuid
+          type: string
+        version:
+          description: The category version the caller read; another version is 409 VERSION_CONFLICT
+          example: 0
+          format: int32
+          type: integer
+      required:
+      - justification
+      - label
+      - requestId
+      type: object
     Posting:
       description: An adjustment posting (the entry's or its reversal's cash line)
       properties:
@@ -20121,6 +20839,136 @@ components:
       required:
       - workorderId
       type: object
+    RegisterFloatChangeRequest:
+      description: Set a register's change float to a new amount, the difference moving to or from a bank account
+      properties:
+        amount:
+          description: The register's new float, in functional currency; zero or more
+          example: 300.0
+          type: number
+        bankGlAccountId:
+          description: The active BANK_CASH account in functional currency the difference moves to or from
+          example: 019a0000-0000-7000-8000-00000000b000
+          format: uuid
+          type: string
+        effectiveDate:
+          description: The date the change is posted on; today in the tenant's accounting time zone when omitted
+          example: '2026-10-15'
+          format: date
+          type: string
+        justification:
+          description: Why the float changes (at least 10 characters); kept in the history and the audit log
+          example: More change needed for the weekend rush
+          maxLength: 1000
+          minLength: 10
+          type: string
+        locationId:
+          description: The location the register belongs to
+          example: 019a0000-0000-7000-8000-00000000a001
+          format: uuid
+          type: string
+        overrideJustification:
+          description: Why the change posts into a closed period; honoured only with accounting:period:override
+          example: Float counted on the last day of the closed month
+          maxLength: 1000
+          type: string
+        requestId:
+          description: Caller-generated UUIDv7 naming this request; a replay returns the first result
+          example: 019a0000-0000-7000-8000-000000000102
+          format: uuid
+          type: string
+      required:
+      - amount
+      - bankGlAccountId
+      - justification
+      - locationId
+      - requestId
+      type: object
+    RegisterFloatGoLiveRequest:
+      description: Establish a register's go-live change float against opening balance equity
+      properties:
+        amount:
+          description: The register's change float on the go-live date, in functional currency; more than zero
+          example: 200.0
+          type: number
+        goLiveDate:
+          description: The go-live date the entry is dated on; it must fall in an open period
+          example: '2026-10-01'
+          format: date
+          type: string
+        justification:
+          description: Why the float is what it is (at least 10 characters); kept in the history and the audit log
+          example: Counted float in drawer 1 at go-live
+          maxLength: 1000
+          minLength: 10
+          type: string
+        locationId:
+          description: The location the register belongs to
+          example: 019a0000-0000-7000-8000-00000000a001
+          format: uuid
+          type: string
+        requestId:
+          description: Caller-generated UUIDv7 naming this request; a replay returns the first result
+          example: 019a0000-0000-7000-8000-000000000101
+          format: uuid
+          type: string
+      required:
+      - amount
+      - goLiveDate
+      - justification
+      - locationId
+      - requestId
+      type: object
+    RegisterFloatResponse:
+      description: A register's change float after a go-live or Change float command
+      properties:
+        amount:
+          description: The float after the command
+          example: 300.0
+          type: number
+        effectiveDate:
+          description: The date the entry is dated on
+          format: date
+          type: string
+        journalEntryId:
+          description: The journal entry the command posted
+          format: uuid
+          type: string
+        journalEntryNumber:
+          description: That entry's number
+          example: JE-202610-000042
+          type: string
+        kind:
+          description: What changed the float
+          enum:
+          - GO_LIVE
+          - CHANGE
+          - REVERSAL
+          type: string
+        locationId:
+          description: The location the register belongs to
+          format: uuid
+          type: string
+        previousAmount:
+          description: The float before the command
+          example: 200.0
+          type: number
+        registerId:
+          description: The register (pos-order's terminalId)
+          example: T-1
+          type: string
+        replayed:
+          description: True when this answers a replayed requestId with the first result
+          type: boolean
+      required:
+      - amount
+      - effectiveDate
+      - journalEntryId
+      - kind
+      - locationId
+      - previousAmount
+      - registerId
+      type: object
     RemainderCreditRequest:
       description: Keep a payment's unapplied remainder as a customer credit
       properties:
@@ -20961,6 +21809,7 @@ components:
           - GL_MAPPING
           - DEFAULT_GL_MAPPING
           - STATEMENT_LINE
+          - PETTY_EXPENSE_CATEGORY
           example: ACCOUNT
           type: string
         reason:
