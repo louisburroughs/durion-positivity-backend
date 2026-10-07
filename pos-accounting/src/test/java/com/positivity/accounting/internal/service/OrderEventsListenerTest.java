@@ -98,6 +98,7 @@ class OrderEventsListenerTest {
         ArgumentCaptor<ProcessedEvent> processed = ArgumentCaptor.forClass(ProcessedEvent.class);
         verify(processedEvents).save(processed.capture());
         assertThat(processed.getValue().getEventId()).isEqualTo("e-1");
+        assertThat(processed.getValue().getOwner()).isEqualTo(OrderEventsListener.OWNER);
         assertThat(processed.getValue().getProcessedAt()).isEqualTo(Instant.now(TEST_CLOCK));
     }
 
@@ -280,19 +281,46 @@ class OrderEventsListenerTest {
 
         listener.onOrderEvent(sessionClosed("e-2"));
 
-        verifyNoInteractions(postingService);
+        verifyNoInteractions(postingService, movementPostingService);
         verify(processedEvents, never()).save(any());
     }
 
     @Test
-    @DisplayName("Other order fact types are ignored without recording their eventIds")
-    void otherEventTypesIgnored() {
+    @DisplayName("#2579: other order fact types post nothing but are recorded under the order owner for the manifest")
+    void otherEventTypesIgnoredButRecorded() {
+        when(processedEvents.existsById("e-3")).thenReturn(false);
+
         listener.onOrderEvent("""
                 {"eventId":"e-3","eventType":"order.order.completed","payload":{}}
                 """);
 
-        verifyNoInteractions(postingService);
-        verifyNoInteractions(processedEvents);
+        verifyNoInteractions(postingService, movementPostingService, ingestionRecorder, sessionReplica);
+        ArgumentCaptor<ProcessedEvent> processed = ArgumentCaptor.forClass(ProcessedEvent.class);
+        verify(processedEvents).save(processed.capture());
+        assertThat(processed.getValue().getEventId()).isEqualTo("e-3");
+        assertThat(processed.getValue().getOwner()).isEqualTo(OrderEventsListener.OWNER);
+    }
+
+    @Test
+    @DisplayName("#2579: a duplicate of an ignored fact type is not recorded twice")
+    void duplicateOtherEventTypeSkipped() {
+        when(processedEvents.existsById("e-3")).thenReturn(true);
+
+        listener.onOrderEvent("""
+                {"eventId":"e-3","eventType":"order.order.completed","payload":{}}
+                """);
+
+        verify(processedEvents, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("#2579: a fact without an eventId is skipped without recording anything, whatever its type")
+    void factWithoutEventIdSkipped() {
+        listener.onOrderEvent("""
+                {"eventType":"order.order.completed","payload":{}}
+                """);
+
+        verifyNoInteractions(processedEvents, postingService);
     }
 
     @Test
@@ -312,7 +340,7 @@ class OrderEventsListenerTest {
     void unparsableMessageSkipped() {
         listener.onOrderEvent("this is not json");
 
-        verifyNoInteractions(postingService);
+        verifyNoInteractions(postingService, movementPostingService);
         verifyNoInteractions(processedEvents);
     }
 
@@ -394,7 +422,7 @@ class OrderEventsListenerTest {
         assertThat(fact.getValue().locationId()).isEqualTo(UUID.fromString("00000000-0000-0000-0000-0000000000aa"));
         assertThat(fact.getValue().openedAt()).isEqualTo(Instant.parse("2026-07-23T08:00:00Z"));
         verify(processedEvents).save(any());
-        verifyNoInteractions(postingService, ingestionRecorder);
+        verifyNoInteractions(postingService, movementPostingService, ingestionRecorder);
     }
 
     @Test
@@ -442,7 +470,7 @@ class OrderEventsListenerTest {
         assertThatExceptionOfType(DataAccessResourceFailureException.class)
                 .isThrownBy(() -> listener.onOrderEvent(sessionOpened("e-25", 1)));
         verify(processedEvents, never()).save(any());
-        verifyNoInteractions(postingService, ingestionRecorder);
+        verifyNoInteractions(postingService, movementPostingService, ingestionRecorder);
     }
 
     @Test

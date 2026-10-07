@@ -52,7 +52,7 @@ class ManifestReplayPropagationTest {
     private final KafkaTemplate<String, String> kafkaTemplate = mock(KafkaTemplate.class);
 
     static Stream<Class<?>> listeners() {
-        return Stream.of(new Class<?>[] {InvoiceManifestListener.class});
+        return Stream.of(new Class<?>[] {InvoiceManifestListener.class, OrderManifestListener.class});
     }
 
     @ParameterizedTest(name = "{0}")

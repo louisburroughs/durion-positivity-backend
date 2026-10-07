@@ -499,6 +499,21 @@ class RegisterCashMovementPostingServiceTest {
     }
 
     @Test
+    @DisplayName("A fact naming the same movementId twice fails with that reason before anything posts")
+    void repeatedMovementIdFailsTheFact() {
+        assertThatThrownBy(() -> service.postMovements(
+                        fact(
+                                petty(PETTY_1, "SHOP_SUPPLIES", "18.40", null),
+                                petty(PETTY_1, "STAFF_MEALS", "22.00", null)),
+                        ENVELOPE_EVENT_ID))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining(PETTY_1.toString())
+                .hasMessageContaining("more than once");
+        verify(idempotencyService, never()).registerKey(anyString(), any());
+        verifyNoInteractions(glPostingService);
+    }
+
+    @Test
     @DisplayName("A petty expense without a movementId fails the fact: it would share its key and source event with"
             + " every other movement without one")
     void missingMovementIdFailsTheFact() {

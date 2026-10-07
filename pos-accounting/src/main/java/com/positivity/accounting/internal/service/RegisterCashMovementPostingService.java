@@ -10,10 +10,12 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -48,8 +50,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  *       not show it. Nothing about it is registered. <b>Recovery is a backfill, never a redelivery:</b> every consumed
  *       close fact is stored whole as its {@code accounting_event} row's {@code payload}, so the COD half selects the
  *       {@code VENDOR_COD} movement ids of {@code payload.movements} that have no registered posting key and posts
- *       them. A redelivered fact cannot do it: the same envelope id is dropped by {@code processed_events}, pos-order
- *       has no re-emit of a close fact, and posting keys expire.
+ *       them. A redelivered fact cannot do it: pos-order's manifest replay (#2579) re-sends a close fact under its
+ *       original envelope id, which {@code processed_events} drops, and pos-order has no other re-emit of it.
  *   <li>{@code BANK_DROP}, {@code FLOAT_INCREASE}, {@code FLOAT_DECREASE}: nothing at close (the deposit, S18; Change
  *       float, S15).
  *   <li>No reason (recorded before S16) or a reason this module does not know: nothing, logged and counted as {@code
@@ -72,9 +74,9 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * ledger's posts nothing: it is held once per session as the {@code SUSPENDED / CURRENCY_NOT_SUPPORTED} record the
  * over/short hold writes, and the listener then skips the over/short, so the session posts all or nothing.
  *
- * <p>A closed period, a missing mapping or a petty expense that breaks the close fact's contract (no movement id, not
- * {@code OUT}, no category, no positive amount) propagates: the listener's handler transaction rolls back the whole session and the
- * fact goes to retry and the DLQ.
+ * <p>A closed period, a missing mapping or a petty expense that breaks the close fact's contract (no movement id, a
+ * movement id named twice, not {@code OUT}, no category, no positive amount) propagates: the listener's handler
+ * transaction rolls back the whole session and the fact goes to retry and the DLQ.
  */
 @Slf4j
 @Component
@@ -221,6 +223,7 @@ public class RegisterCashMovementPostingService {
         }
 
         pending.forEach(movement -> requirePostable(fact, movement));
+        requireDistinctIds(fact, pending);
         UUID firstPosted = null;
         for (Movement movement : pending) {
             UUID posted = postPettyExpense(fact, movement, transactionDate);
@@ -306,6 +309,20 @@ public class RegisterCashMovementPostingService {
                     + fact.sessionId() + " cannot post: " + problem);
         }
         return movement;
+    }
+
+    /**
+     * One fact names each movement once. A repeated {@code movementId} would post twice and then collide on its
+     * posting key, so it fails the fact for retry / DLQ with that reason instead.
+     */
+    private static void requireDistinctIds(RegisterSessionClosedV1 fact, List<Movement> pending) {
+        Set<UUID> seen = new HashSet<>();
+        for (Movement movement : pending) {
+            if (!seen.add(movement.movementId())) {
+                throw new IllegalArgumentException("Petty-expense movement " + movement.movementId() + " of session "
+                        + fact.sessionId() + " cannot post: the fact names it more than once");
+            }
+        }
     }
 
     private boolean inForeignCurrency(RegisterSessionClosedV1 fact, List<Movement> toPost) {
