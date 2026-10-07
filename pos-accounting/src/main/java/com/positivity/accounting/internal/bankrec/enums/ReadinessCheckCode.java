@@ -31,6 +31,11 @@ public enum ReadinessCheckCode {
     OUTSTANDING_ITEMS_AGING(ReadinessSeverity.WARNING),
     /** A clearing account not cleared back to zero within the aging window (tenant-wide). */
     CLEARING_BALANCE_AGING(ReadinessSeverity.WARNING),
+    /**
+     * 3900 Opening Balance Equity is not zero at the period end (#2511, AW17): the go-live float and
+     * opening balances wait to be cleared into owner's equity by a manual entry (tenant-wide).
+     */
+    OPENING_BALANCE_EQUITY_NOT_CLEARED(ReadinessSeverity.WARNING),
     /** Unresolved bank transactions that arrived after their window was approved (phase 2 only). */
     LATE_BANK_TRANSACTIONS(ReadinessSeverity.WARNING),
     /** The covering reconciliation was approved after the period was closed. */

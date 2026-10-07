@@ -42,11 +42,13 @@ import com.positivity.accounting.internal.bankrec.service.ReconciliationLedger;
 import com.positivity.accounting.internal.dto.BankReconciliationExceptionRequest;
 import com.positivity.accounting.internal.entity.AccountingPeriod;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
+import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
 import com.positivity.accounting.internal.exception.PeriodBankReconciliationIncompleteException;
 import com.positivity.accounting.internal.exception.PeriodBankReconciliationIncompleteException.UnreconciledAccount;
 import com.positivity.accounting.internal.exception.PeriodCloseExceptionNotPermittedException;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.AccountingCalendarZoneResolver;
+import com.positivity.accounting.internal.service.GLMappingResolver;
 import com.positivity.security.common.SecurityContextHelper;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -104,6 +106,11 @@ public class BankReconciliationCloseReadiness {
     /** The longest exception justification the audit row keeps (the request's documented maximum). */
     static final int MAX_JUSTIFICATION = 1000;
 
+    /** Where the go-live float's counter side posts (#2511): resolved, never a hard-coded account. */
+    static final String OPENING_BALANCE_EQUITY_CATEGORY = "REGISTER_FLOAT";
+
+    static final String OPENING_BALANCE_EQUITY_KEY = "OPENING_BALANCE_EQUITY";
+
     private static final JsonMapper SNAPSHOT_MAPPER = JsonMapper.builder().build();
 
     private static final List<ReconciliationStatus> IN_FLIGHT =
@@ -125,6 +132,7 @@ public class BankReconciliationCloseReadiness {
     private final ReconciliationLedger ledger;
     private final LedgerEntries ledgerEntries;
     private final ObjectProvider<IncompleteImportLookup> importLookups;
+    private final GLMappingResolver glMappingResolver;
 
     /**
      * The close decision: whether readiness held, and whether an exception was granted to close anyway.
@@ -161,6 +169,7 @@ public class BankReconciliationCloseReadiness {
         List<CloseReadinessCheck> tenantChecks = new ArrayList<>();
         draftEntries(start, end).ifPresent(tenantChecks::add);
         tenantChecks.addAll(clearingBalanceAging(end));
+        openingBalanceEquity(end).ifPresent(tenantChecks::add);
 
         List<BankCashAccount> inScope = bankCashAccounts.listInScope(effective.closeScope());
         Map<UUID, LocalDate> coverage = new HashMap<>();
@@ -659,6 +668,35 @@ public class BankReconciliationCloseReadiness {
                             refs));
                 });
         return checks;
+    }
+
+    /**
+     * {@code OPENING_BALANCE_EQUITY_NOT_CLEARED} (#2511; SPEC-accounting-workspace §4.6 "Float", AW17): the
+     * account {@code REGISTER_FLOAT} / {@code OPENING_BALANCE_EQUITY} resolves to at the period end (3900) holds
+     * a balance outside one minor unit of zero. The go-live float and opening balances post there until the
+     * accountant clears them into owner's equity. Never blocks; not evaluated while the mapping is missing.
+     */
+    private Optional<CloseReadinessCheck> openingBalanceEquity(LocalDate end) {
+        UUID account;
+        try {
+            account = glMappingResolver.resolveGLAccount(
+                    OPENING_BALANCE_EQUITY_CATEGORY, OPENING_BALANCE_EQUITY_KEY, end.atStartOfDay());
+        } catch (GLMappingNotConfiguredException e) {
+            return Optional.empty();
+        }
+        BigDecimal balance = ledger.balanceAsOf(account, end);
+        if (balance.abs().compareTo(currency.tolerance()) <= 0) {
+            return Optional.empty();
+        }
+        String code =
+                accountCode(bankCashAccounts.displayValues(List.of(account)).get(account));
+        Map<String, Object> refs = refs("glAccountId", account, "accountCode", code);
+        refs.put("balanceAtPeriodEnd", balance);
+        return Optional.of(check(
+                ReadinessCheckCode.OPENING_BALANCE_EQUITY_NOT_CLEARED,
+                "Opening balance equity " + code + " holds " + currency.display(balance.negate()) + " at " + end
+                        + "; clear it into owner's equity with a journal entry",
+                refs));
     }
 
     // ---- helpers ----------------------------------------------------------------------------------------
