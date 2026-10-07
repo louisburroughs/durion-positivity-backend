@@ -201,8 +201,8 @@ public class DepositServiceImpl implements DepositService {
 
         UndepositedSessionsResponse.Selection selection = null;
         if (!sessionIds.isEmpty()) {
-            Map<UUID, UndepositedSession> byId = visible.stream()
-                    .collect(Collectors.toMap(UndepositedSession::getSessionId, Function.identity()));
+            Map<UUID, UndepositedSession> byId =
+                    visible.stream().collect(Collectors.toMap(UndepositedSession::getSessionId, Function.identity()));
             List<UndepositedSession> selected = new ArrayList<>();
             for (UUID sessionId : new LinkedHashSet<>(sessionIds)) {
                 UndepositedSession session = byId.get(sessionId);
@@ -232,12 +232,22 @@ public class DepositServiceImpl implements DepositService {
         Map<UUID, GLAccount> accounts = new LinkedHashMap<>();
         UUID undepositedFunds = glMappingResolver.resolveGLAccount(POSTING_CATEGORY, UNDEPOSITED_FUNDS_KEY, at);
         UUID cashClearing = glMappingResolver.resolveGLAccount(POSTING_CATEGORY, CASH_CLEARING_KEY, at);
-        glAccounts.findAllById(List.of(undepositedFunds, cashClearing)).forEach(a -> accounts.put(a.getGlAccountId(), a));
+        glAccounts
+                .findAllById(List.of(undepositedFunds, cashClearing))
+                .forEach(a -> accounts.put(a.getGlAccountId(), a));
 
         List<UndepositedSessionsResponse.PreviewLine> lines = new ArrayList<>();
         addPreview(lines, bank, bankGlAccountId, totals.depositAmount());
-        addPreview(lines, accounts.get(undepositedFunds), undepositedFunds, totals.expectedCash().negate());
-        addPreview(lines, accounts.get(cashClearing), cashClearing, totals.clearingNet().negate());
+        addPreview(
+                lines,
+                accounts.get(undepositedFunds),
+                undepositedFunds,
+                totals.expectedCash().negate());
+        addPreview(
+                lines,
+                accounts.get(cashClearing),
+                cashClearing,
+                totals.clearingNet().negate());
         return new UndepositedSessionsResponse.Selection(
                 selected.stream().map(UndepositedSession::getSessionId).toList(),
                 totals.depositAmount(),
@@ -622,7 +632,8 @@ public class DepositServiceImpl implements DepositService {
     }
 
     private static CashSetupException notFound(UUID depositId) {
-        return new CashSetupException(CashSetupException.Code.DEPOSIT_NOT_FOUND, "Bank deposit " + depositId + " not found");
+        return new CashSetupException(
+                CashSetupException.Code.DEPOSIT_NOT_FOUND, "Bank deposit " + depositId + " not found");
     }
 
     // ---- results ---------------------------------------------------------------------------------------------
@@ -640,7 +651,8 @@ public class DepositServiceImpl implements DepositService {
             return Map.of();
         }
         Map<UUID, UUID> sessionByRow = rows.stream()
-                .collect(Collectors.toMap(UndepositedSession::getUndepositedSessionId, UndepositedSession::getSessionId));
+                .collect(Collectors.toMap(
+                        UndepositedSession::getUndepositedSessionId, UndepositedSession::getSessionId));
         Map<UUID, List<UndepositedSessionDrop>> bySession = new LinkedHashMap<>();
         drops.findByUndepositedSessionIdInOrderByOccurredAtAscMovementIdAsc(sessionByRow.keySet())
                 .forEach(drop -> bySession
@@ -739,7 +751,8 @@ public class DepositServiceImpl implements DepositService {
         audit.setJustification(deposit.getOverrideJustification());
         audit.setNewValue("bankGlAccountId=" + deposit.getBankGlAccountId() + ";bankAccountCode="
                 + deposit.getBankAccountCode() + ";depositDate=" + deposit.getDepositDate() + ";amount="
-                + deposit.getAmount().toPlainString() + ";expectedCash=" + deposit.getExpectedCash().toPlainString()
+                + deposit.getAmount().toPlainString() + ";expectedCash="
+                + deposit.getExpectedCash().toPlainString()
                 + ";clearingNet=" + deposit.getClearingNet().toPlainString() + ";currencyCode="
                 + deposit.getCurrencyCode() + ";sessions=" + sessionIdsOf(taken) + ";bagNumbers="
                 + taken.stream()

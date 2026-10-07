@@ -92,7 +92,8 @@ public class DepositReversalReaction {
         audit.setJustification(saved.getReversalReason());
         audit.setOldValue("status=RECORDED;journalEntryId=" + saved.getJournalEntryId());
         audit.setNewValue("status=REVERSED;reversalJournalEntryId=" + saved.getReversalJournalEntryId()
-                + ";reversalDate=" + saved.getReversalDate() + ";amount=" + saved.getAmount().toPlainString()
+                + ";reversalDate=" + saved.getReversalDate() + ";amount="
+                + saved.getAmount().toPlainString()
                 + ";currencyCode=" + saved.getCurrencyCode() + ";sessions="
                 + taken.stream().map(DepositSession::getSessionId).toList() + ";requestId="
                 + saved.getReversalRequestId() + ";overrideJustification=" + saved.getReversalOverrideJustification());

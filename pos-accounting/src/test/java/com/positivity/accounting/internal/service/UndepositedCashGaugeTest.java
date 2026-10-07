@@ -44,22 +44,20 @@ class UndepositedCashGaugeTest {
         when(sessions.sumDepositAmountByStatus(UndepositedSessionStatus.UNDEPOSITED))
                 .thenReturn(new BigDecimal("1197.00"), new BigDecimal("300.00"));
         when(sessions.findFirstByStatusOrderByClosedAtAsc(UndepositedSessionStatus.UNDEPOSITED))
-                .thenReturn(Optional.of(closedAt("2026-10-06T20:00:00Z")), Optional.of(closedAt("2026-10-02T20:00:00Z")));
+                .thenReturn(
+                        Optional.of(closedAt("2026-10-06T20:00:00Z")), Optional.of(closedAt("2026-10-02T20:00:00Z")));
         MeterRegistry registry = new SimpleMeterRegistry();
         ObjectProvider<MeterRegistry> provider = mock(ObjectProvider.class);
         when(provider.getIfAvailable()).thenReturn(registry);
         UndepositedCashGauge gauge = new UndepositedCashGauge(
-                sessions,
-                tenants,
-                mock(PlatformTransactionManager.class),
-                Clock.fixed(NOW, ZoneOffset.UTC),
-                provider);
+                sessions, tenants, mock(PlatformTransactionManager.class), Clock.fixed(NOW, ZoneOffset.UTC), provider);
 
         gauge.refresh();
 
         assertThat(gauge.amount()).isEqualByComparingTo("1497.00");
         assertThat(gauge.oldestAgeDays()).isEqualTo(6);
-        assertThat(registry.get(UndepositedCashGauge.AMOUNT_GAUGE).gauge().value()).isEqualTo(1497.0);
+        assertThat(registry.get(UndepositedCashGauge.AMOUNT_GAUGE).gauge().value())
+                .isEqualTo(1497.0);
         assertThat(registry.get(UndepositedCashGauge.OLDEST_AGE_GAUGE).gauge().value())
                 .isEqualTo(6.0);
     }

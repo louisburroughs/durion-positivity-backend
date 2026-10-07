@@ -101,7 +101,9 @@ class UndepositedSessionProjectionTest {
         RegisterSessionClosedV1 fact = fact(
                 "USD",
                 "2.00",
-                List.of(new TenderTotal("CARD", new BigDecimal("500.00")), new TenderTotal("ON_ACCOUNT", BigDecimal.TEN)));
+                List.of(
+                        new TenderTotal("CARD", new BigDecimal("500.00")),
+                        new TenderTotal("ON_ACCOUNT", BigDecimal.TEN)));
 
         assertThat(projection.record(fact, 2)).isTrue();
 
@@ -116,21 +118,40 @@ class UndepositedSessionProjectionTest {
     @DisplayName("a schema-1 fact, a session closed in another currency or with a drop in one, and a redelivery"
             + " write no row")
     void noRow() {
-        RegisterSessionClosedV1 usd = fact("USD", "0.00", List.of(cash("100.00")), bankDrop(UUID.randomUUID(), "100.00", "B-1", "USD"));
+        RegisterSessionClosedV1 usd =
+                fact("USD", "0.00", List.of(cash("100.00")), bankDrop(UUID.randomUUID(), "100.00", "B-1", "USD"));
         assertThat(projection.record(usd, 1)).as("schema 1").isFalse();
         assertThat(projection.record(fact("CAD", "0.00", List.of(cash("100.00"))), 2))
                 .as("session in CAD")
                 .isFalse();
         assertThat(projection.record(
-                        fact("USD", "0.00", List.of(cash("100.00")), bankDrop(UUID.randomUUID(), "100.00", "B-1", "CAD")),
+                        fact(
+                                "USD",
+                                "0.00",
+                                List.of(cash("100.00")),
+                                bankDrop(UUID.randomUUID(), "100.00", "B-1", "CAD")),
                         2))
                 .as("drop in CAD")
                 .isFalse();
         when(sessions.existsBySessionId(usd.sessionId())).thenReturn(true);
         assertThat(projection.record(usd, 2)).as("redelivery").isFalse();
         RegisterSessionClosedV1 schemaOneShape = new RegisterSessionClosedV1(
-                UUID.randomUUID(), "T-7", LOCATION, "c", "c", BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
-                BigDecimal.ZERO, false, "USD", List.of(), BigDecimal.ZERO, CLOSED_AT, CLOSED_AT, null);
+                UUID.randomUUID(),
+                "T-7",
+                LOCATION,
+                "c",
+                "c",
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                false,
+                "USD",
+                List.of(),
+                BigDecimal.ZERO,
+                CLOSED_AT,
+                CLOSED_AT,
+                null);
         assertThat(projection.record(schemaOneShape, 2)).as("no movements").isFalse();
 
         verify(sessions, never()).saveAndFlush(any());

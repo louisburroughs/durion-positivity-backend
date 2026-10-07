@@ -95,8 +95,7 @@ public class UndepositedSessionProjection {
         BigDecimal clearingNet = fact.movements().stream()
                 .map(RegisterCashMovementPostingService::clearingEffect)
                 .reduce(fact.overShort() == null ? BigDecimal.ZERO : fact.overShort(), BigDecimal::add);
-        BigDecimal depositAmount =
-                bankDrops.stream().map(Movement::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal depositAmount = bankDrops.stream().map(Movement::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
 
         UndepositedSession session = new UndepositedSession();
         session.setSessionId(fact.sessionId());
@@ -160,8 +159,8 @@ public class UndepositedSessionProjection {
         Set<Object> seen = new HashSet<>();
         for (Movement drop : bankDrops) {
             if (!seen.add(drop.movementId())) {
-                throw new IllegalArgumentException("Bank drop " + drop.movementId() + " of session "
-                        + fact.sessionId() + " cannot be deposited: the fact names it more than once");
+                throw new IllegalArgumentException("Bank drop " + drop.movementId() + " of session " + fact.sessionId()
+                        + " cannot be deposited: the fact names it more than once");
             }
         }
     }

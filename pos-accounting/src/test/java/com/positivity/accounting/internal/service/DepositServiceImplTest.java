@@ -47,9 +47,9 @@ import com.positivity.accounting.internal.repository.UndepositedSessionDropRepos
 import com.positivity.accounting.internal.repository.UndepositedSessionRepository;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.domainevents.accounting.DepositRecordedV1;
+import com.positivity.domainevents.location.LocationAncestry.AncestorSets;
 import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.security.common.LocationAncestorResolver;
-import com.positivity.domainevents.location.LocationAncestry.AncestorSets;
 import com.positivity.security.common.LocationScope;
 import com.positivity.security.common.LocationScopeDeniedException;
 import java.math.BigDecimal;
@@ -148,40 +148,42 @@ class DepositServiceImplTest {
                 Clock.fixed(Instant.parse("2026-10-09T12:00:00Z"), ZoneOffset.UTC));
 
         bank = account(BANK, "1000", "Cash", AccountSubtype.BANK_CASH, true);
-        when(glAccounts.findById(any())).thenAnswer(invocation -> Optional.ofNullable(
-                Map.of(BANK, bank).get(invocation.<UUID>getArgument(0))));
-        when(glAccounts.findAllById(any())).thenReturn(List.of(
-                account(UNDEPOSITED_FUNDS, "1090", "Undeposited Funds", AccountSubtype.UNDEPOSITED_FUNDS, true),
-                account(CASH_CLEARING, "1095", "Register Cash Clearing", AccountSubtype.CURRENT_ASSET, false)));
+        when(glAccounts.findById(any()))
+                .thenAnswer(invocation -> Optional.ofNullable(Map.of(BANK, bank).get(invocation.<UUID>getArgument(0))));
+        when(glAccounts.findAllById(any()))
+                .thenReturn(List.of(
+                        account(UNDEPOSITED_FUNDS, "1090", "Undeposited Funds", AccountSubtype.UNDEPOSITED_FUNDS, true),
+                        account(CASH_CLEARING, "1095", "Register Cash Clearing", AccountSubtype.CURRENT_ASSET, false)));
         when(currencies.currencyOf(BANK)).thenReturn(Optional.of("USD"));
         when(zoneResolver.today()).thenReturn(LocalDate.of(2026, 10, 9));
-        when(zoneResolver.postingDate(any())).thenAnswer(invocation ->
-                LocalDate.ofInstant(invocation.getArgument(0), ZoneOffset.UTC));
+        when(zoneResolver.postingDate(any()))
+                .thenAnswer(invocation -> LocalDate.ofInstant(invocation.getArgument(0), ZoneOffset.UTC));
         when(resolver.resolveGLAccount(eq("BANK_DEPOSIT"), eq("UNDEPOSITED_FUNDS"), any(LocalDateTime.class)))
                 .thenReturn(UNDEPOSITED_FUNDS);
         when(resolver.resolveGLAccount(eq("BANK_DEPOSIT"), eq("CASH_CLEARING"), any(LocalDateTime.class)))
                 .thenReturn(CASH_CLEARING);
 
         // In-memory sessions and drops.
-        when(sessions.findByStatusOrderByClosedAtAscSessionIdAsc(any())).thenAnswer(invocation -> sessionRows.values()
-                .stream()
-                .filter(row -> row.getStatus() == invocation.getArgument(0))
-                .sorted(Comparator.comparing(UndepositedSession::getClosedAt))
-                .toList());
-        when(sessions.lockBySessionIdIn(any())).thenAnswer(invocation -> invocation.<Collection<UUID>>getArgument(0)
-                .stream()
-                .map(sessionRows::get)
-                .filter(Objects::nonNull)
-                .sorted(Comparator.comparing(UndepositedSession::getSessionId))
-                .toList());
-        when(sessions.findBySessionIdIn(any())).thenAnswer(invocation -> invocation.<Collection<UUID>>getArgument(0)
-                .stream()
-                .map(sessionRows::get)
-                .filter(Objects::nonNull)
-                .toList());
-        when(sessions.lockByDepositId(any())).thenAnswer(invocation -> sessionRows.values().stream()
-                .filter(row -> invocation.getArgument(0).equals(row.getDepositId()))
-                .toList());
+        when(sessions.findByStatusOrderByClosedAtAscSessionIdAsc(any()))
+                .thenAnswer(invocation -> sessionRows.values().stream()
+                        .filter(row -> row.getStatus() == invocation.getArgument(0))
+                        .sorted(Comparator.comparing(UndepositedSession::getClosedAt))
+                        .toList());
+        when(sessions.lockBySessionIdIn(any()))
+                .thenAnswer(invocation -> invocation.<Collection<UUID>>getArgument(0).stream()
+                        .map(sessionRows::get)
+                        .filter(Objects::nonNull)
+                        .sorted(Comparator.comparing(UndepositedSession::getSessionId))
+                        .toList());
+        when(sessions.findBySessionIdIn(any()))
+                .thenAnswer(invocation -> invocation.<Collection<UUID>>getArgument(0).stream()
+                        .map(sessionRows::get)
+                        .filter(Objects::nonNull)
+                        .toList());
+        when(sessions.lockByDepositId(any()))
+                .thenAnswer(invocation -> sessionRows.values().stream()
+                        .filter(row -> invocation.getArgument(0).equals(row.getDepositId()))
+                        .toList());
         when(sessions.saveAllAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(drops.findByUndepositedSessionIdInOrderByOccurredAtAscMovementIdAsc(any()))
                 .thenAnswer(invocation -> invocation.<Collection<UUID>>getArgument(0).stream()
@@ -189,19 +191,22 @@ class DepositServiceImplTest {
                         .toList());
 
         // In-memory deposits.
-        when(deposits.findByRequestId(any())).thenAnswer(invocation -> depositRows.values().stream()
-                .filter(row -> invocation.getArgument(0).equals(row.getRequestId()))
-                .findFirst());
-        when(deposits.findByReversalRequestId(any())).thenAnswer(invocation -> depositRows.values().stream()
-                .filter(row -> invocation.getArgument(0).equals(row.getReversalRequestId()))
-                .findFirst());
+        when(deposits.findByRequestId(any()))
+                .thenAnswer(invocation -> depositRows.values().stream()
+                        .filter(row -> invocation.getArgument(0).equals(row.getRequestId()))
+                        .findFirst());
+        when(deposits.findByReversalRequestId(any()))
+                .thenAnswer(invocation -> depositRows.values().stream()
+                        .filter(row -> invocation.getArgument(0).equals(row.getReversalRequestId()))
+                        .findFirst());
         when(deposits.findById(any()))
                 .thenAnswer(invocation -> Optional.ofNullable(depositRows.get(invocation.<UUID>getArgument(0))));
         when(deposits.lockById(any()))
                 .thenAnswer(invocation -> Optional.ofNullable(depositRows.get(invocation.<UUID>getArgument(0))));
-        when(deposits.lockByJournalEntryId(any())).thenAnswer(invocation -> depositRows.values().stream()
-                .filter(row -> invocation.getArgument(0).equals(row.getJournalEntryId()))
-                .findFirst());
+        when(deposits.lockByJournalEntryId(any()))
+                .thenAnswer(invocation -> depositRows.values().stream()
+                        .filter(row -> invocation.getArgument(0).equals(row.getJournalEntryId()))
+                        .findFirst());
         when(deposits.saveAndFlush(any())).thenAnswer(invocation -> {
             Deposit row = invocation.getArgument(0);
             if (row.getDepositId() == null) {
@@ -328,7 +333,8 @@ class DepositServiceImplTest {
     }
 
     @Test
-    @DisplayName("AC3 [M]: drops of 1,190.00 against 1,197.00 are 422 DEPOSIT_UNBALANCED naming 7.00; no entry, no plug")
+    @DisplayName(
+            "AC3 [M]: drops of 1,190.00 against 1,197.00 are 422 DEPOSIT_UNBALANCED naming 7.00; no entry, no plug")
     void unbalancedSelectionIsRefused() {
         UndepositedSession session = session(SHOP_A, "1240.00", "-43.00", drop("1190.00", "B-0913"));
 
@@ -360,7 +366,8 @@ class DepositServiceImplTest {
         assertThat(second.replayed()).isTrue();
         assertThat(second.response().replayed()).isTrue();
         assertThat(second.response().depositId()).isEqualTo(first.response().depositId());
-        assertThat(second.response().journalEntryNumber()).isEqualTo(first.response().journalEntryNumber());
+        assertThat(second.response().journalEntryNumber())
+                .isEqualTo(first.response().journalEntryNumber());
         assertThat(created).hasSize(1);
         assertThat(depositRows).hasSize(1);
 
@@ -376,8 +383,8 @@ class DepositServiceImplTest {
             + " replay is the first result and a second reversal is 409 DEPOSIT_ALREADY_REVERSED")
     void reverseRestoresTheSessions() {
         UndepositedSession session = workedExample(SHOP_A);
-        DepositResponse recorded =
-                service.record(request(UUID.randomUUID(), session.getSessionId())).response();
+        DepositResponse recorded = service.record(request(UUID.randomUUID(), session.getSessionId()))
+                .response();
         signIn(LocationScope.unscoped(), "controller.cfo");
         UUID requestId = UUID.randomUUID();
         DepositReversalRequest reversal =
@@ -441,9 +448,10 @@ class DepositServiceImplTest {
                 "Slip found after the month was closed");
         service.record(overridden);
         verify(journalEntries).postJournalEntry(any(UUID.class), eq("Slip found after the month was closed"));
-        assertThat(depositRows.values()).singleElement().satisfies(deposit -> assertThat(
-                        deposit.getOverrideJustification())
-                .isEqualTo("Slip found after the month was closed"));
+        assertThat(depositRows.values())
+                .singleElement()
+                .satisfies(deposit -> assertThat(deposit.getOverrideJustification())
+                        .isEqualTo("Slip found after the month was closed"));
     }
 
     @Test
@@ -481,7 +489,8 @@ class DepositServiceImplTest {
                 .isInstanceOfSatisfying(CashSetupException.class, e -> {
                     assertThat(e.getCode()).isEqualTo(CashSetupException.Code.DEPOSIT_SESSION_ALREADY_DEPOSITED);
                     assertThat(e.getMessage()).contains("JE-202610-41");
-                    assertThat(e.getReferenceId()).isEqualTo(session.getSessionId().toString());
+                    assertThat(e.getReferenceId())
+                            .isEqualTo(session.getSessionId().toString());
                 });
         assertThatThrownBy(() -> service.record(request(UUID.randomUUID(), UUID.randomUUID())))
                 .isInstanceOf(InvalidRequestParameterException.class);
@@ -533,8 +542,9 @@ class DepositServiceImplTest {
     // ---- location scope (ADR-0061) -------------------------------------------------------------------------------
 
     @Test
-    @DisplayName("ADR-0061: a caller scoped to a region lists only its sessions, cannot select, deposit, read or reverse"
-            + " another location's, and is denied without the location being named")
+    @DisplayName(
+            "ADR-0061: a caller scoped to a region lists only its sessions, cannot select, deposit, read or reverse"
+                    + " another location's, and is denied without the location being named")
     void locationScope() {
         UndepositedSession inReach = workedExample(SHOP_A);
         UndepositedSession outOfReach = workedExample(SHOP_B);
@@ -547,9 +557,11 @@ class DepositServiceImplTest {
         assertThatThrownBy(() -> service.undeposited(List.of(outOfReach.getSessionId()), null))
                 .isInstanceOf(InvalidRequestParameterException.class);
         assertThatThrownBy(() -> service.record(request(UUID.randomUUID(), outOfReach.getSessionId())))
-                .isInstanceOfSatisfying(LocationScopeDeniedException.class, e -> assertThat(e.getMessage())
-                        .as("the denial never names the location")
-                        .doesNotContain(SHOP_B.toString()));
+                .isInstanceOfSatisfying(
+                        LocationScopeDeniedException.class,
+                        e -> assertThat(e.getMessage())
+                                .as("the denial never names the location")
+                                .doesNotContain(SHOP_B.toString()));
         assertThatThrownBy(() -> service.record(request(UUID.randomUUID(), noLocation.getSessionId())))
                 .isInstanceOf(LocationScopeDeniedException.class);
         assertThat(created).isEmpty();
@@ -557,13 +569,14 @@ class DepositServiceImplTest {
 
         // A deposit of another location's drawer, recorded by an unscoped caller, is neither readable nor reversible.
         signIn(LocationScope.unscoped());
-        DepositResponse other =
-                service.record(request(UUID.randomUUID(), outOfReach.getSessionId())).response();
+        DepositResponse other = service.record(request(UUID.randomUUID(), outOfReach.getSessionId()))
+                .response();
         signIn(scopedTo(AccountingPermissions.DEPOSIT_CREATE, AccountingPermissions.DEPOSIT_REVERSE));
         assertThatThrownBy(() -> service.get(other.depositId())).isInstanceOf(LocationScopeDeniedException.class);
         assertThatThrownBy(() -> service.reverse(
                         other.depositId(),
-                        new DepositReversalRequest("Deposited into the wrong bank account", null, null, UUID.randomUUID())))
+                        new DepositReversalRequest(
+                                "Deposited into the wrong bank account", null, null, UUID.randomUUID())))
                 .isInstanceOf(LocationScopeDeniedException.class);
         verify(journalEntries, never()).reverseJournalEntry(any(UUID.class), anyString(), any(), any());
 
@@ -583,7 +596,8 @@ class DepositServiceImplTest {
                 .isEqualTo(CashSetupException.Code.DEPOSIT_NOT_FOUND);
         assertThatThrownBy(() -> service.reverse(
                         missing,
-                        new DepositReversalRequest("Deposited into the wrong bank account", null, null, UUID.randomUUID())))
+                        new DepositReversalRequest(
+                                "Deposited into the wrong bank account", null, null, UUID.randomUUID())))
                 .extracting(e -> ((CashSetupException) e).getCode())
                 .isEqualTo(CashSetupException.Code.DEPOSIT_NOT_FOUND);
     }
@@ -622,7 +636,8 @@ class DepositServiceImplTest {
         return session(location, "1240.00", "-43.00", drop("1197.00", "B-0912"));
     }
 
-    private UndepositedSession session(UUID location, String expectedCash, String clearingNet, UndepositedSessionDrop... sessionDrops) {
+    private UndepositedSession session(
+            UUID location, String expectedCash, String clearingNet, UndepositedSessionDrop... sessionDrops) {
         UndepositedSession row = new UndepositedSession();
         row.setUndepositedSessionId(UUID.randomUUID());
         row.setSessionId(UUID.randomUUID());

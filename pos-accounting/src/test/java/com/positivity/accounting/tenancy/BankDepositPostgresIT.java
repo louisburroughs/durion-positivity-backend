@@ -183,7 +183,9 @@ class BankDepositPostgresIT extends PostgresTenancyTestBase {
         UndepositedSessionsResponse read = asTenant(tenant, () -> deposits.undeposited(List.of(session), bank));
         assertThat(read.sessions()).singleElement().satisfies(view -> {
             assertThat(view.sessionId()).isEqualTo(session);
-            assertThat(view.drops()).extracting(UndepositedSessionsResponse.Drop::bagNumber).containsExactly("B-0912");
+            assertThat(view.drops())
+                    .extracting(UndepositedSessionsResponse.Drop::bagNumber)
+                    .containsExactly("B-0912");
             assertThat(view.locationId()).isEqualTo(LOCATION);
         });
         assertThat(read.selection().depositAmount()).isEqualByComparingTo("1197.00");
@@ -193,19 +195,20 @@ class BankDepositPostgresIT extends PostgresTenancyTestBase {
 
         // AC2: recorded into 1000, dated depositDate.
         UUID requestId = UUIDv7Generator.generate();
-        DepositRecordRequest request = new DepositRecordRequest(
-                bank, today, "USD", List.of(session), requestId, "DS-1", null);
+        DepositRecordRequest request =
+                new DepositRecordRequest(bank, today, "USD", List.of(session), requestId, "DS-1", null);
         DepositService.Outcome recorded = asTenant(tenant, () -> deposits.record(request));
         DepositResponse deposit = recorded.response();
         assertThat(recorded.replayed()).isFalse();
         assertThat(deposit.status()).isEqualTo(DepositStatus.RECORDED);
         assertThat(deposit.journalEntryNumber()).startsWith("JE-");
-        assertThat(deposit.sessions()).singleElement().satisfies(s -> assertThat(s.bagNumbers())
-                .containsExactly("B-0912"));
+        assertThat(deposit.sessions())
+                .singleElement()
+                .satisfies(s -> assertThat(s.bagNumbers()).containsExactly("B-0912"));
         List<Map<String, Object>> entry = entryLines(tenant, deposit.journalEntryId());
         assertThat(entry)
-                .extracting(line -> line.get("account_code") + " " + line.get("debit_amount") + " "
-                        + line.get("credit_amount"))
+                .extracting(line ->
+                        line.get("account_code") + " " + line.get("debit_amount") + " " + line.get("credit_amount"))
                 .containsExactlyInAnyOrder("1000 1197.0000 0.0000", "1090 0.0000 1240.0000", "1095 43.0000 0.0000");
         assertThat(entry).allSatisfy(line -> {
             assertThat(line.get("source_event_type")).isEqualTo("BANK_DEPOSIT");
@@ -216,15 +219,19 @@ class BankDepositPostgresIT extends PostgresTenancyTestBase {
         assertThat(net(tenant, "1090")).isEqualByComparingTo("-1240.00");
         assertThat(net(tenant, "1000")).isEqualByComparingTo("1197.00");
         assertThat(status(tenant, session)).isEqualTo("DEPOSITED");
-        assertThat(asTenant(tenant, () -> deposits.undeposited(List.of(), null)).sessions()).isEmpty();
+        assertThat(asTenant(tenant, () -> deposits.undeposited(List.of(), null)).sessions())
+                .isEmpty();
 
         // AC4: the same requestId again is the first result; one deposit, one entry.
         DepositService.Outcome replay = asTenant(tenant, () -> deposits.record(request));
         assertThat(replay.replayed()).isTrue();
         assertThat(replay.response().depositId()).isEqualTo(deposit.depositId());
-        assertThat(count(tenant, "SELECT count(*) FROM deposit WHERE tenant_id = ?")).isEqualTo(1);
-        assertThat(count(tenant, "SELECT count(*) FROM journal_entry WHERE tenant_id = ? AND source_event_type ="
-                        + " 'BANK_DEPOSIT'"))
+        assertThat(count(tenant, "SELECT count(*) FROM deposit WHERE tenant_id = ?"))
+                .isEqualTo(1);
+        assertThat(count(
+                        tenant,
+                        "SELECT count(*) FROM journal_entry WHERE tenant_id = ? AND source_event_type ="
+                                + " 'BANK_DEPOSIT'"))
                 .isEqualTo(1);
 
         // AC8 (service side): the clerk holds no accounting:deposit:reverse; the endpoint refuses it (controller
@@ -280,7 +287,9 @@ class BankDepositPostgresIT extends PostgresTenancyTestBase {
         UUID unbalanced = UUIDv7Generator.generate();
         closeSession(tenant, fact(unbalanced, "-3.00", "USD", "1240.00", petty("40.00"), drop("1190.00", "B-0913")));
         UUID schemaOne = UUIDv7Generator.generate();
-        asTenant(tenant, () -> listener.onOrderEvent(envelope(UUID.randomUUID().toString(), 1, workedExample(schemaOne))));
+        asTenant(
+                tenant,
+                () -> listener.onOrderEvent(envelope(UUID.randomUUID().toString(), 1, workedExample(schemaOne))));
         UUID foreign = UUIDv7Generator.generate();
         closeSession(tenant, fact(foreign, "0.00", "CAD", "100.00", drop("100.00", "B-CAD")));
         int entries = count(tenant, "SELECT count(*) FROM journal_entry WHERE tenant_id = ?");
@@ -295,7 +304,8 @@ class BankDepositPostgresIT extends PostgresTenancyTestBase {
                     assertThat(e.getCode()).isEqualTo(CashSetupException.Code.DEPOSIT_UNBALANCED);
                     assertThat(e.getMessage()).contains("7.00");
                 });
-        assertThat(count(tenant, "SELECT count(*) FROM journal_entry WHERE tenant_id = ?")).isEqualTo(entries);
+        assertThat(count(tenant, "SELECT count(*) FROM journal_entry WHERE tenant_id = ?"))
+                .isEqualTo(entries);
         assertThat(status(tenant, unbalanced)).isEqualTo("UNDEPOSITED");
         assertThat(asTenant(tenant, () -> deposits.undeposited(List.of(), null)).sessions())
                 .extracting(UndepositedSessionsResponse.Session::sessionId)
@@ -317,8 +327,11 @@ class BankDepositPostgresIT extends PostgresTenancyTestBase {
         try {
             List<Future<Object>> racers = new ArrayList<>();
             for (int i = 0; i < 2; i++) {
-                racers.add(pool.submit(race(start, tenant, () -> deposits.record(new DepositRecordRequest(
-                        bank, today, "USD", List.of(session), UUIDv7Generator.generate(), null, null)))));
+                racers.add(pool.submit(race(
+                        start,
+                        tenant,
+                        () -> deposits.record(new DepositRecordRequest(
+                                bank, today, "USD", List.of(session), UUIDv7Generator.generate(), null, null)))));
             }
             start.countDown();
             for (Future<Object> racer : racers) {
@@ -328,13 +341,16 @@ class BankDepositPostgresIT extends PostgresTenancyTestBase {
             pool.shutdownNow();
         }
 
-        assertThat(outcomes).filteredOn(DepositService.Outcome.class::isInstance).hasSize(1);
+        assertThat(outcomes)
+                .filteredOn(DepositService.Outcome.class::isInstance)
+                .hasSize(1);
         assertThat(outcomes)
                 .filteredOn(CashSetupException.class::isInstance)
                 .singleElement()
                 .extracting(e -> ((CashSetupException) e).getCode())
                 .isEqualTo(CashSetupException.Code.DEPOSIT_SESSION_ALREADY_DEPOSITED);
-        assertThat(count(tenant, "SELECT count(*) FROM deposit WHERE tenant_id = ?")).isEqualTo(1);
+        assertThat(count(tenant, "SELECT count(*) FROM deposit WHERE tenant_id = ?"))
+                .isEqualTo(1);
         assertThat(net(tenant, "1000")).isEqualByComparingTo("1197.00");
     }
 
@@ -418,7 +434,8 @@ class BankDepositPostgresIT extends PostgresTenancyTestBase {
                 .response();
         asTenant(tenantA, () -> journalEntries.reverseJournalEntry(deposit.journalEntryId(), "Isolation check", null));
 
-        assertThat(asTenant(tenantB, () -> deposits.undeposited(List.of(), null)).sessions())
+        assertThat(asTenant(tenantB, () -> deposits.undeposited(List.of(), null))
+                        .sessions())
                 .isEmpty();
         assertThatThrownBy(() -> asTenant(tenantB, () -> deposits.get(deposit.depositId())))
                 .extracting(e -> ((CashSetupException) e).getCode())
@@ -428,7 +445,8 @@ class BankDepositPostgresIT extends PostgresTenancyTestBase {
                         () -> deposits.record(new DepositRecordRequest(
                                 bankB, today, "USD", List.of(session), UUIDv7Generator.generate(), null, null))))
                 .isInstanceOf(InvalidRequestParameterException.class);
-        assertThat(asTenant(tenantA, () -> deposits.undeposited(List.of(), null)).sessions())
+        assertThat(asTenant(tenantA, () -> deposits.undeposited(List.of(), null))
+                        .sessions())
                 .hasSize(1);
     }
 

@@ -84,7 +84,8 @@ class BankDepositControllerTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("the read passes the selection and the bank account through and answers 200; an unknown session is 400")
+    @DisplayName(
+            "the read passes the selection and the bank account through and answers 200; an unknown session is 400")
     void read() throws Exception {
         UUID bank = UUID.fromString("019a0000-0000-7000-8000-00000000b000");
         when(service.undeposited(List.of(SESSION), bank))
@@ -132,12 +133,16 @@ class BankDepositControllerTest extends BaseIntegrationTest {
     @DisplayName("a missing or invalid field is 400 VALIDATION_ERROR naming it, before the service")
     void bodiesAreValidated() throws Exception {
         List<Map.Entry<String, String>> bodies = List.of(
-                Map.entry("bankGlAccountId", BODY.replace("\"bankGlAccountId\":\"019a0000-0000-7000-8000-00000000b000\",", "")),
+                Map.entry(
+                        "bankGlAccountId",
+                        BODY.replace("\"bankGlAccountId\":\"019a0000-0000-7000-8000-00000000b000\",", "")),
                 Map.entry("depositDate", BODY.replace("\"depositDate\":\"2026-10-08\",", "")),
                 Map.entry("currencyCode", BODY.replace("\"currencyCode\":\"USD\",", "")),
                 Map.entry("currencyCode", BODY.replace("\"currencyCode\":\"USD\"", "\"currencyCode\":\"usd\"")),
                 Map.entry("sessionIds", BODY.replace("[\"" + SESSION + "\"]", "[]")),
-                Map.entry("sessionIds", BODY.replace("[\"" + SESSION + "\"]", "[\"" + SESSION + "\",\"" + SESSION + "\"]")),
+                Map.entry(
+                        "sessionIds",
+                        BODY.replace("[\"" + SESSION + "\"]", "[\"" + SESSION + "\",\"" + SESSION + "\"]")),
                 Map.entry("requestId", BODY.replace("\"requestId\":\"019a0000-0000-7000-8000-000000000301\",", "")),
                 Map.entry("depositSlipReference", BODY.replace("DS-20261008-01", "X".repeat(101))));
         for (Map.Entry<String, String> body : bodies) {
@@ -173,7 +178,9 @@ class BankDepositControllerTest extends BaseIntegrationTest {
                 .andExpect(jsonPath("$.currencyCode").value("USD"))
                 .andExpect(jsonPath("$.sessions[0].bagNumbers[0]").value("B-0912"))
                 .andExpect(jsonPath("$.replayed").value(false));
-        post(DEPOSITS, CREATE, BODY).andExpect(status().isOk()).andExpect(jsonPath("$.replayed").value(true));
+        post(DEPOSITS, CREATE, BODY)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.replayed").value(true));
 
         when(service.get(DEPOSIT)).thenReturn(response(DepositStatus.RECORDED, false));
         mockMvc.perform(get(DEPOSITS + "/" + DEPOSIT)
@@ -203,8 +210,14 @@ class BankDepositControllerTest extends BaseIntegrationTest {
                     422,
                     "AMOUNT_PRECISION_EXCEEDS_CURRENCY"
                 },
-                new Object[] {new AccountingPeriodClosedException("2026-09", "Period 2026-09 is closed"), 422, "PERIOD_CLOSED"},
-                new Object[] {new AccountingPeriodHardLockedException(LocalDate.of(2026, 9, 1), "Before the hard-lock date"), 422, "PERIOD_HARD_LOCKED"},
+                new Object[] {
+                    new AccountingPeriodClosedException("2026-09", "Period 2026-09 is closed"), 422, "PERIOD_CLOSED"
+                },
+                new Object[] {
+                    new AccountingPeriodHardLockedException(LocalDate.of(2026, 9, 1), "Before the hard-lock date"),
+                    422,
+                    "PERIOD_HARD_LOCKED"
+                },
                 new Object[] {new LocationScopeDeniedException(CREATE, "x"), 403, "LOCATION_SCOPE_DENIED"});
         for (Object[] refusal : cases) {
             doThrow((RuntimeException) refusal[0]).when(service).record(any());
@@ -221,8 +234,14 @@ class BankDepositControllerTest extends BaseIntegrationTest {
                 new Object[] {cash(CashSetupException.Code.DEPOSIT_NOT_FOUND), 404},
                 new Object[] {cash(CashSetupException.Code.DEPOSIT_ALREADY_REVERSED), 409},
                 new Object[] {cash(CashSetupException.Code.IDEMPOTENCY_CONFLICT), 409},
-                new Object[] {new AccountingPeriodClosedException("2026-09", "Period 2026-09 is closed"), 422, "PERIOD_CLOSED"},
-                new Object[] {new AccountingPeriodHardLockedException(LocalDate.of(2026, 9, 1), "Before the hard-lock date"), 422, "PERIOD_HARD_LOCKED"});
+                new Object[] {
+                    new AccountingPeriodClosedException("2026-09", "Period 2026-09 is closed"), 422, "PERIOD_CLOSED"
+                },
+                new Object[] {
+                    new AccountingPeriodHardLockedException(LocalDate.of(2026, 9, 1), "Before the hard-lock date"),
+                    422,
+                    "PERIOD_HARD_LOCKED"
+                });
         for (Object[] refusal : cases) {
             doThrow((RuntimeException) refusal[0]).when(service).reverse(eq(DEPOSIT), any());
             post(REVERSAL, REVERSE, REVERSAL_BODY)
@@ -238,16 +257,17 @@ class BankDepositControllerTest extends BaseIntegrationTest {
     }
 
     private ResultActions post(String path, String authorities, String body) throws Exception {
-        return mockMvc.perform(
-                org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(path)
-                        .header("X-User", TEST_USER)
-                        .header("X-Authorities", authorities)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body));
+        return mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(path)
+                .header("X-User", TEST_USER)
+                .header("X-Authorities", authorities)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body));
     }
 
     private static String code(Object[] refusal) {
-        return refusal.length > 2 ? (String) refusal[2] : ((CashSetupException) refusal[0]).getCode().name();
+        return refusal.length > 2
+                ? (String) refusal[2]
+                : ((CashSetupException) refusal[0]).getCode().name();
     }
 
     private static CashSetupException cash(CashSetupException.Code code) {

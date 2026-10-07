@@ -718,7 +718,8 @@ class RolePermissionBaselineTest {
         @DisplayName("CAP:550 S18: accounting:deposit:create is held by exactly ACCOUNTING_CLERK, ADMIN and CONTROLLER;"
                 + " accounting:deposit:reverse by exactly ADMIN and CONTROLLER (OI-5, AW31)")
         void depositHolders() {
-            assertThat(holdersOf("accounting:deposit:create")).containsExactly("ACCOUNTING_CLERK", "ADMIN", "CONTROLLER");
+            assertThat(holdersOf("accounting:deposit:create"))
+                    .containsExactly("ACCOUNTING_CLERK", "ADMIN", "CONTROLLER");
             assertThat(holdersOf("accounting:deposit:reverse")).containsExactly("ADMIN", "CONTROLLER");
         }
 

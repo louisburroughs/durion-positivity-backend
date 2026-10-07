@@ -60,7 +60,8 @@ public record DepositReversalRequest(
     public void requireValid() {
         if (reason == null || reason.trim().length() < CashRequests.MIN_JUSTIFICATION) {
             throw InvalidRequestParameterException.forField(
-                    "reason", "reason is required and must be at least " + CashRequests.MIN_JUSTIFICATION + " characters");
+                    "reason",
+                    "reason is required and must be at least " + CashRequests.MIN_JUSTIFICATION + " characters");
         }
         if (reason.trim().length() > MAX_REASON) {
             throw InvalidRequestParameterException.forField(

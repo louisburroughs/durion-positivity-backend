@@ -86,7 +86,9 @@ public class UndepositedCashGauge {
         }));
         amount.set(total.get());
         oldestAgeDays.set(
-                oldest.get() == null ? 0 : Math.max(0, Duration.between(oldest.get(), now).toDays()));
+                oldest.get() == null
+                        ? 0
+                        : Math.max(0, Duration.between(oldest.get(), now).toDays()));
         log.debug("Undeposited drawer cash {} across tenants, oldest {} day(s)", total.get(), oldestAgeDays.get());
     }
 
