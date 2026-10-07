@@ -500,6 +500,7 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
      */
     @Test
     void bankReconciliationPolicyAndReadinessAreTenantScoped() {
+        seedAccountingTimeZone(TENANT_B);
         TransactionTemplate tx = new TransactionTemplate(transactionManager);
         BankReconciliationPolicyRequest request = new BankReconciliationPolicyRequest();
         request.setClosePolicy(BankRecClosePolicy.ADVISORY);

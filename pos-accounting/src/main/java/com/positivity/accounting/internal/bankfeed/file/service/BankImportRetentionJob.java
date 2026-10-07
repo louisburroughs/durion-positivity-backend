@@ -66,6 +66,8 @@ public class BankImportRetentionJob {
      * @return how many files were deleted
      */
     public int purgeForBoundTenant() {
+        // Intentionally UTC (#2558 ruling): retention is not an accounting date. The purge day and the stamp
+        // (BankImportServiceImpl#retentionUntil) are in the same zone, so a file is kept exactly its retention days.
         LocalDate today = LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC);
         Instant now = Instant.now(clock);
         List<BankImport> expired = imports.findByRetentionUntilBeforeAndFilePurgedAtIsNull(today);

@@ -90,7 +90,11 @@ class BankReconciliationGuardsAndViewsTest {
                         clock,
                         com.positivity.accounting.internal.service.TestZoneResolvers.utc(clock)),
                 calculator,
-                new ReconciliationSupport(reconciliationRepository, calculator, clock),
+                new ReconciliationSupport(
+                        reconciliationRepository,
+                        calculator,
+                        clock,
+                        com.positivity.accounting.internal.service.TestZoneResolvers.utc(clock)),
                 auditRecorder,
                 reviewService);
     }

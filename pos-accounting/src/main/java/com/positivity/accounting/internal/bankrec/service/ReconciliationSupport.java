@@ -7,11 +7,11 @@ import com.positivity.accounting.internal.bankrec.intake.BankRecException;
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationRepository;
 import com.positivity.accounting.internal.exception.ReconciliationAlreadyFinalizedException;
 import com.positivity.accounting.internal.exception.ReconciliationNotFoundException;
+import com.positivity.accounting.internal.service.AccountingCalendarZoneResolver;
 import com.positivity.security.common.SecurityContextHelper;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +33,7 @@ public class ReconciliationSupport {
     private final BankReconciliationRepository reconciliations;
     private final ReconciliationCalculator calculator;
     private final Clock clock;
+    private final AccountingCalendarZoneResolver zoneResolver;
 
     /** The reconciliation, or 404 {@code RECONCILIATION_NOT_FOUND}. */
     public @NonNull BankReconciliation require(@NonNull UUID reconciliationId) {
@@ -118,9 +119,10 @@ public class ReconciliationSupport {
         return Instant.now(clock);
     }
 
-    /** Today, on the shared clock. */
+    /** Today in the tenant's accounting calendar (#2558). */
     public @NonNull LocalDate today() {
-        return LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC);
+        // The tenant's accounting calendar (#2558 ruling): outstanding items age in the accounting calendar.
+        return zoneResolver.today();
     }
 
     /** Whether the caller holds {@code authority}. */

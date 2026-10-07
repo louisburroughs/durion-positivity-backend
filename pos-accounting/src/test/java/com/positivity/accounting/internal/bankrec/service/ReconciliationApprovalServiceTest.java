@@ -139,7 +139,11 @@ class ReconciliationApprovalServiceTest {
         ReconciliationLifecycle lifecycle = new ReconciliationLifecycle(
                 clock, reconciliations, matches, glMatches, bankMatches, transactions, items, audit, facts);
         service = new ReconciliationApprovalServiceImpl(
-                new ReconciliationSupport(reconciliations, calculator, clock),
+                new ReconciliationSupport(
+                        reconciliations,
+                        calculator,
+                        clock,
+                        com.positivity.accounting.internal.service.TestZoneResolvers.utc(clock)),
                 new ApprovalGate(usd()),
                 policy,
                 lifecycle,

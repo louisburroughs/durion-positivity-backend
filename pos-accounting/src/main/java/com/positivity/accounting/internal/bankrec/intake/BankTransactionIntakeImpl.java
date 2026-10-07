@@ -15,6 +15,7 @@ import com.positivity.accounting.internal.bankrec.repository.BankStatementReposi
 import com.positivity.accounting.internal.bankrec.repository.BankTransactionRepository;
 import com.positivity.accounting.internal.bankrec.service.BankCashAccounts;
 import com.positivity.accounting.internal.bankrec.service.BankRecAuditRecorder;
+import com.positivity.accounting.internal.bankrec.service.BankRecCalendar;
 import com.positivity.accounting.internal.bankrec.service.BankStatementFacts;
 import com.positivity.accounting.internal.bankrec.service.FunctionalCurrency;
 import com.positivity.accounting.internal.bankrec.service.StatementSupersession;
@@ -79,6 +80,7 @@ public class BankTransactionIntakeImpl implements BankTransactionIntake {
     private final BankStatementFacts facts;
     private final StatementSupersession supersession;
     private final Clock clock;
+    private final BankRecCalendar calendar;
 
     @Override
     public @NonNull IntakeResult accept(@NonNull BankTransactionsObservedV1 batch, @NonNull IntakeContext ctx) {
@@ -250,7 +252,7 @@ public class BankTransactionIntakeImpl implements BankTransactionIntake {
         String acknowledgement = StatementHeaderChecks.check(
                         statements,
                         functionalCurrency,
-                        clock,
+                        calendar,
                         glAccountId,
                         header,
                         ctx.gapAcknowledgement(),

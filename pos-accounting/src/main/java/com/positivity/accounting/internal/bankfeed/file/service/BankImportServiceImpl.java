@@ -227,6 +227,7 @@ public class BankImportServiceImpl implements BankImportService {
         created.setSupersessionJustification(supersessionJustification);
         applyOptions(created, options, parsed);
         created.setCreatedBy(actor);
+        // Intentionally UTC (#2558 ruling): retention is not an accounting date; BankImportRetentionJob purges in UTC.
         created.setRetentionUntil(
                 LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC).plusDays(retentionDays));
         created.setStatus(parsed.mappingResolved() ? BankImportStatus.VALIDATED : BankImportStatus.UPLOADED);

@@ -70,7 +70,7 @@ class ReceivablesWorklistPostgresIT extends PostgresTenancyTestBase {
     @DisplayName("AC1: three AVAILABLE payments listed oldest first, the FULLY_APPLIED one not; the summary covers"
             + " all three whatever the page size")
     void listsAvailablePaymentsOldestFirst() {
-        UUID tenant = UUIDv7Generator.generate();
+        UUID tenant = tenantWithZone();
         UUID customer = UUIDv7Generator.generate();
         Instant now = Instant.now(clock);
         UUID second = payment(tenant, customer, "200.00", "200.00", "AVAILABLE", now.minusSeconds(200), null, "CARD");
@@ -101,7 +101,7 @@ class ReceivablesWorklistPostgresIT extends PostgresTenancyTestBase {
     @Test
     @DisplayName("AC2 against the database: a payment taken against an open invoice of its amount suggests it")
     void remittanceSuggestion() {
-        UUID tenant = UUIDv7Generator.generate();
+        UUID tenant = tenantWithZone();
         UUID customer = UUIDv7Generator.generate();
         UUID invoice = invoice(tenant, customer, "INV-1", "POSTED", "4615.00", LocalDate.now(clock));
         customerParty(tenant, customer, "Rivera Trucking", "CUST-00412");
@@ -127,7 +127,7 @@ class ReceivablesWorklistPostgresIT extends PostgresTenancyTestBase {
     @DisplayName("AC5: 500.00 less 100.00 applied of which 50.00 is reversed (two 50.00 applications, one reversed in"
             + " full), a posted 30.00 memo, a 20.00 credit and a 40.00 deposit leaves 360.00")
     void balanceNetsEveryTerm() {
-        UUID tenant = UUIDv7Generator.generate();
+        UUID tenant = tenantWithZone();
         UUID customer = UUIDv7Generator.generate();
         UUID invoice = invoice(tenant, customer, "INV-500", "POSTED", "500.00", LocalDate.now(clock));
         UUID source = payment(tenant, customer, "100.00", "0.00", "FULLY_APPLIED", Instant.now(clock), null, null);
@@ -152,7 +152,7 @@ class ReceivablesWorklistPostgresIT extends PostgresTenancyTestBase {
     @Test
     @DisplayName("AC6: only the POSTED invoice with a balance is open, and the total equals aged receivables today")
     void openInvoicesMatchAgedReceivables() {
-        UUID tenant = UUIDv7Generator.generate();
+        UUID tenant = tenantWithZone();
         UUID customer = UUIDv7Generator.generate();
         UUID other = UUIDv7Generator.generate();
         LocalDate today = LocalDate.now(clock);
@@ -183,8 +183,8 @@ class ReceivablesWorklistPostgresIT extends PostgresTenancyTestBase {
     @Test
     @DisplayName("AC10: tenant B's payments and invoices never appear to tenant A")
     void tenantIsolation() {
-        UUID tenantA = UUIDv7Generator.generate();
-        UUID tenantB = UUIDv7Generator.generate();
+        UUID tenantA = tenantWithZone();
+        UUID tenantB = tenantWithZone();
         UUID customer = UUIDv7Generator.generate();
         UUID paymentA = payment(tenantA, customer, "10.00", "10.00", "AVAILABLE", Instant.now(clock), null, null);
         payment(tenantB, customer, "20.00", "20.00", "AVAILABLE", Instant.now(clock), null, null);
@@ -205,10 +205,10 @@ class ReceivablesWorklistPostgresIT extends PostgresTenancyTestBase {
     }
 
     @Test
-    @DisplayName("AC11: a page of 100 open invoices costs the same queries as one — the candidates and five balance"
-            + " terms")
+    @DisplayName("AC11: a page of 100 open invoices costs the same queries as one — the candidates, five balance"
+            + " terms and the accounting time zone")
     void boundedQueries() throws Exception {
-        UUID tenant = UUIDv7Generator.generate();
+        UUID tenant = tenantWithZone();
         UUID customer = UUIDv7Generator.generate();
         UUID first = invoice(tenant, customer, "INV-0", "POSTED", "10.00", LocalDate.now(clock));
         UUID source = payment(tenant, customer, "1.00", "0.00", "FULLY_APPLIED", Instant.now(clock), null, null);
@@ -227,8 +227,9 @@ class ReceivablesWorklistPostgresIT extends PostgresTenancyTestBase {
 
         assertThat(forHundred).as("a hundred invoices cost no more than one").isEqualTo(forOne);
         assertThat(forOne)
-                .as("one candidate query plus one grouped query per balance term")
-                .isEqualTo(6);
+                .as("one candidate query, one grouped query per balance term, and the tenant's accounting time zone"
+                        + " (#2558: today is the tenant's day)")
+                .isEqualTo(7);
     }
 
     /**

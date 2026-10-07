@@ -303,8 +303,11 @@ an API-submitted event without a transaction date). An ArchUnit rule
 excepted) on anything that reads the clock's or the JVM's zone: `Clock.getZone()`, `Clock.systemDefaultZone()`,
 `ZoneId`/`ZoneOffset.systemDefault()`, `TimeZone.getDefault()`, and `now()` / `now(Clock)` on `LocalDate`,
 `LocalDateTime`, `LocalTime`, `YearMonth`, `Year`, `MonthDay`, `ZonedDateTime`, `OffsetDateTime` and `OffsetTime`.
-A technical UTC value (bank-import retention, bank reconciliation aging and statement checks) states
-`ZoneOffset.UTC` explicitly. The Kafka posting
+Bank reconciliation dates follow the accounting calendar too (Accounting Domain ruling on #2558): the
+"statement end date must not be in the future" check, the close-readiness aging cap and outstanding-item aging
+all read today through the resolver (`BankRecCalendar` for the intake port, `ReconciliationSupport.today()`), and
+answer `422 ACCOUNTING_TIME_ZONE_UNSET` without a zone. Bank-import file retention stays intentionally UTC
+(retention, not accounting; the stamp and the purge use the same zone). The Kafka posting
 listeners treat an unset zone as they treat a closed period: the posting fails and the record is retried by the
 container (DLQ after the retries; Accounting Domain ruling on #2558); only the settled-payment path holds a row
 `SUSPENDED / ACCOUNTING_TIME_ZONE_UNSET`. Each failed attempt is logged with `reason=ACCOUNTING_TIME_ZONE_UNSET`

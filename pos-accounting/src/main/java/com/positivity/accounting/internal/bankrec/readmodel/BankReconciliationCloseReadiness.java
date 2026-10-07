@@ -46,11 +46,10 @@ import com.positivity.accounting.internal.exception.PeriodBankReconciliationInco
 import com.positivity.accounting.internal.exception.PeriodBankReconciliationIncompleteException.UnreconciledAccount;
 import com.positivity.accounting.internal.exception.PeriodCloseExceptionNotPermittedException;
 import com.positivity.accounting.internal.security.AccountingPermissions;
+import com.positivity.accounting.internal.service.AccountingCalendarZoneResolver;
 import com.positivity.security.common.SecurityContextHelper;
 import java.math.BigDecimal;
-import java.time.Clock;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -112,7 +111,7 @@ public class BankReconciliationCloseReadiness {
     private static final List<BankTransactionStatus> UNRESOLVED =
             List.of(BankTransactionStatus.UNMATCHED, BankTransactionStatus.POSSIBLE_DUPLICATE);
 
-    private final Clock clock;
+    private final AccountingCalendarZoneResolver zoneResolver;
     private final BankRecPolicy policy;
     private final BankRecSettings settings;
     private final FunctionalCurrency currency;
@@ -360,7 +359,8 @@ public class BankReconciliationCloseReadiness {
         }
         incompleteImports(id, end).ifPresent(checks::add);
 
-        LocalDate agingDay = earlier(end, LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC));
+        // Today in the tenant's accounting calendar (#2558 ruling), the calendar the period itself is cut in.
+        LocalDate agingDay = earlier(end, zoneResolver.today());
         List<BankReconciliationOutstandingItem> open =
                 outstandingItems.findByGlAccountIdAndItemDateLessThanEqual(id, end).stream()
                         .filter(i -> i.getStatus() == OutstandingItemStatus.OPEN)
