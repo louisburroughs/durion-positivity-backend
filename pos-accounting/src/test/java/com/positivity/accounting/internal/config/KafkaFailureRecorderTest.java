@@ -57,4 +57,14 @@ class KafkaFailureRecorderTest {
     void noRegistry() {
         new KafkaFailureRecorder(null).failed(RECORD, new AccountingTimeZoneUnsetException(), 1);
     }
+
+    @Test
+    @DisplayName("a cause cycle (A -> B -> A) ends at the depth cap instead of looping")
+    void causeCycleTerminates() {
+        IllegalStateException a = new IllegalStateException("a");
+        IllegalStateException b = new IllegalStateException("b", a);
+        a.initCause(b);
+
+        assertThat(KafkaFailureRecorder.reasonOf(a)).isEqualTo("OTHER");
+    }
 }

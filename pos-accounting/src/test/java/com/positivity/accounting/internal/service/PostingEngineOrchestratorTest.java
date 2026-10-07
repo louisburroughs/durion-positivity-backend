@@ -761,6 +761,31 @@ class PostingEngineOrchestratorTest {
     class PeriodGatePreCheckTests {
 
         @Test
+        @DisplayName("#2558: an explicit-date event with no accounting time zone is SUSPENDED /"
+                + " ACCOUNTING_TIME_ZONE_UNSET, not FAILED / INTERNAL_ERROR")
+        void unsetZone_suspendsWithTimeZoneUnset() {
+            when(idempotencyService.isKeyProcessed(anyString())).thenReturn(false);
+            when(accountingPeriodGate.isPostingBlocked(any()))
+                    .thenThrow(new com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetException());
+            when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+            when(reprocessingAttemptHistoryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+            PostingResult result = orchestrator.processEvent(testEvent, testMappingVersion, testUserId, true);
+
+            assertThat(result.isSuccess()).isFalse();
+            assertThat(result.getFailureReason()).isEqualTo(PostingFailureReason.ACCOUNTING_TIME_ZONE_UNSET);
+            verify(accountingEventRepository).save(eventCaptor.capture());
+            AccountingEvent savedEvent = eventCaptor.getValue();
+            assertThat(savedEvent.getStatus()).isEqualTo(AccountingEventStatus.SUSPENDED);
+            assertThat(savedEvent.getFailureReasonCode()).isEqualTo("ACCOUNTING_TIME_ZONE_UNSET");
+            assertThat(savedEvent.getFailureDetails())
+                    .contains("set the accounting time zone")
+                    .contains("reprocess");
+            verify(journalEntryService, never()).createJournalEntry(any());
+            verify(idempotencyService, never()).registerKey(anyString(), any());
+        }
+
+        @Test
         @DisplayName("autoPost into a closed period suspends the event with PERIOD_CLOSED before evaluation")
         void autoPostClosedPeriod_suspendsWithPeriodClosed() {
             // Given

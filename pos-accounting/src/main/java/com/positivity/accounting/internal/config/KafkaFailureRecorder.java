@@ -23,6 +23,9 @@ public class KafkaFailureRecorder {
     static final String TIME_ZONE_UNSET = "ACCOUNTING_TIME_ZONE_UNSET";
     static final String OTHER = "OTHER";
 
+    /** How deep the cause chain is searched. */
+    static final int MAX_CAUSE_DEPTH = 16;
+
     private final @Nullable MeterRegistry meterRegistry;
 
     public KafkaFailureRecorder(@Nullable MeterRegistry meterRegistry) {
@@ -31,12 +34,11 @@ public class KafkaFailureRecorder {
 
     /** The reason code of a listener failure: {@value #TIME_ZONE_UNSET} when any cause is the unset zone. */
     static @NonNull String reasonOf(@Nullable Throwable failure) {
-        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+        // Bounded: a cause chain can be a cycle (A -> B -> A).
+        Throwable cause = failure;
+        for (int depth = 0; cause != null && depth < MAX_CAUSE_DEPTH; depth++, cause = cause.getCause()) {
             if (cause instanceof AccountingTimeZoneUnsetException) {
                 return TIME_ZONE_UNSET;
-            }
-            if (cause.getCause() == cause) {
-                break;
             }
         }
         return OTHER;

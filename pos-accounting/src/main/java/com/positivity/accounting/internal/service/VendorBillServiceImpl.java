@@ -88,14 +88,14 @@ public class VendorBillServiceImpl implements VendorBillService {
     private final VendorBillDuplicateGuard duplicateGuard;
     private final AccountingSequenceLocker sequenceLocker;
 
+    private final AccountingCalendarZoneResolver zoneResolver;
+
     /**
      * The goods-receipt create, in a transaction this class can see the end of (#2501): the original
      * of a bill that lost a race under {@code uq_vendor_bill_duplicate_rule} is read after this
      * template has returned. By then the failed transaction has rolled back when this class began it,
      * and is marked rollback-only when it joined a caller's.
      */
-    private final AccountingCalendarZoneResolver zoneResolver;
-
     private final TransactionTemplate goodsReceiptTransaction;
 
     public VendorBillServiceImpl(
