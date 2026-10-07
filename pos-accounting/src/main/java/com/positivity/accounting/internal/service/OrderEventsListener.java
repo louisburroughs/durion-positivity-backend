@@ -31,8 +31,12 @@ import tools.jackson.databind.ObjectMapper;
  * processed_events}, transient DB errors and posting failures (closed period, missing mapping,
  * anything unexpected) propagate unwrapped and unmarked for container retry / DLQ (ADR-0044 §4),
  * malformed payloads logged and marked processed so a poison record never blocks the partition.
- * Only {@code order.session.closed} and {@code order.session.opened} events are handled; the topic's
- * other (high-volume) fact types are ignored without recording their eventIds.
+ * Only {@code order.session.closed} and {@code order.session.opened} events are handled.
+ *
+ * <p><b>Reconciliation (#2579).</b> Every eventId read from the topic is recorded in {@code processed_events}
+ * under the {@link #OWNER} tag, the topic's other fact types included: pos-order's {@code order.manifest.v1}
+ * counts every fact of a window, and {@link OrderManifestListener} compares it against exactly these rows. A
+ * fact type this listener ignores is marked processed and nothing else.
  *
  * <p><b>Transaction shape (ADR-0044 as amended by #2146).</b> The listener method is not
  * transactional: the envelope and payload are parsed and {@code processed_events} checked before
@@ -64,6 +68,13 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 @KafkaRails
 public class OrderEventsListener {
+
+    /**
+     * Owner tag stamped on every {@code processed_events} row this listener writes, scoping {@link
+     * OrderManifestListener}'s window scan to {@code order.events.v1} in a table every listener of this
+     * module shares (#2579).
+     */
+    static final String OWNER = "order";
 
     /**
      * Event type codes this listener records an {@code accounting_event} row for, one per consumed
@@ -127,11 +138,6 @@ public class OrderEventsListener {
             return;
         }
         String eventType = envelope.path("eventType").stringValue(null);
-        boolean opened = RegisterSessionOpenedV1.EVENT_TYPE.equals(eventType);
-        if (!opened && !RegisterSessionClosedV1.EVENT_TYPE.equals(eventType)) {
-            log.debug("Ignoring order event type={}", eventType);
-            return;
-        }
         String eventId = envelope.path("eventId").stringValue(null);
         if (eventId == null || eventId.isBlank()) {
             log.warn("Skipping {} event without eventId: {}", eventType, message);
@@ -139,6 +145,13 @@ public class OrderEventsListener {
         }
         if (processedEventRepository.existsById(eventId)) {
             log.debug("Skipping duplicate {} event eventId={}", eventType, eventId);
+            return;
+        }
+        boolean opened = RegisterSessionOpenedV1.EVENT_TYPE.equals(eventType);
+        if (!opened && !RegisterSessionClosedV1.EVENT_TYPE.equals(eventType)) {
+            // Recorded all the same: the owner's manifest counts every fact of the window (#2579).
+            log.debug("Ignoring order event type={} eventId={}", eventType, eventId);
+            markInOwnTransaction(eventId);
             return;
         }
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0L);
@@ -230,6 +243,7 @@ public class OrderEventsListener {
     private void markProcessed(@NonNull String eventId) {
         processedEventRepository.save(ProcessedEvent.builder()
                 .eventId(eventId)
+                .owner(OWNER)
                 .processedAt(Instant.now(clock))
                 .build());
     }

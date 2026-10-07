@@ -2,6 +2,7 @@ package com.positivity.order.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.Mockito.mock;
 
 import com.positivity.domainevents.order.PurchaseOrderRequestedV1;
 import com.positivity.order.internal.dto.purchaseorder.CreatePurchaseOrderRequest;
@@ -10,6 +11,7 @@ import com.positivity.order.internal.repository.PurchaseOrderRepository;
 import com.positivity.tenancy.TenantContext;
 import com.positivity.tenancy.testing.TenantTestSupport;
 import java.time.Clock;
+import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.jspecify.annotations.NonNull;
@@ -70,6 +72,8 @@ class PurchaseOrderCommandListenerTransactionTest {
                 processedEventRepository,
                 purchaseOrderRepository,
                 failingService,
+                mock(OrderOutboxReplayService.class),
+                Duration.ofDays(30),
                 transactionManager);
     }
 

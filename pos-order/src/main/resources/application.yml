@@ -99,6 +99,13 @@ pos:
       accounting-manifest-topic: ${POS_ORDER_ACCOUNTING_MANIFEST_TOPIC:accounting.manifest.v1}
       accounting-manifest-consumer-group: ${POS_ORDER_ACCOUNTING_MANIFEST_CONSUMER_GROUP:pos-order-accounting-manifests}
       accounting-commands-topic: ${POS_ORDER_ACCOUNTING_COMMANDS_TOPIC:accounting.commands.v1}
+    # Reconciliation manifests of order.events.v1, one per tenant per closed window (ADR-0044 section 4,
+    # #2579): consumers compare their processed-events log and send order.outbox.replay-requested on
+    # order.commands.v1 when a window disagrees.
+    manifest:
+      topic: ${POS_ORDER_MANIFEST_TOPIC:order.manifest.v1}
+      window: ${POS_ORDER_MANIFEST_WINDOW:PT1H}
+      grace: ${POS_ORDER_MANIFEST_GRACE:PT5M}
     pricing:
       # PriceQuoteRequest requires a customerTierId; served from config until a customer→tier
       # mapping feed exists (the ext_customer replica carries only the tier name). Story B1.

@@ -105,6 +105,10 @@ pos:
       inventory-events-topic: ${POS_ACCOUNTING_KAFKA_INVENTORY_EVENTS_TOPIC:inventory.events.v1}
       # Order fact feed for register-session over/short GL posting (odoo-parity G3, #1083)
       order-events-topic: ${POS_ACCOUNTING_KAFKA_ORDER_EVENTS_TOPIC:order.events.v1}
+      # Its reconciliation manifest + the replay-request command topic (ADR-0044 section 4, #2579)
+      order-manifest-topic: ${POS_ACCOUNTING_KAFKA_ORDER_MANIFEST_TOPIC:order.manifest.v1}
+      order-manifest-consumer-group: ${POS_ACCOUNTING_KAFKA_ORDER_MANIFEST_CONSUMER_GROUP:pos-accounting-order-manifests}
+      order-commands-topic: ${POS_ACCOUNTING_KAFKA_ORDER_COMMANDS_TOPIC:order.commands.v1}
       workorder-commands-topic: ${POS_ACCOUNTING_KAFKA_WORKORDER_COMMANDS_TOPIC:workorder.commands.v1}
       # Workorder fact feed resolving outstanding invoice-regeneration commands (#1537 D1)
       workorder-events-topic: ${POS_ACCOUNTING_KAFKA_WORKORDER_EVENTS_TOPIC:workorder.events.v1}
