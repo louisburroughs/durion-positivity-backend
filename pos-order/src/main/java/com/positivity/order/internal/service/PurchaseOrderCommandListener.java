@@ -40,8 +40,10 @@ import tools.jackson.databind.ObjectMapper;
  * only {@code order.events.v1} rows ({@link OrderOutboxReplayService}). A window with an {@code until} is
  * replayed as {@code [since, until)}, one without as everything since {@code since}, each widened by a
  * second for the skew between an outbox row's {@code createdAt} and its event id. A window starting further
- * back than {@code pos.order.outbox.replay.max-lookback} (default {@code P30D}) or without a parsable
- * {@code since} is logged and dropped; a transient database failure propagates for the container to retry.
+ * back than {@code pos.order.outbox.replay.max-lookback} (default {@code P30D}), without a parsable
+ * {@code since}, or with an {@code until} that is unparsable or not after {@code since} is logged and
+ * dropped, never widened; a transient database failure propagates for the container to retry. Any other
+ * {@code commandType} is ignored and recorded nowhere: it never falls through to the purchase-order path.
  *
  * <p>One consumer, not one per command, for the same reason as pos-supplier's {@code
  * SupplierCommandListener}: a second consumer group on this topic would see every purchase-order command
@@ -132,11 +134,16 @@ public class PurchaseOrderCommandListener {
             log.warn("Skipping unparsable order command", e);
             return;
         }
-        String commandType = envelope.path("commandType").stringValue(null);
-        if (commandType != null
-                && COMMAND_OUTBOX_REPLAY_REQUESTED.equals(
-                        commandType.toUpperCase(Locale.ROOT).replace('.', '_').replace('-', '_'))) {
-            handleOutboxReplayRequested(envelope);
+        String rawCommandType = envelope.path("commandType").stringValue(null);
+        if (rawCommandType != null && !rawCommandType.isBlank()) {
+            // The platform command shape, never a purchase-order envelope: dispatched here, recorded nowhere.
+            String commandType =
+                    rawCommandType.toUpperCase(Locale.ROOT).replace('.', '_').replace('-', '_');
+            if (COMMAND_OUTBOX_REPLAY_REQUESTED.equals(commandType)) {
+                handleOutboxReplayRequested(envelope);
+                return;
+            }
+            log.debug("Ignoring unsupported commandType={} message={}", commandType, message);
             return;
         }
         String eventType = envelope.path("eventType").stringValue(null);
@@ -199,8 +206,14 @@ public class PurchaseOrderCommandListener {
             return;
         }
         Instant until = parseInstant(payload, "until");
+        if ((payload.hasNonNull("until") && until == null) || (until != null && !until.isAfter(since))) {
+            // An unparsable, empty or inverted window is malformed: widening it to "everything since" would
+            // replay far more than was asked for.
+            log.warn("Ignoring order outbox replay command with a malformed or inverted window: {}", command);
+            return;
+        }
         try {
-            int queued = until != null && until.isAfter(since)
+            int queued = until != null
                     ? outboxReplayService.replayBetween(
                             since.minus(REPLAY_WINDOW_SLACK), until.plus(REPLAY_WINDOW_SLACK))
                     : outboxReplayService.replaySince(since.minus(REPLAY_WINDOW_SLACK));

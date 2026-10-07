@@ -340,9 +340,11 @@ Uses Flyway with PostgreSQL. Migrations at `src/main/resources/db/migration`: `V
 pos-invoice fact, ADR-0067 DF-3; ON_ACCOUNT rows stay null). Alpha databases are recreated rather than migrated
 (`docs/runbooks/flyway-baseline-reset.md`, "Alpha Cutover").
 
-Forward migrations: `V2__order_prior_transmitted_version.sql` (#2492) and
+Forward migrations include `V2__order_prior_transmitted_version.sql` (#2492),
 `V3__ext_customer_house_account.sql` (CAP:550 S8 — the nullable `ext_customer.house_account` flag that marks the
-tenant's CASH house account; filled by a party-fact replay).
+tenant's CASH house account; filled by a party-fact replay), and
+`V6__event_outbox_published_window_index.sql` (#2579 — the partial `(topic, created_at) WHERE published_at IS NOT
+NULL` index the reconciliation manifest and its replay read `event_outbox` through, as the other fact owners have).
 
 ## Development
 

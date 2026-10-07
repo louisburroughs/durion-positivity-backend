@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.positivity.order.PostgresSliceTestBase;
 import com.positivity.order.internal.entity.OutboxEvent;
+import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -18,7 +19,8 @@ import org.springframework.beans.factory.annotation.Autowired;
  * real PostgreSQL schema. A replay re-queues only the requesting tenant's published {@code order.events.v1}
  * rows of the window: the commands this module queues on the same outbox for other owners, another tenant's
  * facts and rows outside the window keep their publication, and a row not yet published is left alone.
- * A re-queued row is back in the drain head, with its original payload and so its original event id.
+ * A re-queued row is back in the drain head, with its original payload and so its original event id. The
+ * window queries have their own partial index (V6), the one the other fact owners carry.
  */
 @DisplayName("Order outbox manifest and replay queries on PostgreSQL")
 class OutboxEventRepositoryTest extends PostgresSliceTestBase {
@@ -32,6 +34,9 @@ class OutboxEventRepositoryTest extends PostgresSliceTestBase {
 
     @Autowired
     private OutboxEventRepository outbox;
+
+    @Autowired
+    private EntityManager entityManager;
 
     /** A row created at {@code createdAt}, published a second later unless {@code published} is false. */
     private OutboxEvent row(UUID tenantId, String topic, Instant createdAt, boolean published) {
@@ -124,5 +129,16 @@ class OutboxEventRepositoryTest extends PostgresSliceTestBase {
                     assertThat(drained.getAttempts()).isZero();
                     assertThat(drained.getLastError()).isNull();
                 });
+    }
+
+    @Test
+    @DisplayName("V6 indexes the published window by topic and creation time, over published rows only")
+    void publishedWindowIndexMatchesTheQueries() {
+        Object definition = entityManager
+                .createNativeQuery("SELECT indexdef FROM pg_indexes WHERE schemaname = 'public'"
+                        + " AND tablename = 'event_outbox' AND indexname = 'idx_event_outbox_published_window'")
+                .getSingleResult();
+
+        assertThat(definition).asString().contains("(topic, created_at)").contains("WHERE (published_at IS NOT NULL)");
     }
 }

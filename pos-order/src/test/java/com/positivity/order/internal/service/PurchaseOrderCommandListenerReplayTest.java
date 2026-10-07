@@ -17,6 +17,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
@@ -79,7 +80,8 @@ class PurchaseOrderCommandListenerReplayTest {
     }
 
     @Test
-    @DisplayName("a request older than the look-back, a missing or malformed since, or another command replays nothing")
+    @DisplayName(
+            "a request older than the look-back, a missing or malformed since, or an unparsable message replays nothing")
     void ignoresWhatItCannotServe() {
         listener.onOrderCommand("""
                 {"commandType":"order.outbox.replay-requested","payload":{"since":"2026-01-01T00:00:00Z"}}
@@ -87,20 +89,63 @@ class PurchaseOrderCommandListenerReplayTest {
         listener.onOrderCommand("{\"commandType\":\"order.outbox.replay-requested\",\"payload\":{}}");
         listener.onOrderCommand("{\"commandType\":\"order.outbox.replay-requested\",\"payload\":{\"since\":\"x\"}}");
         listener.onOrderCommand("{\"commandType\":\"order.outbox.replay-requested\"}");
-        listener.onOrderCommand("{\"commandType\":\"order.something-else\",\"payload\":{}}");
         listener.onOrderCommand("not json");
 
         verifyNoInteractions(replayService);
     }
 
     @Test
+    @DisplayName("an unsupported commandType is ignored: no replay, no processed mark, no purchase-order path")
+    void unsupportedCommandTypeIsIgnored() {
+        listener.onOrderCommand("""
+                {"commandType":"order.something-else","eventType":"order.purchase-order.requested",
+                 "eventId":"evt-2","payload":{}}
+                """);
+
+        verifyNoInteractions(replayService, processedEvents, purchaseOrderService);
+    }
+
+    @Test
+    @DisplayName(
+            "an until at or before since, or an unparsable until, is dropped rather than widened to an open replay")
+    void invertedOrMalformedWindowIsDropped() {
+        listener.onOrderCommand("""
+                {"commandType":"order.outbox.replay-requested",
+                 "payload":{"since":"2026-10-07T11:00:00Z","until":"2026-10-07T10:00:00Z"}}
+                """);
+        listener.onOrderCommand("""
+                {"commandType":"order.outbox.replay-requested",
+                 "payload":{"since":"2026-10-07T10:00:00Z","until":"2026-10-07T10:00:00Z"}}
+                """);
+        listener.onOrderCommand("""
+                {"commandType":"order.outbox.replay-requested",
+                 "payload":{"since":"2026-10-07T10:00:00Z","until":"not-an-instant"}}
+                """);
+
+        verifyNoInteractions(replayService);
+    }
+
+    @Test
+    @DisplayName("a lost database connection propagates for container retry (AGENTS.md: pin with a resource failure)")
+    void resourceFailurePropagates() {
+        when(replayService.replayBetween(any(), any()))
+                .thenThrow(new DataAccessResourceFailureException("connection refused"));
+
+        assertThatExceptionOfType(DataAccessResourceFailureException.class)
+                .isThrownBy(() -> listener.onOrderCommand("""
+                        {"commandType":"order.outbox.replay-requested",
+                         "payload":{"since":"2026-10-07T10:00:00Z","until":"2026-10-07T11:00:00Z"}}
+                        """));
+        verifyNoInteractions(processedEvents);
+    }
+
+    @Test
     @DisplayName("a transient database failure propagates for container retry")
     void transientFailurePropagates() {
-        when(replayService.replayBetween(any(), any())).thenThrow(new QueryTimeoutException("timeout"));
+        when(replayService.replaySince(any())).thenThrow(new QueryTimeoutException("timeout"));
 
         assertThatExceptionOfType(QueryTimeoutException.class).isThrownBy(() -> listener.onOrderCommand("""
-                {"commandType":"order.outbox.replay-requested",
-                 "payload":{"since":"2026-10-07T10:00:00Z","until":"2026-10-07T11:00:00Z"}}
+                {"commandType":"order.outbox.replay-requested","payload":{"since":"2026-10-07T10:00:00Z"}}
                 """));
     }
 
