@@ -208,6 +208,30 @@ class AccountingEventsListenerTest {
     }
 
     @Test
+    @DisplayName("#2577: a later fact without currencyCode (schema 1 or 2) keeps an existing copy's currency; its"
+            + " amount and location still apply by state")
+    void olderFactKeepsTheStoredCurrency() {
+        when(floats.findById(FLOAT_ID))
+                .thenReturn(Optional.of(ExtAccountingRegisterFloat.builder()
+                        .registerFloatId(FLOAT_ID)
+                        .registerId("T-1")
+                        .locationId(UUID.fromString("01900000-0000-7000-8000-0000000000bb"))
+                        .amount(new java.math.BigDecimal("150.0000"))
+                        .currencyCode("CAD")
+                        .aggregateVersion(4L)
+                        .build()));
+
+        listener.onAccountingEvent(floatFact("e-13", 5, "275.00"));
+
+        ArgumentCaptor<ExtAccountingRegisterFloat> copy = ArgumentCaptor.forClass(ExtAccountingRegisterFloat.class);
+        verify(floats).save(copy.capture());
+        assertThat(copy.getValue().getCurrencyCode()).as("never re-denominated").isEqualTo("CAD");
+        assertThat(copy.getValue().getAmount()).isEqualByComparingTo("275.00");
+        assertThat(copy.getValue().getLocationId()).hasToString("01900000-0000-7000-8000-0000000000aa");
+        assertThat(copy.getValue().getAggregateVersion()).isEqualTo(5L);
+    }
+
+    @Test
     @DisplayName("an equal version applies (start-up republish and replay repair the copy)")
     void equalVersionApplies() {
         when(categories.findById(CATEGORY_ID))
