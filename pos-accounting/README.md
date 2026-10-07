@@ -278,7 +278,8 @@ Posted entries carry a sequential `entryNumber` in the format `JE-{YYYYMM}-{seq}
   `FLOAT_RELOCATION_NOT_REVERSIBLE`); a go-live or Change float entry of a register that has moved may
   not be reversed before its latest move (422 `FLOAT_REVERSAL_BEFORE_RELOCATION`), and when its 1080
   line sits at a location the register has left, the reversal also posts, on its own date, the
-  reclass that brings the reversed amount to the register's current location
+  reclass that brings the reversed amount to the register's current location (422
+  `GL_MAPPING_NOT_CONFIGURED` if `REGISTER_FLOAT` has no mapping on that date)
 - Emits a `JournalEntryReversed` outbox domain event in the same transaction (MANDATORY propagation)
   for downstream read models
 
@@ -695,10 +696,16 @@ dated the move; a zero float moves without an entry. New codes: 404 `FLOAT_REGIS
 `FLOAT_REGISTER_SESSION_OPEN`, 409 `FLOAT_RELOCATION_NOT_REVERSIBLE`, 422
 `FLOAT_REVERSAL_BEFORE_RELOCATION`.
 
+A move may not be dated before any float entry of the register — every go-live, change, relocation
+and reversal, **reversed or not**, since a reversed entry's 1080 line stays on its date and a reversal
+may be dated before the entry it reverses (`FLOAT_RELOCATION_DATE_INVALID`).
+
 A register does not move while it has an open pos-order session (#2573): `OrderEventsListener` keeps
 the `ext_order_register_session` replica from `order.session.opened` and `order.session.closed`
-(version-guarded; a session never reopens), and the relocation refuses, under the float row lock, a
-register whose latest-opened session is OPEN (422 `FLOAT_REGISTER_SESSION_OPEN`, `referenceId` = the
+(version-guarded; a session never reopens). The closed fact closes the replica in a transaction of its
+own, *before* the over/short posting transaction that holds the processed mark: a close whose posting
+fails still closes the session, and the redelivery re-applies the state-based write harmlessly. The
+relocation refuses, under the float row lock, a register whose latest-opened session is OPEN (422 `FLOAT_REGISTER_SESSION_OPEN`, `referenceId` = the
 session id; its location is logged, not returned). Accepted race: a session whose opened fact has not
 arrived does not block. The guard takes effect once pos-order publishes `order.session.opened` (S40,
 #2578); until then the replica holds only sessions seen through their close facts. The fact

@@ -51,10 +51,14 @@ import tools.jackson.databind.ObjectMapper;
  * zero variance, {@code PROCESSED / DUPLICATE_IGNORED} when the session's posting key was already
  * registered. A currency hold writes its own {@code SUSPENDED} row inside the posting service.
  *
- * <p><b>Session replica (#2571, #2573).</b> Both session facts also keep {@link RegisterSessionReplica}, in the
- * same handler transaction as the processed mark: the opened fact only writes the replica (it posts nothing and
- * records no ingestion row); the closed fact closes the replica row after its posting. The register float
- * relocation reads the replica to refuse moving a register with an open session.
+ * <p><b>Session replica (#2571, #2573).</b> Both session facts also keep {@link RegisterSessionReplica}, which the
+ * register float relocation reads to refuse moving a register with an open session. The opened fact only writes
+ * the replica (it posts nothing and records no ingestion row), together with its processed mark. The closed fact
+ * closes the replica row in a {@code REQUIRES_NEW} transaction of its own, <em>before</em> the over/short posting
+ * transaction, which keeps the processed mark. This shape is deliberate: a close whose posting fails and goes to
+ * retry or the DLQ still closes the session, so the register is not left blocked behind a session pos-order has
+ * closed. It is safe because the posting never reads the replica or {@code register_float}, and the replica write
+ * is state-based and version-guarded, so a redelivery re-applies it harmlessly.
  */
 @Slf4j
 @Component
@@ -165,6 +169,8 @@ public class OrderEventsListener {
         }
 
         try {
+            // The replica first, in its own transaction: see the class doc ("Session replica").
+            handlerTransaction.executeWithoutResult(_ -> sessionReplica.closed(fact, aggregateVersion));
             handlerTransaction.executeWithoutResult(_ -> {
                 FactPostingOutcome outcome = registerOverShortPostingService.postOverShort(fact, eventId);
                 ingestionRecorder.record(
@@ -175,7 +181,6 @@ public class OrderEventsListener {
                         zoneResolver.heldRecordDateTime(fact.closedAt()),
                         fact,
                         outcome);
-                sessionReplica.closed(fact, aggregateVersion);
                 markProcessed(eventId);
             });
         } catch (DatabindException e) {

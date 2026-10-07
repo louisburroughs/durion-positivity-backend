@@ -54,7 +54,7 @@ COMMENT ON TABLE public.register_float IS
 CREATE TABLE public.ext_order_register_session (
     tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,
     session_id uuid NOT NULL,
-    terminal_id character varying(100) NOT NULL,
+    terminal_id character varying(255) NOT NULL,  -- as wide as pos-order's terminal_id
     location_id uuid,
     status character varying(10) NOT NULL,
     opened_at timestamp(6) with time zone NOT NULL,

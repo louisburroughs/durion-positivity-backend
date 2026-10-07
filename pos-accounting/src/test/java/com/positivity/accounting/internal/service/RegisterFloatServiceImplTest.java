@@ -120,6 +120,12 @@ class RegisterFloatServiceImplTest {
                                     kinds.contains(change.getKind()) && change.getReversalJournalEntryId() == null)
                             .toList();
                 });
+        when(changes.findByRegisterFloatIdAndKindIn(any(), anyCollection())).thenAnswer(invocation -> {
+            Collection<RegisterFloatChangeKind> kinds = invocation.getArgument(1);
+            return standing.stream()
+                    .filter(change -> kinds.contains(change.getKind()))
+                    .toList();
+        });
         when(changes.saveAndFlush(any())).thenAnswer(invocation -> {
             RegisterFloatChange change = invocation.getArgument(0);
             standing.add(change);
@@ -677,6 +683,47 @@ class RegisterFloatServiceImplTest {
                         "T-1", relocation(RegisterFloatRelocationReason.MOVED, TODAY.minusDays(1), UUID.randomUUID())))
                 .extracting(e -> ((CashSetupException) e).getCode())
                 .isEqualTo(CashSetupException.Code.FLOAT_RELOCATION_DATE_INVALID);
+    }
+
+    @Test
+    @DisplayName(
+            "AC2/AC6: a reversed entry still floors the move: go-live 200 at A on 10-01, change to 300 dated 10-10,"
+                    + " that change reversed dated 10-05; a move dated 10-07 is 422 FLOAT_RELOCATION_DATE_INVALID, one dated"
+                    + " 10-10 moves")
+    void reversedEntryStillFloorsTheMove() {
+        when(zoneResolver.today()).thenReturn(TODAY);
+        service.establishGoLive("T-1", goLive("200.00", UUID.randomUUID()));
+        service.changeFloat(
+                "T-1",
+                new RegisterFloatChangeRequest(
+                        LOCATION,
+                        new BigDecimal("300.00"),
+                        BANK,
+                        LocalDate.of(2026, 10, 10),
+                        "More change needed for the weekend",
+                        UUID.randomUUID(),
+                        null));
+        // What RegisterFloatReversalReaction leaves after the change is reversed with a date before the change.
+        RegisterFloatChange change = standing.get(1);
+        change.setReversalJournalEntryId(UUID.randomUUID());
+        RegisterFloatChange reversal = new RegisterFloatChange();
+        reversal.setKind(RegisterFloatChangeKind.REVERSAL);
+        reversal.setEffectiveDate(LocalDate.of(2026, 10, 5));
+        standing.add(reversal);
+        registerFloat.setAmount(new BigDecimal("200.00"));
+
+        assertThatThrownBy(() -> service.relocate(
+                        "T-1",
+                        relocation(RegisterFloatRelocationReason.MOVED, LocalDate.of(2026, 10, 7), UUID.randomUUID())))
+                .isInstanceOf(CashSetupException.class)
+                .satisfies(e -> assertThat(e.getMessage()).contains("2026-10-10"))
+                .extracting(e -> ((CashSetupException) e).getCode())
+                .isEqualTo(CashSetupException.Code.FLOAT_RELOCATION_DATE_INVALID);
+        assertThat(capturedEntries()).hasSize(2);
+
+        RegisterFloatService.Outcome moved = service.relocate(
+                "T-1", relocation(RegisterFloatRelocationReason.MOVED, LocalDate.of(2026, 10, 10), UUID.randomUUID()));
+        assertThat(moved.response().amount()).isEqualByComparingTo("200.00");
     }
 
     @Test

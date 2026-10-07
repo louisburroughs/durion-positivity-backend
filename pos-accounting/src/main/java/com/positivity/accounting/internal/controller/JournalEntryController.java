@@ -451,7 +451,8 @@ public class JournalEntryController {
                     PERIOD_CLOSED or PERIOD_HARD_LOCKED for period-gate failures. A register float relocation \
                     entry is never reversed (409 FLOAT_RELOCATION_NOT_REVERSIBLE: move the register again), and \
                     a register float go-live or change entry of a register that has moved may not be reversed \
-                    before its latest move (422 FLOAT_REVERSAL_BEFORE_RELOCATION).
+                    before its latest move (422 FLOAT_REVERSAL_BEFORE_RELOCATION, or 422 \
+                    GL_MAPPING_NOT_CONFIGURED when its follow-up reclass finds no mapping).
                     """,
             tags = {"Journal Entries"})
     @ApiResponse(
@@ -481,7 +482,9 @@ public class JournalEntryController {
                     + " (PERIOD_CLOSED — accounting:period:override plus a non-blank overrideJustification"
                     + " allows reversing into closed periods), is strictly before the hard-lock date"
                     + " (PERIOD_HARD_LOCKED — never overridable), or precedes the latest relocation of the register"
-                    + " whose float entry it reverses (FLOAT_REVERSAL_BEFORE_RELOCATION)",
+                    + " whose float entry it reverses (FLOAT_REVERSAL_BEFORE_RELOCATION); the reversal of a register"
+                    + " float entry whose follow-up reclass finds no REGISTER_FLOAT mapping on the reversal date is"
+                    + " GL_MAPPING_NOT_CONFIGURED",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_JOURNAL_ENTRY_REVERSE", apiVersion = "1")
     public ResponseEntity<JournalEntryResponse> reverseJournalEntry(

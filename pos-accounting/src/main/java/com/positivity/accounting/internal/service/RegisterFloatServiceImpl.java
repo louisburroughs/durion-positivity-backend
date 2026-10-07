@@ -84,9 +84,10 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
     static final List<RegisterFloatChangeKind> RELOCATIONS = List.of(RegisterFloatChangeKind.RELOCATION);
 
     /**
-     * The rows a move may not predate (AW32): the standing go-live, changes and relocations, and the reversals,
-     * whose entries also post on 1080. A move dated before any of them would leave that line at a location the
-     * register had already left.
+     * The rows a move may not predate (AW32): every go-live, change, relocation and reversal, reversed or not, since
+     * each one's entry put a 1080 line on its date and posted lines stay (a reversal may even be dated before the
+     * entry it reverses). A move dated before any of them would leave that line at a location the register had
+     * already left.
      */
     private static final List<RegisterFloatChangeKind> MOVE_FLOOR_KINDS = List.of(
             RegisterFloatChangeKind.GO_LIVE,
@@ -484,7 +485,8 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
         if (floor.isPresent() && date.isBefore(floor.get())) {
             throw new CashSetupException(
                     CashSetupException.Code.FLOAT_RELOCATION_DATE_INVALID,
-                    "The move date " + date + " is before the register's latest float change, on " + floor.get());
+                    "The move date " + date + " is before a float entry of the register dated " + floor.get()
+                            + "; date the move on or after it");
         }
     }
 
@@ -512,20 +514,29 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
     }
 
     /**
-     * A go-live or Change float dated before the register's latest relocation would put its 1080 line at a location
-     * the register had not reached on that date: 422 FLOAT_DATE_BEFORE_RELOCATION (AW32).
+     * A go-live or Change float dated before the register's latest relocation entry (a move, or the reclass that
+     * followed a reversal) would put its 1080 line at a location the register had not reached on that date: 422
+     * FLOAT_DATE_BEFORE_RELOCATION (AW32).
      */
     private void requireNotBeforeRelocation(RegisterFloat registerFloat, LocalDate date) {
-        Optional<LocalDate> moved = latestEffectiveDate(registerFloat, RELOCATIONS);
-        if (moved.isPresent() && date.isBefore(moved.get())) {
+        Optional<LocalDate> relocated = latestEffectiveDate(registerFloat, RELOCATIONS);
+        if (relocated.isPresent() && date.isBefore(relocated.get())) {
             throw new CashSetupException(
                     CashSetupException.Code.FLOAT_DATE_BEFORE_RELOCATION,
-                    "Register " + registerFloat.getRegisterId() + " moved on " + moved.get()
-                            + "; date the command on or" + " after that");
+                    relocationMessage(registerFloat.getRegisterId(), relocated.get(), "command"));
         }
     }
 
-    /** The latest effective date of the float's standing rows of these kinds (a relocation is never reversed). */
+    /** Names a relocation entry without calling a reversal's follow-up reclass a move, and never a location. */
+    static String relocationMessage(String registerId, LocalDate relocatedOn, String what) {
+        return "Register " + registerId + " has a float entry dated " + relocatedOn
+                + " that relocated its float between locations; date the " + what + " on or after it";
+    }
+
+    /**
+     * The latest effective date of the float's rows of these kinds, reversed or not: a reversed row's entry still
+     * has its 1080 line on its date. A relocation is never reversed.
+     */
     private Optional<LocalDate> latestEffectiveDate(
             RegisterFloat registerFloat, Collection<RegisterFloatChangeKind> kinds) {
         return latestEffectiveDate(changes, registerFloat.getRegisterFloatId(), kinds);
@@ -536,7 +547,7 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
         if (registerFloatId == null) {
             return Optional.empty();
         }
-        return changes.findByRegisterFloatIdAndKindInAndReversalJournalEntryIdIsNull(registerFloatId, kinds).stream()
+        return changes.findByRegisterFloatIdAndKindIn(registerFloatId, kinds).stream()
                 .filter(change -> kinds.contains(change.getKind()))
                 .map(RegisterFloatChange::getEffectiveDate)
                 .max(Comparator.naturalOrder());

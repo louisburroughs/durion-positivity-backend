@@ -209,39 +209,31 @@ public class RegisterFloatController {
     @PreAuthorize("hasAuthority('" + AccountingPermissions.FLOAT_MANAGE + "')")
     @Operation(
             operationId = "relocateRegisterFloat",
-            summary = "Relocate Register Float",
+            summary = "Move a Register and Its Float to Another Location",
             description = """
-                    Moves a register, and its change float, from one location to another: posts Dr 1080 \
-                    Register Float at toLocationId / Cr 1080 at fromLocationId for the register's current float, \
-                    dated the effective date, both lines carrying the register; the float itself is unchanged, \
-                    there is no bank line and no 3900 line, and earlier periods keep the location they were \
-                    posted at. A register whose float is zero moves without an entry (journalEntryId null), \
-                    which is how a go-live made under a mistyped location is fixed: reverse the go-live, move \
-                    the register, run go-live again.
-                    Use this tool when a register was set up under the wrong location (reason \
-                    ENTERED_IN_ERROR) or its drawer physically moved (reason MOVED), both posting the same entry; \
-                    do not use changeRegisterFloat, which changes the amount, and do not reverse the relocation \
-                    entry (409 FLOAT_RELOCATION_NOT_REVERSIBLE): correct a wrong move by moving again.
-                    Preconditions: caller holds accounting:float:manage and has both fromLocationId and \
-                    toLocationId in its location scope (403 LOCATION_SCOPE_DENIED); the register has a float \
-                    (404 FLOAT_REGISTER_NOT_FOUND) held at fromLocationId (422 \
-                    FLOAT_REGISTER_LOCATION_MISMATCH); toLocationId differs (422 \
-                    FLOAT_RELOCATION_SAME_LOCATION); no pos-order session is open on the register (422 \
-                    FLOAT_REGISTER_SESSION_OPEN, whose referenceId is the open session and whose message says \
-                    when it opened; close the session first; neither reason nor an override bypasses it, and a \
-                    session whose opened fact has not reached accounting yet does not block); the float is not \
-                    negative (422 FLOAT_AMOUNT_NEGATIVE, fix \
-                    it with changeRegisterFloat first); the effective date is not after today and not before \
-                    the register's latest float change (422 FLOAT_RELOCATION_DATE_INVALID); the date passes the \
-                    period gate (a CLOSED period needs accounting:period:override and overrideJustification). \
-                    Idempotent on requestId: a replay returns the first result with 200, another body with the \
-                    same requestId is 409 IDEMPOTENCY_CONFLICT.
-                    Required inputs: registerId (path), fromLocationId, toLocationId, reason, justification (at \
-                    least 10 characters), requestId; effectiveDate defaults to today in the tenant's accounting \
-                    time zone.
-                    Emits an ACCOUNTING_REGISTER_FLOAT_RELOCATE event, queues accounting.float.changed with kind \
-                    RELOCATION, writes an audit row naming the caller, both locations and the reason, and \
-                    returns 201 with the amount and the journal entry id and number.
+                    Moves a register and its change float from fromLocationId to toLocationId, posting Dr 1080 \
+                    Register Float at the destination / Cr 1080 at the origin for the current float on the \
+                    effective date.
+                    The float is unchanged, there is no bank or 3900 line, and a zero float moves without an \
+                    entry (journalEntryId null), which fixes a go-live made under a mistyped location.
+                    Use this tool for a register set up under the wrong location (ENTERED_IN_ERROR) or a drawer \
+                    that moved (MOVED); do not use changeRegisterFloat, which changes the amount, and never \
+                    reverse the relocation entry (409 FLOAT_RELOCATION_NOT_REVERSIBLE): move again instead.
+                    Preconditions: the caller holds accounting:float:manage with both locations in scope (403 \
+                    LOCATION_SCOPE_DENIED), and the float is held at fromLocationId (404 \
+                    FLOAT_REGISTER_NOT_FOUND, 422 FLOAT_REGISTER_LOCATION_MISMATCH) and moves elsewhere (422 \
+                    FLOAT_RELOCATION_SAME_LOCATION).
+                    The register has no open pos-order session (422 FLOAT_REGISTER_SESSION_OPEN, referenceId \
+                    names it) and its float is not negative (422 FLOAT_AMOUNT_NEGATIVE).
+                    The effective date is not after today nor before the register's latest float entry (422 \
+                    FLOAT_RELOCATION_DATE_INVALID), and passes the period gate (a CLOSED period needs \
+                    accounting:period:override and overrideJustification).
+                    Required inputs: registerId (path), fromLocationId, toLocationId, reason, justification (10 \
+                    or more characters) and requestId, on which the command is idempotent (a replay returns the \
+                    first result with 200, another body is 409 IDEMPOTENCY_CONFLICT); effectiveDate defaults to \
+                    today in the accounting time zone.
+                    Emits ACCOUNTING_REGISTER_FLOAT_RELOCATE, queues accounting.float.changed with kind \
+                    RELOCATION, writes an audit row naming both locations and the reason, and returns 201.
                     """,
             tags = {"Accounting Register Float"})
     @ApiResponse(responseCode = "201", description = "The register was moved")

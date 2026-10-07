@@ -4,12 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.accounting.internal.entity.ExtOrderRegisterSession;
+import com.positivity.accounting.internal.enums.RegisterSessionStatus;
+import com.positivity.accounting.internal.repository.ExtOrderRegisterSessionRepository;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
+import com.positivity.domainevents.order.RegisterSessionOpenedV1;
 import com.positivity.tenancy.TenantContext;
 import com.positivity.tenancy.testing.TenantTestSupport;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -62,6 +67,9 @@ class OrderEventsListenerTransactionTest {
     @Autowired
     private RegisterSessionReplica sessionReplica;
 
+    @Autowired
+    private ExtOrderRegisterSessionRepository sessionRows;
+
     private OrderEventsListener listener;
     private String eventId;
 
@@ -85,7 +93,57 @@ class OrderEventsListenerTransactionTest {
     @AfterEach
     void tearDown() {
         processedEventRepository.deleteById(eventId);
+        sessionRows.deleteAll();
         TenantContext.clear();
+    }
+
+    @Test
+    @DisplayName("#2571: a close whose posting fails still commits the replica close, unmarked; the redelivery"
+            + " re-applies it harmlessly")
+    void closeWhosePostingFailsStillClosesTheReplica() {
+        UUID sessionId = UUID.randomUUID();
+        new TransactionTemplate(transactionManager)
+                .executeWithoutResult(_ -> sessionReplica.opened(
+                        new RegisterSessionOpenedV1(
+                                sessionId, "terminal-1", null, Instant.parse("2026-07-23T08:00:00Z")),
+                        1));
+        failingPostingService.failWith(new IllegalStateException("simulated PERIOD_CLOSED"));
+
+        assertThatThrownBy(() -> listener.onOrderEvent(sessionClosed(sessionId, 2)))
+                .isExactlyInstanceOf(IllegalStateException.class);
+
+        ExtOrderRegisterSession closed = sessionRows.findById(sessionId).orElseThrow();
+        assertThat(closed.getStatus()).isEqualTo(RegisterSessionStatus.CLOSED);
+        assertThat(closed.getAggregateVersion()).isEqualTo(2);
+        assertThat(processedEventRepository.existsById(eventId)).isFalse();
+        assertThat(sessionReplica.openSessionOf("terminal-1")).isEmpty();
+
+        // The redelivery: the replica write is state-based and version-guarded, so applying it again changes nothing.
+        assertThatThrownBy(() -> listener.onOrderEvent(sessionClosed(sessionId, 2)))
+                .isExactlyInstanceOf(IllegalStateException.class);
+        assertThat(sessionRows.findAll()).singleElement().satisfies(row -> {
+            assertThat(row.getStatus()).isEqualTo(RegisterSessionStatus.CLOSED);
+            assertThat(row.getAggregateVersion()).isEqualTo(2);
+            assertThat(row.getClosedAt()).isEqualTo(Instant.parse("2026-07-23T18:30:00Z"));
+        });
+    }
+
+    @Test
+    @DisplayName("#2571: an opened fact commits the replica row with its processed mark in its own transaction, which"
+            + " an enclosing rollback does not undo")
+    void sessionOpenedCommitsWithItsMark() {
+        UUID sessionId = UUID.randomUUID();
+
+        assertThatThrownBy(() -> new TransactionTemplate(transactionManager).executeWithoutResult(_ -> {
+                    listener.onOrderEvent(sessionOpened(sessionId));
+                    throw new IllegalStateException("the enclosing transaction rolls back");
+                }))
+                .isExactlyInstanceOf(IllegalStateException.class);
+
+        assertThat(processedEventRepository.existsById(eventId)).isTrue();
+        assertThat(sessionReplica.openSessionOf("terminal-1"))
+                .map(ExtOrderRegisterSession::getSessionId)
+                .contains(sessionId);
     }
 
     @Test
@@ -136,17 +194,28 @@ class OrderEventsListenerTransactionTest {
         assertThat(processedEventRepository.existsById(eventId)).isFalse();
     }
 
-    private String sessionClosed() {
-        UUID sessionId = UUID.randomUUID();
+    private String sessionOpened(UUID sessionId) {
         return """
-                {"eventId":"%s","eventType":"%s","schemaVersion":1,"aggregateId":"%s",
+                {"eventId":"%s","eventType":"%s","schemaVersion":1,"aggregateId":"%s","aggregateVersion":1,
+                 "payload":{"sessionId":"%s","terminalId":"terminal-1","locationId":null,
+                            "openedAt":"2026-07-23T08:00:00Z"}}
+                """.formatted(eventId, RegisterSessionOpenedV1.EVENT_TYPE, sessionId, sessionId);
+    }
+
+    private String sessionClosed() {
+        return sessionClosed(UUID.randomUUID(), 0);
+    }
+
+    private String sessionClosed(UUID sessionId, long version) {
+        return """
+                {"eventId":"%s","eventType":"%s","schemaVersion":1,"aggregateId":"%s","aggregateVersion":%d,
                  "payload":{"sessionId":"%s","terminalId":"terminal-1","locationId":null,
                             "openedByClerkId":"clerk-1","closedByClerkId":"clerk-2",
                             "openingFloat":100.00,"countedCash":140.00,"theoreticalCash":150.00,
                             "overShort":-10.00,"varianceApproved":false,"currencyCode":"USD",
                             "tenderTotals":[{"methodType":"CASH","amount":50.00}],"cashMovementTotal":0.00,
                             "openedAt":"2026-07-23T08:00:00Z","closedAt":"2026-07-23T18:30:00Z"}}
-                """.formatted(eventId, RegisterSessionClosedV1.EVENT_TYPE, sessionId, sessionId);
+                """.formatted(eventId, RegisterSessionClosedV1.EVENT_TYPE, sessionId, version, sessionId);
     }
 
     @TestConfiguration

@@ -85,13 +85,13 @@ public class RegisterFloatReversalReaction {
         RegisterFloat registerFloat =
                 floats.lockById(reversedChange.getRegisterFloatId()).orElseThrow();
         // After a move, a reversal dated earlier would take the amount off a location the register had left.
-        Optional<LocalDate> moved = RegisterFloatServiceImpl.latestEffectiveDate(
+        Optional<LocalDate> relocated = RegisterFloatServiceImpl.latestEffectiveDate(
                 changes, registerFloat.getRegisterFloatId(), RegisterFloatServiceImpl.RELOCATIONS);
-        if (moved.isPresent() && reversed.reversalDate().isBefore(moved.get())) {
+        if (relocated.isPresent() && reversed.reversalDate().isBefore(relocated.get())) {
             throw new CashSetupException(
                     CashSetupException.Code.FLOAT_REVERSAL_BEFORE_RELOCATION,
-                    "Register " + registerFloat.getRegisterId() + " moved on " + moved.get()
-                            + "; date the reversal on or after that");
+                    RegisterFloatServiceImpl.relocationMessage(
+                            registerFloat.getRegisterId(), relocated.get(), "reversal"));
         }
         reversedChange.setReversalJournalEntryId(reversed.reversalJournalEntryId());
         changes.saveAndFlush(reversedChange);

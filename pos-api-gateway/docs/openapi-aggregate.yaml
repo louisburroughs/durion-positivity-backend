@@ -271,6 +271,8 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1registers~1{registerId}~1float
   /v1/accounting/registers/{registerId}/float/go-live:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1registers~1{registerId}~1float~1go-live
+  /v1/accounting/registers/{registerId}/float/relocation:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1registers~1{registerId}~1float~1relocation
   /v1/accounting/reports/export:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1export
   /v1/accounting/reports/export/{exportId}:

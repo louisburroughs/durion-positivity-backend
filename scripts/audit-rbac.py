@@ -87,8 +87,10 @@ real operation. Flat format, one line per value, parsed with regex (no PyYAML):
 
 An operation that names more than one location (a move from one location to
 another) lists the fields it gates; the operation then enters the inventory on
-those fields, each must appear in its parameter list, and for a gate each must
-be passed to a location-scope call in the operation's own body (#2571):
+those fields, each must appear in its parameter-list text (which includes its
+parameter annotations, so a field named only in a @RequestBody example counts),
+and for a gate each must be passed to a `require` / `requireAny` location-scope
+call in the operation's own body (#2571):
 
     - operation: RegisterFloatController.relocate
       shape: gate
@@ -848,13 +850,17 @@ for (module, cls), entry in java_classes.items():
                         call_edges[node].append(((module, target, called), passed))
 
 # A gate decision that names its `fields:` (#2571) holds only if the operation's own body passes
-# every one of them to a location-scope call: a two-location move gated on one field is a hole.
+# every one of them to a denying location-scope call -- `require` / `requireAny`, never a read such
+# as `covers` or `reach`: a two-location move gated on one field is a hole.
+GATE_CALLS = ("require", "requireAny")
 for mod, cls_name, method_name, fields, where in field_gates:
-    passed = " ".join(c["args"] for c in scope_call_sites.get((mod, cls_name, method_name), ()))
+    passed = " ".join(c["args"] for c in scope_call_sites.get((mod, cls_name, method_name), ())
+                      if c["call"] in GATE_CALLS)
     missing = [f for f in fields if not re.search(r'\b' + f + r'\b', passed)]
     if missing:
         flag_location_invalid.append(
-            f"{where}: gate field(s) {', '.join(missing)} not passed to a location-scope call in the operation")
+            f"{where}: gate field(s) {', '.join(missing)} not passed to a require/requireAny location-scope call"
+            f" in the operation")
 
 # Which methods reach a scope call at all, walking the edges backwards from every site.
 reverse_edges = collections.defaultdict(set)

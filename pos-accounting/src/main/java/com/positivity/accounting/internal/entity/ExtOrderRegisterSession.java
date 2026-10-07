@@ -37,8 +37,8 @@ public class ExtOrderRegisterSession extends TenantScopedEntity {
     @Column(name = "session_id", nullable = false, columnDefinition = "UUID")
     private UUID sessionId;
 
-    /** pos-order's terminalId: the register (AW31). */
-    @Column(name = "terminal_id", length = 100, nullable = false)
+    /** pos-order's terminalId: the register (AW31). As wide as pos-order's column, so every close fact applies. */
+    @Column(name = "terminal_id", length = 255, nullable = false)
     private String terminalId;
 
     @Column(name = "location_id")

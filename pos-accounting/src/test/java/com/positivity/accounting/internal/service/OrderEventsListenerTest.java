@@ -255,30 +255,51 @@ class OrderEventsListenerTest {
     }
 
     @Test
-    @DisplayName("#2571: a closed fact closes the session replica, with its version, after the posting")
+    @DisplayName("#2571: a closed fact closes the session replica, with its version, before the posting")
     void sessionClosedClosesTheReplica() {
         when(processedEvents.existsById("e-21")).thenReturn(false);
 
         listener.onOrderEvent(sessionClosed("e-21"));
 
-        org.mockito.InOrder order = org.mockito.Mockito.inOrder(postingService, sessionReplica, processedEvents);
-        order.verify(postingService).postOverShort(any(), org.mockito.ArgumentMatchers.eq("e-21"));
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(sessionReplica, postingService, processedEvents);
         order.verify(sessionReplica).closed(any(RegisterSessionClosedV1.class), org.mockito.ArgumentMatchers.eq(0L));
+        order.verify(postingService).postOverShort(any(), org.mockito.ArgumentMatchers.eq("e-21"));
         order.verify(processedEvents).save(any());
     }
 
     @Test
-    @DisplayName("#2571: a posting failure leaves the replica open and the fact unmarked, for retry")
-    void postingFailureLeavesTheReplicaAlone() {
+    @DisplayName("#2571: a posting failure still closes the replica; the fact stays unmarked for retry, and the"
+            + " redelivery closes it again and posts")
+    void postingFailureStillClosesTheReplica() {
         when(processedEvents.existsById("e-22")).thenReturn(false);
         doThrow(new DataAccessResourceFailureException("db down"))
+                .doReturn(FactPostingOutcome.posted(UUID.randomUUID()))
                 .when(postingService)
                 .postOverShort(any(), org.mockito.ArgumentMatchers.eq("e-22"));
 
         assertThatExceptionOfType(DataAccessResourceFailureException.class)
                 .isThrownBy(() -> listener.onOrderEvent(sessionClosed("e-22")));
-        verify(sessionReplica, never()).closed(any(), org.mockito.ArgumentMatchers.anyLong());
+        verify(sessionReplica).closed(any(), org.mockito.ArgumentMatchers.eq(0L));
         verify(processedEvents, never()).save(any());
+
+        listener.onOrderEvent(sessionClosed("e-22"));
+
+        verify(sessionReplica, org.mockito.Mockito.times(2)).closed(any(), org.mockito.ArgumentMatchers.eq(0L));
+        verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName("#2571: a replica failure on an opened fact propagates unwrapped for retry / DLQ; nothing is marked")
+    void sessionOpenedFailurePropagates() {
+        when(processedEvents.existsById("e-25")).thenReturn(false);
+        doThrow(new DataAccessResourceFailureException("db down"))
+                .when(sessionReplica)
+                .opened(any(), org.mockito.ArgumentMatchers.anyLong());
+
+        assertThatExceptionOfType(DataAccessResourceFailureException.class)
+                .isThrownBy(() -> listener.onOrderEvent(sessionOpened("e-25", 1)));
+        verify(processedEvents, never()).save(any());
+        verifyNoInteractions(postingService, ingestionRecorder);
     }
 
     @Test

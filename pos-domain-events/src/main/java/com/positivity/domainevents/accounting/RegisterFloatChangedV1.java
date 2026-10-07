@@ -76,7 +76,9 @@ public record RegisterFloatChangedV1(
         if (kind == null || effectiveDate == null) {
             throw new IllegalArgumentException("kind and effectiveDate must not be null");
         }
-        if (journalEntryId == null && kind != Kind.RELOCATION) {
+        // Only the kinds that always post must name their entry; any other kind, a relocation of a zero float or
+        // one a newer producer adds, may carry none, so a tolerant reader never throws on it.
+        if (journalEntryId == null && (kind == Kind.GO_LIVE || kind == Kind.CHANGE || kind == Kind.REVERSAL)) {
             throw new IllegalArgumentException("journalEntryId must not be null for " + kind);
         }
     }

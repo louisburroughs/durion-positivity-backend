@@ -19,6 +19,11 @@ public interface RegisterFloatChangeRepository extends JpaRepository<RegisterFlo
     Optional<RegisterFloatChange> findByJournalEntryIdAndKindIn(
             @NonNull UUID journalEntryId, @NonNull Collection<RegisterFloatChangeKind> kinds);
 
+    /** The float's rows of these kinds, reversed or not: every entry they posted keeps its 1080 line. */
+    @NonNull
+    List<RegisterFloatChange> findByRegisterFloatIdAndKindIn(
+            @NonNull UUID registerFloatId, @NonNull Collection<RegisterFloatChangeKind> kinds);
+
     /** The float's rows of these kinds that still stand (not reversed). */
     @NonNull
     List<RegisterFloatChange> findByRegisterFloatIdAndKindInAndReversalJournalEntryIdIsNull(

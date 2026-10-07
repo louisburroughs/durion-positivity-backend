@@ -1087,7 +1087,11 @@ decisions:
 **Two or more locations** — an operation that names several locations (a move from one to another)
 lists the fields it gates in an optional one-line `fields:` key (default `locationId`). The operation
 then enters the inventory on those fields, each field must appear in its parameter list, and for a
-`gate` the operation's own body must pass every field to a location-scope call (#2571):
+`gate` the operation's own body must pass every field to a denying location-scope call (`require` /
+`requireAny`; a read such as `covers` or `reach` does not count) (#2571). The parameter check reads
+the parameter list's **text**, annotations included, as the inventory does: a field named only in a
+`@RequestBody` example or `@Schema` description satisfies it, so name the gated fields in the body
+DTO the operation actually validates.
 
 ```yaml
   - operation: RegisterFloatController.relocate

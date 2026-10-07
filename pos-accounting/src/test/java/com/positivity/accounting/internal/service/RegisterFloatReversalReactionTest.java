@@ -103,6 +103,10 @@ class RegisterFloatReversalReactionTest {
                             .filter(row -> kinds.contains(row.getKind()) && row.getReversalJournalEntryId() == null)
                             .toList();
                 });
+        when(changes.findByRegisterFloatIdAndKindIn(any(), anyCollection())).thenAnswer(invocation -> {
+            Collection<RegisterFloatChangeKind> kinds = invocation.getArgument(1);
+            return rows.stream().filter(row -> kinds.contains(row.getKind())).toList();
+        });
         when(changes.saveAndFlush(any())).thenAnswer(invocation -> {
             RegisterFloatChange saved = invocation.getArgument(0);
             if (saved.getChangeId() == null) {

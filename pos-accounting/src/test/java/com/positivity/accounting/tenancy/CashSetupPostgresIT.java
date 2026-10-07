@@ -516,6 +516,22 @@ class CashSetupPostgresIT extends PostgresTenancyTestBase {
                                 String.class,
                                 tenant))
                 .containsExactly("OPEN", "CLOSED", "CLOSED");
+        // pos-order's terminal ids run to 255 characters; the replica takes them (#2582 review).
+        String longTerminal = "T".repeat(255);
+        UUID wide = UUIDv7Generator.generate();
+        asTenant(tenant, () -> {
+            sessionReplica.opened(new RegisterSessionOpenedV1(wide, longTerminal, LOCATION, noon), 1);
+            sessionReplica.closed(sessionClosed(longTerminal, wide, noon, noon.plusSeconds(60)), 2);
+            return null;
+        });
+        assertThat(new JdbcTemplate(ownerDataSource())
+                        .queryForObject(
+                                "SELECT status FROM ext_order_register_session WHERE tenant_id = ? AND session_id = ?",
+                                String.class,
+                                tenant,
+                                wide))
+                .isEqualTo("CLOSED");
+
         // Two-tenant isolation (ADR-0062): another tenant sees none of these sessions.
         UUID other = tenant();
         assertThat(asTenant(other, () -> sessionReplica.openSessionOf("T-1"))).isEmpty();
@@ -656,106 +672,305 @@ class CashSetupPostgresIT extends PostgresTenancyTestBase {
 
     @Test
     @DisplayName("#2571 AC2: for every location and date, a register's 1080 lines sum to its float where it was held"
-            + " and to zero elsewhere, across go-live, change, relocation and reversal")
+            + " and to zero elsewhere, across go-live, change, relocation, reversal (back-dated too), the reversal"
+            + " follow-up reclass and a zero-float move; several seeds, checked against an independent model")
     void locationInvariant() {
         UUID tenant = tenant();
         provisionAccounting(tenant);
         signIn("controller.cfo", "accounting:float:manage");
         UUID bank = asTenant(
                 tenant, () -> glAccounts.findByAccountCode("1000").orElseThrow().getGlAccountId());
-        List<UUID> locations = List.of(LOCATION, SHOP_B, SHOP_C);
-        Random random = new Random(2571L);
-        LocalDate start = LocalDate.now(ZoneOffset.UTC).minusDays(45);
-        LocalDate day = start;
+        for (long seed : new long[] {2571L, 7L, 20261007L}) {
+            new FloatWalk(tenant, "W-" + seed, bank, new Random(seed)).run();
+        }
+    }
 
-        var goLive = asTenant(tenant, () -> floats.establishGoLive("T-9", goLiveAt(LOCATION, "200.00", start)));
-        List<UUID> reversible = new ArrayList<>(List.of(goLive.response().journalEntryId()));
-        // The register's location at the end of each day it moved, in order (AC2's "held at L on d").
-        List<Map.Entry<LocalDate, UUID>> moves = new ArrayList<>();
-        UUID held = LOCATION;
-        for (int step = 0; step < 24; step++) {
-            day = day.plusDays(random.nextInt(3));
+    /**
+     * One register's random walk for AC2, with its own model of what the ledger must hold: the float as of each
+     * date (the dated deltas of every posted command and reversal) and the location the register was held at
+     * (its relocations by date). The ledger is then checked per location and date against that model, not against
+     * itself.
+     */
+    private final class FloatWalk {
+
+        private static final List<UUID> LOCATIONS = List.of(LOCATION, SHOP_B, SHOP_C);
+
+        private final UUID tenant;
+        private final String register;
+        private final UUID bank;
+        private final Random random;
+        private final LocalDate start = LocalDate.now(ZoneOffset.UTC).minusDays(60);
+        /** Float deltas by date: the model's float on d is their sum up to d. */
+        private final List<Map.Entry<LocalDate, BigDecimal>> deltas = new ArrayList<>();
+        /** Where the register is held from each date on (moves only; a follow-up reclass moves nothing). */
+        private final List<Map.Entry<LocalDate, UUID>> moves = new ArrayList<>();
+        /** Reversible entries: id -> (date, delta, location it was posted at). */
+        private final Map<UUID, Entry> reversible = new LinkedHashMap<>();
+
+        private LocalDate day;
+        private UUID held = LOCATION;
+        private LocalDate latestEntry;
+        private LocalDate latestRelocation;
+        private int backDatedReversals;
+        private int refusedBackDatedMoves;
+
+        private record Entry(LocalDate date, BigDecimal delta, UUID location) {}
+
+        FloatWalk(UUID tenant, String register, UUID bank, Random random) {
+            this.tenant = tenant;
+            this.register = register;
+            this.bank = bank;
+            this.random = random;
+            this.day = start;
+        }
+
+        void run() {
+            // A scripted prefix, so every seed exercises the follow-up reclass, a reversal dated before the entry
+            // it reverses, and a move of a zero float.
+            UUID goLive = goLive();
+            change(new BigDecimal("260.00"), 2);
+            move(SHOP_B, 2);
+            reverse(goLive, day.plusDays(1)); // go-live made at A, reversed after the move: follow-up reclass
+            day = day.plusDays(1);
+            UUID raise = change(new BigDecimal("100.00"), 1);
+            reverse(raise, day.minusDays(1)); // dated before the change it reverses, not before the move
+            // The reversed change's own line still stands on its date: a move between the reversal and the change
+            // would leave it at a location the register had left (#2582 review), so it is refused.
+            assertMoveRefused(day.minusDays(1));
+            change(BigDecimal.ZERO, 1);
+            move(SHOP_C, 1); // zero float: no entry
+            change(new BigDecimal("150.00"), 1);
+
+            for (int step = 0; step < 18; step++) {
+                day = day.plusDays(random.nextInt(3));
+                int pick = random.nextInt(12);
+                if (pick < 4) {
+                    tryMove();
+                } else if (pick < 8 || reversible.isEmpty()) {
+                    BigDecimal target =
+                            BigDecimal.valueOf(random.nextInt(8) == 0 ? 0L : 50L + 10L * random.nextInt(30));
+                    if (target.compareTo(amount()) == 0) {
+                        target = target.add(BigDecimal.TEN);
+                    }
+                    change(target, 0);
+                } else {
+                    List<UUID> ids = new ArrayList<>(reversible.keySet());
+                    reverse(ids.get(random.nextInt(ids.size())), day.minusDays(random.nextInt(5)));
+                }
+            }
+
+            assertThat(count("kind = 'RELOCATION' AND reason = 'REVERSAL_FOLLOW_UP'"))
+                    .as("%s exercised a reversal follow-up reclass", register)
+                    .isPositive();
+            assertThat(count("kind = 'RELOCATION' AND reason = 'MOVED' AND journal_entry_id IS NULL"))
+                    .as("%s moved a zero float", register)
+                    .isPositive();
+            assertThat(backDatedReversals)
+                    .as("%s reversed an entry with an earlier date", register)
+                    .isPositive();
+            verifyLedger();
+        }
+
+        private UUID goLive() {
+            var posted = asTenant(tenant, () -> floats.establishGoLive(register, goLiveAt(LOCATION, "200.00", day)));
+            record(posted.response().journalEntryId(), day, new BigDecimal("200.00"), LOCATION);
+            return posted.response().journalEntryId();
+        }
+
+        private UUID change(BigDecimal target, int daysLater) {
+            day = day.plusDays(daysLater);
             LocalDate on = day;
             UUID at = held;
-            int pick = random.nextInt(10);
-            BigDecimal amount = asTenant(
+            var changed = asTenant(
                     tenant,
-                    () -> floatRows.findByRegisterId("T-9").orElseThrow().getAmount());
-            if (pick < 4) {
-                UUID to = locations.stream()
-                        .filter(location -> !location.equals(at))
-                        .toList()
-                        .get(random.nextInt(2));
-                if (amount.signum() < 0) {
-                    assertThatThrownBy(() -> asTenant(
-                                    tenant,
-                                    () -> floats.relocate(
-                                            "T-9",
-                                            relocation(
-                                                    at,
-                                                    to,
-                                                    RegisterFloatRelocationReason.MOVED,
-                                                    on,
-                                                    UUIDv7Generator.generate()))))
-                            .extracting(e -> ((CashSetupException) e).getCode())
-                            .isEqualTo(CashSetupException.Code.FLOAT_AMOUNT_NEGATIVE);
-                    continue;
-                }
-                asTenant(
-                        tenant,
-                        () -> floats.relocate(
-                                "T-9",
-                                relocation(
-                                        at, to, RegisterFloatRelocationReason.MOVED, on, UUIDv7Generator.generate())));
-                held = to;
-                moves.add(Map.entry(on, to));
-            } else if (pick < 8 || reversible.isEmpty()) {
-                BigDecimal next = BigDecimal.valueOf(50L + 10L * random.nextInt(30));
-                if (next.compareTo(amount) == 0) {
-                    next = next.add(BigDecimal.TEN);
-                }
-                BigDecimal target = next;
-                var changed = asTenant(
-                        tenant,
-                        () -> floats.changeFloat(
-                                "T-9",
-                                new RegisterFloatChangeRequest(
-                                        at,
-                                        target,
-                                        bank,
-                                        on,
-                                        "Float changed for the property test",
-                                        UUIDv7Generator.generate(),
-                                        null)));
-                reversible.add(changed.response().journalEntryId());
-            } else {
-                UUID entry = reversible.remove(random.nextInt(reversible.size()));
-                asTenant(tenant, () -> journalEntries.reverseJournalEntry(entry, "Property test reversal", on));
-            }
+                    () -> floats.changeFloat(
+                            register,
+                            new RegisterFloatChangeRequest(
+                                    at,
+                                    target,
+                                    bank,
+                                    on,
+                                    "Float changed for the property test",
+                                    UUIDv7Generator.generate(),
+                                    null)));
+            BigDecimal delta =
+                    changed.response().amount().subtract(changed.response().previousAmount());
+            record(changed.response().journalEntryId(), on, delta, at);
+            return changed.response().journalEntryId();
         }
-        assertThat(moves).as("the sequence moved the register").isNotEmpty();
 
-        for (LocalDate d = start; !d.isAfter(day); d = d.plusDays(1)) {
-            UUID heldOn = LOCATION;
-            for (Map.Entry<LocalDate, UUID> move : moves) {
-                if (!move.getKey().isAfter(d)) {
-                    heldOn = move.getValue();
-                }
+        private void record(UUID entry, LocalDate on, BigDecimal delta, UUID at) {
+            deltas.add(Map.entry(on, delta));
+            reversible.put(entry, new Entry(on, delta, at));
+            latestEntry = latestEntry == null || on.isAfter(latestEntry) ? on : latestEntry;
+        }
+
+        private void move(UUID to, int daysLater) {
+            day = day.plusDays(daysLater);
+            relocate(to, day);
+        }
+
+        private void relocate(UUID to, LocalDate on) {
+            UUID from = held;
+            asTenant(
+                    tenant,
+                    () -> floats.relocate(
+                            register,
+                            relocation(from, to, RegisterFloatRelocationReason.MOVED, on, UUIDv7Generator.generate())));
+            held = to;
+            moves.add(Map.entry(on, to));
+            latestEntry = on.isAfter(latestEntry) ? on : latestEntry;
+            latestRelocation = latestRelocation == null || on.isAfter(latestRelocation) ? on : latestRelocation;
+        }
+
+        /** A move dated today or a few days back; the model says whether it must be refused, and why. */
+        private void tryMove() {
+            UUID from = held;
+            UUID to = LOCATIONS.stream()
+                    .filter(location -> !location.equals(from))
+                    .toList()
+                    .get(random.nextInt(2));
+            LocalDate on = random.nextInt(3) == 0 ? day.minusDays(1 + random.nextInt(3)) : day;
+            if (on.isBefore(start)) {
+                on = start;
             }
-            BigDecimal total = BigDecimal.ZERO;
-            for (UUID location : locations) {
-                total = total.add(floatBalance(tenant, "T-9", location, d));
+            LocalDate date = on;
+            CashSetupException.Code expected = amount().signum() < 0
+                    ? CashSetupException.Code.FLOAT_AMOUNT_NEGATIVE
+                    : date.isBefore(latestEntry) ? CashSetupException.Code.FLOAT_RELOCATION_DATE_INVALID : null;
+            if (expected == null) {
+                relocate(to, date);
+                return;
             }
-            for (UUID location : locations) {
-                assertThat(floatBalance(tenant, "T-9", location, d))
-                        .as("register T-9 at %s on %s (held at %s)", location, d, heldOn)
-                        .isEqualByComparingTo(location.equals(heldOn) ? total : BigDecimal.ZERO);
+            assertThatThrownBy(() -> asTenant(
+                            tenant,
+                            () -> floats.relocate(
+                                    register,
+                                    relocation(
+                                            from,
+                                            to,
+                                            RegisterFloatRelocationReason.MOVED,
+                                            date,
+                                            UUIDv7Generator.generate()))))
+                    .extracting(e -> ((CashSetupException) e).getCode())
+                    .isEqualTo(expected);
+            if (expected == CashSetupException.Code.FLOAT_RELOCATION_DATE_INVALID) {
+                refusedBackDatedMoves++;
             }
         }
-        assertThat(asTenant(
-                        tenant,
-                        () -> floatRows.findByRegisterId("T-9").orElseThrow().getAmount()))
-                .isEqualByComparingTo(floatBalance(tenant, "T-9", held, day));
+
+        private void assertMoveRefused(LocalDate on) {
+            UUID from = held;
+            UUID to = LOCATIONS.stream()
+                    .filter(location -> !location.equals(from))
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(on).isBefore(latestEntry);
+            assertThatThrownBy(() -> asTenant(
+                            tenant,
+                            () -> floats.relocate(
+                                    register,
+                                    relocation(
+                                            from,
+                                            to,
+                                            RegisterFloatRelocationReason.MOVED,
+                                            on,
+                                            UUIDv7Generator.generate()))))
+                    .extracting(e -> ((CashSetupException) e).getCode())
+                    .isEqualTo(CashSetupException.Code.FLOAT_RELOCATION_DATE_INVALID);
+            refusedBackDatedMoves++;
+        }
+
+        private void reverse(UUID entry, LocalDate requested) {
+            LocalDate on = requested.isBefore(start) ? start : requested;
+            Entry reversed = reversible.get(entry);
+            if (latestRelocation != null && on.isBefore(latestRelocation)) {
+                assertThatThrownBy(() -> asTenant(
+                                tenant, () -> journalEntries.reverseJournalEntry(entry, "Property test reversal", on)))
+                        .extracting(e -> ((CashSetupException) e).getCode())
+                        .isEqualTo(CashSetupException.Code.FLOAT_REVERSAL_BEFORE_RELOCATION);
+                return;
+            }
+            asTenant(tenant, () -> journalEntries.reverseJournalEntry(entry, "Property test reversal", on));
+            reversible.remove(entry);
+            deltas.add(Map.entry(on, reversed.delta().negate()));
+            latestEntry = on.isAfter(latestEntry) ? on : latestEntry;
+            if (!reversed.location().equals(held)) {
+                // The follow-up reclass is a relocation entry, dated the reversal.
+                latestRelocation = on.isAfter(latestRelocation) ? on : latestRelocation;
+            }
+            if (on.isBefore(reversed.date())) {
+                backDatedReversals++;
+            }
+        }
+
+        private BigDecimal amount() {
+            return asTenant(
+                    tenant,
+                    () -> floatRows.findByRegisterId(register).orElseThrow().getAmount());
+        }
+
+        private int count(String where) {
+            return new JdbcTemplate(ownerDataSource())
+                    .queryForObject(
+                            "SELECT count(*) FROM register_float_change WHERE tenant_id = ? AND register_id = ? AND "
+                                    + where,
+                            Integer.class,
+                            tenant,
+                            register);
+        }
+
+        private void verifyLedger() {
+            // Net 1080 per (date, location) for this register, every posted line.
+            Map<LocalDate, Map<String, BigDecimal>> posted = new java.util.TreeMap<>();
+            new JdbcTemplate(ownerDataSource())
+                    .query(
+                            "SELECT e.transaction_date::date, l.dimensions->>'locationId',"
+                                    + " sum(coalesce(l.debit_amount, 0) - coalesce(l.credit_amount, 0))"
+                                    + " FROM journal_entry_line l JOIN journal_entry e ON e.tenant_id = l.tenant_id"
+                                    + " AND e.journal_entry_id = l.journal_entry_id JOIN gl_account g ON g.tenant_id ="
+                                    + " l.tenant_id AND g.gl_account_id = l.gl_account_id WHERE l.tenant_id = ?"
+                                    + " AND g.account_code = '1080' AND l.dimensions->>'registerId' = ?"
+                                    + " AND e.status IN ('POSTED', 'REVERSED') GROUP BY 1, 2",
+                            rs -> {
+                                posted.computeIfAbsent(rs.getDate(1).toLocalDate(), d -> new LinkedHashMap<>())
+                                        .merge(rs.getString(2), rs.getBigDecimal(3), BigDecimal::add);
+                            },
+                            tenant,
+                            register);
+            Map<String, BigDecimal> running = new LinkedHashMap<>();
+            for (LocalDate d = start; !d.isAfter(day); d = d.plusDays(1)) {
+                posted.getOrDefault(d, Map.of())
+                        .forEach((location, net) -> running.merge(location, net, BigDecimal::add));
+                LocalDate cutOff = d;
+                BigDecimal expectedFloat = deltas.stream()
+                        .filter(delta -> !delta.getKey().isAfter(cutOff))
+                        .map(Map.Entry::getValue)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+                UUID heldOn = LOCATION;
+                for (Map.Entry<LocalDate, UUID> move : moves) {
+                    if (!move.getKey().isAfter(d)) {
+                        heldOn = move.getValue();
+                    }
+                }
+                for (UUID location : LOCATIONS) {
+                    assertThat(running.getOrDefault(location.toString(), BigDecimal.ZERO))
+                            .as("%s at %s on %s (held at %s)", register, location, d, heldOn)
+                            .isEqualByComparingTo(location.equals(heldOn) ? expectedFloat : BigDecimal.ZERO);
+                }
+            }
+            assertThat(running.keySet())
+                    .as("%s posted 1080 only at the walk's locations", register)
+                    .allMatch(location -> LOCATIONS.stream()
+                            .anyMatch(known -> known.toString().equals(location)));
+            assertThat(amount())
+                    .as("%s's float row against the model", register)
+                    .isEqualByComparingTo(
+                            deltas.stream().map(Map.Entry::getValue).reduce(BigDecimal.ZERO, BigDecimal::add));
+            assertThat(refusedBackDatedMoves)
+                    .as("%s refused a back-dated move", register)
+                    .isPositive();
+        }
     }
 
     @Test
@@ -995,9 +1210,14 @@ class CashSetupPostgresIT extends PostgresTenancyTestBase {
 
     private static RegisterSessionClosedV1 sessionClosed(
             UUID session, java.time.Instant opened, java.time.Instant closed) {
+        return sessionClosed("T-1", session, opened, closed);
+    }
+
+    private static RegisterSessionClosedV1 sessionClosed(
+            String terminal, UUID session, java.time.Instant opened, java.time.Instant closed) {
         return new RegisterSessionClosedV1(
                 session,
-                "T-1",
+                terminal,
                 LOCATION,
                 "clerk-1",
                 "clerk-2",
