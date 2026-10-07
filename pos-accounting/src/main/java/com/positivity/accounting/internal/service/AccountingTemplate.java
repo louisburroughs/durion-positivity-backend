@@ -60,7 +60,8 @@ public record AccountingTemplate(
     }
 
     /** One template entry. */
-    public sealed interface Entry permits Account, Category, Key, GlMapping, DefaultGlMapping, StatementLine {
+    public sealed interface Entry
+            permits Account, Category, Key, GlMapping, DefaultGlMapping, StatementLine, PettyExpenseCategory {
 
         /** The entry's kind. */
         @NonNull
@@ -269,6 +270,53 @@ public record AccountingTemplate(
             return "account " + accountCode + " on line " + lineCode
                     + (lineDescription == null ? "" : " " + lineDescription) + " of the "
                     + statementType.name().toLowerCase(Locale.ROOT).replace('_', ' ');
+        }
+    }
+
+    /**
+     * A petty-expense category (#2511; SPEC-accounting-workspace §4.6): the label and examples of the
+     * {@code REGISTER_CASH_MOVEMENT} key {@code PETTY_EXPENSE_<code>}. Matched in a tenant by code and
+     * applied after its key and GL mapping.
+     */
+    public record PettyExpenseCategory(
+            @NonNull String code,
+            @NonNull String label,
+            @Nullable String examples) implements Entry {
+
+        /** The posting category every petty-expense key belongs to. */
+        public static final String POSTING_CATEGORY = "REGISTER_CASH_MOVEMENT";
+
+        /** The prefix of a petty-expense category's mapping key. */
+        public static final String KEY_PREFIX = "PETTY_EXPENSE_";
+
+        /** The mapping key of the category with this code. */
+        public static @NonNull String keyNameOf(@NonNull String code) {
+            return KEY_PREFIX + code;
+        }
+
+        /** The entry key of this category's GL mapping. */
+        public @NonNull String glMappingEntryKey() {
+            return TemplateEntryKind.GL_MAPPING.name() + ":" + POSTING_CATEGORY + "/" + keyNameOf(code);
+        }
+
+        @Override
+        public TemplateEntryKind kind() {
+            return TemplateEntryKind.PETTY_EXPENSE_CATEGORY;
+        }
+
+        @Override
+        public String naturalKey() {
+            return code;
+        }
+
+        @Override
+        public String canonical() {
+            return join(label, examples);
+        }
+
+        @Override
+        public String describe() {
+            return "petty-expense category " + code + " (" + label + ")";
         }
     }
 

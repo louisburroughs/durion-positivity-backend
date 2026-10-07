@@ -767,7 +767,7 @@ class SecurityGatewayConfigTest {
     @Test
     void unknownPermVer_returns401() {
         String permBits = encodePermBits(116);
-        String token = buildToken("alice", "u1", permBits, 99);
+        String token = buildToken("alice", "u1", permBits, 999);
 
         GlobalFilter filter = new SecurityGatewayConfig(
                         TEST_SECRET,
@@ -1613,9 +1613,9 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 98")
+    @DisplayName("CATALOG_VERSION is 99")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(98);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(99);
     }
 
     @Test
@@ -1970,8 +1970,10 @@ class SecurityGatewayConfigTest {
         assertThat(GatewayPermissionCatalog.authorityForBit(550)).isEqualTo("PERM_supplier:vendor:read");
         assertThat(GatewayPermissionCatalog.authorityForBit(551)).isEqualTo("PERM_supplier:vendor:write");
         assertThat(GatewayPermissionCatalog.authorityForBit(552)).isEqualTo("PERM_supplier:vendor_remit:approve");
+        // catalog v99 (CAP:550 S15, #2511): the register float commands (bit 553)
+        assertThat(GatewayPermissionCatalog.authorityForBit(553)).isEqualTo("PERM_accounting:float:manage");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(553)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(554)).isNull();
     }
 
     @Test

@@ -48,6 +48,8 @@ permissions:
     description: "Request an accounting data export"
   - name: "accounting:export:view"
     description: "View accounting export status and history"
+  - name: "accounting:float:manage"
+    description: "Manage float"
   - name: "accounting:gl-mapping:create"
     description: "Create gl mapping"
   - name: "accounting:gl-mapping:resolve"

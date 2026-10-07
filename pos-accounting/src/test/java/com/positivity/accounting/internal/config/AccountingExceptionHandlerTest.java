@@ -175,6 +175,12 @@ class AccountingExceptionHandlerTest {
                                     new AccountNotZeroBalanceException("non-zero balance"), request)),
                     Named.of("handleAccountNotInactive", (HandlerInvocation) request ->
                             handler.handleAccountNotInactive(new AccountNotInactiveException("not inactive"), request)),
+                    Named.of("handleCashSetup", (HandlerInvocation) request -> handler.handleCashSetup(
+                            new com.positivity.accounting.internal.exception.CashSetupException(
+                                    com.positivity.accounting.internal.exception.CashSetupException.Code
+                                            .FLOAT_ALREADY_ESTABLISHED,
+                                    "Register T-1 already has a float"),
+                            request)),
                     Named.of("handleDuplicateEvent", (HandlerInvocation)
                             request -> handler.handleDuplicateEvent(new DuplicateEventException("duplicate"), request)),
                     Named.of("handleUnbalancedEntry", (HandlerInvocation) request ->

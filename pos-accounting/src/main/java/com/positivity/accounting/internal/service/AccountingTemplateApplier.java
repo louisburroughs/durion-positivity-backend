@@ -245,6 +245,7 @@ public class AccountingTemplateApplier {
                 case AccountingTemplate.GlMapping mapping -> evaluate(mapping);
                 case AccountingTemplate.DefaultGlMapping mapping -> evaluate(mapping);
                 case AccountingTemplate.StatementLine line -> evaluate(line);
+                case AccountingTemplate.PettyExpenseCategory category -> evaluate(category);
             };
         }
 
@@ -312,6 +313,24 @@ public class AccountingTemplateApplier {
             return chart.findStatementLine(line.statementType(), account.id())
                     .map(existing -> Verdict.adopted(existing.id()))
                     .orElseGet(() -> Verdict.created(chart.createStatementLine(line, account.id())));
+        }
+
+        private Verdict evaluate(AccountingTemplate.PettyExpenseCategory category) {
+            Optional<UUID> existing = chart.findPettyExpenseCategory(category.code());
+            if (existing.isPresent()) {
+                return Verdict.adopted(existing.get());
+            }
+            UUID categoryId = chart.findCategory(AccountingTemplate.PettyExpenseCategory.POSTING_CATEGORY)
+                    .orElseThrow(() -> danglingReference(category));
+            UUID keyId = chart.findMappingKey(
+                            categoryId, AccountingTemplate.PettyExpenseCategory.keyNameOf(category.code()))
+                    .orElseThrow(() -> danglingReference(category));
+            AccountingTemplateEntry mappingRecord = recorded.get(category.glMappingEntryKey());
+            if (mappingRecord != null && mappingRecord.getOutcome().needsAttention()) {
+                // The cashier would pick a category that posts nowhere the template meant.
+                return Verdict.withheld(TemplateEntryReason.DEPENDS_ON_CONFLICT, mappingRecord.getTenantValue());
+            }
+            return Verdict.created(chart.createPettyExpenseCategory(keyId, category));
         }
 
         /**

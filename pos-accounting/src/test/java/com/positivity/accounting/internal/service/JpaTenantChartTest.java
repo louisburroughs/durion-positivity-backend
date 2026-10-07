@@ -42,7 +42,11 @@ class JpaTenantChartTest {
             mock(MappingKeyRepository.class),
             mock(GLMappingRepository.class),
             mock(DefaultGLMappingRepository.class),
-            statementLines);
+            statementLines,
+            mock(com.positivity.accounting.internal.repository.PettyExpenseCategoryRepository.class),
+            mock(com.positivity.accounting.internal.repository.PettyExpenseCategoryChangeRepository.class),
+            null,
+            java.time.Clock.systemUTC());
     private final GLAccount revenue = account();
 
     @Test

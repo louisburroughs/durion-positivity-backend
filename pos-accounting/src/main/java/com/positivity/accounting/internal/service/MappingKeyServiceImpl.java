@@ -6,6 +6,7 @@ import com.positivity.accounting.internal.dto.MappingKeyResponse;
 import com.positivity.accounting.internal.dto.MappingKeyUpdateRequest;
 import com.positivity.accounting.internal.entity.MappingKey;
 import com.positivity.accounting.internal.entity.PostingCategory;
+import com.positivity.accounting.internal.exception.CashSetupException;
 import com.positivity.accounting.internal.repository.GLMappingRepository;
 import com.positivity.accounting.internal.repository.MappingKeyRepository;
 import com.positivity.accounting.internal.repository.PostingCategoryRepository;
@@ -72,6 +73,8 @@ public class MappingKeyServiceImpl implements MappingKeyService {
                 .findById(request.getPostingCategoryId())
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, POSTING_CATEGORY_NOT_FOUND + request.getPostingCategoryId()));
+
+        requireNotManaged(category.getCategoryName(), request.getKeyName());
 
         // Validate uniqueness within category
         String trimmedName = request.getKeyName().trim();
@@ -156,6 +159,9 @@ public class MappingKeyServiceImpl implements MappingKeyService {
                 .findById(mappingKey.getPostingCategoryId())
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, POSTING_CATEGORY_NOT_FOUND + mappingKey.getPostingCategoryId()));
+
+        requireNotManaged(category.getCategoryName(), mappingKey.getKeyName());
+        requireNotManaged(category.getCategoryName(), request.getKeyName());
 
         // Validate uniqueness if name is changing
         String trimmedName = request.getKeyName().trim();
@@ -261,6 +267,8 @@ public class MappingKeyServiceImpl implements MappingKeyService {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, POSTING_CATEGORY_NOT_FOUND + mappingKey.getPostingCategoryId()));
 
+        requireNotManaged(category.getCategoryName(), mappingKey.getKeyName());
+
         // Check for active mappings
         long activeMappingCount = glMappingRepository.countByMappingKeyIdAndDeactivatedAtIsNull(mappingKeyId);
         if (activeMappingCount > 0) {
@@ -279,6 +287,20 @@ public class MappingKeyServiceImpl implements MappingKeyService {
         }
 
         return toResponse(deactivated, category.getCategoryName());
+    }
+
+    /**
+     * A petty-expense category's key ({@code PETTY_EXPENSE_*} under {@code REGISTER_CASH_MOVEMENT}) has one
+     * write path, {@code /v1/accounting/petty-expense-categories} (#2511): 422 {@code
+     * PETTY_EXPENSE_CATEGORY_MANAGED} here. Every other key keeps the generic behaviour.
+     */
+    private static void requireNotManaged(String categoryName, String keyName) {
+        if (PettyExpenseCategoryServiceImpl.isManagedKey(categoryName, keyName)) {
+            throw new CashSetupException(
+                    CashSetupException.Code.PETTY_EXPENSE_CATEGORY_MANAGED,
+                    "Mapping key " + keyName.trim() + " is a petty-expense category; change it through"
+                            + " /v1/accounting/petty-expense-categories");
+        }
     }
 
     /**

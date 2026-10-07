@@ -45,11 +45,11 @@ class RetreadPlantAddOnSourceTest {
     @DisplayName("owns the seven retread accounts and their Labor & Overhead lines, and nothing else")
     void ownsTheRetreadAccountsAndTheirLines() {
         assertThat(RetreadPlantAddOnSource.ACCOUNT_CODES)
-                .containsExactly("6350", "6450", "6470", "6510", "6520", "6530", "6900");
+                .containsExactly("6350", "6450", "6470", "6510", "6520", "6530", "4940");
         assertThat(RetreadPlantAddOnSource.ENTRY_KEYS).hasSize(14);
 
         assertThat(source.owns(account("6350"))).isTrue();
-        assertThat(source.owns(line(StatementType.LABOR_OVERHEAD, "6900"))).isTrue();
+        assertThat(source.owns(line(StatementType.LABOR_OVERHEAD, "4940"))).isTrue();
         assertThat(source.owns(account("6340"))).isFalse();
         assertThat(source.owns(line(StatementType.LABOR_OVERHEAD, "6340"))).isFalse();
         assertThat(source.owns(line(StatementType.INCOME_STATEMENT, "6350")))

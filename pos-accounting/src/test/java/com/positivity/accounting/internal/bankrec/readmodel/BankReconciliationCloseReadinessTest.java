@@ -131,6 +131,9 @@ class BankReconciliationCloseReadinessTest {
     @Mock
     private IncompleteImportLookup importLookup;
 
+    @Mock
+    private com.positivity.accounting.internal.service.OpeningBalanceEquityAccount openingBalanceEquityAccount;
+
     private BankReconciliationCloseReadiness service;
     private AccountingPeriod period;
 
@@ -150,7 +153,8 @@ class BankReconciliationCloseReadinessTest {
                 calculator,
                 ledger,
                 ledgerEntries,
-                importLookups);
+                importLookups,
+                openingBalanceEquityAccount);
         period = new AccountingPeriod();
         period.setPeriodId(UUID.randomUUID());
         period.setPeriodCode("2026-08");
@@ -433,6 +437,36 @@ class BankReconciliationCloseReadinessTest {
     }
 
     @Test
+    @DisplayName("#2511 AC12: 3900 not zero at the period end is an OPENING_BALANCE_EQUITY_NOT_CLEARED warning that"
+            + " never blocks close")
+    void openingBalanceEquityWarns() {
+        UUID equity = UUID.fromString("019a0000-0000-7000-8000-000000003900");
+        when(openingBalanceEquityAccount.on(any())).thenReturn(java.util.Optional.of(equity));
+        when(bankCashAccounts.displayValues(any()))
+                .thenReturn(Map.of(equity, new BankCashAccount(equity, "3900", "Opening Balance Equity")));
+        when(ledger.balanceAsOf(eq(equity), any())).thenReturn(BigDecimal.ZERO);
+        CloseReadinessResponse cleared = service.evaluate(period);
+        when(ledger.balanceAsOf(eq(equity), any())).thenReturn(new BigDecimal("-200.00"));
+
+        CloseReadinessResponse readiness = service.evaluate(period);
+
+        assertThat(readiness.checks())
+                .filteredOn(c -> c.code() == ReadinessCheckCode.OPENING_BALANCE_EQUITY_NOT_CLEARED)
+                .singleElement()
+                .satisfies(c -> {
+                    assertThat(c.severity()).isEqualTo(ReadinessSeverity.WARNING);
+                    assertThat(c.references()).containsEntry("accountCode", "3900");
+                });
+        assertThat(readiness.warningCount()).isEqualTo(cleared.warningCount() + 1);
+        assertThat(readiness.blockingCount()).as("a warning never blocks close").isEqualTo(cleared.blockingCount());
+        assertThat(readiness.ready()).isEqualTo(cleared.ready());
+
+        when(ledger.balanceAsOf(eq(equity), any())).thenReturn(BigDecimal.ZERO);
+        assertThat(service.evaluate(period).checks())
+                .noneMatch(c -> c.code() == ReadinessCheckCode.OPENING_BALANCE_EQUITY_NOT_CLEARED);
+    }
+
+    @Test
     @DisplayName("#2558: at 2026-01-31T23:30-06:00 an item dated Jan 31 is 0 days old in a Chicago calendar (aging"
             + " cap is the tenant's today, not the UTC clock's Feb 1)")
     void agingCapIsTheTenantCalendarToday() {
@@ -453,7 +487,8 @@ class BankReconciliationCloseReadinessTest {
                 calculator,
                 ledger,
                 ledgerEntries,
-                importLookups);
+                importLookups,
+                openingBalanceEquityAccount);
         AccountingPeriod february = new AccountingPeriod();
         february.setPeriodId(UUID.randomUUID());
         february.setPeriodCode("2026-02");

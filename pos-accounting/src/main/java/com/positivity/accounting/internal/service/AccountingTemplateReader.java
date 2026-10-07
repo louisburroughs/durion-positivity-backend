@@ -4,12 +4,14 @@ import com.positivity.accounting.internal.entity.DefaultGLMapping;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.entity.GLMapping;
 import com.positivity.accounting.internal.entity.MappingKey;
+import com.positivity.accounting.internal.entity.PettyExpenseCategory;
 import com.positivity.accounting.internal.entity.PostingCategory;
 import com.positivity.accounting.internal.entity.StatementLineMapping;
 import com.positivity.accounting.internal.repository.DefaultGLMappingRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.GLMappingRepository;
 import com.positivity.accounting.internal.repository.MappingKeyRepository;
+import com.positivity.accounting.internal.repository.PettyExpenseCategoryRepository;
 import com.positivity.accounting.internal.repository.PostingCategoryRepository;
 import com.positivity.accounting.internal.repository.StatementLineMappingRepository;
 import com.positivity.tenancy.PlatformTenant;
@@ -50,6 +52,7 @@ public class AccountingTemplateReader implements AccountingTemplateSource {
     private final GLMappingRepository glMappings;
     private final DefaultGLMappingRepository defaultGlMappings;
     private final StatementLineMappingRepository statementLines;
+    private final PettyExpenseCategoryRepository pettyExpenseCategories;
     private final TransactionTemplate readOnly;
     private final AtomicReference<AccountingTemplate> loaded = new AtomicReference<>();
 
@@ -60,6 +63,7 @@ public class AccountingTemplateReader implements AccountingTemplateSource {
             GLMappingRepository glMappings,
             DefaultGLMappingRepository defaultGlMappings,
             StatementLineMappingRepository statementLines,
+            PettyExpenseCategoryRepository pettyExpenseCategories,
             PlatformTransactionManager transactionManager) {
         this.accounts = accounts;
         this.categories = categories;
@@ -67,6 +71,7 @@ public class AccountingTemplateReader implements AccountingTemplateSource {
         this.glMappings = glMappings;
         this.defaultGlMappings = defaultGlMappings;
         this.statementLines = statementLines;
+        this.pettyExpenseCategories = pettyExpenseCategories;
         this.readOnly = new TransactionTemplate(transactionManager);
         this.readOnly.setReadOnly(true);
     }
@@ -165,6 +170,10 @@ public class AccountingTemplateReader implements AccountingTemplateSource {
                     line.getLineDescription(),
                     line.getDisplayOrder(),
                     line.getOperation()));
+        }
+        for (PettyExpenseCategory category : pettyExpenseCategories.findAllByOrderByCodeAsc()) {
+            entries.add(new AccountingTemplate.PettyExpenseCategory(
+                    category.getCode(), category.getLabel(), category.getExamples()));
         }
         return AccountingTemplate.of(entries);
     }

@@ -85,6 +85,18 @@ public interface TenantChart {
      */
     void refreshStatementLine(@NonNull UUID lineId, AccountingTemplate.@NonNull StatementLine line);
 
+    /** The id of the tenant's petty-expense category with this code (#2511). */
+    @NonNull
+    Optional<UUID> findPettyExpenseCategory(@NonNull String code);
+
+    /**
+     * Creates the petty-expense category on the key, records its {@code CREATE} history row and
+     * queues its {@code accounting.petty-expense-category.changed} fact; returns its id.
+     */
+    @NonNull
+    UUID createPettyExpenseCategory(
+            @NonNull UUID mappingKeyId, AccountingTemplate.@NonNull PettyExpenseCategory category);
+
     /**
      * A tenant account as the adoption test sees it.
      *

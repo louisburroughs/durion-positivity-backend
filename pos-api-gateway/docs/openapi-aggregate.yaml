@@ -193,6 +193,14 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1periods~1{periodCode}~1close-readiness
   /v1/accounting/periods/{periodCode}/reopen:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1periods~1{periodCode}~1reopen
+  /v1/accounting/petty-expense-categories:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1petty-expense-categories
+  /v1/accounting/petty-expense-categories/{code}:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1petty-expense-categories~1{code}
+  /v1/accounting/petty-expense-categories/{code}/account:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1petty-expense-categories~1{code}~1account
+  /v1/accounting/petty-expense-categories/{code}/deactivate:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1petty-expense-categories~1{code}~1deactivate
   /v1/accounting/posting-categories:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1posting-categories
   /v1/accounting/posting-categories/{postingCategoryId}:
@@ -259,6 +267,10 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1{reconciliationId}~1submit
   /v1/accounting/reconciliations/{reconciliationId}/supersede:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1{reconciliationId}~1supersede
+  /v1/accounting/registers/{registerId}/float:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1registers~1{registerId}~1float
+  /v1/accounting/registers/{registerId}/float/go-live:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1registers~1{registerId}~1float~1go-live
   /v1/accounting/reports/export:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1export
   /v1/accounting/reports/export/{exportId}:

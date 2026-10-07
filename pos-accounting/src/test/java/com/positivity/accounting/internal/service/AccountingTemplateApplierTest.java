@@ -96,6 +96,62 @@ class AccountingTemplateApplierTest {
                 stateLock, states, entryRecords, auditLogs, chart, Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
+    private static final AccountingTemplate.PettyExpenseCategory STAFF_MEALS_CATEGORY =
+            new AccountingTemplate.PettyExpenseCategory("STAFF_MEALS", "Staff meals", null);
+
+    @Test
+    @DisplayName("#2511: a petty-expense category is created after its key and GL mapping")
+    void pettyExpenseCategoryComesAfterItsMapping() {
+        AccountingTemplateApplier.Result result = applier.apply(
+                TENANT,
+                AccountingTemplate.of(List.of(
+                        STAFF_MEALS_CATEGORY, STAFF_MEALS_MAPPING, STAFF_MEALS_KEY, CASH_MOVEMENT, STAFF_MEALS)));
+
+        assertThat(chart.writes)
+                .containsExactly(
+                        "create ACCOUNT:6295",
+                        "create CATEGORY:REGISTER_CASH_MOVEMENT",
+                        "create MAPPING_KEY:REGISTER_CASH_MOVEMENT/PETTY_EXPENSE_STAFF_MEALS",
+                        "create GL_MAPPING:REGISTER_CASH_MOVEMENT/PETTY_EXPENSE_STAFF_MEALS",
+                        "create PETTY_EXPENSE_CATEGORY:STAFF_MEALS");
+        assertThat(result.changes()).containsOnly(Map.entry(TemplateEntryOutcome.CREATED, 5));
+        assertThat(chart.pettyExpenseCategories).containsKey("STAFF_MEALS");
+    }
+
+    @Test
+    @DisplayName("#2511: a category the tenant already holds is adopted, never rewritten")
+    void pettyExpenseCategoryIsAdopted() {
+        UUID held = UUID.randomUUID();
+        chart.pettyExpenseCategories.put("STAFF_MEALS", held);
+
+        applier.apply(
+                TENANT,
+                AccountingTemplate.of(List.of(
+                        STAFF_MEALS_CATEGORY, STAFF_MEALS_MAPPING, STAFF_MEALS_KEY, CASH_MOVEMENT, STAFF_MEALS)));
+
+        assertThat(chart.writes).doesNotContain("create PETTY_EXPENSE_CATEGORY:STAFF_MEALS");
+        assertThat(entries.get("PETTY_EXPENSE_CATEGORY:STAFF_MEALS").getOutcome())
+                .isEqualTo(TemplateEntryOutcome.ADOPTED);
+        assertThat(entries.get("PETTY_EXPENSE_CATEGORY:STAFF_MEALS").getTargetRowId())
+                .isEqualTo(held);
+    }
+
+    @Test
+    @DisplayName("#2511: a category whose GL mapping is withheld is withheld too: it would post nowhere meant")
+    void pettyExpenseCategoryWaitsForItsMapping() {
+        chart.holdAccount("6295", "Team lunches", AccountType.EXPENSE);
+
+        AccountingTemplateApplier.Result result = applier.apply(
+                TENANT,
+                AccountingTemplate.of(List.of(
+                        STAFF_MEALS_CATEGORY, STAFF_MEALS_MAPPING, STAFF_MEALS_KEY, CASH_MOVEMENT, STAFF_MEALS)));
+
+        assertThat(chart.writes).doesNotContain("create PETTY_EXPENSE_CATEGORY:STAFF_MEALS");
+        assertThat(entries.get("PETTY_EXPENSE_CATEGORY:STAFF_MEALS").getOutcome())
+                .isEqualTo(TemplateEntryOutcome.WITHHELD);
+        assertThat(result.attention()).contains("PETTY_EXPENSE_CATEGORY:STAFF_MEALS");
+    }
+
     @Test
     @DisplayName("an empty tenant receives every entry, in dependency order whatever order the template lists them in")
     void createsEverythingInDependencyOrder() {

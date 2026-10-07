@@ -343,6 +343,9 @@ SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', 
 --     supplier:vendor_remit:approve  -> ADMIN, CONTROLLER, GENERAL_MANAGER (never the requester: the
 --                                       service refuses self-approval whatever the grant)
 --     supplier:fact:replay           -> ADMIN (the crm:fact:replay precedent)
+-- * CAP:550 S15 (#2511, SPEC-accounting-workspace §4.6 "Float", Security sign-off OI-5 2026-10-05, AW31):
+--   accounting:float:manage (bit 553), the register go-live float and Change float commands.
+--     accounting:float:manage        -> ADMIN, CONTROLLER (ACCOUNTING_CLERK and GENERAL_MANAGER receive nothing)
 --
 -- IDEMPOTENCY
 -- Every statement below is ON CONFLICT DO NOTHING, and role/permission ids are
@@ -409,6 +412,7 @@ FROM (VALUES
     ('accounting:events:view', 'accounting', 'events', 'view', 8),
     ('accounting:export:request', 'accounting', 'export', 'request', 242),
     ('accounting:export:view', 'accounting', 'export', 'view', 243),
+    ('accounting:float:manage', 'accounting', 'float', 'manage', 553),
     ('accounting:gl:reconcile', 'accounting', 'gl', 'reconcile', 509),
     ('accounting:gl-mapping:create', 'accounting', 'gl-mapping', 'create', 291),
     ('accounting:gl-mapping:resolve', 'accounting', 'gl-mapping', 'resolve', 292),
@@ -977,6 +981,7 @@ FROM (VALUES
     ('ADMIN', 'accounting:events:view'),
     ('ADMIN', 'accounting:export:request'),
     ('ADMIN', 'accounting:export:view'),
+    ('ADMIN', 'accounting:float:manage'),
     ('ADMIN', 'accounting:gl:reconcile'),
     ('ADMIN', 'accounting:gl-mapping:create'),
     ('ADMIN', 'accounting:gl-mapping:resolve'),
@@ -1443,6 +1448,7 @@ FROM (VALUES
     ('CONTROLLER', 'accounting:events:submit'),
     ('CONTROLLER', 'accounting:events:view'),
     ('CONTROLLER', 'accounting:export:view'),
+    ('CONTROLLER', 'accounting:float:manage'),
     ('CONTROLLER', 'accounting:gl:reconcile'),
     ('CONTROLLER', 'accounting:gl-mapping:create'),
     ('CONTROLLER', 'accounting:gl-mapping:resolve'),
@@ -1865,6 +1871,7 @@ BEGIN
         ('accounting:events:view'),
         ('accounting:export:request'),
         ('accounting:export:view'),
+        ('accounting:float:manage'),
         ('accounting:gl:reconcile'),
         ('accounting:gl-mapping:create'),
         ('accounting:gl-mapping:resolve'),

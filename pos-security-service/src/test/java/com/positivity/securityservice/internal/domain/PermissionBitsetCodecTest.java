@@ -167,7 +167,7 @@ class PermissionBitsetCodecTest {
                 PermissionCode.CATALOG__PRODUCT__VIEW // bit 11
                 );
         String encoded = PermissionBitsetCodec.encode(perms);
-        assertThatThrownBy(() -> PermissionBitsetCodec.decodeToPermissions(encoded, 99))
+        assertThatThrownBy(() -> PermissionBitsetCodec.decodeToPermissions(encoded, PermissionCode.CATALOG_VERSION + 1))
                 .isInstanceOf(SecurityValidationException.class)
                 .hasMessageContaining("Unsupported permission catalog version");
     }

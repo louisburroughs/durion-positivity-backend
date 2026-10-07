@@ -797,7 +797,7 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
         JdbcTemplate jdbc = new JdbcTemplate(isolated);
         Flyway.configure()
                 .dataSource(isolated)
-                .locations("classpath:db/migration")
+                .locations(com.positivity.accounting.AccountingMigrations.releasedUpTo(3))
                 .target("3")
                 .load()
                 .migrate();

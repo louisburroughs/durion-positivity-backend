@@ -4,17 +4,25 @@ import com.positivity.accounting.internal.entity.DefaultGLMapping;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.entity.GLMapping;
 import com.positivity.accounting.internal.entity.MappingKey;
+import com.positivity.accounting.internal.entity.PettyExpenseCategory;
+import com.positivity.accounting.internal.entity.PettyExpenseCategoryChange;
 import com.positivity.accounting.internal.entity.PostingCategory;
 import com.positivity.accounting.internal.entity.StatementLineMapping;
 import com.positivity.accounting.internal.enums.GLAccountStatus;
+import com.positivity.accounting.internal.enums.PettyExpenseCategoryChangeType;
+import com.positivity.accounting.internal.enums.PettyExpenseCategoryStatus;
 import com.positivity.accounting.internal.enums.StatementType;
 import com.positivity.accounting.internal.repository.DefaultGLMappingRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.GLMappingRepository;
 import com.positivity.accounting.internal.repository.MappingKeyRepository;
+import com.positivity.accounting.internal.repository.PettyExpenseCategoryChangeRepository;
+import com.positivity.accounting.internal.repository.PettyExpenseCategoryRepository;
 import com.positivity.accounting.internal.repository.PostingCategoryRepository;
 import com.positivity.accounting.internal.repository.StatementLineMappingRepository;
 import com.positivity.shared.id.UUIDv7Generator;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.Optional;
 import java.util.UUID;
@@ -36,12 +44,19 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(propagation = Propagation.MANDATORY)
 public class JpaTenantChart implements TenantChart {
 
+    /** The history row's justification for a category the template created. */
+    static final String TEMPLATE_JUSTIFICATION = "Provisioned from the accounting tenant template";
+
     private final GLAccountRepository accounts;
     private final PostingCategoryRepository categories;
     private final MappingKeyRepository mappingKeys;
     private final GLMappingRepository glMappings;
     private final DefaultGLMappingRepository defaultGlMappings;
     private final StatementLineMappingRepository statementLines;
+    private final PettyExpenseCategoryRepository pettyExpenseCategories;
+    private final PettyExpenseCategoryChangeRepository pettyExpenseCategoryChanges;
+    private final PettyExpenseCategoryFacts pettyExpenseCategoryFacts;
+    private final Clock clock;
 
     @Override
     public Optional<AccountRow> findAccount(@NonNull String code) {
@@ -204,6 +219,38 @@ public class JpaTenantChart implements TenantChart {
         line.setLineDescription(template.lineDescription());
         line.setDisplayOrder(template.displayOrder());
         statementLines.save(line);
+    }
+
+    @Override
+    public Optional<UUID> findPettyExpenseCategory(@NonNull String code) {
+        return pettyExpenseCategories.findByCode(code).map(PettyExpenseCategory::getPettyExpenseCategoryId);
+    }
+
+    @Override
+    public UUID createPettyExpenseCategory(
+            @NonNull UUID mappingKeyId, AccountingTemplate.@NonNull PettyExpenseCategory template) {
+        PettyExpenseCategory category = new PettyExpenseCategory();
+        category.setMappingKeyId(mappingKeyId);
+        category.setCode(template.code());
+        category.setLabel(template.label());
+        category.setExamples(template.examples());
+        category.setStatus(PettyExpenseCategoryStatus.ACTIVE);
+        category.setCreatedBy(ACTOR);
+        category.setModifiedBy(ACTOR);
+        PettyExpenseCategory saved = pettyExpenseCategories.saveAndFlush(category);
+
+        PettyExpenseCategoryChange change = new PettyExpenseCategoryChange();
+        change.setPettyExpenseCategoryId(saved.getPettyExpenseCategoryId());
+        change.setCode(saved.getCode());
+        change.setChangeType(PettyExpenseCategoryChangeType.CREATE);
+        change.setNewValue(template.describe());
+        change.setActor(ACTOR);
+        change.setJustification(TEMPLATE_JUSTIFICATION);
+        change.setChangedAt(Instant.now(clock));
+        pettyExpenseCategoryChanges.save(change);
+
+        pettyExpenseCategoryFacts.changed(saved, ACTOR);
+        return saved.getPettyExpenseCategoryId();
     }
 
     private static LineRow lineRow(StatementLineMapping line) {

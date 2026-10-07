@@ -54,5 +54,11 @@ public enum AccountSubtype {
     OPERATING_EXPENSE,
 
     /** Anything not covered by a more specific subtype. */
-    OTHER
+    OTHER,
+
+    /**
+     * Cash kept on the premises, outside the bank (ASSET). Example: 1080 Register Float, the drawers'
+     * change float (#2511, AW9, AW16). Never {@link #BANK_CASH}: bank reconciliation does not see it.
+     */
+    CASH_ON_HAND
 }
