@@ -24,8 +24,8 @@ import org.springframework.stereotype.Component;
  * {@code V5__tenant_template_provisioning.sql}, because {@code V2__seed_accounting.sql} already gave
  * it these accounts.
  *
- * <p>The codes are the ones {@code V2} uses today. S15's AW30 renumbering turns 6900 "Rubber Dust
- * Sales Income" into 4940 here, in the seed and in its migration together.
+ * <p>The codes are V2's as renumbered by AW30 (#2511, {@code V11__chart_float_petty_expense_categories.sql}):
+ * 4940 Rubber Dust Sales Income was 6900, a revenue account in the expense range.
  */
 @Component
 @RequiredArgsConstructor
@@ -38,7 +38,7 @@ public class RetreadPlantAddOnSource implements AccountingTemplateSource {
     public static final String ON = "true";
 
     /** The add-on's account codes. */
-    public static final List<String> ACCOUNT_CODES = List.of("6350", "6450", "6470", "6510", "6520", "6530", "6900");
+    public static final List<String> ACCOUNT_CODES = List.of("6350", "6450", "6470", "6510", "6520", "6530", "4940");
 
     /** The entry keys the add-on owns: its accounts and their Labor &amp; Overhead lines. */
     public static final Set<String> ENTRY_KEYS = entryKeys();

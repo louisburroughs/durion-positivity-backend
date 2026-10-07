@@ -29,6 +29,7 @@ final class FakeTenantChart implements TenantChart {
     final Map<UUID, AccountingTemplate.StatementLine> lines = new LinkedHashMap<>();
     final Map<UUID, UUID> lineAccounts = new LinkedHashMap<>();
     final Map<UUID, String> lineLocations = new LinkedHashMap<>();
+    final Map<String, UUID> pettyExpenseCategories = new LinkedHashMap<>();
 
     /** Every write, in order: {@code "create ACCOUNT:1000"}, {@code "refresh STATEMENT_LINE:..."}. */
     final List<String> writes = new ArrayList<>();
@@ -237,5 +238,19 @@ final class FakeTenantChart implements TenantChart {
                         line.lineDescription(),
                         line.displayOrder(),
                         current.operation()));
+    }
+
+    @Override
+    public Optional<UUID> findPettyExpenseCategory(String code) {
+        lookups++;
+        return Optional.ofNullable(pettyExpenseCategories.get(code));
+    }
+
+    @Override
+    public UUID createPettyExpenseCategory(UUID mappingKeyId, AccountingTemplate.PettyExpenseCategory category) {
+        writes.add("create " + category.entryKey());
+        UUID id = UUID.randomUUID();
+        pettyExpenseCategories.put(category.code(), id);
+        return id;
     }
 }

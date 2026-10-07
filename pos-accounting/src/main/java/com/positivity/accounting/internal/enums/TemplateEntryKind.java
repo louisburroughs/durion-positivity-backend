@@ -20,5 +20,9 @@ public enum TemplateEntryKind {
     /** A default GL mapping, matched by event type. */
     DEFAULT_GL_MAPPING,
     /** An account's line on a statement, matched by statement type and account. */
-    STATEMENT_LINE
+    STATEMENT_LINE,
+    /**
+     * A petty-expense category (#2511), matched by code; applied after its mapping key and GL mapping.
+     */
+    PETTY_EXPENSE_CATEGORY
 }

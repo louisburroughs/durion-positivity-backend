@@ -14,7 +14,6 @@
 --       ACCOUNT:<code>                      CATEGORY:<name>
 --       MAPPING_KEY:<category>/<key>        GL_MAPPING:<category>/<key>
 --       DEFAULT_GL_MAPPING:<event type>     STATEMENT_LINE:<statement type>:<account code>
---       PETTY_EXPENSE_CATEGORY:<code>
 --   * References are by natural key through the same expression, never a literal id and never a
 --     sub-select: Flyway runs as the owner, which row-level security does not restrict, so
 --     looking an account up by its code would find every tenant's account with that code.
@@ -36,7 +35,6 @@ INSERT INTO gl_account (gl_account_id, account_code, account_name, account_type,
 SELECT md5('accounting-template:01900000-0000-7000-8000-000000000000:ACCOUNT:' || t.code)::uuid, t.code, t.name, t.type, t.subtype, t.reconcilable, TIMESTAMP '2020-01-01 00:00:00', 0, NOW(), 'seed-generator', NOW(), 'seed-generator'
 FROM (VALUES
     ('1000', 'Cash', 'ASSET', 'BANK_CASH', TRUE),
-    ('1080', 'Register Float', 'ASSET', 'CASH_ON_HAND', FALSE),
     ('1090', 'Undeposited Funds', 'ASSET', 'UNDEPOSITED_FUNDS', TRUE),
     ('1095', 'Register Cash Clearing', 'ASSET', 'CURRENT_ASSET', FALSE),
     ('1200', 'Accounts Receivable', 'ASSET', 'RECEIVABLE', TRUE),
@@ -46,8 +44,6 @@ FROM (VALUES
     ('2300', 'Customer Credit Liability', 'LIABILITY', 'CURRENT_LIABILITY', FALSE),
     ('2350', 'Settlement Suspense', 'LIABILITY', 'CURRENT_LIABILITY', FALSE),
     ('2360', 'Bank Reconciliation Adjustments', 'LIABILITY', 'CURRENT_LIABILITY', FALSE),
-    ('3000', 'Owner''s Equity', 'EQUITY', 'OTHER', FALSE),
-    ('3900', 'Opening Balance Equity', 'EQUITY', 'OTHER', FALSE),
     ('4000', 'Service Revenue', 'REVENUE', 'SALES', FALSE),
     ('4900', 'Settlement Adjustments', 'REVENUE', 'OTHER', FALSE),
     ('4920', 'Interest Income', 'REVENUE', 'OTHER', FALSE),
@@ -57,10 +53,7 @@ FROM (VALUES
     ('6000', 'Payment Processor Fees', 'EXPENSE', 'OPERATING_EXPENSE', FALSE),
     ('6020', 'NSF Fees', 'EXPENSE', 'OPERATING_EXPENSE', FALSE),
     ('6030', 'Bank Service Charges', 'EXPENSE', 'OPERATING_EXPENSE', FALSE),
-    ('6040', 'Cash Short', 'EXPENSE', 'OPERATING_EXPENSE', FALSE),
-    ('6295', 'Staff Meals & Refreshments', 'EXPENSE', 'OPERATING_EXPENSE', FALSE),
-    ('6375', 'Cleaning & Janitorial Supplies', 'EXPENSE', 'OPERATING_EXPENSE', FALSE),
-    ('6380', 'Postage & Shipping', 'EXPENSE', 'OPERATING_EXPENSE', FALSE)
+    ('6115', 'Cash Short', 'EXPENSE', 'OPERATING_EXPENSE', FALSE)
 ) AS t(code, name, type, subtype, reconcilable)
 ON CONFLICT (tenant_id, account_code) DO UPDATE SET
     account_name = EXCLUDED.account_name,
@@ -72,15 +65,14 @@ ON CONFLICT (tenant_id, account_code) DO UPDATE SET
     modified_by = 'seed-generator';
 
 -- GL accounts: the CAP-316 labour and overhead chart every tenant receives (AW30). Numbers and names
--- are the ones V2__seed_accounting.sql gave the alpha default tenant, as renumbered by AW30 (#2511,
--- V11__chart_float_petty_expense_categories.sql): 6010 -> 6100, 6015 -> 6102, 6025 -> 6105, and 6340 is
--- Shop Supplies & Consumables. That tenant adopts its rows instead of clashing with them.
+-- are the ones V2__seed_accounting.sql gave the alpha default tenant, so that tenant adopts its rows
+-- instead of clashing with them; S15's AW30 renumbering changes them here and there together.
 INSERT INTO gl_account (gl_account_id, account_code, account_name, account_type, account_subtype, reconcilable, activation_date, version, created_at, created_by, modified_at, modified_by)
 SELECT md5('accounting-template:01900000-0000-7000-8000-000000000000:ACCOUNT:' || t.code)::uuid, t.code, t.name, t.type, t.subtype, t.reconcilable, TIMESTAMP '2020-01-01 00:00:00', 0, NOW(), 'seed-generator', NOW(), 'seed-generator'
 FROM (VALUES
-    ('6100', 'Retread Plant Hourly Wages', 'EXPENSE', NULL::text, FALSE),
-    ('6102', 'Retread Plant Management Salaries', 'EXPENSE', NULL::text, FALSE),
-    ('6105', 'Retread Plant Contract & Temp Labor', 'EXPENSE', NULL::text, FALSE),
+    ('6010', 'Retread Plant Hourly Wages', 'EXPENSE', NULL::text, FALSE),
+    ('6015', 'Retread Plant Management Salaries', 'EXPENSE', NULL::text, FALSE),
+    ('6025', 'Retread Plant Contract & Temp Labor', 'EXPENSE', NULL::text, FALSE),
     ('6110', 'Retread Plant FICA Expense', 'EXPENSE', NULL::text, FALSE),
     ('6120', 'Retread Plant Federal Unemployment Tax', 'EXPENSE', NULL::text, FALSE),
     ('6130', 'Retread Plant State Unemployment Tax', 'EXPENSE', NULL::text, FALSE),
@@ -104,7 +96,7 @@ FROM (VALUES
     ('6310', 'Retread Plant Theft Insurance', 'EXPENSE', NULL::text, FALSE),
     ('6320', 'Retread Plant Liability Insurance', 'EXPENSE', NULL::text, FALSE),
     ('6330', 'Retread Plant Property Taxes', 'EXPENSE', NULL::text, FALSE),
-    ('6340', 'Shop Supplies & Consumables', 'EXPENSE', NULL::text, FALSE),
+    ('6340', 'Retread Shop Consumables', 'EXPENSE', NULL::text, FALSE),
     ('6360', 'Retread Plant Miscellaneous Supplies', 'EXPENSE', NULL::text, FALSE),
     ('6370', 'Retread Plant Office Supplies', 'EXPENSE', NULL::text, FALSE),
     ('6400', 'Retread Plant Utilities', 'EXPENSE', NULL::text, FALSE),
@@ -139,10 +131,7 @@ FROM (VALUES
     ('REGISTER_OVER_SHORT', 'Register-session drawer over/short variance (odoo-parity G3)'),
     ('INVENTORY_ADJUSTMENT', 'Inventory count / manual adjustment GL posting (loss Dr Shrinkage / Cr Inventory, gain Dr Inventory / Cr Shrinkage, #2191)'),
     ('INVENTORY_REVALUATION', 'Manual cost revaluation GL posting (write-up Dr Inventory / Cr COGS, write-down Dr COGS / Cr Inventory, #2193)'),
-    ('INVOICE_REVENUE', 'Invoice revenue recognition on finalization (Dr AR / Cr Service Revenue / Cr Sales Tax Payable, #1843)'),
-    ('REGISTER_CASH_MOVEMENT', 'Drawer cash paid out or in: petty expenses, vendor cash on delivery (#2511, S17)'),
-    ('BANK_DEPOSIT', 'Drawer cash taken to the bank (#2511, S18; the bank side is chosen per deposit)'),
-    ('REGISTER_FLOAT', 'Register change float: go-live against opening balance equity, changes against a bank account (#2511, AW16-AW17)')
+    ('INVOICE_REVENUE', 'Invoice revenue recognition on finalization (Dr AR / Cr Service Revenue / Cr Sales Tax Payable, #1843)')
 ) AS t(name, description)
 ON CONFLICT (tenant_id, posting_category_id) DO UPDATE SET
     category_name = EXCLUDED.category_name,
@@ -185,22 +174,7 @@ FROM (VALUES
     ('INVENTORY_REVALUATION', 'REVALUATION_OFFSET', 'Counter side of a revaluation (credit on write-up, debit on write-down; decision D7 final: 5000 COGS)'),
     ('INVOICE_REVENUE', 'ACCOUNTS_RECEIVABLE', 'Debit side of invoice revenue recognition (the receivable)'),
     ('INVOICE_REVENUE', 'SERVICE_REVENUE', 'Credit side of invoice revenue recognition (total - tax)'),
-    ('INVOICE_REVENUE', 'SALES_TAX_PAYABLE', 'Credit side of invoice revenue recognition (tax collected)'),
-    ('REGISTER_CASH_MOVEMENT', 'PETTY_EXPENSE_SHOP_SUPPLIES', 'Shop supplies'),
-    ('REGISTER_CASH_MOVEMENT', 'PETTY_EXPENSE_SMALL_TOOLS', 'Small tools'),
-    ('REGISTER_CASH_MOVEMENT', 'PETTY_EXPENSE_OFFICE_SUPPLIES', 'Office supplies'),
-    ('REGISTER_CASH_MOVEMENT', 'PETTY_EXPENSE_BUILDING_REPAIRS', 'Building repairs'),
-    ('REGISTER_CASH_MOVEMENT', 'PETTY_EXPENSE_EQUIPMENT_REPAIRS', 'Equipment repairs'),
-    ('REGISTER_CASH_MOVEMENT', 'PETTY_EXPENSE_POSTAGE_SHIPPING', 'Postage and shipping'),
-    ('REGISTER_CASH_MOVEMENT', 'PETTY_EXPENSE_CLEANING_JANITORIAL', 'Cleaning and janitorial'),
-    ('REGISTER_CASH_MOVEMENT', 'PETTY_EXPENSE_STAFF_MEALS', 'Staff meals'),
-    ('REGISTER_CASH_MOVEMENT', 'PETTY_EXPENSE_VEHICLE_FUEL', 'Vehicle fuel'),
-    ('REGISTER_CASH_MOVEMENT', 'CASH_CLEARING', 'Register cash clearing counter (the drawer)'),
-    ('REGISTER_CASH_MOVEMENT', 'ACCOUNTS_PAYABLE', 'Vendor paid cash on delivery from the drawer (S17)'),
-    ('BANK_DEPOSIT', 'UNDEPOSITED_FUNDS', 'Undeposited funds taken to the bank (S18)'),
-    ('BANK_DEPOSIT', 'CASH_CLEARING', 'Register cash clearing taken to the bank (S18)'),
-    ('REGISTER_FLOAT', 'REGISTER_FLOAT', 'The drawers'' change float (1080, AW16)'),
-    ('REGISTER_FLOAT', 'OPENING_BALANCE_EQUITY', 'Counter side of a go-live float (3900, AW17)')
+    ('INVOICE_REVENUE', 'SALES_TAX_PAYABLE', 'Credit side of invoice revenue recognition (tax collected)')
 ) AS t(category, key_name, description)
 ON CONFLICT (tenant_id, mapping_key_id) DO UPDATE SET
     posting_category_id = EXCLUDED.posting_category_id,
@@ -234,7 +208,7 @@ FROM (VALUES
     ('CUSTOMER_CREDIT_REFUND', 'UNDEPOSITED_FUNDS', 'ACCOUNTING', 'CUSTOMER_CREDIT_REFUND_UNDEPOSITED_FUNDS', '1090'),
     ('INVENTORY_SHRINKAGE', 'SHRINKAGE_EXPENSE', 'ACCOUNTING', 'INVENTORY_SHRINKAGE_SHRINKAGE_EXPENSE', '5100'),
     ('INVENTORY_SHRINKAGE', 'INVENTORY_ASSET', 'ACCOUNTING', 'INVENTORY_SHRINKAGE_INVENTORY_ASSET', '1300'),
-    ('REGISTER_OVER_SHORT', 'CASH_SHORT', 'ACCOUNTING', 'REGISTER_OVER_SHORT_CASH_SHORT', '6040'),
+    ('REGISTER_OVER_SHORT', 'CASH_SHORT', 'ACCOUNTING', 'REGISTER_OVER_SHORT_CASH_SHORT', '6115'),
     ('REGISTER_OVER_SHORT', 'CASH_OVER', 'ACCOUNTING', 'REGISTER_OVER_SHORT_CASH_OVER', '4930'),
     ('REGISTER_OVER_SHORT', 'CASH_CLEARING', 'ACCOUNTING', 'REGISTER_OVER_SHORT_CASH_CLEARING', '1095'),
     ('INVENTORY_ADJUSTMENT', 'ADJUSTMENT_LOSS', 'ACCOUNTING', 'INVENTORY_ADJUSTMENT_ADJUSTMENT_LOSS', '5100'),
@@ -244,22 +218,7 @@ FROM (VALUES
     ('INVENTORY_REVALUATION', 'REVALUATION_OFFSET', 'ACCOUNTING', 'INVENTORY_REVALUATION_REVALUATION_OFFSET', '5000'),
     ('INVOICE_REVENUE', 'ACCOUNTS_RECEIVABLE', 'ACCOUNTING', 'INVOICE_REVENUE_ACCOUNTS_RECEIVABLE', '1200'),
     ('INVOICE_REVENUE', 'SERVICE_REVENUE', 'ACCOUNTING', 'INVOICE_REVENUE_SERVICE_REVENUE', '4000'),
-    ('INVOICE_REVENUE', 'SALES_TAX_PAYABLE', 'ACCOUNTING', 'INVOICE_REVENUE_SALES_TAX_PAYABLE', '2200'),
-    ('REGISTER_CASH_MOVEMENT', 'PETTY_EXPENSE_SHOP_SUPPLIES', 'ACCOUNTING', 'PETTY_EXPENSE_SHOP_SUPPLIES', '6340'),
-    ('REGISTER_CASH_MOVEMENT', 'PETTY_EXPENSE_SMALL_TOOLS', 'ACCOUNTING', 'PETTY_EXPENSE_SMALL_TOOLS', '6430'),
-    ('REGISTER_CASH_MOVEMENT', 'PETTY_EXPENSE_OFFICE_SUPPLIES', 'ACCOUNTING', 'PETTY_EXPENSE_OFFICE_SUPPLIES', '6370'),
-    ('REGISTER_CASH_MOVEMENT', 'PETTY_EXPENSE_BUILDING_REPAIRS', 'ACCOUNTING', 'PETTY_EXPENSE_BUILDING_REPAIRS', '6210'),
-    ('REGISTER_CASH_MOVEMENT', 'PETTY_EXPENSE_EQUIPMENT_REPAIRS', 'ACCOUNTING', 'PETTY_EXPENSE_EQUIPMENT_REPAIRS', '6410'),
-    ('REGISTER_CASH_MOVEMENT', 'PETTY_EXPENSE_POSTAGE_SHIPPING', 'ACCOUNTING', 'PETTY_EXPENSE_POSTAGE_SHIPPING', '6380'),
-    ('REGISTER_CASH_MOVEMENT', 'PETTY_EXPENSE_CLEANING_JANITORIAL', 'ACCOUNTING', 'PETTY_EXPENSE_CLEANING_JANITORIAL', '6375'),
-    ('REGISTER_CASH_MOVEMENT', 'PETTY_EXPENSE_STAFF_MEALS', 'ACCOUNTING', 'PETTY_EXPENSE_STAFF_MEALS', '6295'),
-    ('REGISTER_CASH_MOVEMENT', 'PETTY_EXPENSE_VEHICLE_FUEL', 'ACCOUNTING', 'PETTY_EXPENSE_VEHICLE_FUEL', '6250'),
-    ('REGISTER_CASH_MOVEMENT', 'CASH_CLEARING', 'ACCOUNTING', 'REGISTER_CASH_MOVEMENT_CASH_CLEARING', '1095'),
-    ('REGISTER_CASH_MOVEMENT', 'ACCOUNTS_PAYABLE', 'ACCOUNTING', 'REGISTER_CASH_MOVEMENT_ACCOUNTS_PAYABLE', '2000'),
-    ('BANK_DEPOSIT', 'UNDEPOSITED_FUNDS', 'ACCOUNTING', 'BANK_DEPOSIT_UNDEPOSITED_FUNDS', '1090'),
-    ('BANK_DEPOSIT', 'CASH_CLEARING', 'ACCOUNTING', 'BANK_DEPOSIT_CASH_CLEARING', '1095'),
-    ('REGISTER_FLOAT', 'REGISTER_FLOAT', 'ACCOUNTING', 'REGISTER_FLOAT_REGISTER_FLOAT', '1080'),
-    ('REGISTER_FLOAT', 'OPENING_BALANCE_EQUITY', 'ACCOUNTING', 'REGISTER_FLOAT_OPENING_BALANCE_EQUITY', '3900')
+    ('INVOICE_REVENUE', 'SALES_TAX_PAYABLE', 'ACCOUNTING', 'INVOICE_REVENUE_SALES_TAX_PAYABLE', '2200')
 ) AS t(category, key_name, source_system, external_code, account_code)
 ON CONFLICT (tenant_id, gl_mapping_id) DO UPDATE SET
     source_system = EXCLUDED.source_system,
@@ -294,16 +253,12 @@ ON CONFLICT (tenant_id, mapping_id) DO UPDATE SET
 -- (BS_OTHER_ASSETS, BS_OTHER_LIABILITIES, BS_OTHER_EQUITY, BS_PROFIT_NOT_YET_CLOSED, IS_OTHER_INCOME,
 -- IS_OTHER_EXPENSES; a BANK_CASH account on BS_IN_THE_BANK), so no balance is left off a statement.
 -- The line for 4000 used to be REVENUE; a tenant whose line is untouched since adoption follows the
--- recode to IS_SALES (S37's statement-line refresh). BS_KEPT_IN_DRAWERS (1080, AW9, AW16: cash kept in
--- drawers for change, never BANK_CASH and never reconciled), BS_OWNER_EQUITY (3000) and
--- BS_OPENING_BALANCE_EQUITY (3900) are S15's (#2511); equity accounts have lines of their own, so neither
--- counts toward BS_PROFIT_NOT_YET_CLOSED, which collects revenue and expense accounts only. 1250 and 1260
--- are S32's.
+-- recode to IS_SALES (S37's statement-line refresh). BS_KEPT_IN_DRAWERS (1080), BS_OWNER_EQUITY (3000)
+-- and BS_OPENING_BALANCE_EQUITY (3900) are S15's; 1250 and 1260 are S32's.
 INSERT INTO statement_line_mappings (mapping_id, gl_account_id, account_name, statement_type, statement_line_code, parent_line_code, line_description, display_order, operation)
 SELECT md5('accounting-template:01900000-0000-7000-8000-000000000000:STATEMENT_LINE:' || t.statement_type || ':' || t.code)::uuid, md5('accounting-template:01900000-0000-7000-8000-000000000000:ACCOUNT:' || t.code)::uuid, t.code, t.statement_type, t.line_code, t.parent_line_code, t.line_description, t.display_order, t.operation
 FROM (VALUES
     ('BALANCE_SHEET', '1000', 'BS_IN_THE_BANK', NULL::text, 'In the bank', 1, 'SUM'),
-    ('BALANCE_SHEET', '1080', 'BS_KEPT_IN_DRAWERS', NULL::text, 'Kept in drawers for change', 1, 'SUM'),
     ('BALANCE_SHEET', '1090', 'BS_WAITING_TO_BE_DEPOSITED', NULL::text, 'Waiting to be deposited', 2, 'SUM'),
     ('BALANCE_SHEET', '1095', 'BS_WAITING_TO_BE_DEPOSITED', NULL::text, 'Waiting to be deposited', 2, 'SUM'),
     ('BALANCE_SHEET', '1200', 'BS_CUSTOMERS_OWE_YOU', NULL::text, 'Money customers owe you', 3, 'SUM'),
@@ -311,8 +266,6 @@ FROM (VALUES
     ('BALANCE_SHEET', '2000', 'BS_BILLS_FROM_VENDORS', NULL::text, 'Bills from vendors', 5, 'SUM'),
     ('BALANCE_SHEET', '2200', 'BS_SALES_TAX_COLLECTED', NULL::text, 'Sales tax collected, not yet paid', 6, 'SUM'),
     ('BALANCE_SHEET', '2300', 'BS_CUSTOMER_CREDITS', NULL::text, 'Credits customers can still use', 7, 'SUM'),
-    ('BALANCE_SHEET', '3000', 'BS_OWNER_EQUITY', NULL::text, 'Owner''s equity', 8, 'SUM'),
-    ('BALANCE_SHEET', '3900', 'BS_OPENING_BALANCE_EQUITY', NULL::text, 'Opening balances not yet cleared to owner''s equity', 9, 'SUM'),
     ('INCOME_STATEMENT', '4000', 'IS_SALES', NULL::text, 'Sales', 1, 'SUM'),
     ('INCOME_STATEMENT', '5000', 'IS_COST_OF_PARTS_SOLD', NULL::text, 'Cost of tires and parts sold', 2, 'SUM'),
     ('INCOME_STATEMENT', '5100', 'IS_COST_OF_PARTS_SOLD', NULL::text, 'Cost of tires and parts sold', 2, 'SUM'),
@@ -332,9 +285,9 @@ ON CONFLICT (tenant_id, mapping_id) DO UPDATE SET
 INSERT INTO statement_line_mappings (mapping_id, gl_account_id, account_name, statement_type, statement_line_code, parent_line_code, line_description, display_order, operation)
 SELECT md5('accounting-template:01900000-0000-7000-8000-000000000000:STATEMENT_LINE:' || t.statement_type || ':' || t.code)::uuid, md5('accounting-template:01900000-0000-7000-8000-000000000000:ACCOUNT:' || t.code)::uuid, t.code, t.statement_type, t.line_code, t.parent_line_code, t.line_description, t.display_order, t.operation
 FROM (VALUES
-    ('LABOR_OVERHEAD', '6100', '1.1.1', '1.1', 'Hourly wages and bonuses', 1, 'SUM'),
-    ('LABOR_OVERHEAD', '6102', '1.1.2', '1.1', 'Management salaries', 2, 'SUM'),
-    ('LABOR_OVERHEAD', '6105', '1.2', NULL::text, 'Misc Labor (contract and temp production employees)', 3, 'SUM'),
+    ('LABOR_OVERHEAD', '6010', '1.1.1', '1.1', 'Hourly wages and bonuses', 1, 'SUM'),
+    ('LABOR_OVERHEAD', '6015', '1.1.2', '1.1', 'Management salaries', 2, 'SUM'),
+    ('LABOR_OVERHEAD', '6025', '1.2', NULL::text, 'Misc Labor (contract and temp production employees)', 3, 'SUM'),
     ('LABOR_OVERHEAD', '6110', '1.3.1', '1.3', 'FICA', 4, 'SUM'),
     ('LABOR_OVERHEAD', '6120', '1.3.2', '1.3', 'Fed Unemployment', 5, 'SUM'),
     ('LABOR_OVERHEAD', '6130', '1.3.3', '1.3', 'State Unemployment', 6, 'SUM'),
@@ -378,37 +331,12 @@ ON CONFLICT (tenant_id, mapping_id) DO UPDATE SET
     display_order = EXCLUDED.display_order,
     operation = EXCLUDED.operation;
 
--- Petty-expense categories (#2511; SPEC-accounting-workspace §4.6, AW18, AW30): the cashier's label and
--- examples for each REGISTER_CASH_MOVEMENT key PETTY_EXPENSE_<code> above. Entry key
--- PETTY_EXPENSE_CATEGORY:<code>; a tenant matches it by code and receives it after its key and GL mapping.
--- Codes are permanent; there is no "Other".
-INSERT INTO petty_expense_category (petty_expense_category_id, mapping_key_id, code, label, examples, status, version, created_at, created_by, modified_at, modified_by)
-SELECT md5('accounting-template:01900000-0000-7000-8000-000000000000:PETTY_EXPENSE_CATEGORY:' || t.code)::uuid, md5('accounting-template:01900000-0000-7000-8000-000000000000:MAPPING_KEY:REGISTER_CASH_MOVEMENT/PETTY_EXPENSE_' || t.code)::uuid, t.code, t.label, t.examples, 'ACTIVE', 0, NOW(), 'seed-generator', NOW(), 'seed-generator'
-FROM (VALUES
-    ('SHOP_SUPPLIES', 'Shop supplies', 'Rags, gloves, valve caps, lubricant not billed to a job'),
-    ('SMALL_TOOLS', 'Small tools', 'Hand tools below the capital threshold'),
-    ('OFFICE_SUPPLIES', 'Office supplies', NULL::text),
-    ('BUILDING_REPAIRS', 'Building repairs', 'Building upkeep'),
-    ('EQUIPMENT_REPAIRS', 'Equipment repairs', 'Shop equipment upkeep'),
-    ('POSTAGE_SHIPPING', 'Postage and shipping', 'Outbound'),
-    ('CLEANING_JANITORIAL', 'Cleaning and janitorial', NULL::text),
-    ('STAFF_MEALS', 'Staff meals', NULL::text),
-    ('VEHICLE_FUEL', 'Vehicle fuel', 'Shop or service vehicles')
-) AS t(code, label, examples)
-ON CONFLICT (tenant_id, code) DO UPDATE SET
-    mapping_key_id = EXCLUDED.mapping_key_id,
-    label = EXCLUDED.label,
-    examples = EXCLUDED.examples,
-    status = EXCLUDED.status,
-    modified_at = NOW(),
-    modified_by = 'seed-generator';
-
 -- ============================================================================
 -- Retread-plant add-on (AW30; SPEC-accounting-workspace §4.6 "Retread add-on").
 -- Opt-in: a tenant receives these only after a CONTROLLER or ADMIN turns the add-on on
 -- (PUT /v1/accounting/tenant-template/add-ons/retread-plant). The account codes are listed in
--- RetreadPlantAddOnSource; LaborOverheadMappingSeedTest fails when the two disagree. 4940 Rubber Dust
--- Sales Income was 6900 until AW30's renumbering (#2511): no revenue in the expense range.
+-- RetreadPlantAddOnSource; LaborOverheadMappingSeedTest fails when the two disagree. 6900 becomes
+-- 4940 with S15's renumbering.
 -- ============================================================================
 
 -- Retread add-on: GL accounts.
@@ -421,7 +349,7 @@ FROM (VALUES
     ('6510', 'Retread Inventory Charge', 'EXPENSE', NULL::text, FALSE),
     ('6520', 'Casings Scrapped In Production', 'EXPENSE', NULL::text, FALSE),
     ('6530', 'Retread Production Adjustments', 'EXPENSE', NULL::text, FALSE),
-    ('4940', 'Rubber Dust Sales Income', 'REVENUE', NULL::text, FALSE)
+    ('6900', 'Rubber Dust Sales Income', 'REVENUE', NULL::text, FALSE)
 ) AS t(code, name, type, subtype, reconcilable)
 ON CONFLICT (tenant_id, account_code) DO UPDATE SET
     account_name = EXCLUDED.account_name,
@@ -440,7 +368,7 @@ FROM (VALUES
     ('LABOR_OVERHEAD', '6450', '2.11.4', '2.11', 'Depreciation - MRT process equipment ($US only)', 35, 'SUM'),
     ('LABOR_OVERHEAD', '6470', '2.11.6', '2.11', 'MRTI equipment leases or rent', 37, 'SUM'),
     ('LABOR_OVERHEAD', '6510', '2.13', NULL::text, 'Inventory charge', 39, 'SUM'),
-    ('LABOR_OVERHEAD', '4940', '2.14', NULL::text, 'Income from rubber dust sales', 40, 'SUM'),
+    ('LABOR_OVERHEAD', '6900', '2.14', NULL::text, 'Income from rubber dust sales', 40, 'SUM'),
     ('LABOR_OVERHEAD', '6520', '2.15.1', '2.15', 'Casings scrapped in production', 41, 'SUM'),
     ('LABOR_OVERHEAD', '6530', '2.15.2', '2.15', 'Adjustments (customer returns)', 42, 'SUM')
 ) AS t(statement_type, code, line_code, parent_line_code, line_description, display_order, operation)
