@@ -77,7 +77,10 @@ class AccountingConfigurationHardLockConcurrencyTest extends PostgresCommittingT
 
     @AfterEach
     void cleanUp() {
-        configurationRepository.deleteAll();
+        // Every setting but the tenant's accounting time zone, which provisioning seeded (#2558).
+        configurationRepository.deleteAll(configurationRepository.findAll().stream()
+                .filter(row -> !AccountingCalendarZoneResolver.CONFIG_KEY.equals(row.getConfigKey()))
+                .toList());
         auditLogRepository.deleteAll();
     }
 

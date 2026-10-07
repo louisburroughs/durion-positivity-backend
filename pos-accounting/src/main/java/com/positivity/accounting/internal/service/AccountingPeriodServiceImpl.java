@@ -16,6 +16,7 @@ import com.positivity.accounting.internal.exception.InvalidRequestParameterExcep
 import com.positivity.accounting.internal.exception.PeriodBankReconciliationIncompleteException;
 import com.positivity.accounting.internal.exception.PeriodCloseBlockedException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
+import com.positivity.accounting.internal.repository.AccountingConfigurationRepository;
 import com.positivity.accounting.internal.repository.AccountingPeriodRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.security.common.SecurityContextHelper;
@@ -25,7 +26,6 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
-import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.UUID;
@@ -67,11 +67,14 @@ public class AccountingPeriodServiceImpl implements AccountingPeriodService {
     private final JournalEntryRepository journalEntryRepository;
     private final AccountingAuditLogRepository auditLogRepository;
     private final BankReconciliationCloseReadiness closeReadiness;
+    private final AccountingCalendarZoneResolver zoneResolver;
+    private final AccountingConfigurationRepository configurationRepository;
 
     @Override
     @NonNull
     public String getCurrentPeriodId() {
-        YearMonth currentMonth = YearMonth.now(clock);
+        // The tenant's accounting calendar, not the clock's zone (UTC) nor the JVM's (#2558).
+        YearMonth currentMonth = zoneResolver.currentMonth();
         String periodId = currentMonth.toString(); // Format: YYYY-MM
         log.debug("Current accounting period: {}", periodId);
         return periodId;
@@ -80,7 +83,7 @@ public class AccountingPeriodServiceImpl implements AccountingPeriodService {
     @Override
     @NonNull
     public String getPeriodIdForDate(@NonNull Instant date) {
-        LocalDate localDate = date.atZone(ZoneId.systemDefault()).toLocalDate();
+        LocalDate localDate = zoneResolver.postingDate(date);
         YearMonth yearMonth = YearMonth.from(localDate);
         String periodId = yearMonth.toString(); // Format: YYYY-MM
         log.debug("Period for date {}: {}", date, periodId);
@@ -146,6 +149,11 @@ public class AccountingPeriodServiceImpl implements AccountingPeriodService {
     public AccountingPeriodResponse closePeriod(@NonNull String periodCode, @Nullable PeriodCloseRequest request) {
         YearMonth yearMonth = parsePeriodCode(periodCode);
         String canonicalCode = yearMonth.toString();
+
+        // The calendar lock first (#2558): the ACCOUNTING_TIME_ZONE row FOR UPDATE, as a zone change and a hard-lock
+        // change
+        // take it, so a zone change cannot commit after this close has cut the month in the old zone.
+        configurationRepository.findWithLockByConfigKey(AccountingCalendarZoneResolver.CONFIG_KEY);
 
         // Locked read (FOR UPDATE): the close serializes against an in-flight gated posting (AccountingPeriodGate)
         // and re-reads the live balances below under the lock (SPEC-manual-bank-reconciliation I3).
@@ -302,7 +310,7 @@ public class AccountingPeriodServiceImpl implements AccountingPeriodService {
      * A month that has not started yet cannot be closed.
      */
     private AccountingPeriod provisionForClose(YearMonth yearMonth) {
-        LocalDate today = LocalDate.now(clock);
+        LocalDate today = zoneResolver.today();
         if (yearMonth.atDay(1).isAfter(today)) {
             throw new AccountingPeriodNotFoundException(
                     yearMonth.toString(), "Period " + yearMonth + " does not exist and its month has not started");

@@ -15,6 +15,7 @@ import com.positivity.accounting.internal.dto.PaymentApplicationGLPostingEvent;
 import com.positivity.accounting.internal.dto.PaymentApplicationResponse;
 import com.positivity.accounting.internal.dto.ReprocessEventRequest;
 import com.positivity.accounting.internal.dto.UnappliedPaymentRow;
+import com.positivity.accounting.internal.entity.AccountingConfiguration;
 import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.entity.AccountingPeriod;
 import com.positivity.accounting.internal.entity.CustomerCredit;
@@ -31,6 +32,7 @@ import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
 import com.positivity.accounting.internal.enums.ApplicationSource;
 import com.positivity.accounting.internal.handler.CustomerCreditIssuanceGLPostingEventHandler;
 import com.positivity.accounting.internal.handler.PaymentApplicationGLPostingEventHandler;
+import com.positivity.accounting.internal.repository.AccountingConfigurationRepository;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.internal.repository.AccountingPeriodRepository;
 import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
@@ -55,6 +57,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -122,6 +125,9 @@ class AutomaticPaymentApplicationPostgresIT extends PostgresCommittingTestBase {
 
     @Autowired
     private Clock clock;
+
+    @Autowired
+    private AccountingCalendarZoneResolver zoneResolver;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -216,6 +222,12 @@ class AutomaticPaymentApplicationPostgresIT extends PostgresCommittingTestBase {
     @Autowired
     private AccountingPeriodRepository periodRepository;
 
+    @Autowired
+    private AccountingConfigurationRepository configurationRepository;
+
+    @Autowired
+    private AccountingConfigurationService configurationService;
+
     private SettlementEventsListener listener;
     private final tools.jackson.databind.ObjectMapper envelopeMapper = new tools.jackson.databind.ObjectMapper();
     private UUID customerId;
@@ -237,7 +249,8 @@ class AutomaticPaymentApplicationPostgresIT extends PostgresCommittingTestBase {
                 automaticPaymentApplicationService,
                 meterRegistry,
                 transactionManager,
-                paymentIntentLock);
+                paymentIntentLock,
+                zoneResolver);
         customerId = nextUuid();
         invoiceId = nextUuid();
         extCustomerPartyRepository.save(ExtCustomerParty.builder()
@@ -271,6 +284,7 @@ class AutomaticPaymentApplicationPostgresIT extends PostgresCommittingTestBase {
         periodRepository.deleteAll();
         idempotencyKeyRepository.deleteAll();
         sequenceRepository.deleteAll();
+        setZone("UTC");
     }
 
     // ===== criterion 1 =====
@@ -798,12 +812,165 @@ class AutomaticPaymentApplicationPostgresIT extends PostgresCommittingTestBase {
         return id;
     }
 
+    // ===== #2558: the tenant's accounting-calendar zone, with the clock in UTC =====
+
+    /** 2026-01-31T23:30-06:00 in Chicago: still January there, already February in UTC (the clock's zone). */
+    private static final Instant JAN_31_2330_CHICAGO = Instant.parse("2026-02-01T05:30:00Z");
+
+    /** 2026-02-01T00:30-06:00 in Chicago. */
+    private static final Instant FEB_01_0030_CHICAGO = Instant.parse("2026-02-01T06:30:00Z");
+
+    @Test
+    @DisplayName("#2558 AC1: in a Chicago calendar a settlement at 2026-01-31T23:30-06:00 is applied and posted on"
+            + " 2026-01-31, and the January period decides")
+    void timeZone_ac1_lastEveningOfJanuaryStaysInJanuary() {
+        assertThat(clock.getZone()).as("the clock bean stays UTC").isEqualTo(ZoneOffset.UTC);
+        setZone("America/Chicago");
+        seedInvoice("115.00", customerId);
+        UUID intent = nextUuid();
+
+        consume(nextUuid(), fact(intent, "CARD", "115.00", JAN_31_2330_CHICAGO));
+
+        assertThat(singleApplication().getApplicationTimestamp()).isEqualTo(JAN_31_2330_CHICAGO);
+        assertThat(settledRows()).isEmpty();
+        drainOutbox();
+        assertThat(postings()).containsExactly(new Posting("1090", "1200", "115.00", LocalDate.of(2026, 1, 31)));
+        assertThat(periodRepository.findByPeriodCode("2026-01"))
+                .as("posted into January")
+                .isPresent();
+        assertThat(periodRepository.findByPeriodCode("2026-02"))
+                .as("never into February")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("#2558: the customer credit an excess becomes is issued on the same Chicago date, 2026-01-31")
+    void timeZone_excessCreditIssuedInJanuary() {
+        setZone("America/Chicago");
+        seedInvoice("115.00", customerId);
+
+        consume(nextUuid(), fact(nextUuid(), "CARD", "120.00", JAN_31_2330_CHICAGO));
+
+        drainOutbox();
+        assertThat(postings())
+                .containsExactlyInAnyOrder(
+                        new Posting("1090", "1200", "115.00", LocalDate.of(2026, 1, 31)),
+                        new Posting("1090", "2300", "5.00", LocalDate.of(2026, 1, 31)));
+    }
+
+    @Test
+    @DisplayName("#2558 AC2: with January closed that settlement is held SUSPENDED / PERIOD_CLOSED, not posted into"
+            + " February")
+    void timeZone_ac2_closedJanuaryHoldsIt() {
+        setZone("America/Chicago");
+        seedInvoice("115.00", customerId);
+        closedPeriod("2026-01");
+
+        consume(nextUuid(), fact(nextUuid(), "CARD", "115.00", JAN_31_2330_CHICAGO));
+
+        assertThat(paymentApplicationRepository.count()).isZero();
+        assertThat(outboxRepository.count()).isZero();
+        AccountingEvent held = settledRows().getFirst();
+        assertThat(held.getStatus()).isEqualTo(AccountingEventStatus.SUSPENDED);
+        assertThat(held.getFailureReasonCode()).isEqualTo("PERIOD_CLOSED");
+        assertThat(held.getFailureDetails()).contains("2026-01-31");
+        assertThat(held.getTransactionDate()).isEqualTo(LocalDateTime.of(2026, 1, 31, 23, 30));
+        assertThat(journalEntryRepository.count()).isZero();
+    }
+
+    @Test
+    @DisplayName("#2558 AC3: a settlement at 2026-02-01T00:30-06:00 dates into February, even with January closed")
+    void timeZone_ac3_firstMinutesOfFebruary() {
+        setZone("America/Chicago");
+        seedInvoice("115.00", customerId);
+        closedPeriod("2026-01");
+
+        consume(nextUuid(), fact(nextUuid(), "CARD", "115.00", FEB_01_0030_CHICAGO));
+
+        assertThat(singleApplication().getApplicationTimestamp()).isEqualTo(FEB_01_0030_CHICAGO);
+        drainOutbox();
+        assertThat(postings()).containsExactly(new Posting("1090", "1200", "115.00", LocalDate.of(2026, 2, 1)));
+    }
+
+    @Test
+    @DisplayName("#2558: without an ACCOUNTING_TIME_ZONE row the settlement is held SUSPENDED /"
+            + " ACCOUNTING_TIME_ZONE_UNSET (never dated in UTC), and the retry job applies it once the zone exists")
+    void timeZone_unsetHoldsTheSettlement() {
+        removeZone();
+        seedInvoice("115.00", customerId);
+
+        consume(nextUuid(), fact(nextUuid(), "CARD", "115.00", JAN_31_2330_CHICAGO));
+
+        assertThat(paymentApplicationRepository.count()).isZero();
+        AccountingEvent held = settledRows().getFirst();
+        assertThat(held.getStatus()).isEqualTo(AccountingEventStatus.SUSPENDED);
+        assertThat(held.getFailureReasonCode()).isEqualTo("ACCOUNTING_TIME_ZONE_UNSET");
+
+        // Provisioning seeds the row late (the startup sweep), or an administrator sets it: the retry job then
+        // releases the hold by itself, no reprocess needed.
+        setZone("America/Chicago");
+        retryJob.retryBoundTenant();
+
+        assertThat(accountingEventRepository
+                        .findById(held.getEventId())
+                        .orElseThrow()
+                        .getStatus())
+                .isEqualTo(AccountingEventStatus.PROCESSED);
+        drainOutbox();
+        assertThat(postings()).containsExactly(new Posting("1090", "1200", "115.00", LocalDate.of(2026, 1, 31)));
+    }
+
+    @Test
+    @DisplayName("#2558: a zone change never re-cuts history; what was posted in UTC keeps its date, the next"
+            + " settlement is dated in the new zone")
+    void timeZone_changeKeepsPostedDates() {
+        seedInvoice("300.00", customerId);
+        consume(nextUuid(), fact(nextUuid(), "CARD", "115.00", JAN_31_2330_CHICAGO));
+        drainOutbox();
+        assertThat(postings()).containsExactly(new Posting("1090", "1200", "115.00", LocalDate.of(2026, 2, 1)));
+
+        inTransaction(() -> configurationService.setAccountingTimeZone("America/Chicago"));
+        assertThat(postings())
+                .as("the posted entry keeps its date")
+                .containsExactly(new Posting("1090", "1200", "115.00", LocalDate.of(2026, 2, 1)));
+
+        outboxRepository.deleteAll();
+        consume(nextUuid(), fact(nextUuid(), "CARD", "100.00", JAN_31_2330_CHICAGO));
+        drainOutbox();
+        assertThat(postings())
+                .containsExactlyInAnyOrder(
+                        new Posting("1090", "1200", "115.00", LocalDate.of(2026, 2, 1)),
+                        new Posting("1090", "1200", "100.00", LocalDate.of(2026, 1, 31)));
+    }
+
+    private void setZone(String zone) {
+        AccountingConfiguration row = configurationRepository
+                .findByConfigKey(AccountingCalendarZoneResolver.CONFIG_KEY)
+                .orElseGet(() -> {
+                    AccountingConfiguration created = new AccountingConfiguration();
+                    created.setConfigKey(AccountingCalendarZoneResolver.CONFIG_KEY);
+                    return created;
+                });
+        row.setConfigValue(zone);
+        configurationRepository.save(row);
+    }
+
+    private void removeZone() {
+        configurationRepository
+                .findByConfigKey(AccountingCalendarZoneResolver.CONFIG_KEY)
+                .ifPresent(configurationRepository::delete);
+    }
+
     private void consume(UUID eventId, PaymentSettledV1 fact) {
         listener.onPaymentEvent(envelopeMapper.writeValueAsString(
                 Map.of("eventType", PaymentSettledV1.EVENT_TYPE, "eventId", eventId.toString(), "payload", fact)));
     }
 
     private PaymentSettledV1 fact(UUID intent, String method, String amount) {
+        return fact(intent, method, amount, SETTLED_AT);
+    }
+
+    private PaymentSettledV1 fact(UUID intent, String method, String amount, Instant settledAt) {
         return new PaymentSettledV1(
                 intent,
                 invoiceId,
@@ -816,7 +983,7 @@ class AutomaticPaymentApplicationPostgresIT extends PostgresCommittingTestBase {
                 "USD",
                 "stripe",
                 "txn_" + intent,
-                SETTLED_AT);
+                settledAt);
     }
 
     private void seedInvoice(String total, UUID party) {
@@ -890,7 +1057,7 @@ class AutomaticPaymentApplicationPostgresIT extends PostgresCommittingTestBase {
     }
 
     private LocalDate settledDate() {
-        return LocalDate.ofInstant(SETTLED_AT, clock.getZone());
+        return zoneResolver.postingDate(SETTLED_AT);
     }
 
     private <T> T inTransaction(java.util.function.Supplier<T> work) {

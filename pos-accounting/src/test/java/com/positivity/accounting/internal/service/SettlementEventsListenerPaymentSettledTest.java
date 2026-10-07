@@ -156,7 +156,8 @@ class SettlementEventsListenerPaymentSettledTest {
                     automaticPaymentApplicationService,
                     provider,
                     org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class),
-                    org.mockito.Mockito.mock(PaymentIntentLock.class));
+                    org.mockito.Mockito.mock(PaymentIntentLock.class),
+                    TestZoneResolvers.utc(CLOCK));
         }
 
         private String versioned(int schemaVersion, PaymentSettledV1 payload) {
@@ -250,7 +251,8 @@ class SettlementEventsListenerPaymentSettledTest {
                     automaticPaymentApplicationService,
                     mock(ObjectProvider.class),
                     org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class),
-                    paymentIntentLock);
+                    paymentIntentLock,
+                    TestZoneResolvers.utc(CLOCK));
         }
 
         @BeforeEach
@@ -378,6 +380,42 @@ class SettlementEventsListenerPaymentSettledTest {
                             any(),
                             org.mockito.ArgumentMatchers.contains("EUR"));
             verify(processedEventRepository).save(any(ProcessedEvent.class));
+        }
+
+        @Test
+        @DisplayName("#2558: a currency hold at 2026-01-31T23:30-06:00 is dated 2026-01-31 in a Chicago calendar, clock"
+                + " in UTC")
+        void currencyHoldIsDatedInTheTenantCalendar() {
+            PaymentSettledV1 eur = settled(PARTY_UUID.toString(), "EUR");
+            PaymentSettledV1 lateJanuary =
+                    TestZoneResolvers.movedTo(eur, eur.settledAt(), TestZoneResolvers.JAN_31_2330_CHICAGO);
+            SettlementEventsListener chicago = new SettlementEventsListener(
+                    CLOCK,
+                    mapper,
+                    processedEventRepository,
+                    reconciliationService,
+                    paymentApplicationService,
+                    extInvoicePaymentReversalRepository,
+                    extInvoiceDepositCreditApplicationRepository,
+                    new LedgerCurrency("USD"),
+                    ingestionRecorder,
+                    automaticPaymentApplicationService,
+                    mock(ObjectProvider.class),
+                    org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class),
+                    paymentIntentLock,
+                    TestZoneResolvers.fixed(TestZoneResolvers.CHICAGO, CLOCK));
+
+            chicago.onPaymentEvent(envelope(EVENT_ID, lateJanuary));
+
+            verify(ingestionRecorder)
+                    .recordCurrencyHeld(
+                            any(),
+                            any(),
+                            org.mockito.ArgumentMatchers.eq(EVENT_ID),
+                            any(),
+                            org.mockito.ArgumentMatchers.eq(java.time.LocalDateTime.of(2026, 1, 31, 23, 30)),
+                            any(),
+                            any());
         }
 
         @Test
@@ -519,7 +557,8 @@ class SettlementEventsListenerPaymentSettledTest {
                     automaticPaymentApplicationService,
                     mock(ObjectProvider.class),
                     org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class),
-                    org.mockito.Mockito.mock(PaymentIntentLock.class));
+                    org.mockito.Mockito.mock(PaymentIntentLock.class),
+                    TestZoneResolvers.utc(CLOCK));
         }
 
         @BeforeEach

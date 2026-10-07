@@ -4,6 +4,8 @@ import com.positivity.accounting.internal.audit.entity.OverridePolicyThreshold;
 import com.positivity.accounting.internal.audit.entity.RefundPolicyConfig;
 import com.positivity.accounting.internal.audit.repository.OverridePolicyThresholdRepository;
 import com.positivity.accounting.internal.audit.repository.RefundPolicyConfigRepository;
+import com.positivity.accounting.internal.entity.AccountingConfiguration;
+import com.positivity.accounting.internal.repository.AccountingConfigurationRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -14,12 +16,16 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Seeds a tenant's default override thresholds and refund policy.
+ * Seeds a tenant's default override thresholds, refund policy and accounting time zone.
  *
  * <p>The policies are tenant data (ADR-0062). They are created when the tenant is provisioned
  * ({@link AccountingTenantProvisioner}: on {@code tenant.created}, and for registry tenants at
  * startup), inside the provisioning transaction; a tenant that already has policies of a kind is
  * left alone.
+ *
+ * <p>The accounting time zone (#2558) starts as {@code UTC}, the zone the module dated everything in before the
+ * setting existed; an administrator sets the legal entity's real zone before the first period close. A tenant that
+ * has the setting keeps it.
  */
 @Service
 @Slf4j
@@ -29,11 +35,29 @@ public class DataInitializationServiceImpl implements DataInitializationService 
     private final Clock clock;
     private final OverridePolicyThresholdRepository policyRepository;
     private final RefundPolicyConfigRepository refundPolicyRepository;
+    private final AccountingConfigurationRepository configurationRepository;
+
+    /** The accounting time zone a new tenant starts with (#2558). */
+    static final String DEFAULT_ACCOUNTING_TIME_ZONE = "UTC";
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public int seedPolicyDefaults() {
-        return initializeDefaultPolicies() + initializeRefundPolicy();
+        return initializeDefaultPolicies() + initializeRefundPolicy() + initializeAccountingTimeZone();
+    }
+
+    private int initializeAccountingTimeZone() {
+        if (configurationRepository
+                .findByConfigKey(AccountingCalendarZoneResolver.CONFIG_KEY)
+                .isPresent()) {
+            return 0;
+        }
+        AccountingConfiguration zone = new AccountingConfiguration();
+        zone.setConfigKey(AccountingCalendarZoneResolver.CONFIG_KEY);
+        zone.setConfigValue(DEFAULT_ACCOUNTING_TIME_ZONE);
+        configurationRepository.save(zone);
+        log.info("Accounting time zone initialized to {}", DEFAULT_ACCOUNTING_TIME_ZONE);
+        return 1;
     }
 
     private int initializeDefaultPolicies() {

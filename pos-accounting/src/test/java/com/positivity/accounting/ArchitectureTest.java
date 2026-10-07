@@ -14,9 +14,12 @@ import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
+import java.util.Set;
 import java.util.UUID;
 
-@AnalyzeClasses(packages = "com.positivity.accounting", importOptions = ImportOption.DoNotIncludeTests.class)
+@AnalyzeClasses(
+        packages = "com.positivity.accounting",
+        importOptions = {ImportOption.DoNotIncludeTests.class, ImportOption.DoNotIncludeJars.class})
 public class ArchitectureTest {
 
     private static final DescribedPredicate<JavaCall<?>> UUID_RANDOM_UUID_CALL =
@@ -26,6 +29,57 @@ public class ArchitectureTest {
                     return input.getTargetOwner().isEquivalentTo(UUID.class) && "randomUUID".equals(input.getName());
                 }
             };
+
+    /** The date-time types whose {@code now()} / {@code now(Clock)} reads a zone implicitly. */
+    private static final Set<String> ZONED_NOW_TYPES = Set.of(
+            "java.time.LocalDate",
+            "java.time.LocalDateTime",
+            "java.time.LocalTime",
+            "java.time.YearMonth",
+            "java.time.Year",
+            "java.time.MonthDay",
+            "java.time.ZonedDateTime",
+            "java.time.OffsetDateTime",
+            "java.time.OffsetTime");
+
+    /**
+     * A call that reads a zone the tenant never chose (#2558): {@code Clock.getZone()} (the clock bean is UTC),
+     * {@code Clock.systemDefaultZone()}, {@code ZoneId/ZoneOffset.systemDefault()} and {@code TimeZone.getDefault()}
+     * (the JVM's), and {@code now()} / {@code now(Clock)} on a date-time type, which reads the clock's or the JVM's
+     * zone implicitly. A business date comes from {@code AccountingCalendarZoneResolver}; a technical UTC value is
+     * written {@code LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC)}. Matched by owner name only, so the rule
+     * never resolves a call target's class hierarchy (the CI test fork has 1 GiB).
+     */
+    static final DescribedPredicate<JavaCall<?>> GUESSED_ZONE_CALL =
+            new DescribedPredicate<>("read the clock's or the JVM's time zone") {
+                @Override
+                public boolean test(JavaCall<?> input) {
+                    String owner = input.getTargetOwner().getName();
+                    String name = input.getName();
+                    return switch (owner) {
+                        case "java.time.Clock" -> "getZone".equals(name) || "systemDefaultZone".equals(name);
+                        case "java.time.ZoneId", "java.time.ZoneOffset" -> "systemDefault".equals(name);
+                        case "java.util.TimeZone" -> "getDefault".equals(name);
+                        default -> ZONED_NOW_TYPES.contains(owner) && "now".equals(name);
+                    };
+                }
+            };
+
+    /** The one class that turns the clock into a date: in the tenant's zone, {@code now(clock.withZone(zone))}. */
+    static final String ZONE_RESOLVER = "com.positivity.accounting.internal.service.AccountingCalendarZoneResolver";
+
+    /**
+     * The settlement, automatic-application, application-GL and customer-credit flows and the period service (#2558
+     * PR A). The remaining posting flows join in the follow-up PR, which widens the rule to the whole module.
+     */
+    static final String[] ACCOUNTING_CALENDAR_CLASSES = {
+        "com.positivity.accounting.internal.service.AccountingConfigurationServiceImpl",
+        "com.positivity.accounting.internal.service.AccountingPeriodServiceImpl",
+        "com.positivity.accounting.internal.service.AutomaticPaymentApplicationService",
+        "com.positivity.accounting.internal.service.SettlementEventsListener",
+        "com.positivity.accounting.internal.service.PaymentApplicationServiceImpl",
+        "com.positivity.accounting.internal.service.CustomerCreditServiceImpl"
+    };
 
     // Layer packages. The bank reconciliation core (internal.bankrec) and its adapters (internal.bankfeed.*)
     // carry their own layer sub-packages (SPEC-manual-bank-reconciliation §2.1, #2300); the layering rules
@@ -272,6 +326,27 @@ public class ArchitectureTest {
             .callMethodWhere(UUID_RANDOM_UUID_CALL)
             .allowEmptyShould(true)
             .because("UUIDv7Generator centralizes ID creation; direct randomUUID calls are not allowed");
+
+    @ArchTest
+    static final ArchRule posting_dates_use_the_accounting_calendar_zone = noClasses()
+            .that()
+            .resideInAPackage("..internal.handler..")
+            .or()
+            .haveFullyQualifiedName(ACCOUNTING_CALENDAR_CLASSES[0])
+            .or()
+            .haveFullyQualifiedName(ACCOUNTING_CALENDAR_CLASSES[1])
+            .or()
+            .haveFullyQualifiedName(ACCOUNTING_CALENDAR_CLASSES[2])
+            .or()
+            .haveFullyQualifiedName(ACCOUNTING_CALENDAR_CLASSES[3])
+            .or()
+            .haveFullyQualifiedName(ACCOUNTING_CALENDAR_CLASSES[4])
+            .or()
+            .haveFullyQualifiedName(ACCOUNTING_CALENDAR_CLASSES[5])
+            .should()
+            .callMethodWhere(GUESSED_ZONE_CALL)
+            .because("#2558: a posting date and a period are cut in the tenant's accounting-calendar zone"
+                    + " (AccountingCalendarZoneResolver), never in the clock's or the JVM's zone");
 
     // ---- Bank reconciliation core ↔ adapter walls (SPEC-manual-bank-reconciliation §2.1, §8.4; #2300) ----
     // The core (internal.bankrec) is provider- and format-neutral; the adapters (internal.bankfeed.*) reach it

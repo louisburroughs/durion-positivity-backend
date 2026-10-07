@@ -18,9 +18,11 @@ import com.positivity.accounting.internal.entity.AccountingAuditLog;
 import com.positivity.accounting.internal.entity.AccountingPeriod;
 import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
 import com.positivity.accounting.internal.exception.AccountingPeriodNotFoundException;
+import com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetException;
 import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.exception.PeriodBankReconciliationIncompleteException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
+import com.positivity.accounting.internal.repository.AccountingConfigurationRepository;
 import com.positivity.accounting.internal.repository.AccountingPeriodRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.tenancy.TenantResolver;
@@ -29,6 +31,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
@@ -74,6 +77,13 @@ class AccountingPeriodServiceTest {
 
     @Mock
     private BankReconciliationCloseReadiness closeReadiness;
+
+    @Mock
+    private AccountingConfigurationRepository configurationRepository;
+
+    /** The tenant's accounting calendar in this class's arrangements: the zone its instants are built in. */
+    @Spy
+    private AccountingCalendarZoneResolver zoneResolver = TestZoneResolvers.fixed(ZoneId.systemDefault(), TEST_CLOCK);
 
     @InjectMocks
     private AccountingPeriodServiceImpl service;
@@ -356,6 +366,74 @@ class AccountingPeriodServiceTest {
         // Assert: status of an existing row is never changed by provisioning
         assertThat(result.getStatus()).isEqualTo(AccountingPeriodStatus.CLOSED);
         verify(periodRepository, never()).insertIfAbsent(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    // ===== ACCOUNTING-CALENDAR ZONE (#2558) =====
+
+    /** 2026-01-31T23:30-06:00: still January in Chicago, already February in UTC. */
+    private static final Instant JAN_31_2330_CHICAGO = Instant.parse("2026-02-01T05:30:00Z");
+
+    private AccountingPeriodServiceImpl chicagoService(Clock utcClock) {
+        return new AccountingPeriodServiceImpl(
+                utcClock,
+                periodRepository,
+                tenantResolver,
+                journalEntryRepository,
+                auditLogRepository,
+                closeReadiness,
+                TestZoneResolvers.fixed(ZoneId.of("America/Chicago"), utcClock),
+                configurationRepository);
+    }
+
+    @Test
+    @DisplayName("#2558: getPeriodIdForDate cuts at the tenant's midnight, not the UTC clock's or the JVM's")
+    void getPeriodIdForDate_usesTheTenantZone() {
+        AccountingPeriodServiceImpl chicago = chicagoService(Clock.fixed(JAN_31_2330_CHICAGO, ZoneOffset.UTC));
+
+        assertThat(chicago.getPeriodIdForDate(JAN_31_2330_CHICAGO)).isEqualTo("2026-01");
+        assertThat(chicago.getPeriodIdForDate(Instant.parse("2026-02-01T06:30:00Z")))
+                .isEqualTo("2026-02");
+    }
+
+    @Test
+    @DisplayName("#2558: getCurrentPeriodId is this month in the tenant's zone while the clock is UTC")
+    void getCurrentPeriodId_usesTheTenantZone() {
+        AccountingPeriodServiceImpl chicago = chicagoService(Clock.fixed(JAN_31_2330_CHICAGO, ZoneOffset.UTC));
+
+        assertThat(chicago.getCurrentPeriodId()).isEqualTo("2026-01");
+        assertThat(chicago.isPriorPeriod(Instant.parse("2026-01-31T12:00:00Z"))).isFalse();
+    }
+
+    @Test
+    @DisplayName("#2558: an unset zone fails closed instead of reading the clock's or the JVM's zone")
+    void unsetZoneFailsClosed() {
+        Clock utc = Clock.fixed(JAN_31_2330_CHICAGO, ZoneOffset.UTC);
+        AccountingPeriodServiceImpl unset = new AccountingPeriodServiceImpl(
+                utc,
+                periodRepository,
+                tenantResolver,
+                journalEntryRepository,
+                auditLogRepository,
+                closeReadiness,
+                TestZoneResolvers.unset(utc),
+                configurationRepository);
+
+        assertThatThrownBy(unset::getCurrentPeriodId).isInstanceOf(AccountingTimeZoneUnsetException.class);
+        assertThatThrownBy(() -> unset.getPeriodIdForDate(JAN_31_2330_CHICAGO))
+                .isInstanceOf(AccountingTimeZoneUnsetException.class);
+    }
+
+    @Test
+    @DisplayName(
+            "#2558: a close takes the calendar lock (the ACCOUNTING_TIME_ZONE row FOR UPDATE) before the period row")
+    void closeTakesTheCalendarLockFirst() {
+        when(periodRepository.findWithLockByPeriodCode("2024-02")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.closePeriod("2024-02")).isInstanceOf(AccountingPeriodNotFoundException.class);
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(configurationRepository, periodRepository);
+        order.verify(configurationRepository).findWithLockByConfigKey(AccountingCalendarZoneResolver.CONFIG_KEY);
+        order.verify(periodRepository).findWithLockByPeriodCode("2024-02");
     }
 
     // ===== LIFECYCLE INPUT VALIDATION TESTS =====

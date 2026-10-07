@@ -20,6 +20,8 @@ import com.positivity.accounting.internal.exception.AccountingPeriodClosedExcept
 import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
 import com.positivity.accounting.internal.exception.AccountingPeriodNotFoundException;
 import com.positivity.accounting.internal.exception.AccountingPeriodStateException;
+import com.positivity.accounting.internal.exception.AccountingTimeZoneLockedException;
+import com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetException;
 import com.positivity.accounting.internal.exception.AdjustmentSignInvalidException;
 import com.positivity.accounting.internal.exception.CashCustomerCreditNotAllowedException;
 import com.positivity.accounting.internal.exception.CurrencyNotSupportedException;
@@ -31,6 +33,7 @@ import com.positivity.accounting.internal.exception.GLAccountNotActiveException;
 import com.positivity.accounting.internal.exception.GLAccountNotFoundException;
 import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
 import com.positivity.accounting.internal.exception.HardLockDateRegressionException;
+import com.positivity.accounting.internal.exception.InvalidAccountingTimeZoneException;
 import com.positivity.accounting.internal.exception.InvalidDateRangeException;
 import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.exception.JournalEntryNotFoundException;
@@ -198,6 +201,14 @@ class AccountingExceptionHandlerTest {
                             new AccountingPeriodClosedException("2024-01", "period closed"), request)),
                     Named.of("handlePeriodHardLocked", (HandlerInvocation) request -> handler.handlePeriodHardLocked(
                             new AccountingPeriodHardLockedException(LocalDate.of(2024, 1, 1), "hard locked"), request)),
+                    Named.of("handleInvalidAccountingTimeZone", (HandlerInvocation)
+                            request -> handler.handleInvalidAccountingTimeZone(
+                                    new InvalidAccountingTimeZoneException("+05:00", "fixed offset"), request)),
+                    Named.of("handleAccountingTimeZoneLocked", (HandlerInvocation)
+                            request -> handler.handleAccountingTimeZoneLocked(
+                                    new AccountingTimeZoneLockedException("UTC", "America/Chicago"), request)),
+                    Named.of("handleAccountingTimeZoneUnset", (HandlerInvocation) request ->
+                            handler.handleAccountingTimeZoneUnset(new AccountingTimeZoneUnsetException(), request)),
                     Named.of("handleHardLockDateRegression", (HandlerInvocation)
                             request -> handler.handleHardLockDateRegression(
                                     new HardLockDateRegressionException(

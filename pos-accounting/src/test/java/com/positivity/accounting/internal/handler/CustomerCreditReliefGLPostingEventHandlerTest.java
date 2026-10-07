@@ -16,6 +16,7 @@ import com.positivity.accounting.internal.service.CustomerCreditPostingLifecycle
 import com.positivity.accounting.internal.service.GLMappingResolver;
 import com.positivity.accounting.internal.service.GLPostingService;
 import com.positivity.accounting.internal.service.IdempotencyService;
+import com.positivity.accounting.internal.service.TestZoneResolvers;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -68,7 +69,7 @@ class CustomerCreditReliefGLPostingEventHandlerTest {
     @BeforeEach
     void setUp() {
         handler = new CustomerCreditReliefGLPostingEventHandler(
-                Clock.fixed(RELIEF_AT, ZoneOffset.UTC),
+                TestZoneResolvers.utc(Clock.fixed(RELIEF_AT, ZoneOffset.UTC)),
                 idempotencyService,
                 glMappingResolver,
                 glPostingService,
@@ -153,6 +154,52 @@ class CustomerCreditReliefGLPostingEventHandlerTest {
 
         verify(idempotencyService, never()).registerKey(any(), any());
         verify(postingLifecycleService, never()).recordReliefPosting(any(), any());
+    }
+
+    @Test
+    @DisplayName("#2558: a relief at 2026-01-31T23:30-06:00 posts on 2026-01-31 in a Chicago calendar, clock in UTC")
+    void chicagoCalendar_lastEveningOfJanuaryPostsInJanuary() {
+        Instant jan31At2330Chicago = Instant.parse("2026-02-01T05:30:00Z");
+        CustomerCreditReliefGLPostingEventHandler chicago = new CustomerCreditReliefGLPostingEventHandler(
+                TestZoneResolvers.fixed(
+                        java.time.ZoneId.of("America/Chicago"), Clock.fixed(jan31At2330Chicago, ZoneOffset.UTC)),
+                idempotencyService,
+                glMappingResolver,
+                glPostingService,
+                postingLifecycleService);
+        CustomerCreditReliefGLPostingEvent relief = event(CustomerCreditTransactionType.APPLICATION, INVOICE_ID);
+        relief.setReliefTimestamp(jan31At2330Chicago);
+
+        chicago.onCustomerCreditReliefGLPosting(relief);
+
+        verify(glPostingService)
+                .postCustomerCreditRelief(
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        eq(LocalDateTime.of(2026, 1, 31, 23, 30)),
+                        any(),
+                        any(),
+                        any());
+    }
+
+    @Test
+    @DisplayName("#2558: without an accounting time zone the relief fails unwrapped and nothing posts")
+    void unsetZone_failsClosed() {
+        CustomerCreditReliefGLPostingEventHandler unset = new CustomerCreditReliefGLPostingEventHandler(
+                TestZoneResolvers.unset(Clock.fixed(RELIEF_AT, ZoneOffset.UTC)),
+                idempotencyService,
+                glMappingResolver,
+                glPostingService,
+                postingLifecycleService);
+
+        assertThatThrownBy(() -> unset.onCustomerCreditReliefGLPosting(
+                        event(CustomerCreditTransactionType.APPLICATION, INVOICE_ID)))
+                .isInstanceOf(com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetException.class);
+
+        verifyNoInteractions(glPostingService, postingLifecycleService);
     }
 
     // ===== helpers =====

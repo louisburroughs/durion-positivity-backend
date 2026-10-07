@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.AccountingPeriod;
+import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
 import com.positivity.tenancy.TenantAudited;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
@@ -8,6 +9,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
@@ -41,6 +43,12 @@ public interface AccountingPeriodRepository extends JpaRepository<AccountingPeri
      * in chronological order).
      */
     List<AccountingPeriod> findAllByOrderByPeriodCodeDesc();
+
+    /**
+     * Whether the tenant has ever closed a period: one is CLOSED now, or one was closed and reopened (a reopen keeps
+     * {@code closed_at}). Once true the accounting time zone is fixed (#2558).
+     */
+    boolean existsByStatusOrClosedAtIsNotNull(@NonNull AccountingPeriodStatus status);
 
     /**
      * Create an OPEN period row unless one exists for the tenant and {@code periodCode} (#2342).

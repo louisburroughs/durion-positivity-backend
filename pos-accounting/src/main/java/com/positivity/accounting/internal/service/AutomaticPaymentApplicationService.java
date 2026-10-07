@@ -8,6 +8,7 @@ import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePay
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.enums.ApplicationSource;
 import com.positivity.accounting.internal.enums.PostingFailureReason;
+import com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetException;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
@@ -15,7 +16,6 @@ import com.positivity.domainevents.payment.PaymentSettledV1;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
-import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.EnumMap;
@@ -53,7 +53,9 @@ import tools.jackson.databind.ObjectMapper;
  *       retried up to the attempt cap;
  *   <li>the invoice's party, as a UUID, is missing or is not the payment's customer (BR-2, §9.5a):
  *       {@code SKIPPED / NOT_POSTABLE};
- *   <li>the settlement date, in the clock's zone, is in a closed or hard-locked period (BR-5):
+ *   <li>the tenant has no accounting-calendar zone (#2558): {@code SUSPENDED / ACCOUNTING_TIME_ZONE_UNSET},
+ *       released by the retry job once the zone exists (shared attempt cap); never dated in a guessed zone;
+ *   <li>the settlement date, in the tenant's accounting-calendar zone, is in a closed or hard-locked period (BR-5):
  *       {@code SUSPENDED / PERIOD_CLOSED}, reprocessed by a person after reopening (a hard-locked date
  *       cannot be reopened: its detail says to handle the payment by hand);
  *   <li>the payment has nothing unapplied (another path applied or credited it): nothing, no row;
@@ -84,6 +86,7 @@ public class AutomaticPaymentApplicationService {
     /** The held reasons a reprocess of a {@code payment.payment.settled} row routes back here. */
     public static final Set<String> REPROCESSABLE_REASONS = Set.of(
             PostingFailureReason.PERIOD_CLOSED.name(),
+            PostingFailureReason.ACCOUNTING_TIME_ZONE_UNSET.name(),
             InvoicePaymentEventProcessor.INVOICE_NOT_FOUND,
             InvoicePaymentEventProcessor.INVOICE_NOT_ELIGIBLE);
 
@@ -100,6 +103,10 @@ public class AutomaticPaymentApplicationService {
                 "suspended_invoice", AccountingEventStatus.SUSPENDED, InvoicePaymentEventProcessor.INVOICE_NOT_FOUND),
         SUSPENDED_PERIOD(
                 "suspended_period", AccountingEventStatus.SUSPENDED, PostingFailureReason.PERIOD_CLOSED.name()),
+        SUSPENDED_TIME_ZONE(
+                "suspended_time_zone",
+                AccountingEventStatus.SUSPENDED,
+                PostingFailureReason.ACCOUNTING_TIME_ZONE_UNSET.name()),
         FAILED_INELIGIBLE(
                 "failed_ineligible", AccountingEventStatus.FAILED, InvoicePaymentEventProcessor.INVOICE_NOT_ELIGIBLE);
 
@@ -146,7 +153,7 @@ public class AutomaticPaymentApplicationService {
     private final KafkaFactIngestionRecorder ingestionRecorder;
     private final LedgerCurrency ledgerCurrency;
     private final ObjectMapper objectMapper;
-    private final Clock clock;
+    private final AccountingCalendarZoneResolver zoneResolver;
     private final Map<Outcome, Counter> counters = new EnumMap<>(Outcome.class);
 
     public AutomaticPaymentApplicationService(
@@ -159,7 +166,7 @@ public class AutomaticPaymentApplicationService {
             KafkaFactIngestionRecorder ingestionRecorder,
             LedgerCurrency ledgerCurrency,
             ObjectMapper objectMapper,
-            Clock clock,
+            AccountingCalendarZoneResolver zoneResolver,
             ObjectProvider<MeterRegistry> meterRegistry) {
         this.paymentApplicationService = paymentApplicationService;
         this.receivablePaymentRepository = receivablePaymentRepository;
@@ -170,7 +177,7 @@ public class AutomaticPaymentApplicationService {
         this.ingestionRecorder = ingestionRecorder;
         this.ledgerCurrency = ledgerCurrency;
         this.objectMapper = objectMapper;
-        this.clock = clock;
+        this.zoneResolver = zoneResolver;
         MeterRegistry registry = meterRegistry.getIfAvailable();
         if (registry != null) {
             for (Outcome outcome : Outcome.values()) {
@@ -314,8 +321,17 @@ public class AutomaticPaymentApplicationService {
             return new Result(Outcome.SKIPPED_PARTY, "customer differs from invoice " + invoiceNumber);
         }
 
-        // e. Never into a closed or hard-locked period, and no override: nobody is there to give one.
-        LocalDate settledOn = LocalDate.ofInstant(fact.settledAt(), clock.getZone());
+        // e. Dated in the tenant's accounting calendar (#2558), never in a guessed zone; then never into a closed or
+        // hard-locked period, and no override: nobody is there to give one.
+        LocalDate settledOn;
+        try {
+            settledOn = zoneResolver.postingDate(fact.settledAt());
+        } catch (AccountingTimeZoneUnsetException e) {
+            return new Result(
+                    Outcome.SUSPENDED_TIME_ZONE,
+                    "the tenant's accounting time zone is not set, so the settlement has no posting date; reprocess"
+                            + " after setting it");
+        }
         if (periodGate.isPostingBlocked(settledOn)) {
             return new Result(
                     Outcome.SUSPENDED_PERIOD,
@@ -372,7 +388,7 @@ public class AutomaticPaymentApplicationService {
     }
 
     private LocalDateTime transactionDate(PaymentSettledV1 fact) {
-        return LocalDateTime.ofInstant(fact.settledAt(), clock.getZone());
+        return zoneResolver.heldRecordDateTime(fact.settledAt());
     }
 
     private static @Nullable UUID partyUuid(@Nullable String partyId) {

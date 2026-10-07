@@ -9,14 +9,21 @@ import com.positivity.accounting.internal.dto.BankReconciliationPolicyRequest;
 import com.positivity.accounting.internal.dto.BankReconciliationPolicyResponse;
 import com.positivity.accounting.internal.entity.AccountingAuditLog;
 import com.positivity.accounting.internal.entity.AccountingConfiguration;
+import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
+import com.positivity.accounting.internal.exception.AccountingTimeZoneLockedException;
 import com.positivity.accounting.internal.exception.HardLockDateRegressionException;
+import com.positivity.accounting.internal.exception.InvalidAccountingTimeZoneException;
 import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.AccountingConfigurationRepository;
+import com.positivity.accounting.internal.repository.AccountingPeriodRepository;
 import com.positivity.security.common.SecurityContextHelper;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.DateTimeException;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.zone.ZoneRules;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -51,6 +58,11 @@ public class AccountingConfigurationServiceImpl implements AccountingConfigurati
 
     static final String AUDIT_OPERATION_BANK_REC_POLICY_SET = "BANK_REC_POLICY_SET";
 
+    static final String AUDIT_OPERATION_TIME_ZONE_SET = "ACCOUNTING_TIME_ZONE_SET";
+
+    /** The one fixed zone a tenant may keep: the provisioning seed (#2558). */
+    private static final String UTC = "UTC";
+
     /** The longest policy justification kept (the request's documented maximum). */
     private static final int MAX_JUSTIFICATION = 1000;
 
@@ -58,6 +70,7 @@ public class AccountingConfigurationServiceImpl implements AccountingConfigurati
     private final AccountingAuditLogRepository auditLogRepository;
     private final BankRecPolicy bankRecPolicy;
     private final FunctionalCurrency functionalCurrency;
+    private final AccountingPeriodRepository periodRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -76,6 +89,10 @@ public class AccountingConfigurationServiceImpl implements AccountingConfigurati
             throw new InvalidRequestParameterException(
                     "A non-blank justification is required to set the hard-lock date");
         }
+
+        // The calendar lock first (#2558): a hard lock fixes the accounting time zone, so it serializes on the zone row
+        // with a zone change and a period close, always taken before any other row these three lock.
+        configurationRepository.findWithLockByConfigKey(AccountingCalendarZoneResolver.CONFIG_KEY);
 
         // Locked read (FOR UPDATE): concurrent setters serialize on the row so
         // the monotonic-forward check below always sees the latest committed
@@ -111,6 +128,78 @@ public class AccountingConfigurationServiceImpl implements AccountingConfigurati
 
         log.info("Hard-lock date set to {} by {} (previous: {})", hardLockDate, actor, currentDate);
         return hardLockDate;
+    }
+
+    @Override
+    @NonNull
+    @Transactional
+    public String setAccountingTimeZone(@NonNull String timeZone) {
+        ZoneId requested = validTimeZone(timeZone);
+        // Locked read of the calendar lock (#2558): a zone change, a period close and a hard-lock change all take this
+        // row FOR UPDATE first, so a close or hard lock that commits first is seen by the checks below (READ COMMITTED
+        // re-reads per statement), and one that waits sees the new zone.
+        AccountingConfiguration row = configurationRepository
+                .findWithLockByConfigKey(AccountingCalendarZoneResolver.CONFIG_KEY)
+                .orElse(null);
+        String current = row != null ? row.getConfigValue() : null;
+        if (requested.getId().equals(current)) {
+            return current;
+        }
+        // A closed (or reopened) period, or a hard lock, fixes the calendar: a new zone would move the boundary of a
+        // month already cut (ruling #2558: a change never re-cuts history).
+        if (periodRepository.existsByStatusOrClosedAtIsNotNull(AccountingPeriodStatus.CLOSED)
+                || getHardLockDate().isPresent()) {
+            throw new AccountingTimeZoneLockedException(String.valueOf(current), requested.getId());
+        }
+        if (row == null) {
+            row = new AccountingConfiguration();
+            row.setConfigKey(AccountingCalendarZoneResolver.CONFIG_KEY);
+        }
+        row.setConfigValue(requested.getId());
+        AccountingConfiguration saved = configurationRepository.save(row);
+
+        String actor = currentActor();
+        AccountingAuditLog auditLog = new AccountingAuditLog();
+        auditLog.setEntityType(AUDIT_ENTITY_TYPE);
+        auditLog.setEntityId(saved.getConfigId());
+        auditLog.setOperation(AUDIT_OPERATION_TIME_ZONE_SET);
+        auditLog.setUserId(actor);
+        auditLog.setOldValue(current);
+        auditLog.setNewValue(requested.getId());
+        auditLogRepository.save(auditLog);
+
+        log.info("Accounting time zone set to {} by {} (previous: {})", requested.getId(), actor, current);
+        return requested.getId();
+    }
+
+    /**
+     * An IANA region id: known to the zone database, not a {@code SystemV/*} id, and not a fixed offset. The one
+     * fixed zone accepted is {@code UTC} itself, the seed; its aliases ({@code GMT}, {@code Etc/UTC}, {@code
+     * Etc/GMT}, ...) and every other fixed offset ({@code +05:00}, {@code UTC+05:00}, {@code Etc/GMT+5}) are refused.
+     */
+    static ZoneId validTimeZone(String timeZone) {
+        String id = timeZone.trim();
+        if (id.isEmpty()) {
+            throw new InvalidAccountingTimeZoneException(timeZone, "a zone id is required");
+        }
+        if (id.startsWith("SystemV/")) {
+            throw new InvalidAccountingTimeZoneException(id, "SystemV zones are not IANA region ids");
+        }
+        if (!ZoneId.getAvailableZoneIds().contains(id)) {
+            throw new InvalidAccountingTimeZoneException(
+                    id, "not an IANA region id such as America/Chicago (fixed offsets are not accepted)");
+        }
+        ZoneId zone;
+        try {
+            zone = ZoneId.of(id);
+        } catch (DateTimeException e) {
+            throw new InvalidAccountingTimeZoneException(id, e.getMessage());
+        }
+        ZoneRules rules = zone.getRules();
+        if (rules.isFixedOffset() && !UTC.equals(id)) {
+            throw new InvalidAccountingTimeZoneException(id, "a fixed offset is not an accounting calendar zone");
+        }
+        return zone;
     }
 
     @Override

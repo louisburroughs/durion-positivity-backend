@@ -12,9 +12,11 @@ import static org.mockito.Mockito.when;
 import com.positivity.accounting.internal.dto.PaymentApplicationGLPostingEvent;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
+import com.positivity.accounting.internal.service.AccountingCalendarZoneResolver;
 import com.positivity.accounting.internal.service.GLMappingResolver;
 import com.positivity.accounting.internal.service.GLPostingService;
 import com.positivity.accounting.internal.service.IdempotencyService;
+import com.positivity.accounting.internal.service.TestZoneResolvers;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
@@ -45,7 +47,7 @@ class PaymentApplicationGLPostingEventHandlerTest {
     private static final String IDEMPOTENCY_KEY = "PAYMENT_APPLICATION_GL_POSTING:" + APPLICATION_REQUEST_ID;
 
     @Spy
-    private Clock clock = TEST_CLOCK;
+    private AccountingCalendarZoneResolver zoneResolver = TestZoneResolvers.utc(TEST_CLOCK);
 
     @Mock
     private IdempotencyService idempotencyService;
@@ -226,8 +228,8 @@ class PaymentApplicationGLPostingEventHandlerTest {
         // otherwise the entry lands in the wrong accounting period and selects
         // the wrong effective-dated mapping (F4, PR #974).
         Instant applicationInstant = Instant.parse("2026-02-01T08:30:00Z");
-        LocalDateTime expectedTransactionDate = LocalDateTime.ofInstant(applicationInstant, clock.getZone());
-        LocalDateTime clockNow = LocalDateTime.now(clock);
+        LocalDateTime expectedTransactionDate = LocalDateTime.ofInstant(applicationInstant, ZoneOffset.UTC);
+        LocalDateTime clockNow = LocalDateTime.now(TEST_CLOCK);
 
         // Guard: the two dates must genuinely differ so the assertions below
         // distinguish application-date provenance from clock-now provenance.
@@ -313,5 +315,62 @@ class PaymentApplicationGLPostingEventHandlerTest {
                         any(BigDecimal.class),
                         any(LocalDateTime.class),
                         any(String.class));
+    }
+
+    private PaymentApplicationGLPostingEvent eventAt(Instant applicationTimestamp) {
+        return PaymentApplicationGLPostingEvent.builder()
+                .eventId(testEvent.getEventId())
+                .applicationRequestId(APPLICATION_REQUEST_ID)
+                .paymentId(testEvent.getPaymentId())
+                .customerId(testEvent.getCustomerId())
+                .currency("USD")
+                .appliedAmount(new BigDecimal("500.00"))
+                .applicationTimestamp(applicationTimestamp)
+                .build();
+    }
+
+    @Test
+    @DisplayName("#2558: an application at 2026-01-31T23:30-06:00 posts on 2026-01-31 in a Chicago calendar"
+            + " while the clock is UTC")
+    void chicagoCalendar_lastEveningOfJanuaryPostsInJanuary() {
+        Instant jan31At2330Chicago = Instant.parse("2026-02-01T05:30:00Z");
+        PaymentApplicationGLPostingEventHandler chicago = new PaymentApplicationGLPostingEventHandler(
+                TestZoneResolvers.fixed(java.time.ZoneId.of("America/Chicago"), TEST_CLOCK),
+                idempotencyService,
+                glMappingResolver,
+                glPostingService);
+        stubAccountResolution();
+        when(glPostingService.postPaymentApplication(
+                        any(UUID.class),
+                        any(UUID.class),
+                        any(UUID.class),
+                        any(BigDecimal.class),
+                        any(LocalDateTime.class),
+                        any(String.class)))
+                .thenReturn(postedEntry);
+
+        chicago.onPaymentApplicationGLPosting(eventAt(jan31At2330Chicago));
+
+        verify(glPostingService)
+                .postPaymentApplication(
+                        any(UUID.class),
+                        any(UUID.class),
+                        any(UUID.class),
+                        any(BigDecimal.class),
+                        eq(LocalDateTime.of(2026, 1, 31, 23, 30)),
+                        any(String.class));
+    }
+
+    @Test
+    @DisplayName("#2558: without an accounting time zone nothing posts; the work item fails unwrapped and retries")
+    void unsetZone_failsClosedForRetry() {
+        PaymentApplicationGLPostingEventHandler unset = new PaymentApplicationGLPostingEventHandler(
+                TestZoneResolvers.unset(TEST_CLOCK), idempotencyService, glMappingResolver, glPostingService);
+
+        assertThatThrownBy(() -> unset.onPaymentApplicationGLPosting(testEvent))
+                .isInstanceOf(com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetException.class);
+
+        verifyNoInteractions(glPostingService);
+        verify(idempotencyService, never()).registerKey(any(String.class), any(UUID.class));
     }
 }

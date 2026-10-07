@@ -96,7 +96,17 @@ public enum PostingFailureReason {
      * fact with no {@code finalizedAt}, or a status that neither recognizes nor reverses revenue.
      * Event is recorded SKIPPED — terminal, never retried.
      */
-    NOT_POSTABLE;
+    NOT_POSTABLE,
+
+    /**
+     * The tenant has no accounting-calendar zone ({@code ACCOUNTING_TIME_ZONE}, #2558), so the fact's
+     * instant has no posting date and no period gate can decide it. There is no default zone: the
+     * fact is held {@code SUSPENDED}. The scheduled auto-retry loop picks it up again (sharing the
+     * module's attempt cap): a tenant's zone row is seeded by provisioning, which can land after the
+     * first facts (the startup sweep), so the hold clears by itself once the row exists. After the cap
+     * it is reprocessed by a person.
+     */
+    ACCOUNTING_TIME_ZONE_UNSET;
 
     /**
      * Whether an event failing for this reason ends in the terminal {@code SKIPPED} status: the

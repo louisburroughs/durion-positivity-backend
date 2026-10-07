@@ -78,6 +78,7 @@ class CustomerCreditServiceImplTest {
     void setUp() {
         service = new CustomerCreditServiceImpl(
                 Clock.fixed(FIXED_NOW, ZoneOffset.UTC),
+                TestZoneResolvers.utc(Clock.fixed(FIXED_NOW, ZoneOffset.UTC)),
                 customerCreditRepository,
                 creditTransactionRepository,
                 extInvoiceRepository,
@@ -338,6 +339,50 @@ class CustomerCreditServiceImplTest {
                 .extracting(e -> ((ResponseStatusException) e).getStatusCode())
                 .isEqualTo(HttpStatus.CONFLICT);
 
+        verify(creditTransactionRepository, never()).save(any());
+        verify(outboxService, never()).saveToOutbox(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("#2558: a draw-down at 2026-01-31T23:30-06:00 is gated on 2026-01-31 in a Chicago calendar, clock"
+            + " in UTC")
+    void chicagoCalendar_drawDownIsGatedOnTheTenantDate() {
+        Clock utc = Clock.fixed(Instant.parse("2026-02-01T05:30:00Z"), ZoneOffset.UTC);
+        CustomerCreditServiceImpl chicago = new CustomerCreditServiceImpl(
+                utc,
+                TestZoneResolvers.fixed(java.time.ZoneId.of("America/Chicago"), utc),
+                customerCreditRepository,
+                creditTransactionRepository,
+                extInvoiceRepository,
+                invoiceBalanceCalculator,
+                periodService,
+                outboxService);
+        stubCredit(credit(new BigDecimal("600.00")));
+        when(periodService.isPeriodOpen(any(java.time.LocalDate.class))).thenReturn(false);
+
+        assertThatThrownBy(() -> chicago.refundCredit(CREDIT_ID, refundRequest("jan", new BigDecimal("10.00")), USER))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("2026-01-31");
+        verify(periodService).isPeriodOpen(java.time.LocalDate.of(2026, 1, 31));
+    }
+
+    @Test
+    @DisplayName("#2558: without an accounting time zone the draw-down is refused and nothing is recorded")
+    void unsetZone_refusesDrawDown() {
+        Clock utc = Clock.fixed(FIXED_NOW, ZoneOffset.UTC);
+        CustomerCreditServiceImpl unset = new CustomerCreditServiceImpl(
+                utc,
+                TestZoneResolvers.unset(utc),
+                customerCreditRepository,
+                creditTransactionRepository,
+                extInvoiceRepository,
+                invoiceBalanceCalculator,
+                periodService,
+                outboxService);
+        stubCredit(credit(new BigDecimal("600.00")));
+
+        assertThatThrownBy(() -> unset.refundCredit(CREDIT_ID, refundRequest("unset", new BigDecimal("10.00")), USER))
+                .isInstanceOf(com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetException.class);
         verify(creditTransactionRepository, never()).save(any());
         verify(outboxService, never()).saveToOutbox(any(), any(), any(), any(), any());
     }

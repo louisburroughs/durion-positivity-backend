@@ -19,7 +19,6 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -121,6 +120,7 @@ public class SettlementEventsListener {
     private final KafkaFactIngestionRecorder ingestionRecorder;
     private final AutomaticPaymentApplicationService automaticPaymentApplicationService;
     private final PaymentIntentLock paymentIntentLock;
+    private final AccountingCalendarZoneResolver zoneResolver;
     private final Counter payloadRejectedCounter;
     private final Counter paymentSettledUnmappableCounter;
     private final Counter paymentSettledPartyMissingDefectCounter;
@@ -141,8 +141,10 @@ public class SettlementEventsListener {
             AutomaticPaymentApplicationService automaticPaymentApplicationService,
             ObjectProvider<MeterRegistry> meterRegistry,
             PlatformTransactionManager transactionManager,
-            PaymentIntentLock paymentIntentLock) {
+            PaymentIntentLock paymentIntentLock,
+            AccountingCalendarZoneResolver zoneResolver) {
         this.clock = clock;
+        this.zoneResolver = zoneResolver;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.reconciliationService = reconciliationService;
@@ -384,7 +386,7 @@ public class SettlementEventsListener {
                 PaymentSettledV1.EVENT_TYPE,
                 eventId,
                 payload.paymentIntentId(),
-                LocalDateTime.ofInstant(payload.settledAt(), clock.getZone()),
+                zoneResolver.heldRecordDateTime(payload.settledAt()),
                 payload,
                 detail);
         log.warn(

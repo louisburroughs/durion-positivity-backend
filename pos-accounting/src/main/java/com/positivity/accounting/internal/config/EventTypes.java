@@ -394,6 +394,12 @@ public final class EventTypes {
                                 "Replace the tenant's bank reconciliation close policy (mandatory justification)")
                         .build(),
 
+                // AccountingConfigurationController — 1 event (Issue #2558)
+                EventTypeRegistration.approval(
+                                "ACCOUNTING_CONFIGURATION_TIME_ZONE_SET",
+                                "Set the tenant's accounting-calendar time zone (before the first period close)")
+                        .build(),
+
                 // SettlementReconciliationController — 3 events (Story F1c, Issue #963)
                 EventTypeRegistration.fastRead(
                                 "ACCOUNTING_SETTLEMENT_LINES_LIST",

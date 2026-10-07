@@ -3,11 +3,12 @@ package com.positivity.accounting.internal.handler;
 import com.positivity.accounting.internal.dto.PaymentApplicationGLPostingEvent;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
+import com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetException;
+import com.positivity.accounting.internal.service.AccountingCalendarZoneResolver;
 import com.positivity.accounting.internal.service.GLMappingResolver;
 import com.positivity.accounting.internal.service.GLPostingService;
 import com.positivity.accounting.internal.service.IdempotencyService;
 import java.nio.charset.StandardCharsets;
-import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -60,7 +61,7 @@ public class PaymentApplicationGLPostingEventHandler {
     static final String CREDIT_MAPPING_KEY = "ACCOUNTS_RECEIVABLE";
     static final String IDEMPOTENCY_KEY_PREFIX = "PAYMENT_APPLICATION_GL_POSTING:";
 
-    private final Clock clock;
+    private final AccountingCalendarZoneResolver zoneResolver;
     private final IdempotencyService idempotencyService;
     private final GLMappingResolver glMappingResolver;
     private final GLPostingService glPostingService;
@@ -101,9 +102,9 @@ public class PaymentApplicationGLPostingEventHandler {
             // wrong accounting period and selects the wrong effective-dated GL
             // mapping; deriving from applicationTimestamp keeps both the entry
             // date and the mapping resolution stable across replays. The Instant
-            // is converted to LocalDateTime using the injected clock's zone,
-            // matching the module's Instant→LocalDateTime convention.
-            LocalDateTime transactionDate = LocalDateTime.ofInstant(event.getApplicationTimestamp(), clock.getZone());
+            // is dated in the tenant's accounting-calendar zone (#2558); an unset
+            // zone fails closed and the work item retries once it is set.
+            LocalDateTime transactionDate = zoneResolver.postingDateTime(event.getApplicationTimestamp());
 
             // Account resolution via posting category / mapping key
             // configuration — no hardcoded account ids (story C1 requirement).
@@ -130,7 +131,9 @@ public class PaymentApplicationGLPostingEventHandler {
                     applicationRequestId,
                     postedJournalEntryId);
 
-        } catch (AccountingPeriodClosedException | AccountingPeriodHardLockedException e) {
+        } catch (AccountingPeriodClosedException
+                | AccountingPeriodHardLockedException
+                | AccountingTimeZoneUnsetException e) {
             // Wave 2 period gate: propagate unwrapped so the failure reason
             // stays visible in the outbox retry record; retry succeeds once the
             // period is reopened (or the hard lock moved).

@@ -89,7 +89,8 @@ class SettlementEventsListenerDepositCreditAppliedTest {
                 org.mockito.Mockito.mock(AutomaticPaymentApplicationService.class),
                 provider,
                 org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class),
-                org.mockito.Mockito.mock(PaymentIntentLock.class));
+                org.mockito.Mockito.mock(PaymentIntentLock.class),
+                TestZoneResolvers.utc(CLOCK));
     }
 
     private double rejectedCount() {
