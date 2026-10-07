@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.dto.GoodsReceivedEvent;
+import com.positivity.accounting.internal.dto.VendorBillResponse;
 import com.positivity.accounting.internal.entity.AccountingSequence;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.entity.VendorBillLine;
@@ -101,6 +102,9 @@ class VendorBillCreationTest {
         billCounter.setNextValue(42L);
         // Lenient: the replayed-event test returns the existing bill before any number is drawn.
         lenient().when(sequenceLocker.lockOrProvision("BILL-202401")).thenReturn(billCounter);
+        lenient()
+                .when(reader.read(any(VendorBill.class)))
+                .thenReturn(VendorBillResponse.builder().build());
         testVendorId = UUID.fromString("00000000-0000-0000-0000-000000000003");
         testPoId = UUID.fromString("00000000-0000-0000-0000-000000000009");
         testProductId1 = UUID.fromString("00000000-0000-0000-0000-000000000011");
@@ -225,6 +229,7 @@ class VendorBillCreationTest {
                 .containsExactly(true, false);
         // The service holds no event publisher, no posting service and no ingestion path any more: the only
         // collaborators it touches are the bill, its lines, the directory, the guard and the counter.
+        verify(reader).read(any(VendorBill.class));
         verifyNoMoreInteractions(auditLogs, reader);
     }
 

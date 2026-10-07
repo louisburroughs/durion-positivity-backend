@@ -106,11 +106,12 @@ class AccountingEventTypeRegistryTest {
     }
 
     @Test
-    @DisplayName("the vendor bill and AP payment API types post a journal entry through the posting engine")
+    @DisplayName("the AP payment API type posts a journal entry through the posting engine; VENDOR_BILL_GL_POSTING is"
+            + " retired (#2509): a vendor bill posts at approval")
     void apGlPostingTypesPostToGl() {
         assertThat(AccountingEventTypeRegistry.entries())
                 .filteredOn(e -> e.code().endsWith("_GL_POSTING"))
-                .hasSize(2)
+                .hasSize(1)
                 .allSatisfy(e -> {
                     assertThat(e.ingestion()).isEqualTo(Ingestion.API);
                     assertThat(e.sourceDomain()).isEqualTo("accounting");
