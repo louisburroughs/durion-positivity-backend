@@ -4,6 +4,7 @@ import com.positivity.accounting.internal.bankfeed.file.entity.BankImport;
 import com.positivity.accounting.internal.bankfeed.file.repository.BankImportFileRepository;
 import com.positivity.accounting.internal.bankfeed.file.repository.BankImportRepository;
 import com.positivity.tenancy.TenantIterator;
+import java.time.ZoneOffset;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -65,7 +66,7 @@ public class BankImportRetentionJob {
      * @return how many files were deleted
      */
     public int purgeForBoundTenant() {
-        LocalDate today = LocalDate.now(clock);
+        LocalDate today = LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC);
         Instant now = Instant.now(clock);
         List<BankImport> expired = imports.findByRetentionUntilBeforeAndFilePurgedAtIsNull(today);
         int purged = 0;

@@ -894,8 +894,7 @@ class AutomaticPaymentApplicationPostgresIT extends PostgresCommittingTestBase {
 
     @Test
     @DisplayName("#2558: without an ACCOUNTING_TIME_ZONE row the settlement is held SUSPENDED /"
-            + " ACCOUNTING_TIME_ZONE_UNSET (never dated in UTC), the retry job leaves it, and a reprocess after the"
-            + " zone is set applies it")
+            + " ACCOUNTING_TIME_ZONE_UNSET (never dated in UTC), and the retry job applies it once the zone exists")
     void timeZone_unsetHoldsTheSettlement() {
         removeZone();
         seedInvoice("115.00", customerId);
@@ -906,15 +905,17 @@ class AutomaticPaymentApplicationPostgresIT extends PostgresCommittingTestBase {
         AccountingEvent held = settledRows().getFirst();
         assertThat(held.getStatus()).isEqualTo(AccountingEventStatus.SUSPENDED);
         assertThat(held.getFailureReasonCode()).isEqualTo("ACCOUNTING_TIME_ZONE_UNSET");
-        assertThat(retryJob.retryBoundTenant())
-                .as("an operator action, never retried")
-                .isZero();
 
+        // Provisioning seeds the row late (the startup sweep), or an administrator sets it: the retry job then
+        // releases the hold by itself, no reprocess needed.
         setZone("America/Chicago");
-        AccountingEventResponse reprocessed = inTransaction(
-                () -> eventIngestionService.reprocessEvent(held.getEventId(), new ReprocessEventRequest(), "ops-user"));
+        retryJob.retryBoundTenant();
 
-        assertThat(reprocessed.getStatus()).isEqualTo(AccountingEventStatus.PROCESSED);
+        assertThat(accountingEventRepository
+                        .findById(held.getEventId())
+                        .orElseThrow()
+                        .getStatus())
+                .isEqualTo(AccountingEventStatus.PROCESSED);
         drainOutbox();
         assertThat(postings()).containsExactly(new Posting("1090", "1200", "115.00", LocalDate.of(2026, 1, 31)));
     }
@@ -952,14 +953,12 @@ class AutomaticPaymentApplicationPostgresIT extends PostgresCommittingTestBase {
                 });
         row.setConfigValue(zone);
         configurationRepository.save(row);
-        zoneResolver.evict(TENANT);
     }
 
     private void removeZone() {
         configurationRepository
                 .findByConfigKey(AccountingCalendarZoneResolver.CONFIG_KEY)
                 .ifPresent(configurationRepository::delete);
-        zoneResolver.evict(TENANT);
     }
 
     private void consume(UUID eventId, PaymentSettledV1 fact) {

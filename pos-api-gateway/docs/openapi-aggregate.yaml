@@ -1573,6 +1573,22 @@ paths:
     $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1vendor-profiles~1{vendorProfileId}~1stock-snapshots~1latest
   /v1/supplier/vendor-profiles/{vendorProfileId}/stock-snapshots/{snapshotId}/lines:
     $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1vendor-profiles~1{vendorProfileId}~1stock-snapshots~1{snapshotId}~1lines
+  /v1/supplier/vendors:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1vendors
+  /v1/supplier/vendors/facts/replay:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1vendors~1facts~1replay
+  /v1/supplier/vendors/{vendorId}:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1vendors~1{vendorId}
+  /v1/supplier/vendors/{vendorId}/deactivation:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1vendors~1{vendorId}~1deactivation
+  /v1/supplier/vendors/{vendorId}/reactivation:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1vendors~1{vendorId}~1reactivation
+  /v1/supplier/vendors/{vendorId}/remit-to-changes:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1vendors~1{vendorId}~1remit-to-changes
+  /v1/supplier/vendors/{vendorId}/remit-to-changes/{changeId}/approval:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1vendors~1{vendorId}~1remit-to-changes~1{changeId}~1approval
+  /v1/supplier/vendors/{vendorId}/remit-to-changes/{changeId}/rejection:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1vendors~1{vendorId}~1remit-to-changes~1{changeId}~1rejection
   /v1/tax/calculate:
     $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1calculate
   /v1/tax/exemption-certificates:

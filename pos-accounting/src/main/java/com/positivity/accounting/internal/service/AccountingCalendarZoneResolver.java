@@ -12,10 +12,8 @@ import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Component;
@@ -31,9 +29,9 @@ import org.springframework.stereotype.Component;
  * {@code SUSPENDED / ACCOUNTING_TIME_ZONE_UNSET}. Migration V10 seeded {@code UTC} for the tenants that existed, and
  * tenant provisioning seeds {@code UTC} for every new one, so the row is missing only when someone removed it.
  *
- * <p>Zones are cached per tenant; a zone change evicts the tenant's entry ({@link #evict}). A missing row is never
- * cached, so setting the zone takes effect at once. The zone can change only before the tenant's first close, so a
- * stale entry on another instance can never re-cut a closed month.
+ * <p>Nothing is cached: every call is one read of the tenant's row by its unique {@code (tenant_id, config_key)}
+ * index. A per-instance cache would let another instance keep cutting at the old zone after a change, giving one
+ * tenant two period boundaries (the review of #2561), and a change must be visible on every instance at once.
  *
  * <p>All reads use the bound tenant's connection (row-level security), so {@link #zoneFor} refuses a tenant other
  * than the bound one.
@@ -48,7 +46,6 @@ public class AccountingCalendarZoneResolver {
     private final AccountingConfigurationRepository configurationRepository;
     private final TenantResolver tenantResolver;
     private final Clock clock;
-    private final Map<UUID, ZoneId> cache = new ConcurrentHashMap<>();
 
     public AccountingCalendarZoneResolver(
             AccountingConfigurationRepository configurationRepository, TenantResolver tenantResolver, Clock clock) {
@@ -68,13 +65,7 @@ public class AccountingCalendarZoneResolver {
             throw new IllegalStateException(
                     "Accounting time zone of tenant " + tenantId + " asked for while tenant " + bound + " is bound");
         }
-        ZoneId cached = cache.get(tenantId);
-        if (cached != null) {
-            return cached;
-        }
-        ZoneId zone = read().orElseThrow(AccountingTimeZoneUnsetException::new);
-        cache.put(tenantId, zone);
-        return zone;
+        return read().orElseThrow(AccountingTimeZoneUnsetException::new);
     }
 
     /** The bound tenant's accounting-calendar zone. */
@@ -82,7 +73,7 @@ public class AccountingCalendarZoneResolver {
         return zoneFor(tenantResolver.require());
     }
 
-    /** The bound tenant's zone, or empty when it is not set. Uncached; for the configuration read and audit. */
+    /** The bound tenant's zone, or empty when it is not set. */
     public @NonNull Optional<ZoneId> find() {
         return read();
     }
@@ -108,7 +99,7 @@ public class AccountingCalendarZoneResolver {
      * reprocessed, so this is the one place a missing zone does not fail; it is never used for a journal entry.
      */
     public @NonNull LocalDateTime heldRecordDateTime(@NonNull Instant instant) {
-        Optional<ZoneId> zone = cachedOrRead();
+        Optional<ZoneId> zone = read();
         return LocalDateTime.ofInstant(instant, zone.orElse(ZoneOffset.UTC));
     }
 
@@ -120,16 +111,6 @@ public class AccountingCalendarZoneResolver {
     /** The current month in the bound tenant's accounting calendar. */
     public @NonNull YearMonth currentMonth() {
         return YearMonth.now(clock.withZone(zone()));
-    }
-
-    /** Drops the cached zone of {@code tenantId}; the next read goes to the database. */
-    public void evict(@NonNull UUID tenantId) {
-        cache.remove(tenantId);
-    }
-
-    private Optional<ZoneId> cachedOrRead() {
-        ZoneId cached = cache.get(tenantResolver.require());
-        return cached != null ? Optional.of(cached) : read();
     }
 
     private Optional<ZoneId> read() {

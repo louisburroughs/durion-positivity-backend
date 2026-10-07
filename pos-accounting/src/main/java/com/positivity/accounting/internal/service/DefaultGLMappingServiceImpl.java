@@ -8,6 +8,7 @@ import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.exception.DefaultGLMappingNotFoundException;
 import com.positivity.accounting.internal.repository.DefaultGLMappingRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
+import java.time.ZoneOffset;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -176,7 +177,7 @@ public class DefaultGLMappingServiceImpl implements DefaultGLMappingService {
      * posting.
      */
     private void validateGLAccounts(UUID debitAccountId, UUID creditAccountId) {
-        LocalDateTime now = LocalDateTime.now(clock);
+        LocalDateTime now = LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
         glAccountService.validateAccountForPosting(debitAccountId, now);
         glAccountService.validateAccountForPosting(creditAccountId, now);
     }

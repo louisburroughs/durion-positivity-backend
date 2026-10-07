@@ -5,6 +5,7 @@ import com.positivity.accounting.internal.bankrec.enums.BankStatementStatus;
 import com.positivity.accounting.internal.bankrec.repository.BankStatementRepository;
 import com.positivity.accounting.internal.bankrec.service.FunctionalCurrency;
 import com.positivity.domainevents.bankfeed.BankTransactionsObservedV1.StatementHeader;
+import java.time.ZoneOffset;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
@@ -48,7 +49,7 @@ final class StatementHeaderChecks {
             @NonNull StatementHeader header,
             @Nullable String gapAcknowledgement,
             @Nullable UUID superseded) {
-        LocalDate today = LocalDate.now(clock);
+        LocalDate today = LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC);
         if (header.endDate().isAfter(today)) {
             throw BankRecException.field(
                     BankRecErrorCode.VALIDATION_ERROR,

@@ -54,7 +54,7 @@ import tools.jackson.databind.ObjectMapper;
  *   <li>the invoice's party, as a UUID, is missing or is not the payment's customer (BR-2, §9.5a):
  *       {@code SKIPPED / NOT_POSTABLE};
  *   <li>the tenant has no accounting-calendar zone (#2558): {@code SUSPENDED / ACCOUNTING_TIME_ZONE_UNSET},
- *       reprocessed by a person once the zone is set; never dated in a guessed zone;
+ *       released by the retry job once the zone exists (shared attempt cap); never dated in a guessed zone;
  *   <li>the settlement date, in the tenant's accounting-calendar zone, is in a closed or hard-locked period (BR-5):
  *       {@code SUSPENDED / PERIOD_CLOSED}, reprocessed by a person after reopening (a hard-locked date
  *       cannot be reopened: its detail says to handle the payment by hand);

@@ -93,6 +93,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
     private static final String EVENT_NOT_FOUND_PREFIX = "Event not found: ";
 
     private final Clock clock;
+    private final AccountingCalendarZoneResolver zoneResolver;
 
     private static final String EVENT_SPACE = "Event ";
     private static final String EVENT_TYPE = "eventType";
@@ -160,7 +161,8 @@ public class EventIngestionServiceImpl implements EventIngestionService {
             mutableEvent.put(SOURCE_SYSTEM, sourceSystem);
         }
         if (transactionDate == null) {
-            transactionDate = LocalDateTime.now(clock);
+            // Now in the tenant's accounting calendar (#2558), not the UTC clock's.
+            transactionDate = zoneResolver.postingDateTime(clock.instant());
             mutableEvent.put(TRANSACTION_DATE, transactionDate);
         }
 

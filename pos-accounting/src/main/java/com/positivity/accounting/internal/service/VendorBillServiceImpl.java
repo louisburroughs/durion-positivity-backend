@@ -801,7 +801,8 @@ public class VendorBillServiceImpl implements VendorBillService {
      */
     private @NonNull String generateBillNumber(@NonNull UUID vendorId) {
         String vendorPrefix = vendorId.toString().substring(0, 8).toUpperCase(Locale.ROOT);
-        LocalDate recorded = LocalDate.now(clock);
+        // The bill's month in the tenant's accounting calendar (#2558).
+        LocalDate recorded = zoneResolver.today();
         AccountingSequence sequence = sequenceLocker.lockOrProvision(
                 String.format("%s%04d%02d", BILL_NUMBER_SCOPE_PREFIX, recorded.getYear(), recorded.getMonthValue()));
         long assigned = sequence.getNextValue();

@@ -17,6 +17,7 @@ import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentTotals;
 import com.positivity.accounting.internal.service.UnappliedPaymentSuggester.OpenInvoice;
+import java.time.ZoneOffset;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
@@ -164,7 +165,7 @@ public class ReceivablesWorklistServiceImpl implements ReceivablesWorklistServic
     @NonNull
     public CustomerOpenInvoicesPage listOpenInvoices(@NonNull UUID customerId, int page, int size) {
         Instant started = Instant.now(clock);
-        LocalDate today = LocalDate.now(clock);
+        LocalDate today = LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC);
         List<ExtInvoice> candidates = extInvoiceRepository.findByPartyIdInAndStatusIn(
                 List.of(customerId.toString()), InvoiceBalanceCalculator.AR_ELIGIBLE_STATUSES);
         Map<UUID, BigDecimal> balances = invoiceBalanceCalculator.balancesDue(candidates);

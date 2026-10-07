@@ -50,6 +50,7 @@ import com.positivity.domainevents.bankfeed.BankTransactionsObservedV1.Settlemen
 import com.positivity.domainevents.bankfeed.BankTransactionsObservedV1.StatementHeader;
 import com.positivity.security.common.SecurityContextHelper;
 import jakarta.persistence.criteria.Predicate;
+import java.time.ZoneOffset;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -226,7 +227,7 @@ public class BankImportServiceImpl implements BankImportService {
         created.setSupersessionJustification(supersessionJustification);
         applyOptions(created, options, parsed);
         created.setCreatedBy(actor);
-        created.setRetentionUntil(LocalDate.now(clock).plusDays(retentionDays));
+        created.setRetentionUntil(LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC).plusDays(retentionDays));
         created.setStatus(parsed.mappingResolved() ? BankImportStatus.VALIDATED : BankImportStatus.UPLOADED);
         created.setUpdatedAt(Instant.now(clock));
         BankImport saved;

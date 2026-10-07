@@ -47,6 +47,7 @@ import com.positivity.accounting.internal.exception.PeriodBankReconciliationInco
 import com.positivity.accounting.internal.exception.PeriodCloseExceptionNotPermittedException;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.security.common.SecurityContextHelper;
+import java.time.ZoneOffset;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -359,7 +360,7 @@ public class BankReconciliationCloseReadiness {
         }
         incompleteImports(id, end).ifPresent(checks::add);
 
-        LocalDate agingDay = earlier(end, LocalDate.now(clock));
+        LocalDate agingDay = earlier(end, LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC));
         List<BankReconciliationOutstandingItem> open =
                 outstandingItems.findByGlAccountIdAndItemDateLessThanEqual(id, end).stream()
                         .filter(i -> i.getStatus() == OutstandingItemStatus.OPEN)

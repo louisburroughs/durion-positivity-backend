@@ -16,6 +16,7 @@ import com.positivity.accounting.internal.exception.InvalidRequestParameterExcep
 import com.positivity.accounting.internal.exception.PeriodBankReconciliationIncompleteException;
 import com.positivity.accounting.internal.exception.PeriodCloseBlockedException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
+import com.positivity.accounting.internal.repository.AccountingConfigurationRepository;
 import com.positivity.accounting.internal.repository.AccountingPeriodRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.security.common.SecurityContextHelper;
@@ -67,6 +68,7 @@ public class AccountingPeriodServiceImpl implements AccountingPeriodService {
     private final AccountingAuditLogRepository auditLogRepository;
     private final BankReconciliationCloseReadiness closeReadiness;
     private final AccountingCalendarZoneResolver zoneResolver;
+    private final AccountingConfigurationRepository configurationRepository;
 
     @Override
     @NonNull
@@ -147,6 +149,11 @@ public class AccountingPeriodServiceImpl implements AccountingPeriodService {
     public AccountingPeriodResponse closePeriod(@NonNull String periodCode, @Nullable PeriodCloseRequest request) {
         YearMonth yearMonth = parsePeriodCode(periodCode);
         String canonicalCode = yearMonth.toString();
+
+        // The calendar lock first (#2558): the ACCOUNTING_TIME_ZONE row FOR UPDATE, as a zone change and a hard-lock
+        // change
+        // take it, so a zone change cannot commit after this close has cut the month in the old zone.
+        configurationRepository.findWithLockByConfigKey(AccountingCalendarZoneResolver.CONFIG_KEY);
 
         // Locked read (FOR UPDATE): the close serializes against an in-flight gated posting (AccountingPeriodGate)
         // and re-reads the live balances below under the lock (SPEC-manual-bank-reconciliation I3).

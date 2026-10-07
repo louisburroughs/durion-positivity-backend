@@ -128,9 +128,8 @@ class FailedAccountingEventRetryJobTest {
                         "VALIDATION_ERROR",
                         "MISSING_AMOUNT",
                         "PERIOD_CLOSED",
-                        "CURRENCY_NOT_SUPPORTED",
-                        "ACCOUNTING_TIME_ZONE_UNSET");
-        assertThat(PostingFailureReason.autoRetryExcludedCodes()).hasSize(7);
+                        "CURRENCY_NOT_SUPPORTED");
+        assertThat(PostingFailureReason.autoRetryExcludedCodes()).hasSize(6);
     }
 
     @Test

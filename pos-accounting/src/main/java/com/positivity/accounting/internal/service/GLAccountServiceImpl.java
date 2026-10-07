@@ -17,6 +17,7 @@ import com.positivity.accounting.internal.exception.InvalidRequestParameterExcep
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryLineRepository;
 import com.positivity.security.common.SecurityContextHelper;
+import java.time.ZoneOffset;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -122,7 +123,7 @@ public class GLAccountServiceImpl implements GLAccountService {
         if (request.getActivationDate() != null) {
             account.setActivationDate(request.getActivationDate());
         } else {
-            account.setActivationDate(LocalDateTime.now(clock));
+            account.setActivationDate(LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC));
         }
 
         // Set audit fields from authenticated user (falls back to SYSTEM for
@@ -206,7 +207,7 @@ public class GLAccountServiceImpl implements GLAccountService {
      */
     @Override
     public GLAccountResponse activateGLAccount(@NonNull UUID glAccountId) {
-        return activateGLAccount(glAccountId, LocalDateTime.now(clock));
+        return activateGLAccount(glAccountId, LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC));
     }
 
     /**
@@ -265,7 +266,7 @@ public class GLAccountServiceImpl implements GLAccountService {
             throw new AccountNotZeroBalanceException(msg);
         }
 
-        account.setDeactivationDate(LocalDateTime.now(clock));
+        account.setDeactivationDate(LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC));
         account.setModifiedBy(SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM));
 
         account = glAccountRepository.save(account);

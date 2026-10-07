@@ -22,6 +22,7 @@ import com.positivity.accounting.internal.repository.ProcessorSettlementReposito
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
 import com.positivity.domainevents.payment.SettlementReportedV1;
 import com.positivity.shared.id.UUIDv7Generator;
+import java.time.ZoneOffset;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
@@ -366,7 +367,7 @@ public class SettlementReconciliationServiceImpl implements SettlementReconcilia
         return settlementRepository
                 .findById(line.getSettlementId())
                 .map(s -> LocalDateTime.of(s.getSettlementDate(), LocalTime.MIDNIGHT))
-                .orElseGet(() -> LocalDateTime.now(clock));
+                .orElseGet(() -> LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC));
     }
 
     private static UUID deterministicId(@NonNull String seed) {

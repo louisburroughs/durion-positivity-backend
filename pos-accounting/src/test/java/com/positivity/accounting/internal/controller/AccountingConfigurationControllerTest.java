@@ -12,6 +12,7 @@ import com.positivity.accounting.BaseIntegrationTest;
 import com.positivity.accounting.internal.exception.AccountingTimeZoneLockedException;
 import com.positivity.accounting.internal.exception.InvalidAccountingTimeZoneException;
 import com.positivity.accounting.internal.service.AccountingConfigurationService;
+import com.positivity.accounting.internal.service.AccountingPeriodService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -21,6 +22,11 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 class AccountingConfigurationControllerTest extends BaseIntegrationTest {
 
     private static final String PATH = "/v1/accounting/configuration/time-zone";
+
+    // The same mock set as AccountingPeriodControllerTest, so the two share one cached application context instead
+    // of adding one more to the 1 GiB CI test fork (#2558).
+    @MockitoBean
+    private AccountingPeriodService accountingPeriodService;
 
     @MockitoBean
     private AccountingConfigurationService accountingConfigurationService;

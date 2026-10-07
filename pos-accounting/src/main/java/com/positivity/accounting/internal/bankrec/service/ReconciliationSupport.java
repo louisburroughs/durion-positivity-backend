@@ -8,6 +8,7 @@ import com.positivity.accounting.internal.bankrec.repository.BankReconciliationR
 import com.positivity.accounting.internal.exception.ReconciliationAlreadyFinalizedException;
 import com.positivity.accounting.internal.exception.ReconciliationNotFoundException;
 import com.positivity.security.common.SecurityContextHelper;
+import java.time.ZoneOffset;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -119,7 +120,7 @@ public class ReconciliationSupport {
 
     /** Today, on the shared clock. */
     public @NonNull LocalDate today() {
-        return LocalDate.now(clock);
+        return LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC);
     }
 
     /** Whether the caller holds {@code authority}. */
