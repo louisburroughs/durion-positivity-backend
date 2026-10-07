@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.accounting.AccountingMigrations;
-import com.positivity.accounting.tenancy.AccountingPostgresContainer;
+import com.positivity.accounting.AccountingPostgresContainer;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
