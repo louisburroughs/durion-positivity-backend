@@ -27,6 +27,8 @@ class ChartRenumberingMigrationIT {
 
     private static final UUID DEFAULT_TENANT = UUID.fromString("01900000-0000-7000-8000-000000000001");
     private static final UUID PLATFORM = UUID.fromString("01900000-0000-7000-8000-000000000000");
+    private static final UUID SCRAP_TENANT = UUID.fromString("00000000-0000-7000-8000-0000000a2511");
+    private static final UUID CLASH_TENANT = UUID.fromString("00000000-0000-7000-8000-0000000b2511");
     private static final Map<String, String> RENUMBERED =
             Map.of("6010", "6100", "6015", "6102", "6025", "6105", "6115", "6040", "6900", "4940");
 
@@ -60,17 +62,26 @@ class ChartRenumberingMigrationIT {
                 DEFAULT_TENANT,
                 UUID.fromString("01999999-2511-7000-8000-00000000c115"),
                 cashShort);
-        for (String key : List.of("ACCOUNT:6115", "ACCOUNT:6010", "STATEMENT_LINE:LABOR_OVERHEAD:6010")) {
-            jdbc.update(
-                    "INSERT INTO accounting_template_entry (tenant_id, entry_id, entry_key, kind, outcome,"
-                            + " entry_fingerprint, template_value, created_at, modified_at) VALUES (?, ?, ?, ?,"
-                            + " 'ADOPTED', 'f', 'v', TIMESTAMPTZ '2026-10-05 00:00:00+00',"
-                            + " TIMESTAMPTZ '2026-10-05 00:00:00+00')",
-                    DEFAULT_TENANT,
-                    UUID.randomUUID(),
-                    key,
-                    key.startsWith("ACCOUNT") ? "ACCOUNT" : "STATEMENT_LINE");
-        }
+        UUID v2Wages = jdbc.queryForObject(
+                "SELECT gl_account_id FROM gl_account WHERE tenant_id = ? AND account_code = '6010'",
+                UUID.class,
+                DEFAULT_TENANT);
+        UUID v2WagesLine = jdbc.queryForObject(
+                "SELECT mapping_id FROM statement_line_mappings WHERE tenant_id = ? AND gl_account_id = ?"
+                        + " AND statement_type = 'LABOR_OVERHEAD'",
+                UUID.class,
+                DEFAULT_TENANT,
+                v2Wages);
+        record(jdbc, DEFAULT_TENANT, "ACCOUNT:6115", "ACCOUNT", cashShort);
+        record(jdbc, DEFAULT_TENANT, "ACCOUNT:6010", "ACCOUNT", v2Wages);
+        record(jdbc, DEFAULT_TENANT, "STATEMENT_LINE:LABOR_OVERHEAD:6010", "STATEMENT_LINE", v2WagesLine);
+        // A tenant with its own, unrelated 6900: not the template's account, never renumbered.
+        UUID ownScrap = account(jdbc, SCRAP_TENANT, "6900", "Scrap tire sales", "REVENUE");
+        // A tenant that already holds its own 6100 beside the template's 6010: 6010 and its record stay, and the
+        // applier reports the clash.
+        account(jdbc, CLASH_TENANT, "6100", "Owner wages", "EXPENSE");
+        UUID clashWages = account(jdbc, CLASH_TENANT, "6010", "Retread Plant Hourly Wages", "EXPENSE");
+        record(jdbc, CLASH_TENANT, "ACCOUNT:6010", "ACCOUNT", clashWages);
         Map<String, UUID> before = idsByCode(jdbc, DEFAULT_TENANT);
         int defaultRowsBefore = count(jdbc, "gl_account", DEFAULT_TENANT);
         int defaultLinesBefore = count(jdbc, "statement_line_mappings", DEFAULT_TENANT);
@@ -127,6 +138,21 @@ class ChartRenumberingMigrationIT {
                 .as("what the applier recorded follows the codes")
                 .containsExactly("ACCOUNT:6040", "ACCOUNT:6100", "STATEMENT_LINE:LABOR_OVERHEAD:6100");
 
+        assertThat(idsByCode(jdbc, SCRAP_TENANT))
+                .as("a tenant's own unrelated 6900 is not the template's account")
+                .containsEntry("6900", ownScrap)
+                .doesNotContainKey("4940");
+        assertThat(idsByCode(jdbc, CLASH_TENANT))
+                .as("a tenant already holding 6100 keeps 6010 as it is")
+                .containsEntry("6010", clashWages)
+                .containsKey("6100");
+        assertThat(jdbc.queryForList(
+                        "SELECT entry_key FROM accounting_template_entry WHERE tenant_id = ?",
+                        String.class,
+                        CLASH_TENANT))
+                .as("its record keeps its key: the clash is the applier's to report")
+                .containsExactly("ACCOUNT:6010");
+
         // The template: the new codes only, S15's accounts, the CASH_SHORT mapping on 6040, nine categories.
         Map<String, UUID> template = idsByCode(jdbc, PLATFORM);
         assertThat(template)
@@ -177,6 +203,34 @@ class ChartRenumberingMigrationIT {
                         Long.class))
                 .as("FORCE ROW LEVEL SECURITY is on every table V11 touched or created")
                 .isEqualTo(9);
+    }
+
+    private static UUID account(JdbcTemplate jdbc, UUID tenant, String code, String name, String type) {
+        UUID id = UUID.randomUUID();
+        jdbc.update(
+                "INSERT INTO gl_account (tenant_id, gl_account_id, account_code, account_name, account_type,"
+                        + " reconcilable, activation_date, version, created_at, created_by, modified_at, modified_by)"
+                        + " VALUES (?, ?, ?, ?, ?, false, TIMESTAMP '2020-01-01 00:00:00', 0,"
+                        + " TIMESTAMPTZ '2026-10-05 00:00:00+00', 't', TIMESTAMPTZ '2026-10-05 00:00:00+00', 't')",
+                tenant,
+                id,
+                code,
+                name,
+                type);
+        return id;
+    }
+
+    private static void record(JdbcTemplate jdbc, UUID tenant, String key, String kind, UUID target) {
+        jdbc.update(
+                "INSERT INTO accounting_template_entry (tenant_id, entry_id, entry_key, kind, outcome,"
+                        + " entry_fingerprint, target_row_id, template_value, created_at, modified_at) VALUES (?, ?, ?,"
+                        + " ?, 'ADOPTED', 'f', ?, 'v', TIMESTAMPTZ '2026-10-05 00:00:00+00',"
+                        + " TIMESTAMPTZ '2026-10-05 00:00:00+00')",
+                tenant,
+                UUID.randomUUID(),
+                key,
+                kind,
+                target);
     }
 
     private static Map<String, UUID> idsByCode(JdbcTemplate jdbc, UUID tenant) {

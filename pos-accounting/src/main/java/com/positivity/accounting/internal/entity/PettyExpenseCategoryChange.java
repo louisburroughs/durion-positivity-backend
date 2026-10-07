@@ -79,6 +79,10 @@ public class PettyExpenseCategoryChange extends TenantScopedEntity {
     @Column(name = "request_hash", length = 64, updatable = false)
     private String requestHash;
 
+    /** The command's response as first returned, for a replay of its requestId. */
+    @Column(name = "response_json", columnDefinition = "TEXT")
+    private String responseJson;
+
     @Column(name = "changed_at", nullable = false, updatable = false)
     private Instant changedAt;
 

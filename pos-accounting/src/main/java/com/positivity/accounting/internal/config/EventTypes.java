@@ -111,6 +111,30 @@ public final class EventTypes {
                                 "Turn the retread-plant accounting template add-on on for the tenant")
                         .build(),
 
+                // RegisterFloatController - 2 events (CAP:550 S15, #2511)
+                EventTypeRegistration.write(
+                                "ACCOUNTING_REGISTER_FLOAT_GO_LIVE", "Establish a register's go-live change float")
+                        .build(),
+                EventTypeRegistration.write("ACCOUNTING_REGISTER_FLOAT_CHANGE", "Change a register's float")
+                        .build(),
+
+                // PettyExpenseCategoryController - 5 events (CAP:550 S15, #2511)
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_PETTY_EXPENSE_CATEGORY_LIST", "List petty-expense categories")
+                        .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_PETTY_EXPENSE_CATEGORY_CREATE", "Create a petty-expense category")
+                        .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_PETTY_EXPENSE_CATEGORY_UPDATE", "Relabel a petty-expense category")
+                        .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_PETTY_EXPENSE_CATEGORY_DEACTIVATE", "Deactivate a petty-expense category")
+                        .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_PETTY_EXPENSE_CATEGORY_REMAP", "Change a petty-expense category's account")
+                        .build(),
+
                 // GLAccountController - 6 events
                 EventTypeRegistration.search("ACCOUNTING_GL_ACCOUNT_LIST", "List GL accounts with pagination")
                         .build(),

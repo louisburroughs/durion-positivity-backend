@@ -231,6 +231,10 @@ public class PettyExpenseCategoryController {
             tags = {"Accounting Petty-Expense Categories"})
     @ApiResponse(responseCode = "200", description = "The category is inactive, or a replayed requestId")
     @ApiResponse(
+            responseCode = "400",
+            description = "Missing or invalid field (VALIDATION_ERROR)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
             responseCode = "403",
             description = "Caller lacks accounting:mapping-key:deactivate",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
@@ -280,7 +284,8 @@ public class PettyExpenseCategoryController {
                     Preconditions: caller holds accounting:gl-mapping:create; the category exists (404); no \
                     mapping of the category starts on or after effectiveFrom (400 \
                     PETTY_EXPENSE_MAPPING_OVERLAP, the non-overlap rule); glAccountId is an active EXPENSE account \
-                    (422 PETTY_EXPENSE_ACCOUNT_NOT_ELIGIBLE).
+                    (422 PETTY_EXPENSE_ACCOUNT_NOT_ELIGIBLE); effectiveFrom is today or later in the tenant's \
+                    accounting calendar, never retroactive (422 PETTY_EXPENSE_ACCOUNT_CHANGE_BACKDATED).
                     Required inputs: code (path), glAccountId, effectiveFrom, \
                     """ + JUSTIFICATION_RULE + """
                     .
@@ -302,8 +307,13 @@ public class PettyExpenseCategoryController {
             description = "No such category (PETTY_EXPENSE_CATEGORY_NOT_FOUND)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
+            responseCode = "409",
+            description = "IDEMPOTENCY_CONFLICT",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
             responseCode = "422",
-            description = "PETTY_EXPENSE_ACCOUNT_NOT_ELIGIBLE",
+            description = "PETTY_EXPENSE_ACCOUNT_NOT_ELIGIBLE, PETTY_EXPENSE_ACCOUNT_CHANGE_BACKDATED or"
+                    + " ACCOUNTING_TIME_ZONE_UNSET",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_PETTY_EXPENSE_CATEGORY_REMAP", apiVersion = "1")
     public ResponseEntity<PettyExpenseCategoryResponse> remap(

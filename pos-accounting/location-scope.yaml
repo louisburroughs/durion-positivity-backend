@@ -11,3 +11,11 @@ decisions:
     shape: gate
     permission: reporting:view:financial-statements
     reason: The required locationId names the single location the cost matrix is derived for; the clearest FINANCIAL case in the platform, so an ACCOUNTANT assigned to a region sees that region's shops and no others. Gated in the controller after fiscalYear/asOfMonth validation, on the location the GL dimension code resolves to (#1885)
+  - operation: RegisterFloatController.establishGoLive
+    shape: gate
+    permission: accounting:float:manage
+    reason: The required locationId names the location whose register drawer the go-live float is put in, and the 1080 line carries it as a dimension; a CONTROLLER scoped to a region may set floats only for that region's registers. Gated in the controller after body validation (#2511)
+  - operation: RegisterFloatController.changeFloat
+    shape: gate
+    permission: accounting:float:manage
+    reason: The required locationId names the location whose register drawer float changes, and the 1080 line carries it as a dimension; a CONTROLLER scoped to a region may change floats only for that region's registers. Gated in the controller after body validation (#2511)

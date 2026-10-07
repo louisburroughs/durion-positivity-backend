@@ -105,6 +105,12 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
         requireMinorUnit(request.amount());
 
         RegisterFloat registerFloat = lockOrCreate(register, request.locationId());
+        // A concurrent duplicate of this request waited on the lock: it answers with the first result.
+        RegisterFloatChange committed =
+                changes.findByRequestId(request.requestId()).orElse(null);
+        if (committed != null) {
+            return replay(committed, hash);
+        }
         // Once per register (AW17): a standing go-live, or any standing float history, refuses a go-live.
         if (registerFloat.getGoLiveJournalEntryId() != null
                 || !changes.findByRegisterFloatIdAndKindInAndReversalJournalEntryIdIsNull(
@@ -175,6 +181,12 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
         LocalDate date = request.effectiveDate() != null ? request.effectiveDate() : zoneResolver.today();
 
         RegisterFloat registerFloat = lockOrCreate(register, request.locationId());
+        // A concurrent duplicate of this request waited on the lock: it answers with the first result.
+        RegisterFloatChange committed =
+                changes.findByRequestId(request.requestId()).orElse(null);
+        if (committed != null) {
+            return replay(committed, hash);
+        }
         BigDecimal previous = registerFloat.getAmount();
         BigDecimal difference = request.amount().subtract(previous);
         if (difference.signum() == 0) {

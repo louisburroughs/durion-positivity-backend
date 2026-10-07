@@ -39,27 +39,47 @@ ALTER TABLE public.default_gl_mapping NO FORCE ROW LEVEL SECURITY;
 ALTER TABLE public.statement_line_mappings NO FORCE ROW LEVEL SECURITY;
 ALTER TABLE public.accounting_template_entry NO FORCE ROW LEVEL SECURITY;
 
--- 3a. Tenants' books: the code changes, the account (and every line posted to it) stays. A tenant that
---     already holds the new code keeps both accounts as they are; the template then reports the clash.
+-- 3a. Tenants' books: the code changes, the account (and every line posted to it) stays. Only the template's
+--     own account is renumbered: one the applier recorded CREATED or ADOPTED for that entry, or, where the
+--     applier has not run yet (a fresh database, V2's rows), one whose name and type are the template's. A
+--     tenant that already holds the new code keeps both accounts as they are; the template then reports the
+--     clash. A tenant's own unrelated account under an old code is never touched.
 UPDATE public.gl_account g
 SET account_code = r.new_code,
     modified_at = '2026-10-06 00:00:00+00',
     modified_by = 'aw30-renumbering'
-FROM (VALUES ('6010', '6100'), ('6015', '6102'), ('6025', '6105'), ('6115', '6040'), ('6900', '4940'))
-    AS r(old_code, new_code)
+FROM (VALUES ('6010', '6100', 'Retread Plant Hourly Wages', 'EXPENSE'),
+             ('6015', '6102', 'Retread Plant Management Salaries', 'EXPENSE'),
+             ('6025', '6105', 'Retread Plant Contract & Temp Labor', 'EXPENSE'),
+             ('6115', '6040', 'Cash Short', 'EXPENSE'),
+             ('6900', '4940', 'Rubber Dust Sales Income', 'REVENUE'))
+         AS r(old_code, new_code, account_name, account_type)
 WHERE g.account_code = r.old_code
   AND g.tenant_id <> '01900000-0000-7000-8000-000000000000'::uuid
+  AND (EXISTS (SELECT 1 FROM public.accounting_template_entry e
+               WHERE e.tenant_id = g.tenant_id
+                 AND e.entry_key = 'ACCOUNT:' || r.old_code
+                 AND e.outcome IN ('CREATED', 'ADOPTED')
+                 AND e.target_row_id = g.gl_account_id)
+       OR (lower(trim(g.account_name)) = lower(r.account_name) AND g.account_type = r.account_type))
   AND NOT EXISTS (SELECT 1 FROM public.gl_account o
                   WHERE o.tenant_id = g.tenant_id AND o.account_code = r.new_code);
 
--- statement_line_mappings.account_name is a copy of the account's code (V2, the template); it follows.
+-- statement_line_mappings.account_name is a copy of the account's code (V2, the template); it follows, for the
+-- accounts renumbered above only.
 UPDATE public.statement_line_mappings s
 SET account_name = g.account_code
-FROM public.gl_account g
+FROM public.gl_account g, (VALUES ('6010', '6100', 'Retread Plant Hourly Wages', 'EXPENSE'),
+             ('6015', '6102', 'Retread Plant Management Salaries', 'EXPENSE'),
+             ('6025', '6105', 'Retread Plant Contract & Temp Labor', 'EXPENSE'),
+             ('6115', '6040', 'Cash Short', 'EXPENSE'),
+             ('6900', '4940', 'Rubber Dust Sales Income', 'REVENUE'))
+         AS r(old_code, new_code, account_name, account_type)
 WHERE g.tenant_id = s.tenant_id
   AND g.gl_account_id = s.gl_account_id
-  AND s.account_name IN ('6010', '6015', '6025', '6115', '6900')
-  AND g.account_code IN ('6100', '6102', '6105', '6040', '4940')
+  AND s.account_name = r.old_code
+  AND g.account_code = r.new_code
+  AND g.modified_by = 'aw30-renumbering'
   AND s.tenant_id <> '01900000-0000-7000-8000-000000000000'::uuid;
 
 -- 6340 is the shop-supplies category's account (§4.6 "EXISTING, renamed"). A tenant that already renamed it
@@ -72,18 +92,43 @@ WHERE account_code = '6340'
   AND account_name = 'Retread Shop Consumables'
   AND tenant_id <> '01900000-0000-7000-8000-000000000000'::uuid;
 
--- What the template applier recorded for the renumbered accounts and their lines follows the codes, so the
--- next run finds the entries it already settled instead of adopting them a second time.
+-- What the applier recorded for a renumbered account, or for the Labor & Overhead line of one, follows the code,
+-- so the next run finds the entry it already settled. A record whose row was not renumbered (the tenant held the
+-- new code already) keeps its key, and the clash is the applier's to report.
 UPDATE public.accounting_template_entry e
-SET entry_key = r.prefix || r.new_code,
+SET entry_key = 'ACCOUNT:' || r.new_code,
     modified_at = '2026-10-06 00:00:00+00'
-FROM (SELECT p.prefix, c.old_code, c.new_code
-      FROM (VALUES ('ACCOUNT:'), ('STATEMENT_LINE:LABOR_OVERHEAD:')) AS p(prefix)
-      CROSS JOIN (VALUES ('6010', '6100'), ('6015', '6102'), ('6025', '6105'), ('6115', '6040'), ('6900', '4940'))
-          AS c(old_code, new_code)) r
-WHERE e.entry_key = r.prefix || r.old_code
+FROM (VALUES ('6010', '6100', 'Retread Plant Hourly Wages', 'EXPENSE'),
+             ('6015', '6102', 'Retread Plant Management Salaries', 'EXPENSE'),
+             ('6025', '6105', 'Retread Plant Contract & Temp Labor', 'EXPENSE'),
+             ('6115', '6040', 'Cash Short', 'EXPENSE'),
+             ('6900', '4940', 'Rubber Dust Sales Income', 'REVENUE'))
+         AS r(old_code, new_code, account_name, account_type), public.gl_account g
+WHERE e.entry_key = 'ACCOUNT:' || r.old_code
+  AND g.tenant_id = e.tenant_id
+  AND g.gl_account_id = e.target_row_id
+  AND g.account_code = r.new_code
   AND NOT EXISTS (SELECT 1 FROM public.accounting_template_entry o
-                  WHERE o.tenant_id = e.tenant_id AND o.entry_key = r.prefix || r.new_code);
+                  WHERE o.tenant_id = e.tenant_id AND o.entry_key = 'ACCOUNT:' || r.new_code);
+
+UPDATE public.accounting_template_entry e
+SET entry_key = 'STATEMENT_LINE:LABOR_OVERHEAD:' || r.new_code,
+    modified_at = '2026-10-06 00:00:00+00'
+FROM (VALUES ('6010', '6100', 'Retread Plant Hourly Wages', 'EXPENSE'),
+             ('6015', '6102', 'Retread Plant Management Salaries', 'EXPENSE'),
+             ('6025', '6105', 'Retread Plant Contract & Temp Labor', 'EXPENSE'),
+             ('6115', '6040', 'Cash Short', 'EXPENSE'),
+             ('6900', '4940', 'Rubber Dust Sales Income', 'REVENUE'))
+         AS r(old_code, new_code, account_name, account_type), public.statement_line_mappings s, public.gl_account g
+WHERE e.entry_key = 'STATEMENT_LINE:LABOR_OVERHEAD:' || r.old_code
+  AND s.tenant_id = e.tenant_id
+  AND s.mapping_id = e.target_row_id
+  AND g.tenant_id = s.tenant_id
+  AND g.gl_account_id = s.gl_account_id
+  AND g.account_code = r.new_code
+  AND NOT EXISTS (SELECT 1 FROM public.accounting_template_entry o
+                  WHERE o.tenant_id = e.tenant_id
+                    AND o.entry_key = 'STATEMENT_LINE:LABOR_OVERHEAD:' || r.new_code);
 
 -- 3b. The platform tenant's template rows under the old codes. Their ids derive from the old codes, so they
 --     cannot be renumbered in place; R__ adds the accounts, the CASH_SHORT mapping and the lines again.
@@ -174,6 +219,7 @@ CREATE TABLE public.petty_expense_category_change (
     justification character varying(1000) NOT NULL,
     request_id uuid,
     request_hash character varying(64),
+    response_json text,
     changed_at timestamp(6) with time zone NOT NULL,
     created_at timestamp(6) with time zone NOT NULL,
     modified_at timestamp(6) with time zone NOT NULL,

@@ -23,6 +23,8 @@ import com.positivity.accounting.internal.repository.MappingKeyRepository;
 import com.positivity.accounting.internal.repository.PettyExpenseCategoryChangeRepository;
 import com.positivity.accounting.internal.repository.PettyExpenseCategoryRepository;
 import com.positivity.accounting.internal.repository.PostingCategoryRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -42,6 +44,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * {@link PettyExpenseCategoryService} (#2511). Idempotent on {@code requestId}: a replay with the same body
@@ -71,6 +74,8 @@ public class PettyExpenseCategoryServiceImpl implements PettyExpenseCategoryServ
     private final PettyExpenseCategoryFacts facts;
     private final AccountingCalendarZoneResolver zoneResolver;
     private final Clock clock;
+    private final EntityManager entityManager;
+    private final ObjectMapper objectMapper;
 
     /** Whether a key belongs to a petty-expense category, so only this service may write it. */
     public static boolean isManagedKey(@Nullable String categoryName, @Nullable String keyName) {
@@ -150,7 +155,7 @@ public class PettyExpenseCategoryServiceImpl implements PettyExpenseCategoryServ
         category.setCreatedBy(actor);
         category.setModifiedBy(actor);
         category = categories.saveAndFlush(category);
-        record(
+        PettyExpenseCategoryChange change = record(
                 category,
                 PettyExpenseCategoryChangeType.CREATE,
                 null,
@@ -159,7 +164,7 @@ public class PettyExpenseCategoryServiceImpl implements PettyExpenseCategoryServ
                 actor,
                 request.requestId(),
                 hash);
-        return view(category, today);
+        return remember(change, view(category, today));
     }
 
     @Override
@@ -196,8 +201,8 @@ public class PettyExpenseCategoryServiceImpl implements PettyExpenseCategoryServ
             key.setModifiedBy(actor);
             mappingKeys.save(key);
         });
-        PettyExpenseCategory saved = categories.saveAndFlush(category);
-        record(
+        PettyExpenseCategory saved = persistChange(category);
+        PettyExpenseCategoryChange change = record(
                 saved,
                 PettyExpenseCategoryChangeType.RELABEL,
                 before,
@@ -206,7 +211,7 @@ public class PettyExpenseCategoryServiceImpl implements PettyExpenseCategoryServ
                 actor,
                 request.requestId(),
                 hash);
-        return view(saved, zoneResolver.today());
+        return remember(change, view(saved, zoneResolver.today()));
     }
 
     @Override
@@ -233,8 +238,8 @@ public class PettyExpenseCategoryServiceImpl implements PettyExpenseCategoryServ
         category.setModifiedBy(actor);
         // The key and its mapping are kept: a movement recorded before deactivation still posts (§4.6 "never
         // retroactive"). Resolution by category and key does not read the key's active flag.
-        PettyExpenseCategory saved = categories.saveAndFlush(category);
-        record(
+        PettyExpenseCategory saved = persistChange(category);
+        PettyExpenseCategoryChange change = record(
                 saved,
                 PettyExpenseCategoryChangeType.DEACTIVATE,
                 PettyExpenseCategoryStatus.ACTIVE.name(),
@@ -243,7 +248,7 @@ public class PettyExpenseCategoryServiceImpl implements PettyExpenseCategoryServ
                 actor,
                 request.requestId(),
                 hash);
-        return view(saved, zoneResolver.today());
+        return remember(change, view(saved, zoneResolver.today()));
     }
 
     @Override
@@ -263,6 +268,15 @@ public class PettyExpenseCategoryServiceImpl implements PettyExpenseCategoryServ
         }
         PettyExpenseCategory category = require(code);
         LocalDate from = request.effectiveFrom();
+        // Never retroactive (§4.6): an account change takes effect today or later in the tenant's accounting
+        // calendar; an unset zone fails closed (#2558).
+        LocalDate today = zoneResolver.today();
+        if (from.isBefore(today)) {
+            throw new CashSetupException(
+                    CashSetupException.Code.PETTY_EXPENSE_ACCOUNT_CHANGE_BACKDATED,
+                    "An account change takes effect today (" + today + ") or later, not " + from
+                            + ": movements already recorded keep the account they were recorded against");
+        }
         GLAccount account = requireExpenseAccount(request.glAccountId(), from);
         LocalDateTime start = from.atStartOfDay();
         List<GLMapping> mappings = undimensioned(category.getMappingKeyId());
@@ -286,8 +300,8 @@ public class PettyExpenseCategoryServiceImpl implements PettyExpenseCategoryServ
         MappingKey key = mappingKeys.findById(category.getMappingKeyId()).orElseThrow();
         addMapping(key.getPostingCategory(), key, account, from, actor);
         category.setModifiedBy(actor);
-        PettyExpenseCategory saved = categories.saveAndFlush(category);
-        record(
+        PettyExpenseCategory saved = persistChange(category);
+        PettyExpenseCategoryChange change = record(
                 saved,
                 PettyExpenseCategoryChangeType.REMAP,
                 before,
@@ -296,7 +310,7 @@ public class PettyExpenseCategoryServiceImpl implements PettyExpenseCategoryServ
                 actor,
                 request.requestId(),
                 hash);
-        return view(saved, zoneResolver.today());
+        return remember(change, view(saved, zoneResolver.today()));
     }
 
     // ---- writes ---------------------------------------------------------------------------------------------
@@ -314,7 +328,7 @@ public class PettyExpenseCategoryServiceImpl implements PettyExpenseCategoryServ
         glMappings.save(mapping);
     }
 
-    private void record(
+    private PettyExpenseCategoryChange record(
             PettyExpenseCategory category,
             PettyExpenseCategoryChangeType type,
             @Nullable String oldValue,
@@ -344,6 +358,15 @@ public class PettyExpenseCategoryServiceImpl implements PettyExpenseCategoryServ
         }
         facts.changed(category, actor);
         log.info("Petty-expense category {} {} by {}", category.getCode(), type, actor);
+        return change;
+    }
+
+    /** Keeps the command's response with its history row, so a replay returns exactly the first result. */
+    private PettyExpenseCategoryResponse remember(
+            PettyExpenseCategoryChange change, PettyExpenseCategoryResponse response) {
+        change.setResponseJson(objectMapper.writeValueAsString(response));
+        changes.saveAndFlush(change);
+        return response;
     }
 
     // ---- reads ----------------------------------------------------------------------------------------------
@@ -355,10 +378,21 @@ public class PettyExpenseCategoryServiceImpl implements PettyExpenseCategoryServ
                         CashSetupException.Code.IDEMPOTENCY_CONFLICT,
                         "requestId " + requestId + " was already used with a different payload");
             }
-            PettyExpenseCategory category =
-                    categories.findById(original.getPettyExpenseCategoryId()).orElseThrow(notFound(original.getCode()));
-            return view(category, zoneResolver.today()).asReplay();
+            return objectMapper
+                    .readValue(original.getResponseJson(), PettyExpenseCategoryResponse.class)
+                    .asReplay();
         });
+    }
+
+    /**
+     * Saves the category and raises its version whether or not a column of the row changed (an account change
+     * touches only the GL mappings), so every fact a command queues carries a version the consumer has not seen
+     * (ADR-0044 §3). The row stays locked to the end of the transaction.
+     */
+    private PettyExpenseCategory persistChange(PettyExpenseCategory category) {
+        PettyExpenseCategory saved = categories.saveAndFlush(category);
+        entityManager.lock(saved, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
+        return saved;
     }
 
     private PettyExpenseCategory require(String code) {

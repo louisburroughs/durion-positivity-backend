@@ -6,6 +6,7 @@ import com.positivity.accounting.internal.dto.RegisterFloatResponse;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.RegisterFloatService;
 import com.positivity.events.EmitEvent;
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -79,11 +80,13 @@ public class RegisterFloatController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
-            description = "Caller lacks accounting:float:manage",
+            description = "Caller lacks accounting:float:manage, or the location is outside the caller's location"
+                    + " scope (LOCATION_SCOPE_DENIED)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "FLOAT_ALREADY_ESTABLISHED or IDEMPOTENCY_CONFLICT",
+            description = "FLOAT_ALREADY_ESTABLISHED, IDEMPOTENCY_CONFLICT, or VERSION_CONFLICT (the register's first"
+                    + " command raced another; retry)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
@@ -108,6 +111,9 @@ public class RegisterFloatController {
                                                                     """)))
                     @RequestBody
                     RegisterFloatGoLiveRequest request) {
+        request.requireValid();
+        // ADR-0061: @PreAuthorize answered "may this caller manage floats"; this answers "...at this location".
+        SecurityContextHelper.locationScope().require(AccountingPermissions.FLOAT_MANAGE, request.locationId());
         return respond(registerFloatService.establishGoLive(registerId, request));
     }
 
@@ -149,11 +155,13 @@ public class RegisterFloatController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
-            description = "Caller lacks accounting:float:manage",
+            description = "Caller lacks accounting:float:manage, or the location is outside the caller's location"
+                    + " scope (LOCATION_SCOPE_DENIED)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "IDEMPOTENCY_CONFLICT",
+            description = "IDEMPOTENCY_CONFLICT, or VERSION_CONFLICT (the register's first command raced another;"
+                    + " retry)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
@@ -181,6 +189,9 @@ public class RegisterFloatController {
                                                                     """)))
                     @RequestBody
                     RegisterFloatChangeRequest request) {
+        request.requireValid();
+        // ADR-0061: @PreAuthorize answered "may this caller manage floats"; this answers "...at this location".
+        SecurityContextHelper.locationScope().require(AccountingPermissions.FLOAT_MANAGE, request.locationId());
         return respond(registerFloatService.changeFloat(registerId, request));
     }
 

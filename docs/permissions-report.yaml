@@ -1,9 +1,9 @@
-generatedAt: "2026-10-07T01:31:14.187201+00:00"
+generatedAt: "2026-10-07T09:41:37.538221+00:00"
 root: "."
 summary:
   manifestCount: 24
-  permissionCount: 517
-  uniquePermissionCount: 517
+  permissionCount: 518
+  uniquePermissionCount: 518
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -12,7 +12,7 @@ manifests:
     domain: "accounting"
     serviceName: "pos-accounting"
     version: "1.0"
-    permissionCount: 56
+    permissionCount: 57
     permissions:
       - name: "accounting:analytics:view"
         description: "View Wave 2 read-only accounting analytics (invoiced-vs-collected, payment-lag cohorts)"
@@ -60,6 +60,8 @@ manifests:
         description: "Request an accounting data export"
       - name: "accounting:export:view"
         description: "View accounting export status and history"
+      - name: "accounting:float:manage"
+        description: "Manage float"
       - name: "accounting:gl-mapping:create"
         description: "Create gl mapping"
       - name: "accounting:gl-mapping:resolve"
@@ -1344,6 +1346,12 @@ permissions:
     source: "pos-accounting/src/main/resources/permissions.yaml"
   - name: "accounting:export:view"
     description: "View accounting export status and history"
+    domain: "accounting"
+    serviceName: "pos-accounting"
+    module: "pos-accounting"
+    source: "pos-accounting/src/main/resources/permissions.yaml"
+  - name: "accounting:float:manage"
+    description: "Manage float"
     domain: "accounting"
     serviceName: "pos-accounting"
     module: "pos-accounting"

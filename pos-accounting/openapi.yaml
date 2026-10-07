@@ -7115,7 +7115,7 @@ paths:
 
         Use this tool when a category should post somewhere else from now on; do not use createGLMapping, which cannot bind a mapping to a category and key.
 
-        Preconditions: caller holds accounting:gl-mapping:create; the category exists (404); no mapping of the category starts on or after effectiveFrom (400 PETTY_EXPENSE_MAPPING_OVERLAP, the non-overlap rule); glAccountId is an active EXPENSE account (422 PETTY_EXPENSE_ACCOUNT_NOT_ELIGIBLE).
+        Preconditions: caller holds accounting:gl-mapping:create; the category exists (404); no mapping of the category starts on or after effectiveFrom (400 PETTY_EXPENSE_MAPPING_OVERLAP, the non-overlap rule); glAccountId is an active EXPENSE account (422 PETTY_EXPENSE_ACCOUNT_NOT_ELIGIBLE); effectiveFrom is today or later in the tenant''s accounting calendar, never retroactive (422 PETTY_EXPENSE_ACCOUNT_CHANGE_BACKDATED).
 
         Required inputs: code (path), glAccountId, effectiveFrom, justification (at least 10 characters) and requestId (a replay returns the first result with 200; the same requestId with another body is 409 IDEMPOTENCY_CONFLICT).
 
@@ -7171,12 +7171,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: No such category (PETTY_EXPENSE_CATEGORY_NOT_FOUND)
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: IDEMPOTENCY_CONFLICT
         '422':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: PETTY_EXPENSE_ACCOUNT_NOT_ELIGIBLE
+          description: PETTY_EXPENSE_ACCOUNT_NOT_ELIGIBLE, PETTY_EXPENSE_ACCOUNT_CHANGE_BACKDATED or ACCOUNTING_TIME_ZONE_UNSET
       security:
       - bearerAuth:
         - accounting:gl-mapping:create
@@ -7227,6 +7233,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/PettyExpenseCategoryResponse'
           description: The category is inactive, or a replayed requestId
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Missing or invalid field (VALIDATION_ERROR)
         '403':
           content:
             application/json:
@@ -9981,13 +9993,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller lacks accounting:float:manage
+          description: Caller lacks accounting:float:manage, or the location is outside the caller's location scope (LOCATION_SCOPE_DENIED)
         '409':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: IDEMPOTENCY_CONFLICT
+          description: IDEMPOTENCY_CONFLICT, or VERSION_CONFLICT (the register's first command raced another; retry)
         '422':
           content:
             application/json:
@@ -10064,13 +10076,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller lacks accounting:float:manage
+          description: Caller lacks accounting:float:manage, or the location is outside the caller's location scope (LOCATION_SCOPE_DENIED)
         '409':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: FLOAT_ALREADY_ESTABLISHED or IDEMPOTENCY_CONFLICT
+          description: FLOAT_ALREADY_ESTABLISHED, IDEMPOTENCY_CONFLICT, or VERSION_CONFLICT (the register's first command raced another; retry)
         '422':
           content:
             application/json:

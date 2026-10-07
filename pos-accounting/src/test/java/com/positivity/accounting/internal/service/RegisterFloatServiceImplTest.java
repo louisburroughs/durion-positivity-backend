@@ -290,6 +290,38 @@ class RegisterFloatServiceImplTest {
     }
 
     @Test
+    @DisplayName("a duplicate requestId that waited on the register's lock answers with the first result, not a 409")
+    void duplicateThatWaitedOnTheLockIsAReplay() {
+        UUID requestId = UUID.randomUUID();
+        service.establishGoLive("T-1", goLive("200.00", requestId));
+        RegisterFloatChange first = standing.get(0);
+        // The second request found no row before the lock (the first had not committed), and finds it after.
+        when(changes.findByRequestId(requestId)).thenReturn(Optional.empty(), Optional.of(first));
+        when(journalEntries.getJournalEntry(first.getJournalEntryId()))
+                .thenReturn(JournalEntryResponse.builder()
+                        .entryNumber("JE-202610-000001")
+                        .build());
+
+        RegisterFloatService.Outcome replay = service.establishGoLive("T-1", goLive("200.00", requestId));
+
+        assertThat(replay.replayed()).isTrue();
+        assertThat(replay.response().journalEntryId()).isEqualTo(first.getJournalEntryId());
+        assertThat(capturedEntries()).hasSize(1);
+
+        UUID changeRequest = UUID.randomUUID();
+        service.changeFloat("T-1", change("300.00", changeRequest));
+        RegisterFloatChange change = standing.get(standing.size() - 1);
+        when(changes.findByRequestId(changeRequest)).thenReturn(Optional.empty(), Optional.of(change));
+        when(journalEntries.getJournalEntry(change.getJournalEntryId()))
+                .thenReturn(JournalEntryResponse.builder()
+                        .entryNumber("JE-202610-000002")
+                        .build());
+        assertThat(service.changeFloat("T-1", change("300.00", changeRequest)).replayed())
+                .isTrue();
+        assertThat(capturedEntries()).hasSize(2);
+    }
+
+    @Test
     @DisplayName("a body without a justification of 10 characters, or a finer amount than cents, is 400")
     void requestShapeIsValidated() {
         RegisterFloatGoLiveRequest shortJustification =

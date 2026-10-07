@@ -10,14 +10,17 @@ import org.jspecify.annotations.Nullable;
  * <p>Published by pos-accounting through its transactional outbox after every category command
  * (create, relabel, deactivate, account change) and when the tenant template creates a category;
  * republished with the current state at every start (ADR-0044 §4). The envelope's aggregate is the
- * category row and its version. pos-order keeps the cashier's picker from it (S16, ADR-0044 R3); S32
+ * category row and its version, which rises on every command, an account change included. pos-order keeps the cashier's picker from it (S16, ADR-0044 R3); S32
  * adds the tax-recovery fields in a later version.
  *
  * @param code the permanent category code, e.g. {@code SHOP_SUPPLIES}
  * @param label the plain label the cashier sees
  * @param examples what belongs in the category, or null
  * @param status whether new movements may use it
- * @param accountCode the account the category posts to today, or null when it has none
+ * @param accountCode the account in effect when the command ran (or at the republish), or null when it has
+ *     none. A future-dated account change is not republished on the date it takes effect, so consumers use
+ *     this for display only; posting always resolves the account through the category's mapping at the entry
+ *     date.
  * @param accountName that account's name, or null when it has none
  */
 public record PettyExpenseCategoryChangedV1(

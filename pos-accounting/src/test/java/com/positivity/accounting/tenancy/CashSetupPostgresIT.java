@@ -316,16 +316,9 @@ class CashSetupPostgresIT extends PostgresTenancyTestBase {
                 "accounting:gl-mapping:create");
 
         // AC8: relabel; the code stays, the history names the caller from the security context.
-        PettyExpenseCategoryResponse relabelled = asTenant(
-                tenant,
-                () -> categories.update(
-                        "STAFF_MEALS",
-                        new PettyExpenseCategoryUpdateRequest(
-                                "Staff meals and coffee",
-                                null,
-                                null,
-                                "Cashiers asked for a clearer label",
-                                UUIDv7Generator.generate())));
+        PettyExpenseCategoryUpdateRequest relabel = new PettyExpenseCategoryUpdateRequest(
+                "Staff meals and coffee", null, null, "Cashiers asked for a clearer label", UUIDv7Generator.generate());
+        PettyExpenseCategoryResponse relabelled = asTenant(tenant, () -> categories.update("STAFF_MEALS", relabel));
         assertThat(relabelled.code()).isEqualTo("STAFF_MEALS");
         assertThat(relabelled.label()).isEqualTo("Staff meals and coffee");
         assertThat(relabelled.history())
@@ -420,6 +413,49 @@ class CashSetupPostgresIT extends PostgresTenancyTestBase {
                 .extracting(e -> ((CashSetupException) e).getCode())
                 .isEqualTo(CashSetupException.Code.PETTY_EXPENSE_MAPPING_OVERLAP);
 
+        // Two account changes by the same caller: only GL mappings change, yet the version (and so each fact's)
+        // strictly rises (ADR-0044 §3).
+        PettyExpenseCategoryResponse movedAgain = asTenant(
+                tenant,
+                () -> categories.remap(
+                        "SHOP_SUPPLIES",
+                        new PettyExpenseCategoryRemapRequest(
+                                revenueFreeExpense(tenant),
+                                nextMonth.plusMonths(1),
+                                "Supplies move again the month after",
+                                UUIDv7Generator.generate())));
+        assertThat(movedAgain.version()).isGreaterThan(moved.version());
+
+        // Never retroactive: an account change dated before today is refused.
+        assertThatThrownBy(() -> asTenant(
+                        tenant,
+                        () -> categories.remap(
+                                "OFFICE_SUPPLIES",
+                                new PettyExpenseCategoryRemapRequest(
+                                        misc,
+                                        today.minusDays(1),
+                                        "Back-dating the office supplies account",
+                                        UUIDv7Generator.generate()))))
+                .extracting(e -> ((CashSetupException) e).getCode())
+                .isEqualTo(CashSetupException.Code.PETTY_EXPENSE_ACCOUNT_CHANGE_BACKDATED);
+
+        // A replay returns the first result, whatever happened since.
+        asTenant(
+                tenant,
+                () -> categories.update(
+                        "STAFF_MEALS",
+                        new PettyExpenseCategoryUpdateRequest(
+                                "Team meals",
+                                null,
+                                null,
+                                "Renamed again for the menu board",
+                                UUIDv7Generator.generate())));
+        PettyExpenseCategoryResponse replayed = asTenant(tenant, () -> categories.update("STAFF_MEALS", relabel));
+        assertThat(replayed.replayed()).isTrue();
+        assertThat(replayed.label()).isEqualTo("Staff meals and coffee");
+        assertThat(replayed.version()).isEqualTo(relabelled.version());
+        assertThat(replayed.history()).hasSameSizeAs(relabelled.history());
+
         assertThat(asTenant(tenant, () -> categories.list()).categories())
                 .extracting(PettyExpenseCategoryResponse::code)
                 .contains("SHOP_SUPPLIES", "TIRE_DISPOSAL", "VEHICLE_FUEL")
@@ -432,6 +468,11 @@ class CashSetupPostgresIT extends PostgresTenancyTestBase {
         UUID tenant = tenantWithZone();
         tenants.add(tenant);
         return tenant;
+    }
+
+    private UUID revenueFreeExpense(UUID tenant) {
+        return asTenant(
+                tenant, () -> glAccounts.findByAccountCode("6370").orElseThrow().getGlAccountId());
     }
 
     private String code(UUID accountId) {
