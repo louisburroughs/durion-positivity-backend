@@ -1181,6 +1181,106 @@ paths:
       - Bank Accounts
       x-required-permissions:
       - accounting:reconciliation:view
+  /v1/accounting/bank-accounts/{glAccountId}/opening-balance:
+    post:
+      description: 'Puts a bank account''s balance at cutover on the books, with the checks and deposits still in transit, against 3900 Opening Balance Equity. Posts one entry dated asOfDate: one bank line for statementBalance (a debit, a credit when overdrawn), one bank line per outstanding item carrying its reference and itemDate (an OUTSTANDING_CHECK credits the bank, a DEPOSIT_IN_TRANSIT debits it) and one 3900 line for the net, so the book balance is statement + deposits in transit − outstanding checks.
+
+        Use this tool once per bank account, when a shop''s books move onto the platform; do not use createJournalEntry, which records no opening, and do not use it for cash not yet deposited at cutover (deposit it on or before asOfDate and list it as a deposit in transit); AR, AP, inventory and loan openings are out of scope.
+
+        Preconditions: caller holds accounting:je:create and accounting:je:post; the account exists (404 GL_ACCOUNT_NOT_FOUND) and is an active BANK_CASH account in functional currency (422 BANK_OPENING_BALANCE_ACCOUNT_NOT_ELIGIBLE); currencyCode is its currency (422 CURRENCY_NOT_SUPPORTED) and no amount is finer than its minor unit (422 AMOUNT_PRECISION_EXCEEDS_CURRENCY, every such field in fieldErrors); it has no standing opening (409 BANK_OPENING_BALANCE_ALREADY_ESTABLISHED; correct a mistake by reversing the entry, dated on or before asOfDate, and running the opening again); the balance at the end of asOfDate holds no line and no committed statement starts on or before it (422 BANK_OPENING_BALANCE_NOT_FIRST; later lines are allowed); a zero balance needs at least one item (422 BANK_OPENING_BALANCE_EMPTY); asOfDate is not after today in the tenant''s accounting time zone and falls in an OPEN period, with no override path (422 PERIOD_CLOSED or PERIOD_HARD_LOCKED otherwise). Idempotent on requestId: a replay returns the first result with 200, another body with the same requestId is 409 IDEMPOTENCY_CONFLICT.
+
+        Required inputs: glAccountId (path), asOfDate, statementBalance, currencyCode (ISO 4217, the code of every amount, ADR-0067), outstandingItems (type, reference, itemDate on or before asOfDate, amount more than zero; may be empty), justification (at least 10 characters), requestId.
+
+        Emits an ACCOUNTING_BANK_OPENING_BALANCE_ESTABLISH event, writes a BANK_OPENING_BALANCE_ESTABLISH audit row naming the caller, and returns 201 with the balances and their currencyCode, the journal entry id and number and each item''s glLineId; the account''s first bank statement then starts on asOfDate + 1 with opening balance = statementBalance and a gapAcknowledgement; registering each item''s glLineId as an outstanding item there leaves an opening difference of 0.00.
+
+        '
+      operationId: establishBankOpeningBalance
+      parameters:
+      - description: The bank account (a BANK_CASH GL account)
+        in: path
+        name: glAccountId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Cutover on October 31:
+                description: Cutover on October 31
+                value:
+                  asOfDate: '2025-10-31'
+                  currencyCode: USD
+                  justification: Opening balance per the October statement
+                  outstandingItems:
+                  - amount: 450.0
+                    itemDate: '2025-10-28'
+                    reference: '1043'
+                    type: OUTSTANDING_CHECK
+                  - amount: 1200.0
+                    itemDate: '2025-10-31'
+                    reference: DEP-1031
+                    type: DEPOSIT_IN_TRANSIT
+                  requestId: 019a0000-0000-7000-8000-000000000201
+                  statementBalance: 10000.0
+            schema:
+              $ref: '#/components/schemas/BankOpeningBalanceRequest'
+        description: The bank's balance at cutover, the items in transit and why
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankOpeningBalanceResponse'
+          description: 'A replayed requestId: the first result'
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankOpeningBalanceResponse'
+          description: The opening balance was posted
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'Missing or invalid field, named in fieldErrors: currencyCode missing or not an ISO 4217 code, asOfDate after today, an itemDate after asOfDate, or an amount not more than zero or not below 10^14 (VALIDATION_ERROR)'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:je:create or accounting:je:post
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No GL account with this id (GL_ACCOUNT_NOT_FOUND)
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: BANK_OPENING_BALANCE_ALREADY_ESTABLISHED or IDEMPOTENCY_CONFLICT
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: BANK_OPENING_BALANCE_ACCOUNT_NOT_ELIGIBLE, CURRENCY_NOT_SUPPORTED, AMOUNT_PRECISION_EXCEEDS_CURRENCY (every offending amount in fieldErrors), BANK_OPENING_BALANCE_NOT_FIRST, BANK_OPENING_BALANCE_EMPTY, PERIOD_CLOSED, PERIOD_HARD_LOCKED, ACCOUNTING_TIME_ZONE_UNSET or GL_MAPPING_NOT_CONFIGURED
+      security:
+      - bearerAuth:
+        - accounting:je:create
+        - accounting:je:post
+      summary: Establish Bank Opening Balance
+      tags:
+      - Bank Accounts
+      x-required-permissions:
+      - accounting:je:create
+      - accounting:je:post
   /v1/accounting/bank-accounts/{glAccountId}/profile:
     put:
       description: 'Creates or updates the bank-account profile of a reconcilable BANK_CASH GL account: bank name, account mask, currency, default column mapping and statement cycle hint.
@@ -14474,6 +14574,163 @@ components:
       - endDate
       - openingBalance
       - startDate
+      type: object
+    BankOpeningBalanceItem:
+      description: An outstanding item of the opening and its bank line
+      properties:
+        amount:
+          description: The item's amount
+          example: 450.0
+          type: number
+        glLineId:
+          description: 'The bank line the item posted as: the glLineId to register as an outstanding item in the account''s first bank reconciliation'
+          format: uuid
+          type: string
+        itemDate:
+          description: The date the check was written or the deposit made
+          format: date
+          type: string
+        reference:
+          description: The check number or deposit reference
+          example: '1043'
+          type: string
+        type:
+          description: What the item is
+          enum:
+          - OUTSTANDING_CHECK
+          - DEPOSIT_IN_TRANSIT
+          type: string
+      required:
+      - amount
+      - glLineId
+      - itemDate
+      - reference
+      - type
+      type: object
+    BankOpeningBalanceOutstandingItem:
+      description: A check or deposit still in transit at cutover
+      properties:
+        amount:
+          description: The item's amount, more than zero, in functional currency
+          example: 450.0
+          type: number
+        itemDate:
+          description: The date the check was written or the deposit made; on or before asOfDate
+          example: '2025-10-28'
+          format: date
+          type: string
+        reference:
+          description: The check number or deposit reference
+          example: '1043'
+          maxLength: 255
+          type: string
+        type:
+          description: What the item is
+          enum:
+          - OUTSTANDING_CHECK
+          - DEPOSIT_IN_TRANSIT
+          example: OUTSTANDING_CHECK
+          type: string
+      required:
+      - amount
+      - itemDate
+      - reference
+      - type
+      type: object
+    BankOpeningBalanceRequest:
+      description: A bank account's opening balance at cutover, with the items still in transit
+      properties:
+        asOfDate:
+          description: 'The cutover date: the end-of-day balance, usually the day before go-live. The entry is dated on it; it must not be after today and its period must be open'
+          example: '2025-10-31'
+          format: date
+          type: string
+        currencyCode:
+          description: The ISO 4217 code of statementBalance and every item amount (ADR-0067 R-1); it must be the bank account's currency, the functional currency
+          example: USD
+          maxLength: 3
+          minLength: 3
+          type: string
+        justification:
+          description: Why the opening is what it is (at least 10 characters); kept in the audit log
+          example: Opening balance per the October bank statement
+          maxLength: 1000
+          minLength: 10
+          type: string
+        outstandingItems:
+          description: The checks written and deposits made on or before asOfDate that the bank had not yet cleared; may be empty
+          items:
+            $ref: '#/components/schemas/BankOpeningBalanceOutstandingItem'
+          type: array
+        requestId:
+          description: Caller-generated UUIDv7 naming this request; a replay returns the first result
+          example: 019a0000-0000-7000-8000-000000000201
+          format: uuid
+          type: string
+        statementBalance:
+          description: The bank's balance at the end of asOfDate, in functional currency; negative when the account was overdrawn
+          example: 10000.0
+          type: number
+      required:
+      - asOfDate
+      - currencyCode
+      - justification
+      - requestId
+      - statementBalance
+      type: object
+    BankOpeningBalanceResponse:
+      description: A bank account's opening balance as posted
+      properties:
+        accountCode:
+          description: The bank account's code
+          example: '1000'
+          type: string
+        asOfDate:
+          description: The cutover date the entry is dated on
+          format: date
+          type: string
+        bookBalance:
+          description: 'The ledger balance the entry sets: statement balance + deposits in transit − outstanding checks'
+          example: 10750.0
+          type: number
+        currencyCode:
+          description: The ISO 4217 code of both balances and every item amount
+          example: USD
+          type: string
+        glAccountId:
+          description: The bank account
+          format: uuid
+          type: string
+        journalEntryId:
+          description: The journal entry the command posted
+          format: uuid
+          type: string
+        journalEntryNumber:
+          description: That entry's number
+          example: JE-202510-1
+          type: string
+        outstandingItems:
+          description: The outstanding items, each with its own bank line; empty when there are none
+          items:
+            $ref: '#/components/schemas/BankOpeningBalanceItem'
+          type: array
+        replayed:
+          description: True when this answers a replayed requestId with the first result
+          type: boolean
+        statementBalance:
+          description: The bank's balance at the end of asOfDate
+          example: 10000.0
+          type: number
+      required:
+      - accountCode
+      - asOfDate
+      - bookBalance
+      - currencyCode
+      - glAccountId
+      - journalEntryId
+      - journalEntryNumber
+      - outstandingItems
+      - statementBalance
       type: object
     BankReconciliationAdjustmentResponse:
       description: Reconciliation adjustment with its posted journal entry, link and reversal state

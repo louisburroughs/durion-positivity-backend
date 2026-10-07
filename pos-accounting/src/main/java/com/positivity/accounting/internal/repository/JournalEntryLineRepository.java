@@ -71,6 +71,20 @@ public interface JournalEntryLineRepository extends JpaRepository<JournalEntryLi
     BigDecimal getAccountBalanceAsOf(@Param("glAccountId") UUID glAccountId, @Param("asOf") LocalDateTime asOf);
 
     /**
+     * How many lines on one account the balance at {@code before} still holds (bank opening balance, #2572: the
+     * opening must come first). The bank reconciliation's balance ({@link #getAccountBalanceAsOf}) counts every
+     * POSTED or REVERSED entry at its own date, so this does too, leaving out a reversal pair only when both the
+     * original and its reversal are dated before {@code before}: such a pair nets to zero there.
+     */
+    @Query("SELECT COUNT(jel) FROM JournalEntryLine jel JOIN jel.journalEntry je "
+            + "LEFT JOIN je.reversedByJournalEntry reversedBy LEFT JOIN je.reversalJournalEntry reverses "
+            + "WHERE jel.glAccount.glAccountId = :glAccountId AND je.status IN ('POSTED', 'REVERSED') "
+            + "AND je.transactionDate < :before "
+            + "AND (reversedBy IS NULL OR reversedBy.transactionDate >= :before) "
+            + "AND (reverses IS NULL OR reverses.transactionDate >= :before)")
+    long countLinesInBalanceBefore(@Param("glAccountId") UUID glAccountId, @Param("before") LocalDateTime before);
+
+    /**
      * The lines on one account of POSTED entries dated in {@code [from, to]}, with their entry fetched
      * (bank reconciliation — unexplained ledger lines and match candidates, SPEC §3.7, §4.6; story S4,
      * #2303). A REVERSED original is not POSTED; the POSTED entry reversing it is returned and the

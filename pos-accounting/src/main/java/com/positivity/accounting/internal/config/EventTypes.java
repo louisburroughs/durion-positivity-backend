@@ -16,7 +16,8 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 143 event types (includes +1 from the unpaid walk-in sales read (CAP:550 S11, Issue #2508):
+     * Total: 152 event types (includes +1 from the bank opening balance (CAP:550, Issue #2572):
+     * ACCOUNTING_BANK_OPENING_BALANCE_ESTABLISH, +1 from the unpaid walk-in sales read (CAP:550 S11, Issue #2508):
      * ACCOUNTING_UNPAID_WALK_IN_SALES_VIEW, +1 from the automatic payment applications read (CAP:550 S2,
      * Issue #2503): ACCOUNTING_PAYMENT_APPLICATION_AUTOMATIC_LIST_VIEW, +2 from the receivables worklist
      * reads (CAP:550 S1, Issue #2502):
@@ -119,6 +120,12 @@ public final class EventTypes {
                         .build(),
                 EventTypeRegistration.write(
                                 "ACCOUNTING_REGISTER_FLOAT_RELOCATE", "Move a register's float to another location")
+                        .build(),
+
+                // BankOpeningBalanceController - 1 event (CAP:550, #2572)
+                EventTypeRegistration.write(
+                                "ACCOUNTING_BANK_OPENING_BALANCE_ESTABLISH",
+                                "Establish a bank account's opening balance at cutover")
                         .build(),
 
                 // PettyExpenseCategoryController - 5 events (CAP:550 S15, #2511)
