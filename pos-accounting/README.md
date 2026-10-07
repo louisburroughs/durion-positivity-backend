@@ -751,6 +751,41 @@ arrived does not block. The guard takes effect once pos-order publishes `order.s
 `accounting.float.changed` is schema version 3: version 2 added kind `RELOCATION` and a nullable
 `previousLocationId`, version 3 adds `currencyCode` (#2577, below).
 
+## Drawer movement posting (CAP:550 S17, #2513)
+
+A closed register session posts its drawer movements at close, from the `movements` of
+`order.session.closed` schema version 2 (S16, #2512). `OrderEventsListener` hands the fact to
+`RegisterCashMovementPostingService` and then to the over/short posting in one handler transaction, so a
+session posts all or nothing; the replica close still runs first, in its own transaction (#2573). A
+schema-1 fact has no movements and posts its over/short alone, as before.
+
+| Reason | At close | Accounts (posting category `REGISTER_CASH_MOVEMENT`) |
+|---|---|---|
+| `PETTY_EXPENSE` | one entry | Dr `PETTY_EXPENSE_<categoryCode>` / Cr `CASH_CLEARING` (1095), the receipt's gross; 2200 is never debited |
+| `VENDOR_COD` | **not posted yet** (below) | — |
+| `BANK_DROP`, `FLOAT_INCREASE`, `FLOAT_DECREASE` | nothing | the deposit (S18), Change float (S15) |
+| none (recorded before S16) or unknown | nothing, counted `UNCLASSIFIED` | — |
+
+- **Entry** — one two-line entry per movement, source type `REGISTER_CASH_MOVEMENT`, `sourceEventId` =
+  `nameUUIDFromBytes("REGISTER_CASH_MOVEMENT:" + movementId)`, dated at the session's `closedAt`, both lines
+  dimensioned `registerId` (the terminal), `sessionId` and the session's `locationId` — the session's, never the
+  float row's (AW36). The description names the category, amount, receipt, register and close time. A category
+  deactivated after its movement was recorded still resolves: its mapping key stays.
+- **Idempotency** — `REGISTER_CASH_MOVEMENT_GL_POSTING:<movementId>`, registered with the entry: a fact
+  redelivered under a new envelope id posts nothing twice and its record is `PROCESSED / DUPLICATE_IGNORED`.
+- **Failures** — a closed period or a missing mapping rolls the whole session back (over/short included) and
+  propagates for retry and the DLQ, like the over/short; so does a petty expense that breaks the fact's contract
+  (not `OUT`, no category, no positive amount).
+- **Currency** — a session whose fact or any movement to post is not in the ledger currency posts nothing, over/short
+  included, and is held once (Ledger currency below).
+- **Vendor cash on delivery** — its posting (Dr `ACCOUNTS_PAYABLE` / Cr `CASH_CLEARING` plus an AP payment of method
+  `CASH`) is the second half of #2513, waiting on the vendor copy (S24, #2517) and the pay guard (S13, #2510); pos-order
+  refuses the reason until #2576. A `VENDOR_COD` movement that arrives meanwhile is logged (`WARN`), counted on
+  `accounting.cash_movement.unposted{reason=VENDOR_COD}` and not posted; its key stays unregistered, so replaying the
+  close fact once the posting exists posts that movement alone.
+- **Metrics** — `accounting.cash_movement.posted{reason}` and `accounting.cash_movement.unposted{reason}`, counted
+  after commit.
+
 ## Ledger currency (ADR-0067)
 
 The ledger books one currency, `accounting.ledger.base-currency` (`USD` in `application.yml`), read
@@ -758,8 +793,9 @@ through `LedgerCurrency` so ADR-0067 step A5 can replace it with the tenant's fu
 one place. A Stage A ledger never books another currency at par (ADR-0067 PC-9); an absent currency
 on an inbound fact means the ledger currency until producers stamp one (E-3).
 
-- **Register over/short** (`order.session.closed`, #2312) — a session closed in another currency posts
-  nothing. It is held as one `AccountingEvent` row, `sourceSystem = pos-order`, `status = SUSPENDED`,
+- **Register over/short and drawer movements** (`order.session.closed`, #2312, #2513) — a session closed in
+  another currency, or with a drawer movement to post in another currency, posts nothing: neither the over/short
+  nor any movement. It is held as one `AccountingEvent` row, `sourceSystem = pos-order`, `status = SUSPENDED`,
   `failureReasonCode = CURRENCY_NOT_SUPPORTED`, `domainKeyId` = `sessionId`, the currency in
   `errorMessage`; a redelivery writes no second row. Find one with
   `GET /v1/accounting/events?eventType=order.session.closed&domainKeyId=<sessionId>`.
@@ -1097,7 +1133,7 @@ transaction as the posting and the `processed_events` mark:
 |---|---|---|---|---|
 | `InventoryEventsListener` | `inventory.scrap.posted`, `inventory.adjustment.posted`, `inventory.product-value.changed` | `pos-inventory` | scrap / adjustment / revaluation id | see Inventory Posting Facts above |
 | `InvoiceEventsListener` | `invoice.invoice.updated` | `pos-invoice` | invoice id | `PROCESSED / NEW` + `journalEntryId` when revenue (or its reversal) posts; `PROCESSED / DUPLICATE_IGNORED` + the earlier entry when the cycle was already posted (the `POSTED` fact after every `FINALIZED` one); `PROCESSED / NEW`, no entry, for a zero total or a revert with nothing open; `SKIPPED / NOT_POSTABLE` for a stale fact, a deposit-take invoice, no `finalizedAt`, or a status that neither recognizes nor reverses (`ERROR`) |
-| `OrderEventsListener` | `order.session.closed` | `pos-order` | session id | `PROCESSED / NEW` + entry; `PROCESSED / NEW`, no entry, for a zero variance; `PROCESSED / DUPLICATE_IGNORED` when the session key was already posted; a foreign-currency hold is the `SUSPENDED / CURRENCY_NOT_SUPPORTED` row (Ledger currency above) |
+| `OrderEventsListener` | `order.session.closed` | `pos-order` | session id | `PROCESSED / NEW` + an entry it posted (the over/short's, else the first drawer movement's; every movement entry carries the `sessionId` dimension, #2513); `PROCESSED / NEW`, no entry, when nothing posts (a zero variance and no movement to post); `PROCESSED / DUPLICATE_IGNORED` when every posting key of the session was already registered; a foreign-currency hold is the `SUSPENDED / CURRENCY_NOT_SUPPORTED` row (Ledger currency above) |
 | `SupplierInvoiceEventsListener` | `supplier.invoice.received` | `pos-supplier` | vendor bill id | `PROCESSED / NEW`, no entry (nothing posts on ingest), for a new bill and for a duplicate flagged on the live original; `PROCESSED / DUPLICATE_IGNORED` for a duplicate identical to the live bill held, under the duplicate rule above (#2501) |
 | `WarrantyEventsListener` | `warranty.reimbursement.submitted`, `warranty.reimbursement.resolved` | `pos-warranty` | reimbursement id | `PROCESSED / NEW`, no entry; `SKIPPED / NOT_POSTABLE` for a stale fact |
 | `SettlementEventsListener` | `payment.payment.settled` | `pos-invoice` | `paymentIntentId` | no row when the payment is applied automatically or another path already applied it (the application is the evidence); otherwise one row per Payment Application above: `SKIPPED / NOT_POSTABLE`, `SUSPENDED / INVOICE_NOT_FOUND`, `SUSPENDED / PERIOD_CLOSED`, `FAILED / INVOICE_NOT_ELIGIBLE`, or the `SUSPENDED / CURRENCY_NOT_SUPPORTED` hold; a re-emitted fact already skipped for the same cause, or held for the same reason, writes no second row (#2503) |

@@ -12,6 +12,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 import org.junit.jupiter.api.BeforeEach;
@@ -75,7 +76,7 @@ class GLPostingSourceEventTest {
     }
 
     @Test
-    @org.junit.jupiter.api.DisplayName("#2558: a credit-memo reversal and void at 2026-01-31T23:30-06:00 are dated"
+    @DisplayName("#2558: a credit-memo reversal and void at 2026-01-31T23:30-06:00 are dated"
             + " 2026-01-31 in a Chicago calendar, clock in UTC")
     void creditMemoEntriesAreDatedInTheTenantCalendar() {
         Clock utc = Clock.fixed(TestZoneResolvers.JAN_31_2330_CHICAGO, ZoneOffset.UTC);
@@ -185,6 +186,54 @@ class GLPostingSourceEventTest {
         assertSource(
                 s -> s.postRegisterOverShort(sourceEventId, d, a, b, AMOUNT, TXN, "over/short", null),
                 JournalEntrySourceTypes.REGISTER_OVER_SHORT);
+    }
+
+    @Test
+    void registerCashMovement() {
+        assertSource(
+                s -> s.postRegisterCashMovement(
+                        sourceEventId,
+                        a,
+                        b,
+                        AMOUNT,
+                        TXN,
+                        "petty expense",
+                        "Drawer petty expense",
+                        Map.of("registerId", "T-1", "sessionId", d.toString())),
+                JournalEntrySourceTypes.REGISTER_CASH_MOVEMENT);
+    }
+
+    @Test
+    @DisplayName(
+            "#2513: a drawer movement is one Dr / Cr pair of its amount, both lines carrying the session's dimensions")
+    void registerCashMovementLinesCarryDimensions() {
+        UUID entryId = UUID.randomUUID();
+        ArgumentCaptor<JournalEntryCreateRequest> captor = ArgumentCaptor.forClass(JournalEntryCreateRequest.class);
+        when(journalEntryService.createJournalEntry(captor.capture()))
+                .thenReturn(
+                        JournalEntryResponse.builder().journalEntryId(entryId).build());
+        when(journalEntryService.postJournalEntry(any(UUID.class), any()))
+                .thenReturn(
+                        JournalEntryResponse.builder().journalEntryId(entryId).build());
+        Map<String, String> dimensions =
+                Map.of("registerId", "T-1", "sessionId", d.toString(), "locationId", c.toString());
+
+        assertThat(service.postRegisterCashMovement(
+                        sourceEventId, a, b, AMOUNT, TXN, "petty expense", "Drawer petty expense", dimensions))
+                .isEqualTo(entryId);
+
+        JournalEntryCreateRequest request = captor.getValue();
+        assertThat(request.getTransactionDate()).isEqualTo(TXN);
+        assertThat(request.getDescription()).isEqualTo("petty expense");
+        assertThat(request.getLines()).hasSize(2);
+        assertThat(request.getLines().get(0).getGlAccountId()).isEqualTo(a);
+        assertThat(request.getLines().get(0).getDebitAmount()).isEqualByComparingTo(AMOUNT);
+        assertThat(request.getLines().get(0).getCreditAmount()).isZero();
+        assertThat(request.getLines().get(1).getGlAccountId()).isEqualTo(b);
+        assertThat(request.getLines().get(1).getCreditAmount()).isEqualByComparingTo(AMOUNT);
+        assertThat(request.getLines().get(1).getDebitAmount()).isZero();
+        assertThat(request.getLines())
+                .allSatisfy(line -> assertThat(line.getDimensions()).isEqualTo(dimensions));
     }
 
     @Test

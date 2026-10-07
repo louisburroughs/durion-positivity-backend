@@ -8,6 +8,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -561,6 +562,43 @@ public class GLPostingServiceImpl implements GLPostingService {
                 description,
                 overrideJustification,
                 "Settlement Reclass");
+    }
+
+    @Override
+    public UUID postRegisterCashMovement(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID debitAccountId,
+            @NonNull UUID creditAccountId,
+            @NonNull BigDecimal amount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description,
+            @NonNull String lineLabel,
+            @NonNull Map<String, String> dimensions) {
+        List<JournalEntryCreateRequest.JournalEntryLineRequest> lines = List.of(
+                dimensionedLine(debitAccountId, amount, BigDecimal.ZERO, lineLabel, dimensions),
+                dimensionedLine(creditAccountId, BigDecimal.ZERO, amount, lineLabel, dimensions));
+        return createAndPost(
+                JournalEntrySourceTypes.REGISTER_CASH_MOVEMENT,
+                sourceEventId,
+                transactionDate,
+                description,
+                lines,
+                "register cash movement");
+    }
+
+    private static JournalEntryCreateRequest.JournalEntryLineRequest dimensionedLine(
+            @NonNull UUID accountId,
+            @NonNull BigDecimal debitAmount,
+            @NonNull BigDecimal creditAmount,
+            @NonNull String description,
+            @NonNull Map<String, String> dimensions) {
+        return JournalEntryCreateRequest.JournalEntryLineRequest.builder()
+                .glAccountId(accountId)
+                .debitAmount(debitAmount)
+                .creditAmount(creditAmount)
+                .description(description)
+                .dimensions(Map.copyOf(dimensions))
+                .build();
     }
 
     @Override

@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.enums.PostingFailureReason;
+import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -47,5 +48,28 @@ public sealed interface FactPostingOutcome {
 
     static @NonNull FactPostingOutcome notPostable(@NonNull String detail) {
         return new Skipped(PostingFailureReason.NOT_POSTABLE, detail);
+    }
+
+    /**
+     * The one outcome of a fact two posting paths handled in the same transaction (CAP:550 S17, #2513: a closed
+     * register session posts its over/short and each drawer movement), for the fact's one record. A currency hold
+     * wins (the path wrote the held record itself); then a new entry ({@code first}'s before {@code second}'s), so
+     * a fact that posted anything new is {@code NEW}; then an earlier posting, recorded as {@code
+     * DUPLICATE_IGNORED}; then a skip; else nothing to post.
+     */
+    static @NonNull FactPostingOutcome combine(@NonNull FactPostingOutcome first, @NonNull FactPostingOutcome second) {
+        if (first instanceof CurrencyHeld || second instanceof CurrencyHeld) {
+            return new CurrencyHeld();
+        }
+        for (Class<? extends FactPostingOutcome> precedence :
+                List.of(Posted.class, AlreadyPosted.class, Skipped.class)) {
+            if (precedence.isInstance(first)) {
+                return first;
+            }
+            if (precedence.isInstance(second)) {
+                return second;
+            }
+        }
+        return nothingToPost();
     }
 }

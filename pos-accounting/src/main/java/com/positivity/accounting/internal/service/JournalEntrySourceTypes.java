@@ -39,6 +39,10 @@ public final class JournalEntrySourceTypes {
     public static final String SETTLEMENT_WRITE_OFF = "SETTLEMENT_WRITE_OFF";
     public static final String SETTLEMENT_RECLASS = "SETTLEMENT_RECLASS";
     public static final String REGISTER_OVER_SHORT = "REGISTER_OVER_SHORT";
+
+    /** One drawer cash movement of a closed register session, posted at close (CAP:550 S17, #2513). */
+    public static final String REGISTER_CASH_MOVEMENT = "REGISTER_CASH_MOVEMENT";
+
     public static final String INVOICE_REVENUE = "INVOICE_REVENUE";
     public static final String INVOICE_REVENUE_REVERSAL = "INVOICE_REVENUE_REVERSAL";
 

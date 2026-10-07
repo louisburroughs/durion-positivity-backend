@@ -39,6 +39,8 @@ class OrderEventsListenerTest {
 
     private final ProcessedEventRepository processedEvents = mock(ProcessedEventRepository.class);
     private final RegisterOverShortPostingService postingService = mock(RegisterOverShortPostingService.class);
+    private final RegisterCashMovementPostingService movementPostingService =
+            mock(RegisterCashMovementPostingService.class);
     private final KafkaFactIngestionRecorder ingestionRecorder = mock(KafkaFactIngestionRecorder.class);
     private final RegisterSessionReplica sessionReplica = mock(RegisterSessionReplica.class);
 
@@ -46,11 +48,14 @@ class OrderEventsListenerTest {
 
     @BeforeEach
     void setUp() {
+        when(postingService.postOverShort(any(), any())).thenReturn(FactPostingOutcome.nothingToPost());
+        when(movementPostingService.postMovements(any(), any())).thenReturn(FactPostingOutcome.nothingToPost());
         listener = new OrderEventsListener(
                 TEST_CLOCK,
                 new ObjectMapper(),
                 processedEvents,
                 postingService,
+                movementPostingService,
                 ingestionRecorder,
                 org.mockito.Mockito.mock(ObjectProvider.class),
                 mock(PlatformTransactionManager.class),
@@ -120,6 +125,118 @@ class OrderEventsListenerTest {
             assertThat(movement.amount()).isEqualByComparingTo("12.50");
         });
         verify(processedEvents).save(any());
+    }
+
+    private String sessionClosedWithMovements(String eventId) {
+        return sessionClosed(eventId)
+                .replace("\"schemaVersion\":1", "\"schemaVersion\":2")
+                .replace("\"closedAt\":\"2026-07-23T18:30:00Z\"}", """
+                        "closedAt":"2026-07-23T18:30:00Z",
+                         "movements":[{"movementId":"00000000-0000-0000-0000-0000000000f1",
+                                       "reason":"PETTY_EXPENSE","direction":"OUT","amount":12.50,"currencyCode":"USD",
+                                       "categoryCode":"SHOP_SUPPLIES","vendorId":null,"bagNumber":null,
+                                       "receiptReference":"R-1","clerkId":"clerk-1","clerkUserId":null,"approvedBy":null,
+                                       "occurredAt":"2026-07-23T10:00:00Z"}]}""");
+    }
+
+    @Test
+    @DisplayName("#2513 PROPOSED 1: a v2 fact goes to the movement posting and the over/short, in that order, in one"
+            + " handler transaction before the processed mark")
+    void schemaTwoFactPostsMovementsThenOverShort() {
+        when(processedEvents.existsById("e-m1")).thenReturn(false);
+
+        listener.onOrderEvent(sessionClosedWithMovements("e-m1"));
+
+        org.mockito.InOrder order =
+                org.mockito.Mockito.inOrder(sessionReplica, movementPostingService, postingService, processedEvents);
+        order.verify(sessionReplica).closed(any(RegisterSessionClosedV1.class), org.mockito.ArgumentMatchers.eq(0L));
+        ArgumentCaptor<RegisterSessionClosedV1> fact = ArgumentCaptor.forClass(RegisterSessionClosedV1.class);
+        order.verify(movementPostingService).postMovements(fact.capture(), org.mockito.ArgumentMatchers.eq("e-m1"));
+        order.verify(postingService).postOverShort(any(), org.mockito.ArgumentMatchers.eq("e-m1"));
+        order.verify(processedEvents).save(any());
+        assertThat(fact.getValue().movements()).singleElement().satisfies(movement -> {
+            assertThat(movement.movementId()).isEqualTo(UUID.fromString("00000000-0000-0000-0000-0000000000f1"));
+            assertThat(movement.categoryCode()).isEqualTo("SHOP_SUPPLIES");
+            assertThat(movement.receiptReference()).isEqualTo("R-1");
+        });
+    }
+
+    @Test
+    @DisplayName("#2513 AC8: a schema-1 fact reaches the movement posting with no movements and posts its over/short")
+    void schemaOneFactStillPostsTheOverShort() {
+        UUID entry = UUID.randomUUID();
+        when(processedEvents.existsById("e-m2")).thenReturn(false);
+        when(postingService.postOverShort(any(), org.mockito.ArgumentMatchers.eq("e-m2")))
+                .thenReturn(FactPostingOutcome.posted(entry));
+
+        listener.onOrderEvent(sessionClosed("e-m2"));
+
+        ArgumentCaptor<RegisterSessionClosedV1> fact = ArgumentCaptor.forClass(RegisterSessionClosedV1.class);
+        verify(movementPostingService).postMovements(fact.capture(), org.mockito.ArgumentMatchers.eq("e-m2"));
+        assertThat(fact.getValue().movements()).isNull();
+        verify(ingestionRecorder)
+                .record(
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        org.mockito.ArgumentMatchers.eq(FactPostingOutcome.posted(entry)));
+    }
+
+    @Test
+    @DisplayName("#2513: a movement entry with a zero-variance close is the fact's NEW record, linked to that entry")
+    void postedMovementIsRecordedWhenTheVarianceIsZero() {
+        UUID movementEntry = UUID.randomUUID();
+        when(processedEvents.existsById("e-m3")).thenReturn(false);
+        when(movementPostingService.postMovements(any(), org.mockito.ArgumentMatchers.eq("e-m3")))
+                .thenReturn(FactPostingOutcome.posted(movementEntry));
+
+        listener.onOrderEvent(sessionClosedWithMovements("e-m3"));
+
+        verify(ingestionRecorder)
+                .record(
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        org.mockito.ArgumentMatchers.eq(FactPostingOutcome.posted(movementEntry)));
+    }
+
+    @Test
+    @DisplayName("#2513 AC7: a session the movement posting holds for its currency posts no over/short; the hold is"
+            + " its record")
+    void currencyHeldMovementsSkipTheOverShort() {
+        when(processedEvents.existsById("e-m4")).thenReturn(false);
+        when(movementPostingService.postMovements(any(), org.mockito.ArgumentMatchers.eq("e-m4")))
+                .thenReturn(new FactPostingOutcome.CurrencyHeld());
+
+        listener.onOrderEvent(sessionClosedWithMovements("e-m4"));
+
+        verify(postingService, never()).postOverShort(any(), any());
+        verify(ingestionRecorder)
+                .record(any(), any(), any(), any(), any(), any(), any(FactPostingOutcome.CurrencyHeld.class));
+        verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName("#2513: a movement posting failure (closed period, missing mapping) propagates before the over/short;"
+            + " nothing is marked")
+    void movementPostingFailurePropagates() {
+        when(processedEvents.existsById("e-m5")).thenReturn(false);
+        doThrow(new IllegalStateException("simulated PERIOD_CLOSED"))
+                .when(movementPostingService)
+                .postMovements(any(), any());
+
+        assertThatExceptionOfType(IllegalStateException.class)
+                .isThrownBy(() -> listener.onOrderEvent(sessionClosedWithMovements("e-m5")));
+
+        verify(postingService, never()).postOverShort(any(), any());
+        verify(processedEvents, never()).save(any());
+        verifyNoInteractions(ingestionRecorder);
     }
 
     @Test
