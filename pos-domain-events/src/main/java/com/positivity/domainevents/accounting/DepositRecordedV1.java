@@ -22,7 +22,7 @@ import org.jspecify.annotations.Nullable;
  * @param depositDate the day the cash reached the bank: the entry's date
  * @param amount the bank debit: the total of the sessions' bank drops; always positive
  * @param currencyCode the ISO 4217 code of {@code amount} (ADR-0067 R-1): the tenant's functional currency
- * @param sessionIds the register sessions the deposit took whole, oldest close first
+ * @param sessionIds the register sessions the deposit took whole, oldest close first; never empty as published
  * @param status {@code RECORDED}, or {@code REVERSED} once the entry is reversed
  * @param journalEntryId the deposit's own entry (the reversal's entry is a separate one)
  */
@@ -79,8 +79,10 @@ public record DepositRecordedV1(
         if (currencyCode == null || !currencyCode.matches("[A-Z]{3}")) {
             throw new IllegalArgumentException("currencyCode must be three upper-case letters, was " + currencyCode);
         }
-        if (sessionIds == null || sessionIds.isEmpty()) {
-            throw new IllegalArgumentException("sessionIds must name at least one session");
+        // pos-accounting always names at least one session; the record itself only refuses a missing list, so a
+        // tolerant reader (and DomainEventContractTest's neutral sample) never throws on an empty one.
+        if (sessionIds == null) {
+            throw new IllegalArgumentException("sessionIds must not be null");
         }
         sessionIds = List.copyOf(sessionIds);
     }

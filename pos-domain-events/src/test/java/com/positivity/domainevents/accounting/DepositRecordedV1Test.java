@@ -61,9 +61,9 @@ class DepositRecordedV1Test {
     }
 
     @Test
-    @DisplayName("refuses no session, a non-positive amount and a currency that is not three upper-case letters")
+    @DisplayName("refuses no session list, a non-positive amount and a currency that is not three upper-case letters")
     void refusesAnInvalidFact() {
-        assertThatThrownBy(() -> fact(BigDecimal.ONE, "USD", List.of(), DepositRecordedV1.Status.RECORDED))
+        assertThatThrownBy(() -> fact(BigDecimal.ONE, "USD", null, DepositRecordedV1.Status.RECORDED))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("sessionIds");
         assertThatThrownBy(() -> fact(BigDecimal.ZERO, "USD", List.of(SESSION), DepositRecordedV1.Status.RECORDED))
