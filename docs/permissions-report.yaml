@@ -1,9 +1,9 @@
-generatedAt: "2026-10-07T11:27:24.446830+00:00"
+generatedAt: "2026-10-07T12:35:14.309923+00:00"
 root: "."
 summary:
   manifestCount: 24
-  permissionCount: 518
-  uniquePermissionCount: 518
+  permissionCount: 520
+  uniquePermissionCount: 520
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -629,7 +629,7 @@ manifests:
     domain: "order"
     serviceName: "pos-order"
     version: "1.0"
-    permissionCount: 31
+    permissionCount: 33
     permissions:
       - name: "order:order:view"
         description: "View orders"
@@ -666,7 +666,11 @@ manifests:
       - name: "order:session:close"
         description: "Begin and confirm the close of a register session with a counted cash count"
       - name: "order:session:approve_variance"
-        description: "Approve a register session close whose over/short exceeds the authorized difference limit"
+        description: "Approve a register session close whose over/short exceeds the drawer policy's tolerance"
+      - name: "order:session:approve_cash_movement"
+        description: "Approve, with one's own credentials at the register, a drawer cash movement above the cashier limit or a float change"
+      - name: "order:session_policy:manage"
+        description: "Read and change the tenant's drawer policy: allowed and cashier limit per movement type, and the over/short tolerance"
       - name: "order:return:create"
         description: "Create a return against a completed order"
       - name: "order:return:approve"
@@ -3000,8 +3004,14 @@ permissions:
     serviceName: "pos-order"
     module: "pos-order"
     source: "pos-order/src/main/resources/permissions.yaml"
+  - name: "order:session:approve_cash_movement"
+    description: "Approve, with one's own credentials at the register, a drawer cash movement above the cashier limit or a float change"
+    domain: "order"
+    serviceName: "pos-order"
+    module: "pos-order"
+    source: "pos-order/src/main/resources/permissions.yaml"
   - name: "order:session:approve_variance"
-    description: "Approve a register session close whose over/short exceeds the authorized difference limit"
+    description: "Approve a register session close whose over/short exceeds the drawer policy's tolerance"
     domain: "order"
     serviceName: "pos-order"
     module: "pos-order"
@@ -3026,6 +3036,12 @@ permissions:
     source: "pos-order/src/main/resources/permissions.yaml"
   - name: "order:session:view"
     description: "View register sessions, cash movements, and X/Z reports"
+    domain: "order"
+    serviceName: "pos-order"
+    module: "pos-order"
+    source: "pos-order/src/main/resources/permissions.yaml"
+  - name: "order:session_policy:manage"
+    description: "Read and change the tenant's drawer policy: allowed and cashier limit per movement type, and the over/short tolerance"
     domain: "order"
     serviceName: "pos-order"
     module: "pos-order"

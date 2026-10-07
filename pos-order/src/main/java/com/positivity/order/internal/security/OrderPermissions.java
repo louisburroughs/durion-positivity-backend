@@ -28,6 +28,17 @@ public final class OrderPermissions {
     public static final String ORDER_SESSION_CLOSE = "order:session:close";
     public static final String ORDER_SESSION_APPROVE_VARIANCE = "order:session:approve_variance";
 
+    // Drawer movements (CAP:550 S16, #2512; SPEC-accounting-workspace §4.6, AW19, AW31)
+    /** Read and change the tenant's drawer policy: allowed / cashier limit per type and the tolerance. */
+    public static final String ORDER_SESSION_POLICY_MANAGE = "order:session_policy:manage";
+
+    /**
+     * Approve a drawer cash movement above the cashier limit, or a float change, at the register. Never
+     * an endpoint's {@code @PreAuthorize}: pos-security-service's step-up check answers whether the
+     * manager whose credentials were entered holds it.
+     */
+    public static final String ORDER_SESSION_APPROVE_CASH_MOVEMENT = "order:session:approve_cash_movement";
+
     // Returns & refunds (odoo-parity F1/F2)
     public static final String ORDER_RETURN_CREATE = "order:return:create";
     public static final String ORDER_RETURN_APPROVE = "order:return:approve";

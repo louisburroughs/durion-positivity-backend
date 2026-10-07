@@ -304,10 +304,11 @@ class JwtServiceImplLocationScopeTest {
         // BILL-DEC-010 invoice:payment:{flow_select,limit_override} at bits 546-547 (95 → 96), and
         // CAP:550 S3 (#2504) accounting:payment:assign-customer at bit 548 (96 → 97), and CAP:550 S23
         // (#2516) the supplier vendor master keys at bits 549-552 (97 → 98), and CAP:550 S15 (#2511)
-        // accounting:float:manage at bit 553 (98 → 99).
+        // accounting:float:manage at bit 553 (98 → 99), and CAP:550 S16 (#2512) order:session_policy:manage
+        // and order:session:approve_cash_movement at bits 554-555 (99 → 100).
         // What this test guards is that the location-scope claims are not what moved it: they ride
         // the same catalog version.
-        assertThat(PermissionCode.CATALOG_VERSION).isEqualTo(99);
+        assertThat(PermissionCode.CATALOG_VERSION).isEqualTo(100);
         Claims claims = claims(token);
         assertThat(claims.get(JwtService.PERM_VER, Integer.class)).isEqualTo(PermissionCode.CATALOG_VERSION);
         // Both scope bitsets decode under that same version: same codec, same bit indexes.

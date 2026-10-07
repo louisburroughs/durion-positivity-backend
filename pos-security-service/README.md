@@ -341,6 +341,11 @@ those claims.
 - `GET /v1/audit/exports/{jobId}` — poll a job (read-only): `PENDING` → `IN_PROGRESS` → `COMPLETED` (with `downloadUrl`) or `FAILED` (with `errorMessage`); jobs and files are purged after `pos.security.audit-export.retention` (7 days), after which the job answers 404
 - `GET /v1/audit/exports/{jobId}/download` — the completed job's file as an attachment; 409 `AUDIT_EXPORT_NOT_READY` until `COMPLETED`
 - `GET /v1/users/authorization/person-decision` — off-session check whether the user linked to a personId has a permission
+- `POST /internal/v1/auth/step-up` — internal (refused by the gateway, absent from the OpenAPI document): checks a person's own
+  credentials once in the caller's tenant (`X-Tenant-Id`, never a body field) under the sign-in lockout policy and answers
+  `{userId, holdsPermission}` for the permission asked about; no token is issued and no session opened; every failed
+  check answers one 403 `STEP_UP_DENIED`, never 401. Called by pos-order for a manager's cash-movement approval at
+  the register (CAP:550 S16, #2512; AW31)
 
 ## Error Responses
 
@@ -377,6 +382,7 @@ row in the same pull request as the controller or advice that mints the code.
 | `INVALID_PERMISSION_REGISTRATION_SECRET` | 401 | The permission-registration secret does not match |
 | `FORBIDDEN` | 403 | Caller lacks required permissions |
 | `USER_HAS_NO_ROLES` | 403 | Credentials or refresh token are valid, but the account currently has no roles assigned; answered the same on login and refresh (ADR-0017 §2 question 1, #1725). `nextAction` tells the caller to have an administrator assign a role |
+| `STEP_UP_DENIED` | 403 | `POST /internal/v1/auth/step-up`: the credentials could not be verified — wrong password, unknown, disabled, expired or locked account — one body for every reason, never 401 (CAP:550 S16, #2512) |
 | `PLATFORM_TENANT_REQUIRED` | 403 | The endpoint is for platform-tenant callers only (ADR-0062) |
 | `ROLE_NOT_FOUND` | 404 | Role does not exist |
 | `USER_NOT_FOUND` | 404 | A referenced user does not resolve — on every entry point that references one by id or username (user management and token issuance alike; ADR-0017 §2 "one condition, one status", #1802). The token-issuance endpoints answer it with a generic message that never names the subject (#1715). A refresh token whose user no longer exists is `401 INVALID_REFRESH_TOKEN` instead, because there the missing user is a credential failure |

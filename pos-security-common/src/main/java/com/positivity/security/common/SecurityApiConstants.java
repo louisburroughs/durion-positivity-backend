@@ -20,6 +20,13 @@ public final class SecurityApiConstants {
      */
     public static final String PERMISSION_SECRET_PROPERTY = "pos.security.api-secret";
 
+    /**
+     * HTTP header carrying the mesh service credential on pos-security-service's {@code /internal/**}
+     * surface (CAP:550 S16, #2512): the same shared secret as {@link #PERMISSION_SECRET_PROPERTY},
+     * which every service already holds, presented on a header of its own.
+     */
+    public static final String INTERNAL_SECRET_HEADER = "X-Internal-Api-Secret";
+
     private SecurityApiConstants() {
         // Utility class
     }

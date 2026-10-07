@@ -5,7 +5,7 @@ decisions:
   - operation: RegisterSessionController.openSession
     shape: gate
     permission: order:session:open
-    reason: the session is opened at the request's locationId (or, when omitted, the terminal's previous session's location); RegisterSessionServiceImpl.openSession gates on the resolved location so omitting locationId cannot bypass the check, and a session resolving to no location is denied for a scoped caller (fail closed).
+    reason: the session is opened at the request's locationId (or, when omitted, the register's float location, else the terminal's previous session's location — #2573); RegisterSessionServiceImpl.openSession gates on the resolved location so omitting locationId cannot bypass the check, and a session resolving to no location is denied for a scoped caller (fail closed).
   - operation: RegisterSessionController.getSession
     shape: gate
     permission: order:session:view
@@ -18,3 +18,15 @@ decisions:
     shape: gate
     permission: order:order:view
     reason: resource-addressed sibling of createCart; the controller gates on the stored order's locationId after the 404 so the create gate cannot be bypassed by reading a cart at another shop by id.
+  - operation: RegisterSessionController.recordCashMovement
+    shape: gate
+    permission: order:session:cash_movement
+    reason: CAP:550 S16 (#2512); the movement is recorded on the stored session's drawer, so RegisterSessionServiceImpl.recordCashMovement gates on the session's locationId after the 404 and before the idempotent replay, so a scoped cashier can neither record nor replay a movement on another shop's drawer; a session with no location is denied for a scoped caller.
+  - operation: RegisterSessionController.requestCashMovementApproval
+    shape: gate
+    permission: order:session:cash_movement
+    reason: CAP:550 S16 (#2512); CashMovementApprovalServiceImpl.approve gates the caller on the stored session's locationId after the 404 and before any credential is checked. The approving manager's own reach is a separate check on the step-up's scope answer (approve_cash_movement must reach the session's location), never the caller's.
+  - operation: RegisterSessionController.cashMovementOptions
+    shape: gate
+    permission: order:session:cash_movement
+    reason: CAP:550 S16 (#2512); the options read describes one stored session's drawer (running totals per reason), so RegisterSessionServiceImpl.cashMovementOptions gates on its locationId after the 404.

@@ -1,14 +1,21 @@
 package com.positivity.order.internal.controller;
 
+import com.positivity.order.internal.exception.CashMovementIdempotencyConflictException;
+import com.positivity.order.internal.exception.CashMovementRefusedException;
+import com.positivity.order.internal.exception.CurrencyNotSupportedException;
+import com.positivity.order.internal.exception.RegisterFloatLocationMismatchException;
 import com.positivity.order.internal.exception.RegisterSessionConflictException;
 import com.positivity.order.internal.exception.RegisterSessionNotFoundException;
 import com.positivity.order.internal.exception.RegisterSessionRequestValidationException;
 import com.positivity.order.internal.exception.SessionCloseBlockedException;
+import com.positivity.order.internal.exception.StepUpUnavailableException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -87,6 +94,101 @@ public class RegisterSessionExceptionHandler {
                         "REGISTER_SESSION_INVALID_ARGUMENT",
                         ex.getMessage(),
                         HttpStatus.BAD_REQUEST.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    /**
+     * A drawer rule refused a cash movement or its approval (CAP:550 S16, #2512): 403 for the approval
+     * rules and 422 for the policy, category and float rules, each with its own code. The message never
+     * says why a step-up check failed.
+     */
+    @ExceptionHandler(CashMovementRefusedException.class)
+    public ResponseEntity<ApiError> handleCashMovementRefused(
+            CashMovementRefusedException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        HttpStatus status = HttpStatus.valueOf(ex.refusal().status());
+        log.info("Cash movement refused code={} correlationId={}", ex.refusal().code(), correlationId);
+        return ResponseEntity.status(status)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.of(
+                        ex.refusal().code(),
+                        ex.getMessage(),
+                        status.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    /**
+     * #2573: a drawer opened away from its register's float location. The details carry the terminal, the
+     * requested location and, only when the caller's scope covers it, the float's location.
+     */
+    @ExceptionHandler(RegisterFloatLocationMismatchException.class)
+    public ResponseEntity<ApiError> handleRegisterFloatLocationMismatch(
+            RegisterFloatLocationMismatchException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        List<ApiError.FieldError> details = new ArrayList<>();
+        details.add(new ApiError.FieldError("terminalId", ex.terminalId()));
+        if (ex.requestedLocationId() != null) {
+            details.add(new ApiError.FieldError(
+                    "requestedLocationId", ex.requestedLocationId().toString()));
+        }
+        if (ex.floatLocationId() != null) {
+            details.add(new ApiError.FieldError(
+                    "floatLocationId", ex.floatLocationId().toString()));
+        }
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.withFieldErrors(
+                        "REGISTER_FLOAT_LOCATION_MISMATCH",
+                        ex.getMessage(),
+                        HttpStatus.UNPROCESSABLE_ENTITY.value(),
+                        Instant.now(clock).toString(),
+                        correlationId,
+                        details));
+    }
+
+    /** ADR-0067 R-1: a drawer amount in a currency other than the functional currency (CAP:550 S16). */
+    @ExceptionHandler(CurrencyNotSupportedException.class)
+    public ResponseEntity<ApiError> handleCurrencyNotSupported(
+            CurrencyNotSupportedException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.of(
+                        "CURRENCY_NOT_SUPPORTED",
+                        ex.getMessage(),
+                        HttpStatus.UNPROCESSABLE_ENTITY.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    /** A cash-movement requestId reused for another payload (CAP:550 S16, #2512; §8.2). */
+    @ExceptionHandler(CashMovementIdempotencyConflictException.class)
+    public ResponseEntity<ApiError> handleIdempotencyConflict(
+            CashMovementIdempotencyConflictException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.of(
+                        "IDEMPOTENCY_CONFLICT",
+                        ex.getMessage(),
+                        HttpStatus.CONFLICT.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    /** The step-up check could not be made (CAP:550 S16, #2512): 503, not a refusal. */
+    @ExceptionHandler(StepUpUnavailableException.class)
+    public ResponseEntity<ApiError> handleStepUpUnavailable(StepUpUnavailableException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        log.warn("Cash movement approval check unavailable: correlationId={}", correlationId, ex);
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.of(
+                        "CASH_MOVEMENT_APPROVAL_UNAVAILABLE",
+                        ex.getMessage(),
+                        HttpStatus.SERVICE_UNAVAILABLE.value(),
                         Instant.now(clock).toString(),
                         correlationId));
     }

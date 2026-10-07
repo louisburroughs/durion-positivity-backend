@@ -188,6 +188,7 @@ class CurrencyHoldReprocessIT {
                 List.of(new RegisterSessionClosedV1.TenderTotal("CASH", new BigDecimal("95.00"))),
                 BigDecimal.ZERO,
                 CLOSED_AT.minusSeconds(28_800),
-                CLOSED_AT);
+                CLOSED_AT,
+                List.of());
     }
 }

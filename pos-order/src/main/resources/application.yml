@@ -26,6 +26,13 @@ spring:
     properties:
       hibernate:
         format_sql: true
+  flyway:
+    placeholders:
+      # V4 stamps drawers that predate CAP:550 S16 with the configured functional currency (ADR-0067
+      # R-2: never an implicit one). FlywayConfig passes it for the application; this entry serves
+      # Spring Boot's own Flyway (the @DataJpaTest slices). A versioned migration's checksum is taken
+      # before placeholders are replaced, so a later change of the value does not fail validation.
+      functional_currency: ${pos.order.functional-currency}
 
 server:
   port: 0
@@ -85,6 +92,13 @@ pos:
       # Source-document replicas (parity story E1): estimate/workorder snapshots
       workorder-events-topic: ${POS_ORDER_WORKORDER_EVENTS_TOPIC:workorder.events.v1}
       workorder-events-consumer-group: ${POS_ORDER_WORKORDER_EVENTS_CONSUMER_GROUP:pos-order-workorder-events}
+      # Accounting's facts (CAP:550 S16, #2512): petty-expense categories and register floats into
+      # pos-order's copies, the accounting reconciliation manifest, and drift-repair replay requests.
+      accounting-events-topic: ${POS_ORDER_ACCOUNTING_EVENTS_TOPIC:accounting.events.v1}
+      accounting-events-consumer-group: ${POS_ORDER_ACCOUNTING_EVENTS_CONSUMER_GROUP:pos-order-accounting-events}
+      accounting-manifest-topic: ${POS_ORDER_ACCOUNTING_MANIFEST_TOPIC:accounting.manifest.v1}
+      accounting-manifest-consumer-group: ${POS_ORDER_ACCOUNTING_MANIFEST_CONSUMER_GROUP:pos-order-accounting-manifests}
+      accounting-commands-topic: ${POS_ORDER_ACCOUNTING_COMMANDS_TOPIC:accounting.commands.v1}
     pricing:
       # PriceQuoteRequest requires a customerTierId; served from config until a customer→tier
       # mapping feed exists (the ext_customer replica carries only the tier name). Story B1.
@@ -92,10 +106,22 @@ pos:
     quote:
       # Counter-quote validity horizon (ISO-8601 duration; parity story A3)
       validity: ${POS_ORDER_QUOTE_VALIDITY:P7D}
+    # The functional currency of drawer money (ADR-0067 R-2, R-6), a Stage A interim until step A5
+    # reads the tenant's: REQUIRED, no default; an unset or non-ISO value fails startup. A drawer is
+    # stamped with it when it opens, and its movements, approvals and close fact use that stamp, so a
+    # change applies to drawers opened afterwards. A request in another currency is 422
+    # CURRENCY_NOT_SUPPORTED.
+    functional-currency: ${POS_ORDER_FUNCTIONAL_CURRENCY}
     session:
-      # Register session over/short (counted − theoretical cash) beyond this absolute amount at
-      # close requires the order:session:approve_variance authority (parity story G2, spec R6.4).
-      authorized-difference-limit: ${POS_ORDER_SESSION_AUTHORIZED_DIFFERENCE_LIMIT:5.00}
+      # The over/short tolerance above which a close needs order:session:approve_variance is the
+      # tenant's drawer policy (GET/PUT /v1/orders/session-policy, CAP:550 S16), not a setting here.
+      # A manager's single-use cash-movement approval token expires after this long (AW31).
+      approval-token-ttl: ${POS_ORDER_SESSION_APPROVAL_TOKEN_TTL:PT5M}
+      # Failed approvals one manager sign-in name may take on one drawer session before the step-up
+      # stops asking pos-security-service for it. Each failure counts against that manager's sign-in
+      # lockout (pos.security.lockout.max-attempts, 5), so keep this BELOW it: a cashier must not be
+      # able to lock a manager out from the register.
+      max-denied-approvals: ${POS_ORDER_SESSION_MAX_DENIED_APPROVALS:3}
   price:
     service-id: ${POS_PRICE_SERVICE_ID:price}
   tax:
@@ -104,6 +130,13 @@ pos:
   invoice:
     # Scoped ADR-0044 exception (checkout invoice creation + saga payment reversal)
     service-id: ${POS_INVOICE_SERVICE_ID:invoice}
+  security-service:
+    # Utility module (ADR-0044 section 1): the internal step-up credential check behind a manager's
+    # cash-movement approval (CAP:550 S16, AW31). Load-balanced inside the mesh, never via the gateway.
+    service-id: ${POS_SECURITY_SERVICE_ID:security-service}
+    # A cashier waits on the step-up at the register: fail fast rather than hang the drawer.
+    connect-timeout: ${POS_SECURITY_SERVICE_CONNECT_TIMEOUT:PT2S}
+    read-timeout: ${POS_SECURITY_SERVICE_READ_TIMEOUT:PT5S}
 
 eureka:
   client:

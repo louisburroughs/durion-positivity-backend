@@ -62,6 +62,13 @@ pos:
   tenancy:
     default-tenant-id: ${POS_TENANCY_DEFAULT_TENANT_ID:01900000-0000-7000-8000-000000000001}
   accounting:
+    # Reconciliation manifests of accounting.events.v1, one per tenant per closed window (CAP:550 S16,
+    # #2512; ADR-0044 section 4): consumers compare their processed-events log and request a replay on
+    # accounting.commands.v1 when a window disagrees.
+    manifest:
+      topic: ${POS_ACCOUNTING_MANIFEST_TOPIC:accounting.manifest.v1}
+      window: ${POS_ACCOUNTING_MANIFEST_WINDOW:PT1H}
+      grace: ${POS_ACCOUNTING_MANIFEST_GRACE:PT5M}
     bankrec:
       import:
         # SPEC-manual-bank-reconciliation D13 (story S3, #2302): raw statement files are kept this many
@@ -106,6 +113,10 @@ pos:
       invoice-commands-topic: ${POS_ACCOUNTING_KAFKA_INVOICE_COMMANDS_TOPIC:invoice.commands.v1}
       # Accounting's own fact feed (accounting.invoice.gl-posted), drained from kafka_event_outbox (#1843)
       accounting-events-topic: ${POS_ACCOUNTING_KAFKA_ACCOUNTING_EVENTS_TOPIC:accounting.events.v1}
+      # Drift repair for accounting's own facts (CAP:550 S16, #2512): consumers that find a window of
+      # accounting.manifest.v1 out of step send accounting.outbox.replay-requested here.
+      accounting-commands-topic: ${POS_ACCOUNTING_KAFKA_ACCOUNTING_COMMANDS_TOPIC:accounting.commands.v1}
+      accounting-commands-consumer-group: ${POS_ACCOUNTING_KAFKA_ACCOUNTING_COMMANDS_CONSUMER_GROUP:pos-accounting-commands}
       # Location fact feed maintaining the ext_location replica whose materialised ancestor sets
       # answer the ADR-0061 location-scope check on the Labor & Overhead report (#1885)
       location-events-topic: ${POS_ACCOUNTING_KAFKA_LOCATION_EVENTS_TOPIC:location.events.v1}
