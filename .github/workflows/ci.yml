@@ -339,9 +339,9 @@ jobs:
 
       - name: Test changed modules and dependents (PR)
         if: github.event_name == 'pull_request' && steps.selection.outputs.run-tests == 'true'
-        # lowResourceTests bounds each Surefire fork to 1 GiB: with -T 1C up to four
-        # module builds fork test JVMs concurrently, and default heap sizing would
-        # overcommit the 16 GB runner.
+        # lowResourceTests bounds each Surefire fork to 1.5 GiB (-Xmx1536m): with -T 1C up to
+        # four module builds fork test JVMs concurrently (about 6 GiB of heap), and default heap
+        # sizing would overcommit the 16 GB runner.
         #
         # The `check` goal is invoked directly rather than by running `verify`: the
         # ratchet's check-ratchet execution is bound to verify, so a build that stops at
