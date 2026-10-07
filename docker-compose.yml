@@ -323,7 +323,7 @@ services:
         set -e
         BOOTSTRAP=kafka:29092
         # BEGIN GENERATED TOPICS (scripts/generate-kafka-topics.py)
-        # 78 topics (39 DLQ). Regenerate with
+        # 82 topics (41 DLQ). Regenerate with
         # scripts/generate-kafka-topics.py --apply after adding a listener or a
         # *-topic property; CI fails on a stale block.
         #
@@ -333,8 +333,12 @@ services:
         #   payment.settlement-config.v1 — compacted config feed, not {domain}.{kind}.v1
         #   sender.outcomes.v1 — FI-2 provider-outcome feed (pos-platform-sender), not {domain}.{kind}.v1
         TOPICS="
+        accounting.commands.v1           604800000
+        accounting.commands.v1.dlq       2592000000
         accounting.events.v1             604800000
         accounting.events.v1.dlq         2592000000
+        accounting.manifest.v1           259200000
+        accounting.manifest.v1.dlq       2592000000
         catalog.commands.v1              604800000
         catalog.commands.v1.dlq          2592000000
         catalog.events.v1                604800000
