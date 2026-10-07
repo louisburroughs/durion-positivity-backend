@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
 import com.positivity.accounting.internal.enums.RegisterFloatChangeKind;
+import com.positivity.accounting.internal.enums.RegisterFloatRelocationReason;
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
@@ -28,7 +29,9 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 /**
  * One change of a register's float (#2511): a {@code GO_LIVE} or {@code CHANGE} row owns the journal
  * entry that moved 1080, a {@code REVERSAL} row records the reversal of one of them. A GO_LIVE or
- * CHANGE row whose entry was reversed carries {@code reversalJournalEntryId} and no longer counts.
+ * CHANGE row whose entry was reversed carries {@code reversalJournalEntryId} and no longer counts. A
+ * {@code RELOCATION} row (#2571, AW32) moved the register from {@code previousLocationId} to {@code
+ * locationId} with its float unchanged; it owns the reclass entry, or none for a zero float.
  */
 @Getter
 @Setter
@@ -59,8 +62,18 @@ public class RegisterFloatChange extends TenantScopedEntity {
     @Column(name = "register_id", length = 100, nullable = false, updatable = false)
     private String registerId;
 
+    /** The register's location after this change; for a RELOCATION, the destination. */
     @Column(name = "location_id", nullable = false, updatable = false)
     private UUID locationId;
+
+    /** On a RELOCATION row: the location the register was held at before the move. */
+    @Column(name = "previous_location_id", updatable = false)
+    private UUID previousLocationId;
+
+    /** On a RELOCATION row: why the register moved. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "reason", length = 20, updatable = false)
+    private RegisterFloatRelocationReason reason;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "kind", length = 10, nullable = false, updatable = false)
@@ -76,8 +89,11 @@ public class RegisterFloatChange extends TenantScopedEntity {
     @Column(name = "bank_gl_account_id", updatable = false)
     private UUID bankGlAccountId;
 
-    /** The entry this row posted; for a REVERSAL, the reversal entry. */
-    @Column(name = "journal_entry_id", nullable = false, updatable = false)
+    /**
+     * The entry this row posted; for a REVERSAL, the reversal entry. Null only on a RELOCATION of a zero float,
+     * which posts nothing.
+     */
+    @Column(name = "journal_entry_id", updatable = false)
     private UUID journalEntryId;
 
     /** On a REVERSAL row: the GO_LIVE or CHANGE row it reversed. */

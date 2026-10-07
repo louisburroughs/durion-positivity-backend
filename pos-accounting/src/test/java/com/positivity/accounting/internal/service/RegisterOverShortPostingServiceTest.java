@@ -80,7 +80,8 @@ class RegisterOverShortPostingServiceTest {
                 List.of(new RegisterSessionClosedV1.TenderTotal("CASH", new BigDecimal("50.00"))),
                 BigDecimal.ZERO,
                 Instant.parse("2026-07-23T08:00:00Z"),
-                CLOSED_AT);
+                CLOSED_AT,
+                List.of());
     }
 
     private UUID postedEntry() {

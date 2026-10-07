@@ -96,7 +96,16 @@ public final class EventTypes {
             EventTypeRegistration.write("ORDER_SESSION_OPEN", "Register session opened for a terminal")
                     .apiVersion("1")
                     .build(),
-            EventTypeRegistration.write("ORDER_SESSION_CASH_MOVEMENT", "Drawer cash paid-in/paid-out recorded")
+            EventTypeRegistration.write(
+                            "ORDER_SESSION_CASH_MOVEMENT", "Drawer cash movement recorded with a fixed reason")
+                    .apiVersion("1")
+                    .build(),
+            EventTypeRegistration.approval(
+                            "ORDER_SESSION_CASH_MOVEMENT_APPROVE",
+                            "Manager approval of a drawer cash movement issued through the step-up")
+                    .apiVersion("1")
+                    .build(),
+            EventTypeRegistration.write("ORDER_SESSION_POLICY_UPDATE", "Drawer policy (limits and tolerance) changed")
                     .apiVersion("1")
                     .build(),
             EventTypeRegistration.write("ORDER_SESSION_BEGIN_CLOSE", "Register session close begun with counted cash")

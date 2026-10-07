@@ -323,7 +323,7 @@ services:
         set -e
         BOOTSTRAP=kafka:29092
         # BEGIN GENERATED TOPICS (scripts/generate-kafka-topics.py)
-        # 78 topics (39 DLQ). Regenerate with
+        # 82 topics (41 DLQ). Regenerate with
         # scripts/generate-kafka-topics.py --apply after adding a listener or a
         # *-topic property; CI fails on a stale block.
         #
@@ -333,8 +333,12 @@ services:
         #   payment.settlement-config.v1 — compacted config feed, not {domain}.{kind}.v1
         #   sender.outcomes.v1 — FI-2 provider-outcome feed (pos-platform-sender), not {domain}.{kind}.v1
         TOPICS="
+        accounting.commands.v1           604800000
+        accounting.commands.v1.dlq       2592000000
         accounting.events.v1             604800000
         accounting.events.v1.dlq         2592000000
+        accounting.manifest.v1           259200000
+        accounting.manifest.v1.dlq       2592000000
         catalog.commands.v1              604800000
         catalog.commands.v1.dlq          2592000000
         catalog.events.v1                604800000
@@ -1274,6 +1278,9 @@ services:
       # purchaseorder.updated on order.events.v1 (read by pos-inventory's ext_purchase_order
       # replicas). Kafka is tier-1, always on outside dev/test (ADR-0044 §4, #2463): no flag.
       <<: [ *pos-security-client-env, *pos-events-client-env ]
+      # ADR-0067 R-2 (CAP:550 S16): drawer money's functional currency, required (no default in the
+      # service). Stage A interim until step A5 reads the tenant's functional currency.
+      POS_ORDER_FUNCTIONAL_CURRENCY: USD
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080

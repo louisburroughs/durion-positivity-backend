@@ -136,7 +136,7 @@ path), it does not fall back.
 | Entry | Consumed by | Guards |
 | --- | --- | --- |
 | `POS_EVENTS_API_SECRET` | `pos-event-receiver` and every emitting module | `X-Events-Api-Secret` on event and event-type registration |
-| `POS_SECURITY_API_SECRET` | `pos-security-service` and every registering module | `X-Permissions-Api-Secret` on `/v1/permissions/register` |
+| `POS_SECURITY_API_SECRET` | `pos-security-service` and every registering module; `pos-order` for the cash-movement step-up | `X-Permissions-Api-Secret` on `/v1/permissions/register`, and `X-Internal-Api-Secret` on `POST /internal/v1/auth/step-up` (CAP:550 S16: the manager's credential check behind a drawer cash-movement approval, pos-security-service's internal chain). Unset in pos-order, every approval answers 503 `CASH_MOVEMENT_APPROVAL_UNAVAILABLE` |
 | `POS_TENANT_REGISTRY_API_SECRET` | `pos-tenant`, and any module with `pos.tenancy.registry.mode=REMOTE` (as `pos.tenancy.registry.secret`) | `X-Tenant-Registry-Secret` on `GET /internal/v1/tenants` (ADR-0062 plan WS4-2) |
 | `POS_PLATFORM_SENDER_API_SECRET` | `pos-platform-sender`, and `pos-marketing` (as `pos.marketing.sender.api-secret`) | `X-Pos-Sender-Secret` on `POST /platform-sender/v1/messages` (FI-2) |
 
@@ -1084,13 +1084,30 @@ decisions:
 | `narrow` | `locationId` is an optional filter on a list/search/report: gate it when given, otherwise restrict the query to `scope.reach(permission)` |
 | `unscoped` | deliberately no check; the `reason` says why (bulk load, no location-private data, or deferred with a tracking issue) |
 
+**Two or more locations** — an operation that names several locations (a move from one to another)
+lists the fields it gates in an optional one-line `fields:` key (default `locationId`). The operation
+then enters the inventory on those fields, each field must appear in its parameter list, and for a
+`gate` the operation's own body must pass every field to a denying location-scope call (`require` /
+`requireAny`; a read such as `covers` or `reach` does not count) (#2571). The parameter check reads
+the parameter list's **text**, annotations included, as the inventory does: a field named only in a
+`@RequestBody` example or `@Schema` description satisfies it, so name the gated fields in the body
+DTO the operation actually validates.
+
+```yaml
+  - operation: RegisterFloatController.relocate
+    shape: gate
+    permission: accounting:float:manage
+    fields: fromLocationId, toLocationId
+    reason: both locations are gated in the controller after body validation.
+```
+
 **CI codes** (never baselined — all three must be zero):
 
 | Code | Fires when |
 | --- | --- |
 | `location_scope_undecided` | a controller operation takes a `locationId` and the module's file has no entry for it (or the file is missing) |
 | `location_scope_stale` | an entry names an operation that no longer exists in the module — an entry for a sibling endpoint that takes no `locationId` (e.g. the by-id detail you gated beside a list) is allowed as long as the `Class.method` exists in one of the module's controllers |
-| `location_scope_invalid` | `shape` not `gate`/`narrow`/`unscoped`, `gate`/`narrow` without `permission`, any entry without `reason`, a duplicate operation, or a file the parser cannot read |
+| `location_scope_invalid` | `shape` not `gate`/`narrow`/`unscoped`, `gate`/`narrow` without `permission`, any entry without `reason`, a duplicate operation, a file the parser cannot read, or a `fields:` entry naming a field the operation's parameters lack or (for `gate`) that its body never passes to a location-scope call |
 | `location_scope_alternates` | a location-scope call passes a permission the endpoint reaching it does not require, or an endpoint takes a scope decision with no `@PreAuthorize` and no authority check at all (#1890) |
 
 `location_scope_summary` (operations found / decided; entries per shape, per module) is printed for

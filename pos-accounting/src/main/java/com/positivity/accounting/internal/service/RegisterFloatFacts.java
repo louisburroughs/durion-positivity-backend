@@ -10,6 +10,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.time.Clock;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -49,9 +50,16 @@ public class RegisterFloatFacts {
                         .register(registry);
     }
 
-    /** The fact of {@code change}, which left the float at its current amount. */
+    /**
+     * The fact of {@code change}, which left the float at its current amount and location. {@code
+     * previousLocationId} is where a relocation moved the register from; null for every other change and for a
+     * republish, which moves nothing (#2571).
+     */
     public static @NonNull RegisterFloatChangedV1 factOf(
-            @NonNull RegisterFloat registerFloat, @NonNull RegisterFloatChange change, @NonNull BigDecimal previous) {
+            @NonNull RegisterFloat registerFloat,
+            @NonNull RegisterFloatChange change,
+            @NonNull BigDecimal previous,
+            @Nullable UUID previousLocationId) {
         return new RegisterFloatChangedV1(
                 registerFloat.getRegisterId(),
                 registerFloat.getLocationId(),
@@ -59,7 +67,8 @@ public class RegisterFloatFacts {
                 previous,
                 RegisterFloatChangedV1.Kind.valueOf(change.getKind().name()),
                 change.getEffectiveDate(),
-                change.getJournalEntryId());
+                change.getJournalEntryId(),
+                previousLocationId);
     }
 
     /** Queues the fact; must run inside the transaction that changed the float. */

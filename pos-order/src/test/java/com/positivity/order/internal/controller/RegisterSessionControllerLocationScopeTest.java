@@ -98,6 +98,9 @@ class RegisterSessionControllerLocationScopeTest {
     @MockitoBean
     private RegisterSessionService registerSessionService;
 
+    @MockitoBean
+    private com.positivity.order.internal.service.CashMovementApprovalService cashMovementApprovalService;
+
     @AfterEach
     void clearCaller() {
         TestSecurityContextHolder.clearContext();
@@ -151,6 +154,7 @@ class RegisterSessionControllerLocationScopeTest {
                 null,
                 null,
                 false,
+                "USD",
                 null,
                 Instant.parse("2026-09-07T08:00:00Z"),
                 null,

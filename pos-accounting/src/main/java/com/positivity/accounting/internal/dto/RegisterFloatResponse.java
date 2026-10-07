@@ -9,15 +9,18 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 /**
- * The outcome of a float command (#2511): the register's float before and after, and the journal
- * entry that moved it, by id and by number (ADR-0064).
+ * The outcome of a float command (#2511, #2571): the register's float before and after, and the journal
+ * entry that moved it, by id and by number (ADR-0064). A relocation of a zero float posts nothing, so both
+ * are null.
  */
-@Schema(description = "A register's change float after a go-live or Change float command")
+@Schema(description = "A register's change float after a go-live, Change float or relocation command")
 public record RegisterFloatResponse(
         @Schema(description = "The register (pos-order's terminalId)", example = "T-1", requiredMode = REQUIRED)
         String registerId,
 
-        @Schema(description = "The location the register belongs to", requiredMode = REQUIRED)
+        @Schema(
+                description = "The location the register belongs to; after a relocation, the destination",
+                requiredMode = REQUIRED)
         UUID locationId,
 
         @Schema(description = "What changed the float", requiredMode = REQUIRED)
@@ -32,10 +35,13 @@ public record RegisterFloatResponse(
         @Schema(description = "The date the entry is dated on", requiredMode = REQUIRED)
         LocalDate effectiveDate,
 
-        @Schema(description = "The journal entry the command posted", requiredMode = REQUIRED)
+        @Schema(
+                description = "The journal entry the command posted; null for a relocation of a zero float, which"
+                        + " posts nothing",
+                nullable = true)
         UUID journalEntryId,
 
-        @Schema(description = "That entry's number", example = "JE-202610-000042")
+        @Schema(description = "That entry's number; null when no entry posted", example = "JE-202610-000042")
         String journalEntryNumber,
 
         @Schema(description = "True when this answers a replayed requestId with the first result")

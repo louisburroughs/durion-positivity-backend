@@ -2,11 +2,15 @@ package com.positivity.order.internal.repository;
 
 import com.positivity.order.internal.entity.RegisterSession;
 import com.positivity.order.internal.entity.RegisterSessionStatus;
+import jakarta.persistence.LockModeType;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface RegisterSessionRepository extends JpaRepository<RegisterSession, UUID> {
 
@@ -27,4 +31,16 @@ public interface RegisterSessionRepository extends JpaRepository<RegisterSession
     Optional<RegisterSession> findFirstByTerminalIdOrderByOpenedAtDesc(String terminalId);
 
     List<RegisterSession> findByTerminalIdOrderByOpenedAtDesc(String terminalId);
+
+    /** The terminal's sessions in the given statuses (OPEN and CLOSING: the drawer that holds it). */
+    List<RegisterSession> findByTerminalIdAndStatusIn(String terminalId, Collection<RegisterSessionStatus> statuses);
+
+    /**
+     * The session, row-locked for the rest of the transaction (CAP:550 S16, #2512): cash movements and
+     * approvals of one session are serialised on it, so a running total per reason is computed over
+     * every movement already committed and a single-use approval is used once.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select s from RegisterSession s where s.sessionId = :sessionId")
+    Optional<RegisterSession> findByIdForUpdate(@Param("sessionId") UUID sessionId);
 }

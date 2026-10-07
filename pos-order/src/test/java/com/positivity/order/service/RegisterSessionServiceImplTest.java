@@ -3,6 +3,7 @@ package com.positivity.order.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -15,24 +16,30 @@ import com.positivity.order.internal.dto.RegisterSessionSummary;
 import com.positivity.order.internal.dto.SessionReport;
 import com.positivity.order.internal.entity.CashMovement;
 import com.positivity.order.internal.entity.CashMovementType;
+import com.positivity.order.internal.entity.ExtAccountingRegisterFloat;
 import com.positivity.order.internal.entity.OrderPaymentRecord;
 import com.positivity.order.internal.entity.RegisterSession;
 import com.positivity.order.internal.entity.RegisterSessionStatus;
 import com.positivity.order.internal.entity.SalesOrderStatus;
+import com.positivity.order.internal.exception.RegisterFloatLocationMismatchException;
 import com.positivity.order.internal.exception.RegisterSessionConflictException;
 import com.positivity.order.internal.exception.RegisterSessionNotFoundException;
 import com.positivity.order.internal.exception.SessionCloseBlockedException;
 import com.positivity.order.internal.repository.CashMovementRepository;
+import com.positivity.order.internal.repository.ExtAccountingPettyExpenseCategoryRepository;
+import com.positivity.order.internal.repository.ExtAccountingRegisterFloatRepository;
 import com.positivity.order.internal.repository.OrderPaymentRecordRepository;
 import com.positivity.order.internal.repository.RegisterSessionRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
 import com.positivity.order.internal.security.OrderPermissions;
 import com.positivity.order.internal.service.model.CashMovementCommand;
 import com.positivity.order.internal.service.model.OpenSessionCommand;
+import com.positivity.order.internal.service.model.SessionPolicyView;
 import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.security.common.LocationAncestorResolver;
 import com.positivity.security.common.LocationScope;
 import com.positivity.security.common.LocationScopeDeniedException;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -50,11 +57,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * Unit tests for register sessions and cash management (parity stories G1/G2, spec R6.1–R6.6).
@@ -85,10 +92,28 @@ class RegisterSessionServiceImplTest {
     private final com.positivity.order.internal.repository.ExtCustomerRepository extCustomerRepository =
             org.mockito.Mockito.mock(com.positivity.order.internal.repository.ExtCustomerRepository.class);
 
+    @Mock
+    private SessionPolicyService sessionPolicyService;
+
+    @Mock
+    private CashMovementApprovalService approvalService;
+
+    @Mock
+    private ExtAccountingRegisterFloatRepository registerFloatRepository;
+
+    @Mock
+    private ExtAccountingPettyExpenseCategoryRepository categoryRepository;
+
     private RegisterSessionServiceImpl service;
+
+    /** The drawer policy's defaults (CAP:550 S16): tolerance 5.00, petty on at 50.00, COD off. */
+    static final SessionPolicyView DEFAULT_POLICY =
+            new SessionPolicyView(null, true, new BigDecimal("50.0000"), false, null, new BigDecimal("5.0000"), "USD");
 
     @org.junit.jupiter.api.BeforeEach
     void setUp() {
+        @SuppressWarnings("unchecked")
+        ObjectProvider<MeterRegistry> meters = org.mockito.Mockito.mock(ObjectProvider.class);
         service = new RegisterSessionServiceImpl(
                 registerSessionRepository,
                 cashMovementRepository,
@@ -96,8 +121,14 @@ class RegisterSessionServiceImplTest {
                 paymentRecordRepository,
                 domainEventPublisher,
                 new com.positivity.order.internal.service.HouseAccountReplica(extCustomerRepository),
-                clock);
-        ReflectionTestUtils.setField(service, "authorizedDifferenceLimit", new BigDecimal("5.00"));
+                sessionPolicyService,
+                approvalService,
+                registerFloatRepository,
+                categoryRepository,
+                new com.positivity.order.internal.config.FunctionalCurrency("USD"),
+                clock,
+                meters);
+        org.mockito.Mockito.lenient().when(sessionPolicyService.current()).thenReturn(DEFAULT_POLICY);
         // Default caller: a pre-rollout token (no loc_* claims), which ADR-0061 treats as unscoped
         // so the existing expectations are unchanged (#1872). Tests that need authorities or a
         // scope replace it. Set here rather than in a second @BeforeEach because JUnit does not
@@ -154,6 +185,7 @@ class RegisterSessionServiceImplTest {
                 .locationId(LOCATION)
                 .openedByClerkId("clerk-1")
                 .status(RegisterSessionStatus.OPEN)
+                .currencyCode("USD")
                 .openingFloat(new BigDecimal("100.0000"))
                 .openedAt(Instant.parse("2026-07-23T08:00:00Z"))
                 .build();
@@ -178,37 +210,164 @@ class RegisterSessionServiceImplTest {
     }
 
     @Test
-    @DisplayName("RSS-001: opening a session with no prior close defaults float to zero")
+    @DisplayName("RSS-001 (CAP:550 S16): a register with no configured float opens at zero, opened by the caller")
     void open_defaultsFloatToZero() {
         when(registerSessionRepository.existsByTerminalIdAndStatusIn(eq(TERMINAL), any()))
                 .thenReturn(false);
-        when(registerSessionRepository.findFirstByTerminalIdOrderByOpenedAtDesc(TERMINAL))
-                .thenReturn(Optional.empty());
+        when(registerFloatRepository.findByRegisterId(TERMINAL)).thenReturn(Optional.empty());
         when(registerSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        RegisterSessionSummary summary =
-                service.openSession(new OpenSessionCommand(TERMINAL, LOCATION, null, "clerk-1"));
+        RegisterSessionSummary summary = service.openSession(new OpenSessionCommand(TERMINAL, LOCATION));
 
         assertThat(summary.status()).isEqualTo("OPEN");
         assertThat(summary.openingFloat()).isEqualByComparingTo("0.00");
+        // ADR-0018: the opener is the security context's caller, never a request field.
+        assertThat(summary.openedByClerkId()).isEqualTo("opener");
+        // MAJOR-1 (ADR-0067 R-2): the drawer is stamped with the functional currency when it opens.
+        assertThat(summary.currencyCode()).isEqualTo("USD");
+        verify(registerSessionRepository).save(argThat(saved -> "USD".equals(saved.getCurrencyCode())));
     }
 
     @Test
-    @DisplayName("RSS-002: opening float carries forward from the previous counted close")
-    void open_carriesForwardPreviousClose() {
+    @DisplayName("RSS-002 (CAP:550 S16 AC7, AW16): the opening float is the configured float, not the previous count")
+    void open_usesConfiguredFloat() {
         RegisterSession prior = openSession(UUID.randomUUID());
         prior.setStatus(RegisterSessionStatus.CLOSED);
         prior.setCountedCash(new BigDecimal("275.5000"));
         when(registerSessionRepository.existsByTerminalIdAndStatusIn(eq(TERMINAL), any()))
                 .thenReturn(false);
-        when(registerSessionRepository.findFirstByTerminalIdOrderByOpenedAtDesc(TERMINAL))
+        // The previous count is never the opening float; with a float copy its location wins (#2573).
+        org.mockito.Mockito.lenient()
+                .when(registerSessionRepository.findFirstByTerminalIdOrderByOpenedAtDesc(TERMINAL))
                 .thenReturn(Optional.of(prior));
+        when(registerFloatRepository.findByRegisterId(TERMINAL))
+                .thenReturn(Optional.of(ExtAccountingRegisterFloat.builder()
+                        .registerId(TERMINAL)
+                        .locationId(LOCATION)
+                        .amount(new BigDecimal("200.0000"))
+                        .build()));
         when(registerSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        RegisterSessionSummary summary = service.openSession(new OpenSessionCommand(TERMINAL, null, null, "clerk-1"));
+        RegisterSessionSummary summary = service.openSession(new OpenSessionCommand(TERMINAL, null));
 
-        assertThat(summary.openingFloat()).isEqualByComparingTo("275.50");
+        assertThat(summary.openingFloat()).isEqualByComparingTo("200.00");
         assertThat(summary.locationId()).isEqualTo(LOCATION);
+    }
+
+    @Test
+    @DisplayName("RSS-002b (CAP:550 S16, decision l7): a negative configured float (after an accounting reversal) opens"
+            + " the drawer at zero")
+    void open_negativeConfiguredFloat() {
+        when(registerSessionRepository.existsByTerminalIdAndStatusIn(eq(TERMINAL), any()))
+                .thenReturn(false);
+        when(registerFloatRepository.findByRegisterId(TERMINAL))
+                .thenReturn(Optional.of(ExtAccountingRegisterFloat.builder()
+                        .registerId(TERMINAL)
+                        .locationId(LOCATION)
+                        .amount(new BigDecimal("-25.0000"))
+                        .build()));
+        when(registerSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        RegisterSessionSummary summary = service.openSession(new OpenSessionCommand(TERMINAL, LOCATION));
+
+        assertThat(summary.openingFloat()).isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    @DisplayName("RSS-002c (#2573): opening at A while the register's float is held at B is 422, no session row")
+    void open_atAnotherLocationThanTheFloatIsRefused() {
+        when(registerSessionRepository.existsByTerminalIdAndStatusIn(eq(TERMINAL), any()))
+                .thenReturn(false);
+        when(registerFloatRepository.findByRegisterId(TERMINAL))
+                .thenReturn(Optional.of(ExtAccountingRegisterFloat.builder()
+                        .registerId(TERMINAL)
+                        .locationId(OTHER_LOCATION)
+                        .amount(new BigDecimal("200.0000"))
+                        .build()));
+
+        assertThatThrownBy(() -> service.openSession(new OpenSessionCommand(TERMINAL, LOCATION)))
+                .isInstanceOf(RegisterFloatLocationMismatchException.class)
+                .satisfies(e -> {
+                    RegisterFloatLocationMismatchException mismatch = (RegisterFloatLocationMismatchException) e;
+                    assertThat(mismatch.terminalId()).isEqualTo(TERMINAL);
+                    assertThat(mismatch.requestedLocationId()).isEqualTo(LOCATION);
+                    // An unscoped caller may see the float's location.
+                    assertThat(mismatch.floatLocationId()).isEqualTo(OTHER_LOCATION);
+                });
+        verify(registerSessionRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("RSS-002d (#2573): a caller whose scope does not cover the float's location is not told it")
+    void open_mismatchHidesAnOutOfScopeFloatLocation() {
+        authenticate(openScopedTo(REGION_NODE));
+        when(registerSessionRepository.existsByTerminalIdAndStatusIn(eq(TERMINAL), any()))
+                .thenReturn(false);
+        when(registerFloatRepository.findByRegisterId(TERMINAL))
+                .thenReturn(Optional.of(ExtAccountingRegisterFloat.builder()
+                        .registerId(TERMINAL)
+                        .locationId(OTHER_LOCATION)
+                        .amount(new BigDecimal("200.0000"))
+                        .build()));
+
+        assertThatThrownBy(() -> service.openSession(new OpenSessionCommand(TERMINAL, LOCATION)))
+                .isInstanceOf(RegisterFloatLocationMismatchException.class)
+                .satisfies(e -> assertThat(((RegisterFloatLocationMismatchException) e).floatLocationId())
+                        .isNull())
+                .satisfies(e -> assertThat(e.getMessage()).doesNotContain(OTHER_LOCATION.toString()));
+        verify(registerSessionRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("RSS-002e (#2573): with no locationId the drawer opens where its float is held, not where it last was")
+    void open_withoutLocationFollowsTheFloat() {
+        RegisterSession prior = openSession(UUID.randomUUID());
+        prior.setStatus(RegisterSessionStatus.CLOSED);
+        when(registerSessionRepository.existsByTerminalIdAndStatusIn(eq(TERMINAL), any()))
+                .thenReturn(false);
+        org.mockito.Mockito.lenient()
+                .when(registerSessionRepository.findFirstByTerminalIdOrderByOpenedAtDesc(TERMINAL))
+                .thenReturn(Optional.of(prior)); // previous session at LOCATION
+        when(registerFloatRepository.findByRegisterId(TERMINAL))
+                .thenReturn(Optional.of(ExtAccountingRegisterFloat.builder()
+                        .registerId(TERMINAL)
+                        .locationId(OTHER_LOCATION)
+                        .amount(new BigDecimal("180.0000"))
+                        .build()));
+        when(registerSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        RegisterSessionSummary summary = service.openSession(new OpenSessionCommand(TERMINAL, null));
+
+        assertThat(summary.locationId()).isEqualTo(OTHER_LOCATION);
+        assertThat(summary.openingFloat()).isEqualByComparingTo("180.00");
+    }
+
+    @Test
+    @DisplayName("RSS-006b (CAP:550 S16 AC6): with the tolerance lowered to 3.00, an over/short of 4.00 needs"
+            + " approve_variance")
+    void confirmClose_policyToleranceApplies() {
+        org.mockito.Mockito.when(sessionPolicyService.current())
+                .thenReturn(new SessionPolicyView(
+                        1L, true, new BigDecimal("50.0000"), false, null, new BigDecimal("3.0000"), "USD"));
+        authorize(OrderPermissions.ORDER_SESSION_CLOSE);
+        UUID id = UUID.randomUUID();
+        RegisterSession closing = openSession(id);
+        closing.setStatus(RegisterSessionStatus.CLOSING);
+        closing.setCountedCash(new BigDecimal("154.0000")); // theoretical 150 -> +4 over (beyond 3, within 5)
+        when(registerSessionRepository.findById(id)).thenReturn(Optional.of(closing));
+        when(salesOrderRepository.existsBySessionIdAndStatus(id, SalesOrderStatus.PENDING_PAYMENT))
+                .thenReturn(false);
+        when(paymentRecordRepository.findBySessionId(id)).thenReturn(List.of(cashSettled("50.00")));
+        when(cashMovementRepository.findBySessionIdOrderByOccurredAtAsc(id)).thenReturn(List.of());
+
+        assertThatThrownBy(() -> service.confirmClose(id)).isInstanceOf(AccessDeniedException.class);
+        verify(registerSessionRepository, never()).save(any());
+
+        authorize(OrderPermissions.ORDER_SESSION_APPROVE_VARIANCE);
+        when(registerSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        RegisterSessionSummary closed = service.confirmClose(id);
+        assertThat(closed.varianceApproved()).isTrue();
+        assertThat(closed.overShort()).isEqualByComparingTo("4.00");
     }
 
     @Test
@@ -217,7 +376,7 @@ class RegisterSessionServiceImplTest {
         when(registerSessionRepository.existsByTerminalIdAndStatusIn(eq(TERMINAL), any()))
                 .thenReturn(true);
 
-        assertThatThrownBy(() -> service.openSession(new OpenSessionCommand(TERMINAL, LOCATION, null, "clerk-1")))
+        assertThatThrownBy(() -> service.openSession(new OpenSessionCommand(TERMINAL, LOCATION)))
                 .isInstanceOf(RegisterSessionConflictException.class);
         verify(registerSessionRepository, never()).save(any());
     }
@@ -229,7 +388,7 @@ class RegisterSessionServiceImplTest {
         when(registerSessionRepository.existsByTerminalIdAndStatusIn(eq(TERMINAL), any()))
                 .thenReturn(true);
 
-        assertThatThrownBy(() -> service.openSession(new OpenSessionCommand(TERMINAL, LOCATION, null, "clerk-1")))
+        assertThatThrownBy(() -> service.openSession(new OpenSessionCommand(TERMINAL, LOCATION)))
                 .isInstanceOf(RegisterSessionConflictException.class);
         verify(registerSessionRepository, never()).save(any());
     }
@@ -241,9 +400,20 @@ class RegisterSessionServiceImplTest {
         RegisterSession closing = openSession(id);
         closing.setStatus(RegisterSessionStatus.CLOSING);
         when(registerSessionRepository.findById(id)).thenReturn(Optional.of(closing));
+        when(registerSessionRepository.findByIdForUpdate(id)).thenReturn(Optional.of(closing));
 
-        assertThatThrownBy(() -> service.recordCashMovement(
-                        new CashMovementCommand(id, "PAID_IN", new BigDecimal("10.00"), "float top-up", "clerk-1")))
+        assertThatThrownBy(() -> service.recordCashMovement(new CashMovementCommand(
+                        id,
+                        com.positivity.shared.id.UUIDv7Generator.generate(),
+                        "BANK_DROP",
+                        new BigDecimal("10.00"),
+                        "USD",
+                        null,
+                        null,
+                        "BAG-1",
+                        null,
+                        null,
+                        null)))
                 .isInstanceOf(RegisterSessionConflictException.class);
     }
 
@@ -342,7 +512,7 @@ class RegisterSessionServiceImplTest {
                 .sessionId(id)
                 .movementType(CashMovementType.PAID_OUT)
                 .amount(new BigDecimal("20.0000"))
-                .reason("bank run")
+                .note("bank run")
                 .clerkId("clerk-1")
                 .occurredAt(Instant.now())
                 .build();
@@ -461,11 +631,11 @@ class RegisterSessionServiceImplTest {
         void inReach_opens() {
             authenticate(openScopedTo(REGION_NODE), OrderPermissions.ORDER_SESSION_OPEN);
             stubNoActiveSessionAndSave();
-            when(registerSessionRepository.findFirstByTerminalIdOrderByOpenedAtDesc(TERMINAL))
+            org.mockito.Mockito.lenient()
+                    .when(registerSessionRepository.findFirstByTerminalIdOrderByOpenedAtDesc(TERMINAL))
                     .thenReturn(Optional.empty());
 
-            RegisterSessionSummary summary =
-                    service.openSession(new OpenSessionCommand(TERMINAL, LOCATION, null, "clerk-1"));
+            RegisterSessionSummary summary = service.openSession(new OpenSessionCommand(TERMINAL, LOCATION));
 
             assertThat(summary.locationId()).isEqualTo(LOCATION);
             assertThat(summary.status()).isEqualTo("OPEN");
@@ -477,11 +647,11 @@ class RegisterSessionServiceImplTest {
             authenticate(openScopedTo(REGION_NODE), OrderPermissions.ORDER_SESSION_OPEN);
             when(registerSessionRepository.existsByTerminalIdAndStatusIn(eq(TERMINAL), any()))
                     .thenReturn(false);
-            when(registerSessionRepository.findFirstByTerminalIdOrderByOpenedAtDesc(TERMINAL))
+            org.mockito.Mockito.lenient()
+                    .when(registerSessionRepository.findFirstByTerminalIdOrderByOpenedAtDesc(TERMINAL))
                     .thenReturn(Optional.empty());
 
-            assertThatThrownBy(() ->
-                            service.openSession(new OpenSessionCommand(TERMINAL, OTHER_LOCATION, null, "clerk-1")))
+            assertThatThrownBy(() -> service.openSession(new OpenSessionCommand(TERMINAL, OTHER_LOCATION)))
                     .isInstanceOf(LocationScopeDeniedException.class)
                     .asInstanceOf(
                             org.assertj.core.api.InstanceOfAssertFactories.type(LocationScopeDeniedException.class))
@@ -502,10 +672,11 @@ class RegisterSessionServiceImplTest {
             prior.setLocationId(OTHER_LOCATION);
             when(registerSessionRepository.existsByTerminalIdAndStatusIn(eq(TERMINAL), any()))
                     .thenReturn(false);
-            when(registerSessionRepository.findFirstByTerminalIdOrderByOpenedAtDesc(TERMINAL))
+            org.mockito.Mockito.lenient()
+                    .when(registerSessionRepository.findFirstByTerminalIdOrderByOpenedAtDesc(TERMINAL))
                     .thenReturn(Optional.of(prior));
 
-            assertThatThrownBy(() -> service.openSession(new OpenSessionCommand(TERMINAL, null, null, "clerk-1")))
+            assertThatThrownBy(() -> service.openSession(new OpenSessionCommand(TERMINAL, null)))
                     .isInstanceOf(LocationScopeDeniedException.class);
             verify(registerSessionRepository, never()).save(any());
         }
@@ -517,11 +688,11 @@ class RegisterSessionServiceImplTest {
             RegisterSession prior = openSession(UUID.randomUUID());
             prior.setStatus(RegisterSessionStatus.CLOSED);
             stubNoActiveSessionAndSave();
-            when(registerSessionRepository.findFirstByTerminalIdOrderByOpenedAtDesc(TERMINAL))
+            org.mockito.Mockito.lenient()
+                    .when(registerSessionRepository.findFirstByTerminalIdOrderByOpenedAtDesc(TERMINAL))
                     .thenReturn(Optional.of(prior));
 
-            RegisterSessionSummary summary =
-                    service.openSession(new OpenSessionCommand(TERMINAL, null, null, "clerk-1"));
+            RegisterSessionSummary summary = service.openSession(new OpenSessionCommand(TERMINAL, null));
 
             assertThat(summary.locationId()).isEqualTo(LOCATION);
         }
@@ -532,10 +703,11 @@ class RegisterSessionServiceImplTest {
             authenticate(openScopedTo(REGION_NODE), OrderPermissions.ORDER_SESSION_OPEN);
             when(registerSessionRepository.existsByTerminalIdAndStatusIn(eq(TERMINAL), any()))
                     .thenReturn(false);
-            when(registerSessionRepository.findFirstByTerminalIdOrderByOpenedAtDesc(TERMINAL))
+            org.mockito.Mockito.lenient()
+                    .when(registerSessionRepository.findFirstByTerminalIdOrderByOpenedAtDesc(TERMINAL))
                     .thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> service.openSession(new OpenSessionCommand(TERMINAL, null, null, "clerk-1")))
+            assertThatThrownBy(() -> service.openSession(new OpenSessionCommand(TERMINAL, null)))
                     .isInstanceOf(LocationScopeDeniedException.class);
             verify(registerSessionRepository, never()).save(any());
         }
@@ -545,11 +717,11 @@ class RegisterSessionServiceImplTest {
         void unscopedCaller_isUnchanged() {
             authenticate(LocationScope.unscoped(), OrderPermissions.ORDER_SESSION_OPEN);
             stubNoActiveSessionAndSave();
-            when(registerSessionRepository.findFirstByTerminalIdOrderByOpenedAtDesc(TERMINAL))
+            org.mockito.Mockito.lenient()
+                    .when(registerSessionRepository.findFirstByTerminalIdOrderByOpenedAtDesc(TERMINAL))
                     .thenReturn(Optional.empty());
 
-            RegisterSessionSummary summary =
-                    service.openSession(new OpenSessionCommand(TERMINAL, OTHER_LOCATION, null, "clerk-1"));
+            RegisterSessionSummary summary = service.openSession(new OpenSessionCommand(TERMINAL, OTHER_LOCATION));
 
             assertThat(summary.locationId()).isEqualTo(OTHER_LOCATION);
         }
@@ -561,11 +733,11 @@ class RegisterSessionServiceImplTest {
                     LocationScope.of(Set.of(), Set.of(), Optional.of(Set.of(REGION_NODE)), true, RESOLVER),
                     OrderPermissions.ORDER_SESSION_OPEN);
             stubNoActiveSessionAndSave();
-            when(registerSessionRepository.findFirstByTerminalIdOrderByOpenedAtDesc(TERMINAL))
+            org.mockito.Mockito.lenient()
+                    .when(registerSessionRepository.findFirstByTerminalIdOrderByOpenedAtDesc(TERMINAL))
                     .thenReturn(Optional.empty());
 
-            RegisterSessionSummary summary =
-                    service.openSession(new OpenSessionCommand(TERMINAL, OTHER_LOCATION, null, "clerk-1"));
+            RegisterSessionSummary summary = service.openSession(new OpenSessionCommand(TERMINAL, OTHER_LOCATION));
 
             assertThat(summary.locationId()).isEqualTo(OTHER_LOCATION);
         }

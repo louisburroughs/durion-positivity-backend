@@ -308,6 +308,64 @@ class SecurityGatewayConfigTest {
                 .isNotNull();
     }
 
+    /**
+     * CAP:550 S16 (#2512, AW31): pos-security-service's step-up credential check is internal — the
+     * gateway's generic security-service route must never carry it to the edge, or anyone signed in
+     * could probe passwords through it.
+     */
+    @Test
+    void stepUpCredentialCheck_isNeverForwarded() {
+        GlobalFilter filter = new SecurityGatewayConfig(
+                        TEST_SECRET,
+                        false,
+                        Set.of("HS256"),
+                        new GatewayAuthProperties(),
+                        new SimpleMeterRegistry(),
+                        TEST_CLOCK)
+                .authFilter();
+        for (String path : List.of(
+                "/security-service/internal/v1/auth/step-up",
+                "/security-service/v1/internal/v1/auth/step-up",
+                // M2 (review of #2569): spellings a downstream service would still resolve to /internal
+                "/security-service//internal/v1/auth/step-up",
+                "/security-service/./internal/v1/auth/step-up",
+                "/security-service/v1/../internal/v1/auth/step-up",
+                "/security-service/%2Finternal/v1/auth/step-up",
+                "/security-service%2Finternal%2Fv1%2Fauth%2Fstep-up",
+                "/security-service/internal;x=y/v1/auth/step-up",
+                "/security-service/INTERNAL/v1/auth/step-up")) {
+            AtomicReference<Boolean> forwarded = new AtomicReference<>(false);
+            // URI.create keeps the raw encoding as a client sends it (a template would re-encode the %).
+            MockServerWebExchange exchange = MockServerWebExchange.from(
+                    MockServerHttpRequest.method(org.springframework.http.HttpMethod.POST, java.net.URI.create(path))
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + buildTenantToken(TENANT_ID))
+                            .build());
+
+            filter.filter(exchange, ex -> {
+                        forwarded.set(true);
+                        return Mono.empty();
+                    })
+                    .block();
+
+            assertThat(forwarded.get()).as(path).isFalse();
+            assertThat(exchange.getResponse().getStatusCode()).as(path).isEqualTo(HttpStatus.FORBIDDEN);
+        }
+    }
+
+    @Test
+    void canonicalPath_resolvesTheSpellingsThatReachInternal() {
+        assertThat(SecurityGatewayConfig.isInternalServicePath("/security-service//internal/x"))
+                .isTrue();
+        assertThat(SecurityGatewayConfig.isInternalServicePath("/security-service/./internal/x"))
+                .isTrue();
+        assertThat(SecurityGatewayConfig.isInternalServicePath("/a/b/../../security-service/internal"))
+                .isTrue();
+        assertThat(SecurityGatewayConfig.isInternalServicePath("/order/v1/orders/internal-notes"))
+                .isFalse();
+        assertThat(SecurityGatewayConfig.isInternalServicePath("/order/v1/orders/sessions"))
+                .isFalse();
+    }
+
     @Test
     void tidClaim_isForwardedAsXTenantId_andInboundCopyIsReplaced() {
         HttpHeaders headers = forward(
@@ -1613,9 +1671,9 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 99")
+    @DisplayName("CATALOG_VERSION is 100")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(99);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(100);
     }
 
     @Test
@@ -1972,8 +2030,11 @@ class SecurityGatewayConfigTest {
         assertThat(GatewayPermissionCatalog.authorityForBit(552)).isEqualTo("PERM_supplier:vendor_remit:approve");
         // catalog v99 (CAP:550 S15, #2511): the register float commands (bit 553)
         assertThat(GatewayPermissionCatalog.authorityForBit(553)).isEqualTo("PERM_accounting:float:manage");
+        // catalog v100 (CAP:550 S16, #2512): the drawer policy and the cash-movement approval (bits 554-555)
+        assertThat(GatewayPermissionCatalog.authorityForBit(554)).isEqualTo("PERM_order:session_policy:manage");
+        assertThat(GatewayPermissionCatalog.authorityForBit(555)).isEqualTo("PERM_order:session:approve_cash_movement");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(554)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(556)).isNull();
     }
 
     @Test

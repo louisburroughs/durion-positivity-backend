@@ -19,3 +19,8 @@ decisions:
     shape: gate
     permission: accounting:float:manage
     reason: The required locationId names the location whose register drawer float changes, and the 1080 line carries it as a dimension; a CONTROLLER scoped to a region may change floats only for that region's registers. Gated in the controller after body validation (#2511)
+  - operation: RegisterFloatController.relocate
+    shape: gate
+    permission: accounting:float:manage
+    fields: fromLocationId, toLocationId
+    reason: A relocation names two locations, the one the register leaves and the one it moves to, and posts a 1080 line at each; a CONTROLLER scoped to a region may move a register only between locations it reaches, so BOTH fields are gated in the controller after body validation. The register's stored location is then required to equal fromLocationId under the row lock (422 FLOAT_REGISTER_LOCATION_MISMATCH, logged, never returned), so naming an in-scope origin cannot move another location's register (#2571, AW32)

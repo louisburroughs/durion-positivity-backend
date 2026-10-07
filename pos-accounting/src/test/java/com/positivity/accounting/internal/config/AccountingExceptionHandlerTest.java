@@ -539,4 +539,43 @@ class AccountingExceptionHandlerTest {
         assertThat(changed.getBody()).isNotNull();
         assertThat(changed.getBody().code()).isEqualTo("PAYMENT_REMAINDER_CHANGED");
     }
+
+    @Test
+    @DisplayName("#2571: a cash-setup refusal naming the record in the way answers with its referenceId and nextAction,"
+            + " and the correlation id in header and body")
+    void cashSetupRefusalWithAReference() {
+        AccountingExceptionHandler handler = new AccountingExceptionHandler(TEST_CLOCK);
+        String session = "019a0000-0000-7000-8000-0000000000c1";
+
+        ResponseEntity<ApiError> response = handler.handleCashSetup(
+                new com.positivity.accounting.internal.exception.CashSetupException(
+                        com.positivity.accounting.internal.exception.CashSetupException.Code
+                                .FLOAT_REGISTER_SESSION_OPEN,
+                        "Register T-1 has an open session " + session + ", opened at 2026-10-07T08:00:00Z",
+                        session,
+                        "Close the register's session, then move the register again."),
+                requestWithHeader(CORRELATION_ID));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().code()).isEqualTo("FLOAT_REGISTER_SESSION_OPEN");
+        assertThat(response.getBody().status()).isEqualTo(422);
+        assertThat(response.getBody().referenceId()).isEqualTo(session);
+        assertThat(response.getBody().nextAction())
+                .isEqualTo("Close the register's session, then move the register again.");
+        assertThat(response.getBody().correlationId()).isEqualTo(CORRELATION_ID);
+        assertThat(response.getHeaders().getFirst(CORRELATION_ID_HEADER)).isEqualTo(CORRELATION_ID);
+
+        // Without a reference, the plain envelope is unchanged.
+        ResponseEntity<ApiError> plain = handler.handleCashSetup(
+                new com.positivity.accounting.internal.exception.CashSetupException(
+                        com.positivity.accounting.internal.exception.CashSetupException.Code
+                                .FLOAT_RELOCATION_NOT_REVERSIBLE,
+                        "A register float relocation entry is never reversed"),
+                requestWithoutHeader());
+        assertThat(plain.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(plain.getBody()).isNotNull();
+        assertThat(plain.getBody().referenceId()).isNull();
+        assertThat(plain.getBody().nextAction()).isNull();
+    }
 }

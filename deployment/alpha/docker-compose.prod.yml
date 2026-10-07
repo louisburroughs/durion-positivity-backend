@@ -166,6 +166,10 @@ services:
     logging: *logging
     # No Kafka flag: pos-order's consumers and outbox are tier-1, always on (ADR-0044 §4, #2463).
     # pos-inventory builds its ext_purchase_order replicas from order.events.v1.
+    environment:
+      # ADR-0067 R-2 (CAP:550 S16): alpha's drawer currency, stated explicitly; pos-order has no
+      # default and fails startup without it. Stage A interim until step A5.
+      POS_ORDER_FUNCTIONAL_CURRENCY: USD
 
   pos-people:
     image: ${ECR_REGISTRY}/durion/pos-people:${BACKEND_TAG}
