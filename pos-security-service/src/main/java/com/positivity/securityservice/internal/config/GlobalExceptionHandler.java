@@ -17,6 +17,7 @@ import com.positivity.securityservice.internal.exception.RoleNotUserAssignableEx
 import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.exception.SelfRegistrationConflictException;
 import com.positivity.securityservice.internal.exception.SelfRegistrationReviewCaseNotFoundException;
+import com.positivity.securityservice.internal.exception.StepUpDeniedException;
 import com.positivity.securityservice.internal.exception.TemplateRoleImmutableException;
 import com.positivity.securityservice.internal.exception.TenantNotFoundException;
 import com.positivity.securityservice.internal.exception.TenantNotImpersonableException;
@@ -301,6 +302,26 @@ public class GlobalExceptionHandler {
                 "VALIDATION_ERROR",
                 ex.getMessage() != null ? ex.getMessage() : "Invalid request parameters",
                 correlationId);
+    }
+
+    /**
+     * Handles StepUpDeniedException — a step-up credential check failed (CAP:550 S16, #2512; AW31).
+     *
+     * **HTTP Status:** 403 Forbidden with one code, {@code STEP_UP_DENIED}, and one message for every
+     * reason (wrong credentials, unknown, disabled, expired or locked account): the body must not tell
+     * a caller which, and it is never 401, which the calling register would read as its own session
+     * failing. The reason is logged by the service.
+     *
+     * @param ex      the exception
+     * @param request the web request
+     * @return error response with 403 status and correlation ID
+     */
+    @ExceptionHandler(StepUpDeniedException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public ResponseEntity<ApiError> handleStepUpDeniedException(StepUpDeniedException ex, WebRequest request) {
+        String correlationId = extractCorrelationId(request);
+        log.warn("Step-up denied (correlationId={})", correlationId);
+        return respond(HttpStatus.FORBIDDEN, "STEP_UP_DENIED", "The credentials could not be verified", correlationId);
     }
 
     /**

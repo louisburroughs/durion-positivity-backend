@@ -531,6 +531,33 @@ class GlobalExceptionHandlerTest {
     }
 
     // ---------------------------------------------------------------
+    // handleStepUpDeniedException
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("handleStepUpDeniedException")
+    class HandleStepUpDeniedException {
+
+        @Test
+        @DisplayName("CAP:550 S16: 403 STEP_UP_DENIED with one message whatever the reason, never 401")
+        void returns403WithoutTheReason() {
+            for (String reason : java.util.List.of("bad_credentials", "account_locked", "account_disabled")) {
+                ResponseEntity<ApiError> response = sut.handleStepUpDeniedException(
+                        new com.positivity.securityservice.internal.exception.StepUpDeniedException(reason),
+                        requestWithHeader());
+
+                assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+                assertThat(response.getBody()).isNotNull();
+                assertThat(response.getBody().code()).isEqualTo("STEP_UP_DENIED");
+                assertThat(response.getBody().message())
+                        .isEqualTo("The credentials could not be verified")
+                        .doesNotContain(reason);
+                assertThat(response.getHeaders().getFirst("X-Correlation-Id")).isEqualTo(CORRELATION_ID);
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------
     // handleBadRequestExceptions
     // ---------------------------------------------------------------
 
@@ -1076,6 +1103,11 @@ class GlobalExceptionHandlerTest {
                     Named.of("handleNoRolesAssignedException", (HandlerInvocation)
                             request -> handler.handleNoRolesAssignedException(
                                     new NoRolesAssignedException("User has no roles assigned"), request)),
+                    Named.of("handleStepUpDeniedException", (HandlerInvocation)
+                            request -> handler.handleStepUpDeniedException(
+                                    new com.positivity.securityservice.internal.exception.StepUpDeniedException(
+                                            "bad_credentials"),
+                                    request)),
                     Named.of("handleTokenUserIdMissingException", (HandlerInvocation)
                             request -> handler.handleTokenUserIdMissingException(
                                     new com.positivity.securityservice.internal.exception.TokenUserIdMissingException(
