@@ -88,7 +88,7 @@ class StatementLineSeedIT extends PostgresCommittingTestBase {
     }
 
     @Test
-    @DisplayName("AC1/AC2: the named lines carry their accounts, 2350 and 4930/6115 fall on computed lines, profit not"
+    @DisplayName("AC1/AC2: the named lines carry their accounts, 2350 and 4930/6040 fall on computed lines, profit not"
             + " yet closed balances the sheet, and net income is revenue less expenses")
     void seededLinesAndComputedLines() {
         // One balanced day of business: sales on account and over the counter, inventory bought on
@@ -106,7 +106,7 @@ class StatementLineSeedIT extends PostgresCommittingTestBase {
         post(line("1000", "40.00", "0"), line("2350", "0", "40.00"));
         post(line("1090", "12.50", "0"), line("2300", "0", "12.50"));
         post(line("1000", "7.00", "0"), line("4930", "0", "7.00"));
-        post(line("6115", "3.00", "0"), line("1000", "0", "3.00"));
+        post(line("6040", "3.00", "0"), line("1000", "0", "3.00"));
 
         BalanceSheetReport balanceSheet = financialReportingService.generateBalanceSheet(DAY);
         Map<String, BigDecimal> bs = balanceSheet.getLineItems();
@@ -157,7 +157,7 @@ class StatementLineSeedIT extends PostgresCommittingTestBase {
         assertThat(is.get("IS_CARD_PROCESSING_FEES")).isEqualByComparingTo("25.00");
         assertThat(is.get("IS_OTHER_INCOME")).as("4930 Cash Over").isEqualByComparingTo("7.00");
         assertThat(is.get("IS_OTHER_EXPENSES"))
-                .as("6115 Cash Short (6040 after S15)")
+                .as("6040 Cash Short (6115 before AW30)")
                 .isEqualByComparingTo("3.00");
         assertThat(incomeStatement.getTotalRevenue()).isEqualByComparingTo("1827.00");
         assertThat(incomeStatement.getTotalExpenses()).isEqualByComparingTo("348.00");
@@ -170,12 +170,8 @@ class StatementLineSeedIT extends PostgresCommittingTestBase {
     @DisplayName("AC2 (AW30): a REVENUE account such as 4940 Rubber Dust Sales with no named line is other income,"
             + " never an expense")
     void rubberDustSalesIsOtherIncome() {
-        glAccountService.createGLAccount(GLAccountCreateRequest.builder()
-                .accountCode("4940")
-                .accountName("Rubber Dust Sales")
-                .accountType(AccountType.REVENUE)
-                .reconcilable(false)
-                .build());
+        // The default tenant holds 4940 Rubber Dust Sales Income, V2's 6900 renumbered by AW30 (#2511), with a Labor
+        // & Overhead line and no income-statement line.
         post(line("1000", "55.00", "0"), line("4940", "0", "55.00"));
 
         IncomeStatementReport report = financialReportingService.generateIncomeStatement(DAY, DAY);
@@ -276,8 +272,8 @@ class StatementLineSeedIT extends PostgresCommittingTestBase {
                                     + " AND statement_type = 'BALANCE_SHEET'",
                             Integer.class,
                             tenant))
-                    .as("tenant %s: the eight balance-sheet mappings", tenant)
-                    .isEqualTo(8);
+                    .as("tenant %s: the eight balance-sheet mappings, and 1080, 3000 and 3900 (#2511)", tenant)
+                    .isEqualTo(11);
             assertThat(owner.queryForObject(
                             "SELECT count(*) FROM statement_line_mappings WHERE tenant_id = ? AND statement_type ="
                                     + " 'INCOME_STATEMENT' AND statement_line_code = 'IS_COST_OF_PARTS_SOLD'",

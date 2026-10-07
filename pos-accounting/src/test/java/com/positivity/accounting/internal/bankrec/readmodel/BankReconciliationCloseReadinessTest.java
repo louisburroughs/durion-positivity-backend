@@ -132,7 +132,13 @@ class BankReconciliationCloseReadinessTest {
     private IncompleteImportLookup importLookup;
 
     @Mock
-    private com.positivity.accounting.internal.service.GLMappingResolver glMappingResolver;
+    private com.positivity.accounting.internal.repository.PostingCategoryRepository postingCategories;
+
+    @Mock
+    private com.positivity.accounting.internal.repository.MappingKeyRepository mappingKeys;
+
+    @Mock
+    private com.positivity.accounting.internal.repository.GLMappingRepository glMappings;
 
     private BankReconciliationCloseReadiness service;
     private AccountingPeriod period;
@@ -154,7 +160,9 @@ class BankReconciliationCloseReadinessTest {
                 ledger,
                 ledgerEntries,
                 importLookups,
-                glMappingResolver);
+                postingCategories,
+                mappingKeys,
+                glMappings);
         period = new AccountingPeriod();
         period.setPeriodId(UUID.randomUUID());
         period.setPeriodCode("2026-08");
@@ -441,8 +449,22 @@ class BankReconciliationCloseReadinessTest {
             + " never blocks close")
     void openingBalanceEquityWarns() {
         UUID equity = UUID.fromString("019a0000-0000-7000-8000-000000003900");
-        when(glMappingResolver.resolveGLAccount(eq("REGISTER_FLOAT"), eq("OPENING_BALANCE_EQUITY"), any()))
-                .thenReturn(equity);
+        com.positivity.accounting.internal.entity.PostingCategory category =
+                new com.positivity.accounting.internal.entity.PostingCategory();
+        category.setPostingCategoryId(UUID.randomUUID());
+        com.positivity.accounting.internal.entity.MappingKey key =
+                new com.positivity.accounting.internal.entity.MappingKey();
+        key.setMappingKeyId(UUID.randomUUID());
+        key.setPostingCategory(category);
+        com.positivity.accounting.internal.entity.GLMapping mapping =
+                new com.positivity.accounting.internal.entity.GLMapping();
+        mapping.setGlAccount(new com.positivity.accounting.internal.entity.GLAccount(equity));
+        when(postingCategories.findByCategoryName("REGISTER_FLOAT")).thenReturn(java.util.Optional.of(category));
+        when(mappingKeys.findByPostingCategory_PostingCategoryIdAndKeyName(
+                        category.getPostingCategoryId(), "OPENING_BALANCE_EQUITY"))
+                .thenReturn(java.util.Optional.of(key));
+        when(glMappings.findAllEffectiveMappings(eq(category.getPostingCategoryId()), eq(key.getMappingKeyId()), any()))
+                .thenReturn(List.of(mapping));
         when(bankCashAccounts.displayValues(any()))
                 .thenReturn(Map.of(equity, new BankCashAccount(equity, "3900", "Opening Balance Equity")));
         when(ledger.balanceAsOf(eq(equity), any())).thenReturn(BigDecimal.ZERO);
@@ -489,7 +511,9 @@ class BankReconciliationCloseReadinessTest {
                 ledger,
                 ledgerEntries,
                 importLookups,
-                glMappingResolver);
+                postingCategories,
+                mappingKeys,
+                glMappings);
         AccountingPeriod february = new AccountingPeriod();
         february.setPeriodId(UUID.randomUUID());
         february.setPeriodCode("2026-02");

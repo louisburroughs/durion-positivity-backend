@@ -31,7 +31,7 @@ class AccountingTimeZoneMigrationIT {
         JdbcTemplate jdbc = new JdbcTemplate(database);
         Flyway.configure()
                 .dataSource(database)
-                .locations("classpath:db/migration")
+                .locations(com.positivity.accounting.AccountingMigrations.releasedUpTo(9))
                 .target("9")
                 .load()
                 .migrate();

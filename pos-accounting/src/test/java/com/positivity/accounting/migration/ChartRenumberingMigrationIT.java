@@ -3,10 +3,6 @@ package com.positivity.accounting.migration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.positivity.accounting.AccountingPostgresContainer;
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.HashMap;
@@ -18,8 +14,6 @@ import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.init.ScriptUtils;
 
@@ -38,13 +32,13 @@ class ChartRenumberingMigrationIT {
 
     @Test
     @DisplayName("AC14: renumbered under the same ids, lines follow, 6340 renamed, nothing deleted, seed idempotent")
-    void renumbersADatabaseThatRanTheOldSeeds() throws SQLException, IOException {
+    void renumbersADatabaseThatRanTheOldSeeds() throws SQLException {
         DataSource database = AccountingPostgresContainer.ownerDataSource("chart-renumbering");
         JdbcTemplate jdbc = new JdbcTemplate(database);
         // The database as the last release left it: V1-V10 and the pre-#2511 template seed.
         Flyway.configure()
                 .dataSource(database)
-                .locations("filesystem:" + lastRelease())
+                .locations(com.positivity.accounting.AccountingMigrations.releasedUpTo(10))
                 .load()
                 .migrate();
         // The default tenant as S37's applier left it: V2's chart plus 6115 Cash Short, its CASH_SHORT mapping and
@@ -183,26 +177,6 @@ class ChartRenumberingMigrationIT {
                         Long.class))
                 .as("FORCE ROW LEVEL SECURITY is on every table V11 touched or created")
                 .isEqualTo(9);
-    }
-
-    /** V1-V10 as they are and the repeatable seed as it was before #2511, in a directory of their own. */
-    private static String lastRelease() throws IOException {
-        Path directory = Files.createTempDirectory("accounting-before-2511");
-        for (Resource migration :
-                new PathMatchingResourcePatternResolver().getResources("classpath:db/migration/V*__*.sql")) {
-            String name = migration.getFilename();
-            int version = Integer.parseInt(name.substring(1, name.indexOf("__")));
-            if (version <= 10) {
-                try (InputStream in = migration.getInputStream()) {
-                    Files.copy(in, directory.resolve(name));
-                }
-            }
-        }
-        try (InputStream in =
-                new ClassPathResource("db/legacy/R__seed_reference_accounting_before_2511.sql").getInputStream()) {
-            Files.copy(in, directory.resolve("R__seed_reference_accounting.sql"));
-        }
-        return directory.toString();
     }
 
     private static Map<String, UUID> idsByCode(JdbcTemplate jdbc, UUID tenant) {

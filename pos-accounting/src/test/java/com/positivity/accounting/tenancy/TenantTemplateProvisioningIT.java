@@ -123,9 +123,6 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
 
     private static final LocalDateTime TEMPLATE_EFFECTIVE = LocalDateTime.of(2020, 1, 1, 0, 0);
 
-    private static final AccountingTemplate.Account STAFF_MEALS = new AccountingTemplate.Account(
-            "6295", "Staff Meals & Refreshments", AccountType.EXPENSE, null, false, null, TEMPLATE_EFFECTIVE);
-
     @Autowired
     private AccountingTemplateReader templateReader;
 
@@ -238,8 +235,8 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
         assertThat(codes(t2))
                 .as("no retread add-on account (AW30), and no CAD or petty account of a later story")
                 .doesNotContainAnyElementsOf(RetreadPlantAddOnSource.ACCOUNT_CODES)
-                .doesNotContain("4940", "1250", "1260", "2210", "2220", "2230")
-                .contains("1000", "1090", "1200", "2200", "4000", "6010", "6340");
+                .doesNotContain("4940", "1250", "1260", "2210", "2220", "2230", "6010", "6115")
+                .contains("1000", "1080", "1090", "1200", "2200", "3900", "4000", "6040", "6100", "6340");
         assertThat(count(t2, "posting_category")).isEqualTo(count(generic, AccountingTemplate.Category.class));
         assertThat(count(t2, "mapping_key")).isEqualTo(count(generic, AccountingTemplate.Key.class));
         assertThat(count(t2, "gl_mapping")).isEqualTo(count(generic, AccountingTemplate.GlMapping.class));
@@ -530,7 +527,10 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
             "the tenant's own 6295 is untouched, the template's is a CONFLICT, its mapping WITHHELD; renumbering heals both")
     void aClashingAccountIsLeftAloneAndHealsWhenRenumbered() {
         UUID t3 = newTenant();
-        AccountingTemplate snapshot = templateReader.snapshot();
+        // The template as it was before S15 (#2511) put 6295 Staff Meals & Refreshments and its category in it.
+        AccountingTemplate withStaffMeals = templateReader.snapshot();
+        AccountingTemplate snapshot = withStaffMeals.only(
+                entry -> !entry.entryKey().contains("6295") && !entry.entryKey().contains("STAFF_MEALS"));
         provision(t3, snapshot);
         TransactionTemplate tx = new TransactionTemplate(transactionManager);
         // T3 was provisioned before S15 and has since opened its own 6295.
@@ -547,29 +547,18 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
                 }));
         List<String> ownAccountBefore = accountRow(t3, tireDisposal);
 
-        // S15: the template adds 6295 Staff Meals & Refreshments and the petty-expense mapping to it.
-        AccountingTemplate withStaffMeals = plus(
-                snapshot,
-                STAFF_MEALS,
-                new AccountingTemplate.Category("REGISTER_CASH_MOVEMENT", "Drawer cash in and out"),
-                new AccountingTemplate.Key("REGISTER_CASH_MOVEMENT", "PETTY_EXPENSE_STAFF_MEALS", "Staff meals"),
-                new AccountingTemplate.GlMapping(
-                        "REGISTER_CASH_MOVEMENT",
-                        "PETTY_EXPENSE_STAFF_MEALS",
-                        "ACCOUNTING",
-                        "REGISTER_CASH_MOVEMENT_PETTY_EXPENSE_STAFF_MEALS",
-                        "6295",
-                        TEMPLATE_EFFECTIVE,
-                        null));
+        // S15: the template adds 6295 Staff Meals & Refreshments, the petty-expense mapping to it and the
+        // STAFF_MEALS category.
         provision(t3, withStaffMeals);
 
         assertThat(accountRow(t3, tireDisposal)).as("T3's 6295 is unchanged").isEqualTo(ownAccountBefore);
         assertThat(count(t3, "gl_mapping"))
-                .isEqualTo(count(snapshot.only(templateReader::owns), AccountingTemplate.GlMapping.class));
+                .as("every mapping but the withheld one")
+                .isEqualTo(count(withStaffMeals.only(templateReader::owns), AccountingTemplate.GlMapping.class) - 1);
         TenantTemplateStatusResponse status = status(t3);
         assertThat(status.state()).isEqualTo(TenantTemplateState.NEEDS_ATTENTION);
         assertThat(status.counts().conflict()).isEqualTo(1);
-        assertThat(status.counts().withheld()).isEqualTo(1);
+        assertThat(status.counts().withheld()).isEqualTo(2);
         assertThat(status.attention())
                 .extracting(
                         TenantTemplateStatusResponse.AttentionItem::entryKey,
@@ -586,6 +575,11 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
                                 "GL_MAPPING:REGISTER_CASH_MOVEMENT/PETTY_EXPENSE_STAFF_MEALS",
                                 TemplateEntryReason.DEPENDS_ON_CONFLICT,
                                 "REGISTER_CASH_MOVEMENT / PETTY_EXPENSE_STAFF_MEALS posts to account 6295",
+                                "6295 Tire disposal, expense"),
+                        tuple(
+                                "PETTY_EXPENSE_CATEGORY:STAFF_MEALS",
+                                TemplateEntryReason.DEPENDS_ON_CONFLICT,
+                                "petty-expense category STAFF_MEALS (Staff meals)",
                                 "6295 Tire disposal, expense"));
         assertThat(status.attention())
                 .as("business text, never ids")
@@ -813,12 +807,14 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
                     .as("no template %s id equals a tenant row's id", table.getKey())
                     .isZero();
         }
-        assertThat(platformBefore.get("gl_account")).isEqualTo(62);
-        assertThat(platformBefore.get("posting_category")).isEqualTo(13);
-        assertThat(platformBefore.get("mapping_key")).isEqualTo(31);
-        assertThat(platformBefore.get("gl_mapping")).isEqualTo(31);
+        // #2511 (S15) adds 1080, 3000, 3900, 6295, 6375 and 6380 (6040 takes 6115's place), three categories,
+        // fifteen keys and mappings, and the balance-sheet lines of 1080, 3000 and 3900.
+        assertThat(platformBefore.get("gl_account")).isEqualTo(68);
+        assertThat(platformBefore.get("posting_category")).isEqualTo(16);
+        assertThat(platformBefore.get("mapping_key")).isEqualTo(46);
+        assertThat(platformBefore.get("gl_mapping")).isEqualTo(46);
         assertThat(platformBefore.get("default_gl_mapping")).isEqualTo(1);
-        assertThat(platformBefore.get("statement_line_mappings")).isEqualTo(54); // 42 Labor & Overhead + 12 (#2524)
+        assertThat(platformBefore.get("statement_line_mappings")).isEqualTo(57); // 42 L&O + 12 (#2524) + 3 (#2511)
     }
 
     // ------------------------------------------------------------------------------------------
@@ -942,7 +938,7 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
                 .isEqualTo(linesBefore + RetreadPlantAddOnSource.ACCOUNT_CODES.size());
         assertThat(owner.queryForObject(
                         "SELECT count(*) FROM gl_account WHERE tenant_id = ? AND created_by = 'tenant-template' AND"
-                                + " account_code IN ('6350', '6450', '6470', '6510', '6520', '6530', '6900')",
+                                + " account_code IN ('6350', '6450', '6470', '6510', '6520', '6530', '4940')",
                         Integer.class,
                         t2))
                 .as("the add-on's accounts are the template's, whoever asked for them")

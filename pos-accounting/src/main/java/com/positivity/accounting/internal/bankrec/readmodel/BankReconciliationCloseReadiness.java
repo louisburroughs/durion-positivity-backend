@@ -41,14 +41,16 @@ import com.positivity.accounting.internal.bankrec.service.ReconciliationChain;
 import com.positivity.accounting.internal.bankrec.service.ReconciliationLedger;
 import com.positivity.accounting.internal.dto.BankReconciliationExceptionRequest;
 import com.positivity.accounting.internal.entity.AccountingPeriod;
+import com.positivity.accounting.internal.entity.GLMapping;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
-import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
 import com.positivity.accounting.internal.exception.PeriodBankReconciliationIncompleteException;
 import com.positivity.accounting.internal.exception.PeriodBankReconciliationIncompleteException.UnreconciledAccount;
 import com.positivity.accounting.internal.exception.PeriodCloseExceptionNotPermittedException;
+import com.positivity.accounting.internal.repository.GLMappingRepository;
+import com.positivity.accounting.internal.repository.MappingKeyRepository;
+import com.positivity.accounting.internal.repository.PostingCategoryRepository;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.AccountingCalendarZoneResolver;
-import com.positivity.accounting.internal.service.GLMappingResolver;
 import com.positivity.security.common.SecurityContextHelper;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -132,7 +134,9 @@ public class BankReconciliationCloseReadiness {
     private final ReconciliationLedger ledger;
     private final LedgerEntries ledgerEntries;
     private final ObjectProvider<IncompleteImportLookup> importLookups;
-    private final GLMappingResolver glMappingResolver;
+    private final PostingCategoryRepository postingCategories;
+    private final MappingKeyRepository mappingKeys;
+    private final GLMappingRepository glMappings;
 
     /**
      * The close decision: whether readiness held, and whether an exception was granted to close anyway.
@@ -677,13 +681,23 @@ public class BankReconciliationCloseReadiness {
      * accountant clears them into owner's equity. Never blocks; not evaluated while the mapping is missing.
      */
     private Optional<CloseReadinessCheck> openingBalanceEquity(LocalDate end) {
-        UUID account;
-        try {
-            account = glMappingResolver.resolveGLAccount(
-                    OPENING_BALANCE_EQUITY_CATEGORY, OPENING_BALANCE_EQUITY_KEY, end.atStartOfDay());
-        } catch (GLMappingNotConfiguredException e) {
+        // Looked up without the resolver: a missing mapping is not an error here, and an exception crossing a
+        // transactional bean would mark the caller's transaction (a period close) rollback-only.
+        Optional<UUID> resolved = postingCategories
+                .findByCategoryName(OPENING_BALANCE_EQUITY_CATEGORY)
+                .flatMap(category -> mappingKeys.findByPostingCategory_PostingCategoryIdAndKeyName(
+                        category.getPostingCategoryId(), OPENING_BALANCE_EQUITY_KEY))
+                .flatMap(key -> glMappings
+                        .findAllEffectiveMappings(key.getPostingCategoryId(), key.getMappingKeyId(), end.atStartOfDay())
+                        .stream()
+                        .filter(m ->
+                                m.getDimensions() == null || m.getDimensions().isEmpty())
+                        .findFirst())
+                .map(GLMapping::getGlAccountId);
+        if (resolved.isEmpty()) {
             return Optional.empty();
         }
+        UUID account = resolved.get();
         BigDecimal balance = ledger.balanceAsOf(account, end);
         if (balance.abs().compareTo(currency.tolerance()) <= 0) {
             return Optional.empty();

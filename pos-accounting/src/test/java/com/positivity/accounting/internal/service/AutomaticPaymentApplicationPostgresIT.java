@@ -750,7 +750,7 @@ class AutomaticPaymentApplicationPostgresIT extends PostgresCommittingTestBase {
         JdbcTemplate jdbc = new JdbcTemplate(isolated);
         Flyway.configure()
                 .dataSource(isolated)
-                .locations("classpath:db/migration")
+                .locations(com.positivity.accounting.AccountingMigrations.releasedUpTo(7))
                 .target("7")
                 .load()
                 .migrate();
