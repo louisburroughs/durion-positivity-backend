@@ -568,8 +568,7 @@ public class JournalEntryServiceImpl implements JournalEntryService {
      * Publish the reversal domain event through the transactional outbox so
      * downstream read models see the status flip. Runs in the same
      * transaction as the reversal ({@code saveToOutbox} is
-     * {@code Propagation.MANDATORY}), mirroring the
-     * {@code InvoicePaymentRecorded} caller pattern: simple-name event type,
+     * {@code Propagation.MANDATORY}): simple-name event type,
      * aggregate = the original journal entry whose state changed. A failed
      * (409) reversal rolls the outbox row back with everything else.
      */
