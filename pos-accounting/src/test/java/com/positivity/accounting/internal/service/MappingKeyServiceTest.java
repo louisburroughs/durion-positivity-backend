@@ -347,4 +347,54 @@ class MappingKeyServiceTest {
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("Mapping key not found");
     }
+
+    // ===== #2511: petty-expense category keys have one write path =====
+
+    @Test
+    @DisplayName(
+            "#2511 AC8: a PETTY_EXPENSE_* key of REGISTER_CASH_MOVEMENT is refused by update, deactivate and create")
+    void pettyExpenseKeysAreManaged() {
+        testCategory.setCategoryName("REGISTER_CASH_MOVEMENT");
+        testMappingKey.setKeyName("PETTY_EXPENSE_STAFF_MEALS");
+        when(mappingKeyRepository.findById(testMappingKeyId)).thenReturn(Optional.of(testMappingKey));
+        when(postingCategoryRepository.findById(testCategoryId)).thenReturn(Optional.of(testCategory));
+        MappingKeyUpdateRequest update = new MappingKeyUpdateRequest();
+        update.setKeyName("PETTY_EXPENSE_STAFF_MEALS");
+        update.setDescription("Team lunches");
+        update.setModifiedBy("controller");
+
+        assertThatThrownBy(() -> service.updateMappingKey(testMappingKeyId, update))
+                .isInstanceOf(com.positivity.accounting.internal.exception.CashSetupException.class)
+                .extracting(e -> ((com.positivity.accounting.internal.exception.CashSetupException) e).getCode())
+                .isEqualTo(
+                        com.positivity.accounting.internal.exception.CashSetupException.Code
+                                .PETTY_EXPENSE_CATEGORY_MANAGED);
+        assertThatThrownBy(() -> service.deactivateMappingKey(testMappingKeyId))
+                .isInstanceOf(com.positivity.accounting.internal.exception.CashSetupException.class);
+
+        MappingKeyCreateRequest create = new MappingKeyCreateRequest();
+        create.setPostingCategoryId(testCategoryId);
+        create.setKeyName("PETTY_EXPENSE_TIRE_DISPOSAL");
+        create.setCreatedBy("controller");
+        assertThatThrownBy(() -> service.createMappingKey(create))
+                .isInstanceOf(com.positivity.accounting.internal.exception.CashSetupException.class);
+        verify(mappingKeyRepository, org.mockito.Mockito.never()).save(any(MappingKey.class));
+    }
+
+    @Test
+    @DisplayName("#2511: other keys of REGISTER_CASH_MOVEMENT keep today's behaviour")
+    void otherCashMovementKeysAreUnchanged() {
+        testCategory.setCategoryName("REGISTER_CASH_MOVEMENT");
+        testMappingKey.setKeyName("CASH_CLEARING");
+        MappingKeyUpdateRequest request = new MappingKeyUpdateRequest();
+        request.setKeyName("CASH_CLEARING");
+        request.setDescription("The drawer");
+        request.setModifiedBy("controller");
+        when(mappingKeyRepository.findById(testMappingKeyId)).thenReturn(Optional.of(testMappingKey));
+        when(postingCategoryRepository.findById(testCategoryId)).thenReturn(Optional.of(testCategory));
+        when(mappingKeyRepository.save(any(MappingKey.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThat(service.updateMappingKey(testMappingKeyId, request).getDescription())
+                .isEqualTo("The drawer");
+    }
 }
