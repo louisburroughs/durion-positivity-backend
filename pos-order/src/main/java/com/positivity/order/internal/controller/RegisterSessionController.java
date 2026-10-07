@@ -83,7 +83,8 @@ public class RegisterSessionController {
     private static final String CASH_MOVEMENT_422_DESCRIPTION = "Refused by a drawer rule:"
             + " CASH_MOVEMENT_TYPE_NOT_ALLOWED (the reason's type is switched off in the drawer policy),"
             + " PETTY_EXPENSE_CATEGORY_UNKNOWN (not an ACTIVE petty-expense category) or FLOAT_CHANGE_NOT_RECORDED"
-            + " (the amount does not close the gap between the configured float and the drawer's float)";
+            + " (the amount does not close the gap between the configured float and the drawer's float) or"
+            + " CURRENCY_NOT_SUPPORTED (an amount in a currency other than the functional currency)";
 
     private final RegisterSessionService registerSessionService;
     private final CashMovementApprovalService cashMovementApprovalService;
@@ -98,13 +99,15 @@ public class RegisterSessionController {
                     session that is already open.
                     Preconditions: the terminal must have no session in OPEN or CLOSING — one drawer per terminal. \
                     A caller whose order:session:open grant is location-scoped must have the resolved location \
-                    within reach (ADR-0061); for such a caller a session that resolves to no location is denied.
-                    Required inputs: terminalId; locationId defaults from the terminal's previous session. The \
-                    opening float is the register's configured float from accounting (zero when it has none) and \
-                    the opener is the caller; an openingFloat or openedByClerkId in the body is ignored.
+                    within reach (ADR-0061); a register whose configured float is held at another location than \
+                    the resolved one does not open there.
+                    Required inputs: terminalId; locationId defaults to the register's float location, else the \
+                    terminal's previous session's; the opening float is the configured float (zero when none or \
+                    negative) and the opener is the caller, so an openingFloat or openedByClerkId is ignored.
                     Emits an ORDER_SESSION_OPEN event.
                     Returns 201 with the new session, 403 LOCATION_SCOPE_DENIED when the caller's location scope \
-                    does not cover the resolved location, and 409 when the terminal already has an active session.
+                    does not cover the resolved location, 409 when the terminal already has an active session, and \
+                    422 REGISTER_FLOAT_LOCATION_MISMATCH when the float is held elsewhere.
                     """,
             tags = {"Register Sessions"})
     @ApiResponse(responseCode = "201", description = "Register session opened.")
@@ -115,6 +118,13 @@ public class RegisterSessionController {
     @ApiResponse(
             responseCode = "409",
             description = "The terminal already has an active (OPEN or CLOSING) register session.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description =
+                    "REGISTER_FLOAT_LOCATION_MISMATCH: the register's configured float is held at another location"
+                            + " than the requested one; fieldErrors name terminalId, requestedLocationId and, when the caller's"
+                            + " scope covers it, floatLocationId.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping
     @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_SESSION_OPEN + "')")
@@ -216,16 +226,20 @@ public class RegisterSessionController {
                     tenant's drawer policy; a petty expense needs an ACTIVE category; a float movement must match \
                     the difference between the register's configured float and the drawer's float. Above the \
                     cashier limit on the session's running total of the reason, and for every float change, the \
-                    request must carry a manager's approvalToken whose approver is not the caller.
-                    Required inputs: requestId (UUIDv7, the idempotency key), reason and a positive amount; \
+                    request must carry a manager's approvalToken whose approver is not the caller; a caller whose \
+                    grant is location-scoped must have the session's location within reach (ADR-0061).
+                    Required inputs: requestId (UUIDv7, the idempotency key), reason, a positive amount and its \
+                    currencyCode (ISO 4217, the functional currency); \
                     categoryCode, receiptReference and note for PETTY_EXPENSE; vendorId for VENDOR_COD; bagNumber \
                     for BANK_DROP. The cashier is the caller; a clerkId in the body is ignored.
                     Emits an ORDER_SESSION_CASH_MOVEMENT event.
                     Returns 201 with the recorded movement and 200 with the first result when the requestId was \
                     already recorded with the same payload; 400 REGISTER_SESSION_INVALID_ARGUMENT for a missing or \
-                    malformed field, 403 for the approval rules, 404 when the session does not exist, 409 \
+                    malformed field (VALIDATION_ERROR for a non-ISO currencyCode), 403 for the approval rules or \
+                    LOCATION_SCOPE_DENIED, 404 when the session does not exist, 409 \
                     REGISTER_SESSION_CONFLICT when the session is not OPEN or IDEMPOTENCY_CONFLICT when the \
-                    requestId was used for another movement, and 422 for a drawer rule.
+                    requestId was used for another movement, and 422 for a drawer rule or CURRENCY_NOT_SUPPORTED \
+                    for a currency other than the functional currency.
                     """,
             tags = {"Register Sessions"})
     @ApiResponse(responseCode = "201", description = "Cash movement recorded.")
@@ -244,7 +258,8 @@ public class RegisterSessionController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "REGISTER_SESSION_CONFLICT (session not OPEN) or IDEMPOTENCY_CONFLICT (requestId reused).",
+            description = "REGISTER_SESSION_CONFLICT (session not OPEN) or IDEMPOTENCY_CONFLICT (requestId reused or"
+                    + " not the first payload).",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
@@ -267,6 +282,7 @@ public class RegisterSessionController {
                                                                     {"requestId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4ac1",
                                                                      "reason":"PETTY_EXPENSE",
                                                                      "amount":30.00,
+                                                                     "currencyCode":"USD",
                                                                      "categoryCode":"SHOP_SUPPLIES",
                                                                      "receiptReference":"R-1001",
                                                                      "note":"Rags and gloves for bay 2"}
@@ -275,9 +291,11 @@ public class RegisterSessionController {
                                                                     {"requestId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4ac2",
                                                                      "reason":"BANK_DROP",
                                                                      "amount":800.00,
+                                                                     "currencyCode":"USD",
                                                                      "bagNumber":"BAG-0042"}
                                                                     """)
                                             }))
+                    @Valid
                     @RequestBody
                     CashMovementRequest request) {
         CashMovementResult result = registerSessionService.recordCashMovement(new CashMovementCommand(
@@ -285,6 +303,7 @@ public class RegisterSessionController {
                 request.getRequestId(),
                 request.getReason(),
                 request.getAmount(),
+                request.getCurrencyCode(),
                 request.getCategoryCode(),
                 request.getVendorId(),
                 request.getBagNumber(),
@@ -306,17 +325,23 @@ public class RegisterSessionController {
                     Use this tool when recordCashMovement needs a manager (above the cashier limit, or a float \
                     change), then send the token as the movement's approvalToken before it expires; do not use it \
                     to sign the manager in — it issues no sign-in token and opens no session.
-                    Preconditions: the session must exist and be OPEN; the verified person must hold \
-                    order:session:approve_cash_movement and must not be the caller.
-                    Required inputs: managerUsername, managerPassword, reason and the movement's exact amount, plus \
-                    its categoryCode or vendorId when it has one. The token is bound to the session, reason, \
-                    amount and category or vendor, expires after five minutes and is used once.
-                    Emits an ORDER_SESSION_CASH_MOVEMENT_APPROVE event. The password is never stored or logged.
+                    Preconditions: the session must exist and be OPEN, within the caller's location scope; the \
+                    verified person must hold order:session:approve_cash_movement with a location scope that \
+                    reaches the session's location, and must not be the caller; after five failed approvals on one \
+                    session the step-up refuses without checking.
+                    Required inputs: managerUsername, managerPassword, reason, the movement's exact amount and its \
+                    currencyCode (the functional currency), plus its categoryCode or vendorId when it has one; the \
+                    token is bound to the session, reason, amount, currency and category or vendor, expires after \
+                    five minutes and is used once.
+                    Emits an ORDER_SESSION_CASH_MOVEMENT_APPROVE event; the password is never stored or logged.
                     Returns 201 with the token and its expiry; 400 for a missing field; 403 \
                     CASH_MOVEMENT_APPROVAL_DENIED for any failed check (wrong or unknown credentials, a locked or \
                     inactive account, or a person without the permission — the same body for every reason, never \
-                    401) or CASH_MOVEMENT_SELF_APPROVAL for the caller's own credentials; 404 when the session \
-                    does not exist; 409 when it is not OPEN.
+                    401), CASH_MOVEMENT_SELF_APPROVAL for the caller's own credentials, \
+                    CASH_MOVEMENT_CALLER_UNIDENTIFIED when the caller's sign-in carries no user id, or \
+                    LOCATION_SCOPE_DENIED; 404 when the session does not exist; 409 when it is not OPEN; 422 \
+                    CURRENCY_NOT_SUPPORTED for a currency other than the functional currency; 503 when the \
+                    credentials could not be checked.
                     """,
             tags = {"Register Sessions"})
     @ApiResponse(responseCode = "201", description = "Approval token issued.")
@@ -326,8 +351,9 @@ public class RegisterSessionController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
-            description = "CASH_MOVEMENT_APPROVAL_DENIED (any failed check, one body for every reason) or"
-                    + " CASH_MOVEMENT_SELF_APPROVAL (the caller's own credentials).",
+            description = "CASH_MOVEMENT_APPROVAL_DENIED (any failed check, one body for every reason),"
+                    + " CASH_MOVEMENT_SELF_APPROVAL (the caller's own credentials), CASH_MOVEMENT_CALLER_UNIDENTIFIED"
+                    + " (the caller's sign-in has no user id) or LOCATION_SCOPE_DENIED.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
@@ -340,6 +366,10 @@ public class RegisterSessionController {
     @ApiResponse(
             responseCode = "503",
             description = "The credentials could not be checked right now (CASH_MOVEMENT_APPROVAL_UNAVAILABLE).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "CURRENCY_NOT_SUPPORTED: the amount is in a currency other than the functional currency.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping("/{sessionId}/cash-movement-approvals")
     @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_SESSION_CASH_MOVEMENT + "')")
@@ -358,8 +388,10 @@ public class RegisterSessionController {
                                                                      "managerPassword":"********",
                                                                      "reason":"PETTY_EXPENSE",
                                                                      "amount":25.00,
+                                                                     "currencyCode":"USD",
                                                                      "categoryCode":"SHOP_SUPPLIES"}
                                                                     """)))
+                    @Valid
                     @RequestBody
                     CashMovementApprovalRequest request) {
         CashMovementApprovalResult result = cashMovementApprovalService.approve(new CashMovementApprovalCommand(
@@ -368,10 +400,12 @@ public class RegisterSessionController {
                 request.getManagerPassword(),
                 request.getReason(),
                 request.getAmount(),
+                request.getCurrencyCode(),
                 request.getCategoryCode(),
                 request.getVendorId()));
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(new CashMovementApprovalResponse(result.approvalToken(), result.expiresAt()));
+                .body(new CashMovementApprovalResponse(
+                        result.approvalToken(), result.expiresAt(), result.amount(), result.currencyCode()));
     }
 
     @Operation(
@@ -384,10 +418,12 @@ public class RegisterSessionController {
                     examples).
                     Use this tool to build the drawer cash in/out screen; use getSessionPolicy instead to read or \
                     manage the tenant's policy.
-                    Preconditions: the session must exist.
+                    Amounts are in the functional currency, stated as currencyCode.
+                    Preconditions: the session must exist, within the caller's location scope (ADR-0061).
                     Required inputs: sessionId (UUID) as a path parameter; there is no request body.
                     No events are emitted and no state changes; this is a read-only projection.
-                    Returns 404 when no register session exists for the supplied id.
+                    Returns 404 when no register session exists for the supplied id, and 403 \
+                    LOCATION_SCOPE_DENIED when its location is outside the caller's scope.
                     """,
             tags = {"Register Sessions"})
     @ApiResponse(responseCode = "200", description = "Options for the session.")
@@ -395,12 +431,17 @@ public class RegisterSessionController {
             responseCode = "404",
             description = "No register session exists for the supplied id.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "LOCATION_SCOPE_DENIED: the session's location is outside the caller's scope.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/{sessionId}/cash-movement-options")
     @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_SESSION_CASH_MOVEMENT + "')")
     public ResponseEntity<CashMovementOptionsResponse> cashMovementOptions(@PathVariable UUID sessionId) {
         CashMovementOptions options = registerSessionService.cashMovementOptions(sessionId);
         return ResponseEntity.ok(new CashMovementOptionsResponse(
                 options.sessionId(),
+                options.currencyCode(),
                 options.reasons().stream()
                         .map(r -> new CashMovementOptionsResponse.ReasonOption(
                                 r.reason(),

@@ -1903,11 +1903,11 @@ paths:
 
         Preconditions: an allowed type needs a cashier limit; vendor cash on delivery stays off until pos-order holds the vendor list.
 
-        Required inputs: pettyExpense and vendorCod (allowed, cashierLimit), overShortTolerance and a justification of at least 10 characters; limits and the tolerance must not be negative.
+        Required inputs: the version read (null only while the defaults apply), currencyCode (the functional currency, ISO 4217), pettyExpense and vendorCod (allowed, cashierLimit), overShortTolerance and a justification of at least 10 characters; limits and the tolerance must not be negative.
 
-        Emits an ORDER_SESSION_POLICY_UPDATE event.
+        Emits an ORDER_SESSION_POLICY_UPDATE event when a setting changes, and nothing otherwise.
 
-        Returns 200 with the policy and its history, 400 VALIDATION_ERROR for a field rule, and 409 SESSION_POLICY_CONFLICT when another change won a race (read again and retry).
+        Returns 200 with the policy and its history, 400 VALIDATION_ERROR for a field rule or a missing or non-ISO currencyCode, 409 SESSION_POLICY_CONFLICT when the version read is not the current one or another change won a race (read again and retry), and 422 CURRENCY_NOT_SUPPORTED for a currency other than the functional currency.
 
         '
       operationId: updateSessionPolicy
@@ -1918,6 +1918,7 @@ paths:
               Lower the tolerance:
                 description: Lower the tolerance
                 value:
+                  currencyCode: USD
                   justification: Tighter count after the audit
                   overShortTolerance: 3.0
                   pettyExpense:
@@ -1925,6 +1926,7 @@ paths:
                     cashierLimit: 50.0
                   vendorCod:
                     allowed: false
+                  version: 3
             schema:
               $ref: '#/components/schemas/UpdateSessionPolicyRequest'
         description: The configurable types, the tolerance and why.
@@ -1947,7 +1949,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'SESSION_POLICY_CONFLICT: another change won a race; read the policy again and retry.'
+          description: 'SESSION_POLICY_CONFLICT: the version read is not the current one, or another change won a race; read the policy again and retry.'
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'CURRENCY_NOT_SUPPORTED: the request states a currency other than the functional currency.'
       security:
       - bearerAuth: []
       summary: Replace the Drawer Policy
@@ -1961,13 +1969,13 @@ paths:
 
         Use this tool at the start of a drawer shift; do not use recordCashMovement, which requires a session that is already open.
 
-        Preconditions: the terminal must have no session in OPEN or CLOSING — one drawer per terminal. A caller whose order:session:open grant is location-scoped must have the resolved location within reach (ADR-0061); for such a caller a session that resolves to no location is denied.
+        Preconditions: the terminal must have no session in OPEN or CLOSING — one drawer per terminal. A caller whose order:session:open grant is location-scoped must have the resolved location within reach (ADR-0061); a register whose configured float is held at another location than the resolved one does not open there.
 
-        Required inputs: terminalId; locationId defaults from the terminal''s previous session. The opening float is the register''s configured float from accounting (zero when it has none) and the opener is the caller; an openingFloat or openedByClerkId in the body is ignored.
+        Required inputs: terminalId; locationId defaults to the register''s float location, else the terminal''s previous session''s; the opening float is the configured float (zero when none or negative) and the opener is the caller, so an openingFloat or openedByClerkId is ignored.
 
         Emits an ORDER_SESSION_OPEN event.
 
-        Returns 201 with the new session, 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover the resolved location, and 409 when the terminal already has an active session.
+        Returns 201 with the new session, 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover the resolved location, 409 when the terminal already has an active session, and 422 REGISTER_FLOAT_LOCATION_MISMATCH when the float is held elsewhere.
 
         '
       operationId: openRegisterSession
@@ -2003,6 +2011,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: The terminal already has an active (OPEN or CLOSING) register session.
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'REGISTER_FLOAT_LOCATION_MISMATCH: the register''s configured float is held at another location than the requested one; fieldErrors name terminalId, requestedLocationId and, when the caller''s scope covers it, floatLocationId.'
       security:
       - bearerAuth: []
       summary: Open a Register Session
@@ -2150,13 +2164,13 @@ paths:
 
         Use this tool when recordCashMovement needs a manager (above the cashier limit, or a float change), then send the token as the movement''s approvalToken before it expires; do not use it to sign the manager in — it issues no sign-in token and opens no session.
 
-        Preconditions: the session must exist and be OPEN; the verified person must hold order:session:approve_cash_movement and must not be the caller.
+        Preconditions: the session must exist and be OPEN, within the caller''s location scope; the verified person must hold order:session:approve_cash_movement with a location scope that reaches the session''s location, and must not be the caller; after five failed approvals on one session the step-up refuses without checking.
 
-        Required inputs: managerUsername, managerPassword, reason and the movement''s exact amount, plus its categoryCode or vendorId when it has one. The token is bound to the session, reason, amount and category or vendor, expires after five minutes and is used once.
+        Required inputs: managerUsername, managerPassword, reason, the movement''s exact amount and its currencyCode (the functional currency), plus its categoryCode or vendorId when it has one; the token is bound to the session, reason, amount, currency and category or vendor, expires after five minutes and is used once.
 
-        Emits an ORDER_SESSION_CASH_MOVEMENT_APPROVE event. The password is never stored or logged.
+        Emits an ORDER_SESSION_CASH_MOVEMENT_APPROVE event; the password is never stored or logged.
 
-        Returns 201 with the token and its expiry; 400 for a missing field; 403 CASH_MOVEMENT_APPROVAL_DENIED for any failed check (wrong or unknown credentials, a locked or inactive account, or a person without the permission — the same body for every reason, never 401) or CASH_MOVEMENT_SELF_APPROVAL for the caller''s own credentials; 404 when the session does not exist; 409 when it is not OPEN.
+        Returns 201 with the token and its expiry; 400 for a missing field; 403 CASH_MOVEMENT_APPROVAL_DENIED for any failed check (wrong or unknown credentials, a locked or inactive account, or a person without the permission — the same body for every reason, never 401), CASH_MOVEMENT_SELF_APPROVAL for the caller''s own credentials, CASH_MOVEMENT_CALLER_UNIDENTIFIED when the caller''s sign-in carries no user id, or LOCATION_SCOPE_DENIED; 404 when the session does not exist; 409 when it is not OPEN; 422 CURRENCY_NOT_SUPPORTED for a currency other than the functional currency; 503 when the credentials could not be checked.
 
         '
       operationId: requestCashMovementApproval
@@ -2176,6 +2190,7 @@ paths:
                 value:
                   amount: 25.0
                   categoryCode: SHOP_SUPPLIES
+                  currencyCode: USD
                   managerPassword: '********'
                   managerUsername: jane.manager
                   reason: PETTY_EXPENSE
@@ -2201,7 +2216,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: CASH_MOVEMENT_APPROVAL_DENIED (any failed check, one body for every reason) or CASH_MOVEMENT_SELF_APPROVAL (the caller's own credentials).
+          description: CASH_MOVEMENT_APPROVAL_DENIED (any failed check, one body for every reason), CASH_MOVEMENT_SELF_APPROVAL (the caller's own credentials), CASH_MOVEMENT_CALLER_UNIDENTIFIED (the caller's sign-in has no user id) or LOCATION_SCOPE_DENIED.
         '404':
           content:
             application/json:
@@ -2214,6 +2229,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: The session is not OPEN (REGISTER_SESSION_CONFLICT).
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'CURRENCY_NOT_SUPPORTED: the amount is in a currency other than the functional currency.'
         '503':
           content:
             application/json:
@@ -2233,13 +2254,15 @@ paths:
 
         Use this tool to build the drawer cash in/out screen; use getSessionPolicy instead to read or manage the tenant''s policy.
 
-        Preconditions: the session must exist.
+        Amounts are in the functional currency, stated as currencyCode.
+
+        Preconditions: the session must exist, within the caller''s location scope (ADR-0061).
 
         Required inputs: sessionId (UUID) as a path parameter; there is no request body.
 
         No events are emitted and no state changes; this is a read-only projection.
 
-        Returns 404 when no register session exists for the supplied id.
+        Returns 404 when no register session exists for the supplied id, and 403 LOCATION_SCOPE_DENIED when its location is outside the caller''s scope.
 
         '
       operationId: getCashMovementOptions
@@ -2257,6 +2280,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/CashMovementOptionsResponse'
           description: Options for the session.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'LOCATION_SCOPE_DENIED: the session''s location is outside the caller''s scope.'
         '404':
           content:
             application/json:
@@ -2314,13 +2343,13 @@ paths:
 
         Use this tool for non-sale drawer cash such as a petty expense or the bank drop; use requestCashMovementApproval first when a manager must approve, and do not use beginSessionClose, which records the final counted drawer instead.
 
-        Preconditions: the session must exist and be OPEN; the reason''s type must be allowed by the tenant''s drawer policy; a petty expense needs an ACTIVE category; a float movement must match the difference between the register''s configured float and the drawer''s float. Above the cashier limit on the session''s running total of the reason, and for every float change, the request must carry a manager''s approvalToken whose approver is not the caller.
+        Preconditions: the session must exist and be OPEN; the reason''s type must be allowed by the tenant''s drawer policy; a petty expense needs an ACTIVE category; a float movement must match the difference between the register''s configured float and the drawer''s float. Above the cashier limit on the session''s running total of the reason, and for every float change, the request must carry a manager''s approvalToken whose approver is not the caller; a caller whose grant is location-scoped must have the session''s location within reach (ADR-0061).
 
-        Required inputs: requestId (UUIDv7, the idempotency key), reason and a positive amount; categoryCode, receiptReference and note for PETTY_EXPENSE; vendorId for VENDOR_COD; bagNumber for BANK_DROP. The cashier is the caller; a clerkId in the body is ignored.
+        Required inputs: requestId (UUIDv7, the idempotency key), reason, a positive amount and its currencyCode (ISO 4217, the functional currency); categoryCode, receiptReference and note for PETTY_EXPENSE; vendorId for VENDOR_COD; bagNumber for BANK_DROP. The cashier is the caller; a clerkId in the body is ignored.
 
         Emits an ORDER_SESSION_CASH_MOVEMENT event.
 
-        Returns 201 with the recorded movement and 200 with the first result when the requestId was already recorded with the same payload; 400 REGISTER_SESSION_INVALID_ARGUMENT for a missing or malformed field, 403 for the approval rules, 404 when the session does not exist, 409 REGISTER_SESSION_CONFLICT when the session is not OPEN or IDEMPOTENCY_CONFLICT when the requestId was used for another movement, and 422 for a drawer rule.
+        Returns 201 with the recorded movement and 200 with the first result when the requestId was already recorded with the same payload; 400 REGISTER_SESSION_INVALID_ARGUMENT for a missing or malformed field (VALIDATION_ERROR for a non-ISO currencyCode), 403 for the approval rules or LOCATION_SCOPE_DENIED, 404 when the session does not exist, 409 REGISTER_SESSION_CONFLICT when the session is not OPEN or IDEMPOTENCY_CONFLICT when the requestId was used for another movement, and 422 for a drawer rule or CURRENCY_NOT_SUPPORTED for a currency other than the functional currency.
 
         '
       operationId: recordCashMovement
@@ -2340,6 +2369,7 @@ paths:
                 value:
                   amount: 800.0
                   bagNumber: BAG-0042
+                  currencyCode: USD
                   reason: BANK_DROP
                   requestId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4ac2
               Petty expense:
@@ -2347,6 +2377,7 @@ paths:
                 value:
                   amount: 30.0
                   categoryCode: SHOP_SUPPLIES
+                  currencyCode: USD
                   note: Rags and gloves for bay 2
                   reason: PETTY_EXPENSE
                   receiptReference: R-1001
@@ -2391,13 +2422,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: REGISTER_SESSION_CONFLICT (session not OPEN) or IDEMPOTENCY_CONFLICT (requestId reused).
+          description: REGISTER_SESSION_CONFLICT (session not OPEN) or IDEMPOTENCY_CONFLICT (requestId reused or not the first payload).
         '422':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'Refused by a drawer rule: CASH_MOVEMENT_TYPE_NOT_ALLOWED (the reason''s type is switched off in the drawer policy), PETTY_EXPENSE_CATEGORY_UNKNOWN (not an ACTIVE petty-expense category) or FLOAT_CHANGE_NOT_RECORDED (the amount does not close the gap between the configured float and the drawer''s float)'
+          description: 'Refused by a drawer rule: CASH_MOVEMENT_TYPE_NOT_ALLOWED (the reason''s type is switched off in the drawer policy), PETTY_EXPENSE_CATEGORY_UNKNOWN (not an ACTIVE petty-expense category) or FLOAT_CHANGE_NOT_RECORDED (the amount does not close the gap between the configured float and the drawer''s float) or CURRENCY_NOT_SUPPORTED (an amount in a currency other than the functional currency)'
       security:
       - bearerAuth: []
       summary: Record a Drawer Cash Movement
@@ -3278,6 +3309,10 @@ components:
           description: The movement's petty-expense category, when it has one
           example: SHOP_SUPPLIES
           type: string
+        currencyCode:
+          description: ISO 4217 code of the amount; must be the functional currency (ADR-0067)
+          example: USD
+          type: string
         managerPassword:
           description: The approving manager's password; checked once, never stored or logged
           format: password
@@ -3303,6 +3338,7 @@ components:
           type: string
       required:
       - amount
+      - currencyCode
       - managerPassword
       - managerUsername
       - reason
@@ -3310,8 +3346,16 @@ components:
     CashMovementApprovalResponse:
       description: A single-use manager approval token for one cash movement
       properties:
+        amount:
+          description: The amount the token is bound to
+          example: 25.0
+          type: number
         approvalToken:
           description: The token; shown once, only its hash is stored
+          type: string
+        currencyCode:
+          description: ISO 4217 code of the amount (the functional currency)
+          example: USD
           type: string
         expiresAt:
           description: When the token expires
@@ -3327,6 +3371,10 @@ components:
           items:
             $ref: '#/components/schemas/CategoryOption'
           type: array
+        currencyCode:
+          description: ISO 4217 code of the limits and running totals (the functional currency)
+          example: USD
+          type: string
         reasons:
           description: One entry per fixed reason
           items:
@@ -3354,6 +3402,10 @@ components:
         categoryCode:
           description: ACTIVE petty-expense category code; required for PETTY_EXPENSE
           example: SHOP_SUPPLIES
+          type: string
+        currencyCode:
+          description: ISO 4217 code of the amount; must be the functional currency (ADR-0067)
+          example: USD
           type: string
         note:
           description: Free-text note; required for PETTY_EXPENSE, optional otherwise
@@ -3384,6 +3436,7 @@ components:
           type: string
       required:
       - amount
+      - currencyCode
       - reason
       - requestId
       type: object
@@ -3396,6 +3449,7 @@ components:
           type: number
         approvedBy:
           description: User id of the approving manager, or null
+          format: uuid
           type: string
         bagNumber:
           description: Deposit bag, for BANK_DROP
@@ -3406,7 +3460,15 @@ components:
           example: SHOP_SUPPLIES
           type: string
         clerkId:
-          description: Cashier who recorded it, from the security context
+          description: Cashier who recorded it, from the security context (sign-in name)
+          type: string
+        clerkUserId:
+          description: The cashier's user id, when the sign-in carried one
+          format: uuid
+          type: string
+        currencyCode:
+          description: ISO 4217 code of the amount (the functional currency)
+          example: USD
           type: string
         movementId:
           description: Movement id
@@ -4968,6 +5030,10 @@ components:
     SessionPolicyResponse:
       description: 'The tenant''s drawer policy: allowed and cashier limit per movement type, tolerance and history'
       properties:
+        currencyCode:
+          description: 'ISO 4217 code of the limits and the tolerance: the functional currency'
+          example: USD
+          type: string
         history:
           description: Every change, newest first
           items:
@@ -5144,6 +5210,10 @@ components:
     UpdateSessionPolicyRequest:
       description: The two configurable movement types, the over/short tolerance and a justification
       properties:
+        currencyCode:
+          description: ISO 4217 code of the limits and the tolerance; must be the functional currency
+          example: USD
+          type: string
         justification:
           description: Why the policy changes (at least 10 characters)
           example: Raise petty limit for winter supplies
@@ -5156,7 +5226,13 @@ components:
           $ref: '#/components/schemas/TypeSetting'
         vendorCod:
           $ref: '#/components/schemas/TypeSetting'
+        version:
+          description: The policy version the change is based on, as read; null only while no policy is stored (the defaults apply). Another version is 409 SESSION_POLICY_CONFLICT
+          example: 3
+          format: int64
+          type: integer
       required:
+      - currencyCode
       - justification
       - overShortTolerance
       - pettyExpense

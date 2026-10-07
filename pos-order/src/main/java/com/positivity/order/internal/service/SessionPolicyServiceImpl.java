@@ -1,7 +1,9 @@
 package com.positivity.order.internal.service;
 
+import com.positivity.order.internal.config.FunctionalCurrency;
 import com.positivity.order.internal.entity.SessionPolicy;
 import com.positivity.order.internal.entity.SessionPolicyChange;
+import com.positivity.order.internal.exception.CurrencyNotSupportedException;
 import com.positivity.order.internal.exception.SessionPolicyConflictException;
 import com.positivity.order.internal.exception.SessionPolicyValidationException;
 import com.positivity.order.internal.repository.SessionPolicyChangeRepository;
@@ -37,8 +39,15 @@ import org.springframework.transaction.annotation.Transactional;
  * against pos-order's vendor copy, which arrives with S24 (#2517; the story's "Spec discrepancy 1",
  * G15). Until then a PUT switching it on is refused, so it stays at its default Off.
  *
- * <p>Racing PUTs: the row's version (or, for the first change, the one-row-per-tenant key) makes the
- * loser fail at flush; it is answered 409 and retries.
+ * <p>Stale and racing PUTs: a PUT names the version it read (none while the defaults apply); another
+ * version is 409 {@code SESSION_POLICY_CONFLICT}, and between two PUTs that read the same version the
+ * row's version (or, for the first change, the one-row-per-tenant key) makes the loser fail at flush.
+ *
+ * <p>Money (ADR-0067 R-1, R-3, R-6): the limits and the tolerance are in the functional currency; a PUT
+ * states {@code currencyCode} (missing or not ISO 4217 is 400, another currency 422 {@code
+ * CURRENCY_NOT_SUPPORTED}) and the read echoes it. A PUT that changes nothing writes and emits nothing:
+ * the {@code ORDER_SESSION_POLICY_UPDATE} event comes from {@link SessionPolicyWriter}, called only for a
+ * change.
  */
 @Slf4j
 @Service
@@ -60,12 +69,22 @@ public class SessionPolicyServiceImpl implements SessionPolicyService {
     static final String VENDOR_COD_LIMIT = "VENDOR_COD_LIMIT";
     static final String OVER_SHORT_TOLERANCE = "OVER_SHORT_TOLERANCE";
 
-    private static final SessionPolicyView DEFAULTS =
-            new SessionPolicyView(null, true, DEFAULT_PETTY_EXPENSE_LIMIT, false, null, DEFAULT_OVER_SHORT_TOLERANCE);
-
     private final SessionPolicyRepository sessionPolicyRepository;
     private final SessionPolicyChangeRepository sessionPolicyChangeRepository;
+    private final SessionPolicyWriter sessionPolicyWriter;
+    private final FunctionalCurrency functionalCurrency;
     private final Clock clock;
+
+    private SessionPolicyView defaults() {
+        return new SessionPolicyView(
+                null,
+                true,
+                DEFAULT_PETTY_EXPENSE_LIMIT,
+                false,
+                null,
+                DEFAULT_OVER_SHORT_TOLERANCE,
+                functionalCurrency.code());
+    }
 
     @Override
     @Transactional(readOnly = true)
@@ -73,7 +92,7 @@ public class SessionPolicyServiceImpl implements SessionPolicyService {
         return sessionPolicyRepository
                 .findFirstByOrderByCreatedAtAsc()
                 .map(SessionPolicyServiceImpl::toView)
-                .orElse(DEFAULTS);
+                .orElseGet(this::defaults);
     }
 
     @Override
@@ -94,9 +113,18 @@ public class SessionPolicyServiceImpl implements SessionPolicyService {
     @Transactional
     public @NonNull SessionPolicyView update(@NonNull UpdateSessionPolicyCommand command) {
         String justification = validate(command);
+        if (!functionalCurrency.isFunctional(command.currencyCode())) {
+            throw new CurrencyNotSupportedException("The drawer policy is stated in " + functionalCurrency.code()
+                    + ", the functional currency; " + command.currencyCode().trim() + " is not supported");
+        }
         SessionPolicy stored =
                 sessionPolicyRepository.findFirstByOrderByCreatedAtAsc().orElse(null);
-        SessionPolicyView before = stored == null ? DEFAULTS : toView(stored);
+        Long storedVersion = stored == null ? null : stored.getVersion();
+        if (!Objects.equals(storedVersion, command.expectedVersion())) {
+            throw new SessionPolicyConflictException(
+                    "The drawer policy changed since it was read; read it again and retry", null);
+        }
+        SessionPolicyView before = stored == null ? defaults() : toView(stored);
 
         boolean pettyAllowed = command.pettyExpenseAllowed();
         BigDecimal pettyLimit = scaleOrNull(command.pettyExpenseLimit());
@@ -104,14 +132,14 @@ public class SessionPolicyServiceImpl implements SessionPolicyService {
         BigDecimal codLimit = scaleOrNull(command.vendorCodLimit());
         BigDecimal tolerance = scale(command.overShortTolerance());
 
-        List<String[]> changes = new ArrayList<>();
-        diff(changes, PETTY_EXPENSE_ALLOWED, before.pettyExpenseAllowed(), pettyAllowed);
-        diff(changes, PETTY_EXPENSE_LIMIT, before.pettyExpenseLimit(), pettyLimit);
-        diff(changes, VENDOR_COD_ALLOWED, before.vendorCodAllowed(), codAllowed);
-        diff(changes, VENDOR_COD_LIMIT, before.vendorCodLimit(), codLimit);
-        diff(changes, OVER_SHORT_TOLERANCE, before.overShortTolerance(), tolerance);
-        if (changes.isEmpty()) {
-            // A PUT that changes nothing writes nothing (§4.6): no row, no history.
+        List<String[]> diffs = new ArrayList<>();
+        diff(diffs, PETTY_EXPENSE_ALLOWED, before.pettyExpenseAllowed(), pettyAllowed);
+        diff(diffs, PETTY_EXPENSE_LIMIT, before.pettyExpenseLimit(), pettyLimit);
+        diff(diffs, VENDOR_COD_ALLOWED, before.vendorCodAllowed(), codAllowed);
+        diff(diffs, VENDOR_COD_LIMIT, before.vendorCodLimit(), codLimit);
+        diff(diffs, OVER_SHORT_TOLERANCE, before.overShortTolerance(), tolerance);
+        if (diffs.isEmpty()) {
+            // A PUT that changes nothing writes nothing and emits nothing (§4.6, review l6).
             return before;
         }
 
@@ -122,28 +150,27 @@ public class SessionPolicyServiceImpl implements SessionPolicyService {
         policy.setVendorCodAllowed(codAllowed);
         policy.setVendorCodLimit(codLimit);
         policy.setOverShortTolerance(tolerance);
+        policy.setCurrencyCode(functionalCurrency.code());
         policy.setUpdatedBy(actor);
+        Instant now = Instant.now(clock);
+        List<SessionPolicyChange> changes = diffs.stream()
+                .map(change -> SessionPolicyChange.builder()
+                        .setting(change[0])
+                        .oldValue(change[1])
+                        .newValue(change[2])
+                        .actor(actor)
+                        .justification(justification)
+                        .changedAt(now)
+                        .build())
+                .toList();
         SessionPolicy saved;
         try {
-            saved = sessionPolicyRepository.saveAndFlush(policy);
+            saved = sessionPolicyWriter.write(policy, changes);
         } catch (ObjectOptimisticLockingFailureException | DataIntegrityViolationException e) {
             throw new SessionPolicyConflictException(
                     "The drawer policy was changed by someone else; read it again and retry", e);
         }
-
-        Instant now = Instant.now(clock);
-        for (String[] change : changes) {
-            sessionPolicyChangeRepository.save(SessionPolicyChange.builder()
-                    .setting(change[0])
-                    .oldValue(change[1])
-                    .newValue(change[2])
-                    .actor(actor)
-                    .justification(justification)
-                    .policyVersion(saved.getVersion())
-                    .changedAt(now)
-                    .build());
-        }
-        log.info("Drawer policy changed by {}: {} setting(s), version {}", actor, changes.size(), saved.getVersion());
+        log.info("Drawer policy changed by {}: {} setting(s), version {}", actor, diffs.size(), saved.getVersion());
         return toView(saved);
     }
 
@@ -165,6 +192,9 @@ public class SessionPolicyServiceImpl implements SessionPolicyService {
         }
         if (command.overShortTolerance() == null) {
             throw new SessionPolicyValidationException("overShortTolerance is required");
+        }
+        if (!FunctionalCurrency.isIsoCode(command.currencyCode())) {
+            throw new SessionPolicyValidationException("currencyCode is required and must be an ISO 4217 code");
         }
         requireNotNegative("pettyExpense.cashierLimit", command.pettyExpenseLimit());
         requireNotNegative("vendorCod.cashierLimit", command.vendorCodLimit());
@@ -217,7 +247,8 @@ public class SessionPolicyServiceImpl implements SessionPolicyService {
                 policy.getPettyExpenseLimit(),
                 policy.isVendorCodAllowed(),
                 policy.getVendorCodLimit(),
-                Objects.requireNonNull(policy.getOverShortTolerance()));
+                Objects.requireNonNull(policy.getOverShortTolerance()),
+                Objects.requireNonNull(policy.getCurrencyCode()));
     }
 
     private static @Nullable BigDecimal scaleOrNull(@Nullable BigDecimal value) {

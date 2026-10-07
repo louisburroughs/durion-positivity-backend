@@ -713,6 +713,16 @@ class OrderExceptionHandlerTest {
                                         new com.positivity.order.internal.exception
                                                 .CashMovementIdempotencyConflictException("requestId reused"),
                                         request)),
+                        Named.of("handleRegisterFloatLocationMismatch", (HandlerInvocation)
+                                request -> handler.handleRegisterFloatLocationMismatch(
+                                        new com.positivity.order.internal.exception
+                                                .RegisterFloatLocationMismatchException("T-1", ID, null),
+                                        request)),
+                        Named.of("handleCurrencyNotSupported", (HandlerInvocation)
+                                request -> handler.handleCurrencyNotSupported(
+                                        new com.positivity.order.internal.exception.CurrencyNotSupportedException(
+                                                "CAD"),
+                                        request)),
                         Named.of("handleStepUpUnavailable", (HandlerInvocation)
                                 request -> handler.handleStepUpUnavailable(
                                         new com.positivity.order.internal.exception.StepUpUnavailableException(

@@ -17,6 +17,7 @@ public record CashMovementApprovalCommand(
         @Nullable String managerPassword,
         @Nullable String reason,
         @Nullable BigDecimal amount,
+        @Nullable String currencyCode,
         @Nullable String categoryCode,
         @Nullable UUID vendorId) {
 
@@ -27,7 +28,8 @@ public record CashMovementApprovalCommand(
     @Override
     public String toString() {
         return "CashMovementApprovalCommand[sessionId=" + sessionId + ", managerUsername=" + managerUsername
-                + ", reason=" + reason + ", amount=" + amount + ", categoryCode=" + categoryCode + ", vendorId="
+                + ", reason=" + reason + ", amount=" + amount + ", currencyCode=" + currencyCode + ", categoryCode="
+                + categoryCode + ", vendorId="
                 + vendorId + "]";
     }
 }

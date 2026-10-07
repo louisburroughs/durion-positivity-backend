@@ -66,6 +66,10 @@ public class CashMovement extends TenantScopedEntity {
     @Column(name = "reason_code", length = 32, updatable = false)
     private CashMovementReason reasonCode;
 
+    /** ISO 4217 code of {@link #amount} (ADR-0067 R-1); the functional currency; null only on pre-S16 rows. */
+    @Column(name = "currency_code", length = 3, updatable = false)
+    private String currencyCode;
+
     /** Accounting petty-expense category code, for {@link CashMovementReason#PETTY_EXPENSE}. */
     @Column(name = "category_code", length = 64, updatable = false)
     private String categoryCode;
@@ -86,13 +90,17 @@ public class CashMovement extends TenantScopedEntity {
     @Column(name = "note", length = 500, updatable = false)
     private String note;
 
-    /** The cashier who recorded it, from the security context (ADR-0018). */
+    /** The cashier who recorded it, from the security context (ADR-0018): the sign-in name. */
     @Column(name = "clerk_id", nullable = false, updatable = false)
     private String clerkId;
 
+    /** The cashier's stable user id from the security context, when the sign-in carried one. */
+    @Column(name = "clerk_user_id", columnDefinition = "UUID", updatable = false)
+    private UUID clerkUserId;
+
     /** The user id of the manager whose approval token it used, or null. */
-    @Column(name = "approved_by", updatable = false)
-    private String approvedBy;
+    @Column(name = "approved_by", columnDefinition = "UUID", updatable = false)
+    private UUID approvedBy;
 
     /** The approval it used, or null. */
     @Column(name = "approval_id", columnDefinition = "UUID", updatable = false)

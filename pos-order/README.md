@@ -96,7 +96,8 @@ Decisions per operation are recorded in [`location-scope.yaml`](location-scope.y
 - `POST /v1/orders/sessions` (`order:session:open`) and `POST /v1/orders/carts`
   (`order:order:create`) are **gated** in `RegisterSessionServiceImpl.openSession` and
   `SalesOrderServiceImpl.createCart` on the *resolved* location — the request's `locationId`, or
-  the default taken from the terminal's previous / open session when it is omitted — so omitting
+  the default (for a session: the register's float location, else the terminal's previous session;
+  for a cart: the terminal's open session) when it is omitted — so omitting
   `locationId` cannot bypass the check. A scoped caller outside its reach gets
   `403 LOCATION_SCOPE_DENIED`; a session that resolves to no location is denied for a scoped caller
   (fail closed). Pre-rollout tokens without `loc_*` claims are unchanged.
@@ -184,9 +185,15 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `VALIDATION_FAILED` | 400 | Bean-validation rejection of a price-override body, with `fieldErrors` |
 | `PURCHASE_ORDER_BAD_REQUEST` | 400 | Purchase-order request validation failure, including a currency that is not an ISO 4217 code |
 | `REGISTER_SESSION_INVALID_ARGUMENT` | 400 | Register-session request validation failure |
+| `VALIDATION_ERROR` | 400 | `PUT /v1/orders/session-policy`: justification under 10 characters, a negative limit or tolerance, an allowed type without a cashier limit, vendor cash on delivery switched on (not until S24), or a missing / non-ISO `currencyCode`; also a non-ISO `currencyCode` on a cash-movement or approval body (CAP:550 S16) |
 | `RETURN_INVALID_ARGUMENT` | 400 | Return request validation failure |
 | `ORDER_FORBIDDEN` | 403 | Caller lacks required order permissions (sales orders, cancellations, price overrides, register sessions) |
 | `PURCHASE_ORDER_FORBIDDEN` | 403 | Caller lacks required purchase-order permissions |
+| `CASH_MOVEMENT_APPROVAL_REQUIRED` | 403 | A cash movement above the cashier limit on the session's running total of its reason, or any float change, without a manager's `approvalToken` (CAP:550 S16) |
+| `CASH_MOVEMENT_APPROVAL_INVALID` | 403 | The approval token is unknown, used, expired, or issued for another session, reason, amount, currency, category or vendor |
+| `CASH_MOVEMENT_SELF_APPROVAL` | 403 | The step-up named the caller's own credentials, or the token's approver is the caller recording the movement |
+| `CASH_MOVEMENT_CALLER_UNIDENTIFIED` | 403 | The caller's sign-in carries no user id, so an approval cannot be proven to be someone else's |
+| `CASH_MOVEMENT_APPROVAL_DENIED` | 403 | The step-up could not verify a holder of `order:session:approve_cash_movement` whose scope reaches the drawer (wrong or unknown credentials, a locked or inactive account, no permission, out of reach), or the drawer already had five failed approvals — one body for every reason, never 401 |
 | `ORDER_NOT_FOUND` | 404 | Sales order does not exist |
 | `ORDER_PRICE_OVERRIDE_NOT_FOUND` | 404 | Price override record not found |
 | `PURCHASE_ORDER_NOT_FOUND` | 404 | Purchase order does not exist |
@@ -194,6 +201,8 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `RETURN_NOT_FOUND` | 404 | On a return endpoint: the return order, or the sales order it references, does not exist |
 | `ORDER_PRICE_OVERRIDE_IDEMPOTENCY_CONFLICT` | 409 | Duplicate idempotency key for price override |
 | `ORDER_IDEMPOTENCY_CONFLICT` | 409 | A cart idempotency key was reused with a different payload |
+| `IDEMPOTENCY_CONFLICT` | 409 | A cash-movement `requestId` already recorded with a different payload or on another session (CAP:550 S16) |
+| `SESSION_POLICY_CONFLICT` | 409 | `PUT /v1/orders/session-policy` named a version other than the current one, or lost a race with another change; read again and retry |
 | `ORDER_CANCELLATION_INVALID` | 409 | Order cannot be cancelled in its current state |
 | `ORDER_NOT_EDITABLE` | 409 | The order's status no longer allows edits |
 | `ORDER_INVALID_STATE_TRANSITION` | 409 | The requested status transition is not allowed from the order's current status |
@@ -205,6 +214,11 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `RETURN_INVALID_STATE` | 409 | The return order's status does not allow the operation |
 | `ORDER_PRICE_OVERRIDE_INVALID` | 422 | Price override failed business validation |
 | `ORDER_INVALID_CUSTOMER` | 422 | The customer referenced by the order is not valid for it |
+| `REGISTER_FLOAT_LOCATION_MISMATCH` | 422 | `POST /v1/orders/sessions` at a location other than the one the register's configured float is held at (#2573: no register moves during an open session); `fieldErrors` name `terminalId`, `requestedLocationId` and, only when the caller's scope covers it, `floatLocationId`. No session is opened |
+| `CASH_MOVEMENT_TYPE_NOT_ALLOWED` | 422 | The movement's reason is switched off in the tenant's drawer policy (CAP:550 S16) |
+| `PETTY_EXPENSE_CATEGORY_UNKNOWN` | 422 | A petty expense names no ACTIVE category of pos-order's copy of accounting's categories |
+| `FLOAT_CHANGE_NOT_RECORDED` | 422 | A float movement that does not close the gap between the register's configured float and the drawer's float exactly, that moves toward a negative float, or on a drawer whose register float is held at another location |
+| `CURRENCY_NOT_SUPPORTED` | 422 | A drawer amount (cash movement, approval, drawer policy) in an ISO 4217 currency other than the functional currency `pos.order.functional-currency` (ADR-0067) |
 | `ORDER_CUSTOMER_REQUIRED` | 422 | Checkout of a cart that names no customer (CAP:550 S8) |
 | `ORDER_WALK_IN_UNAVAILABLE` | 422 | Walk-in was chosen but the customer replica holds no active CASH house account for the tenant |
 | `ORDER_WALK_IN_NOT_ALLOWED` | 422 | A walk-in cart asked for on-account tender, a deposit take or a workorder link; `fieldErrors[walkIn]` is `ON_ACCOUNT`, `DEPOSIT` or `WORKORDER_LINK` |
@@ -226,6 +240,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `ORDER_CANCEL_REVIEW_REQUIRED` | 500 | The cancellation retry failed again and the order is parked at `CANCEL_REQUIRES_MANUAL_REVIEW`; `nextAction` carries the recovery |
 | `ORDER_TAX_UNAVAILABLE` | 503 | pos-tax could not be reached to price the order |
 | `ORDER_INVOICING_UNAVAILABLE` | 503 | pos-invoice could not be reached to complete the order |
+| `CASH_MOVEMENT_APPROVAL_UNAVAILABLE` | 503 | pos-security-service's step-up check could not be made (unreachable, timed out, or answered anything but a result or `STEP_UP_DENIED`) |
 
 ## Configuration
 

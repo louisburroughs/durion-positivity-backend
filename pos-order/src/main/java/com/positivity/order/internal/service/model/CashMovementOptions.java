@@ -14,6 +14,7 @@ import org.jspecify.annotations.Nullable;
  */
 public record CashMovementOptions(
         @NonNull UUID sessionId,
+        @NonNull String currencyCode,
         @NonNull List<ReasonOption> reasons,
         @NonNull List<CategoryOption> categories) {
 

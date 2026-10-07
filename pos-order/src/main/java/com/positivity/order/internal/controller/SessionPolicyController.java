@@ -1,6 +1,5 @@
 package com.positivity.order.internal.controller;
 
-import com.positivity.events.EmitEvent;
 import com.positivity.order.internal.dto.SessionPolicyResponse;
 import com.positivity.order.internal.dto.UpdateSessionPolicyRequest;
 import com.positivity.order.internal.security.OrderPermissions;
@@ -15,6 +14,7 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -79,11 +79,15 @@ public class SessionPolicyController {
                     it to see what one register session may record now — use getCashMovementOptions instead.
                     Preconditions: an allowed type needs a cashier limit; vendor cash on delivery stays off until \
                     pos-order holds the vendor list.
-                    Required inputs: pettyExpense and vendorCod (allowed, cashierLimit), overShortTolerance and a \
-                    justification of at least 10 characters; limits and the tolerance must not be negative.
-                    Emits an ORDER_SESSION_POLICY_UPDATE event.
-                    Returns 200 with the policy and its history, 400 VALIDATION_ERROR for a field rule, and 409 \
-                    SESSION_POLICY_CONFLICT when another change won a race (read again and retry).
+                    Required inputs: the version read (null only while the defaults apply), currencyCode (the \
+                    functional currency, ISO 4217), pettyExpense and vendorCod (allowed, cashierLimit), \
+                    overShortTolerance and a justification of at least 10 characters; limits and the tolerance \
+                    must not be negative.
+                    Emits an ORDER_SESSION_POLICY_UPDATE event when a setting changes, and nothing otherwise.
+                    Returns 200 with the policy and its history, 400 VALIDATION_ERROR for a field rule or a \
+                    missing or non-ISO currencyCode, 409 SESSION_POLICY_CONFLICT when the version read is not the \
+                    current one or another change won a race (read again and retry), and 422 \
+                    CURRENCY_NOT_SUPPORTED for a currency other than the functional currency.
                     """,
             tags = {"Register Sessions"})
     @ApiResponse(responseCode = "200", description = "The policy after the change.")
@@ -94,11 +98,15 @@ public class SessionPolicyController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "SESSION_POLICY_CONFLICT: another change won a race; read the policy again and retry.",
+            description = "SESSION_POLICY_CONFLICT: the version read is not the current one, or another change won a"
+                    + " race; read the policy again and retry.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "CURRENCY_NOT_SUPPORTED: the request states a currency other than the functional currency.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PutMapping
     @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_SESSION_POLICY_MANAGE + "')")
-    @EmitEvent(id = "ORDER_SESSION_POLICY_UPDATE", apiVersion = "1")
     public ResponseEntity<SessionPolicyResponse> updateSessionPolicy(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "The configurable types, the tolerance and why.",
@@ -107,16 +115,20 @@ public class SessionPolicyController {
                                     @Content(
                                             mediaType = "application/json",
                                             examples = @ExampleObject(name = "Lower the tolerance", value = """
-                                                                    {"pettyExpense":{"allowed":true,"cashierLimit":50.00},
+                                                                    {"version":3,"currencyCode":"USD",
+                                                                     "pettyExpense":{"allowed":true,"cashierLimit":50.00},
                                                                      "vendorCod":{"allowed":false,"cashierLimit":null},
                                                                      "overShortTolerance":3.00,
                                                                      "justification":"Tighter count after the audit"}
                                                                     """)))
+                    @Valid
                     @RequestBody
                     UpdateSessionPolicyRequest request) {
         UpdateSessionPolicyRequest.TypeSetting petty = request.getPettyExpense();
         UpdateSessionPolicyRequest.TypeSetting cod = request.getVendorCod();
         SessionPolicyView updated = sessionPolicyService.update(new UpdateSessionPolicyCommand(
+                request.getVersion(),
+                request.getCurrencyCode(),
                 petty == null ? null : petty.getAllowed(),
                 petty == null ? null : petty.getCashierLimit(),
                 cod == null ? null : cod.getAllowed(),
@@ -138,6 +150,7 @@ public class SessionPolicyController {
                                 row.editable()))
                         .toList(),
                 policy.overShortTolerance(),
+                policy.currencyCode(),
                 history.stream()
                         .map(c -> new SessionPolicyResponse.Change(
                                 c.setting(), c.oldValue(), c.newValue(), c.actor(), c.justification(), c.changedAt()))

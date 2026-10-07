@@ -90,6 +90,14 @@ public class RegisterSession extends TenantScopedEntity {
     @Column(name = "closed_by_clerk_id")
     private String closedByClerkId;
 
+    /**
+     * Failed manager approvals on this drawer (CAP:550 S16): after a few the step-up refuses without
+     * asking pos-security-service, so a drawer cannot be used to lock managers out.
+     */
+    @Column(name = "step_up_denials", nullable = false)
+    @Builder.Default
+    private int stepUpDenials = 0;
+
     @Column(name = "opened_at", nullable = false)
     private Instant openedAt;
 

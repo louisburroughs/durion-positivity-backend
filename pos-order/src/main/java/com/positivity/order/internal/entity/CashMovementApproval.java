@@ -57,6 +57,10 @@ public class CashMovementApproval extends TenantScopedEntity {
     @Column(name = "amount", nullable = false, precision = 19, scale = 4, updatable = false)
     private BigDecimal amount;
 
+    /** ISO 4217 code of {@link #amount}; the token is bound to it (ADR-0067 R-1). */
+    @Column(name = "currency_code", nullable = false, length = 3, updatable = false)
+    private String currencyCode;
+
     @Column(name = "category_code", length = 64, updatable = false)
     private String categoryCode;
 

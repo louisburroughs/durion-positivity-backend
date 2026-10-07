@@ -99,11 +99,17 @@ pos:
     quote:
       # Counter-quote validity horizon (ISO-8601 duration; parity story A3)
       validity: ${POS_ORDER_QUOTE_VALIDITY:P7D}
+    # The functional currency of drawer money (ADR-0067 R-6): every cash movement, approval, drawer-policy
+    # limit and close fact states it, and a request in another currency is 422 CURRENCY_NOT_SUPPORTED.
+    functional-currency: ${POS_ORDER_FUNCTIONAL_CURRENCY:USD}
     session:
       # The over/short tolerance above which a close needs order:session:approve_variance is the
       # tenant's drawer policy (GET/PUT /v1/orders/session-policy, CAP:550 S16), not a setting here.
       # A manager's single-use cash-movement approval token expires after this long (AW31).
       approval-token-ttl: ${POS_ORDER_SESSION_APPROVAL_TOKEN_TTL:PT5M}
+      # Failed manager approvals one drawer session may take before the step-up stops asking
+      # pos-security-service (each failure counts against the manager's sign-in lockout).
+      max-denied-approvals: ${POS_ORDER_SESSION_MAX_DENIED_APPROVALS:5}
   price:
     service-id: ${POS_PRICE_SERVICE_ID:price}
   tax:
@@ -116,6 +122,9 @@ pos:
     # Utility module (ADR-0044 section 1): the internal step-up credential check behind a manager's
     # cash-movement approval (CAP:550 S16, AW31). Load-balanced inside the mesh, never via the gateway.
     service-id: ${POS_SECURITY_SERVICE_ID:security-service}
+    # A cashier waits on the step-up at the register: fail fast rather than hang the drawer.
+    connect-timeout: ${POS_SECURITY_SERVICE_CONNECT_TIMEOUT:PT2S}
+    read-timeout: ${POS_SECURITY_SERVICE_READ_TIMEOUT:PT5S}
 
 eureka:
   client:

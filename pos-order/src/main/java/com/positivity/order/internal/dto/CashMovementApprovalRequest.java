@@ -3,6 +3,7 @@ package com.positivity.order.internal.dto;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
+import com.positivity.tax.common.validation.IsoCurrencyCode;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -38,6 +39,13 @@ public class CashMovementApprovalRequest {
 
     @Schema(description = "The exact amount of the movement approved", example = "25.00", requiredMode = REQUIRED)
     private BigDecimal amount;
+
+    @Schema(
+            description = "ISO 4217 code of the amount; must be the functional currency (ADR-0067)",
+            example = "USD",
+            requiredMode = REQUIRED)
+    @IsoCurrencyCode
+    private String currencyCode;
 
     @Schema(
             description = "The movement's petty-expense category, when it has one",

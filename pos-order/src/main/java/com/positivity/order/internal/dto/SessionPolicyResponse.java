@@ -20,6 +20,9 @@ public record SessionPolicyResponse(
         @Schema(description = "Over/short above which a close needs order:session:approve_variance", example = "5.00")
         BigDecimal overShortTolerance,
 
+        @Schema(description = "ISO 4217 code of the limits and the tolerance: the functional currency", example = "USD")
+        String currencyCode,
+
         @Schema(description = "Every change, newest first") List<Change> history) {
 
     @Schema(description = "One movement type's policy")

@@ -11,14 +11,18 @@ import static org.mockito.Mockito.when;
 import com.positivity.order.internal.entity.ExtAccountingPettyExpenseCategory;
 import com.positivity.order.internal.entity.ExtAccountingRegisterFloat;
 import com.positivity.order.internal.entity.ProcessedEvent;
+import com.positivity.order.internal.entity.RegisterSession;
+import com.positivity.order.internal.entity.RegisterSessionStatus;
 import com.positivity.order.internal.repository.ExtAccountingPettyExpenseCategoryRepository;
 import com.positivity.order.internal.repository.ExtAccountingRegisterFloatRepository;
 import com.positivity.order.internal.repository.ProcessedEventRepository;
+import com.positivity.order.internal.repository.RegisterSessionRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -46,6 +50,7 @@ class AccountingEventsListenerTest {
     private final ExtAccountingPettyExpenseCategoryRepository categories =
             mock(ExtAccountingPettyExpenseCategoryRepository.class);
     private final ExtAccountingRegisterFloatRepository floats = mock(ExtAccountingRegisterFloatRepository.class);
+    private final RegisterSessionRepository sessions = mock(RegisterSessionRepository.class);
     private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
     private AccountingEventsListener listener;
 
@@ -60,6 +65,7 @@ class AccountingEventsListenerTest {
                 processed,
                 categories,
                 floats,
+                sessions,
                 mock(PlatformTransactionManager.class),
                 meters);
         when(categories.findById(any())).thenReturn(Optional.empty());
@@ -124,6 +130,38 @@ class AccountingEventsListenerTest {
     }
 
     @Test
+    @DisplayName("#2573: a RELOCATION to B while a drawer is open at A moves the copy, counts once, leaves the session")
+    void relocationWithAnOpenDrawerElsewhereIsCounted() {
+        RegisterSession open = RegisterSession.builder()
+                .sessionId(UUID.randomUUID())
+                .terminalId("T-1")
+                .locationId(UUID.fromString("01900000-0000-7000-8000-0000000000aa"))
+                .status(RegisterSessionStatus.OPEN)
+                .build();
+        when(sessions.findByTerminalIdAndStatusIn(org.mockito.ArgumentMatchers.eq("T-1"), any()))
+                .thenReturn(List.of(open));
+
+        listener.onAccountingEvent(floatFact("e-10", 3, "200.00")
+                .replace("\"kind\":\"CHANGE\"", "\"kind\":\"RELOCATION\"")
+                .replace(
+                        "\"locationId\":\"01900000-0000-7000-8000-0000000000aa\"",
+                        "\"locationId\":\"01900000-0000-7000-8000-0000000000bb\""));
+
+        ArgumentCaptor<ExtAccountingRegisterFloat> copy = ArgumentCaptor.forClass(ExtAccountingRegisterFloat.class);
+        verify(floats).save(copy.capture());
+        assertThat(copy.getValue().getLocationId()).hasToString("01900000-0000-7000-8000-0000000000bb");
+        assertThat(meterRegistry
+                        .get(AccountingEventsListener.FLOAT_LOCATION_MISMATCH)
+                        .tag("kind", "RELOCATION")
+                        .counter()
+                        .count())
+                .isEqualTo(1.0);
+        assertThat(open.getLocationId()).hasToString("01900000-0000-7000-8000-0000000000aa");
+        verify(sessions, never()).save(any());
+        verify(processed).save(any());
+    }
+
+    @Test
     @DisplayName("a fact older than the copy (out of order) changes nothing but is still marked processed")
     void staleFactIgnored() {
         when(floats.findById(FLOAT_ID))
@@ -136,6 +174,12 @@ class AccountingEventsListenerTest {
 
         verify(floats, never()).save(any());
         verify(processed).save(any());
+        // A stale fact neither applies nor counts a location mismatch.
+        verify(sessions, never()).findByTerminalIdAndStatusIn(any(), any());
+        assertThat(meterRegistry
+                        .find(AccountingEventsListener.FLOAT_LOCATION_MISMATCH)
+                        .counter())
+                .isNull();
     }
 
     @Test
@@ -190,11 +234,32 @@ class AccountingEventsListenerTest {
     }
 
     @Test
-    @DisplayName("a malformed payload is skipped without a copy")
-    void malformedSkipped() {
+    @DisplayName(
+            "Copilot: a malformed fact is skipped without a copy but marked processed, so the manifest stops drifting")
+    void malformedSkippedButMarked() {
         listener.onAccountingEvent(floatFact("e-8", 1, "\"not-a-number\""));
         listener.onAccountingEvent("not json");
 
         verify(floats, never()).save(any());
+        ArgumentCaptor<ProcessedEvent> mark = ArgumentCaptor.forClass(ProcessedEvent.class);
+        verify(processed).save(mark.capture());
+        assertThat(mark.getValue().getEventId()).isEqualTo("e-8");
+        assertThat(mark.getValue().getOwner()).isEqualTo("accounting");
+    }
+
+    @Test
+    @DisplayName("#2571: a float kind this build does not know still updates amount and location (state-based)")
+    void unknownKindStillApplies() {
+        listener.onAccountingEvent(floatFact("e-9", 2, "180.00")
+                .replace("\"kind\":\"CHANGE\"", "\"kind\":\"RELOCATION\"")
+                .replace(
+                        "\"locationId\":\"01900000-0000-7000-8000-0000000000aa\"",
+                        "\"locationId\":\"01900000-0000-7000-8000-0000000000bb\","
+                                + "\"previousLocationId\":\"01900000-0000-7000-8000-0000000000aa\""));
+
+        ArgumentCaptor<ExtAccountingRegisterFloat> copy = ArgumentCaptor.forClass(ExtAccountingRegisterFloat.class);
+        verify(floats).save(copy.capture());
+        assertThat(copy.getValue().getAmount()).isEqualByComparingTo("180.00");
+        assertThat(copy.getValue().getLocationId()).hasToString("01900000-0000-7000-8000-0000000000bb");
     }
 }

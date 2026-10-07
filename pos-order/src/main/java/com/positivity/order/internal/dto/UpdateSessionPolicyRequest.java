@@ -3,6 +3,7 @@ package com.positivity.order.internal.dto;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
+import com.positivity.tax.common.validation.IsoCurrencyCode;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import lombok.Data;
@@ -14,6 +15,20 @@ import lombok.Data;
 @Data
 @Schema(description = "The two configurable movement types, the over/short tolerance and a justification")
 public class UpdateSessionPolicyRequest {
+
+    @Schema(
+            description = "The policy version the change is based on, as read; null only while no policy is"
+                    + " stored (the defaults apply). Another version is 409 SESSION_POLICY_CONFLICT",
+            example = "3",
+            requiredMode = NOT_REQUIRED)
+    private Long version;
+
+    @Schema(
+            description = "ISO 4217 code of the limits and the tolerance; must be the functional currency",
+            example = "USD",
+            requiredMode = REQUIRED)
+    @IsoCurrencyCode
+    private String currencyCode;
 
     @Schema(description = "Petty expenses", requiredMode = REQUIRED)
     private TypeSetting pettyExpense;

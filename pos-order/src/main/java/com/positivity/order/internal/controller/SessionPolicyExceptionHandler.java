@@ -1,5 +1,6 @@
 package com.positivity.order.internal.controller;
 
+import com.positivity.order.internal.exception.CurrencyNotSupportedException;
 import com.positivity.order.internal.exception.SessionPolicyConflictException;
 import com.positivity.order.internal.exception.SessionPolicyValidationException;
 import com.positivity.shared.error.ApiError;
@@ -33,6 +34,20 @@ public class SessionPolicyExceptionHandler {
                         "VALIDATION_ERROR",
                         ex.getMessage(),
                         HttpStatus.BAD_REQUEST.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    /** ADR-0067 R-1: a policy stated in a currency other than the functional currency. */
+    @ExceptionHandler(CurrencyNotSupportedException.class)
+    public ResponseEntity<ApiError> handleCurrency(CurrencyNotSupportedException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.of(
+                        "CURRENCY_NOT_SUPPORTED",
+                        ex.getMessage(),
+                        HttpStatus.UNPROCESSABLE_ENTITY.value(),
                         Instant.now(clock).toString(),
                         correlationId));
     }

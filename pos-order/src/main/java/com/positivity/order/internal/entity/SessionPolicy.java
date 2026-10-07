@@ -61,6 +61,10 @@ public class SessionPolicy extends TenantScopedEntity {
     @Column(name = "over_short_tolerance", nullable = false, precision = 19, scale = 4)
     private BigDecimal overShortTolerance;
 
+    /** ISO 4217 code of the limits and the tolerance (ADR-0067 R-1, R-6): the functional currency. */
+    @Column(name = "currency_code", nullable = false, length = 3)
+    private String currencyCode;
+
     /** Who last changed it (ADR-0018). */
     @Column(name = "updated_by", nullable = false)
     private String updatedBy;

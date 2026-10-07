@@ -5,9 +5,12 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * Replace the tenant's drawer policy (CAP:550 S16, #2512): the two configurable types, the over/short
- * tolerance and the justification every change carries. Validated by the service.
+ * tolerance, the currency they are stated in, the justification every change carries, and the version
+ * the client read (null only while no policy is stored). Validated by the service.
  */
 public record UpdateSessionPolicyCommand(
+        @Nullable Long expectedVersion,
+        @Nullable String currencyCode,
         @Nullable Boolean pettyExpenseAllowed,
         @Nullable BigDecimal pettyExpenseLimit,
         @Nullable Boolean vendorCodAllowed,

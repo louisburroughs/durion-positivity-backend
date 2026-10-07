@@ -17,6 +17,7 @@ import org.jspecify.annotations.Nullable;
  * @param vendorCodAllowed whether cashiers may pay vendors cash on delivery
  * @param vendorCodLimit the cashier limit on a session's running total of vendor cash on delivery
  * @param overShortTolerance the over/short above which a close needs {@code order:session:approve_variance}
+ * @param currencyCode ISO 4217 code of the limits and the tolerance: the functional currency (ADR-0067 R-6)
  */
 public record SessionPolicyView(
         @Nullable Long version,
@@ -24,7 +25,8 @@ public record SessionPolicyView(
         @Nullable BigDecimal pettyExpenseLimit,
         boolean vendorCodAllowed,
         @Nullable BigDecimal vendorCodLimit,
-        @NonNull BigDecimal overShortTolerance) {
+        @NonNull BigDecimal overShortTolerance,
+        @NonNull String currencyCode) {
 
     /** Whether a movement of {@code type} may be recorded now; a bank drop and a float change always may. */
     public boolean allowed(@NonNull SessionPolicyType type) {

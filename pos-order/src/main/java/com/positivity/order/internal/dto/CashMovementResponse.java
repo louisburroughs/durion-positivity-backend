@@ -30,6 +30,9 @@ public record CashMovementResponse(
         @Schema(description = "Positive amount moved", example = "30.00")
         BigDecimal amount,
 
+        @Schema(description = "ISO 4217 code of the amount (the functional currency)", example = "USD")
+        String currencyCode,
+
         @Schema(description = "Petty-expense category, for PETTY_EXPENSE", example = "SHOP_SUPPLIES")
         String categoryCode,
 
@@ -44,11 +47,14 @@ public record CashMovementResponse(
         @Schema(description = "Free-text note (the whole free-text reason of an older movement)")
         String note,
 
-        @Schema(description = "Cashier who recorded it, from the security context")
+        @Schema(description = "Cashier who recorded it, from the security context (sign-in name)")
         String clerkId,
 
+        @Schema(description = "The cashier's user id, when the sign-in carried one")
+        UUID clerkUserId,
+
         @Schema(description = "User id of the approving manager, or null")
-        String approvedBy,
+        UUID approvedBy,
 
         @Schema(description = "When the movement was recorded")
         Instant occurredAt) {
@@ -61,12 +67,14 @@ public record CashMovementResponse(
                 m.reason(),
                 m.movementType(),
                 m.amount(),
+                m.currencyCode(),
                 m.categoryCode(),
                 m.vendorId(),
                 m.bagNumber(),
                 m.receiptReference(),
                 m.note(),
                 m.clerkId(),
+                m.clerkUserId(),
                 m.approvedBy(),
                 m.occurredAt());
     }

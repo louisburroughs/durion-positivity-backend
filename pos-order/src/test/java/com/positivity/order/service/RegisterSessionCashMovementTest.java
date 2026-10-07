@@ -11,7 +11,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.domainevents.location.LocationAncestry.AncestorSets;
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
+import com.positivity.order.internal.config.FunctionalCurrency;
 import com.positivity.order.internal.config.OrderDomainEventPublisher;
 import com.positivity.order.internal.entity.CashMovement;
 import com.positivity.order.internal.entity.CashMovementApproval;
@@ -24,6 +26,7 @@ import com.positivity.order.internal.entity.SalesOrderStatus;
 import com.positivity.order.internal.exception.CashMovementIdempotencyConflictException;
 import com.positivity.order.internal.exception.CashMovementRefusedException;
 import com.positivity.order.internal.exception.CashMovementRefusedException.Refusal;
+import com.positivity.order.internal.exception.CurrencyNotSupportedException;
 import com.positivity.order.internal.exception.RegisterSessionRequestValidationException;
 import com.positivity.order.internal.repository.CashMovementRepository;
 import com.positivity.order.internal.repository.ExtAccountingPettyExpenseCategoryRepository;
@@ -37,6 +40,10 @@ import com.positivity.order.internal.service.model.CashMovementOptions;
 import com.positivity.order.internal.service.model.CashMovementResult;
 import com.positivity.order.internal.service.model.SessionPolicyView;
 import com.positivity.security.common.GatewaySecurityConstants;
+import com.positivity.security.common.LocationAncestorResolver;
+import com.positivity.security.common.LocationScope;
+import com.positivity.security.common.LocationScopeDeniedException;
+import com.positivity.shared.id.UUIDv7Generator;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
@@ -47,6 +54,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -55,6 +63,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
@@ -70,6 +79,9 @@ class RegisterSessionCashMovementTest {
     private static final UUID SESSION_ID = UUID.fromString("01900000-0000-7000-8000-00000000a001");
     private static final UUID MANAGER_ID = UUID.fromString("01900000-0000-7000-8000-00000000b001");
     private static final UUID APPROVAL_ID = UUID.fromString("01900000-0000-7000-8000-00000000c001");
+    private static final UUID LOCATION = UUID.fromString("01900000-0000-7000-8000-00000000d001");
+    private static final UUID OTHER_LOCATION = UUID.fromString("01900000-0000-7000-8000-00000000d002");
+    private static final UUID CASHIER_ID = UUID.fromString("01900000-0000-7000-8000-00000000e001");
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-07T12:00:00Z"), ZoneOffset.UTC);
 
     private final RegisterSessionRepository sessions = mock(RegisterSessionRepository.class);
@@ -92,7 +104,7 @@ class RegisterSessionCashMovementTest {
 
     private static SessionPolicyView policy(boolean pettyAllowed, String pettyLimit) {
         return new SessionPolicyView(
-                1L, pettyAllowed, new BigDecimal(pettyLimit), false, null, new BigDecimal("5.0000"));
+                1L, pettyAllowed, new BigDecimal(pettyLimit), false, null, new BigDecimal("5.0000"), "USD");
     }
 
     @BeforeEach
@@ -111,12 +123,14 @@ class RegisterSessionCashMovementTest {
                 approvalService,
                 floats,
                 categories,
+                new FunctionalCurrency("USD"),
                 CLOCK,
                 meters);
         session = RegisterSession.builder()
                 .sessionId(SESSION_ID)
                 .version(3L)
                 .terminalId(TERMINAL)
+                .locationId(LOCATION)
                 .openedByClerkId("opener")
                 .status(RegisterSessionStatus.OPEN)
                 .openingFloat(new BigDecimal("200.0000"))
@@ -135,7 +149,7 @@ class RegisterSessionCashMovementTest {
                         .findFirst());
         lenient().when(movements.saveAndFlush(any())).thenAnswer(inv -> {
             CashMovement m = inv.getArgument(0);
-            m.setMovementId(UUID.randomUUID());
+            m.setMovementId(UUIDv7Generator.generate());
             recorded.add(m);
             return m;
         });
@@ -151,14 +165,24 @@ class RegisterSessionCashMovementTest {
     }
 
     private static void signIn(String username) {
+        signIn(username, LocationScope.unscoped());
+    }
+
+    private static void signIn(String username, LocationScope scope) {
         var token = new UsernamePasswordAuthenticationToken(username, "n/a", List.of());
-        token.setDetails(Map.of(GatewaySecurityConstants.DETAIL_USERNAME, username));
+        token.setDetails(Map.of(
+                GatewaySecurityConstants.DETAIL_USERNAME,
+                username,
+                GatewaySecurityConstants.DETAIL_USER_ID,
+                CASHIER_ID,
+                GatewaySecurityConstants.DETAIL_LOCATION_SCOPE,
+                scope));
         SecurityContextHolder.getContext().setAuthentication(token);
     }
 
     private static ExtAccountingPettyExpenseCategory category(String code, String status) {
         return ExtAccountingPettyExpenseCategory.builder()
-                .pettyExpenseCategoryId(UUID.randomUUID())
+                .pettyExpenseCategoryId(UUIDv7Generator.generate())
                 .code(code)
                 .label("Shop supplies")
                 .status(status)
@@ -173,6 +197,7 @@ class RegisterSessionCashMovementTest {
                 requestId,
                 "PETTY_EXPENSE",
                 new BigDecimal(amount),
+                "USD",
                 "SHOP_SUPPLIES",
                 null,
                 null,
@@ -183,12 +208,22 @@ class RegisterSessionCashMovementTest {
 
     private static CashMovementCommand bankDrop(UUID requestId, String amount, String bag) {
         return new CashMovementCommand(
-                SESSION_ID, requestId, "BANK_DROP", new BigDecimal(amount), null, null, bag, null, null, null);
+                SESSION_ID, requestId, "BANK_DROP", new BigDecimal(amount), "USD", null, null, bag, null, null, null);
     }
 
     private static CashMovementCommand floatChange(String reason, String amount, String token) {
         return new CashMovementCommand(
-                SESSION_ID, UUID.randomUUID(), reason, new BigDecimal(amount), null, null, null, null, null, token);
+                SESSION_ID,
+                UUIDv7Generator.generate(),
+                reason,
+                new BigDecimal(amount),
+                "USD",
+                null,
+                null,
+                null,
+                null,
+                null,
+                token);
     }
 
     private void managerApproves(CashMovementReason reason, String amount, String category) {
@@ -197,6 +232,7 @@ class RegisterSessionCashMovementTest {
                         eq(SESSION_ID),
                         eq(reason),
                         any(),
+                        eq("USD"),
                         category == null ? any() : eq(category),
                         any()))
                 .thenReturn(CashMovementApproval.builder()
@@ -218,12 +254,12 @@ class RegisterSessionCashMovementTest {
         @DisplayName(
                 "AC1: 30.00 then 25.00 against a 50.00 limit — the second needs a manager; with a token, approvedBy")
         void runningTotalNeedsManagerAboveLimit() {
-            CashMovementResult first = service.recordCashMovement(petty(UUID.randomUUID(), "30.00", null));
+            CashMovementResult first = service.recordCashMovement(petty(UUIDv7Generator.generate(), "30.00", null));
             assertThat(first.replayed()).isFalse();
             assertThat(first.movement().approvedBy()).isNull();
 
             // [M] the single movement (25.00) is below the limit; only the running total (55.00) is above.
-            UUID second = UUID.randomUUID();
+            UUID second = UUIDv7Generator.generate();
             assertThatThrownBy(() -> service.recordCashMovement(petty(second, "25.00", null)))
                     .isInstanceOf(CashMovementRefusedException.class)
                     .satisfies(e -> assertThat(refusal(e).refusal()).isEqualTo(Refusal.APPROVAL_REQUIRED));
@@ -238,7 +274,7 @@ class RegisterSessionCashMovementTest {
             managerApproves(CashMovementReason.PETTY_EXPENSE, "25.00", "SHOP_SUPPLIES");
             CashMovementResult approved = service.recordCashMovement(petty(second, "25.00", "token-1"));
 
-            assertThat(approved.movement().approvedBy()).isEqualTo(MANAGER_ID.toString());
+            assertThat(approved.movement().approvedBy()).isEqualTo(MANAGER_ID);
             assertThat(recorded.get(1).getApprovalId()).isEqualTo(APPROVAL_ID);
             assertThat(recorded.get(1).getMovementType().name()).isEqualTo("PAID_OUT");
         }
@@ -247,8 +283,8 @@ class RegisterSessionCashMovementTest {
         @DisplayName(
                 "AC13: a retry with the same requestId returns the first result and records nothing; options show 55.00")
         void replayReturnsFirstResult() {
-            service.recordCashMovement(petty(UUID.randomUUID(), "30.00", null));
-            UUID approvedRequest = UUID.randomUUID();
+            service.recordCashMovement(petty(UUIDv7Generator.generate(), "30.00", null));
+            UUID approvedRequest = UUIDv7Generator.generate();
             managerApproves(CashMovementReason.PETTY_EXPENSE, "25.00", "SHOP_SUPPLIES");
             CashMovementResult first = service.recordCashMovement(petty(approvedRequest, "25.00", "token-1"));
 
@@ -258,7 +294,7 @@ class RegisterSessionCashMovementTest {
             assertThat(replay.replayed()).isTrue();
             assertThat(replay.movement()).isEqualTo(first.movement());
             assertThat(recorded).hasSize(2);
-            verify(approvalService).use(anyString(), any(), any(), any(), any(), any());
+            verify(approvalService).use(anyString(), any(), any(), any(), any(), any(), any());
 
             CashMovementOptions options = service.cashMovementOptions(SESSION_ID);
             assertThat(options.reasons())
@@ -275,7 +311,7 @@ class RegisterSessionCashMovementTest {
         @Test
         @DisplayName("§8.2: the same requestId with another payload is IDEMPOTENCY_CONFLICT")
         void sameRequestIdOtherPayloadConflicts() {
-            UUID requestId = UUID.randomUUID();
+            UUID requestId = UUIDv7Generator.generate();
             service.recordCashMovement(petty(requestId, "10.00", null));
 
             assertThatThrownBy(() -> service.recordCashMovement(petty(requestId, "11.00", null)))
@@ -286,10 +322,11 @@ class RegisterSessionCashMovementTest {
         @Test
         @DisplayName("a bank drop has no limit and needs no manager, whatever the amount")
         void bankDropUnlimited() {
-            CashMovementResult drop = service.recordCashMovement(bankDrop(UUID.randomUUID(), "5000.00", "BAG-1"));
+            CashMovementResult drop =
+                    service.recordCashMovement(bankDrop(UUIDv7Generator.generate(), "5000.00", "BAG-1"));
 
             assertThat(drop.movement().bagNumber()).isEqualTo("BAG-1");
-            verify(approvalService, never()).use(anyString(), any(), any(), any(), any(), any());
+            verify(approvalService, never()).use(anyString(), any(), any(), any(), any(), any(), any());
         }
     }
 
@@ -301,11 +338,11 @@ class RegisterSessionCashMovementTest {
         @DisplayName(
                 "AC3: petty switched off mid-session refuses the next one; the earlier ones stay on the close fact")
         void switchedOffIsNotRetroactive() {
-            service.recordCashMovement(petty(UUID.randomUUID(), "10.00", null));
-            service.recordCashMovement(petty(UUID.randomUUID(), "12.00", null));
+            service.recordCashMovement(petty(UUIDv7Generator.generate(), "10.00", null));
+            service.recordCashMovement(petty(UUIDv7Generator.generate(), "12.00", null));
             when(policyService.current()).thenReturn(policy(false, "50.0000"));
 
-            assertThatThrownBy(() -> service.recordCashMovement(petty(UUID.randomUUID(), "5.00", null)))
+            assertThatThrownBy(() -> service.recordCashMovement(petty(UUIDv7Generator.generate(), "5.00", null)))
                     .satisfies(e -> assertThat(refusal(e).refusal()).isEqualTo(Refusal.TYPE_NOT_ALLOWED));
 
             closeSession();
@@ -321,11 +358,12 @@ class RegisterSessionCashMovementTest {
         void vendorCodOffByDefault() {
             CashMovementCommand cod = new CashMovementCommand(
                     SESSION_ID,
-                    UUID.randomUUID(),
+                    UUIDv7Generator.generate(),
                     "VENDOR_COD",
                     new BigDecimal("40.00"),
+                    "USD",
                     null,
-                    UUID.randomUUID(),
+                    UUIDv7Generator.generate(),
                     null,
                     null,
                     null,
@@ -340,7 +378,7 @@ class RegisterSessionCashMovementTest {
         void inactiveCategoryRefused() {
             when(categories.findByCode("SHOP_SUPPLIES")).thenReturn(Optional.of(category("SHOP_SUPPLIES", "INACTIVE")));
 
-            assertThatThrownBy(() -> service.recordCashMovement(petty(UUID.randomUUID(), "10.00", null)))
+            assertThatThrownBy(() -> service.recordCashMovement(petty(UUIDv7Generator.generate(), "10.00", null)))
                     .satisfies(e -> assertThat(refusal(e).refusal()).isEqualTo(Refusal.CATEGORY_UNKNOWN));
         }
 
@@ -349,7 +387,7 @@ class RegisterSessionCashMovementTest {
         void clerkFromSecurityContext() {
             signIn("cashier-7");
 
-            CashMovementResult result = service.recordCashMovement(petty(UUID.randomUUID(), "10.00", null));
+            CashMovementResult result = service.recordCashMovement(petty(UUIDv7Generator.generate(), "10.00", null));
 
             assertThat(result.movement().clerkId()).isEqualTo("cashier-7");
         }
@@ -357,15 +395,16 @@ class RegisterSessionCashMovementTest {
         @Test
         @DisplayName("AC9: a bank drop without a bag number, or a petty expense missing a field, is a 400")
         void requiredFields() {
-            assertThatThrownBy(() -> service.recordCashMovement(bankDrop(UUID.randomUUID(), "100.00", " ")))
+            assertThatThrownBy(() -> service.recordCashMovement(bankDrop(UUIDv7Generator.generate(), "100.00", " ")))
                     .isInstanceOf(RegisterSessionRequestValidationException.class)
                     .hasMessageContaining("bagNumber");
             for (CashMovementCommand missing : List.of(
                     new CashMovementCommand(
                             SESSION_ID,
-                            UUID.randomUUID(),
+                            UUIDv7Generator.generate(),
                             "PETTY_EXPENSE",
                             BigDecimal.TEN,
+                            "USD",
                             null,
                             null,
                             null,
@@ -374,9 +413,10 @@ class RegisterSessionCashMovementTest {
                             null),
                     new CashMovementCommand(
                             SESSION_ID,
-                            UUID.randomUUID(),
+                            UUIDv7Generator.generate(),
                             "PETTY_EXPENSE",
                             BigDecimal.TEN,
+                            "USD",
                             "SHOP_SUPPLIES",
                             null,
                             null,
@@ -385,9 +425,10 @@ class RegisterSessionCashMovementTest {
                             null),
                     new CashMovementCommand(
                             SESSION_ID,
-                            UUID.randomUUID(),
+                            UUIDv7Generator.generate(),
                             "PETTY_EXPENSE",
                             BigDecimal.TEN,
+                            "USD",
                             "SHOP_SUPPLIES",
                             null,
                             null,
@@ -398,10 +439,20 @@ class RegisterSessionCashMovementTest {
                         .isInstanceOf(RegisterSessionRequestValidationException.class);
             }
             assertThatThrownBy(() -> service.recordCashMovement(new CashMovementCommand(
-                            SESSION_ID, UUID.randomUUID(), "OTHER", BigDecimal.TEN, null, null, null, null, "x", null)))
+                            SESSION_ID,
+                            UUIDv7Generator.generate(),
+                            "OTHER",
+                            BigDecimal.TEN,
+                            "USD",
+                            null,
+                            null,
+                            null,
+                            null,
+                            "x",
+                            null)))
                     .isInstanceOf(RegisterSessionRequestValidationException.class);
             assertThatThrownBy(() -> service.recordCashMovement(new CashMovementCommand(
-                            SESSION_ID, null, "BANK_DROP", BigDecimal.TEN, null, null, "B", null, null, null)))
+                            SESSION_ID, null, "BANK_DROP", BigDecimal.TEN, "USD", null, null, "B", null, null, null)))
                     .isInstanceOf(RegisterSessionRequestValidationException.class)
                     .hasMessageContaining("requestId");
             assertThat(recorded).isEmpty();
@@ -417,6 +468,7 @@ class RegisterSessionCashMovementTest {
             when(floats.findByRegisterId(TERMINAL))
                     .thenReturn(Optional.of(ExtAccountingRegisterFloat.builder()
                             .registerId(TERMINAL)
+                            .locationId(LOCATION)
                             .amount(new BigDecimal("250.0000"))
                             .build()));
         }
@@ -429,7 +481,7 @@ class RegisterSessionCashMovementTest {
             CashMovementResult result = service.recordCashMovement(floatChange("FLOAT_INCREASE", "50.00", "token-1"));
 
             assertThat(result.movement().movementType()).isEqualTo("PAID_IN");
-            assertThat(result.movement().approvedBy()).isEqualTo(MANAGER_ID.toString());
+            assertThat(result.movement().approvedBy()).isEqualTo(MANAGER_ID);
             // The drawer now holds the configured float: a second increase matches nothing.
             assertThatThrownBy(() -> service.recordCashMovement(floatChange("FLOAT_INCREASE", "50.00", "token-1")))
                     .satisfies(e -> assertThat(refusal(e).refusal()).isEqualTo(Refusal.FLOAT_CHANGE_NOT_RECORDED));
@@ -461,15 +513,22 @@ class RegisterSessionCashMovementTest {
     @DisplayName(
             "AC10: the close fact is schema 2 with one entry per movement — reason, amount, details, clerk, approver")
     void closeFactCarriesMovements() {
-        service.recordCashMovement(petty(UUID.randomUUID(), "20.00", null));
-        service.recordCashMovement(bankDrop(UUID.randomUUID(), "300.00", "BAG-7"));
+        service.recordCashMovement(petty(UUIDv7Generator.generate(), "20.00", null));
+        service.recordCashMovement(bankDrop(UUIDv7Generator.generate(), "300.00", "BAG-7"));
         when(floats.findByRegisterId(TERMINAL))
                 .thenReturn(Optional.of(ExtAccountingRegisterFloat.builder()
                         .registerId(TERMINAL)
+                        .locationId(LOCATION)
                         .amount(new BigDecimal("150.0000"))
                         .build()));
         when(approvalService.use(
-                        eq("token-1"), eq(SESSION_ID), eq(CashMovementReason.FLOAT_DECREASE), any(), any(), any()))
+                        eq("token-1"),
+                        eq(SESSION_ID),
+                        eq(CashMovementReason.FLOAT_DECREASE),
+                        any(),
+                        eq("USD"),
+                        any(),
+                        any()))
                 .thenReturn(CashMovementApproval.builder()
                         .approvalId(APPROVAL_ID)
                         .approverUserId(MANAGER_ID)
@@ -481,6 +540,7 @@ class RegisterSessionCashMovementTest {
         ArgumentCaptor<RegisterSessionClosedV1> fact = ArgumentCaptor.forClass(RegisterSessionClosedV1.class);
         verify(publisher).publishRegisterSessionClosed(any(), fact.capture());
         assertThat(RegisterSessionClosedV1.SCHEMA_VERSION).isEqualTo(2);
+        assertThat(fact.getValue().currencyCode()).isEqualTo("USD");
         List<RegisterSessionClosedV1.Movement> facts = fact.getValue().movements();
         assertThat(facts).hasSize(3);
         assertThat(facts.get(0)).satisfies(m -> {
@@ -490,6 +550,8 @@ class RegisterSessionCashMovementTest {
             assertThat(m.categoryCode()).isEqualTo("SHOP_SUPPLIES");
             assertThat(m.receiptReference()).isEqualTo("R-20.00");
             assertThat(m.clerkId()).isEqualTo("cashier");
+            assertThat(m.clerkUserId()).isEqualTo(CASHIER_ID);
+            assertThat(m.currencyCode()).isEqualTo("USD");
             assertThat(m.approvedBy()).isNull();
         });
         assertThat(facts.get(1)).satisfies(m -> {
@@ -498,11 +560,159 @@ class RegisterSessionCashMovementTest {
         });
         assertThat(facts.get(2)).satisfies(m -> {
             assertThat(m.reason()).isEqualTo("FLOAT_DECREASE");
-            assertThat(m.approvedBy()).isEqualTo(MANAGER_ID.toString());
+            assertThat(m.approvedBy()).isEqualTo(MANAGER_ID);
         });
         // Theoretical cash still adds every movement signed by direction: 200 − 20 − 300 − 50.
         assertThat(fact.getValue().cashMovementTotal()).isEqualByComparingTo("-370.00");
         assertThat(fact.getValue().theoreticalCash()).isEqualByComparingTo("-170.00");
+    }
+
+    @Nested
+    @DisplayName("review round: identifiers, currency, location scope, float location (#2569)")
+    class ReviewRound {
+
+        @Test
+        @DisplayName("a requestId that is not a UUIDv7 is a 400 (Copilot)")
+        void requestIdMustBeVersionSeven() {
+            assertThatThrownBy(() -> service.recordCashMovement(petty(UUID.randomUUID(), "10.00", null)))
+                    .isInstanceOf(RegisterSessionRequestValidationException.class)
+                    .hasMessageContaining("UUIDv7");
+            assertThat(recorded).isEmpty();
+        }
+
+        @Test
+        @DisplayName("ADR-0067: a missing or non-ISO currency is 400, another ISO currency 422; the movement echoes it")
+        void currencyRules() {
+            assertThatThrownBy(() -> service.recordCashMovement(new CashMovementCommand(
+                            SESSION_ID,
+                            UUIDv7Generator.generate(),
+                            "BANK_DROP",
+                            BigDecimal.TEN,
+                            null,
+                            null,
+                            null,
+                            "B",
+                            null,
+                            null,
+                            null)))
+                    .isInstanceOf(RegisterSessionRequestValidationException.class)
+                    .hasMessageContaining("currencyCode");
+            assertThatThrownBy(() -> service.recordCashMovement(new CashMovementCommand(
+                            SESSION_ID,
+                            UUIDv7Generator.generate(),
+                            "BANK_DROP",
+                            BigDecimal.TEN,
+                            "XXZ",
+                            null,
+                            null,
+                            "B",
+                            null,
+                            null,
+                            null)))
+                    .isInstanceOf(RegisterSessionRequestValidationException.class);
+            assertThatThrownBy(() -> service.recordCashMovement(new CashMovementCommand(
+                            SESSION_ID,
+                            UUIDv7Generator.generate(),
+                            "BANK_DROP",
+                            BigDecimal.TEN,
+                            "CAD",
+                            null,
+                            null,
+                            "B",
+                            null,
+                            null,
+                            null)))
+                    .isInstanceOf(CurrencyNotSupportedException.class);
+            assertThat(recorded).isEmpty();
+
+            CashMovementResult drop = service.recordCashMovement(bankDrop(UUIDv7Generator.generate(), "10.00", "B"));
+            assertThat(drop.movement().currencyCode()).isEqualTo("USD");
+            assertThat(drop.movement().clerkUserId()).isEqualTo(CASHIER_ID);
+        }
+
+        @Test
+        @DisplayName("M3: a cashier scoped to another shop can neither record nor read the options — nothing recorded")
+        void cashierOutOfReachIsDenied() {
+            LocationAncestorResolver resolver = id -> new AncestorSets(Set.of(id), Set.of(id));
+            signIn(
+                    "cashier",
+                    LocationScope.of(
+                            Set.of(),
+                            Set.of("order:session:cash_movement"),
+                            Optional.of(Set.of(OTHER_LOCATION)),
+                            true,
+                            resolver));
+
+            assertThatThrownBy(() -> service.recordCashMovement(bankDrop(UUIDv7Generator.generate(), "10.00", "B")))
+                    .isInstanceOf(LocationScopeDeniedException.class);
+            assertThatThrownBy(() -> service.cashMovementOptions(SESSION_ID))
+                    .isInstanceOf(LocationScopeDeniedException.class);
+            assertThat(recorded).isEmpty();
+        }
+
+        @Test
+        @DisplayName("#2573: a float movement on a drawer whose register float is now held elsewhere is 422, never"
+                + " measured against zero")
+        void floatAtAnotherLocationRefusesFloatChanges() {
+            when(floats.findByRegisterId(TERMINAL))
+                    .thenReturn(Optional.of(ExtAccountingRegisterFloat.builder()
+                            .registerId(TERMINAL)
+                            .locationId(OTHER_LOCATION)
+                            .amount(new BigDecimal("250.0000"))
+                            .build()));
+
+            // A decrease of the whole drawer float would match a zero target; it must not.
+            assertThatThrownBy(() -> service.recordCashMovement(floatChange("FLOAT_DECREASE", "200.00", "token-1")))
+                    .satisfies(e -> {
+                        assertThat(refusal(e).refusal()).isEqualTo(Refusal.FLOAT_CHANGE_NOT_RECORDED);
+                        assertThat(e.getMessage())
+                                .contains("another location")
+                                .doesNotContain(OTHER_LOCATION.toString());
+                    });
+            assertThatThrownBy(() -> service.recordCashMovement(floatChange("FLOAT_INCREASE", "50.00", "token-1")))
+                    .satisfies(e -> assertThat(refusal(e).refusal()).isEqualTo(Refusal.FLOAT_CHANGE_NOT_RECORDED));
+            assertThat(recorded).isEmpty();
+        }
+
+        @Test
+        @DisplayName("l7: a FLOAT_DECREASE toward a negative configured float is refused")
+        void decreaseTowardNegativeTargetRefused() {
+            when(floats.findByRegisterId(TERMINAL))
+                    .thenReturn(Optional.of(ExtAccountingRegisterFloat.builder()
+                            .registerId(TERMINAL)
+                            .locationId(LOCATION)
+                            .amount(new BigDecimal("-25.0000"))
+                            .build()));
+
+            assertThatThrownBy(() -> service.recordCashMovement(floatChange("FLOAT_DECREASE", "225.00", "token-1")))
+                    .satisfies(e -> assertThat(refusal(e).refusal()).isEqualTo(Refusal.FLOAT_CHANGE_NOT_RECORDED));
+        }
+
+        @Test
+        @DisplayName("l4: only the requestId key maps to IDEMPOTENCY_CONFLICT; another integrity failure is not hidden")
+        void onlyTheRequestIdConstraintIsAnIdempotencyConflict() {
+            org.mockito.Mockito.doThrow(
+                            new DataIntegrityViolationException(
+                                    "violates check constraint cash_movement_reason_code_check"),
+                            new DataIntegrityViolationException(
+                                    "duplicate key value violates unique constraint \"uq_cash_movement_request\""))
+                    .when(movements)
+                    .saveAndFlush(any());
+
+            assertThatThrownBy(() -> service.recordCashMovement(bankDrop(UUIDv7Generator.generate(), "10.00", "B")))
+                    .isInstanceOf(DataIntegrityViolationException.class);
+            assertThatThrownBy(() -> service.recordCashMovement(bankDrop(UUIDv7Generator.generate(), "10.00", "B")))
+                    .isInstanceOf(CashMovementIdempotencyConflictException.class);
+        }
+
+        @Test
+        @DisplayName("l3: the command's string form never carries the approval token")
+        void commandToStringHidesToken() {
+            assertThat(petty(UUIDv7Generator.generate(), "10.00", "secret-token-value")
+                            .toString())
+                    .doesNotContain("secret-token-value")
+                    .contains("approvalToken=present");
+        }
     }
 
     private void closeSession() {

@@ -11,6 +11,12 @@ import java.util.UUID;
 @Schema(description = "Cash movement reasons, limits, running totals and petty-expense categories for one session")
 public record CashMovementOptionsResponse(
         @Schema(description = "The session") UUID sessionId,
+
+        @Schema(
+                description = "ISO 4217 code of the limits and running totals (the functional currency)",
+                example = "USD")
+        String currencyCode,
+
         @Schema(description = "One entry per fixed reason") List<ReasonOption> reasons,
 
         @Schema(description = "The ACTIVE petty-expense categories")

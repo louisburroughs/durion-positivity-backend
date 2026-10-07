@@ -3,13 +3,15 @@
 -- approvals, and pos-order's copies of accounting's petty-expense categories and register floats.
 --
 --   1. cash_movement gains its fixed reason and the reason's detail, the register's idempotency key
---      (request_id, unique per tenant), and the manager approval it used. The free-text reason becomes
+--      (request_id, unique per tenant), the cashier's user id, and the manager approval it used (the
+--      approver's user id and the approval). register_session counts failed approvals. The free-text reason becomes
 --      the optional note; rows recorded before this story keep their text there with a null reason_code,
 --      and every row recorded from now on carries a request_id and a reason_code.
 --   2. session_policy: one row per tenant (the defaults apply while there is none); session_policy_change:
 --      one history row per changed setting.
 --   3. cash_movement_approval: the step-up's single-use token, stored only as its SHA-256 hash, bound to
---      the session, reason, amount and category or vendor, with the approver's user id.
+--      the session, reason, amount (with its currency) and category or vendor, with the approver's user id.
+--   Every new money column states its ISO 4217 currency (ADR-0067 R-1): the functional currency.
 --   4. ext_accounting_petty_expense_category and ext_accounting_register_float: written only by
 --      accounting.petty-expense-category.changed and accounting.float.changed (S15), each keyed by the
 --      fact's aggregate (the accounting row id) and guarded by aggregate_version (ADR-0044 R3).
@@ -23,11 +25,13 @@ ALTER TABLE public.cash_movement ALTER COLUMN note DROP NOT NULL;
 ALTER TABLE public.cash_movement
     ADD COLUMN request_id uuid,
     ADD COLUMN reason_code character varying(32),
+    ADD COLUMN currency_code character varying(3),
     ADD COLUMN category_code character varying(64),
     ADD COLUMN vendor_id uuid,
     ADD COLUMN bag_number character varying(64),
     ADD COLUMN receipt_reference character varying(128),
-    ADD COLUMN approved_by character varying(255),
+    ADD COLUMN clerk_user_id uuid,
+    ADD COLUMN approved_by uuid,
     ADD COLUMN approval_id uuid;
 ALTER TABLE public.cash_movement
     ADD CONSTRAINT cash_movement_reason_code_check CHECK (reason_code IS NULL OR (reason_code)::text = ANY (ARRAY[
@@ -35,10 +39,16 @@ ALTER TABLE public.cash_movement
         'FLOAT_DECREASE'::text]));
 -- A movement recorded through the register's request carries its reason; only pre-S16 rows have neither.
 ALTER TABLE public.cash_movement
-    ADD CONSTRAINT cash_movement_reason_required_check CHECK (request_id IS NULL OR reason_code IS NOT NULL);
+    ADD CONSTRAINT cash_movement_reason_required_check
+        CHECK (request_id IS NULL OR (reason_code IS NOT NULL AND currency_code IS NOT NULL));
 ALTER TABLE ONLY public.cash_movement
     ADD CONSTRAINT uq_cash_movement_request UNIQUE (tenant_id, request_id);
 CREATE INDEX ix_cash_movement_session_reason ON public.cash_movement USING btree (tenant_id, session_id, reason_code);
+
+-- Failed manager approvals per drawer session: the step-up stops asking pos-security-service after a
+-- small number, so one drawer cannot be used to lock managers out (review l2).
+ALTER TABLE public.register_session
+    ADD COLUMN step_up_denials integer DEFAULT 0 NOT NULL;
 
 -- 2. Session policy and its history.
 CREATE TABLE public.session_policy (
@@ -50,6 +60,7 @@ CREATE TABLE public.session_policy (
     vendor_cod_allowed boolean NOT NULL,
     vendor_cod_limit numeric(19,4),
     over_short_tolerance numeric(19,4) NOT NULL,
+    currency_code character varying(3) NOT NULL,
     updated_by character varying(255) NOT NULL,
     created_at timestamp with time zone NOT NULL,
     updated_at timestamp with time zone NOT NULL,
@@ -112,6 +123,7 @@ CREATE TABLE public.cash_movement_approval (
     session_id uuid NOT NULL,
     reason_code character varying(32) NOT NULL,
     amount numeric(19,4) NOT NULL,
+    currency_code character varying(3) NOT NULL,
     category_code character varying(64),
     vendor_id uuid,
     token_hash character varying(64) NOT NULL,

@@ -54,7 +54,7 @@ class RegisterSessionCashMovementControllerTest extends BaseControllerSliceTest 
     private static final String CASH_MOVEMENT = "order:session:cash_movement";
 
     private static final String PETTY_BODY = """
-            {"requestId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4c01","reason":"PETTY_EXPENSE","amount":25.00,
+            {"requestId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4c01","reason":"PETTY_EXPENSE","amount":25.00,"currencyCode":"USD",
              "categoryCode":"SHOP_SUPPLIES","receiptReference":"R-1","note":"gloves","approvalToken":"tok",
              "clerkId":"X"}
             """;
@@ -73,13 +73,15 @@ class RegisterSessionCashMovementControllerTest extends BaseControllerSliceTest 
                 "PETTY_EXPENSE",
                 "PAID_OUT",
                 new BigDecimal("25.0000"),
+                "USD",
                 "SHOP_SUPPLIES",
                 null,
                 null,
                 "R-1",
                 "gloves",
                 "cashier",
-                "01900000-0000-7000-8000-00000000b001",
+                UUID.fromString("01900000-0000-7000-8000-00000000c001"),
+                UUID.fromString("01900000-0000-7000-8000-00000000b001"),
                 Instant.parse("2026-10-07T12:00:00Z"));
     }
 
@@ -96,13 +98,50 @@ class RegisterSessionCashMovementControllerTest extends BaseControllerSliceTest 
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.reason").value("PETTY_EXPENSE"))
                 .andExpect(jsonPath("$.approvedBy").value("01900000-0000-7000-8000-00000000b001"))
-                .andExpect(jsonPath("$.clerkId").value("cashier"));
+                .andExpect(jsonPath("$.clerkId").value("cashier"))
+                .andExpect(jsonPath("$.currencyCode").value("USD"));
 
         ArgumentCaptor<CashMovementCommand> command = ArgumentCaptor.forClass(CashMovementCommand.class);
         verify(registerSessionService).recordCashMovement(command.capture());
         assertThat(command.getValue().requestId()).isEqualTo(REQUEST_ID);
         assertThat(command.getValue().approvalToken()).isEqualTo("tok");
+        assertThat(command.getValue().currencyCode()).isEqualTo("USD");
         assertThat(command.getValue().toString()).doesNotContain("\"X\"").doesNotContain("clerkId");
+    }
+
+    @Test
+    @DisplayName("#2573: opening away from the register's float location is 422 REGISTER_FLOAT_LOCATION_MISMATCH")
+    void openAwayFromTheFloatIs422() throws Exception {
+        UUID requested = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a90");
+        UUID floatAt = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a91");
+        when(registerSessionService.openSession(any()))
+                .thenThrow(new com.positivity.order.internal.exception.RegisterFloatLocationMismatchException(
+                        "T-1", requested, floatAt))
+                .thenThrow(new com.positivity.order.internal.exception.RegisterFloatLocationMismatchException(
+                        "T-1", requested, null));
+        String body = "{\"terminalId\":\"T-1\",\"locationId\":\"" + requested + "\"}";
+
+        mockMvc.perform(withGatewayAuth(
+                        post("/v1/orders/sessions")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body),
+                        "order:session:open"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("REGISTER_FLOAT_LOCATION_MISMATCH"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("terminalId"))
+                .andExpect(jsonPath("$.fieldErrors[1].message").value(requested.toString()))
+                .andExpect(jsonPath("$.fieldErrors[2].message").value(floatAt.toString()));
+        String hidden = mockMvc.perform(withGatewayAuth(
+                        post("/v1/orders/sessions")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body),
+                        "order:session:open"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.fieldErrors.length()").value(2))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        assertThat(hidden).doesNotContain(floatAt.toString());
     }
 
     @Test
@@ -174,19 +213,22 @@ class RegisterSessionCashMovementControllerTest extends BaseControllerSliceTest 
     @DisplayName("step-up: 201 with the token and its expiry")
     void stepUpIssuesToken() throws Exception {
         when(cashMovementApprovalService.approve(any()))
-                .thenReturn(new CashMovementApprovalResult("tok-123", Instant.parse("2026-10-07T12:05:00Z")));
+                .thenReturn(new CashMovementApprovalResult(
+                        "tok-123", Instant.parse("2026-10-07T12:05:00Z"), new BigDecimal("25.0000"), "USD"));
 
         mockMvc.perform(withGatewayAuth(
                         post("/v1/orders/sessions/{sessionId}/cash-movement-approvals", SESSION_ID)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
                                                 {"managerUsername":"jane","managerPassword":"s3cret",
-                                                 "reason":"PETTY_EXPENSE","amount":25.00,"categoryCode":"SHOP_SUPPLIES"}
+                                                 "reason":"PETTY_EXPENSE","amount":25.00,"currencyCode":"USD",
+                                                 "categoryCode":"SHOP_SUPPLIES"}
                                                 """),
                         CASH_MOVEMENT))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.approvalToken").value("tok-123"))
-                .andExpect(jsonPath("$.expiresAt").value("2026-10-07T12:05:00Z"));
+                .andExpect(jsonPath("$.expiresAt").value("2026-10-07T12:05:00Z"))
+                .andExpect(jsonPath("$.currencyCode").value("USD"));
 
         ArgumentCaptor<CashMovementApprovalCommand> command =
                 ArgumentCaptor.forClass(CashMovementApprovalCommand.class);
@@ -203,7 +245,8 @@ class RegisterSessionCashMovementControllerTest extends BaseControllerSliceTest 
                         Refusal.APPROVAL_DENIED, "The manager's credentials could not be verified for this approval"))
                 .thenThrow(new StepUpUnavailableException("down", null));
         String body = """
-                {"managerUsername":"jane","managerPassword":"wrong","reason":"FLOAT_INCREASE","amount":50.00}
+                {"managerUsername":"jane","managerPassword":"wrong","reason":"FLOAT_INCREASE","amount":50.00,
+                 "currencyCode":"USD"}
                 """;
 
         String denied = mockMvc.perform(withGatewayAuth(
@@ -232,6 +275,7 @@ class RegisterSessionCashMovementControllerTest extends BaseControllerSliceTest 
         when(registerSessionService.cashMovementOptions(SESSION_ID))
                 .thenReturn(new CashMovementOptions(
                         SESSION_ID,
+                        "USD",
                         List.of(new CashMovementOptions.ReasonOption(
                                 "PETTY_EXPENSE",
                                 "PAID_OUT",
@@ -246,6 +290,32 @@ class RegisterSessionCashMovementControllerTest extends BaseControllerSliceTest 
                         get("/v1/orders/sessions/{sessionId}/cash-movement-options", SESSION_ID), CASH_MOVEMENT))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reasons[0].runningTotal").value(55.0))
-                .andExpect(jsonPath("$.categories[0].code").value("SHOP_SUPPLIES"));
+                .andExpect(jsonPath("$.categories[0].code").value("SHOP_SUPPLIES"))
+                .andExpect(jsonPath("$.currencyCode").value("USD"));
+    }
+
+    @Test
+    @DisplayName("ADR-0067: another currency is 422 CURRENCY_NOT_SUPPORTED; a non-ISO code is 400 before the service")
+    void currencyAnswers() throws Exception {
+        when(registerSessionService.recordCashMovement(any()))
+                .thenThrow(new com.positivity.order.internal.exception.CurrencyNotSupportedException("CAD"));
+
+        mockMvc.perform(withGatewayAuth(
+                        post("/v1/orders/sessions/{sessionId}/cash-movements", SESSION_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(PETTY_BODY.replace("\"USD\"", "\"CAD\"")),
+                        CASH_MOVEMENT))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("CURRENCY_NOT_SUPPORTED"));
+        mockMvc.perform(withGatewayAuth(
+                        post("/v1/orders/sessions/{sessionId}/cash-movement-approvals", SESSION_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                                {"managerUsername":"jane","managerPassword":"x","reason":"BANK_DROP",
+                                                 "amount":5.00,"currencyCode":"DOLLARS"}
+                                                """),
+                        CASH_MOVEMENT))
+                .andExpect(status().isBadRequest());
+        verify(cashMovementApprovalService, never()).approve(any());
     }
 }

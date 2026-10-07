@@ -7,10 +7,14 @@ import com.positivity.kafka.common.KafkaRails;
 import com.positivity.order.internal.entity.ExtAccountingPettyExpenseCategory;
 import com.positivity.order.internal.entity.ExtAccountingRegisterFloat;
 import com.positivity.order.internal.entity.ProcessedEvent;
+import com.positivity.order.internal.entity.RegisterSession;
+import com.positivity.order.internal.entity.RegisterSessionStatus;
 import com.positivity.order.internal.repository.ExtAccountingPettyExpenseCategoryRepository;
 import com.positivity.order.internal.repository.ExtAccountingRegisterFloatRepository;
 import com.positivity.order.internal.repository.ProcessedEventRepository;
+import com.positivity.order.internal.repository.RegisterSessionRepository;
 import com.positivity.tenancy.kafka.RetryableConsumerFailures;
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.math.BigDecimal;
@@ -19,6 +23,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -50,8 +55,9 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <p>Transaction shape (#2146, ADR-0044 §4 amendment 2026-09-23): the listener method is not {@code
  * @Transactional}; the handler and its {@code processed_events} mark run together in a {@code
- * REQUIRES_NEW} transaction of their own. A permanent failure rolls back only that work and is logged
- * and skipped; transient database errors propagate for container retry and dead-lettering.
+ * REQUIRES_NEW} transaction of their own. A permanent failure rolls back only that work, is logged, and
+ * its eventId is then marked processed in a transaction of its own, so the manifest does not report it
+ * as drift forever; transient database errors propagate for container retry and dead-lettering.
  */
 @Slf4j
 @Component
@@ -60,12 +66,17 @@ public class AccountingEventsListener {
 
     static final String OWNER = "accounting";
     static final String LAG_TIMER = "replica.lag";
+    static final String FLOAT_LOCATION_MISMATCH = "order.session.float_location_mismatch";
+
+    private static final List<RegisterSessionStatus> ACTIVE_STATUSES =
+            List.of(RegisterSessionStatus.OPEN, RegisterSessionStatus.CLOSING);
 
     private final Clock clock;
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
     private final ExtAccountingPettyExpenseCategoryRepository categoryRepository;
     private final ExtAccountingRegisterFloatRepository registerFloatRepository;
+    private final RegisterSessionRepository registerSessionRepository;
     private final @Nullable MeterRegistry meterRegistry;
 
     /** The event's handler work and its processed mark, in a transaction of their own. */
@@ -77,6 +88,7 @@ public class AccountingEventsListener {
             ProcessedEventRepository processedEventRepository,
             ExtAccountingPettyExpenseCategoryRepository categoryRepository,
             ExtAccountingRegisterFloatRepository registerFloatRepository,
+            RegisterSessionRepository registerSessionRepository,
             PlatformTransactionManager transactionManager,
             ObjectProvider<MeterRegistry> meterRegistry) {
         this.clock = clock;
@@ -84,6 +96,7 @@ public class AccountingEventsListener {
         this.processedEventRepository = processedEventRepository;
         this.categoryRepository = categoryRepository;
         this.registerFloatRepository = registerFloatRepository;
+        this.registerSessionRepository = registerSessionRepository;
         this.meterRegistry = meterRegistry.getIfAvailable();
         this.handlerTransaction = new TransactionTemplate(transactionManager);
         this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -129,7 +142,18 @@ public class AccountingEventsListener {
                 throw e;
             }
             log.warn("Skipping malformed accounting event eventId={} eventType={}", eventId, eventType, e);
+            // Permanent: mark it in a transaction of its own, so accounting's manifest stops reporting the
+            // same unrecoverable event as drift on every window (AGENTS.md, ADR-0044 §4).
+            recordFailed(eventId);
         }
+    }
+
+    private void recordFailed(String eventId) {
+        handlerTransaction.executeWithoutResult(_ -> processedEventRepository.save(ProcessedEvent.builder()
+                .eventId(eventId)
+                .owner(OWNER)
+                .processedAt(Instant.now(clock))
+                .build()));
     }
 
     private void applyCategory(JsonNode envelope) {
@@ -177,6 +201,35 @@ public class AccountingEventsListener {
         copy.setSyncedAt(Instant.now(clock));
         registerFloatRepository.save(copy);
         recordLag(envelope, "register-float");
+        warnOnActiveSessionElsewhere(copy, envelope.path("payload").path("kind").stringValue("UNKNOWN"));
+    }
+
+    /**
+     * #2573 (Order ruling): no register moves while its drawer is open. The copy follows accounting by
+     * state, whatever the kind (a relocation included); an OPEN or CLOSING session of the terminal at
+     * another location is left as it is, and the inconsistency is logged and counted for an operator.
+     */
+    private void warnOnActiveSessionElsewhere(ExtAccountingRegisterFloat copy, String kind) {
+        List<RegisterSession> active =
+                registerSessionRepository.findByTerminalIdAndStatusIn(copy.getRegisterId(), ACTIVE_STATUSES);
+        for (RegisterSession session : active) {
+            if (!copy.getLocationId().equals(session.getLocationId())) {
+                log.warn(
+                        "Register {} float is now at another location than its {} session {}; the session is"
+                                + " left unchanged (kind={})",
+                        copy.getRegisterId(),
+                        session.getStatus(),
+                        session.getSessionId(),
+                        kind);
+                if (meterRegistry != null) {
+                    Counter.builder(FLOAT_LOCATION_MISMATCH)
+                            .description("Register float facts whose location differs from an open drawer's")
+                            .tag("kind", kind)
+                            .register(meterRegistry)
+                            .increment();
+                }
+            }
+        }
     }
 
     /** {@code replica.lag}: how long after accounting committed the fact this copy applied it. */

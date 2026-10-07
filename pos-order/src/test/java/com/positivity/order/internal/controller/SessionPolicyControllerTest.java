@@ -38,7 +38,8 @@ class SessionPolicyControllerTest extends BaseControllerSliceTest {
 
     private static final String MANAGE = "order:session_policy:manage";
     private static final String BODY = """
-            {"pettyExpense":{"allowed":true,"cashierLimit":50.00},
+            {"version":2,"currencyCode":"USD",
+             "pettyExpense":{"allowed":true,"cashierLimit":50.00},
              "vendorCod":{"allowed":false,"cashierLimit":null},
              "overShortTolerance":3.00,
              "justification":"Tighter count after the audit"}
@@ -48,7 +49,8 @@ class SessionPolicyControllerTest extends BaseControllerSliceTest {
     private SessionPolicyService sessionPolicyService;
 
     private static SessionPolicyView defaults() {
-        return new SessionPolicyView(null, true, new BigDecimal("50.0000"), false, null, new BigDecimal("5.0000"));
+        return new SessionPolicyView(
+                null, true, new BigDecimal("50.0000"), false, null, new BigDecimal("5.0000"), "USD");
     }
 
     @Test
@@ -71,7 +73,8 @@ class SessionPolicyControllerTest extends BaseControllerSliceTest {
                 .andExpect(jsonPath("$.types[3].type").value("FLOAT_CHANGE"))
                 .andExpect(jsonPath("$.types[3].alwaysNeedsManager").value(true))
                 .andExpect(jsonPath("$.types[3].editable").value(false))
-                .andExpect(jsonPath("$.overShortTolerance").value(5.0));
+                .andExpect(jsonPath("$.overShortTolerance").value(5.0))
+                .andExpect(jsonPath("$.currencyCode").value("USD"));
     }
 
     @Test
@@ -79,7 +82,7 @@ class SessionPolicyControllerTest extends BaseControllerSliceTest {
     void putUpdates() throws Exception {
         when(sessionPolicyService.update(any()))
                 .thenReturn(new SessionPolicyView(
-                        0L, true, new BigDecimal("50.0000"), false, null, new BigDecimal("3.0000")));
+                        3L, true, new BigDecimal("50.0000"), false, null, new BigDecimal("3.0000"), "USD"));
         when(sessionPolicyService.history())
                 .thenReturn(List.of(new SessionPolicyChangeView(
                         "OVER_SHORT_TOLERANCE",
@@ -104,6 +107,8 @@ class SessionPolicyControllerTest extends BaseControllerSliceTest {
         assertThat(command.getValue().overShortTolerance()).isEqualByComparingTo("3.00");
         assertThat(command.getValue().pettyExpenseAllowed()).isTrue();
         assertThat(command.getValue().vendorCodAllowed()).isFalse();
+        assertThat(command.getValue().expectedVersion()).isEqualTo(2L);
+        assertThat(command.getValue().currencyCode()).isEqualTo("USD");
     }
 
     @Test
@@ -141,5 +146,29 @@ class SessionPolicyControllerTest extends BaseControllerSliceTest {
                         MANAGE))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("SESSION_POLICY_CONFLICT"));
+    }
+
+    @Test
+    @DisplayName("ADR-0067: another currency is 422 CURRENCY_NOT_SUPPORTED; a non-ISO code is 400 before the service")
+    void currencyAnswers() throws Exception {
+        when(sessionPolicyService.update(any()))
+                .thenThrow(new com.positivity.order.internal.exception.CurrencyNotSupportedException("CAD"));
+
+        mockMvc.perform(withGatewayAuth(
+                        put("/v1/orders/session-policy")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(BODY.replace("\"USD\"", "\"CAD\"")),
+                        MANAGE))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("CURRENCY_NOT_SUPPORTED"));
+        org.mockito.Mockito.clearInvocations(sessionPolicyService);
+        mockMvc.perform(withGatewayAuth(
+                        put("/v1/orders/session-policy")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(BODY.replace("\"USD\"", "\"DOLLARS\"")),
+                        MANAGE))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        verify(sessionPolicyService, never()).update(any());
     }
 }

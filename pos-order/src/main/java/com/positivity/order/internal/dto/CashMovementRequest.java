@@ -3,10 +3,12 @@ package com.positivity.order.internal.dto;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
+import com.positivity.tax.common.validation.IsoCurrencyCode;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.util.UUID;
 import lombok.Data;
+import lombok.ToString;
 
 /**
  * Request payload for recording a drawer cash movement (CAP:550 S16, #2512; AW15). The cashier is
@@ -33,6 +35,13 @@ public class CashMovementRequest {
 
     @Schema(description = "Positive cash amount moved", example = "30.00", requiredMode = REQUIRED)
     private BigDecimal amount;
+
+    @Schema(
+            description = "ISO 4217 code of the amount; must be the functional currency (ADR-0067)",
+            example = "USD",
+            requiredMode = REQUIRED)
+    @IsoCurrencyCode
+    private String currencyCode;
 
     @Schema(
             description = "ACTIVE petty-expense category code; required for PETTY_EXPENSE",
@@ -65,5 +74,6 @@ public class CashMovementRequest {
             description = "A manager's single-use approval token from the cash-movement-approvals step-up; required"
                     + " above the cashier limit and for every float change",
             requiredMode = NOT_REQUIRED)
+    @ToString.Exclude
     private String approvalToken;
 }

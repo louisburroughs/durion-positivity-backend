@@ -15,6 +15,7 @@ import org.jspecify.annotations.Nullable;
  * @param requestId the register's idempotency key (UUIDv7)
  * @param reason one of the fixed reasons, as sent
  * @param amount the positive amount
+ * @param currencyCode the amount's ISO 4217 code; must be the functional currency
  * @param categoryCode the petty-expense category, for {@code PETTY_EXPENSE}
  * @param vendorId the vendor, for {@code VENDOR_COD}
  * @param bagNumber the deposit bag, for {@code BANK_DROP}
@@ -27,6 +28,7 @@ public record CashMovementCommand(
         @Nullable UUID requestId,
         @Nullable String reason,
         @Nullable BigDecimal amount,
+        @Nullable String currencyCode,
         @Nullable String categoryCode,
         @Nullable UUID vendorId,
         @Nullable String bagNumber,
@@ -36,5 +38,15 @@ public record CashMovementCommand(
 
     public CashMovementCommand {
         Objects.requireNonNull(sessionId, "sessionId must not be null");
+    }
+
+    /** Never prints the approval token. */
+    @Override
+    public String toString() {
+        return "CashMovementCommand[sessionId=" + sessionId + ", requestId=" + requestId + ", reason=" + reason
+                + ", amount=" + amount + ", currencyCode=" + currencyCode + ", categoryCode=" + categoryCode
+                + ", vendorId=" + vendorId + ", bagNumber="
+                + bagNumber + ", receiptReference=" + receiptReference + ", approvalToken="
+                + (approvalToken == null ? "absent" : "present") + "]";
     }
 }

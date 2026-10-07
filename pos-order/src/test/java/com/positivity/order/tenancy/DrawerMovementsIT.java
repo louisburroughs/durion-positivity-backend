@@ -6,9 +6,14 @@ import static com.positivity.tenancy.testing.TenantTestSupport.asTenant;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.positivity.order.internal.config.OutboxEventWriter;
+import com.positivity.order.internal.entity.CashMovementApproval;
+import com.positivity.order.internal.entity.CashMovementApprovalStatus;
+import com.positivity.order.internal.entity.CashMovementReason;
 import com.positivity.order.internal.entity.ExtAccountingPettyExpenseCategory;
 import com.positivity.order.internal.entity.ExtAccountingRegisterFloat;
 import com.positivity.order.internal.entity.OutboxEvent;
+import com.positivity.order.internal.exception.CashMovementRefusedException;
+import com.positivity.order.internal.repository.CashMovementApprovalRepository;
 import com.positivity.order.internal.repository.ExtAccountingPettyExpenseCategoryRepository;
 import com.positivity.order.internal.repository.ExtAccountingRegisterFloatRepository;
 import com.positivity.order.internal.repository.OutboxEventRepository;
@@ -19,15 +24,25 @@ import com.positivity.order.internal.service.model.OpenSessionCommand;
 import com.positivity.order.internal.service.model.UpdateSessionPolicyCommand;
 import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.security.common.LocationScope;
+import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.tenancy.TenantContext;
 import com.positivity.tenancy.TenantResolver;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -81,12 +96,24 @@ class DrawerMovementsIT extends PostgresTenancyTestBase {
     @Autowired
     private ObjectMapper objectMapper;
 
+    private static final UUID CASHIER_ID = UUID.fromString("01900000-0000-7000-8000-0000000c0001");
+    private static final UUID MANAGER_ID = UUID.fromString("01900000-0000-7000-8000-0000000b0001");
+
+    @Autowired
+    private CashMovementApprovalRepository approvals;
+
     @BeforeEach
     void signIn() {
+        signInAsCashier();
+    }
+
+    private static void signInAsCashier() {
         var token = new UsernamePasswordAuthenticationToken("cashier-it", "n/a", List.of());
         token.setDetails(Map.of(
                 GatewaySecurityConstants.DETAIL_USERNAME,
                 "cashier-it",
+                GatewaySecurityConstants.DETAIL_USER_ID,
+                CASHIER_ID,
                 GatewaySecurityConstants.DETAIL_LOCATION_SCOPE,
                 LocationScope.unscoped()));
         SecurityContextHolder.getContext().setAuthentication(token);
@@ -104,8 +131,15 @@ class DrawerMovementsIT extends PostgresTenancyTestBase {
         String register = "T-" + UUID.randomUUID();
         asTenant(TENANT_A, () -> {
             sessionPolicyService.update(new UpdateSessionPolicyCommand(
-                    true, new BigDecimal("40.00"), false, null, new BigDecimal("3.00"), "Tenant A tightens its count"));
-            floats.saveAndFlush(floatCopy(register, "200.00"));
+                    sessionPolicyService.current().version(),
+                    "USD",
+                    true,
+                    new BigDecimal("40.00"),
+                    false,
+                    null,
+                    new BigDecimal("3.00"),
+                    "Tenant A tightens its count"));
+            floats.saveAndFlush(floatCopy(register, "200.00", UUID.randomUUID()));
             categories.saveAndFlush(category("IT_" + register.substring(2, 10)));
         });
 
@@ -129,16 +163,18 @@ class DrawerMovementsIT extends PostgresTenancyTestBase {
         String register = "T-" + UUID.randomUUID();
         String categoryCode = "IT_" + register.substring(2, 10);
         UUID sessionId = asTenant(TENANT_A, () -> {
-            floats.saveAndFlush(floatCopy(register, "200.00"));
+            UUID shop = UUID.randomUUID();
+            floats.saveAndFlush(floatCopy(register, "200.00", shop));
             categories.saveAndFlush(category(categoryCode));
             UUID id = registerSessionService
-                    .openSession(new OpenSessionCommand(register, null))
+                    .openSession(new OpenSessionCommand(register, shop))
                     .sessionId();
             registerSessionService.recordCashMovement(new CashMovementCommand(
                     id,
-                    UUID.randomUUID(),
+                    UUIDv7Generator.generate(),
                     "PETTY_EXPENSE",
                     new BigDecimal("12.50"),
+                    "USD",
                     categoryCode,
                     null,
                     null,
@@ -147,9 +183,10 @@ class DrawerMovementsIT extends PostgresTenancyTestBase {
                     null));
             registerSessionService.recordCashMovement(new CashMovementCommand(
                     id,
-                    UUID.randomUUID(),
+                    UUIDv7Generator.generate(),
                     "BANK_DROP",
                     new BigDecimal("100.00"),
+                    "USD",
                     null,
                     null,
                     "BAG-IT-1",
@@ -181,13 +218,98 @@ class DrawerMovementsIT extends PostgresTenancyTestBase {
         assertThat(movements.get(1).path("reason").stringValue()).isEqualTo("BANK_DROP");
         assertThat(movements.get(1).path("bagNumber").stringValue()).isEqualTo("BAG-IT-1");
         assertThat(movements.get(1).path("direction").stringValue()).isEqualTo("OUT");
+        assertThat(movements.get(0).path("currencyCode").stringValue()).isEqualTo("USD");
+        assertThat(movements.get(0).path("clerkUserId").stringValue()).isEqualTo(CASHIER_ID.toString());
+        assertThat(payload.path("currencyCode").stringValue()).isEqualTo("USD");
     }
 
-    private static ExtAccountingRegisterFloat floatCopy(String register, String amount) {
+    /**
+     * Review m6: two registers presenting the same single-use token at once. The session's row lock
+     * serialises them; the one that waits re-reads the approval as USED and is refused, so exactly one
+     * movement records the manager's approval.
+     */
+    @Test
+    @DisplayName("a token presented twice at once approves exactly one movement")
+    void concurrentUseOfOneTokenApprovesOnce() throws Exception {
+        String register = "T-" + UUID.randomUUID();
+        String categoryCode = "IT_" + register.substring(2, 10);
+        String token = "it-token-" + UUID.randomUUID();
+        UUID sessionId = asTenant(TENANT_A, () -> {
+            UUID shop = UUID.randomUUID();
+            categories.saveAndFlush(category(categoryCode));
+            UUID id = registerSessionService
+                    .openSession(new OpenSessionCommand(register, shop))
+                    .sessionId();
+            approvals.saveAndFlush(CashMovementApproval.builder()
+                    .sessionId(id)
+                    .reasonCode(CashMovementReason.PETTY_EXPENSE)
+                    .amount(new BigDecimal("60.0000"))
+                    .currencyCode("USD")
+                    .categoryCode(categoryCode)
+                    .tokenHash(sha256(token))
+                    .approverUserId(MANAGER_ID)
+                    .requestedBy("cashier-it")
+                    .status(CashMovementApprovalStatus.ISSUED)
+                    .expiresAt(Instant.now().plusSeconds(3600))
+                    .build());
+            return id;
+        });
+
+        CountDownLatch start = new CountDownLatch(1);
+        Callable<String> attempt = () -> {
+            signInAsCashier();
+            try {
+                start.await();
+                return asTenant(TENANT_A, () -> {
+                    try {
+                        registerSessionService.recordCashMovement(new CashMovementCommand(
+                                sessionId,
+                                UUIDv7Generator.generate(),
+                                "PETTY_EXPENSE",
+                                new BigDecimal("60.00"),
+                                "USD",
+                                categoryCode,
+                                null,
+                                null,
+                                "R-IT-2",
+                                "gloves",
+                                token));
+                        return "recorded";
+                    } catch (CashMovementRefusedException e) {
+                        return e.refusal().name();
+                    }
+                });
+            } finally {
+                SecurityContextHolder.clearContext();
+            }
+        };
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<String> first = pool.submit(attempt);
+            Future<String> second = pool.submit(attempt);
+            start.countDown();
+            assertThat(List.of(first.get(60, TimeUnit.SECONDS), second.get(60, TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder("recorded", "APPROVAL_INVALID");
+        } finally {
+            pool.shutdownNow();
+        }
+        asTenant(
+                TENANT_A,
+                () -> assertThat(registerSessionService.listCashMovements(sessionId))
+                        .singleElement()
+                        .satisfies(m -> assertThat(m.approvedBy()).isEqualTo(MANAGER_ID)));
+    }
+
+    private static String sha256(String token) throws Exception {
+        return HexFormat.of()
+                .formatHex(MessageDigest.getInstance("SHA-256").digest(token.getBytes(StandardCharsets.UTF_8)));
+    }
+
+    private static ExtAccountingRegisterFloat floatCopy(String register, String amount, UUID location) {
         return ExtAccountingRegisterFloat.builder()
                 .registerFloatId(UUID.randomUUID())
                 .registerId(register)
-                .locationId(UUID.randomUUID())
+                .locationId(location)
                 .amount(new BigDecimal(amount))
                 .effectiveDate(LocalDate.of(2026, 10, 7))
                 .aggregateVersion(1L)

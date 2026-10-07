@@ -20,6 +20,7 @@ import com.positivity.order.internal.entity.OrderPaymentRecord;
 import com.positivity.order.internal.entity.RegisterSession;
 import com.positivity.order.internal.entity.RegisterSessionStatus;
 import com.positivity.order.internal.entity.SalesOrderStatus;
+import com.positivity.order.internal.exception.RegisterFloatLocationMismatchException;
 import com.positivity.order.internal.exception.RegisterSessionConflictException;
 import com.positivity.order.internal.exception.RegisterSessionNotFoundException;
 import com.positivity.order.internal.exception.SessionCloseBlockedException;
@@ -106,7 +107,7 @@ class RegisterSessionServiceImplTest {
 
     /** The drawer policy's defaults (CAP:550 S16): tolerance 5.00, petty on at 50.00, COD off. */
     static final SessionPolicyView DEFAULT_POLICY =
-            new SessionPolicyView(null, true, new BigDecimal("50.0000"), false, null, new BigDecimal("5.0000"));
+            new SessionPolicyView(null, true, new BigDecimal("50.0000"), false, null, new BigDecimal("5.0000"), "USD");
 
     @org.junit.jupiter.api.BeforeEach
     void setUp() {
@@ -123,6 +124,7 @@ class RegisterSessionServiceImplTest {
                 approvalService,
                 registerFloatRepository,
                 categoryRepository,
+                new com.positivity.order.internal.config.FunctionalCurrency("USD"),
                 clock,
                 meters);
         org.mockito.Mockito.lenient().when(sessionPolicyService.current()).thenReturn(DEFAULT_POLICY);
@@ -229,11 +231,14 @@ class RegisterSessionServiceImplTest {
         prior.setCountedCash(new BigDecimal("275.5000"));
         when(registerSessionRepository.existsByTerminalIdAndStatusIn(eq(TERMINAL), any()))
                 .thenReturn(false);
-        when(registerSessionRepository.findFirstByTerminalIdOrderByOpenedAtDesc(TERMINAL))
+        // The previous count is never the opening float; with a float copy its location wins (#2573).
+        org.mockito.Mockito.lenient()
+                .when(registerSessionRepository.findFirstByTerminalIdOrderByOpenedAtDesc(TERMINAL))
                 .thenReturn(Optional.of(prior));
         when(registerFloatRepository.findByRegisterId(TERMINAL))
                 .thenReturn(Optional.of(ExtAccountingRegisterFloat.builder()
                         .registerId(TERMINAL)
+                        .locationId(LOCATION)
                         .amount(new BigDecimal("200.0000"))
                         .build()));
         when(registerSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -245,21 +250,119 @@ class RegisterSessionServiceImplTest {
     }
 
     @Test
-    @DisplayName(
-            "RSS-002b (CAP:550 S16): a negative configured float (after an accounting reversal) opens as it stands")
+    @DisplayName("RSS-002b (CAP:550 S16, decision l7): a negative configured float (after an accounting reversal) opens"
+            + " the drawer at zero")
     void open_negativeConfiguredFloat() {
         when(registerSessionRepository.existsByTerminalIdAndStatusIn(eq(TERMINAL), any()))
                 .thenReturn(false);
         when(registerFloatRepository.findByRegisterId(TERMINAL))
                 .thenReturn(Optional.of(ExtAccountingRegisterFloat.builder()
                         .registerId(TERMINAL)
+                        .locationId(LOCATION)
                         .amount(new BigDecimal("-25.0000"))
                         .build()));
         when(registerSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         RegisterSessionSummary summary = service.openSession(new OpenSessionCommand(TERMINAL, LOCATION));
 
-        assertThat(summary.openingFloat()).isEqualByComparingTo("-25.00");
+        assertThat(summary.openingFloat()).isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    @DisplayName("RSS-002c (#2573): opening at A while the register's float is held at B is 422, no session row")
+    void open_atAnotherLocationThanTheFloatIsRefused() {
+        when(registerSessionRepository.existsByTerminalIdAndStatusIn(eq(TERMINAL), any()))
+                .thenReturn(false);
+        when(registerFloatRepository.findByRegisterId(TERMINAL))
+                .thenReturn(Optional.of(ExtAccountingRegisterFloat.builder()
+                        .registerId(TERMINAL)
+                        .locationId(OTHER_LOCATION)
+                        .amount(new BigDecimal("200.0000"))
+                        .build()));
+
+        assertThatThrownBy(() -> service.openSession(new OpenSessionCommand(TERMINAL, LOCATION)))
+                .isInstanceOf(RegisterFloatLocationMismatchException.class)
+                .satisfies(e -> {
+                    RegisterFloatLocationMismatchException mismatch = (RegisterFloatLocationMismatchException) e;
+                    assertThat(mismatch.terminalId()).isEqualTo(TERMINAL);
+                    assertThat(mismatch.requestedLocationId()).isEqualTo(LOCATION);
+                    // An unscoped caller may see the float's location.
+                    assertThat(mismatch.floatLocationId()).isEqualTo(OTHER_LOCATION);
+                });
+        verify(registerSessionRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("RSS-002d (#2573): a caller whose scope does not cover the float's location is not told it")
+    void open_mismatchHidesAnOutOfScopeFloatLocation() {
+        authenticate(openScopedTo(REGION_NODE));
+        when(registerSessionRepository.existsByTerminalIdAndStatusIn(eq(TERMINAL), any()))
+                .thenReturn(false);
+        when(registerFloatRepository.findByRegisterId(TERMINAL))
+                .thenReturn(Optional.of(ExtAccountingRegisterFloat.builder()
+                        .registerId(TERMINAL)
+                        .locationId(OTHER_LOCATION)
+                        .amount(new BigDecimal("200.0000"))
+                        .build()));
+
+        assertThatThrownBy(() -> service.openSession(new OpenSessionCommand(TERMINAL, LOCATION)))
+                .isInstanceOf(RegisterFloatLocationMismatchException.class)
+                .satisfies(e -> assertThat(((RegisterFloatLocationMismatchException) e).floatLocationId())
+                        .isNull())
+                .satisfies(e -> assertThat(e.getMessage()).doesNotContain(OTHER_LOCATION.toString()));
+        verify(registerSessionRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("RSS-002e (#2573): with no locationId the drawer opens where its float is held, not where it last was")
+    void open_withoutLocationFollowsTheFloat() {
+        RegisterSession prior = openSession(UUID.randomUUID());
+        prior.setStatus(RegisterSessionStatus.CLOSED);
+        when(registerSessionRepository.existsByTerminalIdAndStatusIn(eq(TERMINAL), any()))
+                .thenReturn(false);
+        org.mockito.Mockito.lenient()
+                .when(registerSessionRepository.findFirstByTerminalIdOrderByOpenedAtDesc(TERMINAL))
+                .thenReturn(Optional.of(prior)); // previous session at LOCATION
+        when(registerFloatRepository.findByRegisterId(TERMINAL))
+                .thenReturn(Optional.of(ExtAccountingRegisterFloat.builder()
+                        .registerId(TERMINAL)
+                        .locationId(OTHER_LOCATION)
+                        .amount(new BigDecimal("180.0000"))
+                        .build()));
+        when(registerSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        RegisterSessionSummary summary = service.openSession(new OpenSessionCommand(TERMINAL, null));
+
+        assertThat(summary.locationId()).isEqualTo(OTHER_LOCATION);
+        assertThat(summary.openingFloat()).isEqualByComparingTo("180.00");
+    }
+
+    @Test
+    @DisplayName("RSS-006b (CAP:550 S16 AC6): with the tolerance lowered to 3.00, an over/short of 4.00 needs"
+            + " approve_variance")
+    void confirmClose_policyToleranceApplies() {
+        org.mockito.Mockito.when(sessionPolicyService.current())
+                .thenReturn(new SessionPolicyView(
+                        1L, true, new BigDecimal("50.0000"), false, null, new BigDecimal("3.0000"), "USD"));
+        authorize(OrderPermissions.ORDER_SESSION_CLOSE);
+        UUID id = UUID.randomUUID();
+        RegisterSession closing = openSession(id);
+        closing.setStatus(RegisterSessionStatus.CLOSING);
+        closing.setCountedCash(new BigDecimal("154.0000")); // theoretical 150 -> +4 over (beyond 3, within 5)
+        when(registerSessionRepository.findById(id)).thenReturn(Optional.of(closing));
+        when(salesOrderRepository.existsBySessionIdAndStatus(id, SalesOrderStatus.PENDING_PAYMENT))
+                .thenReturn(false);
+        when(paymentRecordRepository.findBySessionId(id)).thenReturn(List.of(cashSettled("50.00")));
+        when(cashMovementRepository.findBySessionIdOrderByOccurredAtAsc(id)).thenReturn(List.of());
+
+        assertThatThrownBy(() -> service.confirmClose(id)).isInstanceOf(AccessDeniedException.class);
+        verify(registerSessionRepository, never()).save(any());
+
+        authorize(OrderPermissions.ORDER_SESSION_APPROVE_VARIANCE);
+        when(registerSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        RegisterSessionSummary closed = service.confirmClose(id);
+        assertThat(closed.varianceApproved()).isTrue();
+        assertThat(closed.overShort()).isEqualByComparingTo("4.00");
     }
 
     @Test
@@ -291,13 +394,15 @@ class RegisterSessionServiceImplTest {
         UUID id = UUID.randomUUID();
         RegisterSession closing = openSession(id);
         closing.setStatus(RegisterSessionStatus.CLOSING);
+        when(registerSessionRepository.findById(id)).thenReturn(Optional.of(closing));
         when(registerSessionRepository.findByIdForUpdate(id)).thenReturn(Optional.of(closing));
 
         assertThatThrownBy(() -> service.recordCashMovement(new CashMovementCommand(
                         id,
-                        UUID.randomUUID(),
+                        com.positivity.shared.id.UUIDv7Generator.generate(),
                         "BANK_DROP",
                         new BigDecimal("10.00"),
+                        "USD",
                         null,
                         null,
                         "BAG-1",
