@@ -45,7 +45,10 @@ and reports every disagreement between them:
                         Class.method exists in one of the module's controllers)
   location_scope_invalid  shape not gate|narrow|unscoped, gate/narrow without a
                         permission, any entry without a reason, a duplicate
-                        operation, or a file the flat-format parser cannot read
+                        operation, a file the flat-format parser cannot read,
+                        or a `fields:` entry naming a field the operation's
+                        parameters lack or (gate) its body never passes to a
+                        location-scope call
   location_scope_alternates  a location-scope call passes a permission the
                         endpoint reaching it does not require, or the endpoint
                         requires nothing at all (#1890)
@@ -81,6 +84,19 @@ real operation. Flat format, one line per value, parsed with regex (no PyYAML):
       shape: gate                            # gate | narrow | unscoped
       permission: inventory:adjustment:create   # required for gate / narrow
       reason: locationId names the site the adjustment is raised at.
+
+An operation that names more than one location (a move from one location to
+another) lists the fields it gates; the operation then enters the inventory on
+those fields, each must appear in its parameter-list text (which includes its
+parameter annotations, so a field named only in a @RequestBody example counts),
+and for a gate each must be passed to a `require` / `requireAny` location-scope
+call in the operation's own body (#2571):
+
+    - operation: RegisterFloatController.relocate
+      shape: gate
+      permission: accounting:float:manage
+      fields: fromLocationId, toLocationId   # optional; default locationId
+      reason: both locations are gated.
 
 See docs/OPERATIONS_RUNBOOK.md "Location-scope decisions (location-scope.yaml)".
 
@@ -412,6 +428,7 @@ def params_of(src, i):
 
 
 loc_ops = collections.defaultdict(set)            # module -> {Class.method} taking locationId
+op_params = collections.defaultdict(dict)          # module -> {Class.method: parameter-list text}
 controller_methods = collections.defaultdict(set)  # module -> {Class.method} of every public
                                                    # method in a *Controller.java (sibling check)
 for f in sorted(java_files):
@@ -431,6 +448,7 @@ for f in sorted(java_files):
         if not md:
             continue
         ptext = params_of(body, m.start() + md.end() - 1)
+        op_params[mod][f"{cls}.{md.group(1)}"] = ptext
         if re.search(r'\blocationId\b', ptext):
             loc_ops[mod].add(f"{cls}.{md.group(1)}")
 
@@ -453,7 +471,7 @@ def parse_location_scope(path):
 
     Accepted lines: comments/blank, `decisions:` (optionally `decisions: []`),
     `- operation: X` opening an entry, and `shape:` / `permission:` / `reason:`
-    continuation lines inside an entry. Every value is one line, optionally
+    / `fields:` continuation lines inside an entry. Every value is one line, optionally
     quoted. Anything else (a multi-line `>` reason, an unknown key, a
     continuation before any `- operation:`) is reported as malformed rather than
     silently skipped -- the file gates CI, so a decision the parser cannot see
@@ -486,8 +504,9 @@ def parse_location_scope(path):
         if cur is None:
             errors.append(f"line {lineno}: `{key}:` outside an entry")
             continue
-        if key not in ("shape", "permission", "reason"):
-            errors.append(f"line {lineno}: unknown key `{key}:` (allowed: operation, shape, permission, reason)")
+        if key not in ("shape", "permission", "reason", "fields"):
+            errors.append(f"line {lineno}: unknown key `{key}:` (allowed: operation, shape, permission, reason,"
+                          f" fields)")
             continue
         if key in cur:
             errors.append(f"line {lineno}: duplicate `{key}:` in entry {cur['operation']!r}")
@@ -504,6 +523,7 @@ def parse_location_scope(path):
 flag_location_undecided = []   # "<module>: Class.method"
 flag_location_stale = []       # "<module>: Class.method (line n)"
 flag_location_invalid = []     # "<module>: <problem>"
+field_gates = []               # (module, Class, method, [field], where) -- gate entries naming `fields:`
 location_scope_summary = {}    # module -> {operations, decided, gate, narrow, unscoped}
 location_modules = set(loc_ops) | {p.parent.name for p in root.glob("pos-*/location-scope.yaml")}
 for mod in sorted(location_modules):
@@ -534,6 +554,25 @@ for mod in sorted(location_modules):
             problems.append(f"shape {shape} requires a permission")
         if not e.get("reason"):
             problems.append("missing reason")
+        # `fields:` -- the location fields a multi-location operation gates (#2571). Each must be a
+        # parameter-list identifier of the operation; the operation then counts as location-taking.
+        fields = [f.strip() for f in e.get("fields", "").split(",") if f.strip()]
+        if "fields" in e:
+            params = op_params.get(mod, {}).get(op)
+            if not fields:
+                problems.append("empty fields")
+            for field in fields:
+                if not re.fullmatch(r"[a-z]\w*", field):
+                    problems.append(f"field {field!r} is not an identifier")
+                elif params is None or not re.search(r'\b' + field + r'\b', params):
+                    problems.append(f"field {field} is not in the operation's parameters")
+            if params is not None and not problems:
+                loc_ops[mod].add(op)
+                ops = ops | {op}
+                summary["operations"] = len(ops)
+                if shape == "gate":
+                    cls_name, method_name = op.split(".", 1)
+                    field_gates.append((mod, cls_name, method_name, fields, where))
         if problems:
             flag_location_invalid.append(f"{where}: " + "; ".join(problems))
         else:
@@ -784,6 +823,7 @@ for (module, cls), entry in java_classes.items():
                     args = body[open_paren + 1:close_paren(sk, open_paren)]
                     scope_call_sites[node].append({
                         "call": called,
+                        "args": args,
                         "permissions": permissions_in(args),
                         "line": md["line"] + body[:m.start()].count("\n"),
                     })
@@ -808,6 +848,19 @@ for (module, cls), entry in java_classes.items():
                     callee = java_classes.get((module, target))
                     if callee is not None and called in callee["methods"]:
                         call_edges[node].append(((module, target, called), passed))
+
+# A gate decision that names its `fields:` (#2571) holds only if the operation's own body passes
+# every one of them to a denying location-scope call -- `require` / `requireAny`, never a read such
+# as `covers` or `reach`: a two-location move gated on one field is a hole.
+GATE_CALLS = ("require", "requireAny")
+for mod, cls_name, method_name, fields, where in field_gates:
+    passed = " ".join(c["args"] for c in scope_call_sites.get((mod, cls_name, method_name), ())
+                      if c["call"] in GATE_CALLS)
+    missing = [f for f in fields if not re.search(r'\b' + f + r'\b', passed)]
+    if missing:
+        flag_location_invalid.append(
+            f"{where}: gate field(s) {', '.join(missing)} not passed to a require/requireAny location-scope call"
+            f" in the operation")
 
 # Which methods reach a scope call at all, walking the edges backwards from every site.
 reverse_edges = collections.defaultdict(set)

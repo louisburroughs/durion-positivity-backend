@@ -40,6 +40,7 @@ class OrderEventsListenerTest {
     private final ProcessedEventRepository processedEvents = mock(ProcessedEventRepository.class);
     private final RegisterOverShortPostingService postingService = mock(RegisterOverShortPostingService.class);
     private final KafkaFactIngestionRecorder ingestionRecorder = mock(KafkaFactIngestionRecorder.class);
+    private final RegisterSessionReplica sessionReplica = mock(RegisterSessionReplica.class);
 
     private OrderEventsListener listener;
 
@@ -53,7 +54,8 @@ class OrderEventsListenerTest {
                 ingestionRecorder,
                 org.mockito.Mockito.mock(ObjectProvider.class),
                 mock(PlatformTransactionManager.class),
-                com.positivity.accounting.internal.service.TestZoneResolvers.utc(java.time.Clock.systemUTC()));
+                com.positivity.accounting.internal.service.TestZoneResolvers.utc(java.time.Clock.systemUTC()),
+                sessionReplica);
     }
 
     private String sessionClosed(String eventId) {
@@ -244,5 +246,110 @@ class OrderEventsListenerTest {
                         org.mockito.ArgumentMatchers.eq(java.time.LocalDateTime.of(2026, 1, 31, 23, 30)),
                         any(RegisterSessionClosedV1.class),
                         any());
+    }
+
+    // ---- the session replica (#2571, #2573) -----------------------------------------------------------------
+
+    private String sessionOpened(String eventId, long version) {
+        return """
+                {"eventId":"%s","eventType":"order.session.opened","schemaVersion":1,
+                 "aggregateId":"%s","aggregateVersion":%d,
+                 "occurredAtUtc":"2026-07-23T08:00:00Z","sourceService":"pos-order",
+                 "payload":{"sessionId":"%s","terminalId":"terminal-1",
+                            "locationId":"00000000-0000-0000-0000-0000000000aa",
+                            "openedAt":"2026-07-23T08:00:00Z"}}
+                """.formatted(eventId, SESSION_ID, version, SESSION_ID);
+    }
+
+    @Test
+    @DisplayName("#2571: an opened fact writes the session replica with its version and is marked processed; it posts"
+            + " and records nothing")
+    void sessionOpenedWritesTheReplica() {
+        when(processedEvents.existsById("e-20")).thenReturn(false);
+
+        listener.onOrderEvent(sessionOpened("e-20", 3));
+
+        ArgumentCaptor<com.positivity.domainevents.order.RegisterSessionOpenedV1> fact =
+                ArgumentCaptor.forClass(com.positivity.domainevents.order.RegisterSessionOpenedV1.class);
+        verify(sessionReplica).opened(fact.capture(), org.mockito.ArgumentMatchers.eq(3L));
+        assertThat(fact.getValue().sessionId()).isEqualTo(SESSION_ID);
+        assertThat(fact.getValue().terminalId()).isEqualTo("terminal-1");
+        assertThat(fact.getValue().locationId()).isEqualTo(UUID.fromString("00000000-0000-0000-0000-0000000000aa"));
+        assertThat(fact.getValue().openedAt()).isEqualTo(Instant.parse("2026-07-23T08:00:00Z"));
+        verify(processedEvents).save(any());
+        verifyNoInteractions(postingService, ingestionRecorder);
+    }
+
+    @Test
+    @DisplayName("#2571: a closed fact closes the session replica, with its version, before the posting")
+    void sessionClosedClosesTheReplica() {
+        when(processedEvents.existsById("e-21")).thenReturn(false);
+
+        listener.onOrderEvent(sessionClosed("e-21"));
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(sessionReplica, postingService, processedEvents);
+        order.verify(sessionReplica).closed(any(RegisterSessionClosedV1.class), org.mockito.ArgumentMatchers.eq(0L));
+        order.verify(postingService).postOverShort(any(), org.mockito.ArgumentMatchers.eq("e-21"));
+        order.verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName("#2571: a posting failure still closes the replica; the fact stays unmarked for retry, and the"
+            + " redelivery closes it again and posts")
+    void postingFailureStillClosesTheReplica() {
+        when(processedEvents.existsById("e-22")).thenReturn(false);
+        doThrow(new DataAccessResourceFailureException("db down"))
+                .doReturn(FactPostingOutcome.posted(UUID.randomUUID()))
+                .when(postingService)
+                .postOverShort(any(), org.mockito.ArgumentMatchers.eq("e-22"));
+
+        assertThatExceptionOfType(DataAccessResourceFailureException.class)
+                .isThrownBy(() -> listener.onOrderEvent(sessionClosed("e-22")));
+        verify(sessionReplica).closed(any(), org.mockito.ArgumentMatchers.eq(0L));
+        verify(processedEvents, never()).save(any());
+
+        listener.onOrderEvent(sessionClosed("e-22"));
+
+        verify(sessionReplica, org.mockito.Mockito.times(2)).closed(any(), org.mockito.ArgumentMatchers.eq(0L));
+        verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName("#2571: a replica failure on an opened fact propagates unwrapped for retry / DLQ; nothing is marked")
+    void sessionOpenedFailurePropagates() {
+        when(processedEvents.existsById("e-25")).thenReturn(false);
+        doThrow(new DataAccessResourceFailureException("db down"))
+                .when(sessionReplica)
+                .opened(any(), org.mockito.ArgumentMatchers.anyLong());
+
+        assertThatExceptionOfType(DataAccessResourceFailureException.class)
+                .isThrownBy(() -> listener.onOrderEvent(sessionOpened("e-25", 1)));
+        verify(processedEvents, never()).save(any());
+        verifyNoInteractions(postingService, ingestionRecorder);
+    }
+
+    @Test
+    @DisplayName("#2571: a malformed opened fact is marked processed and never reaches the replica")
+    void malformedSessionOpenedIsMarked() {
+        when(processedEvents.existsById("e-23")).thenReturn(false);
+
+        listener.onOrderEvent("""
+                {"eventId":"e-23","eventType":"order.session.opened","aggregateVersion":1,
+                 "payload":{"sessionId":"%s","openedAt":"2026-07-23T08:00:00Z"}}
+                """.formatted(SESSION_ID));
+
+        verify(sessionReplica, never()).opened(any(), org.mockito.ArgumentMatchers.anyLong());
+        verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName("#2571: a duplicate opened fact is skipped")
+    void duplicateSessionOpenedIsSkipped() {
+        when(processedEvents.existsById("e-24")).thenReturn(true);
+
+        listener.onOrderEvent(sessionOpened("e-24", 1));
+
+        verifyNoInteractions(sessionReplica);
+        verify(processedEvents, never()).save(any());
     }
 }

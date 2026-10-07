@@ -328,6 +328,25 @@ class JournalEntryControllerTest extends BaseIntegrationTest {
         }
 
         @Test
+        @DisplayName("#2571: a register float relocation entry answers 409 FLOAT_RELOCATION_NOT_REVERSIBLE")
+        void reverse_relocationEntry_returns409NotReversible() throws Exception {
+            when(journalEntryService.reverseJournalEntry(eq(ENTRY_ID), eq(REASON), isNull(), isNull()))
+                    .thenThrow(new com.positivity.accounting.internal.exception.CashSetupException(
+                            com.positivity.accounting.internal.exception.CashSetupException.Code
+                                    .FLOAT_RELOCATION_NOT_REVERSIBLE,
+                            "A register float relocation entry is never reversed; correct a wrong move by moving"
+                                    + " the register again"));
+
+            mockMvc.perform(withAuth(post("/v1/accounting/journal-entries/{id}/reverse", ENTRY_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(reversalBody(null)))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("FLOAT_RELOCATION_NOT_REVERSIBLE"))
+                    .andExpect(jsonPath("$.status").value(409))
+                    .andExpect(jsonPath("$.correlationId").exists());
+        }
+
+        @Test
         @DisplayName("Should map a not-yet-posted entry to 409 JE_NOT_POSTED")
         void reverse_draftEntry_returns409NotPosted() throws Exception {
             when(journalEntryService.reverseJournalEntry(eq(ENTRY_ID), eq(REASON), isNull(), isNull()))

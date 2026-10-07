@@ -111,11 +111,14 @@ public final class EventTypes {
                                 "Turn the retread-plant accounting template add-on on for the tenant")
                         .build(),
 
-                // RegisterFloatController - 2 events (CAP:550 S15, #2511)
+                // RegisterFloatController - 3 events (CAP:550 S15, #2511; relocation #2571)
                 EventTypeRegistration.write(
                                 "ACCOUNTING_REGISTER_FLOAT_GO_LIVE", "Establish a register's go-live change float")
                         .build(),
                 EventTypeRegistration.write("ACCOUNTING_REGISTER_FLOAT_CHANGE", "Change a register's float")
+                        .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_REGISTER_FLOAT_RELOCATE", "Move a register's float to another location")
                         .build(),
 
                 // PettyExpenseCategoryController - 5 events (CAP:550 S15, #2511)

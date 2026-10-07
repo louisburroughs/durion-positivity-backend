@@ -274,6 +274,12 @@ Posted entries carry a sequential `entryNumber` in the format `JE-{YYYYMM}-{seq}
   entry's transaction date if that period is OPEN, otherwise to today
 - Errors: `JE_ALREADY_REVERSED` (409, includes double-reversal races), `JE_NOT_POSTED` (409),
   `PERIOD_CLOSED` / `PERIOD_HARD_LOCKED` (422, see the period gate below)
+- Register float entries (#2571, AW32): a relocation entry is never reversed (409
+  `FLOAT_RELOCATION_NOT_REVERSIBLE`); a go-live or Change float entry of a register that has moved may
+  not be reversed before its latest move (422 `FLOAT_REVERSAL_BEFORE_RELOCATION`), and when its 1080
+  line sits at a location the register has left, the reversal also posts, on its own date, the
+  reclass that brings the reversed amount to the register's current location (422
+  `GL_MAPPING_NOT_CONFIGURED` if `REGISTER_FLOAT` has no mapping on that date)
 - Emits a `JournalEntryReversed` outbox domain event in the same transaction (MANDATORY propagation)
   for downstream read models
 
@@ -677,6 +683,34 @@ denied for a location-scoped caller — fail closed — and ignored for a global
 
 This is the platform's clearest `FINANCIAL`-dimension case: an `ACCOUNTANT` assigned to a region
 sees that region's shops and no others.
+
+The register float commands (`/v1/accounting/registers/{registerId}/float`, #2511) gate the body's
+`locationId` on `accounting:float:manage`. The relocation
+(`POST /v1/accounting/registers/{registerId}/float/relocation`, #2571, AW32) gates **both**
+`fromLocationId` and `toLocationId`, then requires the register's stored location to equal
+`fromLocationId` under the row lock (422 `FLOAT_REGISTER_LOCATION_MISMATCH`; the stored location is
+logged, never returned). It posts Dr 1080 {register, to} / Cr 1080 {register, from} for the float,
+dated the move; a zero float moves without an entry. New codes: 404 `FLOAT_REGISTER_NOT_FOUND`, 422
+`FLOAT_RELOCATION_SAME_LOCATION`, `FLOAT_RELOCATION_DATE_INVALID`, `FLOAT_AMOUNT_NEGATIVE`,
+`FLOAT_DATE_BEFORE_RELOCATION` (a later go-live or Change float dated before the move),
+`FLOAT_REGISTER_SESSION_OPEN`, 409 `FLOAT_RELOCATION_NOT_REVERSIBLE`, 422
+`FLOAT_REVERSAL_BEFORE_RELOCATION`.
+
+A move may not be dated before any float entry of the register — every go-live, change, relocation
+and reversal, **reversed or not**, since a reversed entry's 1080 line stays on its date and a reversal
+may be dated before the entry it reverses (`FLOAT_RELOCATION_DATE_INVALID`).
+
+A register does not move while it has an open pos-order session (#2573): `OrderEventsListener` keeps
+the `ext_order_register_session` replica from `order.session.opened` and `order.session.closed`
+(version-guarded; a session never reopens). The closed fact closes the replica in a transaction of its
+own, *before* the over/short posting transaction that holds the processed mark: a close whose posting
+fails still closes the session, and the redelivery re-applies the state-based write harmlessly. The
+relocation refuses, under the float row lock, a register whose latest-opened session is OPEN (422 `FLOAT_REGISTER_SESSION_OPEN`, `referenceId` = the
+session id; its location is logged, not returned). Accepted race: a session whose opened fact has not
+arrived does not block. The guard takes effect once pos-order publishes `order.session.opened` (S40,
+#2578); until then the replica holds only sessions seen through their close facts. The fact
+`accounting.float.changed` is schema version 2: kind `RELOCATION` and a nullable
+`previousLocationId`.
 
 ## Ledger currency (ADR-0067)
 

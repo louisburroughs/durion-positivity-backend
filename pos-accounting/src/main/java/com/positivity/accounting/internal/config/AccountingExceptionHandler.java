@@ -209,7 +209,25 @@ public class AccountingExceptionHandler {
      */
     @ExceptionHandler(CashSetupException.class)
     public ResponseEntity<ApiError> handleCashSetup(CashSetupException ex, HttpServletRequest request) {
-        return build(ex.getCode().status(), ex.getCode().name(), ex.getMessage(), request);
+        if (ex.getReferenceId() == null) {
+            return build(ex.getCode().status(), ex.getCode().name(), ex.getMessage(), request);
+        }
+        // A refusal naming the record in the way, e.g. the open session of FLOAT_REGISTER_SESSION_OPEN (#2571).
+        String correlationId = resolveCorrelationId(request);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        return new ResponseEntity<>(
+                ApiError.guided(
+                        ex.getCode().name(),
+                        ex.getMessage(),
+                        ex.getCode().status().value(),
+                        Instant.now(clock).toString(),
+                        correlationId,
+                        ex.getReferenceId(),
+                        ex.getNextAction(),
+                        null),
+                headers,
+                ex.getCode().status());
     }
 
     @ExceptionHandler(DuplicateEventException.class)

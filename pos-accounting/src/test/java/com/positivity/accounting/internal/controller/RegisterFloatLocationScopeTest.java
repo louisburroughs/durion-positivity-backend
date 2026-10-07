@@ -62,16 +62,19 @@ class RegisterFloatLocationScopeTest {
 
     private static final String GO_LIVE = "/v1/accounting/registers/T-1/float/go-live";
     private static final String CHANGE = "/v1/accounting/registers/T-1/float";
+    private static final String RELOCATION = "/v1/accounting/registers/T-1/float/relocation";
     private static final String PERMISSION = AccountingPermissions.FLOAT_MANAGE;
 
     private static final UUID REGION_NODE = UUID.fromString("019200bb-0000-7000-8000-00000000a000");
     private static final UUID SHOP_A = UUID.fromString("019200bb-0000-7000-8000-00000000000a");
     private static final UUID SHOP_B = UUID.fromString("019200bb-0000-7000-8000-00000000000b");
+    private static final UUID SHOP_C = UUID.fromString("019200bb-0000-7000-8000-00000000000c");
 
-    /** SHOP_A rolls up to REGION_NODE on every dimension; SHOP_B on none. */
+    /** SHOP_A and SHOP_C roll up to REGION_NODE on every dimension; SHOP_B on none. */
     private static final Map<UUID, AncestorSets> REPLICA = Map.of(
             SHOP_A, new AncestorSets(Set.of(SHOP_A, REGION_NODE), Set.of(SHOP_A, REGION_NODE)),
-            SHOP_B, new AncestorSets(Set.of(SHOP_B), Set.of(SHOP_B)));
+            SHOP_B, new AncestorSets(Set.of(SHOP_B), Set.of(SHOP_B)),
+            SHOP_C, new AncestorSets(Set.of(SHOP_C, REGION_NODE), Set.of(SHOP_C, REGION_NODE)));
 
     private static final LocationAncestorResolver RESOLVER =
             locationId -> REPLICA.getOrDefault(locationId, AncestorSets.EMPTY);
@@ -108,6 +111,21 @@ class RegisterFloatLocationScopeTest {
                  "justification":"More change for the weekend",
                  "requestId":"019a0000-0000-7000-8000-000000000202"}
                 """.formatted(location);
+    }
+
+    private static Authentication callerWithoutFloatManage() {
+        var token = new UsernamePasswordAuthenticationToken(
+                "scope-test-user", null, List.of(new SimpleGrantedAuthority("accounting:je:view")));
+        token.setDetails(Map.of(GatewaySecurityConstants.DETAIL_USERNAME, "scope-test-user"));
+        return token;
+    }
+
+    private static String relocationBody(UUID from, UUID to) {
+        return """
+                {"fromLocationId":"%s","toLocationId":"%s","reason":"MOVED",
+                 "justification":"Drawer 1 moved to the new shop",
+                 "requestId":"019a0000-0000-7000-8000-000000000203"}
+                """.formatted(from, to);
     }
 
     private static RegisterFloatService.Outcome outcome(RegisterFloatChangeKind kind) {
@@ -176,6 +194,75 @@ class RegisterFloatLocationScopeTest {
                 .andExpect(jsonPath("$.code").value(LocationScopeDeniedException.ERROR_CODE));
 
         verify(registerFloatService, never()).changeFloat(any(), any());
+    }
+
+    @Test
+    @DisplayName("#2571 AC3: a move between two locations inside the caller's region answers 201")
+    void relocationInReachIsAllowed() throws Exception {
+        when(registerFloatService.relocate(eq("T-1"), any())).thenReturn(outcome(RegisterFloatChangeKind.RELOCATION));
+
+        mockMvc.perform(post(RELOCATION)
+                        .with(authentication(scopedCaller()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(relocationBody(SHOP_A, SHOP_C)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.kind").value("RELOCATION"));
+    }
+
+    @Test
+    @DisplayName("#2571 AC3: a move FROM a location outside the caller's region answers 403 LOCATION_SCOPE_DENIED,"
+            + " nothing posts")
+    void relocationFromOutOfReachIsDenied() throws Exception {
+        mockMvc.perform(post(RELOCATION)
+                        .with(authentication(scopedCaller()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(relocationBody(SHOP_B, SHOP_A)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(LocationScopeDeniedException.ERROR_CODE));
+
+        verify(registerFloatService, never()).relocate(any(), any());
+    }
+
+    @Test
+    @DisplayName("#2571 AC3: a move TO a location outside the caller's region answers 403 LOCATION_SCOPE_DENIED,"
+            + " nothing posts")
+    void relocationToOutOfReachIsDenied() throws Exception {
+        mockMvc.perform(post(RELOCATION)
+                        .with(authentication(scopedCaller()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(relocationBody(SHOP_A, SHOP_B)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(LocationScopeDeniedException.ERROR_CODE));
+
+        verify(registerFloatService, never()).relocate(any(), any());
+    }
+
+    @Test
+    @DisplayName("#2571 AC3: a caller without accounting:float:manage answers 403, nothing posts")
+    void relocationWithoutPermissionIsDenied() throws Exception {
+        mockMvc.perform(post(RELOCATION)
+                        .with(authentication(callerWithoutFloatManage()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(relocationBody(SHOP_A, SHOP_C)))
+                .andExpect(status().isForbidden());
+
+        verify(registerFloatService, never()).relocate(any(), any());
+    }
+
+    @Test
+    @DisplayName("#2571 AC11: a missing reason answers 400 before any scope decision, nothing posts")
+    void relocationWithoutReasonIsRejected() throws Exception {
+        mockMvc.perform(post(RELOCATION)
+                        .with(authentication(scopedCaller()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"fromLocationId":"%s","toLocationId":"%s",
+                                 "justification":"Drawer 1 moved to the new shop",
+                                 "requestId":"019a0000-0000-7000-8000-000000000204"}
+                                """.formatted(SHOP_A, SHOP_C)))
+                .andExpect(status().isBadRequest());
+
+        verify(registerFloatService, never()).relocate(any(), any());
     }
 
     /** Method security plus a fixed clock for the denial advice's timestamp; the chain permits every request. */
