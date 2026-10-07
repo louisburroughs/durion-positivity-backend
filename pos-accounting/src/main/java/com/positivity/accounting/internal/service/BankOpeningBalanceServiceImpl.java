@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.bankrec.readmodel.BankAccountCurrencies;
 import com.positivity.accounting.internal.bankrec.readmodel.BankStatementCoverage;
+import com.positivity.accounting.internal.bankrec.service.FunctionalCurrency;
 import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.dto.BankOpeningBalanceRequest;
 import com.positivity.accounting.internal.dto.BankOpeningBalanceResponse;
@@ -15,6 +16,7 @@ import com.positivity.accounting.internal.enums.AccountSubtype;
 import com.positivity.accounting.internal.enums.BankOpeningItemType;
 import com.positivity.accounting.internal.exception.CashSetupException;
 import com.positivity.accounting.internal.exception.CurrencyNotSupportedException;
+import com.positivity.accounting.internal.exception.GLAccountNotFoundException;
 import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.BankOpeningBalanceRepository;
@@ -27,7 +29,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.Currency;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -53,11 +55,13 @@ import org.springframework.transaction.annotation.Transactional;
  * (SPEC-manual-bank-reconciliation E2, D17, §4.2), so that statement opens with no difference.
  *
  * <p>Once per account: a standing opening (its entry still POSTED) refuses another; the correction is to reverse
- * the entry and run the command again (AW17, ADR-0047). The opening must come first: no standing posted line on
- * the account dated on or before {@code asOfDate} and no committed statement starting on or before it. The account
- * row is locked for the length of the command, so two commands on one account serialize. Idempotent on {@code
- * requestId}: a replay with the same body returns the first result, another body is 409 {@code
- * IDEMPOTENCY_CONFLICT}. The actor comes from the security context (ADR-0018).
+ * the entry, dated on or before {@code asOfDate}, and run the command again (AW17, ADR-0047). The opening must come
+ * first: no line the balance at the end of {@code asOfDate} holds and no committed statement starting on or before
+ * it. The account row is locked for the length of the command, so two openings of one account serialize; an
+ * ordinary posting does not take that lock, so one committing in the same instant is not seen (the bank
+ * reconciliation's opening difference shows it). Idempotent on {@code requestId}: a replay with the same body
+ * returns the first result as stored, another body is 409 {@code IDEMPOTENCY_CONFLICT}. The actor comes from the
+ * security context (ADR-0018).
  */
 @Slf4j
 @Service
@@ -75,6 +79,9 @@ public class BankOpeningBalanceServiceImpl implements BankOpeningBalanceService 
 
     static final String AUDIT_ESTABLISH = "BANK_OPENING_BALANCE_ESTABLISH";
 
+    /** The {@code (tenant_id, request_id)} unique of {@code bank_opening_balance} (V14). */
+    static final String REQUEST_UNIQUE = "uq_bank_opening_balance_request";
+
     private final BankOpeningBalanceRepository openings;
     private final GLAccountRepository glAccounts;
     private final JournalEntryLineRepository journalLines;
@@ -85,6 +92,7 @@ public class BankOpeningBalanceServiceImpl implements BankOpeningBalanceService 
     private final LedgerCurrency ledgerCurrency;
     private final BankAccountCurrencies bankAccountCurrencies;
     private final BankStatementCoverage statementCoverage;
+    private final FunctionalCurrency functionalCurrency;
 
     @Override
     public @NonNull Outcome establish(@NonNull UUID glAccountId, @NonNull BankOpeningBalanceRequest request) {
@@ -100,10 +108,6 @@ public class BankOpeningBalanceServiceImpl implements BankOpeningBalanceService 
         if (replayed != null) {
             return replay(replayed, hash);
         }
-        requireMinorUnit(statementBalance, "statementBalance");
-        for (int i = 0; i < items.size(); i++) {
-            requireMinorUnit(items.get(i).amount(), "outstandingItems[" + i + "].amount");
-        }
         // Today in the tenant's accounting time zone; an unset zone fails closed (#2558).
         LocalDate today = zoneResolver.today();
         if (asOfDate.isAfter(today)) {
@@ -111,6 +115,20 @@ public class BankOpeningBalanceServiceImpl implements BankOpeningBalanceService 
                     "asOfDate",
                     "asOfDate " + asOfDate + " is after today (" + today + "); the opening is the balance at cutover");
         }
+        // ADR-0067 PC-9: the amounts are in the bank account's currency, which eligibility pins to the functional
+        // one; another currency is the platform's one refusal, 422 CURRENCY_NOT_SUPPORTED. Checked before the
+        // precision, which is the currency's own rule.
+        if (ledgerCurrency.isForeign(currencyCode)) {
+            throw new CurrencyNotSupportedException(
+                    "currencyCode " + currencyCode + " is not the bank account's currency " + ledgerCurrency.code());
+        }
+        // ADR-0067 PC-6: every amount finer than the minor unit, in one 422 AMOUNT_PRECISION_EXCEEDS_CURRENCY.
+        Map<String, BigDecimal> amounts = new LinkedHashMap<>();
+        amounts.put("statementBalance", statementBalance);
+        for (int i = 0; i < items.size(); i++) {
+            amounts.put("outstandingItems[" + i + "].amount", items.get(i).amount());
+        }
+        functionalCurrency.requireMinorUnits(amounts);
 
         GLAccount account = glAccounts.lockById(glAccountId).orElse(null);
         // A concurrent duplicate of this request waited on the lock: it answers with the first result.
@@ -118,19 +136,17 @@ public class BankOpeningBalanceServiceImpl implements BankOpeningBalanceService 
         if (committed != null) {
             return replay(committed, hash);
         }
-        requireEligible(account, glAccountId, asOfDate);
-        String code = Objects.requireNonNull(account).getAccountCode();
-        // ADR-0067 PC-9: the amounts are in the bank account's currency, which eligibility pinned to the functional
-        // one; another currency is the platform's one refusal, 422 CURRENCY_NOT_SUPPORTED.
-        if (!ledgerCurrency.code().equals(currencyCode)) {
-            throw new CurrencyNotSupportedException("currencyCode " + currencyCode + " is not bank account " + code
-                    + "'s currency " + ledgerCurrency.code());
+        if (account == null) {
+            // ADR-0017: the path names no account the caller can see (another tenant's is invisible under RLS).
+            throw new GLAccountNotFoundException("GL account " + glAccountId + " not found");
         }
+        requireEligible(account, asOfDate);
+        String code = account.getAccountCode();
         if (!openings.findStandingByGlAccountId(glAccountId).isEmpty()) {
             throw new CashSetupException(
                     CashSetupException.Code.BANK_OPENING_BALANCE_ALREADY_ESTABLISHED,
                     "Bank account " + code + " already has an opening balance; correct it by reversing its entry"
-                            + " and running the opening again");
+                            + " (dated on or before its asOfDate) and running the opening again");
         }
         requireFirst(glAccountId, code, asOfDate);
         if (statementBalance.signum() == 0 && items.isEmpty()) {
@@ -153,20 +169,25 @@ public class BankOpeningBalanceServiceImpl implements BankOpeningBalanceService 
 
         BankOpeningBalance opening = new BankOpeningBalance();
         opening.setGlAccountId(glAccountId);
+        opening.setAccountCode(code);
         opening.setAsOfDate(asOfDate);
         opening.setStatementBalance(statementBalance);
         opening.setBookBalance(bookBalance);
         opening.setCurrencyCode(currencyCode);
         opening.setJournalEntryId(posted.getJournalEntryId());
+        opening.setJournalEntryNumber(posted.getEntryNumber());
         opening.setJustification(justification);
         opening.setActor(RegisterFloatServiceImpl.currentActor());
         opening.setRequestId(requestId);
         opening.setRequestHash(hash);
         BankOpeningBalance saved;
         try {
-            // The request unique is the backstop for one requestId racing itself.
             saved = openings.saveAndFlush(opening);
         } catch (DataIntegrityViolationException e) {
+            // The request unique is the backstop for one requestId racing itself; any other violation is not ours.
+            if (!String.valueOf(e.getMostSpecificCause().getMessage()).contains(REQUEST_UNIQUE)) {
+                throw e;
+            }
             throw new CashSetupException(
                     CashSetupException.Code.IDEMPOTENCY_CONFLICT,
                     "requestId " + requestId + " was concurrently used by another command");
@@ -180,7 +201,7 @@ public class BankOpeningBalanceServiceImpl implements BankOpeningBalanceService 
                 bookBalance,
                 items.size(),
                 posted.getJournalEntryId());
-        return new Outcome(response(saved, code, posted.getEntryNumber(), false), false);
+        return new Outcome(response(saved, false), false);
     }
 
     // ---- posting --------------------------------------------------------------------------------------------
@@ -255,10 +276,7 @@ public class BankOpeningBalanceServiceImpl implements BankOpeningBalanceService 
     // ---- rules ----------------------------------------------------------------------------------------------
 
     /** An active BANK_CASH account in functional currency (ADR-0067), else 422 ACCOUNT_NOT_ELIGIBLE. */
-    private void requireEligible(@Nullable GLAccount account, UUID glAccountId, LocalDate asOfDate) {
-        if (account == null) {
-            throw notEligible("GL account " + glAccountId + " does not exist");
-        }
+    private void requireEligible(GLAccount account, LocalDate asOfDate) {
         if (account.getAccountSubtype() != AccountSubtype.BANK_CASH) {
             throw notEligible("Account " + account.getAccountCode() + " is not a bank account");
         }
@@ -271,7 +289,7 @@ public class BankOpeningBalanceServiceImpl implements BankOpeningBalanceService 
             throw notEligible("Bank account " + account.getAccountCode() + " is not active on " + asOfDate);
         }
         bankAccountCurrencies
-                .currencyOf(glAccountId)
+                .currencyOf(account.getGlAccountId())
                 .filter(ledgerCurrency::isForeign)
                 .ifPresent(currency -> {
                     throw notEligible("Bank account " + account.getAccountCode() + " is in " + currency
@@ -280,12 +298,12 @@ public class BankOpeningBalanceServiceImpl implements BankOpeningBalanceService 
     }
 
     /**
-     * The opening comes first: no standing posted line on the account dated on or before {@code asOfDate} (a
-     * reversal pair does not stand) and no committed statement starting on or before it. Later lines are allowed,
-     * so the opening can be entered after trading has started.
+     * The opening comes first: no line on the account that the balance at the end of {@code asOfDate} holds (a
+     * reversal pair dated entirely on or before it nets out) and no committed statement starting on or before it.
+     * Later lines are allowed, so the opening can be entered after trading has started.
      */
     private void requireFirst(UUID glAccountId, String code, LocalDate asOfDate) {
-        if (journalLines.countStandingPostedLinesBefore(
+        if (journalLines.countLinesInBalanceBefore(
                         glAccountId, asOfDate.plusDays(1).atStartOfDay())
                 > 0) {
             throw new CashSetupException(
@@ -298,15 +316,6 @@ public class BankOpeningBalanceServiceImpl implements BankOpeningBalanceService 
                     CashSetupException.Code.BANK_OPENING_BALANCE_NOT_FIRST,
                     "Bank account " + code + " has a committed bank statement starting on or before " + asOfDate
                             + "; the opening balance must come first");
-        }
-    }
-
-    private void requireMinorUnit(@Nullable BigDecimal amount, String field) {
-        int digits = Math.max(0, Currency.getInstance(ledgerCurrency.code()).getDefaultFractionDigits());
-        if (amount != null && amount.stripTrailingZeros().scale() > digits) {
-            throw InvalidRequestParameterException.forField(
-                    field,
-                    field + " has more decimal places than " + ledgerCurrency.code() + " allows (" + digits + ")");
         }
     }
 
@@ -337,19 +346,14 @@ public class BankOpeningBalanceServiceImpl implements BankOpeningBalanceService 
                     CashSetupException.Code.IDEMPOTENCY_CONFLICT,
                     "requestId " + original.getRequestId() + " was already used with a different payload");
         }
-        String number = journalEntryService
-                .getJournalEntry(original.getJournalEntryId())
-                .getEntryNumber();
-        String code = glAccounts
-                .findById(original.getGlAccountId())
-                .map(GLAccount::getAccountCode)
-                .orElse(null);
-        return new Outcome(response(original, code, number, true), true);
+        return new Outcome(response(original, true), true);
     }
 
-    /** The response, its items read from the entry's own lines so each carries the line id to register. */
-    private BankOpeningBalanceResponse response(
-            BankOpeningBalance opening, @Nullable String code, @Nullable String entryNumber, boolean replayed) {
+    /**
+     * The response, from the row as the first command stored it; the items are read from the entry's own lines
+     * (posted lines never change), so each carries the line id to register.
+     */
+    private BankOpeningBalanceResponse response(BankOpeningBalance opening, boolean replayed) {
         List<BankOpeningBalanceResponse.Item> items =
                 journalLines.findByJournalEntry_JournalEntryId(opening.getJournalEntryId()).stream()
                         .filter(l -> opening.getGlAccountId().equals(l.getGlAccountId()))
@@ -361,14 +365,14 @@ public class BankOpeningBalanceServiceImpl implements BankOpeningBalanceService 
                         .toList();
         return new BankOpeningBalanceResponse(
                 opening.getGlAccountId(),
-                code,
+                opening.getAccountCode(),
                 opening.getAsOfDate(),
                 opening.getStatementBalance(),
                 opening.getBookBalance(),
                 opening.getCurrencyCode(),
                 items,
                 opening.getJournalEntryId(),
-                entryNumber,
+                opening.getJournalEntryNumber(),
                 replayed);
     }
 

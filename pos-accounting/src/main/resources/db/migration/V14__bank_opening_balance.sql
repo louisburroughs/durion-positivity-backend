@@ -10,11 +10,13 @@ CREATE TABLE public.bank_opening_balance (
     tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,
     bank_opening_balance_id uuid NOT NULL,
     gl_account_id uuid NOT NULL,
+    account_code character varying(20) NOT NULL,
     as_of_date date NOT NULL,
     statement_balance numeric(19,4) NOT NULL,
     book_balance numeric(19,4) NOT NULL,
     currency_code character varying(3) NOT NULL,
     journal_entry_id uuid NOT NULL,
+    journal_entry_number character varying(20) NOT NULL,
     justification character varying(1000) NOT NULL,
     actor character varying(50) NOT NULL,
     request_id uuid NOT NULL,
@@ -41,6 +43,9 @@ ALTER TABLE ONLY public.bank_opening_balance
 CREATE INDEX bank_opening_balance_tenant_idx ON public.bank_opening_balance USING btree (tenant_id);
 CREATE INDEX bank_opening_balance_account_idx
     ON public.bank_opening_balance USING btree (tenant_id, gl_account_id);
+-- Bank reconciliation asks whether an opening owns a line's entry before it trusts the line's own item date.
+CREATE INDEX bank_opening_balance_entry_idx
+    ON public.bank_opening_balance USING btree (tenant_id, journal_entry_id);
 
 ALTER TABLE public.bank_opening_balance ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.bank_opening_balance FORCE ROW LEVEL SECURITY;

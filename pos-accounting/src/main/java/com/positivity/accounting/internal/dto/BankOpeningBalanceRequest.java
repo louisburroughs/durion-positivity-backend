@@ -2,10 +2,9 @@ package com.positivity.accounting.internal.dto;
 
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
+import com.positivity.accounting.internal.config.IsoCurrencyCodes;
 import com.positivity.accounting.internal.enums.BankOpeningItemType;
 import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
-import com.positivity.tax.common.validation.IsoCurrencyCode;
-import com.positivity.tax.common.validation.IsoCurrencyCodeValidator;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
@@ -44,7 +43,6 @@ public record BankOpeningBalanceRequest(
                 minLength = 3,
                 maxLength = 3,
                 requiredMode = REQUIRED)
-        @IsoCurrencyCode
         @Nullable
         String currencyCode,
 
@@ -74,6 +72,12 @@ public record BankOpeningBalanceRequest(
 
     /** Longest reference accepted: the bank transaction reference it will be matched against holds 255. */
     public static final int MAX_REFERENCE = 255;
+
+    /**
+     * Amounts stay below 10^14, and so do their sum: the entry's totals are {@code numeric(19,4)} (at most 15
+     * integer digits), and its debits are at most twice the opening's gross amount.
+     */
+    public static final BigDecimal MAX_AMOUNT = new BigDecimal("100000000000000");
 
     /** An item in transit at cutover: it posts as its own bank line, carrying its reference and date. */
     @Schema(name = "BankOpeningBalanceOutstandingItem", description = "A check or deposit still in transit at cutover")
@@ -120,16 +124,25 @@ public record BankOpeningBalanceRequest(
         if (statementBalance == null) {
             throw invalid("statementBalance", "statementBalance is required");
         }
+        requireBelowMax(statementBalance, "statementBalance");
         if (currencyCode == null || currencyCode.isBlank()) {
             throw invalid("currencyCode", "currencyCode is required");
         }
-        // ADR-0067 R-3: the ISO 4217 list behind @IsoCurrencyCode, never a pattern.
-        if (!new IsoCurrencyCodeValidator().isValid(currencyCode, null)) {
+        // ADR-0067 R-3, PC-4: the module's one ISO 4217 list (the JDK's), never a pattern.
+        if (!IsoCurrencyCodes.isIso(currencyCode)) {
             throw invalid("currencyCode", "currencyCode must be an ISO 4217 currency code");
         }
         List<OutstandingItem> items = items();
+        BigDecimal gross = statementBalance.abs();
         for (int i = 0; i < items.size(); i++) {
             requireValid(items.get(i), "outstandingItems[" + i + "]");
+            gross = gross.add(items.get(i).amount());
+        }
+        if (gross.compareTo(MAX_AMOUNT) >= 0) {
+            throw invalid(
+                    "outstandingItems",
+                    "the statement balance and the item amounts together must stay below "
+                            + MAX_AMOUNT.toPlainString());
         }
         try {
             CashRequests.requireJustification(justification, "justification");
@@ -162,6 +175,13 @@ public record BankOpeningBalanceRequest(
         }
         if (item.amount() == null || item.amount().signum() <= 0) {
             throw invalid(field + ".amount", field + ".amount is required and must be more than zero");
+        }
+        requireBelowMax(item.amount(), field + ".amount");
+    }
+
+    private static void requireBelowMax(BigDecimal amount, String field) {
+        if (amount.abs().compareTo(MAX_AMOUNT) >= 0) {
+            throw invalid(field, field + " must stay below " + MAX_AMOUNT.toPlainString() + " in absolute value");
         }
     }
 

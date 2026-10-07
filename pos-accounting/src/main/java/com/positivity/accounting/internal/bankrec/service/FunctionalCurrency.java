@@ -5,6 +5,7 @@ import com.positivity.accounting.internal.config.LedgerCurrency;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Currency;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -53,6 +54,23 @@ public class FunctionalCurrency {
     public void requireMinorUnit(@Nullable BigDecimal amount, @NonNull String field) {
         if (amount != null && !MinorUnit.fits(amount, code())) {
             throw MinorUnit.exceeded(Map.of(field, MinorUnit.detail(code())));
+        }
+    }
+
+    /**
+     * Refuses every amount finer than the ledger currency's minor unit at once: one 422 {@code
+     * AMOUNT_PRECISION_EXCEEDS_CURRENCY} naming each offending field, in the map's order (ADR-0067 PC-6); never
+     * rounds. Null amounts pass.
+     */
+    public void requireMinorUnits(@NonNull Map<String, @Nullable BigDecimal> amounts) {
+        Map<String, String> exceeded = new LinkedHashMap<>();
+        amounts.forEach((field, amount) -> {
+            if (amount != null && !MinorUnit.fits(amount, code())) {
+                exceeded.put(field, MinorUnit.detail(code()));
+            }
+        });
+        if (!exceeded.isEmpty()) {
+            throw MinorUnit.exceeded(exceeded);
         }
     }
 

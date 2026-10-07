@@ -16,6 +16,8 @@ import com.positivity.accounting.internal.bankrec.enums.OutstandingItemKind;
 import com.positivity.accounting.internal.bankrec.enums.OutstandingItemStatus;
 import com.positivity.accounting.internal.bankrec.enums.ReadinessCheckCode;
 import com.positivity.accounting.internal.bankrec.enums.ReadinessSeverity;
+import com.positivity.accounting.internal.bankrec.intake.BankRecErrorCode;
+import com.positivity.accounting.internal.bankrec.intake.BankRecException;
 import com.positivity.accounting.internal.bankrec.readmodel.BankReconciliationCloseReadiness;
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationOutstandingItemRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankTransactionRepository;
@@ -36,6 +38,7 @@ import com.positivity.accounting.internal.exception.AccountingPeriodClosedExcept
 import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
 import com.positivity.accounting.internal.exception.CashSetupException;
 import com.positivity.accounting.internal.exception.CurrencyNotSupportedException;
+import com.positivity.accounting.internal.exception.GLAccountNotFoundException;
 import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.repository.BankOpeningBalanceRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
@@ -342,13 +345,21 @@ class BankOpeningBalancePostgresIT extends PostgresTenancyTestBase {
     }
 
     @Test
-    @DisplayName("AC3/AC5/ADR-0067: a non-bank account, another currency, an earlier posted line, an earlier"
-            + " statement or an empty opening is refused; a line dated after the cutover is not")
+    @DisplayName("AC3/AC5/ADR-0067: a missing or non-bank account, another currency, sub-cent amounts, a line in the"
+            + " cutover's balance (a later-reversed one too), an earlier statement or an empty opening is refused; a"
+            + " line after the cutover, or a pair reversed before it, is not")
     void openingMustComeFirst() {
         UUID tenant = tenant();
         signIn("controller.cfo", "accounting:je:create", "accounting:je:post", "accounting:reconciliation:adjust");
         UUID equity = accountId(tenant, "3900");
         UUID revenue = accountId(tenant, "4000");
+
+        // ADR-0017: a path naming no account the caller can see is 404.
+        UUID nowhere = UUIDv7Generator.generate();
+        assertThatThrownBy(() -> asTenant(
+                        tenant,
+                        () -> openings.establish(nowhere, request("100.00", List.of(), UUIDv7Generator.generate()))))
+                .isInstanceOf(GLAccountNotFoundException.class);
 
         // AC3: not a bank account.
         assertRefused(
@@ -365,6 +376,26 @@ class BankOpeningBalancePostgresIT extends PostgresTenancyTestBase {
                 traded,
                 request("100.00", List.of(), UUIDv7Generator.generate()),
                 CashSetupException.Code.BANK_OPENING_BALANCE_NOT_FIRST);
+
+        // MINOR-3: a line before the cutover reversed after it is still in the cutover's balance (as bank
+        // reconciliation's getAccountBalanceAsOf counts it): not first. A pair dated wholly before it nets out.
+        UUID reversedLater = bankAccount(tenant);
+        UUID early = post(tenant, reversedLater, revenue, "80.00", LocalDate.of(2025, 10, 15));
+        asTenant(tenant, () -> journalEntries.reverseJournalEntry(early, "Keyed twice", CUTOVER.plusDays(5)));
+        assertRefused(
+                tenant,
+                reversedLater,
+                request("100.00", List.of(), UUIDv7Generator.generate()),
+                CashSetupException.Code.BANK_OPENING_BALANCE_NOT_FIRST);
+        UUID reversedBefore = bankAccount(tenant);
+        UUID pair = post(tenant, reversedBefore, revenue, "80.00", LocalDate.of(2025, 10, 15));
+        asTenant(tenant, () -> journalEntries.reverseJournalEntry(pair, "Keyed twice", LocalDate.of(2025, 10, 20)));
+        assertThat(asTenant(
+                                tenant,
+                                () -> openings.establish(
+                                        reversedBefore, request("100.00", List.of(), UUIDv7Generator.generate())))
+                        .replayed())
+                .isFalse();
 
         // AC5: a committed statement starting on or before the cutover.
         UUID stated = bankAccount(tenant);
@@ -395,6 +426,18 @@ class BankOpeningBalancePostgresIT extends PostgresTenancyTestBase {
         assertThatThrownBy(() -> asTenant(tenant, () -> openings.establish(fresh, euros)))
                 .isInstanceOf(CurrencyNotSupportedException.class);
 
+        // ADR-0067 PC-6: amounts finer than the minor unit, every one named, 422.
+        BankOpeningBalanceRequest fine = request(
+                "100.001",
+                List.of(new BankOpeningBalanceRequest.OutstandingItem(
+                        BankOpeningItemType.OUTSTANDING_CHECK, "7", CUTOVER, new BigDecimal("1.005"))),
+                UUIDv7Generator.generate());
+        assertThatThrownBy(() -> asTenant(tenant, () -> openings.establish(fresh, fine)))
+                .isInstanceOfSatisfying(BankRecException.class, e -> {
+                    assertThat(e.code()).isEqualTo(BankRecErrorCode.AMOUNT_PRECISION_EXCEEDS_CURRENCY);
+                    assertThat(e.fieldErrors()).containsOnlyKeys("statementBalance", "outstandingItems[0].amount");
+                });
+
         // AC2: the cutover is not after today in the tenant's calendar (UTC here): 400 naming asOfDate.
         LocalDate tomorrow =
                 LocalDate.ofInstant(clock.instant(), java.time.ZoneOffset.UTC).plusDays(1);
@@ -421,6 +464,88 @@ class BankOpeningBalancePostgresIT extends PostgresTenancyTestBase {
                         .response()
                         .bookBalance())
                 .isEqualByComparingTo("100.00");
+    }
+
+    @Test
+    @DisplayName("MAJOR-1: only an opening entry's own item lines date their items; forged dimensions on a manual"
+            + " entry and the dimensions a reversal copies keep the entry's date")
+    void onlyAnOpeningEntryDatesItsItems() {
+        UUID tenant = tenant();
+        signIn(
+                "controller.cfo",
+                "accounting:je:create",
+                "accounting:je:post",
+                "accounting:je:reverse",
+                "accounting:reconciliation:adjust");
+        UUID cash = accountId(tenant, "1000");
+        UUID revenue = accountId(tenant, "4000");
+        BankOpeningBalanceResponse opened = asTenant(
+                        tenant, () -> openings.establish(cash, workedExample(UUIDv7Generator.generate())))
+                .response();
+
+        // A manual entry whose cash line forges the opening's dimensions with an old date.
+        UUID forgedEntry = post(
+                tenant,
+                cash,
+                revenue,
+                "100.00",
+                LocalDate.of(2025, 11, 10),
+                Map.of("outstandingItemType", "DEPOSIT_IN_TRANSIT", "reference", "X-1", "itemDate", "2025-06-01"));
+        UUID forgedLine = lineOf(tenant, forgedEntry, cash);
+        // The opening reversed on 11-05: its reversal copies the check line's dimensions (itemDate 2025-10-28).
+        UUID reversalEntry = asTenant(
+                tenant,
+                () -> journalEntries
+                        .reverseJournalEntry(
+                                opened.journalEntryId(), "Statement balance keyed wrong", CUTOVER.plusDays(5))
+                        .getJournalEntryId());
+        UUID reversedCheckLine = new JdbcTemplate(ownerDataSource())
+                .queryForObject(
+                        "SELECT line_id FROM journal_entry_line WHERE tenant_id = ? AND journal_entry_id = ? AND"
+                                + " dimensions ->> 'reference' = ?",
+                        UUID.class,
+                        tenant,
+                        reversalEntry,
+                        CHECK);
+
+        UUID statementId = inTx(
+                tenant,
+                () -> statementService
+                        .createManualStatement(BankStatementCreateRequest.builder()
+                                .glAccountId(cash)
+                                .requestId(UUIDv7Generator.generate())
+                                .statement(BankStatementCreateRequest.Header.builder()
+                                        .startDate(LocalDate.of(2025, 11, 1))
+                                        .endDate(LocalDate.of(2025, 11, 30))
+                                        .openingBalance(new BigDecimal("10000.00"))
+                                        .closingBalance(new BigDecimal("10010.00"))
+                                        .build())
+                                .transactions(List.of(bankRow(LocalDate.of(2025, 11, 20), "10.00", "INTEREST")))
+                                .gapAcknowledgement(ACK)
+                                .build())
+                        .getStatementId());
+        UUID reconId = inTx(
+                tenant,
+                () -> reconciliationService
+                        .create(ReconciliationCreateRequest.builder()
+                                .glAccountId(cash)
+                                .requestId(UUIDv7Generator.generate())
+                                .statementId(statementId)
+                                .build())
+                        .getReconciliationId());
+
+        LocalDate forgedDate = inTx(
+                        tenant,
+                        () -> itemService.register(
+                                reconId, register(forgedLine, OutstandingItemKind.DEPOSIT_IN_TRANSIT)))
+                .getItemDate();
+        assertThat(forgedDate).as("a manual entry's forged itemDate").isEqualTo(LocalDate.of(2025, 11, 10));
+        LocalDate reversalDate = inTx(
+                        tenant,
+                        () -> itemService.register(
+                                reconId, register(reversedCheckLine, OutstandingItemKind.DEPOSIT_IN_TRANSIT)))
+                .getItemDate();
+        assertThat(reversalDate).as("a reversal's copied itemDate").isEqualTo(CUTOVER.plusDays(5));
     }
 
     @Test
@@ -494,10 +619,16 @@ class BankOpeningBalancePostgresIT extends PostgresTenancyTestBase {
         });
     }
 
-    /** Posts Dr cash / Cr counter of {@code amount} on {@code day}. */
-    private void post(UUID tenant, UUID cash, UUID counter, String amount, LocalDate day) {
+    /** Posts Dr cash / Cr counter of {@code amount} on {@code day}; returns the entry id. */
+    private UUID post(UUID tenant, UUID cash, UUID counter, String amount, LocalDate day) {
+        return post(tenant, cash, counter, amount, day, null);
+    }
+
+    /** As {@link #post(UUID, UUID, UUID, String, LocalDate)}, the cash line carrying {@code dimensions}. */
+    private UUID post(
+            UUID tenant, UUID cash, UUID counter, String amount, LocalDate day, Map<String, String> dimensions) {
         BigDecimal value = new BigDecimal(amount);
-        asTenant(tenant, () -> {
+        return asTenant(tenant, () -> {
             UUID created = journalEntries
                     .createJournalEntry(JournalEntryCreateRequest.builder()
                             .sourceEventType("TEST")
@@ -509,6 +640,7 @@ class BankOpeningBalancePostgresIT extends PostgresTenancyTestBase {
                                             .glAccountId(cash)
                                             .debitAmount(value)
                                             .creditAmount(BigDecimal.ZERO)
+                                            .dimensions(dimensions)
                                             .build(),
                                     JournalEntryCreateRequest.JournalEntryLineRequest.builder()
                                             .glAccountId(counter)
@@ -517,8 +649,20 @@ class BankOpeningBalancePostgresIT extends PostgresTenancyTestBase {
                                             .build()))
                             .build())
                     .getJournalEntryId();
-            journalEntries.postJournalEntry(created, null);
+            return journalEntries.postJournalEntry(created, null).getJournalEntryId();
         });
+    }
+
+    /** The line of {@code entryId} on {@code account}. */
+    private static UUID lineOf(UUID tenant, UUID entryId, UUID account) {
+        return new JdbcTemplate(ownerDataSource())
+                .queryForObject(
+                        "SELECT line_id FROM journal_entry_line WHERE tenant_id = ? AND journal_entry_id = ? AND"
+                                + " gl_account_id = ?",
+                        UUID.class,
+                        tenant,
+                        entryId,
+                        account);
     }
 
     private void assertRefused(

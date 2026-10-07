@@ -1187,7 +1187,7 @@ paths:
 
         Use this tool once per bank account, when a shop''s books move onto the platform; do not use createJournalEntry, which records no opening, and do not use it for cash not yet deposited at cutover (deposit it on or before asOfDate and list it as a deposit in transit); AR, AP, inventory and loan openings are out of scope.
 
-        Preconditions: caller holds accounting:je:create and accounting:je:post; the account is an active BANK_CASH account in functional currency (422 BANK_OPENING_BALANCE_ACCOUNT_NOT_ELIGIBLE) and currencyCode is its currency (422 CURRENCY_NOT_SUPPORTED); it has no standing opening (409 BANK_OPENING_BALANCE_ALREADY_ESTABLISHED; correct a mistake by reversing the entry and running the opening again); it has no standing posted line dated on or before asOfDate and no committed statement starting on or before it (422 BANK_OPENING_BALANCE_NOT_FIRST; later lines are allowed); a zero balance needs at least one item (422 BANK_OPENING_BALANCE_EMPTY); asOfDate is not after today in the tenant''s accounting time zone and falls in an OPEN period, with no override path (422 PERIOD_CLOSED or PERIOD_HARD_LOCKED otherwise). Idempotent on requestId: a replay returns the first result with 200, another body with the same requestId is 409 IDEMPOTENCY_CONFLICT.
+        Preconditions: caller holds accounting:je:create and accounting:je:post; the account exists (404 GL_ACCOUNT_NOT_FOUND) and is an active BANK_CASH account in functional currency (422 BANK_OPENING_BALANCE_ACCOUNT_NOT_ELIGIBLE); currencyCode is its currency (422 CURRENCY_NOT_SUPPORTED) and no amount is finer than its minor unit (422 AMOUNT_PRECISION_EXCEEDS_CURRENCY, every such field in fieldErrors); it has no standing opening (409 BANK_OPENING_BALANCE_ALREADY_ESTABLISHED; correct a mistake by reversing the entry, dated on or before asOfDate, and running the opening again); the balance at the end of asOfDate holds no line and no committed statement starts on or before it (422 BANK_OPENING_BALANCE_NOT_FIRST; later lines are allowed); a zero balance needs at least one item (422 BANK_OPENING_BALANCE_EMPTY); asOfDate is not after today in the tenant''s accounting time zone and falls in an OPEN period, with no override path (422 PERIOD_CLOSED or PERIOD_HARD_LOCKED otherwise). Idempotent on requestId: a replay returns the first result with 200, another body with the same requestId is 409 IDEMPOTENCY_CONFLICT.
 
         Required inputs: glAccountId (path), asOfDate, statementBalance, currencyCode (ISO 4217, the code of every amount, ADR-0067), outstandingItems (type, reference, itemDate on or before asOfDate, amount more than zero; may be empty), justification (at least 10 characters), requestId.
 
@@ -1246,13 +1246,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'Missing or invalid field, named in fieldErrors: currencyCode missing or not an ISO 4217 code, asOfDate after today, an itemDate after asOfDate, or an amount not more than zero (VALIDATION_ERROR)'
+          description: 'Missing or invalid field, named in fieldErrors: currencyCode missing or not an ISO 4217 code, asOfDate after today, an itemDate after asOfDate, or an amount not more than zero or not below 10^14 (VALIDATION_ERROR)'
         '403':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Caller lacks accounting:je:create or accounting:je:post
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No GL account with this id (GL_ACCOUNT_NOT_FOUND)
         '409':
           content:
             application/json:
@@ -1264,7 +1270,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: BANK_OPENING_BALANCE_ACCOUNT_NOT_ELIGIBLE, CURRENCY_NOT_SUPPORTED, BANK_OPENING_BALANCE_NOT_FIRST, BANK_OPENING_BALANCE_EMPTY, PERIOD_CLOSED, PERIOD_HARD_LOCKED, ACCOUNTING_TIME_ZONE_UNSET or GL_MAPPING_NOT_CONFIGURED
+          description: BANK_OPENING_BALANCE_ACCOUNT_NOT_ELIGIBLE, CURRENCY_NOT_SUPPORTED, AMOUNT_PRECISION_EXCEEDS_CURRENCY (every offending amount in fieldErrors), BANK_OPENING_BALANCE_NOT_FIRST, BANK_OPENING_BALANCE_EMPTY, PERIOD_CLOSED, PERIOD_HARD_LOCKED, ACCOUNTING_TIME_ZONE_UNSET or GL_MAPPING_NOT_CONFIGURED
       security:
       - bearerAuth:
         - accounting:je:create
@@ -14605,10 +14611,10 @@ components:
           type: string
         journalEntryNumber:
           description: That entry's number
-          example: JE-202510-000001
+          example: JE-202510-1
           type: string
         outstandingItems:
-          description: The outstanding items, each with its own bank line
+          description: The outstanding items, each with its own bank line; empty when there are none
           items:
             $ref: '#/components/schemas/BankOpeningBalanceItem'
           type: array
@@ -14626,6 +14632,8 @@ components:
       - currencyCode
       - glAccountId
       - journalEntryId
+      - journalEntryNumber
+      - outstandingItems
       - statementBalance
       type: object
     BankReconciliationAdjustmentResponse:

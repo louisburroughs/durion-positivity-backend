@@ -63,6 +63,12 @@ public class ReconciliationOutstandingItemServiceImpl implements ReconciliationO
     private final BankRecAuditRecorder audit;
     private final BankRecSettings settings;
 
+    /**
+     * A ledger-side item copies its line's date (§3.6): the entry's, except that a bank opening's own item line
+     * carries the item's date, as the opening entry is dated the cutover (#2572, OI-10).
+     */
+    private final OpeningItemLineDimensions openingItemDates;
+
     @Override
     public @NonNull OutstandingItemResponse register(
             @NonNull UUID reconciliationId, @NonNull OutstandingItemRegisterRequest request) {
@@ -85,7 +91,9 @@ public class ReconciliationOutstandingItemServiceImpl implements ReconciliationO
             JournalEntryLine line = requireLedgerLine(recon, request.getGlLineId(), kind);
             item.setGlLineId(line.getLineId());
             item.setSignedAmount(line.getDebitAmount().subtract(line.getCreditAmount()));
-            item.setItemDate(itemDate(line));
+            item.setItemDate(openingItemDates
+                    .ownDate(line)
+                    .orElse(line.getJournalEntry().getTransactionDate().toLocalDate()));
         } else {
             if (request.getBankTransactionId() == null) {
                 throw notEligible("BANK_ERROR_PENDING is a bank-side item; name the bankTransactionId");
@@ -257,18 +265,6 @@ public class ReconciliationOutstandingItemServiceImpl implements ReconciliationO
                     + " to cash; GL line " + glLineId + " is " + signed);
         }
         return line;
-    }
-
-    /**
-     * The date a ledger-side item is copied from its line (§3.6): the entry's date, except that a bank opening
-     * balance's item line carries the item's own date (#2572, OI-10), as the entry is dated the cutover. That date
-     * is never after the entry's, so the item stays open at the baseline the opening precedes.
-     */
-    private static LocalDate itemDate(JournalEntryLine line) {
-        LocalDate entryDate = line.getJournalEntry().getTransactionDate().toLocalDate();
-        return OpeningItemLineDimensions.itemDate(line.getDimensions())
-                .filter(own -> !own.isAfter(entryDate))
-                .orElse(entryDate);
     }
 
     /** An UNMATCHED bank row on the account, dated on or before the window end, in no match or OPEN item. */

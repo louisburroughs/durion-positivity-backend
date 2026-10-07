@@ -63,12 +63,14 @@ public class BankOpeningBalanceController {
                     createJournalEntry, which records no opening, and do not use it for cash not yet deposited \
                     at cutover (deposit it on or before asOfDate and list it as a deposit in transit); AR, AP, \
                     inventory and loan openings are out of scope.
-                    Preconditions: caller holds accounting:je:create and accounting:je:post; the account is an \
-                    active BANK_CASH account in functional currency (422 BANK_OPENING_BALANCE_ACCOUNT_NOT_ELIGIBLE) \
-                    and currencyCode is its currency (422 CURRENCY_NOT_SUPPORTED); it has no \
+                    Preconditions: caller holds accounting:je:create and accounting:je:post; the account exists \
+                    (404 GL_ACCOUNT_NOT_FOUND) and is an active BANK_CASH account in functional currency (422 \
+                    BANK_OPENING_BALANCE_ACCOUNT_NOT_ELIGIBLE); currencyCode is its currency (422 \
+                    CURRENCY_NOT_SUPPORTED) and no amount is finer than its minor unit (422 \
+                    AMOUNT_PRECISION_EXCEEDS_CURRENCY, every such field in fieldErrors); it has no \
                     standing opening (409 BANK_OPENING_BALANCE_ALREADY_ESTABLISHED; correct a mistake by reversing \
-                    the entry and running the opening again); it has no standing posted line dated on or before \
-                    asOfDate and no committed statement starting on or before it (422 \
+                    the entry, dated on or before asOfDate, and running the opening again); the balance at the end \
+                    of asOfDate holds no line and no committed statement starts on or before it (422 \
                     BANK_OPENING_BALANCE_NOT_FIRST; later lines are allowed); a zero balance needs at least one \
                     item (422 BANK_OPENING_BALANCE_EMPTY); asOfDate is not after today in the tenant's accounting \
                     time zone and falls in an OPEN period, with no override path (422 PERIOD_CLOSED or \
@@ -91,12 +93,16 @@ public class BankOpeningBalanceController {
     @ApiResponse(
             responseCode = "400",
             description = "Missing or invalid field, named in fieldErrors: currencyCode missing or not an ISO 4217"
-                    + " code, asOfDate after today, an itemDate after asOfDate, or an amount not more than zero"
-                    + " (VALIDATION_ERROR)",
+                    + " code, asOfDate after today, an itemDate after asOfDate, or an amount not more than zero or"
+                    + " not below 10^14 (VALIDATION_ERROR)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = "Caller lacks accounting:je:create or accounting:je:post",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "No GL account with this id (GL_ACCOUNT_NOT_FOUND)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
@@ -105,9 +111,9 @@ public class BankOpeningBalanceController {
     @ApiResponse(
             responseCode = "422",
             description = "BANK_OPENING_BALANCE_ACCOUNT_NOT_ELIGIBLE, CURRENCY_NOT_SUPPORTED,"
-                    + " BANK_OPENING_BALANCE_NOT_FIRST,"
-                    + " BANK_OPENING_BALANCE_EMPTY, PERIOD_CLOSED, PERIOD_HARD_LOCKED, ACCOUNTING_TIME_ZONE_UNSET"
-                    + " or GL_MAPPING_NOT_CONFIGURED",
+                    + " AMOUNT_PRECISION_EXCEEDS_CURRENCY (every offending amount in fieldErrors),"
+                    + " BANK_OPENING_BALANCE_NOT_FIRST, BANK_OPENING_BALANCE_EMPTY, PERIOD_CLOSED, PERIOD_HARD_LOCKED,"
+                    + " ACCOUNTING_TIME_ZONE_UNSET or GL_MAPPING_NOT_CONFIGURED",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_BANK_OPENING_BALANCE_ESTABLISH", apiVersion = "1")
     public ResponseEntity<BankOpeningBalanceResponse> establish(

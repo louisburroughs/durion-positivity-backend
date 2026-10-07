@@ -10,8 +10,11 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.accounting.internal.bankrec.intake.BankRecErrorCode;
+import com.positivity.accounting.internal.bankrec.intake.BankRecException;
 import com.positivity.accounting.internal.bankrec.readmodel.BankAccountCurrencies;
 import com.positivity.accounting.internal.bankrec.readmodel.BankStatementCoverage;
+import com.positivity.accounting.internal.bankrec.service.FunctionalCurrency;
 import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.dto.BankOpeningBalanceRequest;
 import com.positivity.accounting.internal.dto.BankOpeningBalanceResponse;
@@ -26,6 +29,7 @@ import com.positivity.accounting.internal.enums.BankOpeningItemType;
 import com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetException;
 import com.positivity.accounting.internal.exception.CashSetupException;
 import com.positivity.accounting.internal.exception.CurrencyNotSupportedException;
+import com.positivity.accounting.internal.exception.GLAccountNotFoundException;
 import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.BankOpeningBalanceRepository;
@@ -44,6 +48,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataIntegrityViolationException;
 
 @DisplayName("Bank opening balance command (#2572, OI-10)")
 class BankOpeningBalanceServiceImplTest {
@@ -80,7 +85,8 @@ class BankOpeningBalanceServiceImplTest {
                 zoneResolver,
                 new LedgerCurrency("USD"),
                 currencies,
-                coverage);
+                coverage,
+                new FunctionalCurrency(new LedgerCurrency("USD")));
 
         bank = new GLAccount(BANK);
         bank.setAccountCode("1000");
@@ -129,7 +135,7 @@ class BankOpeningBalanceServiceImplTest {
             }
             JournalEntryResponse entry = JournalEntryResponse.builder()
                     .journalEntryId(UUID.randomUUID())
-                    .entryNumber("JE-202510-00000" + (entries.size() + 1))
+                    .entryNumber("JE-202510-" + (entries.size() + 1))
                     .lines(lines)
                     .build();
             entries.put(entry.getJournalEntryId(), entry);
@@ -181,7 +187,7 @@ class BankOpeningBalanceServiceImplTest {
         assertThat(response.statementBalance()).isEqualByComparingTo("10000.00");
         assertThat(response.bookBalance()).isEqualByComparingTo("10750.00");
         assertThat(response.currencyCode()).isEqualTo("USD");
-        assertThat(response.journalEntryNumber()).isEqualTo("JE-202510-000001");
+        assertThat(response.journalEntryNumber()).isEqualTo("JE-202510-1");
         List<JournalEntryResponse.JournalEntryLineResponse> posted =
                 entries.get(response.journalEntryId()).getLines();
         assertThat(response.outstandingItems())
@@ -210,6 +216,8 @@ class BankOpeningBalanceServiceImplTest {
             assertThat(row.getAsOfDate()).isEqualTo(AS_OF);
             assertThat(row.getBookBalance()).isEqualByComparingTo("10750.00");
             assertThat(row.getCurrencyCode()).isEqualTo("USD");
+            assertThat(row.getAccountCode()).isEqualTo("1000");
+            assertThat(row.getJournalEntryNumber()).isEqualTo("JE-202510-1");
             assertThat(row.getJustification()).isEqualTo(WHY);
             assertThat(row.getActor()).isEqualTo("SYSTEM");
         });
@@ -259,14 +267,19 @@ class BankOpeningBalanceServiceImplTest {
     }
 
     @Test
-    @DisplayName("AC3: a missing, non-bank, inactive or foreign-currency account is 422"
+    @DisplayName("ADR-0017: an account the caller cannot see (missing, or another tenant's under RLS) is 404"
+            + " GL_ACCOUNT_NOT_FOUND and posts nothing")
+    void missingAccountIsNotFound() {
+        bank = null;
+        assertThatThrownBy(() -> service.establish(BANK, workedExample(UUID.randomUUID())))
+                .isInstanceOf(GLAccountNotFoundException.class);
+        verify(journalEntries, never()).createJournalEntry(any());
+    }
+
+    @Test
+    @DisplayName("AC3: a non-bank, inactive or foreign-currency account is 422"
             + " BANK_OPENING_BALANCE_ACCOUNT_NOT_ELIGIBLE and posts nothing")
     void accountMustBeEligible() {
-        GLAccount found = bank;
-        bank = null;
-        assertRefused(CashSetupException.Code.BANK_OPENING_BALANCE_ACCOUNT_NOT_ELIGIBLE);
-
-        bank = found;
         bank.setAccountSubtype(AccountSubtype.CASH_ON_HAND);
         assertRefused(CashSetupException.Code.BANK_OPENING_BALANCE_ACCOUNT_NOT_ELIGIBLE);
 
@@ -296,10 +309,10 @@ class BankOpeningBalanceServiceImplTest {
 
     @Test
     @DisplayName("ADR-0067: an ISO code other than the bank account's currency is 422"
-            + " CURRENCY_NOT_SUPPORTED (PC-9) and posts nothing")
+            + " CURRENCY_NOT_SUPPORTED (PC-9), checked before the amounts' precision, and posts nothing")
     void currencyCodeMustBeTheAccounts() {
-        BankOpeningBalanceRequest euros =
-                new BankOpeningBalanceRequest(AS_OF, new BigDecimal("10.00"), "EUR", List.of(), WHY, UUID.randomUUID());
+        BankOpeningBalanceRequest euros = new BankOpeningBalanceRequest(
+                AS_OF, new BigDecimal("10.001"), "EUR", List.of(), WHY, UUID.randomUUID());
         assertThatThrownBy(() -> service.establish(BANK, euros))
                 .isInstanceOf(CurrencyNotSupportedException.class)
                 .hasMessageContaining("EUR");
@@ -320,10 +333,10 @@ class BankOpeningBalanceServiceImplTest {
             + " it, is 422 BANK_OPENING_BALANCE_NOT_FIRST")
     void openingMustComeFirst() {
         LocalDateTime dayAfter = AS_OF.plusDays(1).atStartOfDay();
-        when(journalLines.countStandingPostedLinesBefore(BANK, dayAfter)).thenReturn(1L);
+        when(journalLines.countLinesInBalanceBefore(BANK, dayAfter)).thenReturn(1L);
         assertRefused(CashSetupException.Code.BANK_OPENING_BALANCE_NOT_FIRST);
 
-        when(journalLines.countStandingPostedLinesBefore(BANK, dayAfter)).thenReturn(0L);
+        when(journalLines.countLinesInBalanceBefore(BANK, dayAfter)).thenReturn(0L);
         when(coverage.startsOnOrBefore(BANK, AS_OF)).thenReturn(true);
         assertRefused(CashSetupException.Code.BANK_OPENING_BALANCE_NOT_FIRST);
 
@@ -331,7 +344,7 @@ class BankOpeningBalanceServiceImplTest {
         when(coverage.startsOnOrBefore(BANK, AS_OF)).thenReturn(false);
         assertThat(service.establish(BANK, workedExample(UUID.randomUUID())).replayed())
                 .isFalse();
-        verify(journalLines, org.mockito.Mockito.atLeastOnce()).countStandingPostedLinesBefore(BANK, dayAfter);
+        verify(journalLines, org.mockito.Mockito.atLeastOnce()).countLinesInBalanceBefore(BANK, dayAfter);
     }
 
     @Test
@@ -378,37 +391,89 @@ class BankOpeningBalanceServiceImplTest {
     }
 
     @Test
-    @DisplayName("a body with a short justification, a non-positive item, a blank reference or sub-cent amounts is 400")
+    @DisplayName("a body with a short justification, a non-positive or oversized amount or a blank reference is 400")
     void requestShapeIsValidated() {
         assertThatThrownBy(() -> service.establish(
                         BANK,
                         new BankOpeningBalanceRequest(
                                 AS_OF, new BigDecimal("1.00"), "USD", List.of(), "too short", UUID.randomUUID())))
-                .isInstanceOf(InvalidRequestParameterException.class);
+                .isInstanceOfSatisfying(
+                        InvalidRequestParameterException.class,
+                        e -> assertThat(e.getField()).isEqualTo("justification"));
         assertThatThrownBy(() -> service.establish(
                         BANK,
                         request(
                                 "1.00",
                                 List.of(item(BankOpeningItemType.OUTSTANDING_CHECK, "1", "0")),
                                 UUID.randomUUID())))
-                .isInstanceOf(InvalidRequestParameterException.class);
+                .isInstanceOfSatisfying(
+                        InvalidRequestParameterException.class,
+                        e -> assertThat(e.getField()).isEqualTo("outstandingItems[0].amount"));
         assertThatThrownBy(() -> service.establish(
                         BANK,
                         request(
                                 "1.00",
                                 List.of(item(BankOpeningItemType.OUTSTANDING_CHECK, " ", "5.00")),
                                 UUID.randomUUID())))
-                .isInstanceOf(InvalidRequestParameterException.class);
-        assertThatThrownBy(() -> service.establish(BANK, request("1.001", List.of(), UUID.randomUUID())))
-                .isInstanceOf(InvalidRequestParameterException.class);
+                .isInstanceOfSatisfying(
+                        InvalidRequestParameterException.class,
+                        e -> assertThat(e.getField()).isEqualTo("outstandingItems[0].reference"));
+        // numeric(19,4) holds 15 integer digits: amounts, and their sum, stay below 10^14 (400, never a 500).
+        assertThatThrownBy(() -> service.establish(BANK, request("100000000000000", List.of(), UUID.randomUUID())))
+                .isInstanceOfSatisfying(
+                        InvalidRequestParameterException.class,
+                        e -> assertThat(e.getField()).isEqualTo("statementBalance"));
         assertThatThrownBy(() -> service.establish(
                         BANK,
                         request(
-                                "1.00",
-                                List.of(item(BankOpeningItemType.DEPOSIT_IN_TRANSIT, "D", "5.005")),
+                                "60000000000000",
+                                List.of(item(BankOpeningItemType.DEPOSIT_IN_TRANSIT, "D", "50000000000000")),
                                 UUID.randomUUID())))
-                .isInstanceOf(InvalidRequestParameterException.class);
+                .isInstanceOfSatisfying(
+                        InvalidRequestParameterException.class,
+                        e -> assertThat(e.getField()).isEqualTo("outstandingItems"));
         verify(journalEntries, never()).createJournalEntry(any());
+    }
+
+    @Test
+    @DisplayName("ADR-0067 PC-6: amounts finer than the minor unit are 422 AMOUNT_PRECISION_EXCEEDS_CURRENCY, every"
+            + " offending field in one error, never rounded")
+    void amountsFinerThanTheMinorUnitAreRefusedTogether() {
+        BankOpeningBalanceRequest fine = request(
+                "1.001",
+                List.of(
+                        item(BankOpeningItemType.DEPOSIT_IN_TRANSIT, "D", "5.00"),
+                        item(BankOpeningItemType.OUTSTANDING_CHECK, "7", "5.005")),
+                UUID.randomUUID());
+        assertThatThrownBy(() -> service.establish(BANK, fine)).isInstanceOfSatisfying(BankRecException.class, e -> {
+            assertThat(e.code()).isEqualTo(BankRecErrorCode.AMOUNT_PRECISION_EXCEEDS_CURRENCY);
+            assertThat(e.fieldErrors()).containsOnlyKeys("statementBalance", "outstandingItems[1].amount");
+        });
+        // Trailing zeros are not precision.
+        assertThat(service.establish(BANK, request("1.0000", List.of(), UUID.randomUUID()))
+                        .response()
+                        .statementBalance())
+                .isEqualByComparingTo("1.00");
+        assertThat(entries).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("only the request unique maps to 409 IDEMPOTENCY_CONFLICT; any other integrity violation propagates")
+    void onlyTheRequestUniqueIsAConflict() {
+        // doThrow: re-stubbing with when() would run the setUp answer with a null row.
+        org.mockito.Mockito.doThrow(new DataIntegrityViolationException(
+                        "dup", new RuntimeException("duplicate key violates uq_bank_opening_balance_request")))
+                .doThrow(new DataIntegrityViolationException(
+                        "fk", new RuntimeException("violates bank_opening_balance_journal_entry_fk")))
+                .when(openings)
+                .saveAndFlush(any());
+
+        assertThatThrownBy(() -> service.establish(BANK, workedExample(UUID.randomUUID())))
+                .isInstanceOfSatisfying(
+                        CashSetupException.class,
+                        e -> assertThat(e.getCode()).isEqualTo(CashSetupException.Code.IDEMPOTENCY_CONFLICT));
+        assertThatThrownBy(() -> service.establish(BANK, workedExample(UUID.randomUUID())))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
@@ -430,6 +495,12 @@ class BankOpeningBalanceServiceImplTest {
         assertThat(replay.response().outstandingItems())
                 .isEqualTo(first.response().outstandingItems());
         assertThat(entries).hasSize(1);
+        // The replay is the stored first result: a renamed account or anything since does not change it.
+        bank.setAccountCode("1001");
+        BankOpeningBalanceService.Outcome later = service.establish(BANK, workedExample(requestId));
+        assertThat(later.response().accountCode()).isEqualTo("1000");
+        assertThat(later.response().journalEntryNumber()).isEqualTo("JE-202510-1");
+        verify(journalEntries, never()).getJournalEntry(any());
 
         BankOpeningBalanceRequest other = request("10001.00", List.of(), requestId);
         BankOpeningBalanceRequest otherCurrency = new BankOpeningBalanceRequest(

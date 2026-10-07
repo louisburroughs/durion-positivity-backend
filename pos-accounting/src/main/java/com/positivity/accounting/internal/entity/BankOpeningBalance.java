@@ -18,6 +18,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.hibernate.annotations.Immutable;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -33,6 +34,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString
 @Entity
+@Immutable
 @EntityListeners(AuditingEntityListener.class)
 @Table(
         name = "bank_opening_balance",
@@ -53,6 +55,10 @@ public class BankOpeningBalance extends TenantScopedEntity {
     @Column(name = "gl_account_id", nullable = false, updatable = false)
     private UUID glAccountId;
 
+    /** The account's code when the opening was posted: a replay answers with it, whatever happened since. */
+    @Column(name = "account_code", length = 20, nullable = false, updatable = false)
+    private String accountCode;
+
     /** The cutover date: the entry is dated on it. */
     @Column(name = "as_of_date", nullable = false, updatable = false)
     private LocalDate asOfDate;
@@ -71,6 +77,10 @@ public class BankOpeningBalance extends TenantScopedEntity {
 
     @Column(name = "journal_entry_id", nullable = false, updatable = false)
     private UUID journalEntryId;
+
+    /** The entry's number (ADR-0064), so a replay returns exactly the first result. */
+    @Column(name = "journal_entry_number", length = 20, nullable = false, updatable = false)
+    private String journalEntryNumber;
 
     @Column(name = "justification", length = 1000, nullable = false, updatable = false)
     private String justification;

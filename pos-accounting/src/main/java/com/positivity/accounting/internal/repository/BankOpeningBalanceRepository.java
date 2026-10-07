@@ -16,6 +16,9 @@ public interface BankOpeningBalanceRepository extends JpaRepository<BankOpeningB
     @NonNull
     Optional<BankOpeningBalance> findByRequestId(@NonNull UUID requestId);
 
+    /** Whether an opening owns this journal entry (bank reconciliation trusts its item lines' own dates). */
+    boolean existsByJournalEntryId(@NonNull UUID journalEntryId);
+
     /**
      * The account's standing openings: those whose journal entry is still POSTED. A reversed entry is REVERSED
      * (ADR-0047), so its opening no longer stands and the account may be opened again.

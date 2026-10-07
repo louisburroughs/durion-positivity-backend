@@ -45,13 +45,18 @@ public record BankOpeningBalanceResponse(
                 requiredMode = REQUIRED)
         String currencyCode,
 
-        @ArraySchema(arraySchema = @Schema(description = "The outstanding items, each with its own bank line"))
+        @ArraySchema(
+                arraySchema =
+                        @Schema(
+                                description = "The outstanding items, each with its own bank line; empty when there"
+                                        + " are none",
+                                requiredMode = REQUIRED))
         List<Item> outstandingItems,
 
         @Schema(description = "The journal entry the command posted", requiredMode = REQUIRED)
         UUID journalEntryId,
 
-        @Schema(description = "That entry's number", example = "JE-202510-000001")
+        @Schema(description = "That entry's number", example = "JE-202510-1", requiredMode = REQUIRED)
         String journalEntryNumber,
 
         @Schema(description = "True when this answers a replayed requestId with the first result")
