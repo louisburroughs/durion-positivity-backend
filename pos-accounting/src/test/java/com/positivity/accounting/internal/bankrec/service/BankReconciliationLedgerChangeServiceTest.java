@@ -167,7 +167,14 @@ class BankReconciliationLedgerChangeServiceTest {
                 .thenReturn(List.of(item));
 
         hook.onReversed(new LedgerReversalApplied(
-                original, reversal, REVERSAL_DATE, List.of(matchedLine, itemLine), Set.of(ACCOUNT_ID), ACTOR, null));
+                original,
+                reversal,
+                REVERSAL_DATE,
+                List.of(matchedLine, itemLine),
+                Set.of(ACCOUNT_ID),
+                ACTOR,
+                null,
+                "Posted to the wrong bank account"));
 
         assertThat(match.getBrokenByJournalEntryId()).isEqualTo(reversal);
         verify(writer).end(match, MatchState.BROKEN, null, ACTOR);
@@ -197,7 +204,8 @@ class BankReconciliationLedgerChangeServiceTest {
                 List.of(line),
                 Set.of(ACCOUNT_ID),
                 ACTOR,
-                null));
+                null,
+                "Posted to the wrong bank account"));
 
         verify(writer, never()).end(any(), any(), any(), any());
         verify(facts, never()).invalidated(any(), any(), any(), any());

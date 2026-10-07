@@ -64,3 +64,5 @@ pos.security.permission-registration.enabled: false
 pos.events.base-url: http://127.0.0.1:1
 # Tests drive accounting events explicitly; the scheduled received-event drainer (#2435) stays off.
 pos.accounting.event-drainer.enabled: false
+# The undeposited drawer cash gauges (#2514) poll on a schedule too; UndepositedCashGaugeTest drives them directly.
+pos.accounting.deposit-gauge.enabled: false

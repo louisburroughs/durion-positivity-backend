@@ -108,6 +108,18 @@ public final class AccountingPermissions {
      */
     public static final String FLOAT_MANAGE = "accounting:float:manage";
 
+    /**
+     * Read the undeposited register sessions and record a bank deposit of their drawer cash (CAP:550 S18, #2514;
+     * SPEC-accounting-workspace §4.5, §7.1, AW10; Security sign-off OI-5/AW31): ACCOUNTING_CLERK, CONTROLLER and ADMIN.
+     */
+    public static final String DEPOSIT_CREATE = "accounting:deposit:create";
+
+    /**
+     * Reverse a bank deposit of drawer cash (CAP:550 S18, #2514; §4.5, ADR-0047; Security sign-off OI-5/AW31):
+     * CONTROLLER and ADMIN.
+     */
+    public static final String DEPOSIT_REVERSE = "accounting:deposit:reverse";
+
     /** Create gl mapping. */
     public static final String GL_MAPPING_CREATE = "accounting:gl-mapping:create";
 

@@ -67,6 +67,12 @@ class TenantTemplateAdoptionIT extends PostgresCommittingTestBase {
     private static final int S15_ENTRIES = S15_CHART_ROWS + 9;
 
     /**
+     * Template entries of #2572 (bank opening balances) the old seeds never wrote: the OPENING_BALANCE posting
+     * category, its OPENING_BALANCE_EQUITY key and that key's GL mapping to 3900.
+     */
+    private static final int S39_CHART_ROWS = 3;
+
+    /**
      * Template entries of #2509 (S12, AW38-AW40) the old seeds never wrote: accounts 2100, 5050 and 5060; the
      * GOODS_RECEIPT and VENDOR_BILL categories; their 3 + 13 mapping keys and GL mappings; the balance-sheet line of
      * 2100 and the income-statement lines of 5050 and 5060.
@@ -151,8 +157,9 @@ class TenantTemplateAdoptionIT extends PostgresCommittingTestBase {
         List<String> added = new ArrayList<>(after);
         added.removeAll(before);
         assertThat(added)
-                .as("only S35's statement lines, S15's chart (#2511) and S12's (#2509) were added")
-                .hasSize(S35_STATEMENT_LINES + S15_CHART_ROWS + S12_CHART_ROWS);
+                .as("only S35's statement lines, S15's chart (#2511), the opening-balance mapping (#2572) and S12's"
+                        + " chart (#2509) were added")
+                .hasSize(S35_STATEMENT_LINES + S15_CHART_ROWS + S39_CHART_ROWS + S12_CHART_ROWS);
         assertThat(added.stream()
                         .filter(row -> row.contains("\"BALANCE_SHEET\""))
                         .count())
@@ -182,8 +189,8 @@ class TenantTemplateAdoptionIT extends PostgresCommittingTestBase {
                 .as("every template entry the old seeds wrote, the retread add-on included, is ADOPTED; the rest"
                         + " CREATED")
                 .containsExactlyInAnyOrder(
-                        "ADOPTED " + (templateEntries - S35_STATEMENT_LINES - S15_ENTRIES - S12_CHART_ROWS),
-                        "CREATED " + (S35_STATEMENT_LINES + S15_ENTRIES + S12_CHART_ROWS));
+                        "ADOPTED " + (templateEntries - S35_STATEMENT_LINES - S15_ENTRIES - S39_CHART_ROWS - S12_CHART_ROWS),
+                        "CREATED " + (S35_STATEMENT_LINES + S15_ENTRIES + S39_CHART_ROWS + S12_CHART_ROWS));
         assertThat(owner.queryForObject(
                         "SELECT count(*) FROM accounting_template_entry WHERE tenant_id = ? AND target_row_id IS NULL",
                         Integer.class,
@@ -192,8 +199,8 @@ class TenantTemplateAdoptionIT extends PostgresCommittingTestBase {
         TenantTemplateStatusResponse status = tenantTemplateService.status();
         assertThat(status.state()).isEqualTo(TenantTemplateState.UP_TO_DATE);
         assertThat(status.counts().adopted())
-                .isEqualTo(templateEntries - S35_STATEMENT_LINES - S15_ENTRIES - S12_CHART_ROWS);
-        assertThat(status.counts().created()).isEqualTo(S35_STATEMENT_LINES + S15_ENTRIES + S12_CHART_ROWS);
+                .isEqualTo(templateEntries - S35_STATEMENT_LINES - S15_ENTRIES - S39_CHART_ROWS - S12_CHART_ROWS);
+        assertThat(status.counts().created()).isEqualTo(S35_STATEMENT_LINES + S15_ENTRIES + S39_CHART_ROWS + S12_CHART_ROWS);
         assertThat(status.retreadPlantAddOn()).isTrue();
         assertThat(owner.queryForObject(
                         "SELECT count(*) FROM gl_account WHERE tenant_id = ?", Integer.class, PlatformTenant.ID))

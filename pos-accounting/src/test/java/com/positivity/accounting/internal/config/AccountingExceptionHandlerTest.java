@@ -181,6 +181,12 @@ class AccountingExceptionHandlerTest {
                                             .FLOAT_ALREADY_ESTABLISHED,
                                     "Register T-1 already has a float"),
                             request)),
+                    Named.of("handleVendorBill", (HandlerInvocation) request -> handler.handleVendorBill(
+                            new com.positivity.accounting.internal.exception.VendorBillException(
+                                    com.positivity.accounting.internal.exception.VendorBillException.Code
+                                            .AP_BILL_NOT_APPROVABLE,
+                                    "Bill INV-1 is APPROVED and cannot be approved"),
+                            request)),
                     Named.of("handleDuplicateEvent", (HandlerInvocation)
                             request -> handler.handleDuplicateEvent(new DuplicateEventException("duplicate"), request)),
                     Named.of("handleUnbalancedEntry", (HandlerInvocation) request ->

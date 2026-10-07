@@ -35,6 +35,9 @@ pos:
     # Tests drive accounting events explicitly; the scheduled received-event drainer (#2435) stays off.
     event-drainer:
       enabled: false
+    # The undeposited drawer cash gauges (#2514) poll on a schedule too; UndepositedCashGaugeTest drives them.
+    deposit-gauge:
+      enabled: false
 
 eureka:
   client:

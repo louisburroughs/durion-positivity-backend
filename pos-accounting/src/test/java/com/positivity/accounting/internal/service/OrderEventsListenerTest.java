@@ -43,6 +43,7 @@ class OrderEventsListenerTest {
             mock(RegisterCashMovementPostingService.class);
     private final KafkaFactIngestionRecorder ingestionRecorder = mock(KafkaFactIngestionRecorder.class);
     private final RegisterSessionReplica sessionReplica = mock(RegisterSessionReplica.class);
+    private final UndepositedSessionProjection undepositedSessions = mock(UndepositedSessionProjection.class);
 
     private OrderEventsListener listener;
 
@@ -60,7 +61,8 @@ class OrderEventsListenerTest {
                 org.mockito.Mockito.mock(ObjectProvider.class),
                 mock(PlatformTransactionManager.class),
                 com.positivity.accounting.internal.service.TestZoneResolvers.utc(java.time.Clock.systemUTC()),
-                sessionReplica);
+                sessionReplica,
+                undepositedSessions);
     }
 
     private String sessionClosed(String eventId) {
@@ -126,6 +128,30 @@ class OrderEventsListenerTest {
             assertThat(movement.amount()).isEqualByComparingTo("12.50");
         });
         verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName("CAP:550 S18 (#2514): once the session posted, its undeposited session is written in the same"
+            + " handler transaction, with the envelope's schema version; a session held for its currency writes none")
+    void postedSessionWritesItsUndepositedSession() {
+        listener.onOrderEvent(sessionClosedWithMovements("e-s18"));
+
+        ArgumentCaptor<RegisterSessionClosedV1> fact = ArgumentCaptor.forClass(RegisterSessionClosedV1.class);
+        verify(undepositedSessions).record(fact.capture(), org.mockito.ArgumentMatchers.eq(2));
+        assertThat(fact.getValue().sessionId()).isEqualTo(SESSION_ID);
+
+        listener.onOrderEvent(sessionClosed("e-s18-v1"));
+        verify(undepositedSessions).record(any(), org.mockito.ArgumentMatchers.eq(1));
+
+        org.mockito.Mockito.clearInvocations(undepositedSessions);
+        when(movementPostingService.postMovements(any(), any())).thenReturn(new FactPostingOutcome.CurrencyHeld());
+        listener.onOrderEvent(sessionClosedWithMovements("e-s18-held"));
+        verify(undepositedSessions, never()).record(any(), org.mockito.ArgumentMatchers.anyInt());
+
+        when(movementPostingService.postMovements(any(), any())).thenReturn(FactPostingOutcome.nothingToPost());
+        when(postingService.postOverShort(any(), any())).thenReturn(new FactPostingOutcome.CurrencyHeld());
+        listener.onOrderEvent(sessionClosedWithMovements("e-s18-held-variance"));
+        verify(undepositedSessions, never()).record(any(), org.mockito.ArgumentMatchers.anyInt());
     }
 
     private String sessionClosedWithMovements(String eventId) {

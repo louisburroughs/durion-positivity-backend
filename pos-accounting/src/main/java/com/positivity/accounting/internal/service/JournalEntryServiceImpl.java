@@ -517,7 +517,8 @@ public class JournalEntryServiceImpl implements JournalEntryService {
                 original.getLines().stream().map(JournalEntryLine::getLineId).toList(),
                 accountsOf(original),
                 actor,
-                overrideJustification));
+                overrideJustification,
+                reversalReason));
 
         recordReversalAudit(original, savedReversal, actor, reversalReason);
         publishReversalEvent(original, savedReversal, reversalTransactionDate.toLocalDate(), reversalReason, actor);

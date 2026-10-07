@@ -246,6 +246,13 @@ class RegisterFloatReversalReactionTest {
 
     private static LedgerReversalApplied reversal(UUID original, LocalDate date, String override) {
         return new LedgerReversalApplied(
-                original, UUID.randomUUID(), date, List.of(UUID.randomUUID()), Set.of(FLOAT_ACCOUNT), "cfo", override);
+                original,
+                UUID.randomUUID(),
+                date,
+                List.of(UUID.randomUUID()),
+                Set.of(FLOAT_ACCOUNT),
+                "cfo",
+                override,
+                "Float entered against the wrong register");
     }
 }

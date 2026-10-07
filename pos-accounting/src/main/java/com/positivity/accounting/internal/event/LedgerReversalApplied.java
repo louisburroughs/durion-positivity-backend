@@ -22,6 +22,8 @@ import org.jspecify.annotations.Nullable;
  * @param actor who reversed it (ADR-0018)
  * @param overrideJustification the justification the reversal posted into a closed period with, if any; a
  *     listener that posts a follow-up entry on the reversal date posts it under the same override (#2571)
+ * @param reversalReason why the entry was reversed, as the caller gave it; a listener that keeps a record of the
+ *     reversed document stores it (a bank deposit, CAP:550 S18, #2514)
  */
 public record LedgerReversalApplied(
         @NonNull UUID originalJournalEntryId,
@@ -30,7 +32,8 @@ public record LedgerReversalApplied(
         @NonNull List<UUID> originalLineIds,
         @NonNull Set<UUID> glAccountIds,
         @NonNull String actor,
-        @Nullable String overrideJustification) {
+        @Nullable String overrideJustification,
+        @NonNull String reversalReason) {
 
     public LedgerReversalApplied {
         originalLineIds = List.copyOf(originalLineIds);

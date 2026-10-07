@@ -49,6 +49,10 @@ General-ledger accounting service for the Durion Positivity ETSMS platform. Mana
 - `GET /v1/accounting/tenant-template/status` — where the caller's tenant stands against the accounting template (permission `accounting:coa:view`, event `ACCOUNTING_TENANT_TEMPLATE_STATUS_VIEW`; see [Tenant provisioning](#tenant-provisioning-the-accounting-template-2526))
 - `PUT /v1/accounting/tenant-template/add-ons/retread-plant` — turn the retread-plant add-on on for the caller's tenant (permission `accounting:coa:create`, event `ACCOUNTING_TENANT_TEMPLATE_ADD_ON_ENABLE`)
 - `POST /v1/accounting/bank-accounts/{glAccountId}/opening-balance` — a bank account's opening balance at cutover, with its outstanding items, through 3900 (permissions `accounting:je:create` and `accounting:je:post`, event `ACCOUNTING_BANK_OPENING_BALANCE_ESTABLISH`; see [Bank opening balance](#bank-opening-balance-2572-oi-10))
+- `GET /v1/accounting/undeposited-sessions[?sessionId=…&bankGlAccountId=…]` — the closed register sessions whose drawer cash has not reached the bank, oldest first, and for a selection the deposit it makes (permission `accounting:deposit:create`, event `ACCOUNTING_UNDEPOSITED_SESSIONS_VIEW`; see [Bank deposits of drawer cash](#bank-deposits-of-drawer-cash-cap550-s18-2514))
+- `POST /v1/accounting/deposits` — Record bank deposit of whole sessions (permission `accounting:deposit:create`, event `ACCOUNTING_DEPOSIT_CREATE`)
+- `GET /v1/accounting/deposits/{depositId}` — a deposit as it stands (permission `accounting:deposit:create`, event `ACCOUNTING_DEPOSIT_VIEW`)
+- `POST /v1/accounting/deposits/{depositId}/reversal` — Reverse deposit (permission `accounting:deposit:reverse`, event `ACCOUNTING_DEPOSIT_REVERSE`)
 
 ### Display references on responses
 
@@ -457,7 +461,7 @@ holder sets are:
 | `accounting:payment:assign-customer` | no role yet |
 | `accounting:ap:approve` | `ACCOUNTING_CLERK`, `ADMIN`, `CONTROLLER`, `GENERAL_MANAGER` — send a bill for approval, correct a match exception, select a candidate (S12, #2509; reinstated, bit 262) |
 | `accounting:ap:reject` | `ACCOUNTING_CLERK`, `ADMIN`, `CONTROLLER`, `GENERAL_MANAGER` — reject, void a match exception; with the approval tier, void an approved bill (S12; reinstated, bit 263) |
-| `accounting:ap:approve_over_limit` | `ADMIN`, `CONTROLLER`, `GENERAL_MANAGER` — approve, `ACCEPT`; until S13's clerk limit (default 0) every bill needs it (S12, catalog v101, bit 556) |
+| `accounting:ap:approve_over_limit` | `ADMIN`, `CONTROLLER`, `GENERAL_MANAGER` — approve, `ACCEPT`; until S13's clerk limit (default 0) every bill needs it (S12, catalog v102, bit 558) |
 
 `accounting:payment:assign-customer` (catalog v97, bit 548; `AccountingPermissions.PAYMENT_ASSIGN_CUSTOMER`)
 is registered ahead of its endpoint — assigning a customer, once and with a justification, to a payment
@@ -804,6 +808,56 @@ schema-1 fact has no movements and posts its over/short alone, as before.
   `processed_events` drops, and pos-order has no other re-emit of it.)
 - **Metrics** — `accounting.cash_movement.posted{reason}` and `accounting.cash_movement.unposted{reason}`, counted
   after commit. Any `unposted` increment must alert (operations configuration).
+
+## Bank deposits of drawer cash (CAP:550 S18, #2514)
+
+Drawer cash leaves "Waiting to be deposited" (1090 + 1095, AW9) exactly when it reaches the bank, one entry per
+deposit, and a wrong deposit is reversed, never edited (AW10, ADR-0047).
+
+- **Undeposited sessions** — `OrderEventsListener` writes an `undeposited_session` row (and one
+  `undeposited_session_drop` per `BANK_DROP` movement) for every `order.session.closed` fact at schema version 2 in
+  the ledger currency, in the handler transaction that posts the session's movements and over/short, after they
+  posted (`UndepositedSessionProjection`). It holds the drops (bag numbers, amounts) and their total, the
+  **expected cash** (the `CASH` tender total, what the session's sales put in 1090) and the **clearing net** (the
+  signed sum, debit positive, of the 1095 lines the session's over/short and petty expenses posted:
+  `overShort − Σ petty`). A schema-1 fact, a session closed in another currency or with a drop in one, and a session
+  S17 held for its currency write no row (ADR-0067 PC-9: never deposited at par); a redelivery writes nothing. No
+  call to pos-order (ADR-0044).
+- **Read** — `GET /v1/accounting/undeposited-sessions` lists the `UNDEPOSITED` sessions the caller's
+  `accounting:deposit:create` reaches, oldest first, with register, location, close date, age in days, bag numbers
+  and amounts. With `sessionId` parameters it adds `selection`: `depositAmount`, `expectedCash`, `clearingNet`,
+  `difference = depositAmount − expectedCash − clearingNet`, `balanced` and the entry's lines, so the dialog (S20)
+  never sums amounts (P7). A `sessionId` it does not list is 400. Nothing posts.
+- **Record bank deposit** — `POST /v1/accounting/deposits` `{bankGlAccountId, depositDate, currencyCode, sessionIds,
+  requestId, depositSlipReference?, overrideJustification?}`. One entry, source type `BANK_DEPOSIT`, dated
+  `depositDate` through the period gate: Dr the bank account by the drops (one line, the line bank reconciliation
+  matches), Cr `UNDEPOSITED_FUNDS` (1090) by the expected cash, Dr `CASH_CLEARING` (1095) when the clearing net is a
+  credit, Cr when a debit (a zero line is left out); accounts through the `BANK_DEPOSIT` posting category. Sessions
+  are taken whole and become `DEPOSITED`; their rows are locked in session-id order, so two clerks serialize.
+  Refusals: 422 `CURRENCY_NOT_SUPPORTED`, 422 `DEPOSIT_BANK_ACCOUNT_NOT_ELIGIBLE` (not an active, reconcilable
+  `BANK_CASH` account in functional currency), 400 for an unknown session or a selection with no drops, 403
+  `LOCATION_SCOPE_DENIED`, 409 `DEPOSIT_SESSION_ALREADY_DEPOSITED`, 422 `AMOUNT_PRECISION_EXCEEDS_CURRENCY`, 422
+  `DEPOSIT_UNBALANCED` naming the difference (no plug line is ever written), 422 `PERIOD_CLOSED` /
+  `PERIOD_HARD_LOCKED`. Idempotent on `requestId`: a replay returns the first result (`replayed: true`, 200), another
+  body is 409 `IDEMPOTENCY_CONFLICT`.
+- **Reverse deposit** — `POST /v1/accounting/deposits/{depositId}/reversal` `{reason (10-400), reversalDate?,
+  overrideJustification?, requestId}` reverses the entry through the journal-entry reversal (its default date, period
+  gate and override); `DepositReversalReaction` marks the deposit `REVERSED` and returns its sessions to
+  `UNDEPOSITED`. The same reaction runs when the deposit's entry is reversed through
+  `POST /v1/accounting/journal-entries/{id}/reverse`, so the deposit and the ledger never disagree. 404
+  `DEPOSIT_NOT_FOUND`, 409 `DEPOSIT_ALREADY_REVERSED`, 409 `IDEMPOTENCY_CONFLICT`.
+- **Location scope** — every session and deposit is gated on its stored location (location-scope.yaml); a session
+  with no location is reachable only by an unscoped caller.
+- **Fact** — `accounting.deposit.recorded` v1 on `accounting.events.v1` (`DepositRecordedV1`, aggregate = the
+  deposit): `{depositId, bankGlAccountId, depositDate, amount, currencyCode, sessionIds, status, journalEntryId}`,
+  queued through the outbox when recorded and again with `status = REVERSED`.
+- **Audit and metrics** — `BANK_DEPOSIT_RECORD` / `BANK_DEPOSIT_REVERSE` audit rows (actor, bank account, sessions,
+  bag numbers, amounts, slip reference, `requestId`, override justification); counters `accounting.deposit.recorded`
+  and `accounting.deposit.unbalanced`; gauges `accounting.deposit.undeposited.amount` and
+  `accounting.deposit.undeposited.oldest_age_days` across tenants (`pos.accounting.deposit-gauge.*`).
+- **Not here** — checks (no `CHECK` tender exists; spec discrepancy 1); the dialog (S20); the to-do items and the
+  1090-age warning (S19). The clearing net is taken from the close fact when the session closes: a later reversal of
+  one of the session's over/short or petty-expense entries does not change it.
 
 ## Ledger currency (ADR-0067)
 

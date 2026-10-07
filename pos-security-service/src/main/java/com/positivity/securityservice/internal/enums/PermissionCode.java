@@ -1052,14 +1052,17 @@ public enum PermissionCode {
     ORDER__SESSION_POLICY__MANAGE(554, "order:session_policy:manage"),
     ORDER__SESSION__APPROVE_CASH_MOVEMENT(555, "order:session:approve_cash_movement"),
     // ── Accounting (new) ───────────────────────────────────────────────────────
+    ACCOUNTING__DEPOSIT__CREATE(556, "accounting:deposit:create"),
+    ACCOUNTING__DEPOSIT__REVERSE(557, "accounting:deposit:reverse"),
+    // ── Accounting (new) ───────────────────────────────────────────────────────
     /** Approve a vendor bill over the clerk limit (CAP:550 S12, #2509; SPEC-accounting-workspace §4.3, AW4, AW5). */
-    ACCOUNTING__AP__APPROVE_OVER_LIMIT(556, "accounting:ap:approve_over_limit");
+    ACCOUNTING__AP__APPROVE_OVER_LIMIT(558, "accounting:ap:approve_over_limit");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 101;
+    public static final int CATALOG_VERSION = 102;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

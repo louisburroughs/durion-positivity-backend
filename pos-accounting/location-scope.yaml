@@ -24,3 +24,19 @@ decisions:
     permission: accounting:float:manage
     fields: fromLocationId, toLocationId
     reason: A relocation names two locations, the one the register leaves and the one it moves to, and posts a 1080 line at each; a CONTROLLER scoped to a region may move a register only between locations it reaches, so BOTH fields are gated in the controller after body validation. The register's stored location is then required to equal fromLocationId under the row lock (422 FLOAT_REGISTER_LOCATION_MISMATCH, logged, never returned), so naming an in-scope origin cannot move another location's register (#2571, AW32)
+  - operation: BankDepositController.listUndepositedSessions
+    shape: narrow
+    permission: accounting:deposit:create
+    reason: CAP:550 S18 (#2514); the read takes no locationId but reaches every undeposited session, each stored with its register session's location; DepositServiceImpl.undeposited lists only the sessions whose location the caller's accounting:deposit:create covers (a session with no location only for an unscoped caller), and a sessionId outside that list is 400 like an unknown one, so another location's session is neither listed nor told apart.
+  - operation: BankDepositController.recordBankDeposit
+    shape: gate
+    permission: accounting:deposit:create
+    reason: CAP:550 S18 (#2514); the deposit takes the named sessions' drawer cash, so DepositServiceImpl.record gates on each session's stored location after locking the rows and before their status is read (403 LOCATION_SCOPE_DENIED, which never names the location); a requestId replay is gated the same way on the stored deposit's sessions.
+  - operation: BankDepositController.getBankDeposit
+    shape: gate
+    permission: accounting:deposit:create
+    reason: CAP:550 S18 (#2514); resource-addressed sibling of recordBankDeposit; DepositServiceImpl.get gates on every location the stored deposit took cash from after the 404, so a deposit of another location's drawers cannot be read by id.
+  - operation: BankDepositController.reverseBankDeposit
+    shape: gate
+    permission: accounting:deposit:reverse
+    reason: CAP:550 S18 (#2514); DepositServiceImpl.reverse gates on every location the stored deposit took cash from after locking it and before its status is read (and a requestId replay the same way); the generic journal-entry reversal of the same entry is gated by accounting:je:reverse alone, as for every entry, and DepositReversalReaction takes no scope decision.

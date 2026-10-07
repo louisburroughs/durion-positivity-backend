@@ -44,6 +44,12 @@ public final class JournalEntrySourceTypes {
     public static final String REGISTER_CASH_MOVEMENT = "REGISTER_CASH_MOVEMENT";
 
     /**
+     * A bank deposit of drawer cash (CAP:550 S18, #2514): Dr bank / Cr 1090 / Dr or Cr 1095; its source event id derives
+     * from the deposit's id.
+     */
+    public static final String BANK_DEPOSIT = "BANK_DEPOSIT";
+
+    /**
      * A vendor bill or credit note posted at its approval (CAP:550 S12, #2509; AW37); its void reverses the entry
      * under the same source.
      */

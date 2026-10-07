@@ -71,6 +71,9 @@ class OrderEventsListenerTransactionTest {
     private RegisterSessionReplica sessionReplica;
 
     @Autowired
+    private UndepositedSessionProjection undepositedSessions;
+
+    @Autowired
     private ExtOrderRegisterSessionRepository sessionRows;
 
     private OrderEventsListener listener;
@@ -91,7 +94,8 @@ class OrderEventsListenerTransactionTest {
                 meterRegistry,
                 transactionManager,
                 com.positivity.accounting.internal.service.TestZoneResolvers.utc(java.time.Clock.systemUTC()),
-                sessionReplica);
+                sessionReplica,
+                undepositedSessions);
     }
 
     @AfterEach
