@@ -3,6 +3,7 @@ package com.positivity.order.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -10,7 +11,6 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.domainevents.location.LocationAncestry.AncestorSets;
 import com.positivity.order.internal.client.StepUpPort;
-import com.positivity.order.internal.config.FunctionalCurrency;
 import com.positivity.order.internal.entity.CashMovementApproval;
 import com.positivity.order.internal.entity.CashMovementApprovalStatus;
 import com.positivity.order.internal.entity.CashMovementReason;
@@ -22,6 +22,7 @@ import com.positivity.order.internal.exception.CurrencyNotSupportedException;
 import com.positivity.order.internal.exception.RegisterSessionConflictException;
 import com.positivity.order.internal.exception.RegisterSessionRequestValidationException;
 import com.positivity.order.internal.repository.CashMovementApprovalRepository;
+import com.positivity.order.internal.repository.CashMovementStepUpDenialRepository;
 import com.positivity.order.internal.repository.RegisterSessionRepository;
 import com.positivity.order.internal.security.OrderPermissions;
 import com.positivity.order.internal.service.model.CashMovementApprovalCommand;
@@ -77,6 +78,7 @@ class CashMovementApprovalServiceTest {
 
     private final CashMovementApprovalRepository approvals = mock(CashMovementApprovalRepository.class);
     private final RegisterSessionRepository sessions = mock(RegisterSessionRepository.class);
+    private final CashMovementStepUpDenialRepository denials = mock(CashMovementStepUpDenialRepository.class);
     private final StepUpPort stepUp = mock(StepUpPort.class);
     private final AtomicReference<CashMovementApproval> stored = new AtomicReference<>();
     private RegisterSession session;
@@ -89,6 +91,7 @@ class CashMovementApprovalServiceTest {
                 .sessionId(SESSION_ID)
                 .terminalId("T-1")
                 .locationId(LOCATION)
+                .currencyCode("USD")
                 .status(RegisterSessionStatus.OPEN)
                 .build();
         when(sessions.findById(SESSION_ID)).thenAnswer(_ -> Optional.of(session));
@@ -115,14 +118,7 @@ class CashMovementApprovalServiceTest {
     private CashMovementApprovalServiceImpl newService(Clock at) {
         ObjectProvider<MeterRegistry> meters = mock(ObjectProvider.class);
         return new CashMovementApprovalServiceImpl(
-                approvals,
-                sessions,
-                stepUp,
-                RESOLVER,
-                new FunctionalCurrency("USD"),
-                at,
-                mock(PlatformTransactionManager.class),
-                meters);
+                approvals, sessions, denials, stepUp, RESOLVER, at, mock(PlatformTransactionManager.class), meters);
     }
 
     private static void signIn(String username, UUID userId, LocationScope scope) {
@@ -222,7 +218,8 @@ class CashMovementApprovalServiceTest {
         assertThatThrownBy(() -> service.approve(command("clerk2", "25.00")))
                 .satisfies(e -> assertThat(refusalOf(e)).isEqualTo(Refusal.APPROVAL_DENIED));
         verify(approvals, never()).save(any());
-        verify(sessions).countStepUpDenial(SESSION_ID);
+        verify(denials)
+                .save(argThat(d -> SESSION_ID.equals(d.getSessionId()) && "clerk2".equals(d.getApproverUsername())));
     }
 
     @Test
@@ -230,12 +227,16 @@ class CashMovementApprovalServiceTest {
     void checkRefusalPassesThrough() {
         when(stepUp.verify("manager", "wrong", PERMISSION, LOCATION))
                 .thenThrow(new CashMovementRefusedException(Refusal.APPROVAL_DENIED, "denied"));
+        when(stepUp.verify(" Manager ", "wrong", PERMISSION, LOCATION))
+                .thenThrow(new CashMovementRefusedException(Refusal.APPROVAL_DENIED, "denied"));
 
         assertThatThrownBy(() -> service.approve(new CashMovementApprovalCommand(
-                        SESSION_ID, "manager", "wrong", "PETTY_EXPENSE", BigDecimal.TEN, "USD", null, null)))
+                        SESSION_ID, " Manager ", "wrong", "PETTY_EXPENSE", BigDecimal.TEN, "USD", null, null)))
                 .satisfies(e -> assertThat(refusalOf(e)).isEqualTo(Refusal.APPROVAL_DENIED));
         verify(approvals, never()).save(any());
-        verify(sessions).countStepUpDenial(SESSION_ID);
+        // Counted per drawer and sign-in name, trimmed and lower case.
+        verify(denials)
+                .save(argThat(d -> SESSION_ID.equals(d.getSessionId()) && "manager".equals(d.getApproverUsername())));
     }
 
     @Test
@@ -280,17 +281,33 @@ class CashMovementApprovalServiceTest {
     }
 
     @Test
-    @DisplayName("l2: after five failed approvals on the drawer the step-up refuses without asking")
-    void deniedApprovalsAreCapped() {
-        session.setStepUpDenials(5);
+    @DisplayName("MINOR-1: three refusals of one manager name on the drawer stop the step-up for that name only")
+    void deniedApprovalsAreCappedPerManagerName() {
+        when(denials.countBySessionIdAndApproverUsername(SESSION_ID, "manager")).thenReturn(3L);
+        when(denials.countBySessionIdAndApproverUsername(SESSION_ID, "manager2"))
+                .thenReturn(2L);
 
-        assertThatThrownBy(() -> service.approve(command("manager", "25.00")))
+        // The default cap (3) sits below pos-security-service's sign-in lockout (5 attempts).
+        assertThatThrownBy(() -> service.approve(command("MANAGER", "25.00")))
                 .satisfies(e -> assertThat(refusalOf(e)).isEqualTo(Refusal.APPROVAL_DENIED));
+        verify(stepUp, never()).verify(any(), any(), any(), any());
+
+        // Another manager can still approve the same drawer.
+        when(stepUp.verify("manager2", "s3cret", PERMISSION, LOCATION)).thenReturn(globalHolder(MANAGER_ID));
+        assertThat(service.approve(command("manager2", "25.00")).approvalToken())
+                .isNotBlank();
+    }
+
+    @Test
+    @DisplayName("MINOR-1: a sign-in name longer than the stored column is a 400 before any check")
+    void overlongManagerNameIsInvalid() {
+        assertThatThrownBy(() -> service.approve(command("m".repeat(256), "25.00")))
+                .isInstanceOf(RegisterSessionRequestValidationException.class);
         verify(stepUp, never()).verify(any(), any(), any(), any());
     }
 
     @Test
-    @DisplayName("ADR-0067: a missing currency is 400, another currency 422, both before any check")
+    @DisplayName("ADR-0067: a missing currency is 400; one other than the drawer's stamp is 422; both before any check")
     void currencyRules() {
         assertThatThrownBy(() -> service.approve(new CashMovementApprovalCommand(
                         SESSION_ID, "manager", "s3cret", "PETTY_EXPENSE", BigDecimal.TEN, null, null, null)))
@@ -299,6 +316,29 @@ class CashMovementApprovalServiceTest {
                         SESSION_ID, "manager", "s3cret", "PETTY_EXPENSE", BigDecimal.TEN, "EUR", null, null)))
                 .isInstanceOf(CurrencyNotSupportedException.class);
         verify(stepUp, never()).verify(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("MAJOR-1: the token is minted in the drawer's stamped currency, not today's configuration")
+    void tokenUsesTheDrawerStamp() {
+        session.setCurrencyCode("CAD");
+        managerVerifies(globalHolder(MANAGER_ID));
+
+        assertThatThrownBy(() -> service.approve(command("manager", "25.00")))
+                .isInstanceOf(CurrencyNotSupportedException.class)
+                .hasMessageContaining("CAD");
+        CashMovementApprovalResult minted = service.approve(new CashMovementApprovalCommand(
+                SESSION_ID,
+                "manager",
+                "s3cret",
+                "PETTY_EXPENSE",
+                new BigDecimal("25.00"),
+                "CAD",
+                "SHOP_SUPPLIES",
+                null));
+
+        assertThat(minted.currencyCode()).isEqualTo("CAD");
+        assertThat(stored.get().getCurrencyCode()).isEqualTo("CAD");
     }
 
     @Test

@@ -19,6 +19,7 @@ import org.jspecify.annotations.Nullable;
  * @param theoreticalCash expected cash snapshotted at close (null until then)
  * @param overShort countedCash − theoreticalCash (null until closed)
  * @param varianceApproved whether an over/short beyond the limit was approved at close
+ * @param currencyCode ISO 4217 code of every amount, stamped when the drawer opened (ADR-0067)
  * @param closedByClerkId clerk who confirmed the close (null until closed)
  * @param openedAt when the session opened
  * @param closingStartedAt when begin-close recorded the count (null until then)
@@ -35,6 +36,7 @@ public record RegisterSessionSummary(
         @Nullable BigDecimal theoreticalCash,
         @Nullable BigDecimal overShort,
         boolean varianceApproved,
+        @NonNull String currencyCode,
         @Nullable String closedByClerkId,
         @NonNull Instant openedAt,
         @Nullable Instant closingStartedAt,

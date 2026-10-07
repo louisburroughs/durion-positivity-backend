@@ -154,6 +154,7 @@ class RegisterSessionControllerLocationScopeTest {
                 null,
                 null,
                 false,
+                "USD",
                 null,
                 Instant.parse("2026-09-07T08:00:00Z"),
                 null,

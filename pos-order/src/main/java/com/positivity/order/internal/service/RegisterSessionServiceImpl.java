@@ -197,6 +197,8 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                 .openedByClerkId(SecurityContextHelper.getCurrentUsernameOrDefault("system"))
                 .status(RegisterSessionStatus.OPEN)
                 .openingFloat(openingFloat)
+                // ADR-0067: the drawer's currency for its whole life, whatever the configuration later says.
+                .currencyCode(functionalCurrency.code())
                 .openedAt(now)
                 .build();
         return toSummary(registerSessionRepository.save(session));
@@ -225,13 +227,15 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
     @Transactional
     public @NonNull CashMovementResult recordCashMovement(@NonNull CashMovementCommand command) {
         ValidMovement movement = validate(command);
-        if (!functionalCurrency.isFunctional(movement.currencyCode())) {
-            throw new CurrencyNotSupportedException("Drawer cash is counted in " + functionalCurrency.code()
-                    + ", the functional currency; " + movement.currencyCode() + " is not supported");
-        }
         // ADR-0061: 404 first, then the caller's reach at the drawer's location — a scoped cashier
         // cannot record (or replay) a movement on another shop's drawer.
-        requireInScope(require(command.sessionId()), OrderPermissions.ORDER_SESSION_CASH_MOVEMENT);
+        RegisterSession drawer = require(command.sessionId());
+        requireInScope(drawer, OrderPermissions.ORDER_SESSION_CASH_MOVEMENT);
+        // ADR-0067: the drawer's own currency, stamped when it opened (never the live configuration).
+        if (!drawer.getCurrencyCode().equals(movement.currencyCode())) {
+            throw new CurrencyNotSupportedException("This drawer's cash is counted in " + drawer.getCurrencyCode()
+                    + "; " + movement.currencyCode() + " is not supported");
+        }
 
         // Idempotent replay first (§8.2): a retry returns the first result, even after its approval
         // token was used, and is never re-checked against today's policy.
@@ -278,7 +282,8 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
         }
 
         CashMovementApproval approval = null;
-        if (needsManager(policy, type, runningTotal(recorded, reason).add(movement.amount()))
+        boolean limitsApply = limitsApply(policy, session);
+        if (needsManager(policy, type, runningTotal(recorded, reason).add(movement.amount()), limitsApply)
                 || movement.approvalToken() != null) {
             if (movement.approvalToken() == null) {
                 throw refused(
@@ -294,7 +299,7 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                         session.getSessionId(),
                         reason,
                         movement.amount(),
-                        functionalCurrency.code(),
+                        session.getCurrencyCode(),
                         movement.categoryCode(),
                         movement.vendorId());
             } catch (CashMovementRefusedException e) {
@@ -311,7 +316,7 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                     .reasonCode(reason)
                     .movementType(reason.direction())
                     .amount(movement.amount())
-                    .currencyCode(functionalCurrency.code())
+                    .currencyCode(session.getCurrencyCode())
                     .categoryCode(movement.categoryCode())
                     .vendorId(movement.vendorId())
                     .bagNumber(movement.bagNumber())
@@ -345,16 +350,18 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
         SessionPolicyView policy = sessionPolicyService.current();
         List<CashMovement> recorded = cashMovementRepository.findBySessionIdOrderByOccurredAtAsc(sessionId);
         boolean open = session.getStatus() == RegisterSessionStatus.OPEN;
+        boolean limitsApply = limitsApply(policy, session);
         List<CashMovementOptions.ReasonOption> reasons = new ArrayList<>();
         for (CashMovementReason reason : CashMovementReason.values()) {
             SessionPolicyType type = reason.policyType();
+            BigDecimal limit = policy.cashierLimit(type);
             reasons.add(new CashMovementOptions.ReasonOption(
                     reason.name(),
                     reason.direction().name(),
                     open && policy.allowed(type),
-                    policy.cashierLimit(type),
+                    limitsApply ? limit : null,
                     scale(runningTotal(recorded, reason)),
-                    policy.alwaysNeedsManager(type),
+                    policy.alwaysNeedsManager(type) || (!limitsApply && limit != null),
                     requiredFields(reason)));
         }
         List<CashMovementOptions.CategoryOption> categories =
@@ -362,7 +369,7 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                         .map(category -> new CashMovementOptions.CategoryOption(
                                 category.getCode(), category.getLabel(), category.getExamples()))
                         .toList();
-        return new CashMovementOptions(sessionId, functionalCurrency.code(), reasons, categories);
+        return new CashMovementOptions(sessionId, session.getCurrencyCode(), reasons, categories);
     }
 
     @Override
@@ -410,7 +417,10 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                 scale(session.getOpeningFloat().add(cashSettlements).add(cashMovementTotal));
         BigDecimal overShort = scale(counted.subtract(theoretical));
 
-        BigDecimal tolerance = sessionPolicyService.current().overShortTolerance();
+        SessionPolicyView policy = sessionPolicyService.current();
+        // A tolerance stated in another currency than the drawer's cannot be compared: any difference
+        // then needs the variance approval (fail closed, ADR-0067 PC-9).
+        BigDecimal tolerance = limitsApply(policy, session) ? policy.overShortTolerance() : ZERO;
         if (overShort.abs().compareTo(tolerance) > 0) {
             if (!SecurityContextHelper.hasAuthority(OrderPermissions.ORDER_SESSION_APPROVE_VARIANCE)) {
                 throw new AccessDeniedException("Register session over/short of " + overShort
@@ -445,13 +455,13 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                         theoretical,
                         overShort,
                         saved.isVarianceApproved(),
-                        functionalCurrency.code(),
+                        saved.getCurrencyCode(),
                         tenderTotals,
                         cashMovementTotal,
                         saved.getOpenedAt(),
                         now,
                         cashMovementRepository.findBySessionIdOrderByOccurredAtAsc(sessionId).stream()
-                                .map(m -> toFactMovement(m, functionalCurrency.code()))
+                                .map(m -> toFactMovement(m, saved.getCurrencyCode()))
                                 .toList()));
         return toSummary(saved);
     }
@@ -632,13 +642,27 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                 .reduce(ZERO, BigDecimal::add);
     }
 
-    /** Above the cashier limit on the running total, or a type that always needs a manager. */
-    private static boolean needsManager(SessionPolicyView policy, SessionPolicyType type, BigDecimal runningTotal) {
+    /**
+     * Above the cashier limit on the running total, or a type that always needs a manager. A limit stated
+     * in another currency than the drawer's cannot be compared, so it then always needs a manager (fail
+     * closed, ADR-0067 PC-9).
+     */
+    private static boolean needsManager(
+            SessionPolicyView policy, SessionPolicyType type, BigDecimal runningTotal, boolean limitsApply) {
         if (policy.alwaysNeedsManager(type)) {
             return true;
         }
         BigDecimal limit = policy.cashierLimit(type);
-        return limit != null && runningTotal.compareTo(limit) > 0;
+        return limit != null && (!limitsApply || runningTotal.compareTo(limit) > 0);
+    }
+
+    /**
+     * Whether the drawer policy's amounts are in the drawer's currency. They differ only when the
+     * functional currency was reconfigured between the policy's write (or, with no policy, now) and the
+     * drawer's open.
+     */
+    private static boolean limitsApply(SessionPolicyView policy, RegisterSession session) {
+        return policy.currencyCode().equals(session.getCurrencyCode());
     }
 
     private static List<String> requiredFields(CashMovementReason reason) {
@@ -835,6 +859,7 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                 s.getTheoreticalCash(),
                 s.getOverShort(),
                 s.isVarianceApproved(),
+                s.getCurrencyCode(),
                 s.getClosedByClerkId(),
                 s.getOpenedAt(),
                 s.getClosingStartedAt(),

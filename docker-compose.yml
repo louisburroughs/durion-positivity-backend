@@ -1278,6 +1278,9 @@ services:
       # purchaseorder.updated on order.events.v1 (read by pos-inventory's ext_purchase_order
       # replicas). Kafka is tier-1, always on outside dev/test (ADR-0044 §4, #2463): no flag.
       <<: [ *pos-security-client-env, *pos-events-client-env ]
+      # ADR-0067 R-2 (CAP:550 S16): drawer money's functional currency, required (no default in the
+      # service). Stage A interim until step A5 reads the tenant's functional currency.
+      POS_ORDER_FUNCTIONAL_CURRENCY: USD
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080

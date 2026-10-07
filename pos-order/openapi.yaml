@@ -4629,6 +4629,10 @@ components:
           type: string
         countedCash:
           type: number
+        currencyCode:
+          description: ISO 4217 code of every amount on the drawer, stamped from the functional currency when it opened (ADR-0067); a configuration change applies only to drawers opened later
+          example: USD
+          type: string
         locationId:
           format: uuid
           type: string

@@ -91,12 +91,12 @@ public class RegisterSession extends TenantScopedEntity {
     private String closedByClerkId;
 
     /**
-     * Failed manager approvals on this drawer (CAP:550 S16): after a few the step-up refuses without
-     * asking pos-security-service, so a drawer cannot be used to lock managers out.
+     * ISO 4217 code of the drawer's money, stamped from the functional currency when it opens (ADR-0067
+     * R-1, R-2; CAP:550 S16). Every movement, approval and the close fact of this drawer use it, never the
+     * live configuration, so a configuration change cannot re-denominate an open drawer.
      */
-    @Column(name = "step_up_denials", nullable = false)
-    @Builder.Default
-    private int stepUpDenials = 0;
+    @Column(name = "currency_code", nullable = false, length = 3, updatable = false)
+    private String currencyCode;
 
     @Column(name = "opened_at", nullable = false)
     private Instant openedAt;

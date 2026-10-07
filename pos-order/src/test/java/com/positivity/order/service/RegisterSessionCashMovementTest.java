@@ -133,6 +133,7 @@ class RegisterSessionCashMovementTest {
                 .locationId(LOCATION)
                 .openedByClerkId("opener")
                 .status(RegisterSessionStatus.OPEN)
+                .currencyCode("USD")
                 .openingFloat(new BigDecimal("200.0000"))
                 .openedAt(Instant.parse("2026-10-07T08:00:00Z"))
                 .build();
@@ -712,6 +713,132 @@ class RegisterSessionCashMovementTest {
                             .toString())
                     .doesNotContain("secret-token-value")
                     .contains("approvalToken=present");
+        }
+    }
+
+    @Nested
+    @DisplayName("round 2 MAJOR-1: the drawer keeps the currency it opened in (ADR-0067 R-2)")
+    class DrawerCurrencyStamp {
+
+        /** The drawer opened in CAD; the functional currency has since been reconfigured to USD. */
+        @BeforeEach
+        void stampedInAnotherCurrency() {
+            session.setCurrencyCode("CAD");
+        }
+
+        private CashMovementCommand drop(String currency) {
+            return new CashMovementCommand(
+                    SESSION_ID,
+                    UUIDv7Generator.generate(),
+                    "BANK_DROP",
+                    new BigDecimal("10.00"),
+                    currency,
+                    null,
+                    null,
+                    "B",
+                    null,
+                    null,
+                    null);
+        }
+
+        @Test
+        @DisplayName("movements, options and the close fact use the stamp, never the live configuration")
+        void stampWinsOverConfiguration() {
+            assertThatThrownBy(() -> service.recordCashMovement(drop("USD")))
+                    .isInstanceOf(CurrencyNotSupportedException.class)
+                    .hasMessageContaining("CAD");
+            assertThat(recorded).isEmpty();
+
+            CashMovementResult drop = service.recordCashMovement(drop("CAD"));
+            assertThat(drop.movement().currencyCode()).isEqualTo("CAD");
+            assertThat(service.cashMovementOptions(SESSION_ID).currencyCode()).isEqualTo("CAD");
+
+            closeSession();
+            ArgumentCaptor<RegisterSessionClosedV1> fact = ArgumentCaptor.forClass(RegisterSessionClosedV1.class);
+            verify(publisher).publishRegisterSessionClosed(any(), fact.capture());
+            assertThat(fact.getValue().currencyCode()).isEqualTo("CAD");
+            assertThat(fact.getValue().movements())
+                    .singleElement()
+                    .extracting(RegisterSessionClosedV1.Movement::currencyCode)
+                    .isEqualTo("CAD");
+        }
+
+        @Test
+        @DisplayName("a manager token is used in the drawer's currency")
+        void tokenIsUsedInTheStamp() {
+            when(approvalService.use(any(), any(), any(), any(), any(), any(), any()))
+                    .thenReturn(CashMovementApproval.builder()
+                            .approvalId(APPROVAL_ID)
+                            .approverUserId(MANAGER_ID)
+                            .build());
+
+            service.recordCashMovement(new CashMovementCommand(
+                    SESSION_ID,
+                    UUIDv7Generator.generate(),
+                    "BANK_DROP",
+                    new BigDecimal("10.00"),
+                    "CAD",
+                    null,
+                    null,
+                    "B",
+                    null,
+                    null,
+                    "token-1"));
+
+            verify(approvalService)
+                    .use(
+                            eq("token-1"),
+                            eq(SESSION_ID),
+                            eq(CashMovementReason.BANK_DROP),
+                            any(),
+                            eq("CAD"),
+                            any(),
+                            any());
+        }
+
+        @Test
+        @DisplayName("a policy limit stated in another currency cannot be compared: a manager is needed (fail closed)")
+        void foreignPolicyLimitNeedsManager() {
+            CashMovementCommand petty = new CashMovementCommand(
+                    SESSION_ID,
+                    UUIDv7Generator.generate(),
+                    "PETTY_EXPENSE",
+                    new BigDecimal("1.00"),
+                    "CAD",
+                    "SHOP_SUPPLIES",
+                    null,
+                    null,
+                    "R-1",
+                    "gloves",
+                    null);
+
+            assertThatThrownBy(() -> service.recordCashMovement(petty))
+                    .isInstanceOf(CashMovementRefusedException.class)
+                    .satisfies(e -> assertThat(refusal(e).refusal()).isEqualTo(Refusal.APPROVAL_REQUIRED));
+            CashMovementOptions.ReasonOption pettyOption = service.cashMovementOptions(SESSION_ID).reasons().stream()
+                    .filter(r -> r.reason().equals("PETTY_EXPENSE"))
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(pettyOption.cashierLimit()).isNull();
+            assertThat(pettyOption.alwaysNeedsManager()).isTrue();
+        }
+
+        @Test
+        @DisplayName("a tolerance stated in another currency is zero at close: any difference needs approve_variance")
+        void foreignToleranceIsZeroAtClose() {
+            session.setStatus(RegisterSessionStatus.CLOSING);
+            session.setCountedCash(new BigDecimal("201.0000"));
+            when(salesOrders.existsBySessionIdAndStatus(SESSION_ID, SalesOrderStatus.PENDING_PAYMENT))
+                    .thenReturn(false);
+            when(payments.findBySessionId(SESSION_ID)).thenReturn(List.of());
+            when(sessions.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            // 1.00 over is inside the policy's 5.00 USD tolerance, but the drawer counts CAD.
+            assertThatThrownBy(() -> service.confirmClose(SESSION_ID))
+                    .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+
+            session.setCurrencyCode("USD");
+            assertThat(service.confirmClose(SESSION_ID).status()).isEqualTo("CLOSED");
         }
     }
 

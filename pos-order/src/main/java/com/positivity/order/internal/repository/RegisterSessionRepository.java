@@ -9,10 +9,8 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
-import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.transaction.annotation.Transactional;
 
 public interface RegisterSessionRepository extends JpaRepository<RegisterSession, UUID> {
 
@@ -45,10 +43,4 @@ public interface RegisterSessionRepository extends JpaRepository<RegisterSession
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select s from RegisterSession s where s.sessionId = :sessionId")
     Optional<RegisterSession> findByIdForUpdate(@Param("sessionId") UUID sessionId);
-
-    /** Counts one failed manager approval on the drawer, in a transaction of its own (CAP:550 S16). */
-    @Transactional
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("update RegisterSession s set s.stepUpDenials = s.stepUpDenials + 1 where s.sessionId = :sessionId")
-    int countStepUpDenial(@Param("sessionId") UUID sessionId);
 }

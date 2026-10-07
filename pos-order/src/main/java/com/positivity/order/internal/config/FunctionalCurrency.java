@@ -8,21 +8,28 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * The functional currency pos-order's drawer money is in (ADR-0067 R-1, R-6; CAP:550 S16, #2512): the
- * currency of every cash movement, approval, drawer-policy limit and close fact. Configured as {@code
- * pos.order.functional-currency} (USD by default, as pos-accounting's {@code
- * accounting.ledger.base-currency}); a value that is not an ISO 4217 code fails startup.
+ * The functional currency of drawer money: the one place pos-order reads it (ADR-0067 R-2, R-6; CAP:550
+ * S16, #2512). It is a Stage A interim, the counterpart of pos-accounting's {@code LedgerCurrency}: ADR-0067
+ * step A5 swaps it for the tenant's functional currency (the PC-2 accessor), and nothing else in the
+ * module reads the property.
+ *
+ * <p>Read from {@code pos.order.functional-currency} ({@code POS_ORDER_FUNCTIONAL_CURRENCY}), which has no
+ * default: an unset value fails startup, as does one that is not an ISO 4217 code (R-2, no implicit
+ * {@code USD}). A drawer is stamped with this currency when it opens; every movement, approval and close
+ * fact of that drawer then uses the stamp, never this property, so a configuration change cannot
+ * re-denominate an open drawer. The drawer policy is stated in it when it is written.
  */
 @Component
 public class FunctionalCurrency {
 
     private final String code;
 
-    public FunctionalCurrency(@Value("${pos.order.functional-currency:USD}") @NonNull String code) {
+    public FunctionalCurrency(@Value("${pos.order.functional-currency}") @NonNull String code) {
         String normalized = code.trim().toUpperCase(Locale.ROOT);
         if (!isIsoCode(normalized)) {
             throw new IllegalStateException(
-                    "pos.order.functional-currency must be an ISO 4217 code, was '" + code + "'");
+                    "pos.order.functional-currency (POS_ORDER_FUNCTIONAL_CURRENCY) must be an ISO 4217 code, was '"
+                            + code + "'");
         }
         this.code = normalized;
     }

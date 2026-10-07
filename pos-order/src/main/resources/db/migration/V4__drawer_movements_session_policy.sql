@@ -4,14 +4,16 @@
 --
 --   1. cash_movement gains its fixed reason and the reason's detail, the register's idempotency key
 --      (request_id, unique per tenant), the cashier's user id, and the manager approval it used (the
---      approver's user id and the approval). register_session counts failed approvals. The free-text reason becomes
---      the optional note; rows recorded before this story keep their text there with a null reason_code,
---      and every row recorded from now on carries a request_id and a reason_code.
+--      approver's user id and the approval). The free-text reason becomes the optional note; rows
+--      recorded before this story keep their text there with a null reason_code, and every row recorded
+--      from now on carries a request_id and a reason_code. register_session is stamped with its
+--      currency when it opens, and cash_movement_step_up_denial counts failed approvals per drawer and
+--      manager sign-in name.
 --   2. session_policy: one row per tenant (the defaults apply while there is none); session_policy_change:
 --      one history row per changed setting.
 --   3. cash_movement_approval: the step-up's single-use token, stored only as its SHA-256 hash, bound to
 --      the session, reason, amount (with its currency) and category or vendor, with the approver's user id.
---   Every new money column states its ISO 4217 currency (ADR-0067 R-1): the functional currency.
+--   Every new money column states its ISO 4217 currency (ADR-0067 R-1): the drawer's, stamped at open.
 --   4. ext_accounting_petty_expense_category and ext_accounting_register_float: written only by
 --      accounting.petty-expense-category.changed and accounting.float.changed (S15), each keyed by the
 --      fact's aggregate (the accounting row id) and guarded by aggregate_version (ADR-0044 R3).
@@ -45,10 +47,42 @@ ALTER TABLE ONLY public.cash_movement
     ADD CONSTRAINT uq_cash_movement_request UNIQUE (tenant_id, request_id);
 CREATE INDEX ix_cash_movement_session_reason ON public.cash_movement USING btree (tenant_id, session_id, reason_code);
 
--- Failed manager approvals per drawer session: the step-up stops asking pos-security-service after a
--- small number, so one drawer cannot be used to lock managers out (review l2).
+-- The drawer's currency (ADR-0067 R-1, R-2), stamped when it opens from pos.order.functional-currency.
+-- Its movements, approvals and close fact use the stamp, so a later configuration change never
+-- re-denominates an open drawer. Drawers that predate this story take the configured currency through
+-- the Flyway placeholder (no implicit 'USD'); new rows must state it, so the default is dropped.
 ALTER TABLE public.register_session
-    ADD COLUMN step_up_denials integer DEFAULT 0 NOT NULL;
+    ADD COLUMN currency_code character varying(3) DEFAULT '${functional_currency}' NOT NULL;
+ALTER TABLE public.register_session ALTER COLUMN currency_code DROP DEFAULT;
+
+-- Failed manager approvals, one row per refusal, per drawer session and manager sign-in name (lower
+-- case): the step-up stops asking pos-security-service for that name after a few, below the sign-in
+-- lockout, so a register cannot be used to lock a manager out (review l2, round 2 MINOR-1).
+CREATE TABLE public.cash_movement_step_up_denial (
+    tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,
+    denial_id uuid NOT NULL,
+    session_id uuid NOT NULL,
+    approver_username character varying(255) NOT NULL,
+    created_at timestamp with time zone NOT NULL
+);
+
+ALTER TABLE ONLY public.cash_movement_step_up_denial
+    ADD CONSTRAINT cash_movement_step_up_denial_pkey PRIMARY KEY (denial_id);
+ALTER TABLE ONLY public.cash_movement_step_up_denial
+    ADD CONSTRAINT cash_movement_step_up_denial_tenant_key UNIQUE (tenant_id, denial_id);
+ALTER TABLE ONLY public.cash_movement_step_up_denial
+    ADD CONSTRAINT fk_cash_movement_step_up_denial_session FOREIGN KEY (tenant_id, session_id)
+        REFERENCES public.register_session(tenant_id, session_id) ON DELETE CASCADE;
+CREATE INDEX cash_movement_step_up_denial_tenant_idx
+    ON public.cash_movement_step_up_denial USING btree (tenant_id);
+CREATE INDEX cash_movement_step_up_denial_session_idx
+    ON public.cash_movement_step_up_denial USING btree (tenant_id, session_id, approver_username);
+
+ALTER TABLE public.cash_movement_step_up_denial ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cash_movement_step_up_denial FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON public.cash_movement_step_up_denial
+    USING (tenant_id = public.app_current_tenant())
+    WITH CHECK (tenant_id = public.app_current_tenant());
 
 -- 2. Session policy and its history.
 CREATE TABLE public.session_policy (

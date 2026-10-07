@@ -136,7 +136,7 @@ path), it does not fall back.
 | Entry | Consumed by | Guards |
 | --- | --- | --- |
 | `POS_EVENTS_API_SECRET` | `pos-event-receiver` and every emitting module | `X-Events-Api-Secret` on event and event-type registration |
-| `POS_SECURITY_API_SECRET` | `pos-security-service` and every registering module | `X-Permissions-Api-Secret` on `/v1/permissions/register` |
+| `POS_SECURITY_API_SECRET` | `pos-security-service` and every registering module; `pos-order` for the cash-movement step-up | `X-Permissions-Api-Secret` on `/v1/permissions/register`, and `X-Internal-Api-Secret` on `POST /internal/v1/auth/step-up` (CAP:550 S16: the manager's credential check behind a drawer cash-movement approval, pos-security-service's internal chain). Unset in pos-order, every approval answers 503 `CASH_MOVEMENT_APPROVAL_UNAVAILABLE` |
 | `POS_TENANT_REGISTRY_API_SECRET` | `pos-tenant`, and any module with `pos.tenancy.registry.mode=REMOTE` (as `pos.tenancy.registry.secret`) | `X-Tenant-Registry-Secret` on `GET /internal/v1/tenants` (ADR-0062 plan WS4-2) |
 | `POS_PLATFORM_SENDER_API_SECRET` | `pos-platform-sender`, and `pos-marketing` (as `pos.marketing.sender.api-secret`) | `X-Pos-Sender-Secret` on `POST /platform-sender/v1/messages` (FI-2) |
 

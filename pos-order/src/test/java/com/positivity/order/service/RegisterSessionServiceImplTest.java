@@ -3,6 +3,7 @@ package com.positivity.order.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -184,6 +185,7 @@ class RegisterSessionServiceImplTest {
                 .locationId(LOCATION)
                 .openedByClerkId("clerk-1")
                 .status(RegisterSessionStatus.OPEN)
+                .currencyCode("USD")
                 .openingFloat(new BigDecimal("100.0000"))
                 .openedAt(Instant.parse("2026-07-23T08:00:00Z"))
                 .build();
@@ -221,6 +223,9 @@ class RegisterSessionServiceImplTest {
         assertThat(summary.openingFloat()).isEqualByComparingTo("0.00");
         // ADR-0018: the opener is the security context's caller, never a request field.
         assertThat(summary.openedByClerkId()).isEqualTo("opener");
+        // MAJOR-1 (ADR-0067 R-2): the drawer is stamped with the functional currency when it opens.
+        assertThat(summary.currencyCode()).isEqualTo("USD");
+        verify(registerSessionRepository).save(argThat(saved -> "USD".equals(saved.getCurrencyCode())));
     }
 
     @Test

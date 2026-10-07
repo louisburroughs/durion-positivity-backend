@@ -6,6 +6,7 @@ import com.positivity.order.internal.config.FunctionalCurrency;
 import com.positivity.order.internal.entity.CashMovementApproval;
 import com.positivity.order.internal.entity.CashMovementApprovalStatus;
 import com.positivity.order.internal.entity.CashMovementReason;
+import com.positivity.order.internal.entity.CashMovementStepUpDenial;
 import com.positivity.order.internal.entity.RegisterSession;
 import com.positivity.order.internal.entity.RegisterSessionStatus;
 import com.positivity.order.internal.exception.CashMovementRefusedException;
@@ -15,6 +16,7 @@ import com.positivity.order.internal.exception.RegisterSessionConflictException;
 import com.positivity.order.internal.exception.RegisterSessionNotFoundException;
 import com.positivity.order.internal.exception.RegisterSessionRequestValidationException;
 import com.positivity.order.internal.repository.CashMovementApprovalRepository;
+import com.positivity.order.internal.repository.CashMovementStepUpDenialRepository;
 import com.positivity.order.internal.repository.RegisterSessionRepository;
 import com.positivity.order.internal.security.OrderPermissions;
 import com.positivity.order.internal.service.model.CashMovementApprovalCommand;
@@ -62,13 +64,15 @@ import org.springframework.transaction.support.TransactionTemplate;
  * evaluated here against pos-order's location replica, exactly as a token of theirs would be (ADR-0061),
  * so a manager scoped to another shop cannot approve this drawer. A failed check, for any reason, is
  * {@code CASH_MOVEMENT_APPROVAL_DENIED} (never 401); the cashier's own credentials are {@code
- * CASH_MOVEMENT_SELF_APPROVAL}. The remote call runs outside any database transaction, and after {@code
- * pos.order.session.max-denied-approvals} failures on one drawer the step-up stops asking
- * pos-security-service, so a drawer cannot be used to lock managers out. The password is never stored
- * or logged.
+ * CASH_MOVEMENT_SELF_APPROVAL}. The remote call runs outside any database transaction. After {@code
+ * pos.order.session.max-denied-approvals} refusals (3 by default) of one manager sign-in name on one
+ * drawer, the step-up stops asking pos-security-service for that name; the cap sits below the sign-in
+ * lockout (5), so a register cannot be used to lock a manager out, and another manager can still approve.
+ * The password is never stored or logged.
  *
  * <p><b>Token.</b> 32 random bytes, returned once; only its SHA-256 hash is stored with the approver's
- * user id. It is bound to the session, the reason, the amount and the category or vendor, expires after
+ * user id. It is bound to the session, the reason, the amount in the drawer's currency (stamped when the
+ * drawer opened, ADR-0067) and the category or vendor, expires after
  * {@code pos.order.session.approval-token-ttl} (five minutes by default, as pos-invoice's elevation) and
  * is used by at most one movement, whose recorder must not be the approver. An expired token is marked
  * {@code EXPIRED} in a transaction of its own when a movement presents it.
@@ -80,13 +84,14 @@ public class CashMovementApprovalServiceImpl implements CashMovementApprovalServ
     static final String ELEVATED_COUNTER = "order.cash_movement.elevated";
 
     private static final int TOKEN_BYTES = 32;
+    private static final int MAX_USERNAME_LENGTH = 255;
     private static final Base64.Encoder TOKEN_ENCODER = Base64.getUrlEncoder().withoutPadding();
 
     private final CashMovementApprovalRepository approvalRepository;
     private final RegisterSessionRepository registerSessionRepository;
+    private final CashMovementStepUpDenialRepository denialRepository;
     private final StepUpPort stepUpPort;
     private final LocationAncestorResolver locationAncestors;
-    private final FunctionalCurrency functionalCurrency;
     private final Clock clock;
     private final @Nullable MeterRegistry meterRegistry;
     private final TransactionTemplate ownTransaction;
@@ -95,24 +100,25 @@ public class CashMovementApprovalServiceImpl implements CashMovementApprovalServ
     @Value("${pos.order.session.approval-token-ttl:PT5M}")
     private Duration tokenTtl = Duration.ofMinutes(5);
 
-    @Value("${pos.order.session.max-denied-approvals:5}")
-    private int maxDeniedApprovals = 5;
+    /** Refusals per drawer and manager sign-in name before the step-up stops asking; below the lockout. */
+    @Value("${pos.order.session.max-denied-approvals:3}")
+    private int maxDeniedApprovals = 3;
 
     @SuppressWarnings("java:S107") // one collaborator per concern of the approval
     public CashMovementApprovalServiceImpl(
             CashMovementApprovalRepository approvalRepository,
             RegisterSessionRepository registerSessionRepository,
+            CashMovementStepUpDenialRepository denialRepository,
             StepUpPort stepUpPort,
             LocationAncestorResolver locationAncestors,
-            FunctionalCurrency functionalCurrency,
             Clock clock,
             PlatformTransactionManager transactionManager,
             ObjectProvider<MeterRegistry> meterRegistry) {
         this.approvalRepository = approvalRepository;
         this.registerSessionRepository = registerSessionRepository;
+        this.denialRepository = denialRepository;
         this.stepUpPort = stepUpPort;
         this.locationAncestors = locationAncestors;
-        this.functionalCurrency = functionalCurrency;
         this.clock = clock;
         this.meterRegistry = meterRegistry.getIfAvailable();
         this.ownTransaction = new TransactionTemplate(transactionManager);
@@ -126,6 +132,10 @@ public class CashMovementApprovalServiceImpl implements CashMovementApprovalServ
     @Override
     public @NonNull CashMovementApprovalResult approve(@NonNull CashMovementApprovalCommand command) {
         String username = requireText(command.managerUsername(), "managerUsername");
+        if (username.trim().length() > MAX_USERNAME_LENGTH) {
+            throw new RegisterSessionRequestValidationException(
+                    "managerUsername must be at most " + MAX_USERNAME_LENGTH + " characters");
+        }
         String password = requireText(command.managerPassword(), "managerPassword");
         CashMovementReason reason = CashMovementReason.parse(command.reason())
                 .orElseThrow(() -> new RegisterSessionRequestValidationException(
@@ -138,10 +148,6 @@ public class CashMovementApprovalServiceImpl implements CashMovementApprovalServ
             throw new RegisterSessionRequestValidationException(
                     "currencyCode is required and must be an ISO 4217 code");
         }
-        if (!functionalCurrency.isFunctional(command.currencyCode())) {
-            throw new CurrencyNotSupportedException("Drawer cash is counted in " + functionalCurrency.code()
-                    + ", the functional currency; " + command.currencyCode().trim() + " is not supported");
-        }
         RegisterSession session = registerSessionRepository
                 .findById(command.sessionId())
                 .orElseThrow(() -> new RegisterSessionNotFoundException(command.sessionId()));
@@ -149,6 +155,12 @@ public class CashMovementApprovalServiceImpl implements CashMovementApprovalServ
         UUID location = session.getLocationId();
         SecurityContextHelper.locationScope()
                 .require(OrderPermissions.ORDER_SESSION_CASH_MOVEMENT, location == null ? "" : location.toString());
+        // ADR-0067: the drawer's own currency, stamped when it opened (never the live configuration).
+        String drawerCurrency = session.getCurrencyCode();
+        if (!drawerCurrency.equals(command.currencyCode().trim())) {
+            throw new CurrencyNotSupportedException("This drawer's cash is counted in " + drawerCurrency + "; "
+                    + command.currencyCode().trim() + " is not supported");
+        }
         if (session.getStatus() != RegisterSessionStatus.OPEN) {
             throw new RegisterSessionConflictException("Cash movement approvals require an OPEN session; session "
                     + session.getSessionId() + " is " + session.getStatus());
@@ -159,13 +171,17 @@ public class CashMovementApprovalServiceImpl implements CashMovementApprovalServ
                         "Your sign-in carries no user id, so a manager's approval cannot be checked against it;"
                                 + " sign in again"));
         String cashier = SecurityContextHelper.getCurrentUsernameOrDefault("system");
-        if (session.getStepUpDenials() >= maxDeniedApprovals) {
+        String approverKey = username.trim().toLowerCase(Locale.ROOT);
+        long denials = denialRepository.countBySessionIdAndApproverUsername(session.getSessionId(), approverKey);
+        if (denials >= maxDeniedApprovals) {
             log.warn(
-                    "Cash movement approval refused without a check: {} failed approvals on sessionId={} cashier={}",
-                    session.getStepUpDenials(),
+                    "Cash movement approval refused without a check: {} refused approvals for one manager name on"
+                            + " sessionId={} cashier={}",
+                    denials,
                     session.getSessionId(),
                     cashier);
-            throw denied("Too many failed manager approvals on this drawer; close it and open a new session");
+            throw denied("Too many refused approvals for this manager on this drawer; another manager can"
+                    + " approve, or close the drawer and open a new session");
         }
 
         StepUpPort.StepUpResult verified;
@@ -173,7 +189,7 @@ public class CashMovementApprovalServiceImpl implements CashMovementApprovalServ
             verified = stepUpPort.verify(
                     username, password, OrderPermissions.ORDER_SESSION_APPROVE_CASH_MOVEMENT, location);
         } catch (CashMovementRefusedException e) {
-            countDenial(session);
+            countDenial(session, approverKey);
             throw e;
         }
         if (verified.userId().equals(callerUserId) || isCallersName(username)) {
@@ -185,7 +201,7 @@ public class CashMovementApprovalServiceImpl implements CashMovementApprovalServ
                     Refusal.SELF_APPROVAL, "A cash movement cannot be approved by the cashier who records it");
         }
         if (!verified.holdsPermission() || !reaches(verified, location)) {
-            countDenial(session);
+            countDenial(session, approverKey);
             log.warn(
                     "Cash movement approval denied sessionId={} cashier={} approver={} holdsPermission={}",
                     session.getSessionId(),
@@ -201,7 +217,7 @@ public class CashMovementApprovalServiceImpl implements CashMovementApprovalServ
                 .sessionId(session.getSessionId())
                 .reasonCode(reason)
                 .amount(scale(amount))
-                .currencyCode(functionalCurrency.code())
+                .currencyCode(drawerCurrency)
                 .categoryCode(blankToNull(command.categoryCode()))
                 .vendorId(command.vendorId())
                 .tokenHash(hash(token))
@@ -217,7 +233,7 @@ public class CashMovementApprovalServiceImpl implements CashMovementApprovalServ
                 reason,
                 cashier,
                 verified.userId());
-        return new CashMovementApprovalResult(token, expiresAt, scale(amount), functionalCurrency.code());
+        return new CashMovementApprovalResult(token, expiresAt, scale(amount), drawerCurrency);
     }
 
     @Override
@@ -301,8 +317,12 @@ public class CashMovementApprovalServiceImpl implements CashMovementApprovalServ
         return false;
     }
 
-    private void countDenial(RegisterSession session) {
-        registerSessionRepository.countStepUpDenial(session.getSessionId());
+    /** Records one refusal for the drawer and the manager sign-in name (its own short transaction). */
+    private void countDenial(RegisterSession session, String approverKey) {
+        denialRepository.save(CashMovementStepUpDenial.builder()
+                .sessionId(session.getSessionId())
+                .approverUsername(approverKey)
+                .build());
     }
 
     private static CashMovementRefusedException denied(String message) {

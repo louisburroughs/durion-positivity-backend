@@ -193,7 +193,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `CASH_MOVEMENT_APPROVAL_INVALID` | 403 | The approval token is unknown, used, expired, or issued for another session, reason, amount, currency, category or vendor |
 | `CASH_MOVEMENT_SELF_APPROVAL` | 403 | The step-up named the caller's own credentials, or the token's approver is the caller recording the movement |
 | `CASH_MOVEMENT_CALLER_UNIDENTIFIED` | 403 | The caller's sign-in carries no user id, so an approval cannot be proven to be someone else's |
-| `CASH_MOVEMENT_APPROVAL_DENIED` | 403 | The step-up could not verify a holder of `order:session:approve_cash_movement` whose scope reaches the drawer (wrong or unknown credentials, a locked or inactive account, no permission, out of reach), or the drawer already had five failed approvals — one body for every reason, never 401 |
+| `CASH_MOVEMENT_APPROVAL_DENIED` | 403 | The step-up could not verify a holder of `order:session:approve_cash_movement` whose scope reaches the drawer (wrong or unknown credentials, a locked or inactive account, no permission, out of reach), or that manager sign-in name was already refused `pos.order.session.max-denied-approvals` times (3) on this drawer — one body for every reason, never 401 |
 | `ORDER_NOT_FOUND` | 404 | Sales order does not exist |
 | `ORDER_PRICE_OVERRIDE_NOT_FOUND` | 404 | Price override record not found |
 | `PURCHASE_ORDER_NOT_FOUND` | 404 | Purchase order does not exist |
@@ -218,7 +218,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `CASH_MOVEMENT_TYPE_NOT_ALLOWED` | 422 | The movement's reason is switched off in the tenant's drawer policy (CAP:550 S16) |
 | `PETTY_EXPENSE_CATEGORY_UNKNOWN` | 422 | A petty expense names no ACTIVE category of pos-order's copy of accounting's categories |
 | `FLOAT_CHANGE_NOT_RECORDED` | 422 | A float movement that does not close the gap between the register's configured float and the drawer's float exactly, that moves toward a negative float, or on a drawer whose register float is held at another location |
-| `CURRENCY_NOT_SUPPORTED` | 422 | A drawer amount (cash movement, approval, drawer policy) in an ISO 4217 currency other than the functional currency `pos.order.functional-currency` (ADR-0067) |
+| `CURRENCY_NOT_SUPPORTED` | 422 | A cash movement or approval in an ISO 4217 currency other than the drawer's (stamped from `pos.order.functional-currency` when it opened), or a drawer-policy PUT in a currency other than the functional currency (ADR-0067) |
 | `ORDER_CUSTOMER_REQUIRED` | 422 | Checkout of a cart that names no customer (CAP:550 S8) |
 | `ORDER_WALK_IN_UNAVAILABLE` | 422 | Walk-in was chosen but the customer replica holds no active CASH house account for the tenant |
 | `ORDER_WALK_IN_NOT_ALLOWED` | 422 | A walk-in cart asked for on-account tender, a deposit take or a workorder link; `fieldErrors[walkIn]` is `ON_ACCOUNT`, `DEPOSIT` or `WORKORDER_LINK` |
@@ -248,6 +248,9 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | ----------------------- | -------- | ---------------------------- |
 | `SPRING_DATASOURCE_URL` | required | PostgreSQL connection URL    |
 | `EUREKA_SERVER_URL`     | required | Eureka service discovery URL |
+| `POS_ORDER_FUNCTIONAL_CURRENCY` | required | ISO 4217 code of drawer money (ADR-0067 R-2; a Stage A interim until step A5 reads the tenant's functional currency). No default: unset or non-ISO fails startup. A drawer is stamped with it when it opens, and its movements, approvals and close fact keep that stamp, so a change applies to drawers opened afterwards. V4 stamps pre-existing drawers with it through the Flyway placeholder `${functional_currency}` (`FlywayConfig`). |
+| `POS_ORDER_SESSION_MAX_DENIED_APPROVALS` | `3` | Refused manager approvals per drawer session and manager sign-in name before the step-up stops asking pos-security-service for that name. Keep it below pos-security-service's sign-in lockout (`pos.security.lockout.max-attempts`, 5) so a register cannot lock a manager out; another manager can still approve. |
+| `POS_SECURITY_API_SECRET` | required for approvals | Sent as `X-Internal-Api-Secret` on the step-up call; unset, every approval is 503 `CASH_MOVEMENT_APPROVAL_UNAVAILABLE` |
 
 ## Multitenancy (ADR-0062, WS3 wave 5)
 

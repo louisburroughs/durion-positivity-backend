@@ -17,6 +17,14 @@ public record RegisterSessionResponse(
         BigDecimal theoreticalCash,
         BigDecimal overShort,
         boolean varianceApproved,
+
+        @Schema(
+                description = "ISO 4217 code of every amount on the drawer, stamped from the functional"
+                        + " currency when it opened (ADR-0067); a configuration change applies only to"
+                        + " drawers opened later",
+                example = "USD")
+        String currencyCode,
+
         String closedByClerkId,
         Instant openedAt,
         Instant closingStartedAt,
@@ -34,6 +42,7 @@ public record RegisterSessionResponse(
                 s.theoreticalCash(),
                 s.overShort(),
                 s.varianceApproved(),
+                s.currencyCode(),
                 s.closedByClerkId(),
                 s.openedAt(),
                 s.closingStartedAt(),
