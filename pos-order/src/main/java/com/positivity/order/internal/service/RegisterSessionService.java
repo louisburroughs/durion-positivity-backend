@@ -4,6 +4,8 @@ import com.positivity.order.internal.dto.CashMovementSummary;
 import com.positivity.order.internal.dto.RegisterSessionSummary;
 import com.positivity.order.internal.dto.SessionReport;
 import com.positivity.order.internal.service.model.CashMovementCommand;
+import com.positivity.order.internal.service.model.CashMovementOptions;
+import com.positivity.order.internal.service.model.CashMovementResult;
 import com.positivity.order.internal.service.model.OpenSessionCommand;
 import java.math.BigDecimal;
 import java.util.List;
@@ -21,7 +23,8 @@ public interface RegisterSessionService {
 
     /**
      * Opens a session on a terminal. Fails with a 409 if the terminal already has an OPEN session
-     * (spec R6.1). Opening float defaults to the terminal's previous counted close when not given.
+     * (spec R6.1). The opening float is the register's configured float from accounting, zero when none
+     * (CAP:550 S16, AW16); the opener is the caller (ADR-0018).
      */
     @NonNull
     RegisterSessionSummary openSession(@NonNull OpenSessionCommand command);
@@ -34,9 +37,17 @@ public interface RegisterSessionService {
     @NonNull
     RegisterSessionSummary getSession(@NonNull UUID sessionId);
 
-    /** Records a PAID_IN / PAID_OUT drawer movement against an OPEN session (spec R6.6). */
+    /**
+     * Records a drawer movement with one of the fixed reasons against an OPEN session (spec R6.6;
+     * CAP:550 S16, AW15, AW19, AW31): reason fields, the drawer policy, the running-total limit, a
+     * manager's approval and the float match. Idempotent on the command's {@code requestId}.
+     */
     @NonNull
-    CashMovementSummary recordCashMovement(@NonNull CashMovementCommand command);
+    CashMovementResult recordCashMovement(@NonNull CashMovementCommand command);
+
+    /** What the register may offer the cashier for an OPEN or CLOSING session (CAP:550 S16, spec §6.2). */
+    @NonNull
+    CashMovementOptions cashMovementOptions(@NonNull UUID sessionId);
 
     /** Lists the cash movements for a session, oldest first. */
     @NonNull
@@ -51,8 +62,9 @@ public interface RegisterSessionService {
 
     /**
      * Confirm-close (spec R6.3–R6.4): snapshots the theoretical cash, computes over/short, and moves
-     * the session to CLOSED. An over/short beyond the authorized difference limit requires the
-     * {@code order:session:approve_variance} authority; emits {@code order.session.closed}.
+     * the session to CLOSED. An over/short beyond the tenant's over/short tolerance requires the
+     * {@code order:session:approve_variance} authority; emits {@code order.session.closed} (schema 2,
+     * with every movement).
      */
     @NonNull
     RegisterSessionSummary confirmClose(@NonNull UUID sessionId);

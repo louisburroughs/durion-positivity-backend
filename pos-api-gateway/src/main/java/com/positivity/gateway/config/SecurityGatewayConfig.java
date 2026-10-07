@@ -114,7 +114,8 @@ public class SecurityGatewayConfig {
      * /<service>/v1/internal/...}; both spellings are refused, and the refusal therefore does not
      * depend on where the version filter happens to run in the chain.
      */
-    private static final Pattern INTERNAL_SERVICE_PATH = Pattern.compile("^/[^/]+(?:/v\\d+)?/internal(?:/.*)?$");
+    private static final Pattern INTERNAL_SERVICE_PATH =
+            Pattern.compile("^/[^/]+(?:/v\\d+)?/internal(?:/.*)?$", Pattern.CASE_INSENSITIVE);
 
     private static final String ERROR_MESSAGE_TOKEN_REVOKED = "Access token has been revoked";
     private static final String ERROR_MESSAGE_UNAUTHORIZED = "Authentication is required to access this resource";
@@ -796,8 +797,34 @@ public class SecurityGatewayConfig {
         return Optional.of(normalizedAuthorities);
     }
 
-    private static boolean isInternalServicePath(String path) {
-        return path != null && INTERNAL_SERVICE_PATH.matcher(path).matches();
+    /**
+     * Whether {@code path} names a service's internal surface, judged on its canonical form so a
+     * spelling the downstream service would still resolve to {@code /internal} cannot slip past: an
+     * encoded slash ({@code %2F}, already decoded by {@link URI#getPath()}), a doubled slash, a {@code
+     * .} or {@code ..} segment, a matrix parameter ({@code ;x=y}) or a different letter case (CAP:550
+     * S16, #2512 — the step-up credential check lives there).
+     */
+    static boolean isInternalServicePath(String path) {
+        return path != null
+                && INTERNAL_SERVICE_PATH.matcher(canonicalPath(path)).matches();
+    }
+
+    /** {@code path} with empty, {@code .} and {@code ..} segments resolved and matrix parameters dropped. */
+    static String canonicalPath(String path) {
+        java.util.Deque<String> segments = new java.util.ArrayDeque<>();
+        for (String raw : path.replace('\\', '/').split("/")) {
+            int matrix = raw.indexOf(';');
+            String segment = matrix >= 0 ? raw.substring(0, matrix) : raw;
+            if (segment.isEmpty() || ".".equals(segment)) {
+                continue;
+            }
+            if ("..".equals(segment)) {
+                segments.pollLast();
+                continue;
+            }
+            segments.addLast(segment);
+        }
+        return "/" + String.join("/", segments);
     }
 
     private boolean isPublicPath(String path) {

@@ -346,6 +346,11 @@ SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', 
 -- * CAP:550 S15 (#2511, SPEC-accounting-workspace §4.6 "Float", Security sign-off OI-5 2026-10-05, AW31):
 --   accounting:float:manage (bit 553), the register go-live float and Change float commands.
 --     accounting:float:manage        -> ADMIN, CONTROLLER (ACCOUNTING_CLERK and GENERAL_MANAGER receive nothing)
+-- * CAP:550 S16 (#2512, SPEC-accounting-workspace §4.6 "Drawer limits", Security sign-off OI-5 2026-10-05, AW31):
+--   the drawer policy and the manager's approval of a cash movement at the register (bits 554, 555).
+--     order:session_policy:manage          -> ADMIN, CONTROLLER, GENERAL_MANAGER
+--     order:session:approve_cash_movement  -> ADMIN, GENERAL_MANAGER (LOCATION_MANAGER in the alpha baseline): the
+--                                             holders of order:session:approve_variance
 --
 -- IDEMPOTENCY
 -- Every statement below is ON CONFLICT DO NOTHING, and role/permission ids are
@@ -694,11 +699,13 @@ FROM (VALUES
     ('order:return:approve', 'order', 'return', 'approve', 413),
     ('order:return:create', 'order', 'return', 'create', 412),
     ('order:return:view', 'order', 'return', 'view', 414),
+    ('order:session:approve_cash_movement', 'order', 'session', 'approve_cash_movement', 555),
     ('order:session:approve_variance', 'order', 'session', 'approve_variance', 411),
     ('order:session:cash_movement', 'order', 'session', 'cash_movement', 409),
     ('order:session:close', 'order', 'session', 'close', 410),
     ('order:session:open', 'order', 'session', 'open', 407),
     ('order:session:view', 'order', 'session', 'view', 408),
+    ('order:session_policy:manage', 'order', 'session_policy', 'manage', 554),
     ('people-contact:organization:edit', 'people-contact', 'organization', 'edit', 443),
     ('people-contact:organization:view', 'people-contact', 'organization', 'view', 444),
     ('people-contact:person:create', 'people-contact', 'person', 'create', 352),
@@ -1233,11 +1240,13 @@ FROM (VALUES
     ('ADMIN', 'order:return:approve'),
     ('ADMIN', 'order:return:create'),
     ('ADMIN', 'order:return:view'),
+    ('ADMIN', 'order:session:approve_cash_movement'),
     ('ADMIN', 'order:session:approve_variance'),
     ('ADMIN', 'order:session:cash_movement'),
     ('ADMIN', 'order:session:close'),
     ('ADMIN', 'order:session:open'),
     ('ADMIN', 'order:session:view'),
+    ('ADMIN', 'order:session_policy:manage'),
     ('ADMIN', 'people-contact:organization:edit'),
     ('ADMIN', 'people-contact:organization:view'),
     ('ADMIN', 'people-contact:person:create'),
@@ -1484,6 +1493,7 @@ FROM (VALUES
     ('CONTROLLER', 'mcp:chat:stream'),
     ('CONTROLLER', 'nlti:request:read'),
     ('CONTROLLER', 'nlti:request:submit'),
+    ('CONTROLLER', 'order:session_policy:manage'),
     ('CONTROLLER', 'people:self:view'),
     ('CONTROLLER', 'reporting:view:financial-statements'),
     ('CONTROLLER', 'supplier:vendor:read'),
@@ -1551,7 +1561,9 @@ FROM (VALUES
     ('GENERAL_MANAGER', 'order:order:view'),
     ('GENERAL_MANAGER', 'order:order:void'),
     ('GENERAL_MANAGER', 'order:return:approve'),
+    ('GENERAL_MANAGER', 'order:session:approve_cash_movement'),
     ('GENERAL_MANAGER', 'order:session:approve_variance'),
+    ('GENERAL_MANAGER', 'order:session_policy:manage'),
     ('GENERAL_MANAGER', 'people-contact:organization:edit'),
     ('GENERAL_MANAGER', 'people-contact:organization:view'),
     ('GENERAL_MANAGER', 'people:employee:view'),
@@ -2124,11 +2136,13 @@ BEGIN
         ('order:return:approve'),
         ('order:return:create'),
         ('order:return:view'),
+        ('order:session:approve_cash_movement'),
         ('order:session:approve_variance'),
         ('order:session:cash_movement'),
         ('order:session:close'),
         ('order:session:open'),
         ('order:session:view'),
+        ('order:session_policy:manage'),
         ('people-contact:organization:edit'),
         ('people-contact:organization:view'),
         ('people-contact:person:create'),

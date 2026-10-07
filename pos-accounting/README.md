@@ -918,6 +918,9 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `pos.accounting.credit-memo.ar-account-id`          | required             | GL account for AR reductions             |
 | `pos.accounting.kafka.inventory-events-topic`       | `inventory.events.v1` | Inventory scrap and adjustment facts for shrinkage / adjustment GL posting (#1043, #2191) |
 | `pos.accounting.kafka.accounting-events-topic`      | `accounting.events.v1` | Accounting's own fact feed (`accounting.invoice.gl-posted`), drained from `kafka_event_outbox` (#1843) |
+| `pos.accounting.kafka.accounting-commands-topic`    | `accounting.commands.v1` | Drift repair for accounting's own facts: `accounting.outbox.replay-requested` re-queues the requesting tenant's facts of a window (`AccountingCommandListener`; CAP:550 S16, #2512) |
+| `pos.accounting.manifest.topic`                     | `accounting.manifest.v1` | One reconciliation manifest per tenant per closed window of `accounting.events.v1` (`ManifestPublisher`, ADR-0044 §4; first consumer: pos-order's copies of the float and petty-expense category facts, #2512) |
+| `pos.accounting.manifest.window` / `.grace`         | `PT1H` / `PT5M`      | Manifest window length, and how long after a window closes its manifest is published |
 | `pos.accounting.outbox.poll-interval-ms`            | `1000`               | Kafka outbox drain interval (#1843) |
 | `pos.accounting.outbox.send-timeout-ms`             | `10000`              | Broker ack timeout per outbox row (#1843) |
 | `stripe.api-key`                                    | required             | Stripe API key for payment processing    |

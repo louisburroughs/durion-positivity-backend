@@ -11,7 +11,13 @@ import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
-@DisplayName("RegisterFloatChangedV1 relocation (additive, schema version 2; #2571)")
+/**
+ * The float fact's wire contract. CAP:550 S16 (#2512): a kind a newer producer adds reads as UNKNOWN, so a
+ * state-based consumer still applies the fact's amount and location. S38 (#2571): schema version 2 adds the
+ * RELOCATION kind and {@code previousLocationId}, additively, and only the kinds that always post must name their
+ * journal entry.
+ */
+@DisplayName("RegisterFloatChangedV1 (schema version 2; tolerant kinds, relocation)")
 class RegisterFloatChangedV1Test {
 
     private static final ObjectMapper MAPPER =
@@ -20,6 +26,15 @@ class RegisterFloatChangedV1Test {
     private static final UUID SHOP_A = UUID.fromString("019a0000-0000-7000-8000-00000000a001");
     private static final UUID SHOP_B = UUID.fromString("019a0000-0000-7000-8000-00000000a002");
     private static final UUID ENTRY = UUID.fromString("019a0000-0000-7000-8000-00000000e001");
+
+    private static String json(String kind) {
+        return """
+                {"registerId":"T-1","locationId":"01980a58-0000-7000-8000-0000000000a2","amount":250.00,
+                 "previousAmount":200.00,"kind":"%s","effectiveDate":"2026-10-07",
+                 "journalEntryId":"01980a58-0000-7000-8000-0000000000e1",
+                 "previousLocationId":"01980a58-0000-7000-8000-0000000000a1"}
+                """.formatted(kind);
+    }
 
     private static RegisterFloatChangedV1 fact(RegisterFloatChangedV1.Kind kind, UUID entry, UUID previousLocation) {
         return new RegisterFloatChangedV1(
@@ -31,6 +46,46 @@ class RegisterFloatChangedV1Test {
                 LocalDate.of(2026, 10, 15),
                 entry,
                 previousLocation);
+    }
+
+    @Test
+    @DisplayName("an unknown kind reads as UNKNOWN with amount and location intact")
+    void unknownKindReadsAsUnknown() {
+        RegisterFloatChangedV1 read =
+                MAPPER.readValue(json("A_KIND_FROM_A_NEWER_PRODUCER"), RegisterFloatChangedV1.class);
+
+        assertThat(read.kind()).isEqualTo(RegisterFloatChangedV1.Kind.UNKNOWN);
+        assertThat(read.amount()).isEqualByComparingTo("250.00");
+        assertThat(read.locationId()).hasToString("01980a58-0000-7000-8000-0000000000a2");
+    }
+
+    @Test
+    @DisplayName("an unknown kind without a journal entry still reads: a tolerant reader never throws")
+    void unknownKindWithoutAnEntryStillReads() {
+        String withoutEntry = """
+                {"registerId":"T-1","locationId":"01980a58-0000-7000-8000-0000000000a2","amount":250.00,
+                 "previousAmount":250.00,"kind":"A_KIND_FROM_A_NEWER_PRODUCER","effectiveDate":"2026-10-07"}
+                """;
+
+        RegisterFloatChangedV1 read = MAPPER.readValue(withoutEntry, RegisterFloatChangedV1.class);
+
+        assertThat(read.kind()).isEqualTo(RegisterFloatChangedV1.Kind.UNKNOWN);
+        assertThat(read.journalEntryId()).isNull();
+    }
+
+    @Test
+    @DisplayName("known kinds, RELOCATION included, read as themselves")
+    void knownKindsRoundTrip() {
+        for (RegisterFloatChangedV1.Kind kind : new RegisterFloatChangedV1.Kind[] {
+            RegisterFloatChangedV1.Kind.GO_LIVE,
+            RegisterFloatChangedV1.Kind.CHANGE,
+            RegisterFloatChangedV1.Kind.REVERSAL,
+            RegisterFloatChangedV1.Kind.RELOCATION
+        }) {
+            assertThat(MAPPER.readValue(json(kind.name()), RegisterFloatChangedV1.class)
+                            .kind())
+                    .isEqualTo(kind);
+        }
     }
 
     @Test
@@ -65,6 +120,8 @@ class RegisterFloatChangedV1Test {
     @DisplayName("only the kinds that always post must name their entry: a zero-float relocation carries none")
     void nullEntryRule() {
         assertThat(fact(RegisterFloatChangedV1.Kind.RELOCATION, null, SHOP_A).journalEntryId())
+                .isNull();
+        assertThat(fact(RegisterFloatChangedV1.Kind.UNKNOWN, null, null).journalEntryId())
                 .isNull();
         for (RegisterFloatChangedV1.Kind posting : new RegisterFloatChangedV1.Kind[] {
             RegisterFloatChangedV1.Kind.GO_LIVE,

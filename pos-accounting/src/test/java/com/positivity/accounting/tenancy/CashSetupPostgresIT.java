@@ -1230,7 +1230,8 @@ class CashSetupPostgresIT extends PostgresTenancyTestBase {
                 List.of(),
                 BigDecimal.ZERO,
                 opened,
-                closed);
+                closed,
+                List.of());
     }
 
     private static RegisterFloatRelocationRequest relocation(

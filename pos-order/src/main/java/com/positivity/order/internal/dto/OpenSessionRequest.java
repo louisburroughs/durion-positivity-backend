@@ -5,11 +5,14 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.PositiveOrZero;
-import java.math.BigDecimal;
 import java.util.UUID;
 import lombok.Data;
 
+/**
+ * Request payload for opening a register session. The opening float is the register's configured float
+ * from accounting and the opener comes from the security context (CAP:550 S16, #2512; AW16, ADR-0018):
+ * an {@code openingFloat} or {@code openedByClerkId} a client still sends is ignored.
+ */
 @Data
 @Schema(description = "Request payload for opening a register session")
 public class OpenSessionRequest {
@@ -22,22 +25,8 @@ public class OpenSessionRequest {
     private String terminalId;
 
     @Schema(
-            description = "Clerk opening the session",
-            example = "01960003-0000-7000-8000-000000000050",
-            requiredMode = REQUIRED)
-    @NotBlank
-    private String openedByClerkId;
-
-    @Schema(
             description = "Shop location; defaults from the terminal's previous session when omitted",
             example = "01960003-0000-7000-8000-000000000090",
             requiredMode = NOT_REQUIRED)
     private UUID locationId;
-
-    @Schema(
-            description = "Starting drawer cash; defaults to the terminal's previous counted close when omitted",
-            example = "150.00",
-            requiredMode = NOT_REQUIRED)
-    @PositiveOrZero
-    private BigDecimal openingFloat;
 }

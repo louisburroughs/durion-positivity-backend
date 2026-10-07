@@ -1,10 +1,12 @@
 package com.positivity.securityservice.internal.config;
 
 import com.positivity.securityservice.internal.security.GatewayHeaderAuthenticationFilter;
+import com.positivity.securityservice.internal.security.InternalServiceSecretFilter;
 import com.positivity.securityservice.internal.security.JwtAuthenticationFilter;
 import com.positivity.securityservice.internal.security.PermissionRegistrationSecretFilter;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Clock;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,6 +30,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import tools.jackson.databind.ObjectMapper;
 
 @Configuration
 @EnableWebSecurity
@@ -60,6 +63,39 @@ public class SecurityConfig {
     @Bean
     public GatewayHeaderAuthenticationFilter gatewayHeaderAuthenticationFilter() {
         return new GatewayHeaderAuthenticationFilter();
+    }
+
+    /**
+     * The service-to-service surface, {@code /internal/**} (CAP:550 S16, #2512): today the step-up
+     * credential check pos-order calls for a manager's cash-movement approval. Stateless and without
+     * CSRF — a mesh call carries no cookie and no CSRF token — and authenticated only by the mesh
+     * service credential ({@link InternalServiceSecretFilter}); gateway identity headers and bearer
+     * tokens are not accepted here. The gateway also refuses every {@code /internal} path at the edge.
+     */
+    @Bean
+    @Order(0)
+    public SecurityFilterChain internalServiceFilterChain(
+            HttpSecurity http,
+            @Value("${pos.security.api-secret:}") String internalSecret,
+            Clock clock,
+            ObjectMapper objectMapper) {
+        try {
+            // CSRF safe to disable: STATELESS (below), no cookie is ever issued on this path, and
+            // the only credential is a header a cross-site request cannot set. (Sonar S4502)
+            http.securityMatcher("/internal/**")
+                    .csrf(csrf -> csrf.disable())
+                    .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                    .authorizeHttpRequests(
+                            auth -> auth.anyRequest().hasAuthority(InternalServiceSecretFilter.INTERNAL_SERVICE_ROLE))
+                    .addFilterBefore(
+                            new InternalServiceSecretFilter(internalSecret, clock, objectMapper),
+                            UsernamePasswordAuthenticationFilter.class)
+                    .exceptionHandling(ex -> ex.authenticationEntryPoint(jsonAuthenticationEntryPoint)
+                            .accessDeniedHandler(jsonAccessDeniedHandler));
+            return http.build();
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to build internal service filter chain", e);
+        }
     }
 
     @Bean

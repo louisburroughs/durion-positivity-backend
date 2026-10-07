@@ -97,6 +97,32 @@ class OrderEventsListenerTest {
     }
 
     @Test
+    @DisplayName("CAP:550 S16 (#2512): a schema-2 fact with movements[] still posts the over/short unchanged")
+    void schemaTwoFactWithMovementsStillPostsOverShort() {
+        when(processedEvents.existsById("e-v2")).thenReturn(false);
+        String message = sessionClosed("e-v2")
+                .replace("\"schemaVersion\":1", "\"schemaVersion\":2")
+                .replace("\"closedAt\":\"2026-07-23T18:30:00Z\"}", """
+                        "closedAt":"2026-07-23T18:30:00Z",
+                         "movements":[{"movementId":"00000000-0000-0000-0000-0000000000f1",
+                                       "reason":"PETTY_EXPENSE","direction":"OUT","amount":12.50,"currencyCode":"USD",
+                                       "categoryCode":"SHOP_SUPPLIES","vendorId":null,"bagNumber":null,
+                                       "receiptReference":"R-1","clerkId":"clerk-1","clerkUserId":null,"approvedBy":null,
+                                       "occurredAt":"2026-07-23T10:00:00Z"}]}""");
+
+        listener.onOrderEvent(message);
+
+        ArgumentCaptor<RegisterSessionClosedV1> fact = ArgumentCaptor.forClass(RegisterSessionClosedV1.class);
+        verify(postingService).postOverShort(fact.capture(), org.mockito.ArgumentMatchers.eq("e-v2"));
+        assertThat(fact.getValue().overShort()).isEqualByComparingTo(new BigDecimal("-10.00"));
+        assertThat(fact.getValue().movements()).singleElement().satisfies(movement -> {
+            assertThat(movement.reason()).isEqualTo("PETTY_EXPENSE");
+            assertThat(movement.amount()).isEqualByComparingTo("12.50");
+        });
+        verify(processedEvents).save(any());
+    }
+
+    @Test
     @DisplayName("#2433: the posted over/short is recorded as one ingestion row under pos-order, linked to its entry")
     void postedOverShortIsRecorded() {
         UUID journalEntryId = UUID.randomUUID();

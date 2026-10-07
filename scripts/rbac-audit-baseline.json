@@ -10,6 +10,7 @@
     "crm:processing_log:view": "granted to ADMIN, enforced nowhere: no controller exposes a processing-log endpoint in pos-customer -- see §7 task 5.",
     "crm:suspense:view": "granted to ADMIN, enforced nowhere: no controller exposes a suspense endpoint in pos-customer -- see §7 task 5.",
     "nlti:request:read": "granted broadly, enforced nowhere: no NLTI status/read endpoint exists yet -- see §7 task 5.",
+    "order:session:approve_cash_movement": "granted to ADMIN/GENERAL_MANAGER/LOCATION_MANAGER, required by no endpoint by design (CAP:550 S16 #2512, AW31): pos-security-service's internal step-up check asks whether the manager whose own credentials were entered at the register holds it; the caller of the approvals endpoint needs only order:session:cash_movement.",
     "people:skill:assign": "granted to ADMIN, enforced nowhere: no skill feature exists anywhere in pos-people -- see §7 task 5.",
     "people:skill:edit": "granted to ADMIN, enforced nowhere: no skill feature exists anywhere in pos-people -- see §7 task 5.",
     "pricing:normalization:view": "granted to ADMIN, enforced nowhere: no read endpoint for pricing normalization exists -- see §7 task 5.",

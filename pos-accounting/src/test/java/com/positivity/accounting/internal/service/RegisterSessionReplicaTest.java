@@ -149,6 +149,7 @@ class RegisterSessionReplicaTest {
                 List.of(),
                 BigDecimal.ZERO,
                 opened,
-                closed);
+                closed,
+                List.of());
     }
 }

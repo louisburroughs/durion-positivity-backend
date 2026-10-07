@@ -1,5 +1,6 @@
 package com.positivity.domainevents.accounting;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -51,7 +52,11 @@ public record RegisterFloatChangedV1(
     public static final String EVENT_TYPE = "accounting.float.changed";
     public static final int SCHEMA_VERSION = 2;
 
-    /** What changed the float. */
+    /**
+     * What changed the float. Consumers are state-based (they apply {@code amount} and {@code
+     * locationId} whatever the kind), so a kind added later must not fail them: a value this build
+     * does not know reads as {@link #UNKNOWN} (#2512). {@link #RELOCATION} arrived in schema version 2 (#2571).
+     */
     public enum Kind {
         /** The once-only go-live float, against opening balance equity (AW17). */
         GO_LIVE,
@@ -59,8 +64,24 @@ public record RegisterFloatChangedV1(
         CHANGE,
         /** The reversal of a go-live or change entry. */
         REVERSAL,
-        /** The register moved to another location; the float moves with it, unchanged (AW32). */
-        RELOCATION
+        /** The register moved to another location; the float moves with it, unchanged (AW32, #2571). */
+        RELOCATION,
+        /** A kind published by a newer producer than this build knows; never published itself. */
+        UNKNOWN;
+
+        /** Reads a wire value, mapping one this build does not know to {@link #UNKNOWN}. */
+        @JsonCreator
+        public static Kind fromWire(@Nullable String value) {
+            if (value == null) {
+                return UNKNOWN;
+            }
+            for (Kind kind : values()) {
+                if (kind.name().equals(value)) {
+                    return kind;
+                }
+            }
+            return UNKNOWN;
+        }
     }
 
     public RegisterFloatChangedV1 {
