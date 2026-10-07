@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.config.LedgerCurrency;
+import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
 import com.positivity.domainevents.order.RegisterSessionClosedV1.Movement;
 import io.micrometer.core.instrument.Counter;
@@ -62,10 +63,10 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * register float's (AW36): a register moves only between sessions.
  *
  * <p><b>Idempotency</b> is per movement: {@code REGISTER_CASH_MOVEMENT_GL_POSTING:<movementId>} is registered in the
- * same transaction as the entry, so a fact redelivered under a fresh envelope id posts nothing twice within the
- * posting-key window (the {@code IdempotencyService} keys expire after 24 hours, as the over/short's do; non-expiring
- * posting keys are #2595). The checks run in the over/short's order: idempotency, then currency, then the
- * fact's contract.
+ * same transaction as the entry, so a fact redelivered under a fresh envelope id posts nothing twice. The key expires
+ * after 24 hours ({@code IdempotencyService}); past that, the entry's deterministic {@code sourceEventId} is the
+ * durable backstop, as in {@link InventoryRevaluationPostingService} (non-expiring posting keys: #2595). The checks run
+ * in the over/short's order: idempotency, then currency, then the fact's contract.
  *
  * <p><b>Currency (ADR-0067 PC-9).</b> A session whose fact, or any movement to post, is in a currency other than the
  * ledger's posts nothing: it is held once per session as the {@code SUSPENDED / CURRENCY_NOT_SUPPORTED} record the
@@ -121,6 +122,7 @@ public class RegisterCashMovementPostingService {
     private final GLPostingService glPostingService;
     private final LedgerCurrency ledgerCurrency;
     private final KafkaFactIngestionRecorder ingestionRecorder;
+    private final JournalEntryRepository journalEntryRepository;
     private final @Nullable MeterRegistry meterRegistry;
 
     public RegisterCashMovementPostingService(
@@ -130,6 +132,7 @@ public class RegisterCashMovementPostingService {
             GLPostingService glPostingService,
             LedgerCurrency ledgerCurrency,
             KafkaFactIngestionRecorder ingestionRecorder,
+            JournalEntryRepository journalEntryRepository,
             ObjectProvider<MeterRegistry> meterRegistry) {
         this.zoneResolver = zoneResolver;
         this.idempotencyService = idempotencyService;
@@ -137,6 +140,7 @@ public class RegisterCashMovementPostingService {
         this.glPostingService = glPostingService;
         this.ledgerCurrency = ledgerCurrency;
         this.ingestionRecorder = ingestionRecorder;
+        this.journalEntryRepository = journalEntryRepository;
         this.meterRegistry = meterRegistry.getIfAvailable();
     }
 
@@ -193,8 +197,7 @@ public class RegisterCashMovementPostingService {
         List<Movement> pending = new ArrayList<>();
         UUID firstEarlier = null;
         for (Movement movement : toPost) {
-            if (movement.movementId() != null
-                    && idempotencyService.isKeyProcessed(IDEMPOTENCY_KEY_PREFIX + movement.movementId())) {
+            if (movement.movementId() != null && alreadyPosted(movement.movementId())) {
                 log.info(
                         "Drawer movement GL posting already processed, skipping | sessionId={} | movementId={}",
                         fact.sessionId(),
@@ -226,6 +229,16 @@ public class RegisterCashMovementPostingService {
             firstPosted = firstPosted == null ? posted : firstPosted;
         }
         return FactPostingOutcome.posted(firstPosted);
+    }
+
+    /**
+     * Whether the movement's entry was posted before: its posting key, or, once that key has expired ({@code
+     * IdempotencyService}, 24 hours), the entry's deterministic source event, the durable backstop {@link
+     * InventoryRevaluationPostingService} uses too.
+     */
+    private boolean alreadyPosted(UUID movementId) {
+        return idempotencyService.isKeyProcessed(IDEMPOTENCY_KEY_PREFIX + movementId)
+                || !journalEntryRepository.findBySourceEvent(toSourceEventId(movementId)).isEmpty();
     }
 
     private UUID postPettyExpense(RegisterSessionClosedV1 fact, Movement movement, LocalDateTime transactionDate) {

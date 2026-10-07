@@ -399,6 +399,7 @@ public interface GLPostingService {
      * @param dimensions the lines' dimensions
      * @return posted journal entry's id
      */
+    @NonNull
     UUID postRegisterCashMovement(
             @NonNull UUID sourceEventId,
             @NonNull UUID debitAccountId,

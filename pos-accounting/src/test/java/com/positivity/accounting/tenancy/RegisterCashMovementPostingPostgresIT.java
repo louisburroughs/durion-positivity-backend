@@ -193,6 +193,19 @@ class RegisterCashMovementPostingPostgresIT extends PostgresTenancyTestBase {
         assertThat(records(tenant, session))
                 .allSatisfy(record -> assertThat(record.get("journal_entry_id")).isNotNull());
 
+        // Past the posting keys' 24 hours (expired, not yet cleaned up), a re-emit under a fresh envelope id still
+        // posts nothing twice: the entries' deterministic source events are the backstop, and no key is re-registered.
+        new JdbcTemplate(ownerDataSource())
+                .update(
+                        "UPDATE idempotency_keys SET expires_at = now() - interval '1 day' WHERE tenant_id = ?",
+                        tenant);
+        asTenant(tenant, () -> listener.onOrderEvent(envelope(UUID.randomUUID().toString(), fact)));
+        assertThat(entryCount(tenant)).isEqualTo(2);
+        assertThat(records(tenant, session))
+                .hasSize(3)
+                .extracting(record -> record.get("idempotency_outcome"))
+                .containsExactlyInAnyOrder("NEW", "DUPLICATE_IGNORED", "DUPLICATE_IGNORED");
+
         // Two-tenant isolation (ADR-0062): another tenant sees none of these entries, and the same movements (the
         // same movement ids) delivered to it post its own two entries: the posting keys are tenant-scoped. Its
         // session id differs: the session replica's key is the session id alone (pos-order's UUIDv7 ids never repeat
@@ -243,6 +256,10 @@ class RegisterCashMovementPostingPostgresIT extends PostgresTenancyTestBase {
 
         assertThat(entryCount(tenant)).isZero();
         assertThat(records(tenant, fact.sessionId())).isEmpty();
+        assertThat(new JdbcTemplate(ownerDataSource())
+                        .queryForObject(
+                                "SELECT count(*) FROM idempotency_keys WHERE tenant_id = ?", Integer.class, tenant))
+                .isZero();
         assertThat(asTenant(tenant, () -> processedEventRepository.existsById(eventId)))
                 .isFalse();
 

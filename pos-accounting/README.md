@@ -773,10 +773,11 @@ schema-1 fact has no movements and posts its over/short alone, as before.
   deactivated after its movement was recorded still resolves: its mapping key stays.
 - **Idempotency** — `REGISTER_CASH_MOVEMENT_GL_POSTING:<movementId>`, registered with the entry and scoped to the
   tenant: a fact redelivered under a new envelope id posts nothing twice and its record is `PROCESSED /
-  DUPLICATE_IGNORED`. This holds **within the posting-key window**: `IdempotencyService` keys expire after 24 hours,
-  as the over/short's do, pending the follow-up on non-expiring posting keys (#2595). The checks run in the over/short's
-  order — idempotency, then currency, then the fact's contract — so a redelivered session already posted never writes
-  a hold, and a foreign session with a malformed movement is held rather than sent to the DLQ.
+  DUPLICATE_IGNORED`. The key expires after 24 hours (`IdempotencyService`); past that, the entry's deterministic
+  `sourceEventId` is the durable backstop, as for inventory revaluations. The over/short has no such backstop: its
+  "posts nothing twice" holds within the posting-key window, pending non-expiring posting keys (#2595). The checks run
+  in the over/short's order — idempotency, then currency, then the fact's contract — so a redelivered session already
+  posted never writes a hold, and a foreign session with a malformed movement is held rather than sent to the DLQ.
 - **Failures** — a closed period or a missing mapping rolls the whole session back (over/short included) and
   propagates for retry and the DLQ, like the over/short; so does a petty expense that breaks the fact's contract
   (no `movementId`, not `OUT`, no category, no positive amount). A missing mapping writes no ingestion row; a

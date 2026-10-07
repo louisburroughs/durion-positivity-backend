@@ -13,7 +13,9 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.config.LedgerCurrency;
+import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
+import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
 import com.positivity.domainevents.order.RegisterSessionClosedV1.Movement;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -61,6 +63,7 @@ class RegisterCashMovementPostingServiceTest {
     private final GLMappingResolver glMappingResolver = mock(GLMappingResolver.class);
     private final GLPostingService glPostingService = mock(GLPostingService.class);
     private final KafkaFactIngestionRecorder ingestionRecorder = mock(KafkaFactIngestionRecorder.class);
+    private final JournalEntryRepository journalEntryRepository = mock(JournalEntryRepository.class);
     private final MeterRegistry meterRegistry = new SimpleMeterRegistry();
 
     private RegisterCashMovementPostingService service;
@@ -77,6 +80,7 @@ class RegisterCashMovementPostingServiceTest {
                 glPostingService,
                 new LedgerCurrency("USD"),
                 ingestionRecorder,
+                journalEntryRepository,
                 registry);
         when(glMappingResolver.resolveGLAccount("REGISTER_CASH_MOVEMENT", "PETTY_EXPENSE_SHOP_SUPPLIES", POSTING_DATE))
                 .thenReturn(SHOP_SUPPLIES_ACCOUNT);
@@ -243,6 +247,23 @@ class RegisterCashMovementPostingServiceTest {
         FactPostingOutcome outcome = service.postMovements(
                 fact(petty(PETTY_1, "SHOP_SUPPLIES", "18.40", null), petty(PETTY_2, "STAFF_MEALS", "22.00", null)),
                 ENVELOPE_EVENT_ID);
+
+        assertThat(outcome)
+                .isEqualTo(new FactPostingOutcome.AlreadyPosted(
+                        null, RegisterCashMovementPostingService.toSourceEventId(PETTY_1)));
+        verifyNoInteractions(glPostingService);
+        verify(idempotencyService, never()).registerKey(anyString(), any());
+    }
+
+    @Test
+    @DisplayName("Past the posting key's 24 hours, the entry's deterministic source event still stops a second posting"
+            + " and no key is registered again")
+    void sourceEventIsTheDurableBackstop() {
+        when(journalEntryRepository.findBySourceEvent(RegisterCashMovementPostingService.toSourceEventId(PETTY_1)))
+                .thenReturn(List.of(new JournalEntry()));
+
+        FactPostingOutcome outcome =
+                service.postMovements(fact(petty(PETTY_1, "SHOP_SUPPLIES", "18.40", null)), ENVELOPE_EVENT_ID);
 
         assertThat(outcome)
                 .isEqualTo(new FactPostingOutcome.AlreadyPosted(

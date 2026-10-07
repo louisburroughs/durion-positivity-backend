@@ -565,7 +565,7 @@ public class GLPostingServiceImpl implements GLPostingService {
     }
 
     @Override
-    public UUID postRegisterCashMovement(
+    public @NonNull UUID postRegisterCashMovement(
             @NonNull UUID sourceEventId,
             @NonNull UUID debitAccountId,
             @NonNull UUID creditAccountId,
