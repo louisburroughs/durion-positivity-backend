@@ -80,7 +80,7 @@ public final class AccountingEventTypeRegistry {
                     true),
             new Entry(
                     RegisterSessionClosedV1.EVENT_TYPE,
-                    "Register session closed (over/short)",
+                    "Register session closed (over/short and drawer movements)",
                     DOMAIN_ORDER,
                     Ingestion.KAFKA,
                     true),

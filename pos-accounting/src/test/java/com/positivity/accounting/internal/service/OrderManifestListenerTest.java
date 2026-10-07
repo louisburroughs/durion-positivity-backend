@@ -214,6 +214,7 @@ class OrderManifestListenerTest {
                 objectMapper,
                 processedEvents,
                 mock(RegisterOverShortPostingService.class),
+                mock(RegisterCashMovementPostingService.class),
                 mock(KafkaFactIngestionRecorder.class),
                 mock(ObjectProvider.class),
                 mock(PlatformTransactionManager.class),

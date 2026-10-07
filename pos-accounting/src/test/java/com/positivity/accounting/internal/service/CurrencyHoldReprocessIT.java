@@ -62,6 +62,9 @@ class CurrencyHoldReprocessIT {
     private RegisterOverShortPostingService overShortPostingService;
 
     @Autowired
+    private RegisterCashMovementPostingService movementPostingService;
+
+    @Autowired
     private EventIngestionService eventIngestionService;
 
     @Autowired
@@ -159,6 +162,33 @@ class CurrencyHoldReprocessIT {
         assertThat(heldRecords()).hasSize(1);
     }
 
+    @Test
+    @DisplayName("#2513: a session held for a drawer movement's currency (the fact itself in the ledger currency) is"
+            + " re-suspended on reprocess and posts nothing")
+    void movementHeldReprocessReSuspends() {
+        movementPostingService.postMovements(
+                usdSessionWithCadPettyExpense(), UUID.randomUUID().toString());
+        UUID eventId = onlyHeldRecord().getEventId();
+
+        AccountingEventResponse response =
+                eventIngestionService.reprocessEvent(eventId, new ReprocessEventRequest(), "ops-user-2513");
+
+        assertThat(response.getStatus()).isEqualTo(AccountingEventStatus.SUSPENDED);
+        AccountingEvent after = onlyHeldRecord();
+        assertThat(after.getStatus()).isEqualTo(AccountingEventStatus.SUSPENDED);
+        assertThat(after.getFailureReasonCode()).isEqualTo("CURRENCY_NOT_SUPPORTED");
+        assertThat(after.getFailureDetails()).contains("CAD");
+        assertThat(after.getAttemptCount()).isEqualTo(1);
+        assertThat(after.getFinalPostingReferenceId()).isNull();
+        assertThat(journalEntryRepository.count()).isZero();
+        assertThat(reprocessingAttemptHistoryRepository.findByAccountingEvent_EventIdOrderByAttemptedAtDesc(eventId))
+                .singleElement()
+                .satisfies(attempt -> {
+                    assertThat(attempt.getTriggeredByUserId()).isEqualTo("ops-user-2513");
+                    assertThat(attempt.getOutcome()).isEqualTo(ReprocessingOutcome.FAILURE);
+                });
+    }
+
     private AccountingEvent onlyHeldRecord() {
         List<AccountingEvent> held = heldRecords();
         assertThat(held).hasSize(1);
@@ -170,6 +200,39 @@ class CurrencyHoldReprocessIT {
                 .filter(e -> RegisterSessionClosedV1.EVENT_TYPE.equals(e.getEventType()))
                 .filter(e -> sessionId.toString().equals(e.getDomainKeyId()))
                 .toList();
+    }
+
+    private RegisterSessionClosedV1 usdSessionWithCadPettyExpense() {
+        return new RegisterSessionClosedV1(
+                sessionId,
+                "terminal-1",
+                null,
+                "clerk-1",
+                "clerk-2",
+                new BigDecimal("100.00"),
+                new BigDecimal("81.60"),
+                new BigDecimal("81.60"),
+                BigDecimal.ZERO,
+                false,
+                "USD",
+                List.of(),
+                new BigDecimal("-18.40"),
+                CLOSED_AT.minusSeconds(28_800),
+                CLOSED_AT,
+                List.of(new RegisterSessionClosedV1.Movement(
+                        UUID.randomUUID(),
+                        "PETTY_EXPENSE",
+                        "OUT",
+                        new BigDecimal("18.40"),
+                        "CAD",
+                        "SHOP_SUPPLIES",
+                        null,
+                        null,
+                        null,
+                        "clerk-1",
+                        null,
+                        null,
+                        CLOSED_AT.minusSeconds(3600))));
     }
 
     private RegisterSessionClosedV1 eurShortage() {

@@ -25,7 +25,7 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * Consumes {@code order.events.v1} register-session close facts into over/short GL postings
- * (odoo-parity G3, issue #1083).
+ * (odoo-parity G3, issue #1083) and drawer movement GL postings (CAP:550 S17, #2513).
  *
  * <p>Same reliability contract as {@link InventoryEventsListener}: idempotent via {@code
  * processed_events}, transient DB errors and posting failures (closed period, missing mapping,
@@ -47,12 +47,15 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <p>Posting itself (idempotent on sessionId via posting key, period-gated, accounts resolved
  * through the {@code REGISTER_OVER_SHORT} posting category, zero-variance posts nothing) lives in
- * {@link RegisterOverShortPostingService}.
+ * {@link RegisterOverShortPostingService}. A schema-2 fact's drawer movements (CAP:550 S17, #2513) post
+ * through {@link RegisterCashMovementPostingService} in the same handler transaction, first, so the session
+ * posts all or nothing; a session it holds for its currency posts no over/short either.
  *
  * <p><b>Ingestion record (#2433).</b> Every consumed session-close fact writes one {@code
  * accounting_event} row through {@link KafkaFactIngestionRecorder} in the handler transaction:
- * {@code PROCESSED / NEW} linked to the posted entry, {@code PROCESSED / NEW} with no entry for a
- * zero variance, {@code PROCESSED / DUPLICATE_IGNORED} when the session's posting key was already
+ * {@code PROCESSED / NEW} linked to a posted entry (the over/short's, else the first movement's; every
+ * movement entry carries the {@code sessionId} dimension), {@code PROCESSED / NEW} with no entry when
+ * nothing posts, {@code PROCESSED / DUPLICATE_IGNORED} when every posting key of the session was already
  * registered. A currency hold writes its own {@code SUSPENDED} row inside the posting service.
  *
  * <p><b>Session replica (#2571, #2573).</b> Both session facts also keep {@link RegisterSessionReplica}, which the
@@ -87,6 +90,7 @@ public class OrderEventsListener {
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
     private final RegisterOverShortPostingService registerOverShortPostingService;
+    private final RegisterCashMovementPostingService registerCashMovementPostingService;
     private final KafkaFactIngestionRecorder ingestionRecorder;
     private final RegisterSessionReplica sessionReplica;
     private final Counter payloadRejectedCounter;
@@ -101,6 +105,7 @@ public class OrderEventsListener {
             ObjectMapper objectMapper,
             ProcessedEventRepository processedEventRepository,
             RegisterOverShortPostingService registerOverShortPostingService,
+            RegisterCashMovementPostingService registerCashMovementPostingService,
             KafkaFactIngestionRecorder ingestionRecorder,
             ObjectProvider<MeterRegistry> meterRegistry,
             PlatformTransactionManager transactionManager,
@@ -112,6 +117,7 @@ public class OrderEventsListener {
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.registerOverShortPostingService = registerOverShortPostingService;
+        this.registerCashMovementPostingService = registerCashMovementPostingService;
         this.ingestionRecorder = ingestionRecorder;
         this.handlerTransaction = new TransactionTemplate(transactionManager);
         this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -185,7 +191,7 @@ public class OrderEventsListener {
             // The replica first, in its own transaction: see the class doc ("Session replica").
             handlerTransaction.executeWithoutResult(_ -> sessionReplica.closed(fact, aggregateVersion));
             handlerTransaction.executeWithoutResult(_ -> {
-                FactPostingOutcome outcome = registerOverShortPostingService.postOverShort(fact, eventId);
+                FactPostingOutcome outcome = postSession(fact, eventId);
                 ingestionRecorder.record(
                         RegisterOverShortPostingService.SOURCE_SYSTEM,
                         RegisterSessionClosedV1.EVENT_TYPE,
@@ -199,6 +205,19 @@ public class OrderEventsListener {
         } catch (DatabindException e) {
             reject(eventId, e);
         }
+    }
+
+    /**
+     * Everything a closed session posts, inside the handler transaction so the session posts all or nothing (CAP:550
+     * S17, #2513): its drawer movements, then its over/short. A session the movement posting held for its currency
+     * posts no over/short either; a schema-1 fact has no movements and posts the over/short alone.
+     */
+    private @NonNull FactPostingOutcome postSession(@NonNull RegisterSessionClosedV1 fact, @NonNull String eventId) {
+        FactPostingOutcome movements = registerCashMovementPostingService.postMovements(fact, eventId);
+        if (movements instanceof FactPostingOutcome.CurrencyHeld) {
+            return movements;
+        }
+        return FactPostingOutcome.combine(registerOverShortPostingService.postOverShort(fact, eventId), movements);
     }
 
     /**

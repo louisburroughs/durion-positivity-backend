@@ -65,6 +65,9 @@ class OrderEventsListenerTransactionTest {
     private KafkaFactIngestionRecorder ingestionRecorder;
 
     @Autowired
+    private RegisterCashMovementPostingService movementPostingService;
+
+    @Autowired
     private RegisterSessionReplica sessionReplica;
 
     @Autowired
@@ -83,6 +86,7 @@ class OrderEventsListenerTransactionTest {
                 new ObjectMapper(),
                 processedEventRepository,
                 failingPostingService,
+                movementPostingService,
                 ingestionRecorder,
                 meterRegistry,
                 transactionManager,

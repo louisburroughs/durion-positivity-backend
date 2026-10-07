@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import com.positivity.accounting.internal.dto.SettlementPostingCommand;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -380,6 +381,34 @@ public interface GLPostingService {
             @NonNull LocalDateTime transactionDate,
             @NonNull String description,
             @Nullable String overrideJustification);
+
+    /**
+     * Post one drawer cash movement of a closed register session (CAP:550 S17, #2513; spec §4.6, §7.1 "Drawer
+     * movement posting"): a balanced two-line entry {@code Dr debitAccount / Cr creditAccount} of {@code amount},
+     * source type {@link JournalEntrySourceTypes#REGISTER_CASH_MOVEMENT}. Both lines carry {@code dimensions} (the
+     * register, the session and the session's location), so a location or register report finds the movement.
+     * Posted at once; a CLOSED period propagates for the caller's retry.
+     *
+     * @param sourceEventId deterministic JE source id derived from the movement id
+     * @param debitAccountId account to debit (the petty-expense category's account)
+     * @param creditAccountId account to credit (register cash clearing)
+     * @param amount the movement's positive amount
+     * @param transactionDate business transaction date (the session's close time)
+     * @param description entry description, naming the movement by its business references
+     * @param lineLabel the label of both lines
+     * @param dimensions the lines' dimensions
+     * @return posted journal entry's id
+     */
+    @NonNull
+    UUID postRegisterCashMovement(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID debitAccountId,
+            @NonNull UUID creditAccountId,
+            @NonNull BigDecimal amount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description,
+            @NonNull String lineLabel,
+            @NonNull Map<String, String> dimensions);
 
     /**
      * Post a register-session drawer over/short variance (odoo-parity G3, issue #1083): a balanced
