@@ -351,6 +351,11 @@ SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', 
 --     order:session_policy:manage          -> ADMIN, CONTROLLER, GENERAL_MANAGER
 --     order:session:approve_cash_movement  -> ADMIN, GENERAL_MANAGER (LOCATION_MANAGER in the alpha baseline): the
 --                                             holders of order:session:approve_variance
+-- * CAP:550 S18 (#2514, SPEC-accounting-workspace §4.5 / §7.1 "Permissions", Security sign-off OI-5 2026-10-05,
+--   AW31): bank deposits of drawer cash (bits 556, 557).
+--     accounting:deposit:create   -> ADMIN, CONTROLLER, ACCOUNTING_CLERK (reads the undeposited sessions and
+--                                    records the deposit)
+--     accounting:deposit:reverse  -> ADMIN, CONTROLLER (a wrong deposit is reversed and recorded again)
 --
 -- IDEMPOTENCY
 -- Every statement below is ON CONFLICT DO NOTHING, and role/permission ids are
@@ -411,6 +416,8 @@ FROM (VALUES
     ('accounting:default-mapping:delete', 'accounting', 'default-mapping', 'delete', 288),
     ('accounting:default-mapping:edit', 'accounting', 'default-mapping', 'edit', 289),
     ('accounting:default-mapping:view', 'accounting', 'default-mapping', 'view', 290),
+    ('accounting:deposit:create', 'accounting', 'deposit', 'create', 556),
+    ('accounting:deposit:reverse', 'accounting', 'deposit', 'reverse', 557),
     ('accounting:events:reprocess', 'accounting', 'events', 'reprocess', 241),
     ('accounting:events:retry', 'accounting', 'events', 'retry', 10),
     ('accounting:events:submit', 'accounting', 'events', 'submit', 9),
@@ -940,6 +947,7 @@ FROM (VALUES
     ('ACCOUNTING_CLERK', 'accounting:ap:view'),
     ('ACCOUNTING_CLERK', 'accounting:coa:view'),
     ('ACCOUNTING_CLERK', 'accounting:customer-credit:view'),
+    ('ACCOUNTING_CLERK', 'accounting:deposit:create'),
     ('ACCOUNTING_CLERK', 'accounting:events:view'),
     ('ACCOUNTING_CLERK', 'accounting:export:view'),
     ('ACCOUNTING_CLERK', 'accounting:je:view'),
@@ -982,6 +990,8 @@ FROM (VALUES
     ('ADMIN', 'accounting:default-mapping:delete'),
     ('ADMIN', 'accounting:default-mapping:edit'),
     ('ADMIN', 'accounting:default-mapping:view'),
+    ('ADMIN', 'accounting:deposit:create'),
+    ('ADMIN', 'accounting:deposit:reverse'),
     ('ADMIN', 'accounting:events:reprocess'),
     ('ADMIN', 'accounting:events:retry'),
     ('ADMIN', 'accounting:events:submit'),
@@ -1452,6 +1462,8 @@ FROM (VALUES
     ('CONTROLLER', 'accounting:default-mapping:delete'),
     ('CONTROLLER', 'accounting:default-mapping:edit'),
     ('CONTROLLER', 'accounting:default-mapping:view'),
+    ('CONTROLLER', 'accounting:deposit:create'),
+    ('CONTROLLER', 'accounting:deposit:reverse'),
     ('CONTROLLER', 'accounting:events:reprocess'),
     ('CONTROLLER', 'accounting:events:retry'),
     ('CONTROLLER', 'accounting:events:submit'),
@@ -1877,6 +1889,8 @@ BEGIN
         ('accounting:default-mapping:delete'),
         ('accounting:default-mapping:edit'),
         ('accounting:default-mapping:view'),
+        ('accounting:deposit:create'),
+        ('accounting:deposit:reverse'),
         ('accounting:events:reprocess'),
         ('accounting:events:retry'),
         ('accounting:events:submit'),

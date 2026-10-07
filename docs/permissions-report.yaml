@@ -1,9 +1,9 @@
-generatedAt: "2026-10-07T20:40:30.708371+00:00"
+generatedAt: "2026-10-07T22:56:00.428817+00:00"
 root: "."
 summary:
   manifestCount: 24
-  permissionCount: 520
-  uniquePermissionCount: 520
+  permissionCount: 522
+  uniquePermissionCount: 522
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -12,7 +12,7 @@ manifests:
     domain: "accounting"
     serviceName: "pos-accounting"
     version: "1.0"
-    permissionCount: 57
+    permissionCount: 59
     permissions:
       - name: "accounting:analytics:view"
         description: "View Wave 2 read-only accounting analytics (invoiced-vs-collected, payment-lag cohorts)"
@@ -54,6 +54,10 @@ manifests:
         description: "Retry failed accounting events"
       - name: "accounting:events:submit"
         description: "Submit accounting events"
+      - name: "accounting:deposit:create"
+        description: "Read the undeposited register sessions and record a bank deposit of their drawer cash (CAP:550 S18)"
+      - name: "accounting:deposit:reverse"
+        description: "Reverse a bank deposit of drawer cash (CAP:550 S18)"
       - name: "accounting:events:view"
         description: "View accounting events"
       - name: "accounting:export:request"
@@ -1314,6 +1318,18 @@ permissions:
     source: "pos-accounting/src/main/resources/permissions.yaml"
   - name: "accounting:default-mapping:view"
     description: "View default mapping"
+    domain: "accounting"
+    serviceName: "pos-accounting"
+    module: "pos-accounting"
+    source: "pos-accounting/src/main/resources/permissions.yaml"
+  - name: "accounting:deposit:create"
+    description: "Read the undeposited register sessions and record a bank deposit of their drawer cash (CAP:550 S18)"
+    domain: "accounting"
+    serviceName: "pos-accounting"
+    module: "pos-accounting"
+    source: "pos-accounting/src/main/resources/permissions.yaml"
+  - name: "accounting:deposit:reverse"
+    description: "Reverse a bank deposit of drawer cash (CAP:550 S18)"
     domain: "accounting"
     serviceName: "pos-accounting"
     module: "pos-accounting"
