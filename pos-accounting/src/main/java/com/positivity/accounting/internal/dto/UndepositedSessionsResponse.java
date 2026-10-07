@@ -28,7 +28,9 @@ public record UndepositedSessionsResponse(
         Selection selection) {
 
     /** One undeposited session. */
-    @Schema(description = "A closed register session whose drawer cash waits to be deposited")
+    @Schema(
+            name = "UndepositedSession",
+            description = "A closed register session whose drawer cash waits to be deposited")
     public record Session(
             @Schema(description = "The register session") UUID sessionId,
 
@@ -74,7 +76,7 @@ public record UndepositedSessionsResponse(
             List<Drop> drops) {}
 
     /** One bank drop of a session. */
-    @Schema(description = "A bank drop: the bag and the amount the deposit takes")
+    @Schema(name = "UndepositedSessionDrop", description = "A bank drop: the bag and the amount the deposit takes")
     public record Drop(
             @Schema(description = "pos-order's drawer movement")
             UUID movementId,
@@ -86,7 +88,9 @@ public record UndepositedSessionsResponse(
             BigDecimal amount) {}
 
     /** The deposit the selected sessions make. */
-    @Schema(description = "What recording a deposit of the selected sessions posts; nothing posts here")
+    @Schema(
+            name = "DepositSelection",
+            description = "What recording a deposit of the selected sessions posts; nothing posts here")
     public record Selection(
             @Schema(description = "The selected sessions") List<UUID> sessionIds,
 
@@ -112,7 +116,7 @@ public record UndepositedSessionsResponse(
             List<PreviewLine> lines) {}
 
     /** One line of the entry a deposit would post. */
-    @Schema(description = "A line of the entry the deposit would post")
+    @Schema(name = "DepositPreviewLine", description = "A line of the entry the deposit would post")
     public record PreviewLine(
             @Schema(description = "The GL account; null for the bank line when no bankGlAccountId was given") @Nullable
             UUID glAccountId,

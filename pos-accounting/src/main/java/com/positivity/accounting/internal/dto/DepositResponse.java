@@ -80,7 +80,7 @@ public record DepositResponse(
         boolean replayed) {
 
     /** One session the deposit took. */
-    @Schema(description = "A session the deposit took whole")
+    @Schema(name = "DepositSession", description = "A session the deposit took whole")
     public record Session(
             @Schema(description = "The register session") UUID sessionId,
 
