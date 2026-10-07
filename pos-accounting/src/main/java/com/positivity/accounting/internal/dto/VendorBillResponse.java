@@ -117,22 +117,19 @@ public class VendorBillResponse {
     @JsonProperty("createdBy")
     private String createdBy;
 
-    @Nullable
     @Schema(description = "Where the bill came from", example = "SUPPLIER_CONNECTION", requiredMode = NOT_REQUIRED)
     @JsonProperty("channel")
-    private VendorBillReview.Channel channel;
+    private VendorBillReview.@Nullable Channel channel;
 
-    @Nullable
     @Schema(
             description = "The submission and, on an approved bill, the approval; null before the bill is sent",
             requiredMode = NOT_REQUIRED)
     @JsonProperty("approval")
-    private VendorBillReview.Approval approval;
+    private VendorBillReview.@Nullable Approval approval;
 
-    @Nullable
     @Schema(description = "Who rejected or voided the bill; only for REJECTED and VOIDED", requiredMode = NOT_REQUIRED)
     @JsonProperty("rejection")
-    private VendorBillReview.Rejection rejection;
+    private VendorBillReview.@Nullable Rejection rejection;
 
     @Nullable
     @Schema(
@@ -148,10 +145,9 @@ public class VendorBillResponse {
     @JsonProperty("openAmount")
     private BigDecimal openAmount;
 
-    @Nullable
     @Schema(description = "The latest match evidence and the open candidates", requiredMode = NOT_REQUIRED)
     @JsonProperty("match")
-    private VendorBillReview.Match match;
+    private VendorBillReview.@Nullable Match match;
 
     @Schema(
             description = "Received lines with what the vendor billed; empty for a bill without lines",
@@ -172,8 +168,7 @@ public class VendorBillResponse {
     @JsonProperty("availableActions")
     private List<VendorBillReview.AvailableAction> availableActions;
 
-    @Nullable
     @Schema(description = "The entry posted at approval; null until approved", requiredMode = NOT_REQUIRED)
     @JsonProperty("posting")
-    private VendorBillReview.Posting posting;
+    private VendorBillReview.@Nullable Posting posting;
 }

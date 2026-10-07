@@ -116,10 +116,9 @@ public class VendorBillApprovalController {
                                                                  "classification":{"debitClass":"EXPENSE",
                                                                   "expenseMappingKey":"EXPENSE_EQUIPMENT_REPAIRS"}}
                                                                 """)))
-                    @NonNull
                     @Valid
                     @RequestBody
-                    VendorBillCommands.Submit request) {
+                    VendorBillCommands.@NonNull Submit request) {
         return ResponseEntity.ok(approvalService.submitForApproval(billId, request));
     }
 
@@ -196,10 +195,9 @@ public class VendorBillApprovalController {
                                                          "classification":{"debitClass":"EXPENSE",
                                                           "expenseMappingKey":"EXPENSE_SHOP_SUPPLIES"}}
                                                         """)))
-                    @NonNull
                     @Valid
                     @RequestBody
-                    VendorBillCommands.Approve request) {
+                    VendorBillCommands.@NonNull Approve request) {
         return ResponseEntity.ok(approvalService.approve(billId, request));
     }
 
@@ -258,10 +256,9 @@ public class VendorBillApprovalController {
                                                             name = "Reject",
                                                             value = "{\"reason\":\"Vendor billed a delivery we"
                                                                     + " refused\"}")))
-                    @NonNull
                     @Valid
                     @RequestBody
-                    VendorBillCommands.Reject request) {
+                    VendorBillCommands.@NonNull Reject request) {
         return ResponseEntity.ok(approvalService.reject(billId, request));
     }
 
@@ -336,10 +333,9 @@ public class VendorBillApprovalController {
                                                 {"resolutionAction":"ACCEPT",
                                                  "reason":"Price increase agreed by phone"}
                                                 """)))
-                    @NonNull
                     @Valid
                     @RequestBody
-                    VendorBillCommands.ResolveException request) {
+                    VendorBillCommands.@NonNull ResolveException request) {
         return ResponseEntity.ok(approvalService.resolveException(billId, request));
     }
 
@@ -462,10 +458,9 @@ public class VendorBillApprovalController {
                                                             name = "Void",
                                                             value = "{\"reason\":\"Billed twice, the vendor"
                                                                     + " confirmed\"}")))
-                    @NonNull
                     @Valid
                     @RequestBody
-                    VendorBillCommands.VoidApproved request) {
+                    VendorBillCommands.@NonNull VoidApproved request) {
         return ResponseEntity.ok(approvalService.voidApproved(billId, request));
     }
 
