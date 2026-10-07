@@ -489,9 +489,11 @@ class RegisterFloatServiceImplTest {
                                 null)))
                 .isInstanceOf(CurrencyNotSupportedException.class);
 
+        verify(floats, never()).lockByRegisterId(any());
         verify(floats, never()).saveAndFlush(any());
         verify(journalEntries, never()).createJournalEntry(any());
         verify(writer, never()).publish(any(), any());
+        verify(auditLogs, never()).save(any());
         assertThat(standing).isEmpty();
     }
 
@@ -521,6 +523,10 @@ class RegisterFloatServiceImplTest {
         assertThat(standing)
                 .hasSize(2)
                 .allSatisfy(row -> assertThat(row.getCurrencyCode()).isEqualTo("USD"));
+        ArgumentCaptor<AccountingAuditLog> audits = ArgumentCaptor.forClass(AccountingAuditLog.class);
+        verify(auditLogs, org.mockito.Mockito.times(2)).save(audits.capture());
+        assertThat(audits.getAllValues())
+                .allSatisfy(audit -> assertThat(audit.getNewValue()).contains("currencyCode=USD"));
         ArgumentCaptor<DomainEventEnvelope<?>> facts = ArgumentCaptor.forClass(DomainEventEnvelope.class);
         verify(writer, org.mockito.Mockito.times(2)).publish(eq("accounting.events.v1"), facts.capture());
         assertThat(facts.getAllValues()).allSatisfy(envelope -> {

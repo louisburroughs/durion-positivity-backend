@@ -614,7 +614,9 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
 
     /**
      * A float movement must close the gap between the configured float and the float now in the
-     * drawer (opening float ± earlier float movements) exactly, in its direction (§4.6 "Float").
+     * drawer (opening float ± earlier float movements) exactly, in its direction (§4.6 "Float"). A float
+     * held at another location, or in another currency than the drawer's (#2577: 422 {@code
+     * CURRENCY_NOT_SUPPORTED}), is never compared.
      */
     private void requireRecordedFloatChange(
             RegisterSession session, List<CashMovement> recorded, CashMovementReason reason, BigDecimal amount) {
@@ -630,6 +632,14 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                     Refusal.FLOAT_CHANGE_NOT_RECORDED,
                     "The register's configured float is held at another location than this drawer's; no float"
                             + " change can be recorded on it here");
+        }
+        if (floatCopy.isPresent()
+                && !session.getCurrencyCode().equals(floatCopy.get().getCurrencyCode())) {
+            // #2577 (ADR-0067 PC-9): a drawer opened before the copy existed keeps its own stamp; a float in
+            // another currency is never compared with the drawer's cash.
+            throw new CurrencyNotSupportedException("The register's configured float is in "
+                    + floatCopy.get().getCurrencyCode() + "; this drawer counts " + session.getCurrencyCode()
+                    + ", so no float change can be recorded on it");
         }
         BigDecimal target = floatCopy.map(copy -> scale(copy.getAmount())).orElse(ZERO);
         BigDecimal gap = target.subtract(drawerFloat);

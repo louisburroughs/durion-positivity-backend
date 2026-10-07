@@ -45,7 +45,7 @@ import org.jspecify.annotations.Nullable;
  *     (schema version 2)
  * @param currencyCode the ISO 4217 code of {@code amount} and {@code previousAmount}: the currency the
  *     register's float is held in, the tenant's functional currency (schema version 3); null only on an
- *     older event
+ *     older event, and three upper-case letters when stated
  */
 public record RegisterFloatChangedV1(
         @NonNull String registerId,
@@ -110,6 +110,10 @@ public record RegisterFloatChangedV1(
         // one a newer producer adds, may carry none, so a tolerant reader never throws on it.
         if (journalEntryId == null && (kind == Kind.GO_LIVE || kind == Kind.CHANGE || kind == Kind.REVERSAL)) {
             throw new IllegalArgumentException("journalEntryId must not be null for " + kind);
+        }
+        // Absent on an older event; when stated, an ISO 4217 code is three upper-case letters (ADR-0067 R-3).
+        if (currencyCode != null && !currencyCode.matches("[A-Z]{3}")) {
+            throw new IllegalArgumentException("currencyCode must be three upper-case letters, was " + currencyCode);
         }
     }
 }

@@ -784,8 +784,8 @@ on an inbound fact means the ledger currency until producers stamp one (E-3).
 - **Register float** (`/v1/accounting/registers/{registerId}/float[/go-live]`, #2577; R-1) — a go-live or
   Change float states `currencyCode`: missing or not on the ISO 4217 list (`IsoCurrencyCodes`, never
   normalised) is 400 `VALIDATION_ERROR` naming the field; a code other than the ledger currency, or than
-  the currency the register's float is held in, is 422 `CURRENCY_NOT_SUPPORTED` before any row is locked or
-  any entry posts. A replay is checked first and answers with the first result; the code is part of the
+  the currency the register's float is held in, is 422 `CURRENCY_NOT_SUPPORTED` before any entry posts (the
+  float-currency check runs under the row lock, and the refusal rolls the command back). A replay is checked first and answers with the first result; the code is part of the
   replayed body. `register_float` and `register_float_change` hold `currency_code NOT NULL` (V15; rows
   that predate it take the ledger currency from the `ledger_currency` Flyway placeholder that
   `FlywayConfig` binds from `LedgerCurrency`, never a literal). The response (`RegisterFloatResponse`)

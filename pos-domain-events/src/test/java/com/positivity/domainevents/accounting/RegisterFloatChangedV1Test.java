@@ -106,6 +106,26 @@ class RegisterFloatChangedV1Test {
     }
 
     @Test
+    @DisplayName("#2577: a stated currencyCode that is not three upper-case letters is refused")
+    void malformedCurrencyIsRefused() {
+        for (String malformed : new String[] {"", "usd", "US", "USDX", "U5D"}) {
+            assertThatThrownBy(() -> new RegisterFloatChangedV1(
+                            "T-1",
+                            SHOP_B,
+                            new BigDecimal("200.00"),
+                            new BigDecimal("200.00"),
+                            RegisterFloatChangedV1.Kind.CHANGE,
+                            LocalDate.of(2026, 10, 15),
+                            ENTRY,
+                            null,
+                            malformed))
+                    .as("currencyCode %s", malformed)
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("currencyCode");
+        }
+    }
+
+    @Test
     @DisplayName("#2577: a version-2 payload, without currencyCode, still parses with a null currency")
     void versionTwoPayloadStillParses() {
         RegisterFloatChangedV1 read = MAPPER.readValue(json("RELOCATION"), RegisterFloatChangedV1.class);

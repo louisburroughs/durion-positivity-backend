@@ -24,12 +24,6 @@ spring:
         format_sql: true
   jackson:
     default-property-inclusion: non_null
-  flyway:
-    placeholders:
-      # V15 stamps register floats that predate #2577 with the ledger currency (ADR-0067 R-2: never an implicit
-      # one). FlywayConfig passes it for the application; this entry serves Spring Boot's own Flyway. A versioned
-      # migration's checksum is taken before placeholders are replaced, so a later change does not fail validation.
-      ledger_currency: ${accounting.ledger.base-currency}
 
 server:
   port: 0

@@ -201,7 +201,8 @@ public class AccountingEventsListener {
         copy.setLocationId(fact.locationId());
         // A reversal in accounting can leave a float negative; the copy holds it as it stands.
         copy.setAmount(scale(fact.amount()));
-        // ADR-0067 PC-8: a fact without a currency (schema 1 or 2) is in the tenant's functional currency.
+        // ADR-0067 PC-8: a fact without a currency (schema 1 or 2) is in the tenant's functional currency. Until
+        // #2583 (ADR-0067 PC-2/A2) that is the interim pos.order.functional-currency, not the tenant's own.
         copy.setCurrencyCode(fact.currencyCode() != null ? fact.currencyCode() : functionalCurrency.code());
         copy.setEffectiveDate(fact.effectiveDate() == null ? LocalDate.now(clock) : fact.effectiveDate());
         copy.setAggregateVersion(aggregateVersion);
