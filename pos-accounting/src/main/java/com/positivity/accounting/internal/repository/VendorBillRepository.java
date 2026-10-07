@@ -221,11 +221,10 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
     /**
      * Find unpaid bills (status = APPROVED or PENDING_REVIEW) for a vendor.
      */
-    @Query(
-            "SELECT vb FROM VendorBill vb WHERE vb.vendorId = :vendorId AND vb.status IN"
-                + " (com.positivity.accounting.internal.enums.VendorBillStatus.APPROVED,"
-                + " com.positivity.accounting.internal.enums.VendorBillStatus.PENDING_RECEIPT_MATCH) ORDER BY"
-                + " vb.dueDate ASC")
+    @Query("SELECT vb FROM VendorBill vb WHERE vb.vendorId = :vendorId AND vb.status IN"
+            + " (com.positivity.accounting.internal.enums.VendorBillStatus.APPROVED,"
+            + " com.positivity.accounting.internal.enums.VendorBillStatus.PENDING_RECEIPT_MATCH) ORDER BY"
+            + " vb.dueDate ASC")
     List<VendorBill> findUnpaidBillsForVendor(UUID vendorId);
 
     /**
