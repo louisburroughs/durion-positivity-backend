@@ -64,6 +64,9 @@ class CreditMemoServiceTest {
     @Spy
     Clock clock = TEST_CLOCK;
 
+    @Spy
+    AccountingCalendarZoneResolver zoneResolver = TestZoneResolvers.utc(TEST_CLOCK);
+
     @Mock
     private CreditMemoRepository creditMemoRepository;
 

@@ -6,9 +6,9 @@ import com.positivity.accounting.internal.bankrec.intake.BankRecException;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.enums.AccountSubtype;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
-import java.time.ZoneOffset;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -75,7 +75,10 @@ public class BankCashAccounts {
 
     /** Every active bank account of the tenant, ordered by account code. */
     public @NonNull List<BankCashAccount> listActive() {
-        return glAccounts.findReconcilableActiveOn(AccountSubtype.BANK_CASH, LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC)).stream()
+        return glAccounts
+                .findReconcilableActiveOn(
+                        AccountSubtype.BANK_CASH, LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC))
+                .stream()
                 .map(BankCashAccounts::toRef)
                 .toList();
     }
@@ -96,7 +99,8 @@ public class BankCashAccounts {
     /** One page of {@link #listActive()}, cut in the database. */
     public @NonNull Page<BankCashAccount> pageActive(@NonNull Pageable pageable) {
         return glAccounts
-                .findReconcilableActiveOn(AccountSubtype.BANK_CASH, LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC), pageable)
+                .findReconcilableActiveOn(
+                        AccountSubtype.BANK_CASH, LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC), pageable)
                 .map(BankCashAccounts::toRef);
     }
 

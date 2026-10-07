@@ -644,7 +644,7 @@ class VendorBillServiceTest {
                     new VendorBillDuplicateGuard(billRepository, noMeters),
                     sequenceLocker,
                     transactionManager,
-                    com.positivity.accounting.internal.service.TestZoneResolvers.utc(java.time.Clock.systemUTC()));
+                    TestZoneResolvers.utc(FIXED_CLOCK));
             when(billRepository.findLiveDuplicate(any(), any(), any(), any(), any()))
                     .thenReturn(Optional.empty());
         }

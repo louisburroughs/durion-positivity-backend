@@ -47,6 +47,9 @@ class VendorBillServiceGLPostingTest {
     @Spy
     Clock clock = FIXED_CLOCK;
 
+    @Spy
+    AccountingCalendarZoneResolver zoneResolver = TestZoneResolvers.utc(FIXED_CLOCK);
+
     @Mock
     private VendorBillRepository billRepository;
 

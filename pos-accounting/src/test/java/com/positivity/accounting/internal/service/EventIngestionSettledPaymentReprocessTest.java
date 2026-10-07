@@ -49,6 +49,9 @@ class EventIngestionSettledPaymentReprocessTest {
     @Spy
     Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
 
+    @Spy
+    AccountingCalendarZoneResolver zoneResolver = TestZoneResolvers.utc(Clock.fixed(NOW, ZoneOffset.UTC));
+
     @Mock
     private AccountingEventRepository accountingEventRepository;
 

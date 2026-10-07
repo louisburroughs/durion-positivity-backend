@@ -122,6 +122,7 @@ class JournalEntryServiceTest {
                 accountingPeriodService, periodRepository, configurationService, auditLogRepository);
         service = new JournalEntryServiceImpl(
                 clock,
+                TestZoneResolvers.utc(clock),
                 journalEntryRepository,
                 glAccountService,
                 glAccountRepository,

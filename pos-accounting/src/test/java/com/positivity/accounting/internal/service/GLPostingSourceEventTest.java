@@ -47,7 +47,7 @@ class GLPostingSourceEventTest {
 
     @BeforeEach
     void setUp() {
-        service = new GLPostingServiceImpl(CLOCK, journalEntryService);
+        service = new GLPostingServiceImpl(CLOCK, TestZoneResolvers.utc(CLOCK), journalEntryService);
     }
 
     private void assertSource(Function<GLPostingServiceImpl, UUID> call, String expectedType) {
@@ -72,6 +72,30 @@ class GLPostingSourceEventTest {
         assertSource(
                 s -> s.postCreditMemoReversal(sourceEventId, a, b, c, AMOUNT, TAX, "cm", false, null, null),
                 JournalEntrySourceTypes.CREDIT_MEMO_REVERSAL);
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("#2558: a credit-memo reversal and void at 2026-01-31T23:30-06:00 are dated"
+            + " 2026-01-31 in a Chicago calendar, clock in UTC")
+    void creditMemoEntriesAreDatedInTheTenantCalendar() {
+        Clock utc = Clock.fixed(TestZoneResolvers.JAN_31_2330_CHICAGO, ZoneOffset.UTC);
+        GLPostingServiceImpl chicago = new GLPostingServiceImpl(
+                utc, TestZoneResolvers.fixed(TestZoneResolvers.CHICAGO, utc), journalEntryService);
+        ArgumentCaptor<JournalEntryCreateRequest> captor = ArgumentCaptor.forClass(JournalEntryCreateRequest.class);
+        UUID entryId = UUID.randomUUID();
+        when(journalEntryService.createJournalEntry(captor.capture()))
+                .thenReturn(
+                        JournalEntryResponse.builder().journalEntryId(entryId).build());
+        when(journalEntryService.postJournalEntry(any(UUID.class), any()))
+                .thenReturn(
+                        JournalEntryResponse.builder().journalEntryId(entryId).build());
+
+        chicago.postCreditMemoReversal(sourceEventId, a, b, c, AMOUNT, TAX, "cm", false, null, null);
+        chicago.postCreditMemoVoid(sourceEventId, a, b, c, AMOUNT, TAX, "void");
+
+        assertThat(captor.getAllValues())
+                .extracting(JournalEntryCreateRequest::getTransactionDate)
+                .containsOnly(LocalDateTime.of(2026, 1, 31, 23, 30));
     }
 
     @Test
