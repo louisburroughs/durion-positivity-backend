@@ -112,11 +112,11 @@ public class BankDepositController {
             summary = "Record Bank Deposit",
             description = """
                     Records a bank deposit of whole closed register sessions' drawer cash in one step: posts one \
-                    BANK_DEPOSIT entry dated depositDate, Dr the bank account by the sessions' bank drops (one line), \
-                    Cr 1090 Undeposited Funds by their expected cash and Dr 1095 Register Cash Clearing when their \
-                    clearing net is a credit (Cr when a debit) by its size, a zero line left out; the sessions become \
-                    DEPOSITED. Every amount comes from the sessions (the server computes the deposit total). The \
-                    single bank line is what bank reconciliation matches to the statement credit.
+                    BANK_DEPOSIT entry dated depositDate, Dr the bank account by the sessions' bank drops (one line, \
+                    the one bank reconciliation matches to the statement credit), Cr 1090 Undeposited Funds by their \
+                    expected cash and Dr 1095 Register Cash Clearing when their clearing net is a credit (Cr when a \
+                    debit) by its size, a zero line left out and every amount computed from the sessions; the \
+                    sessions become DEPOSITED.
                     Use this tool when the cash of one or more closed drawers reached the bank; do not use \
                     createJournalEntry, and never add a balancing line yourself: a deposit that does not balance is \
                     refused. To correct a deposit, reverse it and record it again.
@@ -241,8 +241,8 @@ public class BankDepositController {
                     entry restores 1090 Undeposited Funds and 1095 Register Cash Clearing and takes the amount off \
                     the bank account, the deposit becomes REVERSED and its sessions wait to be deposited again. A \
                     reversed bank line matched in an approved bank reconciliation invalidates that reconciliation.
-                    Use this tool to correct a wrong deposit, then record it again; deposits are never edited. \
-                    Reversing the deposit's entry with reverseJournalEntry has the same effect.
+                    Use this tool to correct a wrong deposit, then record it again; do not edit a deposit or post a \
+                    correcting journal entry instead (reverseJournalEntry on the deposit's entry has the same effect).
                     Preconditions: caller holds accounting:deposit:reverse and reaches every location the deposit \
                     took cash from (403 LOCATION_SCOPE_DENIED); the deposit exists (404 DEPOSIT_NOT_FOUND) and is \
                     not already reversed (409 DEPOSIT_ALREADY_REVERSED); the reversal date (reversalDate, else the \
