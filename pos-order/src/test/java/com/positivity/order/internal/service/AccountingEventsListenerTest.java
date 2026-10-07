@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.order.internal.config.FunctionalCurrency;
 import com.positivity.order.internal.entity.ExtAccountingPettyExpenseCategory;
 import com.positivity.order.internal.entity.ExtAccountingRegisterFloat;
 import com.positivity.order.internal.entity.ProcessedEvent;
@@ -66,6 +67,7 @@ class AccountingEventsListenerTest {
                 categories,
                 floats,
                 sessions,
+                new FunctionalCurrency("USD"),
                 mock(PlatformTransactionManager.class),
                 meters);
         when(categories.findById(any())).thenReturn(Optional.empty());
@@ -127,6 +129,29 @@ class AccountingEventsListenerTest {
         assertThat(copy.getValue().getRegisterId()).isEqualTo("T-1");
         assertThat(copy.getValue().getAmount()).isEqualByComparingTo("-25.00");
         assertThat(copy.getValue().getAggregateVersion()).isEqualTo(5L);
+    }
+
+    @Test
+    @DisplayName("#2577 (ADR-0067 R-1): a schema-3 float fact's currencyCode is copied with its amount")
+    void floatCurrencyCopied() {
+        listener.onAccountingEvent(floatFact("e-11", 2, "200.00")
+                .replace("\"schemaVersion\":1", "\"schemaVersion\":3")
+                .replace("\"kind\":\"CHANGE\"", "\"kind\":\"CHANGE\",\"currencyCode\":\"CAD\""));
+
+        ArgumentCaptor<ExtAccountingRegisterFloat> copy = ArgumentCaptor.forClass(ExtAccountingRegisterFloat.class);
+        verify(floats).save(copy.capture());
+        assertThat(copy.getValue().getCurrencyCode()).isEqualTo("CAD");
+    }
+
+    @Test
+    @DisplayName(
+            "#2577 (ADR-0067 PC-8): a float fact without currencyCode (schema 1 or 2) is in the functional currency")
+    void floatWithoutCurrencyIsInTheFunctionalCurrency() {
+        listener.onAccountingEvent(floatFact("e-12", 2, "200.00"));
+
+        ArgumentCaptor<ExtAccountingRegisterFloat> copy = ArgumentCaptor.forClass(ExtAccountingRegisterFloat.class);
+        verify(floats).save(copy.capture());
+        assertThat(copy.getValue().getCurrencyCode()).isEqualTo("USD");
     }
 
     @Test

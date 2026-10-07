@@ -471,6 +471,7 @@ class RegisterSessionCashMovementTest {
                             .registerId(TERMINAL)
                             .locationId(LOCATION)
                             .amount(new BigDecimal("250.0000"))
+                            .currencyCode("USD")
                             .build()));
         }
 
@@ -521,6 +522,7 @@ class RegisterSessionCashMovementTest {
                         .registerId(TERMINAL)
                         .locationId(LOCATION)
                         .amount(new BigDecimal("150.0000"))
+                        .currencyCode("USD")
                         .build()));
         when(approvalService.use(
                         eq("token-1"),
@@ -660,6 +662,7 @@ class RegisterSessionCashMovementTest {
                             .registerId(TERMINAL)
                             .locationId(OTHER_LOCATION)
                             .amount(new BigDecimal("250.0000"))
+                            .currencyCode("USD")
                             .build()));
 
             // A decrease of the whole drawer float would match a zero target; it must not.
@@ -683,6 +686,7 @@ class RegisterSessionCashMovementTest {
                             .registerId(TERMINAL)
                             .locationId(LOCATION)
                             .amount(new BigDecimal("-25.0000"))
+                            .currencyCode("USD")
                             .build()));
 
             assertThatThrownBy(() -> service.recordCashMovement(floatChange("FLOAT_DECREASE", "225.00", "token-1")))

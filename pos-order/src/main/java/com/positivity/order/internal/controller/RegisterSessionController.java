@@ -100,14 +100,15 @@ public class RegisterSessionController {
                     Preconditions: the terminal must have no session in OPEN or CLOSING — one drawer per terminal. \
                     A caller whose order:session:open grant is location-scoped must have the resolved location \
                     within reach (ADR-0061); a register whose configured float is held at another location than \
-                    the resolved one does not open there.
+                    the resolved one, or in another currency than the drawer's, does not open there.
                     Required inputs: terminalId; locationId defaults to the register's float location, else the \
                     terminal's previous session's; the opening float is the configured float (zero when none or \
                     negative) and the opener is the caller, so an openingFloat or openedByClerkId is ignored.
                     Emits an ORDER_SESSION_OPEN event.
                     Returns 201 with the new session, 403 LOCATION_SCOPE_DENIED when the caller's location scope \
-                    does not cover the resolved location, 409 when the terminal already has an active session, and \
-                    422 REGISTER_FLOAT_LOCATION_MISMATCH when the float is held elsewhere.
+                    does not cover the resolved location, 409 when the terminal already has an active session, \
+                    422 REGISTER_FLOAT_LOCATION_MISMATCH when the float is held elsewhere, and 422 \
+                    CURRENCY_NOT_SUPPORTED when the float is in another currency than the drawer's.
                     """,
             tags = {"Register Sessions"})
     @ApiResponse(responseCode = "201", description = "Register session opened.")
@@ -124,7 +125,8 @@ public class RegisterSessionController {
             description =
                     "REGISTER_FLOAT_LOCATION_MISMATCH: the register's configured float is held at another location"
                             + " than the requested one; fieldErrors name terminalId, requestedLocationId and, when the caller's"
-                            + " scope covers it, floatLocationId.",
+                            + " scope covers it, floatLocationId. CURRENCY_NOT_SUPPORTED: the configured float is in another"
+                            + " currency than the drawer's (the functional currency).",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping
     @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_SESSION_OPEN + "')")

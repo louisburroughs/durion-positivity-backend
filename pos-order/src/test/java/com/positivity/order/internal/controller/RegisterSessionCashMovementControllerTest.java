@@ -110,6 +110,22 @@ class RegisterSessionCashMovementControllerTest extends BaseControllerSliceTest 
     }
 
     @Test
+    @DisplayName("#2577: opening a drawer whose configured float is in another currency is 422 CURRENCY_NOT_SUPPORTED")
+    void openWithAFloatInAnotherCurrencyIs422() throws Exception {
+        when(registerSessionService.openSession(any()))
+                .thenThrow(new com.positivity.order.internal.exception.CurrencyNotSupportedException(
+                        "Register T-1 has its configured float in CAD; this drawer counts USD"));
+
+        mockMvc.perform(withGatewayAuth(
+                        post("/v1/orders/sessions")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"terminalId\":\"T-1\"}"),
+                        "order:session:open"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("CURRENCY_NOT_SUPPORTED"));
+    }
+
+    @Test
     @DisplayName("#2573: opening away from the register's float location is 422 REGISTER_FLOAT_LOCATION_MISMATCH")
     void openAwayFromTheFloatIs422() throws Exception {
         UUID requested = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a90");

@@ -186,6 +186,15 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
             throw new RegisterFloatLocationMismatchException(
                     command.terminalId(), locationId, floatLocationVisible ? floatLocation : null);
         }
+        // ADR-0067: the drawer's currency for its whole life, whatever the configuration later says.
+        String drawerCurrency = functionalCurrency.code();
+        if (floatCopy.isPresent() && !drawerCurrency.equals(floatCopy.get().getCurrencyCode())) {
+            // #2577 (PC-9): a float is never compared or counted across currencies; like a float held at
+            // another location, it does not open this drawer.
+            throw new CurrencyNotSupportedException("Register " + command.terminalId() + " has its configured float"
+                    + " in " + floatCopy.get().getCurrencyCode() + "; this drawer counts " + drawerCurrency
+                    + ", so it does not open until accounting states the float in " + drawerCurrency);
+        }
 
         // AW16: the register's configured float, never a request value or the previous count; zero when
         // there is none, and never negative cash in a drawer.
@@ -197,8 +206,7 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                 .openedByClerkId(SecurityContextHelper.getCurrentUsernameOrDefault("system"))
                 .status(RegisterSessionStatus.OPEN)
                 .openingFloat(openingFloat)
-                // ADR-0067: the drawer's currency for its whole life, whatever the configuration later says.
-                .currencyCode(functionalCurrency.code())
+                .currencyCode(drawerCurrency)
                 .openedAt(now)
                 .build();
         return toSummary(registerSessionRepository.save(session));
@@ -556,7 +564,8 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
      * The opening float (orchestrator decision l7): the register's configured float, zero when it has
      * none, and floored at zero — a negative accounting float (possible after a reversal) opens the drawer
      * at zero with a warning and {@value #OPENING_FLOAT_ADJUSTED}{@code {reason=negative}}; a drawer never
-     * holds negative cash. The caller has already refused a float held at another location (#2573).
+     * holds negative cash. The caller has already refused a float held at another location (#2573) or in
+     * another currency than the drawer's (#2577).
      */
     private BigDecimal openingFloat(String terminalId, Optional<ExtAccountingRegisterFloat> floatCopy) {
         BigDecimal configured = floatCopy.map(copy -> scale(copy.getAmount())).orElse(ZERO);
