@@ -87,9 +87,9 @@ class VendorBillApprovalMigrationIT {
     private static void bill(JdbcTemplate jdbc, String status) {
         jdbc.update(
                 "INSERT INTO vendor_bill (tenant_id, vendor_bill_id, vendor_id, bill_number, bill_number_key,"
-                    + " bill_date, total_amount, status, created_at, modified_at, created_by, modified_by) VALUES (?,"
-                    + " ?, ?, 'INV-1', 'INV1', TIMESTAMP '2026-09-01 00:00:00', 10.00, ?, TIMESTAMPTZ '2026-09-01"
-                    + " 00:00:00+00', TIMESTAMPTZ '2026-09-01 00:00:00+00', 't', 't')",
+                        + " bill_date, total_amount, status, created_at, modified_at, created_by, modified_by) VALUES (?,"
+                        + " ?, ?, 'INV-1', 'INV1', TIMESTAMP '2026-09-01 00:00:00', 10.00, ?, TIMESTAMPTZ '2026-09-01"
+                        + " 00:00:00+00', TIMESTAMPTZ '2026-09-01 00:00:00+00', 't', 't')",
                 TENANT,
                 UUID.randomUUID(),
                 UUID.randomUUID(),
