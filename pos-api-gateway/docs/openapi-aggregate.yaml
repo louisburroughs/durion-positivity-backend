@@ -39,6 +39,8 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1audit~1type~1{type}
   /v1/accounting/bank-accounts:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1bank-accounts
+  /v1/accounting/bank-accounts/{glAccountId}/opening-balance:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1bank-accounts~1{glAccountId}~1opening-balance
   /v1/accounting/bank-accounts/{glAccountId}/profile:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1bank-accounts~1{glAccountId}~1profile
   /v1/accounting/bank-imports:
