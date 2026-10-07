@@ -238,7 +238,9 @@ public class RegisterCashMovementPostingService {
      */
     private boolean alreadyPosted(UUID movementId) {
         return idempotencyService.isKeyProcessed(IDEMPOTENCY_KEY_PREFIX + movementId)
-                || !journalEntryRepository.findBySourceEvent(toSourceEventId(movementId)).isEmpty();
+                || !journalEntryRepository
+                        .findBySourceEvent(toSourceEventId(movementId))
+                        .isEmpty();
     }
 
     private UUID postPettyExpense(RegisterSessionClosedV1 fact, Movement movement, LocalDateTime transactionDate) {
