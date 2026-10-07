@@ -85,7 +85,10 @@ class BankReconciliationGuardsAndViewsTest {
                 matchRepository,
                 itemRepository,
                 auditLogRepository,
-                new BankCashAccounts(glAccountRepository, clock),
+                new BankCashAccounts(
+                        glAccountRepository,
+                        clock,
+                        com.positivity.accounting.internal.service.TestZoneResolvers.utc(clock)),
                 calculator,
                 new ReconciliationSupport(reconciliationRepository, calculator, clock),
                 auditRecorder,

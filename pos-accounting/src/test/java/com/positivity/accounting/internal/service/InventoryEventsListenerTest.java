@@ -573,4 +573,27 @@ class InventoryEventsListenerTest {
         verify(processedEvents, never()).save(any());
         verifyNoInteractions(ingestionRecorder);
     }
+
+    @Test
+    @DisplayName("#2558: an adjustment at 2026-01-31T23:30-06:00 is recorded on 2026-01-31 in a Chicago calendar")
+    void recordDateIsTheTenantCalendarDate() {
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                listener, "zoneResolver", TestZoneResolvers.fixed(TestZoneResolvers.CHICAGO, TEST_CLOCK));
+        when(processedEvents.existsById("a-chi")).thenReturn(false);
+        when(adjustmentPostingService.postAdjustment(any())).thenReturn(UUID.randomUUID());
+
+        listener.onInventoryEvent(
+                adjustment("a-chi", "-4", "7.25", "AVERAGE").replace("2026-07-21T09:15:00Z", "2026-02-01T05:30:00Z"));
+
+        verify(ingestionRecorder)
+                .recordPosted(
+                        any(),
+                        any(),
+                        eq("a-chi"),
+                        any(),
+                        eq(java.time.LocalDateTime.of(2026, 1, 31, 23, 30)),
+                        any(),
+                        any(),
+                        any());
+    }
 }

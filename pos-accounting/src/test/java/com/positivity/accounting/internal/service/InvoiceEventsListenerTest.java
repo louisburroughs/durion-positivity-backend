@@ -764,4 +764,29 @@ class InvoiceEventsListenerTest {
                                 .isEqualTo(com.positivity.accounting.internal.enums.PostingFailureReason.NOT_POSTABLE));
         verify(processedEvents).save(any());
     }
+
+    @Test
+    @DisplayName("#2558: a revenue fact finalized at 2026-01-31T23:30-06:00 is recorded on 2026-01-31 in a Chicago"
+            + " calendar")
+    void recordDateIsTheTenantCalendarDate() {
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                listener, "zoneResolver", TestZoneResolvers.fixed(TestZoneResolvers.CHICAGO, TEST_CLOCK));
+        FactPostingOutcome outcome = FactPostingOutcome.posted(UUID.randomUUID());
+        when(processedEvents.existsById("e-chi")).thenReturn(false);
+        when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
+        when(revenuePosting.postRevenue(any())).thenReturn(outcome);
+
+        listener.onInvoiceEvent(
+                eventWithStatus("e-chi", 5, "FINALIZED").replace("2026-07-08T10:00:00Z", "2026-02-01T05:30:00Z"));
+
+        verify(ingestionRecorder)
+                .record(
+                        any(),
+                        any(),
+                        org.mockito.ArgumentMatchers.eq("e-chi"),
+                        any(),
+                        org.mockito.ArgumentMatchers.eq(java.time.LocalDateTime.of(2026, 1, 31, 23, 30)),
+                        any(InvoiceUpdatedV1.class),
+                        any());
+    }
 }

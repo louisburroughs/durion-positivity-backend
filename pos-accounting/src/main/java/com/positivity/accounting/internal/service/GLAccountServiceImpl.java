@@ -21,7 +21,6 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -50,6 +49,7 @@ public class GLAccountServiceImpl implements GLAccountService {
     private static final String ACCOUNT_CODE = "accountCode";
 
     private final Clock clock;
+    private final AccountingCalendarZoneResolver zoneResolver;
 
     private static final String GL_ACCOUNT_NOT_FOUND = "GL account not found: ";
 
@@ -123,7 +123,7 @@ public class GLAccountServiceImpl implements GLAccountService {
         if (request.getActivationDate() != null) {
             account.setActivationDate(request.getActivationDate());
         } else {
-            account.setActivationDate(LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC));
+            account.setActivationDate(zoneResolver.postingDateTime(clock.instant()));
         }
 
         // Set audit fields from authenticated user (falls back to SYSTEM for
@@ -207,7 +207,7 @@ public class GLAccountServiceImpl implements GLAccountService {
      */
     @Override
     public GLAccountResponse activateGLAccount(@NonNull UUID glAccountId) {
-        return activateGLAccount(glAccountId, LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC));
+        return activateGLAccount(glAccountId, zoneResolver.postingDateTime(clock.instant()));
     }
 
     /**
@@ -266,7 +266,7 @@ public class GLAccountServiceImpl implements GLAccountService {
             throw new AccountNotZeroBalanceException(msg);
         }
 
-        account.setDeactivationDate(LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC));
+        account.setDeactivationDate(zoneResolver.postingDateTime(clock.instant()));
         account.setModifiedBy(SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM));
 
         account = glAccountRepository.save(account);

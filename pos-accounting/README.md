@@ -303,11 +303,22 @@ an API-submitted event without a transaction date). An ArchUnit rule
 excepted) on anything that reads the clock's or the JVM's zone: `Clock.getZone()`, `Clock.systemDefaultZone()`,
 `ZoneId`/`ZoneOffset.systemDefault()`, `TimeZone.getDefault()`, and `now()` / `now(Clock)` on `LocalDate`,
 `LocalDateTime`, `LocalTime`, `YearMonth`, `Year`, `MonthDay`, `ZonedDateTime`, `OffsetDateTime` and `OffsetTime`.
-A technical UTC value (bank-import retention, bank reconciliation aging and statement checks, GL account
-activation stamps, the receivables worklist's day) states `ZoneOffset.UTC` explicitly. The Kafka posting
+A technical UTC value (bank-import retention, bank reconciliation aging and statement checks) states
+`ZoneOffset.UTC` explicitly. The Kafka posting
 listeners treat an unset zone as they treat a closed period: the posting fails and the record is retried by the
-container (DLQ after the retries); only the settled-payment path holds a row
-`SUSPENDED / ACCOUNTING_TIME_ZONE_UNSET`.
+container (DLQ after the retries; Accounting Domain ruling on #2558); only the settled-payment path holds a row
+`SUSPENDED / ACCOUNTING_TIME_ZONE_UNSET`. Each failed attempt is logged with `reason=ACCOUNTING_TIME_ZONE_UNSET`
+and counted in `accounting.kafka.record.failed{reason,topic}`; a record sent to its `.dlq` is counted in
+`accounting.kafka.record.dead_lettered{reason,topic}` (every other failure is `reason=OTHER`).
+**Runbook:** set the tenant zone (`PUT /v1/accounting/configuration/time-zone`), then replay the DLQ records —
+never post manual journal entries. A replay is idempotent on the event id (`processed_events`): a failed record
+was never marked processed, and a second replay posts nothing.
+
+A tenant without the row cannot close a period or set a hard-lock date either (`422 ACCOUNTING_TIME_ZONE_UNSET`).
+GL account activation and deactivation stamps, the default-mapping validation instant, the bank-cash "active now"
+reads, the settlement reclass date fallback and the receivables worklist's "today" (days past due, as aged
+receivables and the walk-in business day) are all in the tenant's calendar, so they compare correctly with
+posting dates.
 
 - **Seed.** V10 gives every existing tenant `UTC` (what the UTC clock dated everything in, so nothing is
   re-cut); tenant provisioning (`DataInitializationServiceImpl`) gives every new tenant `UTC`. An

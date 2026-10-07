@@ -29,7 +29,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
@@ -713,11 +712,9 @@ public class VendorBillServiceImpl implements VendorBillService {
         }
 
         // 3. Date proximity (20 points)
-        // Convert the timezone-unaware LocalDateTime values to zone-aware ZonedDateTime in the tenant's
-        // accounting-calendar zone (#2558) before computing the duration between them (java:S8700).
-        ZoneId calendarZone = zoneResolver.zone();
+        // Calendar days between the two dates as written (no zone needed: both are already local dates, #2558).
         long daysDiff = Math.abs(java.time.temporal.ChronoUnit.DAYS.between(
-                bill.getBillDate().atZone(calendarZone), event.getInvoiceDate().atZone(calendarZone)));
+                bill.getBillDate().toLocalDate(), event.getInvoiceDate().toLocalDate()));
         if (daysDiff <= 7) {
             score += 20;
             details.append("date_match(20);");

@@ -1,13 +1,15 @@
 package com.positivity.accounting.internal.config;
 
 import com.positivity.kafka.common.KafkaRails;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.function.BiFunction;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.listener.ConsumerRecordRecoverer;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.util.backoff.ExponentialBackOff;
@@ -23,7 +25,6 @@ import org.springframework.util.backoff.ExponentialBackOff;
  * <p>Spring Boot wires a single {@code CommonErrorHandler} bean into the auto-configured listener
  * container factory, so declaring the bean is sufficient.
  */
-@Slf4j
 @Configuration
 @KafkaRails
 public class KafkaErrorHandlingConfig {
@@ -33,22 +34,23 @@ public class KafkaErrorHandlingConfig {
             (record, ex) -> new TopicPartition(record.topic() + ".dlq", -1);
 
     @Bean
-    public DefaultErrorHandler kafkaErrorHandler(@SuppressWarnings("rawtypes") KafkaTemplate kafkaTemplate) {
+    public DefaultErrorHandler kafkaErrorHandler(
+            @SuppressWarnings("rawtypes") KafkaTemplate kafkaTemplate, ObjectProvider<MeterRegistry> meterRegistry) {
         @SuppressWarnings("unchecked")
-        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(kafkaTemplate, DLQ_DESTINATION);
+        DeadLetterPublishingRecoverer publisher = new DeadLetterPublishingRecoverer(kafkaTemplate, DLQ_DESTINATION);
+        KafkaFailureRecorder failures = new KafkaFailureRecorder(meterRegistry.getIfAvailable());
+        ConsumerRecordRecoverer recoverer = (record, ex) -> {
+            failures.deadLettered(record, ex);
+            publisher.accept(record, ex);
+        };
 
         ExponentialBackOff backOff = new ExponentialBackOff(1000L, 2.0);
         backOff.setMaxInterval(30_000L);
         backOff.setMaxAttempts(5);
 
         DefaultErrorHandler handler = new DefaultErrorHandler(recoverer, backOff);
-        handler.setRetryListeners((record, ex, attempt) -> log.warn(
-                "Kafka record processing failed topic={} partition={} offset={} attempt={}",
-                record.topic(),
-                record.partition(),
-                record.offset(),
-                attempt,
-                ex));
+        // Logged and counted by reason (#2558): an unset accounting time zone is ACCOUNTING_TIME_ZONE_UNSET.
+        handler.setRetryListeners(failures::failed);
         return handler;
     }
 }

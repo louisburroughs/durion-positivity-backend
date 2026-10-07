@@ -144,6 +144,29 @@ class VendorBillServiceGLPostingTest {
     }
 
     @Test
+    @DisplayName("#2558: a bill recorded at 2026-01-31T23:30-06:00 takes January's number in a Chicago calendar")
+    void billNumberMonthIsTheTenantCalendarMonth() {
+        Clock utc = Clock.fixed(TestZoneResolvers.JAN_31_2330_CHICAGO, java.time.ZoneOffset.UTC);
+        org.springframework.test.util.ReflectionTestUtils.setField(vendorBillService, "clock", utc);
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                vendorBillService, "zoneResolver", TestZoneResolvers.fixed(TestZoneResolvers.CHICAGO, utc));
+        when(sequenceLocker.lockOrProvision("BILL-202601")).thenReturn(billCounter);
+        when(billRepository.findByOriginEventId(testEvent.getEventId())).thenReturn(Optional.empty());
+        when(billRepository.saveAndFlush(any(VendorBill.class))).thenAnswer(saved -> {
+            VendorBill persisted = saved.getArgument(0);
+            persisted.setVendorBillId(UUID.fromString("00000000-0000-0000-0000-000000000052"));
+            return persisted;
+        });
+
+        vendorBillService.handleGoodsReceivedEvent(testEvent);
+
+        verify(sequenceLocker).lockOrProvision("BILL-202601");
+        ArgumentCaptor<VendorBill> saved = ArgumentCaptor.forClass(VendorBill.class);
+        verify(billRepository).saveAndFlush(saved.capture());
+        assertThat(saved.getValue().getBillNumber()).contains("_20260131_");
+    }
+
+    @Test
     @DisplayName("Should record vendor in directory when bill is created")
     void shouldRecordVendorInDirectory() {
         when(billRepository.findByOriginEventId(testEvent.getEventId())).thenReturn(Optional.empty());

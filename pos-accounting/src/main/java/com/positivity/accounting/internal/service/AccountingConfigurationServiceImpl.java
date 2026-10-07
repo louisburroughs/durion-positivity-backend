@@ -11,6 +11,7 @@ import com.positivity.accounting.internal.entity.AccountingAuditLog;
 import com.positivity.accounting.internal.entity.AccountingConfiguration;
 import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
 import com.positivity.accounting.internal.exception.AccountingTimeZoneLockedException;
+import com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetException;
 import com.positivity.accounting.internal.exception.HardLockDateRegressionException;
 import com.positivity.accounting.internal.exception.InvalidAccountingTimeZoneException;
 import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
@@ -92,7 +93,10 @@ public class AccountingConfigurationServiceImpl implements AccountingConfigurati
 
         // The calendar lock first (#2558): a hard lock fixes the accounting time zone, so it serializes on the zone row
         // with a zone change and a period close, always taken before any other row these three lock.
-        configurationRepository.findWithLockByConfigKey(AccountingCalendarZoneResolver.CONFIG_KEY);
+        // Fail closed (#2558): no close or hard lock is cut in no zone; the zone must be set first.
+        configurationRepository
+                .findWithLockByConfigKey(AccountingCalendarZoneResolver.CONFIG_KEY)
+                .orElseThrow(AccountingTimeZoneUnsetException::new);
 
         // Locked read (FOR UPDATE): concurrent setters serialize on the row so
         // the monotonic-forward check below always sees the latest committed

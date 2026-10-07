@@ -140,6 +140,9 @@ class InventoryAdjustmentGLPostingIT {
     private SimpleMeterRegistry meterRegistry;
     private InventoryEventsListener listener;
 
+    @Autowired
+    private AccountingConfigurationRepository zoneConfigurationRepository;
+
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setUp() {
@@ -316,6 +319,41 @@ class InventoryAdjustmentGLPostingIT {
         assertThat(processedEventRepository.existsById(eventId)).isFalse();
         assertThat(journalEntryRepository.count()).isZero();
         assertThat(accountingEventRepository.count()).isZero();
+    }
+
+    @Test
+    @DisplayName(
+            "#2558 ruling: without an accounting time zone the fact fails unmarked (retry, then DLQ); once the zone"
+                    + " is set, replaying the same eventId posts exactly once and a second replay posts nothing")
+    void unsetZoneFailsUnmarkedAndReplayPostsOnce() {
+        com.positivity.accounting.internal.entity.AccountingConfiguration zone = zoneConfigurationRepository
+                .findByConfigKey(AccountingCalendarZoneResolver.CONFIG_KEY)
+                .orElseThrow();
+        String eventId = UUID.randomUUID().toString();
+        String message =
+                envelope(eventId, UUID.randomUUID(), "CYCLE_COUNT", "-1", "5.00", "AVERAGE", Instant.now(clock));
+        zoneConfigurationRepository.delete(zone);
+        try {
+            assertThatExceptionOfType(
+                            com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetException.class)
+                    .isThrownBy(() -> listener.onInventoryEvent(message));
+            assertThat(processedEventRepository.existsById(eventId)).isFalse();
+            assertThat(journalEntryRepository.count()).isZero();
+            assertThat(accountingEventRepository.count()).isZero();
+        } finally {
+            com.positivity.accounting.internal.entity.AccountingConfiguration restored =
+                    new com.positivity.accounting.internal.entity.AccountingConfiguration();
+            restored.setConfigKey(AccountingCalendarZoneResolver.CONFIG_KEY);
+            restored.setConfigValue("UTC");
+            zoneConfigurationRepository.save(restored);
+        }
+
+        listener.onInventoryEvent(message);
+        listener.onInventoryEvent(message);
+
+        assertThat(processedEventRepository.existsById(eventId)).isTrue();
+        assertThat(journalEntryRepository.count()).isEqualTo(1);
+        assertThat(accountingEventRepository.count()).isEqualTo(1);
     }
 
     // ===== helpers =====

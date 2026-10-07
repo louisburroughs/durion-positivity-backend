@@ -6,9 +6,8 @@ import com.positivity.accounting.internal.bankrec.intake.BankRecException;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.enums.AccountSubtype;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
+import com.positivity.accounting.internal.service.AccountingCalendarZoneResolver;
 import java.time.Clock;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +33,7 @@ public class BankCashAccounts {
 
     private final GLAccountRepository glAccounts;
     private final Clock clock;
+    private final AccountingCalendarZoneResolver zoneResolver;
 
     /** A bank account's id with the display values ADR-0064 puts beside it. */
     public record BankCashAccount(
@@ -76,8 +76,7 @@ public class BankCashAccounts {
     /** Every active bank account of the tenant, ordered by account code. */
     public @NonNull List<BankCashAccount> listActive() {
         return glAccounts
-                .findReconcilableActiveOn(
-                        AccountSubtype.BANK_CASH, LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC))
+                .findReconcilableActiveOn(AccountSubtype.BANK_CASH, zoneResolver.postingDateTime(clock.instant()))
                 .stream()
                 .map(BankCashAccounts::toRef)
                 .toList();
@@ -91,7 +90,7 @@ public class BankCashAccounts {
         if (scope == BankRecCloseScope.BANK_CASH_SUBTYPE) {
             return listActive();
         }
-        return glAccounts.findAllReconcilableActiveOn(LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC)).stream()
+        return glAccounts.findAllReconcilableActiveOn(zoneResolver.postingDateTime(clock.instant())).stream()
                 .map(BankCashAccounts::toRef)
                 .toList();
     }
@@ -100,7 +99,7 @@ public class BankCashAccounts {
     public @NonNull Page<BankCashAccount> pageActive(@NonNull Pageable pageable) {
         return glAccounts
                 .findReconcilableActiveOn(
-                        AccountSubtype.BANK_CASH, LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC), pageable)
+                        AccountSubtype.BANK_CASH, zoneResolver.postingDateTime(clock.instant()), pageable)
                 .map(BankCashAccounts::toRef);
     }
 

@@ -27,7 +27,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.ZoneOffset;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -63,6 +62,7 @@ public class SettlementReconciliationServiceImpl implements SettlementReconcilia
     static final String ADJUSTMENT_MAPPING_KEY = "SETTLEMENT_ADJUSTMENT";
 
     private final Clock clock;
+    private final AccountingCalendarZoneResolver zoneResolver;
     private final ProcessorSettlementRepository settlementRepository;
     private final ProcessorSettlementLineRepository lineRepository;
     private final ExtPaymentSettlementConfigRepository configRepository;
@@ -367,7 +367,7 @@ public class SettlementReconciliationServiceImpl implements SettlementReconcilia
         return settlementRepository
                 .findById(line.getSettlementId())
                 .map(s -> LocalDateTime.of(s.getSettlementDate(), LocalTime.MIDNIGHT))
-                .orElseGet(() -> LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC));
+                .orElseGet(() -> zoneResolver.postingDateTime(clock.instant()));
     }
 
     private static UUID deterministicId(@NonNull String seed) {

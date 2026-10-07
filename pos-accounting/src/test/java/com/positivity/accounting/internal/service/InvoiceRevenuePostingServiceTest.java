@@ -350,6 +350,26 @@ class InvoiceRevenuePostingServiceTest {
     }
 
     @Test
+    @DisplayName("#2558: a revert at 2026-01-31T23:30-06:00 posts its mirror on 2026-01-31 in the Chicago calendar")
+    void reversalIsDatedInTheTenantCalendar() {
+        LocalDateTime january31 = LocalDateTime.of(2026, 1, 31, 23, 30);
+        stubAccounts(january31);
+        when(repository.findByInvoiceIdAndReversalJournalEntryIdIsNull(INVOICE_ID))
+                .thenReturn(Optional.of(openPosting()));
+        when(glPostingService.postInvoiceRevenueReversal(
+                        any(), any(), any(), any(), any(), any(), any(), any(), anyString()))
+                .thenReturn(REVERSAL_ENTRY_ID);
+
+        service.reverseRevenue(
+                fact("DRAFT", new BigDecimal("216.53"), new BigDecimal("16.53"), FINALIZED_AT, null),
+                TestZoneResolvers.JAN_31_2330_CHICAGO);
+
+        verify(glPostingService)
+                .postInvoiceRevenueReversal(
+                        any(), any(), any(), any(), any(), any(), any(), eq(january31), anyString());
+    }
+
+    @Test
     @DisplayName("DRAFT with an open posting posts the mirror at the revert's occurredAt and closes the row")
     void draftReversesOpenPosting() {
         LocalDateTime date = expectedDate(REVERTED_AT);

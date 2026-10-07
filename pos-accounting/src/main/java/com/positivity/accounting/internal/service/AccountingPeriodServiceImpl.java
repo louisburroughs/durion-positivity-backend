@@ -12,6 +12,7 @@ import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.exception.AccountingPeriodNotFoundException;
 import com.positivity.accounting.internal.exception.AccountingPeriodStateException;
+import com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetException;
 import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.exception.PeriodBankReconciliationIncompleteException;
 import com.positivity.accounting.internal.exception.PeriodCloseBlockedException;
@@ -153,7 +154,10 @@ public class AccountingPeriodServiceImpl implements AccountingPeriodService {
         // The calendar lock first (#2558): the ACCOUNTING_TIME_ZONE row FOR UPDATE, as a zone change and a hard-lock
         // change
         // take it, so a zone change cannot commit after this close has cut the month in the old zone.
-        configurationRepository.findWithLockByConfigKey(AccountingCalendarZoneResolver.CONFIG_KEY);
+        // Fail closed (#2558): no close or hard lock is cut in no zone; the zone must be set first.
+        configurationRepository
+                .findWithLockByConfigKey(AccountingCalendarZoneResolver.CONFIG_KEY)
+                .orElseThrow(AccountingTimeZoneUnsetException::new);
 
         // Locked read (FOR UPDATE): the close serializes against an in-flight gated posting (AccountingPeriodGate)
         // and re-reads the live balances below under the lock (SPEC-manual-bank-reconciliation I3).

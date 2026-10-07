@@ -169,6 +169,19 @@ class AccountingTimeZoneConfigurationTest extends PostgresIntegrationTestBase {
     }
 
     @Test
+    @DisplayName("without an accounting time zone a hard lock fails closed (ACCOUNTING_TIME_ZONE_UNSET)")
+    void hardLockWithoutAZoneFailsClosed() {
+        configurationRepository
+                .findByConfigKey(AccountingCalendarZoneResolver.CONFIG_KEY)
+                .ifPresent(configurationRepository::delete);
+        configurationRepository.flush();
+
+        assertThatThrownBy(() -> configurationService.setHardLockDate(LocalDate.of(2026, 1, 1), "FY2025 audit"))
+                .isInstanceOf(com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetException.class);
+        assertThat(configurationService.getHardLockDate()).isEmpty();
+    }
+
+    @Test
     @DisplayName("an open, never-closed period does not lock the zone")
     void openPeriodDoesNotLock() {
         period(AccountingPeriodStatus.OPEN);
