@@ -1866,6 +1866,95 @@ paths:
       - Purchase Orders
       x-required-permissions:
       - order:purchase_order:transmit
+  /v1/orders/session-policy:
+    get:
+      description: 'Returns the tenant''s drawer policy and its change history: per movement type (petty expenses, vendor cash on delivery, bank drop, float change) whether cashiers may record it, the cashier limit on a session''s running total and whether a manager is always needed; the over/short tolerance above which a close needs order:session:approve_variance; and every change, newest first. Bank drop and float change are read-only rows.
+
+        Use this tool to read the policy before changing it; use getCashMovementOptions instead for what one register session may record now.
+
+        Preconditions: none — a tenant that never changed the policy gets the defaults (petty expenses on at 50.00, vendor cash on delivery off, tolerance 5.00).
+
+        Required inputs: none; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with the policy.
+
+        '
+      operationId: getSessionPolicy
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionPolicyResponse'
+          description: The drawer policy and its history.
+      security:
+      - bearerAuth: []
+      summary: Get the Drawer Policy
+      tags:
+      - Register Sessions
+      x-required-permissions:
+      - order:session_policy:manage
+    put:
+      description: 'Replaces the two configurable movement types (petty expenses and vendor cash on delivery: allowed and cashier limit) and the over/short tolerance, with a justification. Each changed setting writes one history row (old and new value, actor, justification); a request that changes nothing writes nothing. Switching a type off is never retroactive: recorded movements stand and are carried on the close fact.
+
+        Use this tool to change the drawer limits after reading them with getSessionPolicy; do not use it to see what one register session may record now — use getCashMovementOptions instead.
+
+        Preconditions: an allowed type needs a cashier limit; vendor cash on delivery stays off until pos-order holds the vendor list.
+
+        Required inputs: pettyExpense and vendorCod (allowed, cashierLimit), overShortTolerance and a justification of at least 10 characters; limits and the tolerance must not be negative.
+
+        Emits an ORDER_SESSION_POLICY_UPDATE event.
+
+        Returns 200 with the policy and its history, 400 VALIDATION_ERROR for a field rule, and 409 SESSION_POLICY_CONFLICT when another change won a race (read again and retry).
+
+        '
+      operationId: updateSessionPolicy
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Lower the tolerance:
+                description: Lower the tolerance
+                value:
+                  justification: Tighter count after the audit
+                  overShortTolerance: 3.0
+                  pettyExpense:
+                    allowed: true
+                    cashierLimit: 50.0
+                  vendorCod:
+                    allowed: false
+            schema:
+              $ref: '#/components/schemas/UpdateSessionPolicyRequest'
+        description: The configurable types, the tolerance and why.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionPolicyResponse'
+          description: The policy after the change.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VALIDATION_ERROR: justification under 10 characters, a negative limit or tolerance, an allowed type without a limit, or vendor cash on delivery switched on.'
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'SESSION_POLICY_CONFLICT: another change won a race; read the policy again and retry.'
+      security:
+      - bearerAuth: []
+      summary: Replace the Drawer Policy
+      tags:
+      - Register Sessions
+      x-required-permissions:
+      - order:session_policy:manage
   /v1/orders/sessions:
     post:
       description: 'Opens an OPEN register (drawer) session on a terminal; sales orders created on the terminal while it is open bind to it, and it supplies their location by default.
@@ -1874,7 +1963,7 @@ paths:
 
         Preconditions: the terminal must have no session in OPEN or CLOSING — one drawer per terminal. A caller whose order:session:open grant is location-scoped must have the resolved location within reach (ADR-0061); for such a caller a session that resolves to no location is denied.
 
-        Required inputs: terminalId and openedByClerkId; openingFloat defaults to the terminal''s previous counted close (else zero) when omitted, and locationId defaults from the terminal''s previous session.
+        Required inputs: terminalId; locationId defaults from the terminal''s previous session. The opening float is the register''s configured float from accounting (zero when it has none) and the opener is the caller; an openingFloat or openedByClerkId in the body is ignored.
 
         Emits an ORDER_SESSION_OPEN event.
 
@@ -1890,12 +1979,10 @@ paths:
                 description: Morning open
                 value:
                   locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a90
-                  openedByClerkId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a50
-                  openingFloat: 150.0
                   terminalId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a60
             schema:
               $ref: '#/components/schemas/OpenSessionRequest'
-        description: The terminal, clerk, and optional opening-float context for the shift.
+        description: The terminal and optional location of the shift.
         required: true
       responses:
         '201':
@@ -2057,6 +2144,132 @@ paths:
       - Register Sessions
       x-required-permissions:
       - order:session:close
+  /v1/orders/sessions/{sessionId}/cash-movement-approvals:
+    post:
+      description: 'Verifies a manager''s own credentials, entered once at the shared register under the cashier''s sign-in, and returns a single-use approval token for one cash movement. pos-security-service checks the credentials in the caller''s tenant under the sign-in lockout policy; no token is issued to the manager, no session is opened, and the cashier''s session is untouched.
+
+        Use this tool when recordCashMovement needs a manager (above the cashier limit, or a float change), then send the token as the movement''s approvalToken before it expires; do not use it to sign the manager in — it issues no sign-in token and opens no session.
+
+        Preconditions: the session must exist and be OPEN; the verified person must hold order:session:approve_cash_movement and must not be the caller.
+
+        Required inputs: managerUsername, managerPassword, reason and the movement''s exact amount, plus its categoryCode or vendorId when it has one. The token is bound to the session, reason, amount and category or vendor, expires after five minutes and is used once.
+
+        Emits an ORDER_SESSION_CASH_MOVEMENT_APPROVE event. The password is never stored or logged.
+
+        Returns 201 with the token and its expiry; 400 for a missing field; 403 CASH_MOVEMENT_APPROVAL_DENIED for any failed check (wrong or unknown credentials, a locked or inactive account, or a person without the permission — the same body for every reason, never 401) or CASH_MOVEMENT_SELF_APPROVAL for the caller''s own credentials; 404 when the session does not exist; 409 when it is not OPEN.
+
+        '
+      operationId: requestCashMovementApproval
+      parameters:
+      - in: path
+        name: sessionId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Petty expense over the limit:
+                description: Petty expense over the limit
+                value:
+                  amount: 25.0
+                  categoryCode: SHOP_SUPPLIES
+                  managerPassword: '********'
+                  managerUsername: jane.manager
+                  reason: PETTY_EXPENSE
+            schema:
+              $ref: '#/components/schemas/CashMovementApprovalRequest'
+        description: The manager's credentials and the movement the approval is for.
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashMovementApprovalResponse'
+          description: Approval token issued.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: A required field is missing or malformed (REGISTER_SESSION_INVALID_ARGUMENT).
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: CASH_MOVEMENT_APPROVAL_DENIED (any failed check, one body for every reason) or CASH_MOVEMENT_SELF_APPROVAL (the caller's own credentials).
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No register session exists for the supplied id.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The session is not OPEN (REGISTER_SESSION_CONFLICT).
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The credentials could not be checked right now (CASH_MOVEMENT_APPROVAL_UNAVAILABLE).
+      security:
+      - bearerAuth: []
+      summary: Approve a Drawer Cash Movement (Manager Step-Up)
+      tags:
+      - Register Sessions
+      x-required-permissions:
+      - order:session:cash_movement
+  /v1/orders/sessions/{sessionId}/cash-movement-options:
+    get:
+      description: 'Returns what the register may offer the cashier for a session: per fixed reason whether it is allowed now, its cashier limit, the session''s running total, whether a manager is always needed and the fields it requires; and the ACTIVE petty-expense categories (code, label, examples).
+
+        Use this tool to build the drawer cash in/out screen; use getSessionPolicy instead to read or manage the tenant''s policy.
+
+        Preconditions: the session must exist.
+
+        Required inputs: sessionId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no register session exists for the supplied id.
+
+        '
+      operationId: getCashMovementOptions
+      parameters:
+      - in: path
+        name: sessionId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashMovementOptionsResponse'
+          description: Options for the session.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No register session exists for the supplied id.
+      security:
+      - bearerAuth: []
+      summary: Cash Movement Options for a Session
+      tags:
+      - Register Sessions
+      x-required-permissions:
+      - order:session:cash_movement
   /v1/orders/sessions/{sessionId}/cash-movements:
     get:
       description: 'Lists every recorded cash movement for a register session in the order they occurred.
@@ -2097,17 +2310,17 @@ paths:
       x-required-permissions:
       - order:session:view
     post:
-      description: 'Records a PAID_IN or PAID_OUT cash movement against an OPEN register session; movements feed the theoretical-cash calculation at close.
+      description: 'Records a drawer cash movement with one of the fixed reasons against an OPEN register session: PETTY_EXPENSE (out), VENDOR_COD (out), BANK_DROP (out), FLOAT_INCREASE (in) or FLOAT_DECREASE (out); the direction follows the reason and movements feed the theoretical cash at close.
 
-        Use this tool for non-sale drawer cash such as petty cash or bank drops; do not use beginSessionClose, which records the final counted drawer instead.
+        Use this tool for non-sale drawer cash such as a petty expense or the bank drop; use requestCashMovementApproval first when a manager must approve, and do not use beginSessionClose, which records the final counted drawer instead.
 
-        Preconditions: the session must exist and be OPEN — movements are rejected once closing has begun.
+        Preconditions: the session must exist and be OPEN; the reason''s type must be allowed by the tenant''s drawer policy; a petty expense needs an ACTIVE category; a float movement must match the difference between the register''s configured float and the drawer''s float. Above the cashier limit on the session''s running total of the reason, and for every float change, the request must carry a manager''s approvalToken whose approver is not the caller.
 
-        Required inputs: movementType (PAID_IN or PAID_OUT), a positive amount, reason, and clerkId.
+        Required inputs: requestId (UUIDv7, the idempotency key), reason and a positive amount; categoryCode, receiptReference and note for PETTY_EXPENSE; vendorId for VENDOR_COD; bagNumber for BANK_DROP. The cashier is the caller; a clerkId in the body is ignored.
 
         Emits an ORDER_SESSION_CASH_MOVEMENT event.
 
-        Returns 201 with the recorded movement, 400 when the amount is not positive or the movement type is unknown, 404 when the session does not exist, and 409 when the session is not OPEN.
+        Returns 201 with the recorded movement and 200 with the first result when the requestId was already recorded with the same payload; 400 REGISTER_SESSION_INVALID_ARGUMENT for a missing or malformed field, 403 for the approval rules, 404 when the session does not exist, 409 REGISTER_SESSION_CONFLICT when the session is not OPEN or IDEMPOTENCY_CONFLICT when the requestId was used for another movement, and 422 for a drawer rule.
 
         '
       operationId: recordCashMovement
@@ -2122,16 +2335,25 @@ paths:
         content:
           application/json:
             examples:
-              Petty cash out:
-                description: Petty cash out
+              Bank drop:
+                description: Bank drop
                 value:
-                  amount: 40.0
-                  clerkId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a50
-                  movementType: PAID_OUT
-                  reason: petty cash to office
+                  amount: 800.0
+                  bagNumber: BAG-0042
+                  reason: BANK_DROP
+                  requestId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4ac2
+              Petty expense:
+                description: Petty expense
+                value:
+                  amount: 30.0
+                  categoryCode: SHOP_SUPPLIES
+                  note: Rags and gloves for bay 2
+                  reason: PETTY_EXPENSE
+                  receiptReference: R-1001
+                  requestId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4ac1
             schema:
               $ref: '#/components/schemas/CashMovementRequest'
-        description: 'The cash movement: direction, positive amount, reason, and clerk.'
+        description: 'The movement: requestId, reason, positive amount, the reason''s fields and, when a manager must approve, the approval token.'
         required: true
       responses:
         '200':
@@ -2139,7 +2361,43 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CashMovementResponse'
-          description: OK
+          description: 'Replay of an already-recorded requestId: the first result.'
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashMovementResponse'
+          description: Cash movement recorded.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: A required field is missing or malformed (REGISTER_SESSION_INVALID_ARGUMENT).
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'Refused by the drawer''s approval rules: CASH_MOVEMENT_APPROVAL_REQUIRED (above the cashier limit on the session''s running total, or a float change, without an approvalToken), CASH_MOVEMENT_APPROVAL_INVALID (the token is unknown, used, expired or issued for another session, reason, amount, category or vendor) or CASH_MOVEMENT_SELF_APPROVAL (the token''s approver is the caller)'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No register session exists for the supplied id.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: REGISTER_SESSION_CONFLICT (session not OPEN) or IDEMPOTENCY_CONFLICT (requestId reused).
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'Refused by a drawer rule: CASH_MOVEMENT_TYPE_NOT_ALLOWED (the reason''s type is switched off in the drawer policy), PETTY_EXPENSE_CATEGORY_UNKNOWN (not an ACTIVE petty-expense category) or FLOAT_CHANGE_NOT_RECORDED (the amount does not close the gap between the configured float and the drawer''s float)'
       security:
       - bearerAuth: []
       summary: Record a Drawer Cash Movement
@@ -2155,11 +2413,11 @@ paths:
 
         Preconditions: the session must be in CLOSING, and no order on the session may have re-entered PENDING_PAYMENT since the count began.
 
-        Required inputs: sessionId (UUID) as a path parameter; there is no request body — an over/short beyond the authorized difference limit (default 5.00, configurable via pos.order.session.authorized-difference-limit) additionally requires the order:session:approve_variance permission.
+        Required inputs: sessionId (UUID) as a path parameter; there is no request body — an over/short beyond the tenant''s over/short tolerance (drawer policy, default 5.00) additionally requires the order:session:approve_variance permission.
 
-        Emits an ORDER_SESSION_CONFIRM_CLOSE event and publishes a register-session-closed fact carrying per-tender totals and the reconciliation figures.
+        Emits an ORDER_SESSION_CONFIRM_CLOSE event and publishes a register-session-closed fact (schema version 2) carrying per-tender totals, the reconciliation figures and every cash movement with its reason, amount, details, cashier and approver.
 
-        Returns 200 with the CLOSED session, 403 when the variance exceeds the limit without the approval permission, 404 when the session does not exist, and 409 when the session is not in CLOSING or an order is still awaiting payment.
+        Returns 200 with the CLOSED session, 403 when the variance exceeds the tolerance without the approval permission, 404 when the session does not exist, and 409 when the session is not in CLOSING or an order is still awaiting payment.
 
         '
       operationId: confirmSessionClose
@@ -2186,7 +2444,7 @@ paths:
       - order:session:close
   /v1/orders/sessions/{sessionId}/x-report:
     get:
-      description: 'Returns an interim X-report for a register session: opening float, per-tender totals, cash settlements, cash movements, theoretical cash, and over/short when a count has been recorded.
+      description: 'Returns an interim X-report for a register session: opening float, per-tender totals, cash settlements, cash movements with their reason and details, theoretical cash, and over/short when a count has been recorded.
 
         Use this tool for mid-shift figures while the session is open; use getSessionZReport instead for the end-of-session close summary.
 
@@ -3009,57 +3267,226 @@ components:
       - orderId
       - status
       type: object
-    CashMovementRequest:
-      description: Request payload for recording a drawer cash movement
+    CashMovementApprovalRequest:
+      description: A manager's credentials and the cash movement they approve
       properties:
         amount:
-          description: Positive cash amount moved
-          example: 40.0
-          minimum: 0
+          description: The exact amount of the movement approved
+          example: 25.0
           type: number
-        clerkId:
-          description: Clerk recording the movement
-          example: 01960003-0000-7000-8000-000000000050
-          minLength: 1
+        categoryCode:
+          description: The movement's petty-expense category, when it has one
+          example: SHOP_SUPPLIES
           type: string
-        movementType:
-          description: Movement direction
-          enum:
-          - PAID_IN
-          - PAID_OUT
-          example: PAID_OUT
-          minLength: 1
+        managerPassword:
+          description: The approving manager's password; checked once, never stored or logged
+          format: password
+          type: string
+          writeOnly: true
+        managerUsername:
+          description: The approving manager's sign-in name
+          example: jane.manager
           type: string
         reason:
-          description: Reason for the movement
-          example: petty cash to office
-          minLength: 1
+          description: The reason of the movement approved
+          enum:
+          - PETTY_EXPENSE
+          - VENDOR_COD
+          - BANK_DROP
+          - FLOAT_INCREASE
+          - FLOAT_DECREASE
+          example: PETTY_EXPENSE
+          type: string
+        vendorId:
+          description: The movement's vendor, when it has one
+          format: uuid
           type: string
       required:
       - amount
-      - clerkId
-      - movementType
+      - managerPassword
+      - managerUsername
       - reason
+      type: object
+    CashMovementApprovalResponse:
+      description: A single-use manager approval token for one cash movement
+      properties:
+        approvalToken:
+          description: The token; shown once, only its hash is stored
+          type: string
+        expiresAt:
+          description: When the token expires
+          example: '2026-10-07T12:05:00Z'
+          format: date-time
+          type: string
+      type: object
+    CashMovementOptionsResponse:
+      description: Cash movement reasons, limits, running totals and petty-expense categories for one session
+      properties:
+        categories:
+          description: The ACTIVE petty-expense categories
+          items:
+            $ref: '#/components/schemas/CategoryOption'
+          type: array
+        reasons:
+          description: One entry per fixed reason
+          items:
+            $ref: '#/components/schemas/ReasonOption'
+          type: array
+        sessionId:
+          description: The session
+          format: uuid
+          type: string
+      type: object
+    CashMovementRequest:
+      description: Request payload for recording a drawer cash movement with one of the fixed reasons
+      properties:
+        amount:
+          description: Positive cash amount moved
+          example: 30.0
+          type: number
+        approvalToken:
+          description: A manager's single-use approval token from the cash-movement-approvals step-up; required above the cashier limit and for every float change
+          type: string
+        bagNumber:
+          description: Deposit bag number; required for BANK_DROP
+          example: BAG-0042
+          type: string
+        categoryCode:
+          description: ACTIVE petty-expense category code; required for PETTY_EXPENSE
+          example: SHOP_SUPPLIES
+          type: string
+        note:
+          description: Free-text note; required for PETTY_EXPENSE, optional otherwise
+          example: Rags and gloves for bay 2
+          type: string
+        reason:
+          description: The fixed reason; it decides the direction and the required fields
+          enum:
+          - PETTY_EXPENSE
+          - VENDOR_COD
+          - BANK_DROP
+          - FLOAT_INCREASE
+          - FLOAT_DECREASE
+          example: PETTY_EXPENSE
+          type: string
+        receiptReference:
+          description: Receipt reference; required for PETTY_EXPENSE
+          example: R-1001
+          type: string
+        requestId:
+          description: 'The register''s idempotency key (UUIDv7): a retry with the same id returns the first result'
+          example: 01960003-0000-7000-8000-0000000000c1
+          format: uuid
+          type: string
+        vendorId:
+          description: The vendor paid; required for VENDOR_COD
+          format: uuid
+          type: string
+      required:
+      - amount
+      - reason
+      - requestId
       type: object
     CashMovementResponse:
       description: A drawer cash movement
       properties:
         amount:
+          description: Positive amount moved
+          example: 30.0
           type: number
+        approvedBy:
+          description: User id of the approving manager, or null
+          type: string
+        bagNumber:
+          description: Deposit bag, for BANK_DROP
+          example: BAG-0042
+          type: string
+        categoryCode:
+          description: Petty-expense category, for PETTY_EXPENSE
+          example: SHOP_SUPPLIES
+          type: string
         clerkId:
+          description: Cashier who recorded it, from the security context
           type: string
         movementId:
+          description: Movement id
           format: uuid
           type: string
         movementType:
+          description: Direction, derived from the reason
+          enum:
+          - PAID_IN
+          - PAID_OUT
+          example: PAID_OUT
+          type: string
+        note:
+          description: Free-text note (the whole free-text reason of an older movement)
           type: string
         occurredAt:
+          description: When the movement was recorded
           format: date-time
           type: string
         reason:
+          description: The fixed reason; null on a movement recorded before the fixed reasons
+          enum:
+          - PETTY_EXPENSE
+          - VENDOR_COD
+          - BANK_DROP
+          - FLOAT_INCREASE
+          - FLOAT_DECREASE
+          example: PETTY_EXPENSE
+          type: string
+        receiptReference:
+          description: Receipt, for PETTY_EXPENSE
+          example: R-1001
+          type: string
+        requestId:
+          description: The register's idempotency key; null on a movement recorded before the fixed reasons
+          format: uuid
           type: string
         sessionId:
+          description: Session the movement belongs to
           format: uuid
+          type: string
+        vendorId:
+          description: Vendor paid, for VENDOR_COD
+          format: uuid
+          type: string
+      type: object
+    CategoryOption:
+      description: One ACTIVE petty-expense category
+      properties:
+        code:
+          example: SHOP_SUPPLIES
+          type: string
+        examples:
+          description: What belongs in the category
+          type: string
+        label:
+          example: Shop supplies
+          type: string
+      type: object
+    Change:
+      description: One changed setting
+      properties:
+        actor:
+          description: Who changed it
+          type: string
+        changedAt:
+          description: When
+          format: date-time
+          type: string
+        justification:
+          description: Why
+          type: string
+        newValue:
+          example: '3.00'
+          type: string
+        oldValue:
+          example: '5.00'
+          type: string
+        setting:
+          example: OVER_SHORT_TOLERANCE
           type: string
       type: object
     CheckoutRequest:
@@ -3320,23 +3747,12 @@ components:
           example: 01960003-0000-7000-8000-000000000090
           format: uuid
           type: string
-        openedByClerkId:
-          description: Clerk opening the session
-          example: 01960003-0000-7000-8000-000000000050
-          minLength: 1
-          type: string
-        openingFloat:
-          description: Starting drawer cash; defaults to the terminal's previous counted close when omitted
-          example: 150.0
-          minimum: 0
-          type: number
         terminalId:
           description: Terminal the drawer belongs to; one open session per terminal
           example: 01960003-0000-7000-8000-000000000060
           minLength: 1
           type: string
       required:
-      - openedByClerkId
       - terminalId
       type: object
     OrderDiscountRequest:
@@ -4099,6 +4515,45 @@ components:
           description: The vendor's own wording — a rejection reason or review detail — when it gave one.
           type: string
       type: object
+    ReasonOption:
+      description: One reason's options
+      properties:
+        allowedNow:
+          description: Whether the reason may be recorded now (policy on and session OPEN)
+          type: boolean
+        alwaysNeedsManager:
+          description: Whether every movement of this reason needs a manager (float changes)
+          type: boolean
+        cashierLimit:
+          description: Cashier limit on the session's running total, or null when there is none
+          type: number
+        direction:
+          description: Direction
+          enum:
+          - PAID_IN
+          - PAID_OUT
+          type: string
+        reason:
+          enum:
+          - PETTY_EXPENSE
+          - VENDOR_COD
+          - BANK_DROP
+          - FLOAT_INCREASE
+          - FLOAT_DECREASE
+          example: PETTY_EXPENSE
+          type: string
+        requiredFields:
+          description: The fields the reason requires
+          example:
+          - bagNumber
+          items:
+            type: string
+          type: array
+        runningTotal:
+          description: The session's running total of this reason
+          example: 55.0
+          type: number
+      type: object
     RegisterSessionResponse:
       description: Register session state
       properties:
@@ -4510,6 +4965,28 @@ components:
       - orderId
       - status
       type: object
+    SessionPolicyResponse:
+      description: 'The tenant''s drawer policy: allowed and cashier limit per movement type, tolerance and history'
+      properties:
+        history:
+          description: Every change, newest first
+          items:
+            $ref: '#/components/schemas/Change'
+          type: array
+        overShortTolerance:
+          description: Over/short above which a close needs order:session:approve_variance
+          example: 5.0
+          type: number
+        types:
+          description: One row per movement type; only PETTY_EXPENSE and VENDOR_COD are editable
+          items:
+            $ref: '#/components/schemas/TypePolicy'
+          type: array
+        version:
+          description: The stored policy's version; null while the defaults apply
+          format: int64
+          type: integer
+      type: object
     SessionReportResponse:
       description: X-report (mid-day) or Z-report (close summary) for a register session
       properties:
@@ -4614,6 +5091,44 @@ components:
         methodType:
           type: string
       type: object
+    TypePolicy:
+      description: One movement type's policy
+      properties:
+        allowed:
+          description: Whether cashiers may record it
+          type: boolean
+        alwaysNeedsManager:
+          description: Whether every movement of the type needs a manager
+          type: boolean
+        cashierLimit:
+          description: Cashier limit on a session's running total; null when there is none
+          example: 50.0
+          type: number
+        editable:
+          description: 'Whether the policy may change it (false: read-only row)'
+          type: boolean
+        type:
+          enum:
+          - PETTY_EXPENSE
+          - VENDOR_COD
+          - BANK_DROP
+          - FLOAT_CHANGE
+          example: PETTY_EXPENSE
+          type: string
+      type: object
+    TypeSetting:
+      description: Whether a movement type is allowed and its cashier limit
+      properties:
+        allowed:
+          description: Whether cashiers may record it
+          type: boolean
+        cashierLimit:
+          description: Cashier limit on a session's running total; required while allowed
+          example: 50.0
+          type: number
+      required:
+      - allowed
+      type: object
     UpdateItemRequest:
       description: Request payload for updating an existing cart item line
       properties:
@@ -4625,6 +5140,27 @@ components:
           type: integer
       required:
       - quantity
+      type: object
+    UpdateSessionPolicyRequest:
+      description: The two configurable movement types, the over/short tolerance and a justification
+      properties:
+        justification:
+          description: Why the policy changes (at least 10 characters)
+          example: Raise petty limit for winter supplies
+          type: string
+        overShortTolerance:
+          description: Over/short above which a close needs order:session:approve_variance
+          example: 5.0
+          type: number
+        pettyExpense:
+          $ref: '#/components/schemas/TypeSetting'
+        vendorCod:
+          $ref: '#/components/schemas/TypeSetting'
+      required:
+      - justification
+      - overShortTolerance
+      - pettyExpense
+      - vendorCod
       type: object
     VoidOrderRequest:
       description: Request payload for voiding an unsettled order

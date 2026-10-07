@@ -98,6 +98,9 @@ class RegisterSessionControllerLocationScopeTest {
     @MockitoBean
     private RegisterSessionService registerSessionService;
 
+    @MockitoBean
+    private com.positivity.order.internal.service.CashMovementApprovalService cashMovementApprovalService;
+
     @AfterEach
     void clearCaller() {
         TestSecurityContextHolder.clearContext();

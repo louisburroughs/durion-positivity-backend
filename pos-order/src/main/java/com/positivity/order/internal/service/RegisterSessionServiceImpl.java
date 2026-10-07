@@ -6,38 +6,56 @@ import com.positivity.order.internal.dto.CashMovementSummary;
 import com.positivity.order.internal.dto.RegisterSessionSummary;
 import com.positivity.order.internal.dto.SessionReport;
 import com.positivity.order.internal.entity.CashMovement;
+import com.positivity.order.internal.entity.CashMovementApproval;
+import com.positivity.order.internal.entity.CashMovementReason;
 import com.positivity.order.internal.entity.CashMovementType;
+import com.positivity.order.internal.entity.ExtAccountingPettyExpenseCategory;
+import com.positivity.order.internal.entity.ExtAccountingRegisterFloat;
 import com.positivity.order.internal.entity.OrderPaymentRecord;
 import com.positivity.order.internal.entity.RegisterSession;
 import com.positivity.order.internal.entity.RegisterSessionStatus;
 import com.positivity.order.internal.entity.SalesOrder;
 import com.positivity.order.internal.entity.SalesOrderStatus;
+import com.positivity.order.internal.entity.SessionPolicyType;
+import com.positivity.order.internal.exception.CashMovementIdempotencyConflictException;
+import com.positivity.order.internal.exception.CashMovementRefusedException;
+import com.positivity.order.internal.exception.CashMovementRefusedException.Refusal;
 import com.positivity.order.internal.exception.RegisterSessionConflictException;
 import com.positivity.order.internal.exception.RegisterSessionNotFoundException;
 import com.positivity.order.internal.exception.RegisterSessionRequestValidationException;
 import com.positivity.order.internal.exception.SessionCloseBlockedException;
 import com.positivity.order.internal.repository.CashMovementRepository;
+import com.positivity.order.internal.repository.ExtAccountingPettyExpenseCategoryRepository;
+import com.positivity.order.internal.repository.ExtAccountingRegisterFloatRepository;
 import com.positivity.order.internal.repository.OrderPaymentRecordRepository;
 import com.positivity.order.internal.repository.RegisterSessionRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
 import com.positivity.order.internal.security.OrderPermissions;
 import com.positivity.order.internal.service.model.CashMovementCommand;
+import com.positivity.order.internal.service.model.CashMovementOptions;
+import com.positivity.order.internal.service.model.CashMovementResult;
 import com.positivity.order.internal.service.model.OpenSessionCommand;
+import com.positivity.order.internal.service.model.SessionPolicyView;
 import com.positivity.security.common.SecurityContextHelper;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
-import org.springframework.beans.factory.annotation.Value;
+import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,9 +65,27 @@ import org.springframework.transaction.annotation.Transactional;
  * {@code pos.session} + cash-control analog: a session is a drawer shift on one terminal, orders
  * tendered while it is OPEN bind to it, and close reconciles the counted drawer against the
  * theoretical cash (opening float + Σ session CASH settlements + Σ cash movements).
+ *
+ * <p>CAP:550 S16 (#2512; SPEC-accounting-workspace §4.6, AW15, AW16, AW19, AW31):
+ *
+ * <ul>
+ *   <li>A session opens with the register's configured float from pos-order's copy of accounting's
+ *       floats (zero when the register has none; it can be negative after an accounting reversal),
+ *       and the opener is the caller. A difference at open or close shows as over/short.
+ *   <li>A movement carries one of the fixed {@link CashMovementReason}s with that reason's fields; the
+ *       cashier is the caller. A type switched off in the tenant's drawer policy is refused at once;
+ *       a limited type is checked against the session's running total of that reason including the
+ *       new amount, and above the cashier limit — and for every float change — the request must carry
+ *       a manager's single-use approval token ({@link CashMovementApprovalService}). A float movement
+ *       must close the gap between the configured float and the float now in the drawer, exactly.
+ *   <li>Movements of one session are serialised on the session's row lock, and a movement is
+ *       idempotent on the register's {@code requestId}: a replay returns the first result, even after
+ *       its token was used; the same id with another payload is a conflict.
+ *   <li>Confirm-close compares the over/short with the policy's tolerance and publishes the close
+ *       fact at schema version 2 with every movement.
+ * </ul>
  */
 @Service
-@RequiredArgsConstructor
 public class RegisterSessionServiceImpl implements RegisterSessionService {
 
     private static final BigDecimal ZERO = BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
@@ -64,11 +100,46 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
     private final OrderPaymentRecordRepository paymentRecordRepository;
     private final OrderDomainEventPublisher domainEventPublisher;
     private final HouseAccountReplica houseAccounts;
+    private final SessionPolicyService sessionPolicyService;
+    private final CashMovementApprovalService approvalService;
+    private final ExtAccountingRegisterFloatRepository registerFloatRepository;
+    private final ExtAccountingPettyExpenseCategoryRepository categoryRepository;
     private final Clock clock;
+    private final @Nullable MeterRegistry meterRegistry;
 
-    /** Over/short beyond this absolute amount at close requires order:session:approve_variance. */
-    @Value("${pos.order.session.authorized-difference-limit:5.00}")
-    private BigDecimal authorizedDifferenceLimit;
+    static final String REFUSED_COUNTER = "order.cash_movement.refused";
+
+    private static final int MAX_CODE_LENGTH = 64;
+    private static final int MAX_RECEIPT_REFERENCE_LENGTH = 128;
+    private static final int MAX_NOTE_LENGTH = 500;
+
+    @SuppressWarnings("java:S107") // one collaborator per concern of the drawer; grouping them would hide them
+    public RegisterSessionServiceImpl(
+            RegisterSessionRepository registerSessionRepository,
+            CashMovementRepository cashMovementRepository,
+            SalesOrderRepository salesOrderRepository,
+            OrderPaymentRecordRepository paymentRecordRepository,
+            OrderDomainEventPublisher domainEventPublisher,
+            HouseAccountReplica houseAccounts,
+            SessionPolicyService sessionPolicyService,
+            CashMovementApprovalService approvalService,
+            ExtAccountingRegisterFloatRepository registerFloatRepository,
+            ExtAccountingPettyExpenseCategoryRepository categoryRepository,
+            Clock clock,
+            ObjectProvider<MeterRegistry> meterRegistry) {
+        this.registerSessionRepository = registerSessionRepository;
+        this.cashMovementRepository = cashMovementRepository;
+        this.salesOrderRepository = salesOrderRepository;
+        this.paymentRecordRepository = paymentRecordRepository;
+        this.domainEventPublisher = domainEventPublisher;
+        this.houseAccounts = houseAccounts;
+        this.sessionPolicyService = sessionPolicyService;
+        this.approvalService = approvalService;
+        this.registerFloatRepository = registerFloatRepository;
+        this.categoryRepository = categoryRepository;
+        this.clock = clock;
+        this.meterRegistry = meterRegistry.getIfAvailable();
+    }
 
     @Override
     @Transactional
@@ -80,9 +151,8 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                     "Terminal " + command.terminalId() + " already has an active register session (OPEN or CLOSING)");
         }
 
-        BigDecimal openingFloat = command.openingFloat() != null
-                ? scale(command.openingFloat())
-                : previousCountedClose(command.terminalId());
+        // AW16: the register's configured float, never a request value or the previous count.
+        BigDecimal openingFloat = configuredFloat(command.terminalId());
         UUID locationId = command.locationId() != null ? command.locationId() : previousLocation(command.terminalId());
         // ADR-0061 §3 (#1872): the session is opened *at* the resolved location, so the scope check
         // runs here — after the default from the terminal's previous session is applied — rather
@@ -96,7 +166,7 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
         RegisterSession session = RegisterSession.builder()
                 .terminalId(command.terminalId())
                 .locationId(locationId)
-                .openedByClerkId(command.openedByClerkId())
+                .openedByClerkId(SecurityContextHelper.getCurrentUsernameOrDefault("system"))
                 .status(RegisterSessionStatus.OPEN)
                 .openingFloat(openingFloat)
                 .openedAt(now)
@@ -125,31 +195,135 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
 
     @Override
     @Transactional
-    public @NonNull CashMovementSummary recordCashMovement(@NonNull CashMovementCommand command) {
-        RegisterSession session = require(command.sessionId());
+    public @NonNull CashMovementResult recordCashMovement(@NonNull CashMovementCommand command) {
+        ValidMovement movement = validate(command);
+
+        // Idempotent replay first (§8.2): a retry returns the first result, even after its approval
+        // token was used, and is never re-checked against today's policy.
+        Optional<CashMovementResult> replay = replay(movement);
+        if (replay.isPresent()) {
+            return replay.get();
+        }
+        RegisterSession session = registerSessionRepository
+                .findByIdForUpdate(command.sessionId())
+                .orElseThrow(() -> new RegisterSessionNotFoundException(command.sessionId()));
+        // Re-check under the session's lock: a concurrent request with the same id recorded it while
+        // this one waited.
+        replay = replay(movement);
+        if (replay.isPresent()) {
+            return replay.get();
+        }
         if (session.getStatus() != RegisterSessionStatus.OPEN) {
             throw new RegisterSessionConflictException("Cash movements require an OPEN session; session "
                     + session.getSessionId() + " is " + session.getStatus());
         }
-        if (command.amount().signum() <= 0) {
-            throw new RegisterSessionRequestValidationException("Cash movement amount must be positive");
+
+        CashMovementReason reason = movement.reason();
+        SessionPolicyType type = reason.policyType();
+        SessionPolicyView policy = sessionPolicyService.current();
+        if (!policy.allowed(type)) {
+            // Never retroactive: recorded movements of the type stand and are carried on the close fact.
+            throw refused(Refusal.TYPE_NOT_ALLOWED, reason + " movements are switched off in the drawer policy");
         }
-        CashMovementType type;
+        List<CashMovement> recorded =
+                cashMovementRepository.findBySessionIdOrderByOccurredAtAsc(session.getSessionId());
+        if (reason == CashMovementReason.PETTY_EXPENSE) {
+            boolean active = categoryRepository
+                    .findByCode(movement.categoryCode())
+                    .map(ExtAccountingPettyExpenseCategory::isActive)
+                    .orElse(false);
+            if (!active) {
+                throw refused(
+                        Refusal.CATEGORY_UNKNOWN,
+                        "Petty-expense category " + movement.categoryCode() + " is not an active category");
+            }
+        }
+        if (reason.isFloatChange()) {
+            requireRecordedFloatChange(session, recorded, reason, movement.amount());
+        }
+
+        CashMovementApproval approval = null;
+        if (needsManager(policy, type, runningTotal(recorded, reason).add(movement.amount()))
+                || movement.approvalToken() != null) {
+            if (movement.approvalToken() == null) {
+                throw refused(
+                        Refusal.APPROVAL_REQUIRED,
+                        type == SessionPolicyType.FLOAT_CHANGE
+                                ? "A float change needs a manager's approval"
+                                : "The session's " + reason + " total would exceed the cashier limit; a manager's"
+                                        + " approval is required");
+            }
+            try {
+                approval = approvalService.use(
+                        movement.approvalToken(),
+                        session.getSessionId(),
+                        reason,
+                        movement.amount(),
+                        movement.categoryCode(),
+                        movement.vendorId());
+            } catch (CashMovementRefusedException e) {
+                count(e.refusal());
+                throw e;
+            }
+        }
+
+        CashMovement saved;
         try {
-            type = CashMovementType.valueOf(command.movementType().trim().toUpperCase(java.util.Locale.ROOT));
-        } catch (IllegalArgumentException ex) {
-            throw new RegisterSessionRequestValidationException(
-                    "Unknown cash movement type: " + command.movementType());
+            saved = cashMovementRepository.saveAndFlush(CashMovement.builder()
+                    .sessionId(session.getSessionId())
+                    .requestId(movement.requestId())
+                    .reasonCode(reason)
+                    .movementType(reason.direction())
+                    .amount(movement.amount())
+                    .categoryCode(movement.categoryCode())
+                    .vendorId(movement.vendorId())
+                    .bagNumber(movement.bagNumber())
+                    .receiptReference(movement.receiptReference())
+                    .note(movement.note())
+                    .clerkId(SecurityContextHelper.getCurrentUsernameOrDefault("system"))
+                    .approvedBy(
+                            approval == null
+                                    ? null
+                                    : approval.getApproverUserId().toString())
+                    .approvalId(approval == null ? null : approval.getApprovalId())
+                    .occurredAt(Instant.now(clock))
+                    .build());
+        } catch (DataIntegrityViolationException e) {
+            // The same requestId was recorded on another session meanwhile: not this request's movement.
+            throw new CashMovementIdempotencyConflictException(
+                    "requestId " + movement.requestId() + " was already used for another cash movement");
         }
-        CashMovement movement = CashMovement.builder()
-                .sessionId(session.getSessionId())
-                .movementType(type)
-                .amount(scale(command.amount()))
-                .reason(command.reason())
-                .clerkId(command.clerkId())
-                .occurredAt(Instant.now(clock))
-                .build();
-        return toMovementSummary(cashMovementRepository.save(movement));
+        if (approval != null) {
+            approval.setUsedByMovementId(saved.getMovementId());
+        }
+        return new CashMovementResult(toMovementSummary(saved), false);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public @NonNull CashMovementOptions cashMovementOptions(@NonNull UUID sessionId) {
+        RegisterSession session = require(sessionId);
+        SessionPolicyView policy = sessionPolicyService.current();
+        List<CashMovement> recorded = cashMovementRepository.findBySessionIdOrderByOccurredAtAsc(sessionId);
+        boolean open = session.getStatus() == RegisterSessionStatus.OPEN;
+        List<CashMovementOptions.ReasonOption> reasons = new ArrayList<>();
+        for (CashMovementReason reason : CashMovementReason.values()) {
+            SessionPolicyType type = reason.policyType();
+            reasons.add(new CashMovementOptions.ReasonOption(
+                    reason.name(),
+                    reason.direction().name(),
+                    open && policy.allowed(type),
+                    policy.cashierLimit(type),
+                    scale(runningTotal(recorded, reason)),
+                    policy.alwaysNeedsManager(type),
+                    requiredFields(reason)));
+        }
+        List<CashMovementOptions.CategoryOption> categories =
+                categoryRepository.findByStatusOrderByCodeAsc(ExtAccountingPettyExpenseCategory.ACTIVE).stream()
+                        .map(category -> new CashMovementOptions.CategoryOption(
+                                category.getCode(), category.getLabel(), category.getExamples()))
+                        .toList();
+        return new CashMovementOptions(sessionId, reasons, categories);
     }
 
     @Override
@@ -197,10 +371,11 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                 scale(session.getOpeningFloat().add(cashSettlements).add(cashMovementTotal));
         BigDecimal overShort = scale(counted.subtract(theoretical));
 
-        if (overShort.abs().compareTo(authorizedDifferenceLimit) > 0) {
+        BigDecimal tolerance = sessionPolicyService.current().overShortTolerance();
+        if (overShort.abs().compareTo(tolerance) > 0) {
             if (!SecurityContextHelper.hasAuthority(OrderPermissions.ORDER_SESSION_APPROVE_VARIANCE)) {
                 throw new AccessDeniedException("Register session over/short of " + overShort
-                        + " exceeds the authorized difference limit of " + authorizedDifferenceLimit
+                        + " exceeds the drawer policy's over/short tolerance of " + tolerance
                         + "; permission '" + OrderPermissions.ORDER_SESSION_APPROVE_VARIANCE + "' is required");
             }
             session.setVarianceApproved(true);
@@ -235,7 +410,10 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                         tenderTotals,
                         cashMovementTotal,
                         saved.getOpenedAt(),
-                        now));
+                        now,
+                        cashMovementRepository.findBySessionIdOrderByOccurredAtAsc(sessionId).stream()
+                                .map(RegisterSessionServiceImpl::toFactMovement)
+                                .toList()));
         return toSummary(saved);
     }
 
@@ -325,13 +503,179 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                 .orElseThrow(() -> new RegisterSessionNotFoundException(sessionId));
     }
 
-    /** Opening float defaults to the previous session's counted close (R6.1), else zero. */
-    private BigDecimal previousCountedClose(String terminalId) {
-        return registerSessionRepository
-                .findFirstByTerminalIdOrderByOpenedAtDesc(terminalId)
-                .map(RegisterSession::getCountedCash)
+    /**
+     * The register's configured float (AW16, replacing Order R6.1's carried-forward count): pos-order's
+     * copy of accounting's float for the terminal, zero when it has none. A reversal in accounting can
+     * leave it negative; it is used as it stands, and the difference shows as over/short at close.
+     */
+    private BigDecimal configuredFloat(String terminalId) {
+        return registerFloatRepository
+                .findByRegisterId(terminalId)
+                .map(ExtAccountingRegisterFloat::getAmount)
                 .map(RegisterSessionServiceImpl::scale)
                 .orElse(ZERO);
+    }
+
+    /**
+     * A float movement must close the gap between the configured float and the float now in the
+     * drawer (opening float ± earlier float movements) exactly, in its direction (§4.6 "Float").
+     */
+    private void requireRecordedFloatChange(
+            RegisterSession session, List<CashMovement> recorded, CashMovementReason reason, BigDecimal amount) {
+        BigDecimal drawerFloat = scale(session.getOpeningFloat())
+                .add(runningTotal(recorded, CashMovementReason.FLOAT_INCREASE))
+                .subtract(runningTotal(recorded, CashMovementReason.FLOAT_DECREASE));
+        BigDecimal gap = configuredFloat(session.getTerminalId()).subtract(drawerFloat);
+        BigDecimal expected = reason == CashMovementReason.FLOAT_INCREASE ? gap : gap.negate();
+        if (expected.signum() <= 0 || expected.compareTo(amount) != 0) {
+            throw refused(
+                    Refusal.FLOAT_CHANGE_NOT_RECORDED,
+                    "No recorded float change matches a " + reason + " of "
+                            + amount.stripTrailingZeros().toPlainString());
+        }
+    }
+
+    /** Σ of the session's movements of {@code reason} (pre-S16 movements carry none). */
+    private static BigDecimal runningTotal(List<CashMovement> recorded, CashMovementReason reason) {
+        return recorded.stream()
+                .filter(m -> m.getReasonCode() == reason)
+                .map(CashMovement::getAmount)
+                .reduce(ZERO, BigDecimal::add);
+    }
+
+    /** Above the cashier limit on the running total, or a type that always needs a manager. */
+    private static boolean needsManager(SessionPolicyView policy, SessionPolicyType type, BigDecimal runningTotal) {
+        if (policy.alwaysNeedsManager(type)) {
+            return true;
+        }
+        BigDecimal limit = policy.cashierLimit(type);
+        return limit != null && runningTotal.compareTo(limit) > 0;
+    }
+
+    private static List<String> requiredFields(CashMovementReason reason) {
+        return switch (reason) {
+            case PETTY_EXPENSE -> List.of("categoryCode", "receiptReference", "note");
+            case VENDOR_COD -> List.of("vendorId");
+            case BANK_DROP -> List.of("bagNumber");
+            case FLOAT_INCREASE, FLOAT_DECREASE -> List.of();
+        };
+    }
+
+    /** A validated movement request. */
+    private record ValidMovement(
+            UUID sessionId,
+            UUID requestId,
+            CashMovementReason reason,
+            BigDecimal amount,
+            @Nullable String categoryCode,
+            @Nullable UUID vendorId,
+            @Nullable String bagNumber,
+            @Nullable String receiptReference,
+            @Nullable String note,
+            @Nullable String approvalToken) {
+
+        /** Whether {@code m} records this same request (the approval token is not part of the payload). */
+        boolean samePayloadAs(CashMovement m) {
+            return sessionId.equals(m.getSessionId())
+                    && reason == m.getReasonCode()
+                    && amount.compareTo(m.getAmount()) == 0
+                    && Objects.equals(categoryCode, m.getCategoryCode())
+                    && Objects.equals(vendorId, m.getVendorId())
+                    && Objects.equals(bagNumber, m.getBagNumber())
+                    && Objects.equals(receiptReference, m.getReceiptReference())
+                    && Objects.equals(note, m.getNote());
+        }
+    }
+
+    private static ValidMovement validate(CashMovementCommand command) {
+        if (command.requestId() == null) {
+            throw new RegisterSessionRequestValidationException("requestId is required");
+        }
+        CashMovementReason reason = CashMovementReason.parse(command.reason())
+                .orElseThrow(() -> new RegisterSessionRequestValidationException(
+                        "reason must be one of PETTY_EXPENSE, VENDOR_COD, BANK_DROP, FLOAT_INCREASE, FLOAT_DECREASE"));
+        if (command.amount() == null || command.amount().signum() <= 0) {
+            throw new RegisterSessionRequestValidationException("Cash movement amount must be positive");
+        }
+        String categoryCode = trimmed(command.categoryCode(), "categoryCode", MAX_CODE_LENGTH);
+        String bagNumber = trimmed(command.bagNumber(), "bagNumber", MAX_CODE_LENGTH);
+        String receiptReference = trimmed(command.receiptReference(), "receiptReference", MAX_RECEIPT_REFERENCE_LENGTH);
+        String note = trimmed(command.note(), "note", MAX_NOTE_LENGTH);
+        switch (reason) {
+            case PETTY_EXPENSE -> {
+                require(categoryCode, "categoryCode", reason);
+                require(receiptReference, "receiptReference", reason);
+                require(note, "note", reason);
+            }
+            case VENDOR_COD -> {
+                if (command.vendorId() == null) {
+                    throw new RegisterSessionRequestValidationException("vendorId is required for VENDOR_COD");
+                }
+            }
+            case BANK_DROP -> require(bagNumber, "bagNumber", reason);
+            case FLOAT_INCREASE, FLOAT_DECREASE -> {
+                // No reason field: the amount must match a recorded float change.
+            }
+        }
+        String token =
+                command.approvalToken() == null || command.approvalToken().isBlank()
+                        ? null
+                        : command.approvalToken().trim();
+        return new ValidMovement(
+                command.sessionId(),
+                command.requestId(),
+                reason,
+                scale(command.amount()),
+                reason == CashMovementReason.PETTY_EXPENSE ? categoryCode : null,
+                reason == CashMovementReason.VENDOR_COD ? command.vendorId() : null,
+                reason == CashMovementReason.BANK_DROP ? bagNumber : null,
+                reason == CashMovementReason.PETTY_EXPENSE ? receiptReference : null,
+                note,
+                token);
+    }
+
+    private static void require(@Nullable String value, String field, CashMovementReason reason) {
+        if (value == null) {
+            throw new RegisterSessionRequestValidationException(field + " is required for " + reason);
+        }
+    }
+
+    private static @Nullable String trimmed(@Nullable String value, String field, int maxLength) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String trimmed = value.trim();
+        if (trimmed.length() > maxLength) {
+            throw new RegisterSessionRequestValidationException(
+                    field + " must be at most " + maxLength + " characters");
+        }
+        return trimmed;
+    }
+
+    /** The first result of the same request, or a conflict when the id was used for another payload. */
+    private Optional<CashMovementResult> replay(ValidMovement movement) {
+        return cashMovementRepository.findByRequestId(movement.requestId()).map(existing -> {
+            if (!movement.samePayloadAs(existing)) {
+                throw new CashMovementIdempotencyConflictException(
+                        "requestId " + movement.requestId() + " was already used for a different cash movement");
+            }
+            return new CashMovementResult(toMovementSummary(existing), true);
+        });
+    }
+
+    private CashMovementRefusedException refused(Refusal refusal, String message) {
+        count(refusal);
+        return new CashMovementRefusedException(refusal, message);
+    }
+
+    private void count(Refusal refusal) {
+        if (meterRegistry != null) {
+            Counter.builder(REFUSED_COUNTER)
+                    .description("Drawer cash movements refused by a drawer rule")
+                    .tag("code", refusal.code())
+                    .register(meterRegistry)
+                    .increment();
+        }
     }
 
     private UUID previousLocation(String terminalId) {
@@ -402,10 +746,35 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
         return new CashMovementSummary(
                 m.getMovementId(),
                 m.getSessionId(),
+                m.getRequestId(),
+                m.getReasonCode() == null ? null : m.getReasonCode().name(),
                 m.getMovementType().name(),
                 m.getAmount(),
-                m.getReason(),
+                m.getCategoryCode(),
+                m.getVendorId(),
+                m.getBagNumber(),
+                m.getReceiptReference(),
+                m.getNote(),
                 m.getClerkId(),
+                m.getApprovedBy(),
+                m.getOccurredAt());
+    }
+
+    /** One movement on the close fact (schema version 2). */
+    private static RegisterSessionClosedV1.Movement toFactMovement(CashMovement m) {
+        return new RegisterSessionClosedV1.Movement(
+                m.getMovementId(),
+                m.getReasonCode() == null ? null : m.getReasonCode().name(),
+                m.getMovementType() == CashMovementType.PAID_IN
+                        ? RegisterSessionClosedV1.Movement.IN
+                        : RegisterSessionClosedV1.Movement.OUT,
+                m.getAmount(),
+                m.getCategoryCode(),
+                m.getVendorId(),
+                m.getBagNumber(),
+                m.getReceiptReference(),
+                m.getClerkId(),
+                m.getApprovedBy(),
                 m.getOccurredAt());
     }
 }

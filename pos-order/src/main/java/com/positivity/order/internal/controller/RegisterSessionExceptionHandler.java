@@ -1,9 +1,12 @@
 package com.positivity.order.internal.controller;
 
+import com.positivity.order.internal.exception.CashMovementIdempotencyConflictException;
+import com.positivity.order.internal.exception.CashMovementRefusedException;
 import com.positivity.order.internal.exception.RegisterSessionConflictException;
 import com.positivity.order.internal.exception.RegisterSessionNotFoundException;
 import com.positivity.order.internal.exception.RegisterSessionRequestValidationException;
 import com.positivity.order.internal.exception.SessionCloseBlockedException;
+import com.positivity.order.internal.exception.StepUpUnavailableException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.servlet.http.HttpServletRequest;
@@ -87,6 +90,57 @@ public class RegisterSessionExceptionHandler {
                         "REGISTER_SESSION_INVALID_ARGUMENT",
                         ex.getMessage(),
                         HttpStatus.BAD_REQUEST.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    /**
+     * A drawer rule refused a cash movement or its approval (CAP:550 S16, #2512): 403 for the approval
+     * rules and 422 for the policy, category and float rules, each with its own code. The message never
+     * says why a step-up check failed.
+     */
+    @ExceptionHandler(CashMovementRefusedException.class)
+    public ResponseEntity<ApiError> handleCashMovementRefused(
+            CashMovementRefusedException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        HttpStatus status = HttpStatus.valueOf(ex.refusal().status());
+        log.info("Cash movement refused code={} correlationId={}", ex.refusal().code(), correlationId);
+        return ResponseEntity.status(status)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.of(
+                        ex.refusal().code(),
+                        ex.getMessage(),
+                        status.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    /** A cash-movement requestId reused for another payload (CAP:550 S16, #2512; §8.2). */
+    @ExceptionHandler(CashMovementIdempotencyConflictException.class)
+    public ResponseEntity<ApiError> handleIdempotencyConflict(
+            CashMovementIdempotencyConflictException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.of(
+                        "IDEMPOTENCY_CONFLICT",
+                        ex.getMessage(),
+                        HttpStatus.CONFLICT.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    /** The step-up check could not be made (CAP:550 S16, #2512): 503, not a refusal. */
+    @ExceptionHandler(StepUpUnavailableException.class)
+    public ResponseEntity<ApiError> handleStepUpUnavailable(StepUpUnavailableException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        log.warn("Cash movement approval check unavailable: correlationId={}", correlationId, ex);
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.of(
+                        "CASH_MOVEMENT_APPROVAL_UNAVAILABLE",
+                        ex.getMessage(),
+                        HttpStatus.SERVICE_UNAVAILABLE.value(),
                         Instant.now(clock).toString(),
                         correlationId));
     }

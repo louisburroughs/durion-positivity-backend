@@ -479,6 +479,7 @@ class OrderDomainEventPublisherTest {
                 List.of(),
                 BigDecimal.ZERO,
                 NOW.minusSeconds(28_800),
-                NOW);
+                NOW,
+                List.of());
     }
 }

@@ -41,6 +41,9 @@ class RegisterSessionControllerErrorHandlingTest extends BaseControllerSliceTest
     @MockitoBean
     private RegisterSessionService registerSessionService;
 
+    @MockitoBean
+    private com.positivity.order.internal.service.CashMovementApprovalService cashMovementApprovalService;
+
     @Test
     @DisplayName("a request validation failure answers 400 with its own message and code")
     void aRequestValidationFailureAnswers400WithItsOwnMessageAndCode() throws Exception {

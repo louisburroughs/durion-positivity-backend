@@ -4,28 +4,37 @@ import java.math.BigDecimal;
 import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
- * Command to record a non-sale drawer cash movement (parity story G1, spec R6.6).
+ * Record a drawer cash movement (CAP:550 S16, #2512; SPEC-accounting-workspace §4.6, AW15). The
+ * cashier is never part of the command: it comes from the security context (ADR-0018). The fields
+ * are validated by the service, so a malformed request answers {@code REGISTER_SESSION_INVALID_ARGUMENT}.
  *
- * @param sessionId open session the movement is recorded against
- * @param movementType PAID_IN or PAID_OUT
- * @param amount positive cash amount moved
- * @param reason free-text reason (e.g. "petty cash to office", "bank change order")
- * @param clerkId clerk recording the movement
+ * @param sessionId the OPEN session
+ * @param requestId the register's idempotency key (UUIDv7)
+ * @param reason one of the fixed reasons, as sent
+ * @param amount the positive amount
+ * @param categoryCode the petty-expense category, for {@code PETTY_EXPENSE}
+ * @param vendorId the vendor, for {@code VENDOR_COD}
+ * @param bagNumber the deposit bag, for {@code BANK_DROP}
+ * @param receiptReference the receipt, for {@code PETTY_EXPENSE}
+ * @param note optional free text; required for {@code PETTY_EXPENSE}
+ * @param approvalToken a manager's single-use approval token from the step-up, when one is needed
  */
 public record CashMovementCommand(
         @NonNull UUID sessionId,
-        @NonNull String movementType,
-        @NonNull BigDecimal amount,
-        @NonNull String reason,
-        @NonNull String clerkId) {
+        @Nullable UUID requestId,
+        @Nullable String reason,
+        @Nullable BigDecimal amount,
+        @Nullable String categoryCode,
+        @Nullable UUID vendorId,
+        @Nullable String bagNumber,
+        @Nullable String receiptReference,
+        @Nullable String note,
+        @Nullable String approvalToken) {
 
     public CashMovementCommand {
         Objects.requireNonNull(sessionId, "sessionId must not be null");
-        Objects.requireNonNull(movementType, "movementType must not be null");
-        Objects.requireNonNull(amount, "amount must not be null");
-        Objects.requireNonNull(reason, "reason must not be null");
-        Objects.requireNonNull(clerkId, "clerkId must not be null");
     }
 }

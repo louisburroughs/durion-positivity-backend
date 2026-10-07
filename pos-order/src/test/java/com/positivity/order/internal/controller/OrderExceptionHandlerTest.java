@@ -700,7 +700,24 @@ class OrderExceptionHandlerTest {
                         Named.of("handleInvalidRequest", (HandlerInvocation) request -> handler.handleInvalidRequest(
                                 new RegisterSessionRequestValidationException("negative float"), request)),
                         Named.of("handleAccessDenied", (HandlerInvocation)
-                                request -> handler.handleAccessDenied(new AccessDeniedException("denied"), request)));
+                                request -> handler.handleAccessDenied(new AccessDeniedException("denied"), request)),
+                        Named.of("handleCashMovementRefused", (HandlerInvocation)
+                                request -> handler.handleCashMovementRefused(
+                                        new com.positivity.order.internal.exception.CashMovementRefusedException(
+                                                com.positivity.order.internal.exception.CashMovementRefusedException
+                                                        .Refusal.APPROVAL_REQUIRED,
+                                                "approval required"),
+                                        request)),
+                        Named.of("handleIdempotencyConflict", (HandlerInvocation)
+                                request -> handler.handleIdempotencyConflict(
+                                        new com.positivity.order.internal.exception
+                                                .CashMovementIdempotencyConflictException("requestId reused"),
+                                        request)),
+                        Named.of("handleStepUpUnavailable", (HandlerInvocation)
+                                request -> handler.handleStepUpUnavailable(
+                                        new com.positivity.order.internal.exception.StepUpUnavailableException(
+                                                "down", null),
+                                        request)));
             }
 
             @ParameterizedTest
