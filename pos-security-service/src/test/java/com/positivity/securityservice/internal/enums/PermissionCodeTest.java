@@ -32,6 +32,8 @@ import org.junit.jupiter.api.Test;
 @DisplayName("PermissionCode catalog contract (PERM-001)")
 class PermissionCodeTest {
 
+    // 554 / 99: catalog v99 added accounting:float:manage (553, CAP:550 S15 #2511 — the register float
+    // commands, AW16-AW17, Security sign-off AW31), on top of v98.
     // 553 / 98: catalog v98 added supplier:fact:replay, supplier:vendor:read, supplier:vendor:write and
     // supplier:vendor_remit:approve (549-552, CAP:550 S23 #2516 — the pos-supplier vendor master,
     // ADR-0070 Decision 7), on top of v97. v97 added accounting:payment:assign-customer (548, CAP:550 S3 #2504) —
@@ -71,8 +73,8 @@ class PermissionCodeTest {
     // people:employee_pii:view (519), v82's crm:fact:replay (518), v81's people:self:view (517)
     // and v80's catalog:service:ingest (516). Both numbers move together by design: the version
     // bump is what tells a running gateway its cached catalog is stale.
-    private static final int EXPECTED_PERMISSION_COUNT = 553;
-    private static final int EXPECTED_CATALOG_VERSION = 98;
+    private static final int EXPECTED_PERMISSION_COUNT = 554;
+    private static final int EXPECTED_CATALOG_VERSION = 99;
 
     // -------------------------------------------------------------------------
     // AC-1: Catalog size — EXPECTED_PERMISSION_COUNT entries

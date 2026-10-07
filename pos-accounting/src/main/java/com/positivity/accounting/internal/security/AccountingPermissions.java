@@ -86,6 +86,12 @@ public final class AccountingPermissions {
     /** View accounting export status and history. */
     public static final String EXPORT_VIEW = "accounting:export:view";
 
+    /**
+     * Establish a register's go-live float and change it (#2511; SPEC-accounting-workspace §4.6
+     * "Float", AW16-AW17, AW31): CONTROLLER and ADMIN.
+     */
+    public static final String FLOAT_MANAGE = "accounting:float:manage";
+
     /** Create gl mapping. */
     public static final String GL_MAPPING_CREATE = "accounting:gl-mapping:create";
 

@@ -18,7 +18,8 @@ import org.jspecify.annotations.NonNull;
  *
  * @param registerId the register: pos-order's {@code terminalId} (AW31)
  * @param locationId the location the register belongs to
- * @param amount the register's float now
+ * @param amount the register's float now; negative only when a reversal removed more than stands (the
+ *     ledger shows the same on 1080), never through a command
  * @param previousAmount the float before this change; equal to {@link #amount} on a republish
  * @param kind what changed it
  * @param effectiveDate the date the change was posted on
@@ -55,9 +56,6 @@ public record RegisterFloatChangedV1(
         }
         if (amount == null || previousAmount == null) {
             throw new IllegalArgumentException("amount and previousAmount must not be null");
-        }
-        if (amount.signum() < 0) {
-            throw new IllegalArgumentException("amount must not be negative");
         }
         if (kind == null || effectiveDate == null) {
             throw new IllegalArgumentException("kind and effectiveDate must not be null");

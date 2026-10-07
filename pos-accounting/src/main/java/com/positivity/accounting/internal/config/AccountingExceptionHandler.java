@@ -16,6 +16,7 @@ import com.positivity.accounting.internal.exception.AccountingTimeZoneLockedExce
 import com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetException;
 import com.positivity.accounting.internal.exception.AdjustmentSignInvalidException;
 import com.positivity.accounting.internal.exception.CashCustomerCreditNotAllowedException;
+import com.positivity.accounting.internal.exception.CashSetupException;
 import com.positivity.accounting.internal.exception.CurrencyNotSupportedException;
 import com.positivity.accounting.internal.exception.DefaultGLMappingNotFoundException;
 import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
@@ -200,6 +201,15 @@ public class AccountingExceptionHandler {
     public ResponseEntity<ApiError> handleAccountNotInactive(
             AccountNotInactiveException ex, HttpServletRequest request) {
         return build(HttpStatus.CONFLICT, "ACCOUNT_NOT_INACTIVE", ex.getMessage(), request);
+    }
+
+    /**
+     * Register float and petty-expense category refusals (#2511): the exception carries its code and
+     * status (409 {@code FLOAT_ALREADY_ESTABLISHED}, 422 {@code FLOAT_AMOUNT_UNCHANGED}, ...).
+     */
+    @ExceptionHandler(CashSetupException.class)
+    public ResponseEntity<ApiError> handleCashSetup(CashSetupException ex, HttpServletRequest request) {
+        return build(ex.getCode().status(), ex.getCode().name(), ex.getMessage(), request);
     }
 
     @ExceptionHandler(DuplicateEventException.class)

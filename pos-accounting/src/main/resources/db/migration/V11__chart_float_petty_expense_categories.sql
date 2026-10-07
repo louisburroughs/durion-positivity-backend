@@ -212,8 +212,7 @@ CREATE TABLE public.register_float (
     go_live_journal_entry_id uuid,
     version integer DEFAULT 0 NOT NULL,
     created_at timestamp(6) with time zone NOT NULL,
-    modified_at timestamp(6) with time zone NOT NULL,
-    CONSTRAINT register_float_amount_check CHECK (amount >= 0)
+    modified_at timestamp(6) with time zone NOT NULL
 );
 
 COMMENT ON TABLE public.register_float IS
