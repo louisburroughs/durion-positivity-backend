@@ -88,6 +88,9 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>Confirm-close compares the over/short with the policy's tolerance and publishes the close
  *       fact at schema version 2 with every movement.
  * </ul>
+ *
+ * <p>CAP:550 S40 (#2578): a successful open queues {@code order.session.opened} in its transaction; a refused
+ * open queues nothing. {@link RegisterSessionFactsBootstrap} re-emits it for every active session at start.
  */
 @Slf4j
 @Service
@@ -201,7 +204,11 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                 .currencyCode(functionalCurrency.code())
                 .openedAt(now)
                 .build();
-        return toSummary(registerSessionRepository.save(session));
+        RegisterSession saved = registerSessionRepository.save(session);
+        // CAP:550 S40 (#2578): the opened fact rides this transaction's outbox, so it exists exactly when the
+        // session does; every refusal above throws before it is queued.
+        domainEventPublisher.publishRegisterSessionOpened(saved);
+        return toSummary(saved);
     }
 
     @Override

@@ -36,6 +36,12 @@ public interface RegisterSessionRepository extends JpaRepository<RegisterSession
     List<RegisterSession> findByTerminalIdAndStatusIn(String terminalId, Collection<RegisterSessionStatus> statuses);
 
     /**
+     * The bound tenant's sessions in the given statuses, oldest open first (CAP:550 S40, #2578): the start
+     * republish of {@code order.session.opened} for every active (OPEN or CLOSING) session.
+     */
+    List<RegisterSession> findByStatusInOrderByOpenedAtAscSessionIdAsc(Collection<RegisterSessionStatus> statuses);
+
+    /**
      * The session, row-locked for the rest of the transaction (CAP:550 S16, #2512): cash movements and
      * approvals of one session are serialised on it, so a running total per reason is computed over
      * every movement already committed and a single-use approval is used once.

@@ -5,8 +5,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.domainevents.location.LocationAncestry.AncestorSets;
@@ -55,6 +58,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
@@ -229,6 +233,34 @@ class RegisterSessionServiceImplTest {
     }
 
     @Test
+    @DisplayName("RSS-001b (CAP:550 S40 AC1): a successful open queues exactly one order.session.opened for the saved"
+            + " session")
+    void open_queuesOneOpenedFact() {
+        when(registerSessionRepository.existsByTerminalIdAndStatusIn(eq(TERMINAL), any()))
+                .thenReturn(false);
+        when(registerFloatRepository.findByRegisterId(TERMINAL)).thenReturn(Optional.empty());
+        UUID sessionId = UUID.randomUUID();
+        // The repository answers the persisted session (id and seeded version), which the fact must carry.
+        when(registerSessionRepository.save(any())).thenAnswer(inv -> {
+            RegisterSession persisted = inv.getArgument(0);
+            persisted.setSessionId(sessionId);
+            persisted.setVersion(0L);
+            return persisted;
+        });
+
+        service.openSession(new OpenSessionCommand(TERMINAL, LOCATION));
+
+        InOrder order = inOrder(registerSessionRepository, domainEventPublisher);
+        order.verify(registerSessionRepository).save(any());
+        order.verify(domainEventPublisher)
+                .publishRegisterSessionOpened(argThat(session -> sessionId.equals(session.getSessionId())
+                        && TERMINAL.equals(session.getTerminalId())
+                        && LOCATION.equals(session.getLocationId())
+                        && Instant.parse("2026-07-23T12:00:00Z").equals(session.getOpenedAt())));
+        verifyNoMoreInteractions(domainEventPublisher);
+    }
+
+    @Test
     @DisplayName("RSS-002 (CAP:550 S16 AC7, AW16): the opening float is the configured float, not the previous count")
     void open_usesConfiguredFloat() {
         RegisterSession prior = openSession(UUID.randomUUID());
@@ -295,6 +327,8 @@ class RegisterSessionServiceImplTest {
                     assertThat(mismatch.floatLocationId()).isEqualTo(OTHER_LOCATION);
                 });
         verify(registerSessionRepository, never()).save(any());
+        // CAP:550 S40 AC2: a refused open queues no order.session.opened.
+        verifyNoInteractions(domainEventPublisher);
     }
 
     @Test
@@ -379,6 +413,8 @@ class RegisterSessionServiceImplTest {
         assertThatThrownBy(() -> service.openSession(new OpenSessionCommand(TERMINAL, LOCATION)))
                 .isInstanceOf(RegisterSessionConflictException.class);
         verify(registerSessionRepository, never()).save(any());
+        // CAP:550 S40 AC2: a refused open queues no order.session.opened.
+        verifyNoInteractions(domainEventPublisher);
     }
 
     @Test
@@ -391,6 +427,7 @@ class RegisterSessionServiceImplTest {
         assertThatThrownBy(() -> service.openSession(new OpenSessionCommand(TERMINAL, LOCATION)))
                 .isInstanceOf(RegisterSessionConflictException.class);
         verify(registerSessionRepository, never()).save(any());
+        verifyNoInteractions(domainEventPublisher);
     }
 
     @Test
@@ -660,6 +697,7 @@ class RegisterSessionServiceImplTest {
                         assertThat(denied.locationId()).isEqualTo(OTHER_LOCATION.toString());
                     });
             verify(registerSessionRepository, never()).save(any());
+            verifyNoInteractions(domainEventPublisher);
         }
 
         @Test

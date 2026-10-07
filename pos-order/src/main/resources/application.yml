@@ -122,6 +122,10 @@ pos:
       # lockout (pos.security.lockout.max-attempts, 5), so keep this BELOW it: a cashier must not be
       # able to lock a manager out from the register.
       max-denied-approvals: ${POS_ORDER_SESSION_MAX_DENIED_APPROVALS:3}
+      # CAP:550 S40 (#2578): at start, re-emit order.session.opened for every OPEN or CLOSING session, per
+      # tenant (ADR-0044 §4), so pos-accounting's register-relocation guard heals a lost or missed fact.
+      bootstrap-republish:
+        enabled: ${POS_ORDER_SESSION_BOOTSTRAP_REPUBLISH_ENABLED:true}
   price:
     service-id: ${POS_PRICE_SERVICE_ID:price}
   tax:
