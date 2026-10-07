@@ -73,6 +73,8 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1bank-transactions~1{bankTransactionId}~1exclude
   /v1/accounting/bank-transactions/{bankTransactionId}/restore:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1bank-transactions~1{bankTransactionId}~1restore
+  /v1/accounting/configuration/time-zone:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1configuration~1time-zone
   /v1/accounting/credit-memos:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1credit-memos
   /v1/accounting/credit-memos/{creditMemoId}:
