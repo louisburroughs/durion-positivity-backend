@@ -42,6 +42,17 @@ permissions:
     description: "Retry failed accounting events"
   - name: "accounting:events:submit"
     description: "Submit accounting events"
+  - name: "accounting:deposit:create"
+    description: "Read the undeposited register sessions and record a bank deposit of their drawer cash (CAP:550 S18)"
+    grantTo:
+      - "ACCOUNTING_CLERK"
+      - "ADMIN"
+      - "CONTROLLER"
+  - name: "accounting:deposit:reverse"
+    description: "Reverse a bank deposit of drawer cash (CAP:550 S18)"
+    grantTo:
+      - "ADMIN"
+      - "CONTROLLER"
   - name: "accounting:events:view"
     description: "View accounting events"
   - name: "accounting:export:request"

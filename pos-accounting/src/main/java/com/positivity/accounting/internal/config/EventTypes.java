@@ -16,7 +16,9 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 152 event types (includes +1 from the bank opening balance (CAP:550, Issue #2572):
+     * Total: 156 event types (includes +4 from bank deposits of drawer cash (CAP:550 S18, Issue #2514):
+     * ACCOUNTING_UNDEPOSITED_SESSIONS_VIEW, ACCOUNTING_DEPOSIT_CREATE, ACCOUNTING_DEPOSIT_VIEW,
+     * ACCOUNTING_DEPOSIT_REVERSE, +1 from the bank opening balance (CAP:550, Issue #2572):
      * ACCOUNTING_BANK_OPENING_BALANCE_ESTABLISH, +1 from the unpaid walk-in sales read (CAP:550 S11, Issue #2508):
      * ACCOUNTING_UNPAID_WALK_IN_SALES_VIEW, +1 from the automatic payment applications read (CAP:550 S2,
      * Issue #2503): ACCOUNTING_PAYMENT_APPLICATION_AUTOMATIC_LIST_VIEW, +2 from the receivables worklist
@@ -126,6 +128,19 @@ public final class EventTypes {
                 EventTypeRegistration.write(
                                 "ACCOUNTING_BANK_OPENING_BALANCE_ESTABLISH",
                                 "Establish a bank account's opening balance at cutover")
+                        .build(),
+
+                // BankDepositController - 4 events (CAP:550 S18, #2514)
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_UNDEPOSITED_SESSIONS_VIEW",
+                                "List the closed register sessions whose drawer cash is not yet deposited")
+                        .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_DEPOSIT_CREATE", "Record a bank deposit of closed sessions' drawer cash")
+                        .build(),
+                EventTypeRegistration.fastRead("ACCOUNTING_DEPOSIT_VIEW", "View a bank deposit of drawer cash")
+                        .build(),
+                EventTypeRegistration.write("ACCOUNTING_DEPOSIT_REVERSE", "Reverse a bank deposit of drawer cash")
                         .build(),
 
                 // PettyExpenseCategoryController - 5 events (CAP:550 S15, #2511)
