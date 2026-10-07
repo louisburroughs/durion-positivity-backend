@@ -10,9 +10,14 @@ import com.positivity.order.internal.repository.ProcessedEventRepository;
 import com.positivity.order.internal.repository.PurchaseOrderRepository;
 import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.format.DateTimeParseException;
+import java.util.Locale;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -22,8 +27,25 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Places purchase orders that other domains ask for, on {@code order.commands.v1}
- * (CAP-320 #1334, ADR-0044 R1).
+ * The single consumer of {@code order.commands.v1}: places purchase orders that other domains ask for
+ * (CAP-320 #1334, ADR-0044 R1), and serves {@code order.outbox.replay-requested} drift repairs from
+ * consumers of {@code order.events.v1} (ADR-0044 §4, #2579).
+ *
+ * <h2>The replay command</h2>
+ *
+ * A manifest listener asks with the platform's command shape — {@code commandType} and a {@code payload}
+ * of {@code since} / {@code until}, no event id — so it is dispatched before the event-id guard and
+ * recorded nowhere: replay is idempotent (the rows are re-sent with their original event ids, which
+ * consumers dedupe), as in every other owner. Only the tenant the command arrived under is replayed, and
+ * only {@code order.events.v1} rows ({@link OrderOutboxReplayService}). A window with an {@code until} is
+ * replayed as {@code [since, until)}, one without as everything since {@code since}, each widened by a
+ * second for the skew between an outbox row's {@code createdAt} and its event id. A window starting further
+ * back than {@code pos.order.outbox.replay.max-lookback} (default {@code P30D}) or without a parsable
+ * {@code since} is logged and dropped; a transient database failure propagates for the container to retry.
+ *
+ * <p>One consumer, not one per command, for the same reason as pos-supplier's {@code
+ * SupplierCommandListener}: a second consumer group on this topic would see every purchase-order command
+ * and every replay request the other one handles.
  *
  * <h2>Exactly one order per request</h2>
  *
@@ -60,11 +82,21 @@ public class PurchaseOrderCommandListener {
     /** Requesting domain, per the repo-wide {@code processed_events} convention. */
     static final String OWNER = "inventory";
 
+    /** Wire name {@code order.outbox.replay-requested}, in normalized command-type form. */
+    static final String COMMAND_OUTBOX_REPLAY_REQUESTED = "ORDER_OUTBOX_REPLAY_REQUESTED";
+
+    /** Covers the sub-millisecond skew between an outbox row's createdAt and its event id's timestamp. */
+    private static final Duration REPLAY_WINDOW_SLACK = Duration.ofSeconds(1);
+
     private final Clock clock;
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
     private final PurchaseOrderRepository purchaseOrderRepository;
     private final PurchaseOrderServiceImpl purchaseOrderService;
+    private final OrderOutboxReplayService outboxReplayService;
+
+    /** How far back a replay window may start; older requests are logged and dropped. */
+    private final Duration replayMaxLookback;
 
     /** The event's handler work and its processed mark, in a transaction of their own; see the class doc. */
     private final TransactionTemplate handlerTransaction;
@@ -75,12 +107,16 @@ public class PurchaseOrderCommandListener {
             ProcessedEventRepository processedEventRepository,
             PurchaseOrderRepository purchaseOrderRepository,
             PurchaseOrderServiceImpl purchaseOrderService,
+            OrderOutboxReplayService outboxReplayService,
+            @Value("${pos.order.outbox.replay.max-lookback:P30D}") Duration replayMaxLookback,
             PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.purchaseOrderRepository = purchaseOrderRepository;
         this.purchaseOrderService = purchaseOrderService;
+        this.outboxReplayService = outboxReplayService;
+        this.replayMaxLookback = replayMaxLookback;
         this.handlerTransaction = new TransactionTemplate(transactionManager);
         this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -94,6 +130,13 @@ public class PurchaseOrderCommandListener {
             envelope = objectMapper.readTree(message);
         } catch (Exception e) {
             log.warn("Skipping unparsable order command", e);
+            return;
+        }
+        String commandType = envelope.path("commandType").stringValue(null);
+        if (commandType != null
+                && COMMAND_OUTBOX_REPLAY_REQUESTED.equals(
+                        commandType.toUpperCase(Locale.ROOT).replace('.', '_').replace('-', '_'))) {
+            handleOutboxReplayRequested(envelope);
             return;
         }
         String eventType = envelope.path("eventType").stringValue(null);
@@ -131,6 +174,57 @@ public class PurchaseOrderCommandListener {
             }
             log.warn("Skipping malformed order command eventId={}", eventId, e);
             handlerTransaction.executeWithoutResult(_ -> markProcessed(eventId));
+        }
+    }
+
+    /**
+     * Re-queues the bound tenant's {@code order.events.v1} rows of the requested window (#2579). Malformed
+     * and out-of-lookback requests are dropped after logging; a transient database failure propagates so
+     * the container retries it (ADR-0044 §4).
+     */
+    private void handleOutboxReplayRequested(@NonNull JsonNode command) {
+        JsonNode payload = command.path("payload");
+        Instant since = parseInstant(payload, "since");
+        if (since == null) {
+            log.warn("Ignoring order outbox replay command with missing/malformed payload.since: {}", command);
+            return;
+        }
+        Instant lookbackLimit = Instant.now(clock).minus(replayMaxLookback);
+        if (since.isBefore(lookbackLimit)) {
+            log.warn(
+                    "Ignoring order outbox replay command: since={} exceeds max lookback {} (limit {})",
+                    since,
+                    replayMaxLookback,
+                    lookbackLimit);
+            return;
+        }
+        Instant until = parseInstant(payload, "until");
+        try {
+            int queued = until != null && until.isAfter(since)
+                    ? outboxReplayService.replayBetween(
+                            since.minus(REPLAY_WINDOW_SLACK), until.plus(REPLAY_WINDOW_SLACK))
+                    : outboxReplayService.replaySince(since.minus(REPLAY_WINDOW_SLACK));
+            log.info("Order outbox replay command processed since={} until={} eventsQueued={}", since, until, queued);
+        } catch (RuntimeException e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                // The container retries with backoff, then publishes to {topic}.dlq (ADR-0044 §4); a replay
+                // is idempotent, so redelivery is harmless.
+                throw e;
+            }
+            log.error("Order outbox replay command failed and will not be retried: {}", command, e);
+        }
+    }
+
+    private static @Nullable Instant parseInstant(@NonNull JsonNode payload, @NonNull String field) {
+        String value = payload.path(field).stringValue(null);
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Instant.parse(value);
+        } catch (DateTimeParseException _) {
+            log.warn("Malformed payload.{}={} on order outbox replay command", field, value);
+            return null;
         }
     }
 

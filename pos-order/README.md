@@ -153,6 +153,27 @@ session of every tenant (`TenantIterator`, each tenant in its own transaction) a
 version, and none for a CLOSED session (ADR-0044 §4 backfill). Turn it off with
 `POS_ORDER_SESSION_BOOTSTRAP_REPUBLISH_ENABLED=false` (`pos.order.session.bootstrap-republish.enabled`).
 
+## Reconciliation manifest and replay (ADR-0044 §4, #2579)
+
+pos-order reconciles `order.events.v1` the way every other fact owner does:
+
+- **Manifest.** `ManifestPublisher` publishes one `ReconciliationManifestV1` per tenant per closed window on
+  `order.manifest.v1` (eventType `order.reconciliation.manifest`): the count, checksum and per-type counts of the
+  `order.events.v1` facts that tenant published from `event_outbox` in the window, by eventId (UUIDv7)
+  timestamp. Every fact type is counted (sales order, return, purchase order, register session); the
+  `supplier.commands.v1` requests queued on the same outbox are not facts and are not. Every active tenant
+  gets a manifest each window, zero-count when it published nothing. The job is `@PlatformScoped` (it reads the
+  global outbox) and sends directly, not through the outbox; a failed window is retried next poll.
+- **Replay.** A consumer whose processed-events log disagrees with a window sends
+  `{"commandType":"order.outbox.replay-requested","payload":{"since":…,"until":…}}` on `order.commands.v1`.
+  `PurchaseOrderCommandListener`, the topic's single consumer, dispatches it before the event-id guard and
+  re-queues that tenant's published `order.events.v1` rows of `[since, until)` (everything since `since` without
+  an `until`), widened by a second; the outbox publisher re-sends them with their original event ids, which
+  consumers dedupe. A window starting more than `pos.order.outbox.replay.max-lookback` (`P30D`) ago, or without a
+  parsable `since`, is dropped; a transient database failure is retried by the container.
+- **Consumer.** pos-accounting (`OrderManifestListener`) compares each manifest with the `order` rows its
+  `OrderEventsListener` records, which records every order fact it reads, not only the session facts it posts.
+
 ## Purchase order transmission timeline (issue #1638)
 
 - `GET /v1/orders/purchase-orders/{poId}/transmission-events` (`listPurchaseOrderTransmissionEvents`,
@@ -272,6 +293,9 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `POS_ORDER_FUNCTIONAL_CURRENCY` | required | ISO 4217 code of drawer money (ADR-0067 R-2; a Stage A interim until step A5 reads the tenant's functional currency). No default: unset or non-ISO fails startup. A drawer is stamped with it when it opens, and its movements, approvals and close fact keep that stamp, so a change applies to drawers opened afterwards. V4 stamps pre-existing drawers with it through the Flyway placeholder `${functional_currency}` (`FlywayConfig`). |
 | `POS_ORDER_SESSION_MAX_DENIED_APPROVALS` | `3` | Refused manager approvals per drawer session and manager sign-in name before the step-up stops asking pos-security-service for that name. Keep it below pos-security-service's sign-in lockout (`pos.security.lockout.max-attempts`, 5) so a register cannot lock a manager out; another manager can still approve. |
 | `POS_ORDER_SESSION_BOOTSTRAP_REPUBLISH_ENABLED` | `true` | At start, re-emit `order.session.opened` for every OPEN or CLOSING register session, per tenant (see [Register session facts](#register-session-facts-cap550-s40-2578)). |
+| `POS_ORDER_MANIFEST_TOPIC` | `order.manifest.v1` | Topic of the reconciliation manifests (`pos.order.manifest.topic`; see [Reconciliation manifest and replay](#reconciliation-manifest-and-replay-adr-0044-4-2579)) |
+| `POS_ORDER_MANIFEST_WINDOW` / `POS_ORDER_MANIFEST_GRACE` | `PT1H` / `PT5M` | Manifest window length, and how long after a window closes its manifest is published |
+| `pos.order.outbox.replay.max-lookback` | `P30D` | Oldest window start an `order.outbox.replay-requested` command is served for |
 | `POS_SECURITY_API_SECRET` | required for approvals | Sent as `X-Internal-Api-Secret` on the step-up call; unset, every approval is 503 `CASH_MOVEMENT_APPROVAL_UNAVAILABLE` |
 
 ## Multitenancy (ADR-0062, WS3 wave 5)
@@ -289,8 +313,9 @@ The application pool connects as the non-owner `pos_app` role (Compose: `SPRING_
 `SPRING_FLYWAY_PASSWORD`, `FlywayConfig`).
 
 The outbox row carries the producing tenant as data (`tenant_id`, stamped from the bound tenant by
-`OutboxEventWriter`); the one scheduled job, `OutboxPublisher.publishPending`, is platform-scoped (it drains the
-global `event_outbox` and puts each row's `tenant_id` on the record header). The one native query,
+`OutboxEventWriter`); the outbox jobs are platform-scoped: `OutboxPublisher.publishPending` drains the global
+`event_outbox` and puts each row's `tenant_id` on the record header, and `ManifestPublisher.publishDueManifest`
+reads it to publish one manifest per tenant, each stamped with its tenant. The one native query,
 `PurchaseOrderRepository`'s `nextval('purchase_order_number_seq')`, carries `@TenantAudited`: it reads a
 platform-wide sequence, not a table.
 
