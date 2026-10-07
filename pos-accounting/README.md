@@ -751,6 +751,12 @@ arrived does not block. The guard takes effect once pos-order publishes `order.s
 `accounting.float.changed` is schema version 3: version 2 added kind `RELOCATION` and a nullable
 `previousLocationId`, version 3 adds `currencyCode` (#2577, below).
 
+The order feed is reconciled (ADR-0044 §4, #2579): `OrderEventsListener` records every `order.events.v1`
+eventId it reads under the `order` owner tag, the fact types it ignores included, and `OrderManifestListener`
+compares each per-tenant `order.manifest.v1` window with those rows. On drift it counts
+`replica.drift{owner="order"}` and sends `order.outbox.replay-requested` for the window on `order.commands.v1`;
+pos-order re-sends the window's facts with their original event ids, which `processed_events` dedupes.
+
 ## Ledger currency (ADR-0067)
 
 The ledger books one currency, `accounting.ledger.base-currency` (`USD` in `application.yml`), read
@@ -972,6 +978,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `pos.accounting.kafka.inventory-events-topic`       | `inventory.events.v1` | Inventory scrap and adjustment facts for shrinkage / adjustment GL posting (#1043, #2191) |
 | `pos.accounting.kafka.accounting-events-topic`      | `accounting.events.v1` | Accounting's own fact feed (`accounting.invoice.gl-posted`), drained from `kafka_event_outbox` (#1843) |
 | `pos.accounting.kafka.accounting-commands-topic`    | `accounting.commands.v1` | Drift repair for accounting's own facts: `accounting.outbox.replay-requested` re-queues the requesting tenant's facts of a window (`AccountingCommandListener`; CAP:550 S16, #2512) |
+| `pos.accounting.kafka.order-manifest-topic` / `order-commands-topic` | `order.manifest.v1` / `order.commands.v1` | Reconciliation of the order feed: `OrderManifestListener` compares each per-tenant window with the `order` rows of `processed_events` and sends `order.outbox.replay-requested` on drift (ADR-0044 §4, #2579) |
 | `pos.accounting.manifest.topic`                     | `accounting.manifest.v1` | One reconciliation manifest per tenant per closed window of `accounting.events.v1` (`ManifestPublisher`, ADR-0044 §4; first consumer: pos-order's copies of the float and petty-expense category facts, #2512) |
 | `pos.accounting.manifest.window` / `.grace`         | `PT1H` / `PT5M`      | Manifest window length, and how long after a window closes its manifest is published |
 | `pos.accounting.outbox.poll-interval-ms`            | `1000`               | Kafka outbox drain interval (#1843) |
