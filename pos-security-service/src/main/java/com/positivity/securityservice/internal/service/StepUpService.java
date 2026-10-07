@@ -1,7 +1,9 @@
 package com.positivity.securityservice.internal.service;
 
 import com.positivity.securityservice.internal.dto.StepUpResponse;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Checks a person's credentials once, under the sign-in lockout policy, without issuing a token or
@@ -13,10 +15,13 @@ public interface StepUpService {
     /**
      * Verifies {@code username} / {@code password} in the tenant bound to the request.
      *
-     * @return the person's user id and whether their effective roles grant {@code permission}
+     * @param locationId the location the caller's action is at, for the audit log, or null
+     * @return the person's user id, whether their effective roles grant {@code permission}, and that
+     *     grant's location scope for them
      * @throws com.positivity.securityservice.internal.exception.StepUpDeniedException for wrong
      *     credentials or an unknown, disabled, expired or locked account
      */
     @NonNull
-    StepUpResponse verify(@NonNull String username, @NonNull String password, @NonNull String permission);
+    StepUpResponse verify(
+            @NonNull String username, @NonNull String password, @NonNull String permission, @Nullable UUID locationId);
 }

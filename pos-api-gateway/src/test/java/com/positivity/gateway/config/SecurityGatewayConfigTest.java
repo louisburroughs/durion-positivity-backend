@@ -324,11 +324,22 @@ class SecurityGatewayConfigTest {
                         TEST_CLOCK)
                 .authFilter();
         for (String path : List.of(
-                "/security-service/internal/v1/auth/step-up", "/security-service/v1/internal/v1/auth/step-up")) {
+                "/security-service/internal/v1/auth/step-up",
+                "/security-service/v1/internal/v1/auth/step-up",
+                // M2 (review of #2569): spellings a downstream service would still resolve to /internal
+                "/security-service//internal/v1/auth/step-up",
+                "/security-service/./internal/v1/auth/step-up",
+                "/security-service/v1/../internal/v1/auth/step-up",
+                "/security-service/%2Finternal/v1/auth/step-up",
+                "/security-service%2Finternal%2Fv1%2Fauth%2Fstep-up",
+                "/security-service/internal;x=y/v1/auth/step-up",
+                "/security-service/INTERNAL/v1/auth/step-up")) {
             AtomicReference<Boolean> forwarded = new AtomicReference<>(false);
-            MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.post(path)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + buildTenantToken(TENANT_ID))
-                    .build());
+            // URI.create keeps the raw encoding as a client sends it (a template would re-encode the %).
+            MockServerWebExchange exchange = MockServerWebExchange.from(
+                    MockServerHttpRequest.method(org.springframework.http.HttpMethod.POST, java.net.URI.create(path))
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + buildTenantToken(TENANT_ID))
+                            .build());
 
             filter.filter(exchange, ex -> {
                         forwarded.set(true);
@@ -339,6 +350,20 @@ class SecurityGatewayConfigTest {
             assertThat(forwarded.get()).as(path).isFalse();
             assertThat(exchange.getResponse().getStatusCode()).as(path).isEqualTo(HttpStatus.FORBIDDEN);
         }
+    }
+
+    @Test
+    void canonicalPath_resolvesTheSpellingsThatReachInternal() {
+        assertThat(SecurityGatewayConfig.isInternalServicePath("/security-service//internal/x"))
+                .isTrue();
+        assertThat(SecurityGatewayConfig.isInternalServicePath("/security-service/./internal/x"))
+                .isTrue();
+        assertThat(SecurityGatewayConfig.isInternalServicePath("/a/b/../../security-service/internal"))
+                .isTrue();
+        assertThat(SecurityGatewayConfig.isInternalServicePath("/order/v1/orders/internal-notes"))
+                .isFalse();
+        assertThat(SecurityGatewayConfig.isInternalServicePath("/order/v1/orders/sessions"))
+                .isFalse();
     }
 
     @Test

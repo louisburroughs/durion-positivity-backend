@@ -51,6 +51,12 @@ class StepUpServiceImplTest {
     private final LockoutService lockoutService = mock(LockoutService.class);
     private final UserRepository userRepository = mock(UserRepository.class);
     private final RoleAuthorityService roleAuthorityService = mock(RoleAuthorityService.class);
+    private final StaffingAssignmentProjectionService staffingAssignments =
+            mock(StaffingAssignmentProjectionService.class);
+    private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder =
+            mock(org.springframework.security.crypto.password.PasswordEncoder.class);
+    private static final UUID PERSON_ID = UUID.fromString("01900000-0000-7000-8000-0000000000c1");
+    private static final UUID LOCATION = UUID.fromString("01900000-0000-7000-8000-0000000000d1");
     private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
     private StepUpServiceImpl service;
@@ -61,7 +67,14 @@ class StepUpServiceImplTest {
         ObjectProvider<MeterRegistry> registry = mock(ObjectProvider.class);
         when(registry.getIfAvailable()).thenReturn(meterRegistry);
         service = new StepUpServiceImpl(
-                authenticationManager, lockoutService, userRepository, roleAuthorityService, registry);
+                authenticationManager,
+                lockoutService,
+                userRepository,
+                roleAuthorityService,
+                staffingAssignments,
+                passwordEncoder,
+                java.time.Clock.fixed(java.time.Instant.parse("2026-10-07T12:00:00Z"), java.time.ZoneOffset.UTC),
+                registry);
         TenantContext.bind(TENANT);
     }
 
@@ -85,7 +98,7 @@ class StepUpServiceImplTest {
                 .build());
         var principal = new CustomUserDetailsService.SecurityUserPrincipal(
                 MANAGER_ID,
-                null,
+                PERSON_ID,
                 new org.springframework.security.core.userdetails.User("manager", "n/a", authorities));
         when(authenticationManager.authenticate(any()))
                 .thenReturn(UsernamePasswordAuthenticationToken.authenticated(principal, null, authorities));
@@ -99,7 +112,7 @@ class StepUpServiceImplTest {
         when(roleAuthorityService.expandRolesToAuthorities(Set.of("GENERAL_MANAGER")))
                 .thenReturn(Set.of("ROLE_GENERAL_MANAGER", PERMISSION));
 
-        StepUpResponse response = service.verify("manager", "s3cret", PERMISSION);
+        StepUpResponse response = service.verify("manager", "s3cret", PERMISSION, LOCATION);
 
         assertThat(response.userId()).isEqualTo(MANAGER_ID);
         assertThat(response.holdsPermission()).isTrue();
@@ -121,7 +134,7 @@ class StepUpServiceImplTest {
         when(roleAuthorityService.expandRolesToAuthorities(Set.of("CASHIER")))
                 .thenReturn(Set.of("ROLE_CASHIER", "order:session:cash_movement"));
 
-        StepUpResponse response = service.verify("manager", "s3cret", PERMISSION);
+        StepUpResponse response = service.verify("manager", "s3cret", PERMISSION, LOCATION);
 
         assertThat(response.holdsPermission()).isFalse();
     }
@@ -132,7 +145,7 @@ class StepUpServiceImplTest {
         knownUser();
         when(authenticationManager.authenticate(any())).thenThrow(new BadCredentialsException("bad"));
 
-        assertThatThrownBy(() -> service.verify("manager", "wrong", PERMISSION))
+        assertThatThrownBy(() -> service.verify("manager", "wrong", PERMISSION, LOCATION))
                 .isInstanceOf(StepUpDeniedException.class)
                 .hasMessage("Step-up denied");
 
@@ -145,7 +158,7 @@ class StepUpServiceImplTest {
         when(userRepository.findByUsername("ghost")).thenReturn(Optional.empty());
         when(authenticationManager.authenticate(any())).thenThrow(new BadCredentialsException("bad"));
 
-        assertThatThrownBy(() -> service.verify("ghost", "x", PERMISSION))
+        assertThatThrownBy(() -> service.verify("ghost", "x", PERMISSION, null))
                 .isInstanceOf(StepUpDeniedException.class)
                 .hasMessage("Step-up denied");
 
@@ -158,10 +171,12 @@ class StepUpServiceImplTest {
         knownUser();
         when(lockoutService.isLockedOut(MANAGER_ID)).thenReturn(true);
 
-        assertThatThrownBy(() -> service.verify("manager", "s3cret", PERMISSION))
+        assertThatThrownBy(() -> service.verify("manager", "s3cret", PERMISSION, LOCATION))
                 .isInstanceOf(StepUpDeniedException.class);
 
         verifyNoInteractions(authenticationManager);
+        // A throw-away hash keeps the locked refusal about as slow as a wrong password.
+        verify(passwordEncoder).encode("s3cret");
     }
 
     @Test
@@ -172,10 +187,10 @@ class StepUpServiceImplTest {
                 .thenThrow(new DisabledException("disabled"))
                 .thenThrow(new LockedException("locked"));
 
-        assertThatThrownBy(() -> service.verify("manager", "s3cret", PERMISSION))
+        assertThatThrownBy(() -> service.verify("manager", "s3cret", PERMISSION, LOCATION))
                 .isInstanceOf(StepUpDeniedException.class)
                 .hasMessage("Step-up denied");
-        assertThatThrownBy(() -> service.verify("manager", "s3cret", PERMISSION))
+        assertThatThrownBy(() -> service.verify("manager", "s3cret", PERMISSION, LOCATION))
                 .isInstanceOf(StepUpDeniedException.class)
                 .hasMessage("Step-up denied");
         verify(lockoutService, never()).recordFailedAttempt(any());
@@ -186,15 +201,61 @@ class StepUpServiceImplTest {
     void unboundTenantFailsClosed() {
         TenantContext.clear();
 
-        assertThatThrownBy(() -> service.verify("manager", "s3cret", PERMISSION))
+        assertThatThrownBy(() -> service.verify("manager", "s3cret", PERMISSION, LOCATION))
                 .isNotInstanceOf(StepUpDeniedException.class);
         verifyNoInteractions(authenticationManager);
     }
 
     @Test
+    @DisplayName("M3: a holder through a LOCATION role answers its dimension and the person's assigned nodes")
+    void scopedHolderAnswersScope() {
+        knownUser();
+        authenticates("LOCATION_MANAGER");
+        when(roleAuthorityService.expandRolesToAuthorities(Set.of("LOCATION_MANAGER")))
+                .thenReturn(Set.of("ROLE_LOCATION_MANAGER", PERMISSION));
+        when(roleAuthorityService.resolveRoleGrants(Set.of("LOCATION_MANAGER")))
+                .thenReturn(List.of(new com.positivity.securityservice.internal.domain.RoleGrant(
+                        "LOCATION_MANAGER",
+                        com.positivity.securityservice.internal.enums.LocationScope.LOCATION,
+                        com.positivity.securityservice.internal.enums.LocationHierarchy.OTHER,
+                        Set.of(PERMISSION))));
+        when(staffingAssignments.assignedLocationIds(PERSON_ID, java.time.LocalDate.of(2026, 10, 7)))
+                .thenReturn(List.of(LOCATION));
+
+        StepUpResponse response = service.verify("manager", "s3cret", PERMISSION, LOCATION);
+
+        assertThat(response.holdsPermission()).isTrue();
+        assertThat(response.otherScoped()).isTrue();
+        assertThat(response.financialScoped()).isFalse();
+        assertThat(response.assignedLocationIds()).containsExactly(LOCATION);
+    }
+
+    @Test
+    @DisplayName("M3: a holder through an ALL role is global — no dimension, no nodes looked up")
+    void globalHolderAnswersNoScope() {
+        knownUser();
+        authenticates("GENERAL_MANAGER");
+        when(roleAuthorityService.expandRolesToAuthorities(Set.of("GENERAL_MANAGER")))
+                .thenReturn(Set.of(PERMISSION));
+        when(roleAuthorityService.resolveRoleGrants(Set.of("GENERAL_MANAGER")))
+                .thenReturn(List.of(new com.positivity.securityservice.internal.domain.RoleGrant(
+                        "GENERAL_MANAGER",
+                        com.positivity.securityservice.internal.enums.LocationScope.ALL,
+                        com.positivity.securityservice.internal.enums.LocationHierarchy.OTHER,
+                        Set.of(PERMISSION))));
+
+        StepUpResponse response = service.verify("manager", "s3cret", PERMISSION, LOCATION);
+
+        assertThat(response.financialScoped()).isFalse();
+        assertThat(response.otherScoped()).isFalse();
+        assertThat(response.assignedLocationIds()).isEmpty();
+        verifyNoInteractions(staffingAssignments);
+    }
+
+    @Test
     @DisplayName("the request's string form never carries the password")
     void requestToStringHidesPassword() {
-        assertThat(new StepUpRequest("manager", "s3cret-value", PERMISSION).toString())
+        assertThat(new StepUpRequest("manager", "s3cret-value", PERMISSION, LOCATION).toString())
                 .doesNotContain("s3cret-value")
                 .contains("manager");
     }

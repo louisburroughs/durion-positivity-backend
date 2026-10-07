@@ -1,12 +1,17 @@
 package com.positivity.securityservice.internal.service;
 
+import com.positivity.securityservice.internal.domain.LocationScopeBits;
 import com.positivity.securityservice.internal.dto.StepUpResponse;
 import com.positivity.securityservice.internal.entity.User;
+import com.positivity.securityservice.internal.enums.PermissionCode;
 import com.positivity.securityservice.internal.exception.StepUpDeniedException;
 import com.positivity.securityservice.internal.repository.UserRepository;
 import com.positivity.tenancy.TenantContext;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.time.Clock;
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -26,6 +31,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.FactorGrantedAuthority;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 /**
@@ -39,7 +45,14 @@ import org.springframework.stereotype.Service;
  * the person never signed in, they only proved who they are for one action.
  *
  * <p>The permission is answered from the person's effective roles at this instant, the same expansion
- * the token issuer uses ({@link RoleAuthorityService#expandRolesToAuthorities}).
+ * the token issuer uses ({@link RoleAuthorityService#expandRolesToAuthorities}), together with that
+ * permission's location scope for the person — the dimensions a location-scoped role grants it on and
+ * the person's assigned nodes today, composed exactly as the token's {@code loc_*} claims are (ADR-0061
+ * §2). The caller decides the person's reach at its location with its own location replica, as it would
+ * for a token of theirs; a scoped grant with no assignment answers no nodes, which reaches nowhere.
+ *
+ * <p>A locked account is refused before the password is checked, after a throw-away password hash so the
+ * refusal takes about as long as a wrong password does.
  *
  * <p>The password is never logged; every refusal throws {@link StepUpDeniedException}, whose reason is
  * logged here and never answered.
@@ -55,24 +68,35 @@ public class StepUpServiceImpl implements StepUpService {
     private final LockoutService lockoutService;
     private final UserRepository userRepository;
     private final RoleAuthorityService roleAuthorityService;
+    private final StaffingAssignmentProjectionService staffingAssignments;
+    private final PasswordEncoder passwordEncoder;
+    private final Clock clock;
     private final @Nullable MeterRegistry meterRegistry;
 
+    @SuppressWarnings("java:S107") // one collaborator per check the sign-in runs
     public StepUpServiceImpl(
             AuthenticationManager authenticationManager,
             LockoutService lockoutService,
             UserRepository userRepository,
             RoleAuthorityService roleAuthorityService,
+            StaffingAssignmentProjectionService staffingAssignments,
+            PasswordEncoder passwordEncoder,
+            Clock clock,
             ObjectProvider<MeterRegistry> meterRegistry) {
         this.authenticationManager = authenticationManager;
         this.lockoutService = lockoutService;
         this.userRepository = userRepository;
         this.roleAuthorityService = roleAuthorityService;
+        this.staffingAssignments = staffingAssignments;
+        this.passwordEncoder = passwordEncoder;
+        this.clock = clock;
         this.meterRegistry = meterRegistry.getIfAvailable();
     }
 
     @Override
     @NonNull
-    public StepUpResponse verify(@NonNull String username, @NonNull String password, @NonNull String permission) {
+    public StepUpResponse verify(
+            @NonNull String username, @NonNull String password, @NonNull String permission, @Nullable UUID locationId) {
         // The calling service's tenant, bound by TenantContextFilter from X-Tenant-Id; an unbound
         // request fails closed rather than looking the person up in no tenant.
         UUID tenantId = TenantContext.require();
@@ -81,6 +105,8 @@ public class StepUpServiceImpl implements StepUpService {
         if (knownUserId != null) {
             lockoutService.unlockIfCooldownExpired(knownUserId);
             if (lockoutService.isLockedOut(knownUserId)) {
+                // Spend about what a password check costs, so a locked account is not told apart by time.
+                passwordEncoder.encode(password);
                 throw denied("account_locked", username, tenantId);
             }
         }
@@ -110,15 +136,36 @@ public class StepUpServiceImpl implements StepUpService {
                 .collect(Collectors.toSet());
         boolean holdsPermission =
                 roleAuthorityService.expandRolesToAuthorities(roleNames).contains(permission);
+        StepUpResponse response = holdsPermission
+                ? withScope(principal, roleNames, permission)
+                : new StepUpResponse(principal.userId(), false, false, false, List.of());
         count(holdsPermission ? "verified" : "lacks_permission");
         log.info(
-                "Step-up verified username={} userId={} tenant={} permission={} holdsPermission={}",
+                "Step-up verified username={} userId={} tenant={} permission={} locationId={} holdsPermission={}"
+                        + " financialScoped={} otherScoped={}",
                 username,
                 principal.userId(),
                 tenantId,
                 permission,
-                holdsPermission);
-        return new StepUpResponse(principal.userId(), holdsPermission);
+                locationId,
+                holdsPermission,
+                response.financialScoped(),
+                response.otherScoped());
+        return response;
+    }
+
+    /** The grant's location scope for the person, composed as the token's {@code loc_*} claims are. */
+    private StepUpResponse withScope(
+            CustomUserDetailsService.SecurityUserPrincipal principal, Set<String> roleNames, String permission) {
+        LocationScopeBits bits = LocationScopeBits.compose(roleAuthorityService.resolveRoleGrants(roleNames));
+        PermissionCode code = PermissionCode.fromCode(permission).orElse(null);
+        boolean financial = code != null && bits.financial().contains(code);
+        boolean other = code != null && bits.other().contains(code);
+        List<UUID> nodes = List.of();
+        if ((financial || other) && principal.personId() != null) {
+            nodes = staffingAssignments.assignedLocationIds(principal.personId(), LocalDate.now(clock));
+        }
+        return new StepUpResponse(principal.userId(), true, financial, other, List.copyOf(nodes));
     }
 
     private StepUpDeniedException denied(String reason, String username, UUID tenantId) {
