@@ -46,7 +46,7 @@ Replace the runtime security-service round-trip with **stateless, in-process per
 |--------|--------------|--------|
 | Security-service calls per auth'd request | 2 | 0 |
 | Gateway auth tail latency (p99) | ~80–200 ms | < 10 ms |
-| JWT access token size | ~800–1200 bytes | < 600 bytes |
+| JWT access token size | ~800–1200 bytes | < 640 bytes (was < 600 until catalog v100 added a `perm_ver` digit; the hard ceiling is the gateway's 8 KB request headers) |
 | Spoofable identity headers reaching downstream | Possible | Zero |
 | Permission catalog size | 215 permissions (17 modules) | ≥ 215, extensible to 512+ |
 
@@ -416,7 +416,7 @@ All auth failures MUST emit a structured log event (Slf4j MDC) at WARN level inc
 - Access token does NOT include `roles` or `authorities` string list claims
 - Refresh token remains unchanged (only `sub`, `uid`, `type`, timing claims)
 - `getAuthoritiesFromToken()` decodes `perm_bits` when present; falls back to legacy `authorities` claim for backward compat during migration
-- Token size integration test verifies access token < 600 bytes for a user with 100 permissions
+- Token size integration test verifies access token < 640 bytes for a user with 100 permissions
 
 **Files:** `JwtServiceImpl.java` (modified) · `JwtService.java` (interface, possibly updated) · `JwtServiceImplTest.java` (modified)
 
@@ -568,7 +568,7 @@ All auth failures MUST emit a structured log event (Slf4j MDC) at WARN level inc
 | 1 · Contract | PERM-001 | `PermissionCode` enum + catalog version | All 215 permissions uniquely indexed |
 | 1 · Contract | PERM-003 | `PermissionBitsetCodec` utility | Round-trip unit tests pass |
 | 2 · Issuance | PERM-002 | `Permission.bitIndex` entity column + migration | All existing permissions have non-null bitIndex |
-| 2 · Issuance | PERM-004 | JWT `perm_bits` + `perm_ver` claim in tokens | Token size < 600 bytes; backward-compat mode active |
+| 2 · Issuance | PERM-004 | JWT `perm_bits` + `perm_ver` claim in tokens | Token size < 640 bytes; backward-compat mode active |
 | 3 · Catalog | PERM-005 | Catalog version endpoint + decode diagnostic | Endpoints return correct data; startup warnings 0 |
 | 4 · Gateway | PERM-006 | Gateway local JWT validation (no security-service) | Valid tokens pass; invalid rejected; security-service offline test passes |
 | 4 · Gateway | PERM-007 | Gateway bitset decode → authority mapping | Integration tests: correct authorities propagated |
@@ -674,7 +674,7 @@ Add `@EmitEvent(id = "PERMISSION_DECODE_EXECUTE", apiVersion = "1")` on the deco
 
 **PERM-003:** `PermissionBitsetCodecTest` — encode/decode round-trips, empty set, single permission, all 215, malformed input throws
 
-**PERM-004:** `JwtServiceImplTest` — updated token contains `perm_bits`, `perm_ver`, `uid`; does not contain `roles`, `authorities` lists; backward-compat decode works on old-format token; token size < 600 bytes
+**PERM-004:** `JwtServiceImplTest` — updated token contains `perm_bits`, `perm_ver`, `uid`; does not contain `roles`, `authorities` lists; backward-compat decode works on old-format token; token size < 640 bytes
 
 **PERM-006, PERM-007, PERM-008:** `SecurityGatewayConfigTest` — all 12 scenarios in PERM-011 acceptance criteria using `WebTestClient` + embedded gateway test setup
 

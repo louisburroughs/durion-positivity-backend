@@ -43,6 +43,10 @@ sleep 10
 
 echo -e "${YELLOW}Starting Core Services...${NC}"
 
+# pos-order needs its functional currency (ADR-0067 R-2 Stage-A interim, #2583); local dev runs USD unless the
+# caller exported another ISO 4217 code. Production and alpha set it explicitly in their compose files.
+export POS_ORDER_FUNCTIONAL_CURRENCY="${POS_ORDER_FUNCTIONAL_CURRENCY:-USD}"
+
 # Start all business services
 services=(
     "pos-accounting"
