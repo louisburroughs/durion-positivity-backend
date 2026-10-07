@@ -113,7 +113,22 @@ public class AccountingExceptionHandler {
     @ExceptionHandler(InvalidRequestParameterException.class)
     public ResponseEntity<ApiError> handleInvalidRequestParameter(
             InvalidRequestParameterException ex, HttpServletRequest request) {
-        return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", ex.getMessage(), request);
+        if (ex.getField() == null) {
+            return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", ex.getMessage(), request);
+        }
+        String correlationId = resolveCorrelationId(request);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        return new ResponseEntity<>(
+                ApiError.withFieldErrors(
+                        "VALIDATION_ERROR",
+                        ex.getMessage(),
+                        HttpStatus.BAD_REQUEST.value(),
+                        Instant.now(clock).toString(),
+                        correlationId,
+                        List.of(new ApiError.FieldError(ex.getField(), ex.getMessage()))),
+                headers,
+                HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(EventValidationException.class)

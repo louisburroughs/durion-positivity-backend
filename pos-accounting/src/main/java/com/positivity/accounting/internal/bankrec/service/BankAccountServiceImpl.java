@@ -20,9 +20,9 @@ import com.positivity.accounting.internal.bankrec.repository.BankReconciliationR
 import com.positivity.accounting.internal.bankrec.repository.BankStatementRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankTransactionRepository;
 import com.positivity.accounting.internal.bankrec.service.BankCashAccounts.BankCashAccount;
+import com.positivity.accounting.internal.config.IsoCurrencyCodes;
 import com.positivity.security.common.SecurityContextHelper;
 import java.time.LocalDate;
-import java.util.Currency;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -193,7 +193,7 @@ public class BankAccountServiceImpl implements BankAccountService {
                 : request.getCurrency().trim().toUpperCase(Locale.ROOT);
         if (currency == null || currency.isEmpty()) {
             errors.put("currency", "is required");
-        } else if (!isIsoCurrency(currency)) {
+        } else if (!IsoCurrencyCodes.isIso(currency)) {
             errors.put("currency", "must be an ISO 4217 code");
         }
         if (request.getBankName() != null && request.getBankName().length() > 100) {
@@ -210,18 +210,6 @@ public class BankAccountServiceImpl implements BankAccountService {
             throw new BankRecException(BankRecErrorCode.VALIDATION_ERROR, "The profile request is invalid", errors);
         }
         return currency;
-    }
-
-    private static boolean isIsoCurrency(String code) {
-        if (code.length() != 3) {
-            return false;
-        }
-        try {
-            Currency.getInstance(code);
-            return true;
-        } catch (IllegalArgumentException unknown) {
-            return false;
-        }
     }
 
     private static String summary(BankAccountProfile profile) {

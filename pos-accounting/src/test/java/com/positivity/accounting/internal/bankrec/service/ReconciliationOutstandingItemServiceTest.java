@@ -36,6 +36,8 @@ import com.positivity.accounting.internal.bankrec.repository.BankReconciliationO
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankStatementRepository;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
+import com.positivity.accounting.internal.repository.BankOpeningBalanceRepository;
+import com.positivity.accounting.internal.service.OpeningItemLineDimensions;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -83,6 +85,9 @@ class ReconciliationOutstandingItemServiceTest {
     @Mock
     private BankRecAuditRecorder audit;
 
+    @Mock
+    private BankOpeningBalanceRepository openingRows;
+
     private ReconciliationOutstandingItemServiceImpl service;
     private BankReconciliation recon;
 
@@ -99,7 +104,8 @@ class ReconciliationOutstandingItemServiceTest {
                 reconciliations,
                 statements,
                 audit,
-                settings);
+                settings,
+                new OpeningItemLineDimensions(openingRows));
         recon = reconciliation();
         lenient().when(support.requireOpen(RECON_ID)).thenReturn(recon);
         lenient().when(support.require(RECON_ID)).thenReturn(recon);
@@ -119,6 +125,21 @@ class ReconciliationOutstandingItemServiceTest {
                 .when(eligibility.lockLedger(eq(recon), eq(List.of(line.getLineId()))))
                 .thenReturn(List.of(line));
         return line;
+    }
+
+    /** An item line of a bank opening entry dated 2026-09-30: a bank_opening_balance row owns its entry. */
+    private JournalEntryLine openingLine(String amount, String reference, String itemDate) {
+        JournalEntryLine line = ledgerLine(amount, LocalDate.of(2026, 9, 30));
+        line.setDimensions(
+                dimensions(amount.startsWith("-") ? "OUTSTANDING_CHECK" : "DEPOSIT_IN_TRANSIT", reference, itemDate));
+        lenient()
+                .when(openingRows.existsByJournalEntryId(line.getJournalEntry().getJournalEntryId()))
+                .thenReturn(true);
+        return line;
+    }
+
+    private static java.util.Map<String, String> dimensions(String type, String reference, String itemDate) {
+        return java.util.Map.of("outstandingItemType", type, "reference", reference, "itemDate", itemDate);
     }
 
     private static OutstandingItemRegisterRequest onLine(JournalEntryLine line, OutstandingItemKind kind, String why) {
@@ -147,6 +168,53 @@ class ReconciliationOutstandingItemServiceTest {
             assertThat(response.getItemDate()).isEqualTo(LocalDate.of(2026, 9, 30));
             assertThat(response.getRegisteredInReconciliationId()).isEqualTo(RECON_ID);
             verify(support).refresh(recon);
+        }
+
+        @Test
+        @DisplayName("#2572: a bank opening's item line registers with the item's own date, not the cutover date the"
+                + " entry is dated on; an aged one then needs a justification")
+        void openingItemKeepsItsOwnDate() {
+            JournalEntryLine check = openingLine("-450.00", "1043", "2026-09-28");
+            assertThat(service.register(RECON_ID, onLine(check, OutstandingItemKind.OUTSTANDING_CHECK, null))
+                            .getItemDate())
+                    .isEqualTo(LocalDate.of(2026, 9, 28));
+
+            JournalEntryLine aged = openingLine("-75.00", "0991", "2026-05-01");
+            assertThatThrownBy(
+                            () -> service.register(RECON_ID, onLine(aged, OutstandingItemKind.OUTSTANDING_CHECK, null)))
+                    .isInstanceOfSatisfying(
+                            BankRecException.class,
+                            e -> assertThat(e.code()).isEqualTo(BankRecErrorCode.JUSTIFICATION_REQUIRED));
+        }
+
+        @Test
+        @DisplayName("#2572 [M]: forged opening dimensions on a manual entry, or copied onto a reversal, never backdate"
+                + " an item; a date after the entry's is ignored too")
+        void onlyAnOpeningEntryDatesItsItems() {
+            // A manual entry carrying the opening's dimensions: no bank_opening_balance row owns it.
+            JournalEntryLine forged = ledgerLine("60.00", LocalDate.of(2026, 9, 30));
+            forged.setDimensions(dimensions("DEPOSIT_IN_TRANSIT", "X-1", "2026-06-01"));
+            assertThat(service.register(RECON_ID, onLine(forged, OutstandingItemKind.DEPOSIT_IN_TRANSIT, WHY))
+                            .getItemDate())
+                    .isEqualTo(LocalDate.of(2026, 9, 30));
+
+            // A reversal copies its original's dimensions; even if a row named its entry, a reversal is not one.
+            JournalEntryLine reversal = ledgerLine("450.00", LocalDate.of(2026, 9, 30));
+            reversal.setDimensions(dimensions("OUTSTANDING_CHECK", "1043", "2026-06-01"));
+            reversal.getJournalEntry().setReversalJournalEntryId(UUID.randomUUID());
+            lenient()
+                    .when(openingRows.existsByJournalEntryId(
+                            reversal.getJournalEntry().getJournalEntryId()))
+                    .thenReturn(true);
+            assertThat(service.register(RECON_ID, onLine(reversal, OutstandingItemKind.DEPOSIT_IN_TRANSIT, WHY))
+                            .getItemDate())
+                    .isEqualTo(LocalDate.of(2026, 9, 30));
+
+            // An opening line whose date is after its entry's keeps the entry's date.
+            JournalEntryLine later = openingLine("-20.00", "1050", "2026-10-02");
+            assertThat(service.register(RECON_ID, onLine(later, OutstandingItemKind.OUTSTANDING_CHECK, null))
+                            .getItemDate())
+                    .isEqualTo(LocalDate.of(2026, 9, 30));
         }
 
         @Test

@@ -25,6 +25,7 @@ import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.exception.ReconciliationLineIneligibleException;
 import com.positivity.accounting.internal.exception.ReconciliationNotFoundException;
+import com.positivity.accounting.internal.service.OpeningItemLineDimensions;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -62,6 +63,12 @@ public class ReconciliationOutstandingItemServiceImpl implements ReconciliationO
     private final BankRecAuditRecorder audit;
     private final BankRecSettings settings;
 
+    /**
+     * A ledger-side item copies its line's date (§3.6): the entry's, except that a bank opening's own item line
+     * carries the item's date, as the opening entry is dated the cutover (#2572, OI-10).
+     */
+    private final OpeningItemLineDimensions openingItemDates;
+
     @Override
     public @NonNull OutstandingItemResponse register(
             @NonNull UUID reconciliationId, @NonNull OutstandingItemRegisterRequest request) {
@@ -84,7 +91,9 @@ public class ReconciliationOutstandingItemServiceImpl implements ReconciliationO
             JournalEntryLine line = requireLedgerLine(recon, request.getGlLineId(), kind);
             item.setGlLineId(line.getLineId());
             item.setSignedAmount(line.getDebitAmount().subtract(line.getCreditAmount()));
-            item.setItemDate(line.getJournalEntry().getTransactionDate().toLocalDate());
+            item.setItemDate(openingItemDates
+                    .ownDate(line)
+                    .orElse(line.getJournalEntry().getTransactionDate().toLocalDate()));
         } else {
             if (request.getBankTransactionId() == null) {
                 throw notEligible("BANK_ERROR_PENDING is a bank-side item; name the bankTransactionId");

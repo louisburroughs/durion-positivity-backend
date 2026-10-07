@@ -74,6 +74,13 @@ public interface BankStatementRepository
     Optional<BankStatement> findFirstByGlAccountIdAndStatusOrderByEndDateDesc(
             @NonNull UUID glAccountId, @NonNull BankStatementStatus status);
 
+    /**
+     * Whether the account has a {@code status} statement starting on or before {@code onOrBefore} (bank opening
+     * balance, #2572: an opening must come before the account's first statement).
+     */
+    boolean existsByGlAccountIdAndStatusAndStartDateLessThanEqual(
+            @NonNull UUID glAccountId, @NonNull BankStatementStatus status, @NonNull LocalDate onOrBefore);
+
     /** The statement a manual-statement command created (§6.3). */
     Optional<BankStatement> findByRequestId(@NonNull UUID requestId);
 

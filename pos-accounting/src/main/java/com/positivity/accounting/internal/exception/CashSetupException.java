@@ -5,13 +5,17 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 
 /**
- * A refusal of a register float or petty-expense category command (#2511; SPEC-accounting-workspace
- * §4.6, §7.1): one stable code, one HTTP status, a message in business words.
+ * A refusal of a register float, petty-expense category or bank opening balance command (#2511, #2572;
+ * SPEC-accounting-workspace §4.6, §7.1, OI-10): one stable code, one HTTP status, a message in business words.
  */
 public class CashSetupException extends RuntimeException {
 
     /** The codes and their statuses (S34 lists them in ERROR_CODES.md). */
     public enum Code {
+        BANK_OPENING_BALANCE_ACCOUNT_NOT_ELIGIBLE(HttpStatus.UNPROCESSABLE_CONTENT),
+        BANK_OPENING_BALANCE_ALREADY_ESTABLISHED(HttpStatus.CONFLICT),
+        BANK_OPENING_BALANCE_EMPTY(HttpStatus.UNPROCESSABLE_CONTENT),
+        BANK_OPENING_BALANCE_NOT_FIRST(HttpStatus.UNPROCESSABLE_CONTENT),
         FLOAT_ALREADY_ESTABLISHED(HttpStatus.CONFLICT),
         FLOAT_AMOUNT_NEGATIVE(HttpStatus.UNPROCESSABLE_CONTENT),
         FLOAT_AMOUNT_UNCHANGED(HttpStatus.UNPROCESSABLE_CONTENT),

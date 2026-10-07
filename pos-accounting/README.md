@@ -48,6 +48,7 @@ General-ledger accounting service for the Durion Positivity ETSMS platform. Mana
 - `POST /v1/credit-memos` — create a credit memo
 - `GET /v1/accounting/tenant-template/status` — where the caller's tenant stands against the accounting template (permission `accounting:coa:view`, event `ACCOUNTING_TENANT_TEMPLATE_STATUS_VIEW`; see [Tenant provisioning](#tenant-provisioning-the-accounting-template-2526))
 - `PUT /v1/accounting/tenant-template/add-ons/retread-plant` — turn the retread-plant add-on on for the caller's tenant (permission `accounting:coa:create`, event `ACCOUNTING_TENANT_TEMPLATE_ADD_ON_ENABLE`)
+- `POST /v1/accounting/bank-accounts/{glAccountId}/opening-balance` — a bank account's opening balance at cutover, with its outstanding items, through 3900 (permissions `accounting:je:create` and `accounting:je:post`, event `ACCOUNTING_BANK_OPENING_BALANCE_ESTABLISH`; see [Bank opening balance](#bank-opening-balance-2572-oi-10))
 
 ### Display references on responses
 
@@ -138,6 +139,44 @@ of Goods Sold, 6000 Payment Processor Fees and the settlement, bank reconciliati
 accounts) and the labour and overhead accounts. The template is data in the platform tenant, written by the
 repeatable seed (`R__seed_reference_accounting.sql`); the seed writes no tenant's rows. See
 [Tenant provisioning](#tenant-provisioning-the-accounting-template-2526).
+
+## Bank opening balance (#2572, OI-10)
+
+`POST /v1/accounting/bank-accounts/{glAccountId}/opening-balance` puts a bank account's balance at cutover on
+the books, once per account, following the go-live float pattern. The body is `asOfDate` (the cutover, not after
+today in the tenant's accounting calendar), `statementBalance`, `currencyCode` (ISO 4217, checked against the
+JDK list, `IsoCurrencyCodes`; it must be the account's currency, else 422 `CURRENCY_NOT_SUPPORTED`),
+`outstandingItems[]` (`OUTSTANDING_CHECK` or `DEPOSIT_IN_TRANSIT`, `reference`, `itemDate` on or before
+`asOfDate`, `amount` more than zero), `justification` and `requestId`. A malformed body is 400 `VALIDATION_ERROR`
+naming the field in `fieldErrors`; amounts, and their sum, stay below 10^14 (the entry's `numeric(19,4)`
+totals). An amount finer than the currency's minor unit is 422 `AMOUNT_PRECISION_EXCEEDS_CURRENCY` naming every
+offending field (ADR-0067 PC-6), checked after the currency. An account the caller cannot see is 404
+`GL_ACCOUNT_NOT_FOUND`.
+
+- **The entry**, dated `asOfDate` and posted with no override (the period must be OPEN): one bank line for the
+  statement balance (a credit when overdrawn), one bank line per item carrying the dimensions
+  `outstandingItemType`, `reference` and `itemDate` (a check credits the bank, a deposit in transit debits it),
+  and one line for the net on `OPENING_BALANCE` / `OPENING_BALANCE_EQUITY` (3900 in the template). The book
+  balance is statement + deposits in transit − outstanding checks. Statement 10,000.00, check #1043 450.00 and
+  a deposit in transit 1,200.00 post Dr 1000 10,000.00 / Cr 1000 450.00 / Dr 1000 1,200.00 / Cr 3900 10,750.00.
+- **Refusals**: 422 `BANK_OPENING_BALANCE_ACCOUNT_NOT_ELIGIBLE` (not an active `BANK_CASH` account in functional
+  currency), 409 `BANK_OPENING_BALANCE_ALREADY_ESTABLISHED` (a standing opening: reverse its entry and run the
+  command again; **date the correcting reversal on or before `asOfDate`**, or the reversed opening still counts
+  in the balance at the cutover and the re-run is not first), 422 `BANK_OPENING_BALANCE_NOT_FIRST` (a line the
+  balance at the end of `asOfDate` holds, counted as the bank reconciliation counts it: POSTED or REVERSED
+  entries at their own dates, a reversal pair dated wholly on or before `asOfDate` netting out; or a committed
+  statement starting on or before it; later lines are allowed), 422 `BANK_OPENING_BALANCE_EMPTY` (a zero balance
+  with no items). Idempotent on `requestId` (`bank_opening_balance`, V14): a replay returns the stored first
+  result (account code and entry number included); another body is 409 `IDEMPOTENCY_CONFLICT`. Two openings of
+  one account serialize on the account row; an ordinary posting does not take that lock, so one committed in
+  the same instant is not seen (the first reconciliation's opening difference shows it).
+- **Bank reconciliation**: the response lists each item's `glLineId`. The account's first statement starts on
+  `asOfDate` + 1 with opening balance = `statementBalance` and a `gapAcknowledgement`; registering each
+  `glLineId` as an outstanding item there leaves `openingDifference` = 0.00, and the items match 1:1 when they
+  clear. A registered opening item keeps its own `itemDate` (from the line's dimension), so its aging is real;
+  the dimension is believed only on a line of an opening entry itself (a `bank_opening_balance` row owns it and
+  it is not a reversal), so a forged or copied dimension never backdates an item.
+- 3900 is cleared to 3000 by a manual entry; the `OPENING_BALANCE_EQUITY_NOT_CLEARED` readiness warning covers it.
 
 ## Tenant provisioning: the accounting template (#2526)
 
@@ -837,7 +876,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `JOURNAL_ENTRY_NOT_FOUND` | 404 | Referenced journal entry does not exist |
 | `DEFAULT_GL_MAPPING_NOT_FOUND` | 404 | Referenced default GL mapping does not exist |
 | `POSTING_RULE_SET_NOT_FOUND` | 404 | Referenced posting rule set does not exist |
-| `GL_ACCOUNT_NOT_FOUND` | 404 | Referenced GL account does not exist |
+| `GL_ACCOUNT_NOT_FOUND` | 404 | Referenced GL account does not exist (a bank opening balance's path account included, #2572) |
 | `PERIOD_NOT_FOUND` | 404 | Referenced accounting period does not exist |
 | `TAX_SNAPSHOT_NOT_FOUND` | 404 | Referenced tax snapshot does not exist |
 | `SETTLEMENT_LINE_NOT_FOUND` | 404 | Referenced settlement line does not exist |
@@ -892,7 +931,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `WRITE_OFF_THRESHOLD_EXCEEDED` | 422 | A settlement write-off exceeds the configured threshold |
 | `WHOLE_REQUEST_REVERSAL_REQUIRED` | 422 | A payment application that was applied as one request must be reversed as one request |
 | `ACCOUNT_NOT_RECONCILABLE` | 422 | The GL account is not flagged as reconcilable |
-| `CURRENCY_NOT_SUPPORTED` | 422 | A document in a currency the ledger does not book (ADR-0067 PC-9): a payment applied to invoices in another currency, refused before anything is written (#2334); a bank account, statement or import in another currency |
+| `CURRENCY_NOT_SUPPORTED` | 422 | A document in a currency the ledger does not book (ADR-0067 PC-9): a payment applied to invoices in another currency, refused before anything is written (#2334); a bank account, statement or import in another currency; a bank opening balance whose `currencyCode` is not the account's currency (#2572) |
 | `MATCH_AMOUNT_MISMATCH` | 422 | The matched statement and ledger amounts differ |
 | `RECONCILIATION_ADJUSTMENT_SIGN_INVALID` | 422 | A reconciliation adjustment carries the wrong sign for its type |
 | `RECONCILIATION_NOT_BALANCED` | 422 | Submit or approve while the live difference is beyond ±0.01; `fieldErrors` carries the `difference` |
@@ -903,7 +942,11 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `OUTSTANDING_ITEM_NOT_ELIGIBLE` | 422 | The line, sign, window or state does not allow the outstanding item, reaffirmation, release or clear-in-gap (#2303) |
 | `ADJUSTMENT_LINK_REQUIRED` | 422 | An OTHER without exactly one link, a residual/bridge link on another type, or a TRANSFER counter missing or misplaced (#2303) |
 | `ADJUSTMENT_LINK_NOT_ELIGIBLE` | 422 | The named match, statement, amount or TRANSFER counter fails its rule; an adjustment linked to a bank transaction must equal its amount exactly, else `fieldErrors[amount]` (#2303) |
-| `AMOUNT_PRECISION_EXCEEDS_CURRENCY` | 422 | An amount has more decimal places than its currency's ISO 4217 minor unit allows (e.g. `10.005` in USD; trailing zeros do not count). Refused, never rounded; `fieldErrors` names each amount — `otherApprovalThreshold` on the policy PUT, `amount` on a reconciliation adjustment, `openingBalance` / `closingBalance` / `transactions[n].signedAmount` on a manual statement or import commit, `statement.*Balance` / `splitAt[n].closingBalance` on an import upload or mapping change, `correctedValues.signedAmount` on an import row correction (ADR-0067 PC-6, #2305). An over-precise file row is not refused: upload and mapping change stage it `REJECTED` with `rejectionCode` `AMOUNT_PRECISION_EXCEEDS_CURRENCY` so the preparer can correct it before commit (#2336) |
+| `AMOUNT_PRECISION_EXCEEDS_CURRENCY` | 422 | An amount has more decimal places than its currency's ISO 4217 minor unit allows (e.g. `10.005` in USD; trailing zeros do not count). Refused, never rounded; `fieldErrors` names each amount — `otherApprovalThreshold` on the policy PUT, `amount` on a reconciliation adjustment, `openingBalance` / `closingBalance` / `transactions[n].signedAmount` on a manual statement or import commit, `statement.*Balance` / `splitAt[n].closingBalance` on an import upload or mapping change, `correctedValues.signedAmount` on an import row correction (ADR-0067 PC-6, #2305). An over-precise file row is not refused: upload and mapping change stage it `REJECTED` with `rejectionCode` `AMOUNT_PRECISION_EXCEEDS_CURRENCY` so the preparer can correct it before commit (#2336); a bank opening balance names every offending amount in `fieldErrors` (#2572) |
+| `BANK_OPENING_BALANCE_ACCOUNT_NOT_ELIGIBLE` | 422 | The bank opening balance names an account that is not an active `BANK_CASH` account in functional currency (#2572) |
+| `BANK_OPENING_BALANCE_ALREADY_ESTABLISHED` | 409 | The bank account already has a standing opening balance; reverse its entry and run the command again (#2572) |
+| `BANK_OPENING_BALANCE_NOT_FIRST` | 422 | The bank account has a standing posted line dated on or before `asOfDate`, or a committed statement starting on or before it (#2572) |
+| `BANK_OPENING_BALANCE_EMPTY` | 422 | A bank opening balance of zero with no outstanding items (#2572) |
 | `BANK_ACCOUNT_FEED_NOT_LINKED` | 422 | A statementless (feed-backed) reconciliation on an account without a feed link — every account in phase 1 (#2303) |
 | `PAYMENT_GATEWAY_FAILURE` | 500 | The AP payment gateway call failed |
 | `INTERNAL_ERROR` | 500 | Audit-trail event creation failed unexpectedly |
