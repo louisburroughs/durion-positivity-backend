@@ -60,6 +60,13 @@ public class RegisterFloat extends TenantScopedEntity {
     @Column(name = "amount", precision = 19, scale = 4, nullable = false)
     private BigDecimal amount;
 
+    /**
+     * The ISO 4217 code the float is held in (#2577; ADR-0067 R-1, R-4): the ledger currency when the register's
+     * first command created the row. A command in another currency is refused, so it never changes.
+     */
+    @Column(name = "currency_code", length = 3, nullable = false, updatable = false)
+    private String currencyCode;
+
     /** The go-live entry while it stands; null before go-live and after its reversal. */
     @Column(name = "go_live_journal_entry_id")
     private UUID goLiveJournalEntryId;

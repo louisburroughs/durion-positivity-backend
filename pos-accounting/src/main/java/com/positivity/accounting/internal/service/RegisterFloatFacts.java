@@ -53,7 +53,7 @@ public class RegisterFloatFacts {
     /**
      * The fact of {@code change}, which left the float at its current amount and location. {@code
      * previousLocationId} is where a relocation moved the register from; null for every other change and for a
-     * republish, which moves nothing (#2571).
+     * republish, which moves nothing (#2571). The amounts' currency is the float's own (#2577; ADR-0067 R-1).
      */
     public static @NonNull RegisterFloatChangedV1 factOf(
             @NonNull RegisterFloat registerFloat,
@@ -68,7 +68,8 @@ public class RegisterFloatFacts {
                 RegisterFloatChangedV1.Kind.valueOf(change.getKind().name()),
                 change.getEffectiveDate(),
                 change.getJournalEntryId(),
-                previousLocationId);
+                previousLocationId,
+                registerFloat.getCurrencyCode());
     }
 
     /** Queues the fact; must run inside the transaction that changed the float. */

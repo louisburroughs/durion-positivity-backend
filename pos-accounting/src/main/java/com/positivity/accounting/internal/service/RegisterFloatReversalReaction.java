@@ -38,6 +38,8 @@ import org.springframework.transaction.annotation.Transactional;
  * RELOCATION} row with reason {@code REVERSAL_FOLLOW_UP}; so 1080 still sums, per location, to the float where
  * the register is held and to zero elsewhere.
  *
+ * <p>Both rows it writes, and the fact, state the register float's currency (#2577; ADR-0067 R-1).
+ *
  * <p>It hears the in-process event {@code JournalEntryServiceImpl} publishes after a reversal and runs in
  * that transaction, as {@code BankReconciliationLedgerChangeService} does; a refusal rolls the reversal back.
  */
@@ -128,6 +130,7 @@ public class RegisterFloatReversalReaction {
         row.setKind(RegisterFloatChangeKind.REVERSAL);
         row.setPreviousAmount(previous);
         row.setNewAmount(saved.getAmount());
+        row.setCurrencyCode(saved.getCurrencyCode());
         row.setJournalEntryId(reversed.reversalJournalEntryId());
         row.setReversedChangeId(reversedChange.getChangeId());
         row.setEffectiveDate(reversed.reversalDate());
@@ -144,7 +147,7 @@ public class RegisterFloatReversalReaction {
         audit.setJustification(row.getJustification());
         audit.setOldValue("amount=" + previous.toPlainString());
         audit.setNewValue("registerId=" + saved.getRegisterId() + ";amount="
-                + saved.getAmount().toPlainString()
+                + saved.getAmount().toPlainString() + ";currencyCode=" + saved.getCurrencyCode()
                 + ";reversedJournalEntryId=" + reversed.originalJournalEntryId() + ";reversalJournalEntryId="
                 + reversed.reversalJournalEntryId());
         auditLogs.save(audit);
@@ -187,6 +190,7 @@ public class RegisterFloatReversalReaction {
         row.setReason(RegisterFloatRelocationReason.REVERSAL_FOLLOW_UP);
         row.setPreviousAmount(registerFloat.getAmount());
         row.setNewAmount(registerFloat.getAmount());
+        row.setCurrencyCode(registerFloat.getCurrencyCode());
         row.setJournalEntryId(reclass.getJournalEntryId());
         row.setEffectiveDate(reversed.reversalDate());
         row.setJustification("Follow-up of the reversal of the " + kindName(reversedChange) + " float entry "

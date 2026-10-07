@@ -22,6 +22,7 @@ class ReconciliationRecordsDropMigrationIT {
         DataSource database = AccountingPostgresContainer.ownerDataSource("reconciliation-records-drop");
         JdbcTemplate jdbc = new JdbcTemplate(database);
         Flyway.configure()
+                .placeholders(com.positivity.accounting.AccountingMigrations.placeholders())
                 .dataSource(database)
                 .locations(com.positivity.accounting.AccountingMigrations.releasedUpTo(11))
                 .target("11")
@@ -31,6 +32,7 @@ class ReconciliationRecordsDropMigrationIT {
         assertThat(policies(jdbc)).as("with its tenant_isolation policy").isEqualTo(1);
 
         Flyway.configure()
+                .placeholders(com.positivity.accounting.AccountingMigrations.placeholders())
                 .dataSource(database)
                 .locations("classpath:db/migration")
                 .load()

@@ -9,7 +9,10 @@ import java.time.LocalDate;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
-/** Establish a register's go-live float (#2511; SPEC-accounting-workspace §4.6 "Float", AW17). */
+/**
+ * Establish a register's go-live float (#2511; SPEC-accounting-workspace §4.6 "Float", AW17), stating the
+ * currency of its amount (#2577; ADR-0067 R-1).
+ */
 @Schema(description = "Establish a register's go-live change float against opening balance equity")
 public record RegisterFloatGoLiveRequest(
         @Schema(
@@ -25,6 +28,16 @@ public record RegisterFloatGoLiveRequest(
                 requiredMode = REQUIRED)
         @Nullable
         BigDecimal amount,
+
+        @Schema(
+                description = "The ISO 4217 code of amount (ADR-0067); it must be the tenant's functional currency,"
+                        + " else 422 CURRENCY_NOT_SUPPORTED",
+                example = "USD",
+                minLength = 3,
+                maxLength = 3,
+                requiredMode = REQUIRED)
+        @Nullable
+        String currencyCode,
 
         @Schema(
                 description = "The go-live date the entry is dated on; it must fall in an open period",
@@ -62,6 +75,7 @@ public record RegisterFloatGoLiveRequest(
         if (amount == null || amount.signum() <= 0) {
             throw new InvalidRequestParameterException("amount is required and must be more than zero");
         }
+        CashRequests.requireCurrencyCode(currencyCode, "currencyCode");
         if (goLiveDate == null) {
             throw new InvalidRequestParameterException("goLiveDate is required");
         }

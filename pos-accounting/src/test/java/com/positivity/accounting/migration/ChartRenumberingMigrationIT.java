@@ -39,6 +39,7 @@ class ChartRenumberingMigrationIT {
         JdbcTemplate jdbc = new JdbcTemplate(database);
         // The database as the last release left it: V1-V10 and the pre-#2511 template seed.
         Flyway.configure()
+                .placeholders(com.positivity.accounting.AccountingMigrations.placeholders())
                 .dataSource(database)
                 .locations(com.positivity.accounting.AccountingMigrations.releasedUpTo(10))
                 .load()
@@ -88,6 +89,7 @@ class ChartRenumberingMigrationIT {
         assertThat(before).containsKeys("6010", "6015", "6025", "6115", "6900", "6340");
 
         Flyway.configure()
+                .placeholders(com.positivity.accounting.AccountingMigrations.placeholders())
                 .dataSource(database)
                 .locations("classpath:db/migration")
                 .load()

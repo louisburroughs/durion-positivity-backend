@@ -1,10 +1,13 @@
 package com.positivity.accounting;
 
+import com.positivity.accounting.internal.config.FlywayConfig;
+import com.positivity.accounting.internal.config.LedgerCurrency;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
@@ -17,10 +20,20 @@ import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
  * migrates to an older version therefore runs that release as it shipped: versioned migrations up to the
  * target and the template seed as it was before #2511 ({@code db/legacy/}). A later full migrate from
  * {@code classpath:db/migration} then applies the rest and the current seed, as an upgrade does.
+ *
+ * <p>Every run passes the application's placeholders ({@link #placeholders()}): V15 reads the ledger currency.
  */
 public final class AccountingMigrations {
 
+    /** The ledger currency the test configuration books in ({@code accounting.ledger.base-currency}). */
+    public static final String LEDGER_CURRENCY = "USD";
+
     private AccountingMigrations() {}
+
+    /** The placeholders {@code FlywayConfig} passes, for the test configuration's ledger currency. */
+    public static Map<String, String> placeholders() {
+        return FlywayConfig.placeholders(new LedgerCurrency(LEDGER_CURRENCY));
+    }
 
     /** A filesystem location holding V1..V{@code target} and the pre-#2511 template seed. */
     public static String releasedUpTo(int target) {

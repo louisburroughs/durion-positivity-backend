@@ -796,6 +796,7 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
         DataSource isolated = AccountingPostgresContainer.ownerDataSource("vendor-bill-duplicate-guard");
         JdbcTemplate jdbc = new JdbcTemplate(isolated);
         Flyway.configure()
+                .placeholders(com.positivity.accounting.AccountingMigrations.placeholders())
                 .dataSource(isolated)
                 .locations(com.positivity.accounting.AccountingMigrations.releasedUpTo(3))
                 .target("3")
@@ -809,6 +810,7 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
         List<Map<String, Object>> before = jdbc.queryForList("SELECT * FROM vendor_bill ORDER BY vendor_bill_id");
 
         Flyway latest = Flyway.configure()
+                .placeholders(com.positivity.accounting.AccountingMigrations.placeholders())
                 .dataSource(isolated)
                 .locations("classpath:db/migration")
                 .load();

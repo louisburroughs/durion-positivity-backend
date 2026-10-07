@@ -11,7 +11,7 @@ import java.util.UUID;
 /**
  * The outcome of a float command (#2511, #2571): the register's float before and after, and the journal
  * entry that moved it, by id and by number (ADR-0064). A relocation of a zero float posts nothing, so both
- * are null.
+ * are null. The amounts' currency is stated (#2577; ADR-0067 R-1).
  */
 @Schema(description = "A register's change float after a go-live, Change float or relocation command")
 public record RegisterFloatResponse(
@@ -31,6 +31,13 @@ public record RegisterFloatResponse(
 
         @Schema(description = "The float after the command", example = "300.00", requiredMode = REQUIRED)
         BigDecimal amount,
+
+        @Schema(
+                description = "The ISO 4217 code of previousAmount and amount: the currency the register's float is"
+                        + " held in, the tenant's functional currency (ADR-0067)",
+                example = "USD",
+                requiredMode = REQUIRED)
+        String currencyCode,
 
         @Schema(description = "The date the entry is dated on", requiredMode = REQUIRED)
         LocalDate effectiveDate,
