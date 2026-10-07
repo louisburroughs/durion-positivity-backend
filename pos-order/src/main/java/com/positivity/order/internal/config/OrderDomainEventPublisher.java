@@ -9,6 +9,7 @@ import com.positivity.domainevents.order.OrderCompletedV1;
 import com.positivity.domainevents.order.OrderPaymentIntegrityAlertV1;
 import com.positivity.domainevents.order.OrderReturnedV1;
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
+import com.positivity.domainevents.order.RegisterSessionOpenedV1;
 import com.positivity.order.internal.entity.PriceOverride;
 import com.positivity.order.internal.entity.RegisterSession;
 import com.positivity.order.internal.entity.ReturnOrder;
@@ -211,6 +212,24 @@ public class OrderDomainEventPublisher {
     }
 
     /**
+     * Emits {@code order.session.opened} (CAP:550 S40, #2578) with the session as the aggregate at the session's
+     * version, so a session's opened and closed facts share a partition and stay in order. Called inside the open
+     * transaction, and by {@code RegisterSessionFactsBootstrap} at start for every active session. pos-accounting
+     * refuses to relocate a register while its latest-opened session is active.
+     */
+    public void publishRegisterSessionOpened(@NonNull RegisterSession session) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        RegisterSessionOpenedV1 payload = new RegisterSessionOpenedV1(
+                session.getSessionId(), session.getTerminalId(), session.getLocationId(), session.getOpenedAt());
+        publishSessionFact(
+                writer, RegisterSessionOpenedV1.EVENT_TYPE, RegisterSessionOpenedV1.SCHEMA_VERSION, session, payload);
+        log.debug("Queued order.session.opened sessionId={}", session.getSessionId());
+    }
+
+    /**
      * Emits {@code order.session.closed} (story G2, spec R6.4) with the session as the aggregate.
      * pos-accounting posts the over/short variance to GL (story G3).
      */
@@ -220,12 +239,19 @@ public class OrderDomainEventPublisher {
         if (writer == null) {
             return;
         }
+        publishSessionFact(
+                writer, RegisterSessionClosedV1.EVENT_TYPE, RegisterSessionClosedV1.SCHEMA_VERSION, session, payload);
+        log.debug("Queued order.session.closed sessionId={}", session.getSessionId());
+    }
+
+    private void publishSessionFact(
+            OutboxEventWriter writer, String eventType, int schemaVersion, RegisterSession session, Object payload) {
         long aggregateVersion = session.getVersion() == null ? 0L : session.getVersion();
         writer.publish(
                 DomainTopics.events(ORDER_DOMAIN),
                 DomainEventEnvelope.of(
-                        RegisterSessionClosedV1.EVENT_TYPE,
-                        RegisterSessionClosedV1.SCHEMA_VERSION,
+                        eventType,
+                        schemaVersion,
                         session.getSessionId(),
                         aggregateVersion,
                         SOURCE_SERVICE,
@@ -233,7 +259,6 @@ public class OrderDomainEventPublisher {
                         SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR),
                         payload,
                         clock));
-        log.debug("Queued order.session.closed sessionId={}", session.getSessionId());
     }
 
     private void publish(

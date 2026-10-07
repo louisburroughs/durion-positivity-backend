@@ -17,6 +17,7 @@ import com.positivity.domainevents.order.OrderCompletedV1;
 import com.positivity.domainevents.order.OrderPaymentIntegrityAlertV1;
 import com.positivity.domainevents.order.OrderReturnedV1;
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
+import com.positivity.domainevents.order.RegisterSessionOpenedV1;
 import com.positivity.order.internal.entity.PriceOverride;
 import com.positivity.order.internal.entity.PriceOverrideReasonCode;
 import com.positivity.order.internal.entity.PriceSource;
@@ -407,6 +408,57 @@ class OrderDomainEventPublisherTest {
             when(outboxProvider.getIfAvailable()).thenReturn(null);
 
             publisher.publishRegisterSessionClosed(session(1L), sessionClosedPayload());
+
+            verify(outboxWriter, never()).publish(anyString(), any());
+        }
+    }
+
+    @Nested
+    @DisplayName("order.session.opened (CAP:550 S40, #2578)")
+    class SessionOpened {
+
+        @Test
+        @DisplayName("keys the fact on the session at the session's version, on order.events.v1")
+        void keyedOnSession() {
+            RegisterSession session = session(3L);
+            UUID location = session.getLocationId();
+            session.setOpenedAt(NOW.minusSeconds(60));
+
+            publisher.publishRegisterSessionOpened(session);
+
+            DomainEventEnvelope<?> envelope = captureEnvelope();
+            assertThat(envelope.eventType()).isEqualTo(RegisterSessionOpenedV1.EVENT_TYPE);
+            assertThat(envelope.schemaVersion()).isEqualTo(RegisterSessionOpenedV1.SCHEMA_VERSION);
+            // The same aggregate as order.session.closed: one partition, so the two facts stay in order.
+            assertThat(envelope.aggregateId()).isEqualTo(SESSION_ID);
+            assertThat(envelope.aggregateVersion()).isEqualTo(3L);
+            assertThat(envelope.payload())
+                    .isEqualTo(new RegisterSessionOpenedV1(SESSION_ID, "terminal-1", location, NOW.minusSeconds(60)));
+        }
+
+        @Test
+        @DisplayName("carries a session without a location as a null locationId; an unsaved version is zero")
+        void nullLocationAndVersion() {
+            RegisterSession session = session(null);
+            session.setLocationId(null);
+            session.setOpenedAt(NOW);
+
+            publisher.publishRegisterSessionOpened(session);
+
+            DomainEventEnvelope<?> envelope = captureEnvelope();
+            assertThat(envelope.aggregateVersion()).isZero();
+            assertThat(((RegisterSessionOpenedV1) envelope.payload()).locationId())
+                    .isNull();
+        }
+
+        @Test
+        @DisplayName("does not publish when the writer bean is absent")
+        void noWriterNoPublish() {
+            when(outboxProvider.getIfAvailable()).thenReturn(null);
+            RegisterSession session = session(0L);
+            session.setOpenedAt(NOW);
+
+            publisher.publishRegisterSessionOpened(session);
 
             verify(outboxWriter, never()).publish(anyString(), any());
         }

@@ -7,6 +7,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -34,6 +35,14 @@ public interface RegisterSessionRepository extends JpaRepository<RegisterSession
 
     /** The terminal's sessions in the given statuses (OPEN and CLOSING: the drawer that holds it). */
     List<RegisterSession> findByTerminalIdAndStatusIn(String terminalId, Collection<RegisterSessionStatus> statuses);
+
+    /**
+     * The bound tenant's sessions in the given statuses, oldest open first (CAP:550 S40, #2578): the start
+     * republish of {@code order.session.opened} for every active (OPEN or CLOSING) session.
+     */
+    @NonNull
+    List<RegisterSession> findByStatusInOrderByOpenedAtAscSessionIdAsc(
+            @NonNull Collection<RegisterSessionStatus> statuses);
 
     /**
      * The session, row-locked for the rest of the transaction (CAP:550 S16, #2512): cash movements and

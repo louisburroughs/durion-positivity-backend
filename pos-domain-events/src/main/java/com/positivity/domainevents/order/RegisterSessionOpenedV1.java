@@ -11,8 +11,10 @@ import org.jspecify.annotations.Nullable;
  * <p>Published by pos-order on {@code order.events.v1} with {@code eventType = "order.session.opened"} when a
  * session is opened (S40, #2578). A terminal has at most one active session per tenant: a session is active (OPEN
  * or CLOSING in pos-order) from this fact until its {@code order.session.closed} fact ({@link
- * RegisterSessionClosedV1}), and its {@code locationId} never changes while it is active. The envelope's aggregate
- * is the session ({@code aggregateId = sessionId}), and its version orders the two facts of one session.
+ * RegisterSessionClosedV1}), and its {@code locationId} never changes while it is active. Only the terminal's most
+ * recently opened session can be active. The envelope's aggregate is the session ({@code aggregateId = sessionId}),
+ * and its version orders the two facts of one session. pos-order re-emits this fact at each start for every
+ * active session, at the session's current version.
  *
  * <p>Consumers: pos-accounting keeps a replica of the sessions per terminal and refuses to relocate a register
  * (its {@code registerId} is the {@code terminalId}, AW31) while its latest-opened session is open.
