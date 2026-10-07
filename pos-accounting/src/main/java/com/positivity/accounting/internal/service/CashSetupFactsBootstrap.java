@@ -97,7 +97,7 @@ public class CashSetupFactsBootstrap implements ApplicationRunner {
             }
             floatFacts.changed(
                     registerFloat,
-                    RegisterFloatFacts.factOf(registerFloat, latest.get(), registerFloat.getAmount()),
+                    RegisterFloatFacts.factOf(registerFloat, latest.get(), registerFloat.getAmount(), null),
                     ACTOR);
             queued++;
         }

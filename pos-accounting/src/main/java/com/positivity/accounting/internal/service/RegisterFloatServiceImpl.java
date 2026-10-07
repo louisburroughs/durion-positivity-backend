@@ -6,6 +6,7 @@ import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
 import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.dto.RegisterFloatChangeRequest;
 import com.positivity.accounting.internal.dto.RegisterFloatGoLiveRequest;
+import com.positivity.accounting.internal.dto.RegisterFloatRelocationRequest;
 import com.positivity.accounting.internal.dto.RegisterFloatResponse;
 import com.positivity.accounting.internal.entity.AccountingAuditLog;
 import com.positivity.accounting.internal.entity.GLAccount;
@@ -28,11 +29,14 @@ import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
 import java.util.Currency;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,11 +47,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * The register float commands (#2511; SPEC-accounting-workspace §4.6 "Float"; AW16, AW17).
+ * The register float commands (#2511; SPEC-accounting-workspace §4.6 "Float"; AW16, AW17) and the relocation
+ * of a register to another location (#2571; AW32).
  *
  * <p>Every leg resolves through the {@code REGISTER_FLOAT} posting category at the entry date ({@code
  * REGISTER_FLOAT} → 1080, {@code OPENING_BALANCE_EQUITY} → 3900); the bank side of a change is the account
- * the caller chose. The float row is locked for the length of a command, so two commands on one register
+ * the caller chose. Every 1080 line carries the register and the location holding it on the entry date, so
+ * for every location and date the 1080 lines of a register sum to its float where it was held, and to zero
+ * elsewhere. The float row is locked for the length of a command, so two commands on one register
  * serialize. Idempotent on {@code requestId}: a replay with the same body returns the first result, another
  * body is 409 {@code IDEMPOTENCY_CONFLICT}. The actor comes from the security context (ADR-0018).
  */
@@ -68,11 +75,24 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
 
     static final String AUDIT_GO_LIVE = "REGISTER_FLOAT_GO_LIVE";
     static final String AUDIT_CHANGE = "REGISTER_FLOAT_CHANGE";
+    static final String AUDIT_RELOCATION = "REGISTER_FLOAT_RELOCATION";
 
     private static final int MAX_REGISTER_ID = 100;
     private static final String SYSTEM = "SYSTEM";
     private static final List<RegisterFloatChangeKind> POSTING_KINDS =
             List.of(RegisterFloatChangeKind.GO_LIVE, RegisterFloatChangeKind.CHANGE);
+    static final List<RegisterFloatChangeKind> RELOCATIONS = List.of(RegisterFloatChangeKind.RELOCATION);
+
+    /**
+     * The rows a move may not predate (AW32): the standing go-live, changes and relocations, and the reversals,
+     * whose entries also post on 1080. A move dated before any of them would leave that line at a location the
+     * register had already left.
+     */
+    private static final List<RegisterFloatChangeKind> MOVE_FLOOR_KINDS = List.of(
+            RegisterFloatChangeKind.GO_LIVE,
+            RegisterFloatChangeKind.CHANGE,
+            RegisterFloatChangeKind.RELOCATION,
+            RegisterFloatChangeKind.REVERSAL);
 
     private final RegisterFloatRepository floats;
     private final RegisterFloatChangeRepository changes;
@@ -122,8 +142,9 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
                     "Register " + register + " already has a float; correct it by reversing its float entries and"
                             + " running go-live again");
         }
-
         LocalDate date = request.goLiveDate();
+        requireNotBeforeRelocation(registerFloat, date);
+
         UUID floatAccount = glMappingResolver.resolveGLAccount(POSTING_CATEGORY, FLOAT_KEY, date.atStartOfDay());
         UUID equityAccount =
                 glMappingResolver.resolveGLAccount(POSTING_CATEGORY, OPENING_BALANCE_EQUITY_KEY, date.atStartOfDay());
@@ -196,6 +217,7 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
                     "Register " + register + " already has a float of "
                             + previous.stripTrailingZeros().toPlainString());
         }
+        requireNotBeforeRelocation(registerFloat, date);
         GLAccount bank = requireEligibleBankAccount(request.bankGlAccountId(), date);
 
         UUID floatAccount = glMappingResolver.resolveGLAccount(POSTING_CATEGORY, FLOAT_KEY, date.atStartOfDay());
@@ -227,9 +249,129 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
         return finish(registerFloat, change, previous, posted, AUDIT_CHANGE);
     }
 
+    @Override
+    public @NonNull Outcome relocate(@NonNull String registerId, @NonNull RegisterFloatRelocationRequest request) {
+        request.requireValid();
+        String register = requireRegisterId(registerId);
+        UUID from = Objects.requireNonNull(request.fromLocationId());
+        UUID to = Objects.requireNonNull(request.toLocationId());
+        String override = blankToNull(request.overrideJustification());
+        String hash = new Hash()
+                .field("RELOCATION")
+                .field(register)
+                .field(from)
+                .field(to)
+                .field(request.reason())
+                .field(request.effectiveDate())
+                .field(request.justification().trim())
+                .field(override)
+                .digest();
+        RegisterFloatChange replayed =
+                changes.findByRequestId(request.requestId()).orElse(null);
+        if (replayed != null) {
+            return replay(replayed, hash);
+        }
+        if (from.equals(to)) {
+            throw new CashSetupException(
+                    CashSetupException.Code.FLOAT_RELOCATION_SAME_LOCATION,
+                    "toLocationId must differ from fromLocationId");
+        }
+        // Today in the tenant's accounting time zone bounds the move date; an unset zone fails closed (#2558).
+        LocalDate today = zoneResolver.today();
+        LocalDate date = request.effectiveDate() != null ? request.effectiveDate() : today;
+        if (date.isAfter(today)) {
+            throw new CashSetupException(
+                    CashSetupException.Code.FLOAT_RELOCATION_DATE_INVALID,
+                    "The move date " + date + " is after today (" + today + ")");
+        }
+
+        // A move never creates a register: it moves a float that exists.
+        RegisterFloat registerFloat = floats.lockByRegisterId(register)
+                .orElseThrow(() -> new CashSetupException(
+                        CashSetupException.Code.FLOAT_REGISTER_NOT_FOUND, "Register " + register + " has no float"));
+        // A concurrent duplicate of this request waited on the lock: it answers with the first result.
+        RegisterFloatChange committed =
+                changes.findByRequestId(request.requestId()).orElse(null);
+        if (committed != null) {
+            return replay(committed, hash);
+        }
+        requireMovable(registerFloat, from, date);
+        BigDecimal amount = registerFloat.getAmount();
+
+        // A zero float posts nothing, so the period gate does not apply (AW32).
+        JournalEntryResponse posted = amount.signum() == 0
+                ? null
+                : reclass(
+                        journalEntryService,
+                        glMappingResolver,
+                        register,
+                        from,
+                        to,
+                        amount,
+                        date,
+                        "Relocate float of register " + register,
+                        override);
+
+        registerFloat.setLocationId(to);
+        RegisterFloatChange change = change(
+                registerFloat,
+                RegisterFloatChangeKind.RELOCATION,
+                amount,
+                null,
+                posted,
+                date,
+                request.justification().trim(),
+                override,
+                request.requestId(),
+                hash);
+        change.setPreviousLocationId(from);
+        change.setReason(request.reason());
+        return finish(registerFloat, change, amount, posted, AUDIT_RELOCATION);
+    }
+
     // ---- posting --------------------------------------------------------------------------------------------
 
     private JournalEntryResponse post(
+            UUID postingKey,
+            LocalDate date,
+            String description,
+            List<JournalEntryCreateRequest.JournalEntryLineRequest> lines,
+            @Nullable String overrideJustification) {
+        return post(journalEntryService, postingKey, date, description, lines, overrideJustification);
+    }
+
+    /**
+     * Moves {@code amount} of the register's 1080 balance from location {@code from} to location {@code to}, dated
+     * {@code date} (AW32): Dr 1080 {register, to} / Cr 1080 {register, from}; a negative amount posts the other
+     * way round. No bank and no 3900 line. Both lines resolve through {@code REGISTER_FLOAT} on that date.
+     */
+    static @NonNull JournalEntryResponse reclass(
+            @NonNull JournalEntryService journalEntryService,
+            @NonNull GLMappingResolver glMappingResolver,
+            @NonNull String registerId,
+            @NonNull UUID from,
+            @NonNull UUID to,
+            @NonNull BigDecimal amount,
+            @NonNull LocalDate date,
+            @NonNull String description,
+            @Nullable String overrideJustification) {
+        UUID floatAccount = glMappingResolver.resolveGLAccount(POSTING_CATEGORY, FLOAT_KEY, date.atStartOfDay());
+        BigDecimal abs = amount.abs();
+        UUID debited = amount.signum() > 0 ? to : from;
+        UUID credited = amount.signum() > 0 ? from : to;
+        return post(
+                journalEntryService,
+                UUIDv7Generator.generate(),
+                date,
+                description,
+                List.of(
+                        floatLine(floatAccount, abs, BigDecimal.ZERO, description, registerId, debited),
+                        floatLine(floatAccount, BigDecimal.ZERO, abs, description, registerId, credited)),
+                overrideJustification);
+    }
+
+    private static JournalEntryResponse post(
+            JournalEntryService journalEntryService,
             UUID postingKey,
             LocalDate date,
             String description,
@@ -321,12 +463,65 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
         }
     }
 
+    /**
+     * Every refusal that reads the register's locked state before a move (AW32): it is held at {@code from} (422
+     * FLOAT_REGISTER_LOCATION_MISMATCH), its float is not negative (422 FLOAT_AMOUNT_NEGATIVE), and the move does not
+     * predate its latest float change (422 FLOAT_RELOCATION_DATE_INVALID). Runs under the row lock, after the
+     * requestId re-check, so a further state guard on the register belongs here.
+     */
+    private void requireMovable(RegisterFloat registerFloat, UUID from, LocalDate date) {
+        requireRegisterLocation(registerFloat, from);
+        if (registerFloat.getAmount().signum() < 0) {
+            throw new CashSetupException(
+                    CashSetupException.Code.FLOAT_AMOUNT_NEGATIVE,
+                    "Register " + registerFloat.getRegisterId()
+                            + " has a negative float; correct it with Change float before moving it");
+        }
+        Optional<LocalDate> floor = latestEffectiveDate(registerFloat, MOVE_FLOOR_KINDS);
+        if (floor.isPresent() && date.isBefore(floor.get())) {
+            throw new CashSetupException(
+                    CashSetupException.Code.FLOAT_RELOCATION_DATE_INVALID,
+                    "The move date " + date + " is before the register's latest float change, on " + floor.get());
+        }
+    }
+
+    /**
+     * A go-live or Change float dated before the register's latest relocation would put its 1080 line at a location
+     * the register had not reached on that date: 422 FLOAT_DATE_BEFORE_RELOCATION (AW32).
+     */
+    private void requireNotBeforeRelocation(RegisterFloat registerFloat, LocalDate date) {
+        Optional<LocalDate> moved = latestEffectiveDate(registerFloat, RELOCATIONS);
+        if (moved.isPresent() && date.isBefore(moved.get())) {
+            throw new CashSetupException(
+                    CashSetupException.Code.FLOAT_DATE_BEFORE_RELOCATION,
+                    "Register " + registerFloat.getRegisterId() + " moved on " + moved.get()
+                            + "; date the command on or" + " after that");
+        }
+    }
+
+    /** The latest effective date of the float's standing rows of these kinds (a relocation is never reversed). */
+    private Optional<LocalDate> latestEffectiveDate(
+            RegisterFloat registerFloat, Collection<RegisterFloatChangeKind> kinds) {
+        return latestEffectiveDate(changes, registerFloat.getRegisterFloatId(), kinds);
+    }
+
+    static Optional<LocalDate> latestEffectiveDate(
+            RegisterFloatChangeRepository changes, UUID registerFloatId, Collection<RegisterFloatChangeKind> kinds) {
+        if (registerFloatId == null) {
+            return Optional.empty();
+        }
+        return changes.findByRegisterFloatIdAndKindInAndReversalJournalEntryIdIsNull(registerFloatId, kinds).stream()
+                .filter(change -> kinds.contains(change.getKind()))
+                .map(RegisterFloatChange::getEffectiveDate)
+                .max(Comparator.naturalOrder());
+    }
+
     private RegisterFloatChange change(
             RegisterFloat registerFloat,
             RegisterFloatChangeKind kind,
             BigDecimal previous,
             @Nullable UUID bankAccount,
-            JournalEntryResponse posted,
+            @Nullable JournalEntryResponse posted,
             LocalDate date,
             String justification,
             @Nullable String override,
@@ -340,7 +535,7 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
         change.setPreviousAmount(previous);
         change.setNewAmount(registerFloat.getAmount());
         change.setBankGlAccountId(bankAccount);
-        change.setJournalEntryId(posted.getJournalEntryId());
+        change.setJournalEntryId(posted == null ? null : posted.getJournalEntryId());
         change.setEffectiveDate(date);
         change.setJustification(justification);
         change.setOverrideJustification(override);
@@ -354,7 +549,7 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
             RegisterFloat registerFloat,
             RegisterFloatChange change,
             BigDecimal previous,
-            JournalEntryResponse posted,
+            @Nullable JournalEntryResponse posted,
             String auditOperation) {
         RegisterFloat saved = floats.saveAndFlush(registerFloat);
         try {
@@ -371,22 +566,40 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
         audit.setOperation(auditOperation);
         audit.setUserId(change.getActor());
         audit.setJustification(change.getJustification());
-        audit.setOldValue("amount=" + previous.toPlainString());
-        audit.setNewValue("registerId=" + saved.getRegisterId() + ";locationId=" + saved.getLocationId() + ";amount="
-                + saved.getAmount().toPlainString() + ";bankGlAccountId=" + change.getBankGlAccountId()
-                + ";requestId=" + change.getRequestId() + ";journalEntryId=" + posted.getJournalEntryId()
-                + ";effectiveDate=" + change.getEffectiveDate() + ";override="
-                + (change.getOverrideJustification() != null));
+        if (change.getKind() == RegisterFloatChangeKind.RELOCATION) {
+            audit.setOldValue("locationId=" + change.getPreviousLocationId() + ";amount=" + previous.toPlainString());
+            audit.setNewValue(relocationAuditValue(change));
+        } else {
+            audit.setOldValue("amount=" + previous.toPlainString());
+            audit.setNewValue("registerId=" + saved.getRegisterId() + ";locationId=" + saved.getLocationId()
+                    + ";amount=" + saved.getAmount().toPlainString() + ";bankGlAccountId="
+                    + change.getBankGlAccountId() + ";requestId=" + change.getRequestId() + ";journalEntryId="
+                    + change.getJournalEntryId() + ";effectiveDate=" + change.getEffectiveDate() + ";override="
+                    + (change.getOverrideJustification() != null));
+        }
         auditLogs.save(audit);
-        facts.changed(saved, RegisterFloatFacts.factOf(saved, change, previous), change.getActor());
+        facts.changed(
+                saved,
+                RegisterFloatFacts.factOf(saved, change, previous, change.getPreviousLocationId()),
+                change.getActor());
         log.info(
                 "Register {} float {} -> {} ({}, JE {})",
                 saved.getRegisterId(),
                 previous,
                 saved.getAmount(),
                 change.getKind(),
-                posted.getJournalEntryId());
-        return new Outcome(response(change, posted.getEntryNumber(), false), false);
+                change.getJournalEntryId());
+        return new Outcome(response(change, posted == null ? null : posted.getEntryNumber(), false), false);
+    }
+
+    /** The audit row's new value for a RELOCATION row: both locations, the amount moved and why (AW32). */
+    static String relocationAuditValue(RegisterFloatChange change) {
+        return "registerId=" + change.getRegisterId() + ";fromLocationId=" + change.getPreviousLocationId()
+                + ";toLocationId=" + change.getLocationId() + ";amount="
+                + change.getNewAmount().toPlainString()
+                + ";reason=" + change.getReason() + ";requestId=" + change.getRequestId() + ";journalEntryId="
+                + change.getJournalEntryId() + ";effectiveDate=" + change.getEffectiveDate() + ";override="
+                + (change.getOverrideJustification() != null);
     }
 
     private Outcome replay(RegisterFloatChange original, String hash) {
@@ -395,9 +608,11 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
                     CashSetupException.Code.IDEMPOTENCY_CONFLICT,
                     "requestId " + original.getRequestId() + " was already used with a different payload");
         }
-        String number = journalEntryService
-                .getJournalEntry(original.getJournalEntryId())
-                .getEntryNumber();
+        String number = original.getJournalEntryId() == null
+                ? null
+                : journalEntryService
+                        .getJournalEntry(original.getJournalEntryId())
+                        .getEntryNumber();
         return new Outcome(response(original, number, true), true);
     }
 

@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
  * In-process Spring event (never a Kafka fact): a posted journal entry was reversed, published by {@code
@@ -19,6 +20,8 @@ import org.jspecify.annotations.NonNull;
  * @param originalLineIds the lines of the reversed entry
  * @param glAccountIds the accounts those lines touch
  * @param actor who reversed it (ADR-0018)
+ * @param overrideJustification the justification the reversal posted into a closed period with, if any; a
+ *     listener that posts a follow-up entry on the reversal date posts it under the same override (#2571)
  */
 public record LedgerReversalApplied(
         @NonNull UUID originalJournalEntryId,
@@ -26,7 +29,8 @@ public record LedgerReversalApplied(
         @NonNull LocalDate reversalDate,
         @NonNull List<UUID> originalLineIds,
         @NonNull Set<UUID> glAccountIds,
-        @NonNull String actor) {
+        @NonNull String actor,
+        @Nullable String overrideJustification) {
 
     public LedgerReversalApplied {
         originalLineIds = List.copyOf(originalLineIds);

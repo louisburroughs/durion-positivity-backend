@@ -15,11 +15,14 @@ import com.positivity.accounting.internal.dto.PettyExpenseCategoryResponse;
 import com.positivity.accounting.internal.dto.PettyExpenseCategoryUpdateRequest;
 import com.positivity.accounting.internal.dto.RegisterFloatChangeRequest;
 import com.positivity.accounting.internal.dto.RegisterFloatGoLiveRequest;
+import com.positivity.accounting.internal.dto.RegisterFloatRelocationRequest;
 import com.positivity.accounting.internal.entity.AccountingPeriod;
 import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
 import com.positivity.accounting.internal.enums.PettyExpenseCategoryChangeType;
 import com.positivity.accounting.internal.enums.PettyExpenseCategoryStatus;
+import com.positivity.accounting.internal.enums.RegisterFloatRelocationReason;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
+import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
 import com.positivity.accounting.internal.exception.CashSetupException;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.RegisterFloatRepository;
@@ -33,10 +36,12 @@ import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.tenancy.TenantContext;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -59,6 +64,8 @@ class CashSetupPostgresIT extends PostgresTenancyTestBase {
 
     private static final UUID LOCATION = UUID.fromString("019a0000-0000-7000-8000-00000000a001");
     private static final LocalDate GO_LIVE = LocalDate.of(2026, 10, 1);
+    private static final UUID SHOP_B = UUID.fromString("019a0000-0000-7000-8000-00000000a002");
+    private static final UUID SHOP_C = UUID.fromString("019a0000-0000-7000-8000-00000000a003");
 
     @Autowired
     private RegisterFloatService floats;
@@ -260,6 +267,372 @@ class CashSetupPostgresIT extends PostgresTenancyTestBase {
         // Two-tenant isolation (ADR-0062): another tenant sees no float of T-1.
         UUID other = tenant();
         assertThat(asTenant(other, () -> floatRows.findByRegisterId("T-1"))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("#2571 AC1, AC8-AC11: a move posts the reclass and leaves the go-live alone; replays answer the first"
+            + " result; a relocation entry is never reversed; a pre-move go-live reverses with a follow-up reclass")
+    void relocation() {
+        UUID tenant = tenant();
+        provisionAccounting(tenant);
+        signIn("controller.cfo", "accounting:float:manage");
+        // The test tenant's accounting time zone is UTC.
+        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        LocalDate goLiveDay = today.minusDays(30);
+        LocalDate moveDay = today.minusDays(20);
+
+        var goLive = asTenant(tenant, () -> floats.establishGoLive("T-1", goLiveAt(LOCATION, "200.00", goLiveDay)));
+        UUID requestId = UUIDv7Generator.generate();
+        var moved = asTenant(
+                tenant,
+                () -> floats.relocate(
+                        "T-1", relocation(LOCATION, SHOP_B, RegisterFloatRelocationReason.MOVED, moveDay, requestId)));
+
+        // AC1: one posted entry, dated the move, REGISTER_FLOAT: Dr 1080 {T-1, B} / Cr 1080 {T-1, A}.
+        UUID reclass = moved.response().journalEntryId();
+        assertThat(floatLinesByLocation(tenant, reclass))
+                .containsOnly(Map.entry(SHOP_B.toString(), "D200.0000"), Map.entry(LOCATION.toString(), "C200.0000"));
+        assertThat(lines(tenant, reclass)).containsOnlyKeys("1080");
+        Map<String, Object> entry = new JdbcTemplate(ownerDataSource())
+                .queryForMap(
+                        "SELECT transaction_date::date AS d, source_event_type, status FROM journal_entry"
+                                + " WHERE tenant_id = ? AND journal_entry_id = ?",
+                        tenant,
+                        reclass);
+        assertThat(entry.get("d").toString()).isEqualTo(moveDay.toString());
+        assertThat(entry).containsEntry("source_event_type", "REGISTER_FLOAT").containsEntry("status", "POSTED");
+        assertThat(moved.response().journalEntryNumber()).isNotBlank();
+        // The go-live lines are unchanged; the float is 200.00 at B.
+        assertThat(floatLinesByLocation(tenant, goLive.response().journalEntryId()))
+                .containsOnly(Map.entry(LOCATION.toString(), "D200.0000"));
+        var row = asTenant(tenant, () -> floatRows.findByRegisterId("T-1").orElseThrow());
+        assertThat(row.getLocationId()).isEqualTo(SHOP_B);
+        assertThat(row.getAmount()).isEqualByComparingTo("200.00");
+
+        // AC11: the history row and the audit row.
+        Map<String, Object> history = new JdbcTemplate(ownerDataSource())
+                .queryForMap(
+                        "SELECT kind, location_id, previous_location_id, reason, previous_amount, new_amount,"
+                                + " journal_entry_id, effective_date, actor FROM register_float_change"
+                                + " WHERE tenant_id = ? AND request_id = ?",
+                        tenant,
+                        requestId);
+        assertThat(history)
+                .containsEntry("kind", "RELOCATION")
+                .containsEntry("location_id", SHOP_B)
+                .containsEntry("previous_location_id", LOCATION)
+                .containsEntry("reason", "MOVED")
+                .containsEntry("journal_entry_id", reclass)
+                .containsEntry("actor", "controller.cfo");
+        assertThat((BigDecimal) history.get("previous_amount"))
+                .isEqualByComparingTo((BigDecimal) history.get("new_amount"));
+        assertThat(new JdbcTemplate(ownerDataSource())
+                        .queryForObject(
+                                "SELECT new_value FROM accounting_audit_log WHERE tenant_id = ?"
+                                        + " AND operation = 'REGISTER_FLOAT_RELOCATION'",
+                                String.class,
+                                tenant))
+                .contains("fromLocationId=" + LOCATION)
+                .contains("toLocationId=" + SHOP_B)
+                .contains("amount=200")
+                .contains("reason=MOVED");
+
+        // AC10: replay and conflict.
+        int entries = entryCount(tenant);
+        var replay = asTenant(
+                tenant,
+                () -> floats.relocate(
+                        "T-1", relocation(LOCATION, SHOP_B, RegisterFloatRelocationReason.MOVED, moveDay, requestId)));
+        assertThat(replay.replayed()).isTrue();
+        assertThat(replay.response().journalEntryId()).isEqualTo(reclass);
+        assertThatThrownBy(() -> asTenant(
+                        tenant,
+                        () -> floats.relocate(
+                                "T-1",
+                                relocation(
+                                        LOCATION,
+                                        SHOP_B,
+                                        RegisterFloatRelocationReason.ENTERED_IN_ERROR,
+                                        moveDay,
+                                        requestId))))
+                .extracting(e -> ((CashSetupException) e).getCode())
+                .isEqualTo(CashSetupException.Code.IDEMPOTENCY_CONFLICT);
+        assertThat(entryCount(tenant)).isEqualTo(entries);
+
+        // AC8: the relocation entry is never reversed; nothing is reversed.
+        assertThatThrownBy(
+                        () -> asTenant(tenant, () -> journalEntries.reverseJournalEntry(reclass, "Wrong shop", today)))
+                .isInstanceOf(CashSetupException.class)
+                .extracting(e -> ((CashSetupException) e).getCode())
+                .isEqualTo(CashSetupException.Code.FLOAT_RELOCATION_NOT_REVERSIBLE);
+        assertThat(entryCount(tenant)).isEqualTo(entries);
+        assertThat(status(tenant, reclass)).isEqualTo("POSTED");
+
+        // AC9: the pre-move go-live may not be reversed before the move ...
+        UUID goLiveEntry = goLive.response().journalEntryId();
+        assertThatThrownBy(() -> asTenant(
+                        tenant,
+                        () -> journalEntries.reverseJournalEntry(goLiveEntry, "Wrong amount", moveDay.minusDays(1))))
+                .extracting(e -> ((CashSetupException) e).getCode())
+                .isEqualTo(CashSetupException.Code.FLOAT_REVERSAL_BEFORE_RELOCATION);
+        assertThat(status(tenant, goLiveEntry)).isEqualTo("POSTED");
+        // ... and reversed after it, posts the follow-up reclass: A = 0, B = 0, amount 0.
+        LocalDate reversedOn = today.minusDays(10);
+        asTenant(tenant, () -> journalEntries.reverseJournalEntry(goLiveEntry, "Wrong amount counted", reversedOn));
+        assertThat(floatBalance(tenant, "T-1", LOCATION, today)).isEqualByComparingTo("0");
+        assertThat(floatBalance(tenant, "T-1", SHOP_B, today)).isEqualByComparingTo("0");
+        assertThat(asTenant(
+                        tenant,
+                        () -> floatRows.findByRegisterId("T-1").orElseThrow().getAmount()))
+                .isEqualByComparingTo("0");
+        assertThat(new JdbcTemplate(ownerDataSource())
+                        .queryForObject(
+                                "SELECT count(*) FROM register_float_change WHERE tenant_id = ? AND kind = 'RELOCATION'"
+                                        + " AND reason = 'REVERSAL_FOLLOW_UP' AND previous_location_id = ?"
+                                        + " AND location_id = ? AND effective_date = ?",
+                                Integer.class,
+                                tenant,
+                                LOCATION,
+                                SHOP_B,
+                                reversedOn))
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("#2571 AC5: a mistyped go-live location is fixed: reverse, move the zero float (no entry), go-live"
+            + " at B")
+    void mistypedGoLiveLocationIsFixed() {
+        UUID tenant = tenant();
+        provisionAccounting(tenant);
+        signIn("controller.cfo", "accounting:float:manage");
+        LocalDate goLiveDay = LocalDate.now(ZoneOffset.UTC).minusDays(5);
+
+        var wrong = asTenant(tenant, () -> floats.establishGoLive("T-1", goLiveAt(LOCATION, "200.00", goLiveDay)));
+        asTenant(
+                tenant,
+                () -> journalEntries.reverseJournalEntry(
+                        wrong.response().journalEntryId(), "Wrong location", goLiveDay));
+        int entries = entryCount(tenant);
+        UUID requestId = UUIDv7Generator.generate();
+        var moved = asTenant(
+                tenant,
+                () -> floats.relocate(
+                        "T-1",
+                        relocation(
+                                LOCATION,
+                                SHOP_B,
+                                RegisterFloatRelocationReason.ENTERED_IN_ERROR,
+                                goLiveDay,
+                                requestId)));
+
+        assertThat(moved.replayed()).isFalse();
+        assertThat(moved.response().journalEntryId()).isNull();
+        assertThat(entryCount(tenant)).isEqualTo(entries);
+        assertThat(new JdbcTemplate(ownerDataSource())
+                        .queryForObject(
+                                "SELECT journal_entry_id FROM register_float_change WHERE tenant_id = ? AND request_id = ?",
+                                UUID.class,
+                                tenant,
+                                requestId))
+                .isNull();
+        var right = asTenant(tenant, () -> floats.establishGoLive("T-1", goLiveAt(SHOP_B, "200.00", goLiveDay)));
+        assertThat(floatLinesByLocation(tenant, right.response().journalEntryId()))
+                .containsOnly(Map.entry(SHOP_B.toString(), "D200.0000"));
+        assertThat(floatBalance(tenant, "T-1", LOCATION, goLiveDay)).isEqualByComparingTo("0");
+        assertThat(floatBalance(tenant, "T-1", SHOP_B, goLiveDay)).isEqualByComparingTo("200");
+    }
+
+    @Test
+    @DisplayName("#2571 AC7: a move into a CLOSED period needs accounting:period:override; a hard-locked date is"
+            + " always refused; a zero float posts nothing, so neither gate applies")
+    void relocationPeriodGate() {
+        UUID tenant = tenant();
+        provisionAccounting(tenant);
+        JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
+        owner.update(
+                "INSERT INTO accounting_period (tenant_id, period_id, period_code, start_date, end_date, status,"
+                        + " created_at, created_by, modified_at, modified_by, version) VALUES (?, ?, '2026-08',"
+                        + " DATE '2026-08-01', DATE '2026-08-31', 'CLOSED', TIMESTAMPTZ '2026-09-01 00:00:00+00',"
+                        + " 't', TIMESTAMPTZ '2026-09-01 00:00:00+00', 't', 0)",
+                tenant,
+                UUIDv7Generator.generate());
+        LocalDate july = LocalDate.of(2026, 7, 15);
+        LocalDate august = LocalDate.of(2026, 8, 15);
+        signIn("controller.cfo", "accounting:float:manage");
+        asTenant(tenant, () -> floats.establishGoLive("T-1", goLiveAt(LOCATION, "200.00", july)));
+        asTenant(tenant, () -> floats.establishGoLive("T-2", goLiveAt(LOCATION, "150.00", july)));
+        // T-3's float is gone again (go-live reversed): a zero float.
+        var t3GoLive = asTenant(tenant, () -> floats.establishGoLive("T-3", goLiveAt(LOCATION, "100.00", july)));
+        asTenant(
+                tenant,
+                () -> journalEntries.reverseJournalEntry(
+                        t3GoLive.response().journalEntryId(), "Drawer 3 never opened", july));
+        int entries = entryCount(tenant);
+
+        assertThatThrownBy(() -> asTenant(
+                        tenant,
+                        () -> floats.relocate(
+                                "T-1",
+                                relocation(
+                                        LOCATION,
+                                        SHOP_B,
+                                        RegisterFloatRelocationReason.MOVED,
+                                        august,
+                                        UUIDv7Generator.generate()))))
+                .isInstanceOf(AccountingPeriodClosedException.class);
+        assertThat(entryCount(tenant)).isEqualTo(entries);
+        assertThat(asTenant(
+                        tenant,
+                        () -> floatRows.findByRegisterId("T-1").orElseThrow().getLocationId()))
+                .isEqualTo(LOCATION);
+
+        signIn("controller.cfo", "accounting:float:manage", "accounting:period:override");
+        var overridden = asTenant(
+                tenant,
+                () -> floats.relocate(
+                        "T-1",
+                        new RegisterFloatRelocationRequest(
+                                LOCATION,
+                                SHOP_B,
+                                RegisterFloatRelocationReason.MOVED,
+                                august,
+                                "Drawer 1 moved to the new shop",
+                                UUIDv7Generator.generate(),
+                                "Auditor asked for the August move")));
+        assertThat(floatLinesByLocation(tenant, overridden.response().journalEntryId()))
+                .containsOnly(Map.entry(SHOP_B.toString(), "D200.0000"), Map.entry(LOCATION.toString(), "C200.0000"));
+
+        owner.update(
+                "INSERT INTO accounting_configuration (tenant_id, config_id, config_key, config_value, created_at,"
+                        + " created_by, modified_at, modified_by) VALUES (?, ?, 'HARD_LOCK_DATE', '2026-09-01',"
+                        + " TIMESTAMPTZ '2026-09-02 00:00:00+00', 'test', TIMESTAMPTZ '2026-09-02 00:00:00+00', 'test')",
+                tenant,
+                UUIDv7Generator.generate());
+        assertThatThrownBy(() -> asTenant(
+                        tenant,
+                        () -> floats.relocate(
+                                "T-2",
+                                new RegisterFloatRelocationRequest(
+                                        LOCATION,
+                                        SHOP_B,
+                                        RegisterFloatRelocationReason.MOVED,
+                                        august,
+                                        "Drawer 2 moved to the new shop",
+                                        UUIDv7Generator.generate(),
+                                        "Auditor asked for the August move"))))
+                .isInstanceOf(AccountingPeriodHardLockedException.class);
+
+        // A zero float moves into the hard-locked month: nothing posts, so nothing is gated.
+        UUID t3 = UUIDv7Generator.generate();
+        var zero = asTenant(
+                tenant,
+                () -> floats.relocate(
+                        "T-3", relocation(LOCATION, SHOP_B, RegisterFloatRelocationReason.MOVED, august, t3)));
+        assertThat(zero.response().journalEntryId()).isNull();
+    }
+
+    @Test
+    @DisplayName("#2571 AC2: for every location and date, a register's 1080 lines sum to its float where it was held"
+            + " and to zero elsewhere, across go-live, change, relocation and reversal")
+    void locationInvariant() {
+        UUID tenant = tenant();
+        provisionAccounting(tenant);
+        signIn("controller.cfo", "accounting:float:manage");
+        UUID bank = asTenant(
+                tenant, () -> glAccounts.findByAccountCode("1000").orElseThrow().getGlAccountId());
+        List<UUID> locations = List.of(LOCATION, SHOP_B, SHOP_C);
+        Random random = new Random(2571L);
+        LocalDate start = LocalDate.now(ZoneOffset.UTC).minusDays(45);
+        LocalDate day = start;
+
+        var goLive = asTenant(tenant, () -> floats.establishGoLive("T-9", goLiveAt(LOCATION, "200.00", start)));
+        List<UUID> reversible = new ArrayList<>(List.of(goLive.response().journalEntryId()));
+        // The register's location at the end of each day it moved, in order (AC2's "held at L on d").
+        List<Map.Entry<LocalDate, UUID>> moves = new ArrayList<>();
+        UUID held = LOCATION;
+        for (int step = 0; step < 24; step++) {
+            day = day.plusDays(random.nextInt(3));
+            LocalDate on = day;
+            UUID at = held;
+            int pick = random.nextInt(10);
+            BigDecimal amount = asTenant(
+                    tenant,
+                    () -> floatRows.findByRegisterId("T-9").orElseThrow().getAmount());
+            if (pick < 4) {
+                UUID to = locations.stream()
+                        .filter(location -> !location.equals(at))
+                        .toList()
+                        .get(random.nextInt(2));
+                if (amount.signum() < 0) {
+                    assertThatThrownBy(() -> asTenant(
+                                    tenant,
+                                    () -> floats.relocate(
+                                            "T-9",
+                                            relocation(
+                                                    at,
+                                                    to,
+                                                    RegisterFloatRelocationReason.MOVED,
+                                                    on,
+                                                    UUIDv7Generator.generate()))))
+                            .extracting(e -> ((CashSetupException) e).getCode())
+                            .isEqualTo(CashSetupException.Code.FLOAT_AMOUNT_NEGATIVE);
+                    continue;
+                }
+                asTenant(
+                        tenant,
+                        () -> floats.relocate(
+                                "T-9",
+                                relocation(
+                                        at, to, RegisterFloatRelocationReason.MOVED, on, UUIDv7Generator.generate())));
+                held = to;
+                moves.add(Map.entry(on, to));
+            } else if (pick < 8 || reversible.isEmpty()) {
+                BigDecimal next = BigDecimal.valueOf(50L + 10L * random.nextInt(30));
+                if (next.compareTo(amount) == 0) {
+                    next = next.add(BigDecimal.TEN);
+                }
+                BigDecimal target = next;
+                var changed = asTenant(
+                        tenant,
+                        () -> floats.changeFloat(
+                                "T-9",
+                                new RegisterFloatChangeRequest(
+                                        at,
+                                        target,
+                                        bank,
+                                        on,
+                                        "Float changed for the property test",
+                                        UUIDv7Generator.generate(),
+                                        null)));
+                reversible.add(changed.response().journalEntryId());
+            } else {
+                UUID entry = reversible.remove(random.nextInt(reversible.size()));
+                asTenant(tenant, () -> journalEntries.reverseJournalEntry(entry, "Property test reversal", on));
+            }
+        }
+        assertThat(moves).as("the sequence moved the register").isNotEmpty();
+
+        for (LocalDate d = start; !d.isAfter(day); d = d.plusDays(1)) {
+            UUID heldOn = LOCATION;
+            for (Map.Entry<LocalDate, UUID> move : moves) {
+                if (!move.getKey().isAfter(d)) {
+                    heldOn = move.getValue();
+                }
+            }
+            BigDecimal total = BigDecimal.ZERO;
+            for (UUID location : locations) {
+                total = total.add(floatBalance(tenant, "T-9", location, d));
+            }
+            for (UUID location : locations) {
+                assertThat(floatBalance(tenant, "T-9", location, d))
+                        .as("register T-9 at %s on %s (held at %s)", location, d, heldOn)
+                        .isEqualByComparingTo(location.equals(heldOn) ? total : BigDecimal.ZERO);
+            }
+        }
+        assertThat(asTenant(
+                        tenant,
+                        () -> floatRows.findByRegisterId("T-9").orElseThrow().getAmount()))
+                .isEqualByComparingTo(floatBalance(tenant, "T-9", held, day));
     }
 
     @Test
@@ -486,6 +859,69 @@ class CashSetupPostgresIT extends PostgresTenancyTestBase {
                 GO_LIVE,
                 "Counted float in drawer 1 at go-live",
                 UUIDv7Generator.generate());
+    }
+
+    private static RegisterFloatGoLiveRequest goLiveAt(UUID location, String amount, LocalDate date) {
+        return new RegisterFloatGoLiveRequest(
+                location,
+                new BigDecimal(amount),
+                date,
+                "Counted float in drawer 1 at go-live",
+                UUIDv7Generator.generate());
+    }
+
+    private static RegisterFloatRelocationRequest relocation(
+            UUID from, UUID to, RegisterFloatRelocationReason reason, LocalDate date, UUID requestId) {
+        return new RegisterFloatRelocationRequest(
+                from, to, reason, date, "Drawer 1 moved to the new shop", requestId, null);
+    }
+
+    /** The entry's 1080 lines as location to "D|C amount". */
+    private static Map<String, String> floatLinesByLocation(UUID tenant, UUID entryId) {
+        Map<String, String> lines = new LinkedHashMap<>();
+        new JdbcTemplate(ownerDataSource())
+                .query(
+                        "SELECT l.dimensions->>'locationId', l.debit_amount, l.credit_amount FROM journal_entry_line l"
+                                + " JOIN gl_account g ON g.tenant_id = l.tenant_id AND g.gl_account_id = l.gl_account_id"
+                                + " WHERE l.tenant_id = ? AND l.journal_entry_id = ? AND g.account_code = '1080'",
+                        rs -> {
+                            BigDecimal debit = rs.getBigDecimal(2);
+                            lines.put(
+                                    rs.getString(1),
+                                    debit != null && debit.signum() > 0
+                                            ? "D" + debit.toPlainString()
+                                            : "C" + rs.getBigDecimal(3).toPlainString());
+                        },
+                        tenant,
+                        entryId);
+        return lines;
+    }
+
+    /** Net 1080 for the register at the location over every posted line dated on or before {@code date}. */
+    private static BigDecimal floatBalance(UUID tenant, String registerId, UUID location, LocalDate date) {
+        return new JdbcTemplate(ownerDataSource())
+                .queryForObject(
+                        "SELECT coalesce(sum(coalesce(l.debit_amount, 0) - coalesce(l.credit_amount, 0)), 0)"
+                                + " FROM journal_entry_line l JOIN journal_entry e ON e.tenant_id = l.tenant_id"
+                                + " AND e.journal_entry_id = l.journal_entry_id JOIN gl_account g ON g.tenant_id ="
+                                + " l.tenant_id AND g.gl_account_id = l.gl_account_id WHERE l.tenant_id = ?"
+                                + " AND g.account_code = '1080' AND l.dimensions->>'registerId' = ?"
+                                + " AND l.dimensions->>'locationId' = ? AND e.status IN ('POSTED', 'REVERSED')"
+                                + " AND e.transaction_date < ?",
+                        BigDecimal.class,
+                        tenant,
+                        registerId,
+                        location.toString(),
+                        java.sql.Timestamp.valueOf(date.plusDays(1).atStartOfDay()));
+    }
+
+    private static String status(UUID tenant, UUID entryId) {
+        return new JdbcTemplate(ownerDataSource())
+                .queryForObject(
+                        "SELECT status FROM journal_entry WHERE tenant_id = ? AND journal_entry_id = ?",
+                        String.class,
+                        tenant,
+                        entryId);
     }
 
     private static RegisterFloatChangeRequest change(String amount, UUID bank, UUID requestId) {

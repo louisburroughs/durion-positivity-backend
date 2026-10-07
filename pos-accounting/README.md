@@ -274,6 +274,11 @@ Posted entries carry a sequential `entryNumber` in the format `JE-{YYYYMM}-{seq}
   entry's transaction date if that period is OPEN, otherwise to today
 - Errors: `JE_ALREADY_REVERSED` (409, includes double-reversal races), `JE_NOT_POSTED` (409),
   `PERIOD_CLOSED` / `PERIOD_HARD_LOCKED` (422, see the period gate below)
+- Register float entries (#2571, AW32): a relocation entry is never reversed (409
+  `FLOAT_RELOCATION_NOT_REVERSIBLE`); a go-live or Change float entry of a register that has moved may
+  not be reversed before its latest move (422 `FLOAT_REVERSAL_BEFORE_RELOCATION`), and when its 1080
+  line sits at a location the register has left, the reversal also posts, on its own date, the
+  reclass that brings the reversed amount to the register's current location
 - Emits a `JournalEntryReversed` outbox domain event in the same transaction (MANDATORY propagation)
   for downstream read models
 
@@ -677,6 +682,19 @@ denied for a location-scoped caller — fail closed — and ignored for a global
 
 This is the platform's clearest `FINANCIAL`-dimension case: an `ACCOUNTANT` assigned to a region
 sees that region's shops and no others.
+
+The register float commands (`/v1/accounting/registers/{registerId}/float`, #2511) gate the body's
+`locationId` on `accounting:float:manage`. The relocation
+(`POST /v1/accounting/registers/{registerId}/float/relocation`, #2571, AW32) gates **both**
+`fromLocationId` and `toLocationId`, then requires the register's stored location to equal
+`fromLocationId` under the row lock (422 `FLOAT_REGISTER_LOCATION_MISMATCH`; the stored location is
+logged, never returned). It posts Dr 1080 {register, to} / Cr 1080 {register, from} for the float,
+dated the move; a zero float moves without an entry. New codes: 404 `FLOAT_REGISTER_NOT_FOUND`, 422
+`FLOAT_RELOCATION_SAME_LOCATION`, `FLOAT_RELOCATION_DATE_INVALID`, `FLOAT_AMOUNT_NEGATIVE`,
+`FLOAT_DATE_BEFORE_RELOCATION` (a later go-live or Change float dated before the move), 409
+`FLOAT_RELOCATION_NOT_REVERSIBLE`, 422 `FLOAT_REVERSAL_BEFORE_RELOCATION`. The fact
+`accounting.float.changed` is schema version 2: kind `RELOCATION` and a nullable
+`previousLocationId`.
 
 ## Ledger currency (ADR-0067)
 

@@ -448,7 +448,10 @@ public class JournalEntryController {
                     Returns 400 when the reason is blank, 404 JOURNAL_ENTRY_NOT_FOUND when the entry does not \
                     exist, 409 JE_ALREADY_REVERSED when the entry was already reversed (including a lost \
                     concurrent-reversal race), 409 JE_NOT_POSTED when it is DRAFT or PENDING, and 422 \
-                    PERIOD_CLOSED or PERIOD_HARD_LOCKED for period-gate failures.
+                    PERIOD_CLOSED or PERIOD_HARD_LOCKED for period-gate failures. A register float relocation \
+                    entry is never reversed (409 FLOAT_RELOCATION_NOT_REVERSIBLE: move the register again), and \
+                    a register float go-live or change entry of a register that has moved may not be reversed \
+                    before its latest move (422 FLOAT_REVERSAL_BEFORE_RELOCATION).
                     """,
             tags = {"Journal Entries"})
     @ApiResponse(
@@ -469,14 +472,16 @@ public class JournalEntryController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "Entry is already reversed (JE_ALREADY_REVERSED) or not yet posted (JE_NOT_POSTED)",
+            description = "Entry is already reversed (JE_ALREADY_REVERSED), not yet posted (JE_NOT_POSTED), or a"
+                    + " register float relocation entry (FLOAT_RELOCATION_NOT_REVERSIBLE)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
             description = "Resolved reversal date falls in a CLOSED accounting period without a valid override"
                     + " (PERIOD_CLOSED — accounting:period:override plus a non-blank overrideJustification"
-                    + " allows reversing into closed periods), or is strictly before the hard-lock date"
-                    + " (PERIOD_HARD_LOCKED — never overridable)",
+                    + " allows reversing into closed periods), is strictly before the hard-lock date"
+                    + " (PERIOD_HARD_LOCKED — never overridable), or precedes the latest relocation of the register"
+                    + " whose float entry it reverses (FLOAT_REVERSAL_BEFORE_RELOCATION)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_JOURNAL_ENTRY_REVERSE", apiVersion = "1")
     public ResponseEntity<JournalEntryResponse> reverseJournalEntry(

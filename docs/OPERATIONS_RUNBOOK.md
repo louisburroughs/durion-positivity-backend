@@ -1084,13 +1084,26 @@ decisions:
 | `narrow` | `locationId` is an optional filter on a list/search/report: gate it when given, otherwise restrict the query to `scope.reach(permission)` |
 | `unscoped` | deliberately no check; the `reason` says why (bulk load, no location-private data, or deferred with a tracking issue) |
 
+**Two or more locations** — an operation that names several locations (a move from one to another)
+lists the fields it gates in an optional one-line `fields:` key (default `locationId`). The operation
+then enters the inventory on those fields, each field must appear in its parameter list, and for a
+`gate` the operation's own body must pass every field to a location-scope call (#2571):
+
+```yaml
+  - operation: RegisterFloatController.relocate
+    shape: gate
+    permission: accounting:float:manage
+    fields: fromLocationId, toLocationId
+    reason: both locations are gated in the controller after body validation.
+```
+
 **CI codes** (never baselined — all three must be zero):
 
 | Code | Fires when |
 | --- | --- |
 | `location_scope_undecided` | a controller operation takes a `locationId` and the module's file has no entry for it (or the file is missing) |
 | `location_scope_stale` | an entry names an operation that no longer exists in the module — an entry for a sibling endpoint that takes no `locationId` (e.g. the by-id detail you gated beside a list) is allowed as long as the `Class.method` exists in one of the module's controllers |
-| `location_scope_invalid` | `shape` not `gate`/`narrow`/`unscoped`, `gate`/`narrow` without `permission`, any entry without `reason`, a duplicate operation, or a file the parser cannot read |
+| `location_scope_invalid` | `shape` not `gate`/`narrow`/`unscoped`, `gate`/`narrow` without `permission`, any entry without `reason`, a duplicate operation, a file the parser cannot read, or a `fields:` entry naming a field the operation's parameters lack or (for `gate`) that its body never passes to a location-scope call |
 | `location_scope_alternates` | a location-scope call passes a permission the endpoint reaching it does not require, or an endpoint takes a scope decision with no `@PreAuthorize` and no authority check at all (#1890) |
 
 `location_scope_summary` (operations found / decided; entries per shape, per module) is printed for

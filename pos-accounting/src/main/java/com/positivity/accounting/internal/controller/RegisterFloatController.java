@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.controller;
 
 import com.positivity.accounting.internal.dto.RegisterFloatChangeRequest;
 import com.positivity.accounting.internal.dto.RegisterFloatGoLiveRequest;
+import com.positivity.accounting.internal.dto.RegisterFloatRelocationRequest;
 import com.positivity.accounting.internal.dto.RegisterFloatResponse;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.RegisterFloatService;
@@ -29,8 +30,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * A register's change float (#2511; SPEC-accounting-workspace §4.6 "Float", §7.1 "Float"; AW16, AW17): the
- * once-only go-live float and Change float. The register is pos-order's {@code terminalId} (AW31). No screen
- * calls these yet; they are reachable through the SDK.
+ * once-only go-live float, Change float, and the relocation of a register to another location (#2571, AW32).
+ * The register is pos-order's {@code terminalId} (AW31). No screen calls these yet; they are reachable through
+ * the SDK.
  */
 @RestController
 @RequestMapping("/v1/accounting/registers/{registerId}/float")
@@ -91,8 +93,9 @@ public class RegisterFloatController {
     @ApiResponse(
             responseCode = "422",
             description =
-                    "PERIOD_CLOSED, PERIOD_HARD_LOCKED, GL_MAPPING_NOT_CONFIGURED, or FLOAT_REGISTER_LOCATION_MISMATCH"
-                            + " (the register belongs to another location)",
+                    "PERIOD_CLOSED, PERIOD_HARD_LOCKED, GL_MAPPING_NOT_CONFIGURED, FLOAT_REGISTER_LOCATION_MISMATCH"
+                            + " (the register belongs to another location), or FLOAT_DATE_BEFORE_RELOCATION (dated"
+                            + " before the register's latest relocation)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_REGISTER_FLOAT_GO_LIVE", apiVersion = "1")
     public ResponseEntity<RegisterFloatResponse> establishGoLive(
@@ -168,8 +171,9 @@ public class RegisterFloatController {
     @ApiResponse(
             responseCode = "422",
             description = "FLOAT_AMOUNT_UNCHANGED, FLOAT_BANK_ACCOUNT_NOT_ELIGIBLE, PERIOD_CLOSED, PERIOD_HARD_LOCKED,"
-                    + " ACCOUNTING_TIME_ZONE_UNSET, GL_MAPPING_NOT_CONFIGURED or FLOAT_REGISTER_LOCATION_MISMATCH (the register"
-                    + " belongs to another location)",
+                    + " ACCOUNTING_TIME_ZONE_UNSET, GL_MAPPING_NOT_CONFIGURED, FLOAT_REGISTER_LOCATION_MISMATCH (the register"
+                    + " belongs to another location) or FLOAT_DATE_BEFORE_RELOCATION (dated before the register's latest"
+                    + " relocation)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_REGISTER_FLOAT_CHANGE", apiVersion = "1")
     public ResponseEntity<RegisterFloatResponse> changeFloat(
@@ -196,6 +200,98 @@ public class RegisterFloatController {
         // ADR-0061: @PreAuthorize answered "may this caller manage floats"; this answers "...at this location".
         SecurityContextHelper.locationScope().require(AccountingPermissions.FLOAT_MANAGE, request.locationId());
         return respond(registerFloatService.changeFloat(registerId, request));
+    }
+
+    @PostMapping("/relocation")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:float:manage"})
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.FLOAT_MANAGE + "')")
+    @Operation(
+            operationId = "relocateRegisterFloat",
+            summary = "Relocate Register Float",
+            description = """
+                    Moves a register, and its change float, from one location to another: posts Dr 1080 \
+                    Register Float at toLocationId / Cr 1080 at fromLocationId for the register's current float, \
+                    dated the effective date, both lines carrying the register. The float itself is unchanged; \
+                    there is no bank line and no 3900 line, and earlier periods keep the location they were \
+                    posted at. A register whose float is zero moves without an entry (journalEntryId null), \
+                    which is how a go-live made under a mistyped location is fixed: reverse the go-live, move \
+                    the register, run go-live again.
+                    Use this tool when a register was set up under the wrong location (reason \
+                    ENTERED_IN_ERROR) or its drawer physically moved (reason MOVED); both post the same entry. \
+                    Do not use changeRegisterFloat, which changes the amount, and do not reverse the relocation \
+                    entry (409 FLOAT_RELOCATION_NOT_REVERSIBLE): correct a wrong move by moving again.
+                    Preconditions: caller holds accounting:float:manage and has both fromLocationId and \
+                    toLocationId in its location scope (403 LOCATION_SCOPE_DENIED); the register has a float \
+                    (404 FLOAT_REGISTER_NOT_FOUND) held at fromLocationId (422 \
+                    FLOAT_REGISTER_LOCATION_MISMATCH); toLocationId differs (422 \
+                    FLOAT_RELOCATION_SAME_LOCATION); the float is not negative (422 FLOAT_AMOUNT_NEGATIVE, fix \
+                    it with changeRegisterFloat first); the effective date is not after today and not before \
+                    the register's latest float change (422 FLOAT_RELOCATION_DATE_INVALID); the date passes the \
+                    period gate (a CLOSED period needs accounting:period:override and overrideJustification). \
+                    Idempotent on requestId: a replay returns the first result with 200, another body with the \
+                    same requestId is 409 IDEMPOTENCY_CONFLICT.
+                    Required inputs: registerId (path), fromLocationId, toLocationId, reason, justification (at \
+                    least 10 characters), requestId; effectiveDate defaults to today in the tenant's accounting \
+                    time zone.
+                    Emits an ACCOUNTING_REGISTER_FLOAT_RELOCATE event, queues accounting.float.changed with kind \
+                    RELOCATION, writes an audit row naming the caller, both locations and the reason, and \
+                    returns 201 with the amount and the journal entry id and number.
+                    """,
+            tags = {"Accounting Register Float"})
+    @ApiResponse(responseCode = "201", description = "The register was moved")
+    @ApiResponse(responseCode = "200", description = "A replayed requestId: the first result")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Missing or invalid field, a missing reason or a justification under 10 characters"
+                    + " (VALIDATION_ERROR)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Caller lacks accounting:float:manage, or either location is outside the caller's location"
+                    + " scope (LOCATION_SCOPE_DENIED)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "FLOAT_REGISTER_NOT_FOUND: the register has no float",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "IDEMPOTENCY_CONFLICT or VERSION_CONFLICT",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "FLOAT_REGISTER_LOCATION_MISMATCH (the register is not held at fromLocationId),"
+                    + " FLOAT_RELOCATION_SAME_LOCATION, FLOAT_RELOCATION_DATE_INVALID, FLOAT_AMOUNT_NEGATIVE,"
+                    + " PERIOD_CLOSED, PERIOD_HARD_LOCKED, ACCOUNTING_TIME_ZONE_UNSET or GL_MAPPING_NOT_CONFIGURED",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @EmitEvent(id = "ACCOUNTING_REGISTER_FLOAT_RELOCATE", apiVersion = "1")
+    public ResponseEntity<RegisterFloatResponse> relocate(
+            @Parameter(description = "The register: pos-order's terminalId", example = "T-1") @PathVariable
+                    String registerId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            required = true,
+                            description = "Where the register moves from and to, and why",
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema = @Schema(implementation = RegisterFloatRelocationRequest.class),
+                                            examples = @ExampleObject(name = "Drawer 1 moved", value = """
+                                                                    {"fromLocationId":"019a0000-0000-7000-8000-00000000a001",
+                                                                     "toLocationId":"019a0000-0000-7000-8000-00000000a002",
+                                                                     "reason":"MOVED","effectiveDate":"2026-10-15",
+                                                                     "justification":"Drawer 1 moved to the new shop",
+                                                                     "requestId":"019a0000-0000-7000-8000-000000000103"}
+                                                                    """)))
+                    @RequestBody
+                    RegisterFloatRelocationRequest request) {
+        request.requireValid();
+        // ADR-0061: @PreAuthorize answered "may this caller manage floats"; these answer "...at both locations".
+        // The register's stored location is checked against fromLocationId under the row lock, in the service.
+        SecurityContextHelper.locationScope().require(AccountingPermissions.FLOAT_MANAGE, request.fromLocationId());
+        SecurityContextHelper.locationScope().require(AccountingPermissions.FLOAT_MANAGE, request.toLocationId());
+        return respond(registerFloatService.relocate(registerId, request));
     }
 
     private static ResponseEntity<RegisterFloatResponse> respond(RegisterFloatService.Outcome outcome) {
