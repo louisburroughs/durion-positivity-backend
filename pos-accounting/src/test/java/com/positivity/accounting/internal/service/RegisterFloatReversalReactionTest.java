@@ -80,6 +80,7 @@ class RegisterFloatReversalReactionTest {
         registerFloat.setRegisterId("T-1");
         registerFloat.setLocationId(SHOP_B);
         registerFloat.setAmount(new BigDecimal("200.00"));
+        registerFloat.setCurrencyCode("USD");
         goLive = row(RegisterFloatChangeKind.GO_LIVE, SHOP_A, "0", "200.00", GO_LIVE);
         RegisterFloatChange move = row(RegisterFloatChangeKind.RELOCATION, SHOP_B, "200.00", "200.00", MOVED);
         move.setPreviousLocationId(SHOP_A);
@@ -196,6 +197,9 @@ class RegisterFloatReversalReactionTest {
         assertThat(followUp.getEffectiveDate()).isEqualTo(reversedOn);
         assertThat(followUp.getJournalEntryId()).isNotNull();
         assertThat(followUp.getOverrideJustification()).isEqualTo("Reversed in the closed month on audit advice");
+        // #2577: both rows the reaction writes state the float's currency.
+        assertThat(followUp.getCurrencyCode()).isEqualTo("USD");
+        assertThat(rows.get(rows.size() - 1).getCurrencyCode()).isEqualTo("USD");
         assertThat(rows.get(rows.size() - 1).getKind())
                 .as("the REVERSAL row is the latest, so a republish names the reversal")
                 .isEqualTo(RegisterFloatChangeKind.REVERSAL);
@@ -208,6 +212,7 @@ class RegisterFloatReversalReactionTest {
         assertThat(fact.kind()).isEqualTo(RegisterFloatChangedV1.Kind.REVERSAL);
         assertThat(fact.locationId()).isEqualTo(SHOP_B);
         assertThat(fact.previousLocationId()).isNull();
+        assertThat(fact.currencyCode()).isEqualTo("USD");
     }
 
     @Test

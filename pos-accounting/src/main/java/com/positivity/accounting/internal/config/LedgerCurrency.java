@@ -24,9 +24,12 @@ public class LedgerCurrency {
 
     public LedgerCurrency(@Value("${accounting.ledger.base-currency}") @NonNull String code) {
         String normalized = code.trim().toUpperCase(Locale.ROOT);
-        if (!normalized.matches("[A-Z]{3}")) {
+        // The module's one ISO 4217 list (ADR-0067 R-3), not a pattern: V15 backfills register floats with this
+        // code through Flyway's ledger_currency placeholder, and FlywayConfig needs this bean, so a code the list
+        // does not know fails startup here, before any migration runs (#2577).
+        if (!IsoCurrencyCodes.isIso(normalized)) {
             throw new IllegalStateException(
-                    "accounting.ledger.base-currency must be a three-letter ISO 4217 code, was '" + code + "'");
+                    "accounting.ledger.base-currency must be an ISO 4217 currency code, was '" + code + "'");
         }
         this.code = normalized;
     }

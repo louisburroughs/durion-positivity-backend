@@ -10,7 +10,10 @@ import java.time.LocalDate;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
-/** Change a register's float against a bank account (#2511; SPEC-accounting-workspace §4.6 "Float", AW16). */
+/**
+ * Change a register's float against a bank account (#2511; SPEC-accounting-workspace §4.6 "Float", AW16), stating
+ * the currency of its amount (#2577; ADR-0067 R-1).
+ */
 @Schema(description = "Set a register's change float to a new amount, the difference moving to or from a bank account")
 public record RegisterFloatChangeRequest(
         @Schema(
@@ -26,6 +29,16 @@ public record RegisterFloatChangeRequest(
                 requiredMode = REQUIRED)
         @Nullable
         BigDecimal amount,
+
+        @Schema(
+                description = "The ISO 4217 code of amount (ADR-0067); it must be the tenant's functional currency,"
+                        + " else 422 CURRENCY_NOT_SUPPORTED",
+                example = "USD",
+                minLength = 3,
+                maxLength = 3,
+                requiredMode = REQUIRED)
+        @Nullable
+        String currencyCode,
 
         @Schema(
                 description = "The active BANK_CASH account in functional currency the difference moves to or from",
@@ -79,6 +92,7 @@ public record RegisterFloatChangeRequest(
         if (amount == null || amount.signum() < 0) {
             throw new InvalidRequestParameterException("amount is required and must not be negative");
         }
+        CashRequests.requireCurrencyCode(currencyCode, "currencyCode");
         if (bankGlAccountId == null) {
             throw new InvalidRequestParameterException("bankGlAccountId is required");
         }

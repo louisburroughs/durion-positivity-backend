@@ -15,9 +15,10 @@ import tools.jackson.databind.json.JsonMapper;
  * The float fact's wire contract. CAP:550 S16 (#2512): a kind a newer producer adds reads as UNKNOWN, so a
  * state-based consumer still applies the fact's amount and location. S38 (#2571): schema version 2 adds the
  * RELOCATION kind and {@code previousLocationId}, additively, and only the kinds that always post must name their
- * journal entry.
+ * journal entry. #2577 (ADR-0067 R-1): schema version 3 adds {@code currencyCode}, additively; an older payload
+ * without it still parses.
  */
-@DisplayName("RegisterFloatChangedV1 (schema version 2; tolerant kinds, relocation)")
+@DisplayName("RegisterFloatChangedV1 (schema version 3; tolerant kinds, relocation, currencyCode)")
 class RegisterFloatChangedV1Test {
 
     private static final ObjectMapper MAPPER =
@@ -45,7 +46,8 @@ class RegisterFloatChangedV1Test {
                 kind,
                 LocalDate.of(2026, 10, 15),
                 entry,
-                previousLocation);
+                previousLocation,
+                "USD");
     }
 
     @Test
@@ -89,15 +91,48 @@ class RegisterFloatChangedV1Test {
     }
 
     @Test
-    @DisplayName("is schema version 2 and round-trips a relocation with its origin")
+    @DisplayName("is schema version 3 and round-trips a relocation with its origin and its currency")
     void roundTripsARelocation() {
         RegisterFloatChangedV1 moved = fact(RegisterFloatChangedV1.Kind.RELOCATION, ENTRY, SHOP_A);
 
-        RegisterFloatChangedV1 read = MAPPER.readValue(MAPPER.writeValueAsString(moved), RegisterFloatChangedV1.class);
+        String wire = MAPPER.writeValueAsString(moved);
+        RegisterFloatChangedV1 read = MAPPER.readValue(wire, RegisterFloatChangedV1.class);
 
-        assertThat(RegisterFloatChangedV1.SCHEMA_VERSION).isEqualTo(2);
+        assertThat(RegisterFloatChangedV1.SCHEMA_VERSION).isEqualTo(3);
         assertThat(read).isEqualTo(moved);
         assertThat(read.previousLocationId()).isEqualTo(SHOP_A);
+        assertThat(wire).contains("\"currencyCode\":\"USD\"");
+        assertThat(read.currencyCode()).isEqualTo("USD");
+    }
+
+    @Test
+    @DisplayName("#2577: a stated currencyCode that is not three upper-case letters is refused")
+    void malformedCurrencyIsRefused() {
+        for (String malformed : new String[] {"", "usd", "US", "USDX", "U5D"}) {
+            assertThatThrownBy(() -> new RegisterFloatChangedV1(
+                            "T-1",
+                            SHOP_B,
+                            new BigDecimal("200.00"),
+                            new BigDecimal("200.00"),
+                            RegisterFloatChangedV1.Kind.CHANGE,
+                            LocalDate.of(2026, 10, 15),
+                            ENTRY,
+                            null,
+                            malformed))
+                    .as("currencyCode %s", malformed)
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("currencyCode");
+        }
+    }
+
+    @Test
+    @DisplayName("#2577: a version-2 payload, without currencyCode, still parses with a null currency")
+    void versionTwoPayloadStillParses() {
+        RegisterFloatChangedV1 read = MAPPER.readValue(json("RELOCATION"), RegisterFloatChangedV1.class);
+
+        assertThat(read.kind()).isEqualTo(RegisterFloatChangedV1.Kind.RELOCATION);
+        assertThat(read.amount()).isEqualByComparingTo("250.00");
+        assertThat(read.currencyCode()).isNull();
     }
 
     @Test
@@ -114,6 +149,7 @@ class RegisterFloatChangedV1Test {
         assertThat(read.kind()).isEqualTo(RegisterFloatChangedV1.Kind.GO_LIVE);
         assertThat(read.previousLocationId()).isNull();
         assertThat(read.journalEntryId()).isEqualTo(ENTRY);
+        assertThat(read.currencyCode()).isNull();
     }
 
     @Test

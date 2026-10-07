@@ -471,6 +471,7 @@ class RegisterSessionCashMovementTest {
                             .registerId(TERMINAL)
                             .locationId(LOCATION)
                             .amount(new BigDecimal("250.0000"))
+                            .currencyCode("USD")
                             .build()));
         }
 
@@ -503,6 +504,26 @@ class RegisterSessionCashMovementTest {
         }
 
         @Test
+        @DisplayName("#2577 (ADR-0067 PC-9): a configured float in another currency than the drawer's (a CAD copy"
+                + " arriving after a USD drawer opened) is 422 CURRENCY_NOT_SUPPORTED; nothing is compared or recorded")
+        void floatInAnotherCurrencyIsNeverCompared() {
+            when(floats.findByRegisterId(TERMINAL))
+                    .thenReturn(Optional.of(ExtAccountingRegisterFloat.builder()
+                            .registerId(TERMINAL)
+                            .locationId(LOCATION)
+                            .amount(new BigDecimal("250.0000"))
+                            .currencyCode("CAD")
+                            .build()));
+
+            assertThatThrownBy(() -> service.recordCashMovement(floatChange("FLOAT_INCREASE", "50.00", "token-1")))
+                    .isInstanceOf(CurrencyNotSupportedException.class)
+                    .hasMessageContaining("CAD")
+                    .hasMessageContaining("USD");
+            assertThat(recorded).isEmpty();
+            verify(approvalService, never()).use(any(), any(), any(), any(), any(), any(), any());
+        }
+
+        @Test
         @DisplayName("AC8: the matching increase without a token — CASH_MOVEMENT_APPROVAL_REQUIRED (always a manager)")
         void floatChangeAlwaysNeedsManager() {
             assertThatThrownBy(() -> service.recordCashMovement(floatChange("FLOAT_INCREASE", "50.00", null)))
@@ -521,6 +542,7 @@ class RegisterSessionCashMovementTest {
                         .registerId(TERMINAL)
                         .locationId(LOCATION)
                         .amount(new BigDecimal("150.0000"))
+                        .currencyCode("USD")
                         .build()));
         when(approvalService.use(
                         eq("token-1"),
@@ -660,6 +682,7 @@ class RegisterSessionCashMovementTest {
                             .registerId(TERMINAL)
                             .locationId(OTHER_LOCATION)
                             .amount(new BigDecimal("250.0000"))
+                            .currencyCode("USD")
                             .build()));
 
             // A decrease of the whole drawer float would match a zero target; it must not.
@@ -683,6 +706,7 @@ class RegisterSessionCashMovementTest {
                             .registerId(TERMINAL)
                             .locationId(LOCATION)
                             .amount(new BigDecimal("-25.0000"))
+                            .currencyCode("USD")
                             .build()));
 
             assertThatThrownBy(() -> service.recordCashMovement(floatChange("FLOAT_DECREASE", "225.00", "token-1")))

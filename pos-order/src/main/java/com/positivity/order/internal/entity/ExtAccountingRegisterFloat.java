@@ -44,6 +44,13 @@ public class ExtAccountingRegisterFloat extends TenantScopedEntity {
     @Column(name = "amount", nullable = false, precision = 19, scale = 4)
     private BigDecimal amount;
 
+    /**
+     * The ISO 4217 code of {@link #amount} (#2577; ADR-0067 R-1): the fact's {@code currencyCode}; for a new copy
+     * from a fact that predates it, the functional currency (PC-8). An older fact never changes a stated one.
+     */
+    @Column(name = "currency_code", nullable = false, length = 3)
+    private String currencyCode;
+
     @Column(name = "effective_date", nullable = false)
     private LocalDate effectiveDate;
 

@@ -4,6 +4,7 @@ import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.accounting.PettyExpenseCategoryChangedV1;
 import com.positivity.domainevents.accounting.RegisterFloatChangedV1;
 import com.positivity.kafka.common.KafkaRails;
+import com.positivity.order.internal.config.FunctionalCurrency;
 import com.positivity.order.internal.entity.ExtAccountingPettyExpenseCategory;
 import com.positivity.order.internal.entity.ExtAccountingRegisterFloat;
 import com.positivity.order.internal.entity.ProcessedEvent;
@@ -47,7 +48,8 @@ import tools.jackson.databind.ObjectMapper;
  * <p>Each copy row is keyed by the fact's aggregate (the accounting row id), and the fact's {@code
  * aggregateVersion} guards it ({@link ReplicaVersionGuard}): a fact older than the row is ignored, so
  * a float fact arriving out of order changes nothing; an equal version applies, which is what lets
- * accounting's start-up republish and a manifest-driven replay repair a row.
+ * accounting's start-up republish and a manifest-driven replay repair a row. The float copy keeps the fact's
+ * {@code currencyCode} (#2577), the functional currency for a fact without one (ADR-0067 PC-8).
  *
  * <p>Every accounting fact's eventId is recorded in {@code processed_events} (owner {@value #OWNER}),
  * the facts this module ignores included, because accounting's reconciliation manifest counts every
@@ -77,6 +79,7 @@ public class AccountingEventsListener {
     private final ExtAccountingPettyExpenseCategoryRepository categoryRepository;
     private final ExtAccountingRegisterFloatRepository registerFloatRepository;
     private final RegisterSessionRepository registerSessionRepository;
+    private final FunctionalCurrency functionalCurrency;
     private final @Nullable MeterRegistry meterRegistry;
 
     /** The event's handler work and its processed mark, in a transaction of their own. */
@@ -89,6 +92,7 @@ public class AccountingEventsListener {
             ExtAccountingPettyExpenseCategoryRepository categoryRepository,
             ExtAccountingRegisterFloatRepository registerFloatRepository,
             RegisterSessionRepository registerSessionRepository,
+            FunctionalCurrency functionalCurrency,
             PlatformTransactionManager transactionManager,
             ObjectProvider<MeterRegistry> meterRegistry) {
         this.clock = clock;
@@ -97,6 +101,7 @@ public class AccountingEventsListener {
         this.categoryRepository = categoryRepository;
         this.registerFloatRepository = registerFloatRepository;
         this.registerSessionRepository = registerSessionRepository;
+        this.functionalCurrency = functionalCurrency;
         this.meterRegistry = meterRegistry.getIfAvailable();
         this.handlerTransaction = new TransactionTemplate(transactionManager);
         this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -196,6 +201,14 @@ public class AccountingEventsListener {
         copy.setLocationId(fact.locationId());
         // A reversal in accounting can leave a float negative; the copy holds it as it stands.
         copy.setAmount(scale(fact.amount()));
+        if (fact.currencyCode() != null) {
+            copy.setCurrencyCode(fact.currencyCode());
+        } else if (existing == null) {
+            // ADR-0067 PC-8: a new copy from a fact without a currency (schema 1 or 2) is in the tenant's functional
+            // currency. Until #2583 (ADR-0067 PC-2/A2) that is the interim pos.order.functional-currency.
+            copy.setCurrencyCode(functionalCurrency.code());
+        }
+        // An older fact without a currency never re-denominates a copy that already states one: it keeps it.
         copy.setEffectiveDate(fact.effectiveDate() == null ? LocalDate.now(clock) : fact.effectiveDate());
         copy.setAggregateVersion(aggregateVersion);
         copy.setSyncedAt(Instant.now(clock));

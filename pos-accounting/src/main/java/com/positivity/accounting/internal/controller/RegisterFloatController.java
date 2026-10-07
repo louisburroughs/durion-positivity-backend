@@ -68,17 +68,19 @@ public class RegisterFloatController {
                     again). Idempotent on requestId: a replay returns the first result with 200, another body \
                     with the same requestId is 409 IDEMPOTENCY_CONFLICT.
                     Required inputs: registerId (path, pos-order's terminalId), locationId, amount (more than \
-                    zero, functional currency), goLiveDate, justification (at least 10 characters), requestId.
+                    zero), currencyCode (ISO 4217, the functional currency: 422 CURRENCY_NOT_SUPPORTED \
+                    otherwise), goLiveDate, justification (at least 10 characters), requestId.
                     Emits an ACCOUNTING_REGISTER_FLOAT_GO_LIVE event, queues accounting.float.changed, writes \
-                    an audit row naming the caller, and returns 201 with the previous and new amount and the \
-                    journal entry id and number.
+                    an audit row naming the caller, and returns 201 with the previous and new amount, their \
+                    currencyCode, and the journal entry id and number.
                     """,
             tags = {"Accounting Register Float"})
     @ApiResponse(responseCode = "201", description = "The go-live float was posted")
     @ApiResponse(responseCode = "200", description = "A replayed requestId: the first result")
     @ApiResponse(
             responseCode = "400",
-            description = "Missing or invalid field (VALIDATION_ERROR)",
+            description = "Missing or invalid field, a currencyCode missing or not on the ISO 4217 list included"
+                    + " (VALIDATION_ERROR)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
@@ -92,10 +94,10 @@ public class RegisterFloatController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description =
-                    "PERIOD_CLOSED, PERIOD_HARD_LOCKED, GL_MAPPING_NOT_CONFIGURED, FLOAT_REGISTER_LOCATION_MISMATCH"
-                            + " (the register belongs to another location), or FLOAT_DATE_BEFORE_RELOCATION (dated"
-                            + " before the register's latest relocation)",
+            description = "CURRENCY_NOT_SUPPORTED (currencyCode is not the functional currency, or not the currency the"
+                    + " register's float is held in), PERIOD_CLOSED, PERIOD_HARD_LOCKED, GL_MAPPING_NOT_CONFIGURED,"
+                    + " FLOAT_REGISTER_LOCATION_MISMATCH (the register belongs to another location), or"
+                    + " FLOAT_DATE_BEFORE_RELOCATION (dated before the register's latest relocation)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_REGISTER_FLOAT_GO_LIVE", apiVersion = "1")
     public ResponseEntity<RegisterFloatResponse> establishGoLive(
@@ -110,7 +112,8 @@ public class RegisterFloatController {
                                             schema = @Schema(implementation = RegisterFloatGoLiveRequest.class),
                                             examples = @ExampleObject(name = "Drawer 1 at go-live", value = """
                                                                     {"locationId":"019a0000-0000-7000-8000-00000000a001",
-                                                                     "amount":200.00,"goLiveDate":"2026-10-01",
+                                                                     "amount":200.00,"currencyCode":"USD",
+                                                                     "goLiveDate":"2026-10-01",
                                                                      "justification":"Counted float in drawer 1 at go-live",
                                                                      "requestId":"019a0000-0000-7000-8000-000000000101"}
                                                                     """)))
@@ -144,19 +147,21 @@ public class RegisterFloatController {
                     period gate (a CLOSED period needs accounting:period:override and overrideJustification). \
                     Idempotent on requestId: a replay returns the first result with 200, another body with the \
                     same requestId is 409 IDEMPOTENCY_CONFLICT.
-                    Required inputs: registerId (path), locationId, amount (zero or more), bankGlAccountId, \
+                    Required inputs: registerId (path), locationId, amount (zero or more), currencyCode (ISO \
+                    4217, the functional currency: 422 CURRENCY_NOT_SUPPORTED otherwise), bankGlAccountId, \
                     justification (at least 10 characters), requestId; effectiveDate defaults to today in the \
                     tenant's accounting time zone.
                     Emits an ACCOUNTING_REGISTER_FLOAT_CHANGE event, queues accounting.float.changed, writes an \
-                    audit row naming the caller, and returns 201 with the previous and new amount and the \
-                    journal entry id and number.
+                    audit row naming the caller, and returns 201 with the previous and new amount, their \
+                    currencyCode, and the journal entry id and number.
                     """,
             tags = {"Accounting Register Float"})
     @ApiResponse(responseCode = "201", description = "The change was posted")
     @ApiResponse(responseCode = "200", description = "A replayed requestId: the first result")
     @ApiResponse(
             responseCode = "400",
-            description = "Missing or invalid field (VALIDATION_ERROR)",
+            description = "Missing or invalid field, a currencyCode missing or not on the ISO 4217 list included"
+                    + " (VALIDATION_ERROR)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
@@ -170,7 +175,9 @@ public class RegisterFloatController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description = "FLOAT_AMOUNT_UNCHANGED, FLOAT_BANK_ACCOUNT_NOT_ELIGIBLE, PERIOD_CLOSED, PERIOD_HARD_LOCKED,"
+            description = "CURRENCY_NOT_SUPPORTED (currencyCode is not the functional currency, or not the currency the"
+                    + " register's float is held in), FLOAT_AMOUNT_UNCHANGED, FLOAT_BANK_ACCOUNT_NOT_ELIGIBLE,"
+                    + " PERIOD_CLOSED, PERIOD_HARD_LOCKED,"
                     + " ACCOUNTING_TIME_ZONE_UNSET, GL_MAPPING_NOT_CONFIGURED, FLOAT_REGISTER_LOCATION_MISMATCH (the register"
                     + " belongs to another location) or FLOAT_DATE_BEFORE_RELOCATION (dated before the register's latest"
                     + " relocation)",
@@ -188,7 +195,7 @@ public class RegisterFloatController {
                                             schema = @Schema(implementation = RegisterFloatChangeRequest.class),
                                             examples = @ExampleObject(name = "More change for drawer 1", value = """
                                                                     {"locationId":"019a0000-0000-7000-8000-00000000a001",
-                                                                     "amount":300.00,
+                                                                     "amount":300.00,"currencyCode":"USD",
                                                                      "bankGlAccountId":"019a0000-0000-7000-8000-00000000b000",
                                                                      "effectiveDate":"2026-10-15",
                                                                      "justification":"More change needed for the weekend rush",

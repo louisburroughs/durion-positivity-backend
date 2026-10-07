@@ -17,13 +17,18 @@ import org.jspecify.annotations.Nullable;
  * location (AW32, #2571). The envelope's aggregate is the register's float row, so its version
  * orders the facts of one register; it is republished with the current state at every start
  * (ADR-0044 §4). pos-order sets a session's opening float from it (S16).
- * Amounts are in the tenant's functional currency (ADR-0067).
+ * Amounts are in the tenant's functional currency (ADR-0067), stated by {@code currencyCode}.
  *
  * <p>Schema version 2 (#2571) added {@link Kind#RELOCATION} and {@code previousLocationId}, and a
  * relocation of a register whose float is zero posts nothing, so its {@code journalEntryId} is
  * null — additive only (ADR-0044 §3): a version-1 consumer that copies {@code locationId} and
  * {@code amount} handles a relocation as it is; a version-2 consumer must treat the new field as
  * absent on old events.
+ *
+ * <p>Schema version 3 (#2577; ADR-0067 R-1, PC-8) added {@code currencyCode}, the ISO 4217 code of
+ * {@code amount} and {@code previousAmount}, in place and additively (ADR-0044 §3). pos-accounting
+ * always states it; a consumer reads it as absent on a version-1 or version-2 event, where an absent
+ * currency means the tenant's functional currency (PC-8).
  *
  * @param registerId the register: pos-order's {@code terminalId} (AW31)
  * @param locationId the location the register belongs to; for a relocation, the destination
@@ -38,6 +43,9 @@ import org.jspecify.annotations.Nullable;
  * @param previousLocationId the location the register was held at before a relocation; null on every
  *     other kind and on a republish, so it is non-null exactly when this fact moved the register
  *     (schema version 2)
+ * @param currencyCode the ISO 4217 code of {@code amount} and {@code previousAmount}: the currency the
+ *     register's float is held in, the tenant's functional currency (schema version 3); null only on an
+ *     older event, and three upper-case letters when stated
  */
 public record RegisterFloatChangedV1(
         @NonNull String registerId,
@@ -47,10 +55,11 @@ public record RegisterFloatChangedV1(
         @NonNull Kind kind,
         @NonNull LocalDate effectiveDate,
         @Nullable UUID journalEntryId,
-        @Nullable UUID previousLocationId) {
+        @Nullable UUID previousLocationId,
+        @Nullable String currencyCode) {
 
     public static final String EVENT_TYPE = "accounting.float.changed";
-    public static final int SCHEMA_VERSION = 2;
+    public static final int SCHEMA_VERSION = 3;
 
     /**
      * What changed the float. Consumers are state-based (they apply {@code amount} and {@code
@@ -101,6 +110,10 @@ public record RegisterFloatChangedV1(
         // one a newer producer adds, may carry none, so a tolerant reader never throws on it.
         if (journalEntryId == null && (kind == Kind.GO_LIVE || kind == Kind.CHANGE || kind == Kind.REVERSAL)) {
             throw new IllegalArgumentException("journalEntryId must not be null for " + kind);
+        }
+        // Absent on an older event; when stated, an ISO 4217 code is three upper-case letters (ADR-0067 R-3).
+        if (currencyCode != null && !currencyCode.matches("[A-Z]{3}")) {
+            throw new IllegalArgumentException("currencyCode must be three upper-case letters, was " + currencyCode);
         }
     }
 }

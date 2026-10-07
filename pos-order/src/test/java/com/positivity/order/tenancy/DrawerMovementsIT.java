@@ -311,6 +311,7 @@ class DrawerMovementsIT extends PostgresTenancyTestBase {
                 .registerId(register)
                 .locationId(location)
                 .amount(new BigDecimal(amount))
+                .currencyCode("USD")
                 .effectiveDate(LocalDate.of(2026, 10, 7))
                 .aggregateVersion(1L)
                 .syncedAt(Instant.parse("2026-10-07T12:00:00Z"))

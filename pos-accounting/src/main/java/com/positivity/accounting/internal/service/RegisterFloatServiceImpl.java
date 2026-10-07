@@ -15,6 +15,7 @@ import com.positivity.accounting.internal.entity.RegisterFloatChange;
 import com.positivity.accounting.internal.enums.AccountSubtype;
 import com.positivity.accounting.internal.enums.RegisterFloatChangeKind;
 import com.positivity.accounting.internal.exception.CashSetupException;
+import com.positivity.accounting.internal.exception.CurrencyNotSupportedException;
 import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
@@ -57,6 +58,11 @@ import org.springframework.transaction.annotation.Transactional;
  * elsewhere. The float row is locked for the length of a command, so two commands on one register
  * serialize. Idempotent on {@code requestId}: a replay with the same body returns the first result, another
  * body is 409 {@code IDEMPOTENCY_CONFLICT}. The actor comes from the security context (ADR-0018).
+ *
+ * <p>Every amount states its currency (#2577; ADR-0067 R-1): a go-live or Change float names its {@code
+ * currencyCode}, which must be the ledger currency (PC-9: else 422 {@code CURRENCY_NOT_SUPPORTED}, nothing
+ * posts) and the currency the register's float is held in. The float row, every history row, the response and
+ * the fact carry it.
  */
 @Slf4j
 @Service
@@ -116,6 +122,7 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
                 .field(register)
                 .field(request.locationId())
                 .field(request.amount())
+                .field(request.currencyCode())
                 .field(request.goLiveDate())
                 .field(request.justification().trim())
                 .digest();
@@ -124,9 +131,10 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
         if (replayed != null) {
             return replay(replayed, hash);
         }
+        String currency = requireLedgerCurrency(request.currencyCode());
         requireMinorUnit(request.amount());
 
-        RegisterFloat registerFloat = lockOrCreate(register, request.locationId());
+        RegisterFloat registerFloat = lockOrCreate(register, request.locationId(), currency);
         // A concurrent duplicate of this request waited on the lock: it answers with the first result.
         RegisterFloatChange committed =
                 changes.findByRequestId(request.requestId()).orElse(null);
@@ -134,6 +142,7 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
             return replay(committed, hash);
         }
         requireRegisterLocation(registerFloat, request.locationId());
+        requireFloatCurrency(registerFloat, currency);
         // Once per register (AW17): a standing go-live, or any standing float history, refuses a go-live.
         if (registerFloat.getGoLiveJournalEntryId() != null
                 || !changes.findByRegisterFloatIdAndKindInAndReversalJournalEntryIdIsNull(
@@ -189,6 +198,7 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
                 .field(register)
                 .field(request.locationId())
                 .field(request.amount())
+                .field(request.currencyCode())
                 .field(request.bankGlAccountId())
                 .field(request.effectiveDate())
                 .field(request.justification().trim())
@@ -199,11 +209,12 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
         if (replayed != null) {
             return replay(replayed, hash);
         }
+        String currency = requireLedgerCurrency(request.currencyCode());
         requireMinorUnit(request.amount());
         // A default date is today in the tenant's accounting time zone; an unset zone fails closed (#2558).
         LocalDate date = request.effectiveDate() != null ? request.effectiveDate() : zoneResolver.today();
 
-        RegisterFloat registerFloat = lockOrCreate(register, request.locationId());
+        RegisterFloat registerFloat = lockOrCreate(register, request.locationId(), currency);
         // A concurrent duplicate of this request waited on the lock: it answers with the first result.
         RegisterFloatChange committed =
                 changes.findByRequestId(request.requestId()).orElse(null);
@@ -211,6 +222,7 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
             return replay(committed, hash);
         }
         requireRegisterLocation(registerFloat, request.locationId());
+        requireFloatCurrency(registerFloat, currency);
         BigDecimal previous = registerFloat.getAmount();
         BigDecimal difference = request.amount().subtract(previous);
         if (difference.signum() == 0) {
@@ -428,12 +440,13 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
 
     // ---- rows -----------------------------------------------------------------------------------------------
 
-    private RegisterFloat lockOrCreate(String registerId, UUID locationId) {
+    private RegisterFloat lockOrCreate(String registerId, UUID locationId, String currencyCode) {
         return floats.lockByRegisterId(registerId).orElseGet(() -> {
             RegisterFloat created = new RegisterFloat();
             created.setRegisterId(registerId);
             created.setLocationId(locationId);
             created.setAmount(BigDecimal.ZERO);
+            created.setCurrencyCode(currencyCode);
             try {
                 // The (tenant, register) unique is the backstop for two first commands racing.
                 floats.saveAndFlush(created);
@@ -571,6 +584,7 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
         change.setKind(kind);
         change.setPreviousAmount(previous);
         change.setNewAmount(registerFloat.getAmount());
+        change.setCurrencyCode(registerFloat.getCurrencyCode());
         change.setBankGlAccountId(bankAccount);
         change.setJournalEntryId(posted == null ? null : posted.getJournalEntryId());
         change.setEffectiveDate(date);
@@ -609,7 +623,8 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
         } else {
             audit.setOldValue("amount=" + previous.toPlainString());
             audit.setNewValue("registerId=" + saved.getRegisterId() + ";locationId=" + saved.getLocationId()
-                    + ";amount=" + saved.getAmount().toPlainString() + ";bankGlAccountId="
+                    + ";amount=" + saved.getAmount().toPlainString() + ";currencyCode=" + saved.getCurrencyCode()
+                    + ";bankGlAccountId="
                     + change.getBankGlAccountId() + ";requestId=" + change.getRequestId() + ";journalEntryId="
                     + change.getJournalEntryId() + ";effectiveDate=" + change.getEffectiveDate() + ";override="
                     + (change.getOverrideJustification() != null));
@@ -633,7 +648,7 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
     static String relocationAuditValue(RegisterFloatChange change) {
         return "registerId=" + change.getRegisterId() + ";fromLocationId=" + change.getPreviousLocationId()
                 + ";toLocationId=" + change.getLocationId() + ";amount="
-                + change.getNewAmount().toPlainString()
+                + change.getNewAmount().toPlainString() + ";currencyCode=" + change.getCurrencyCode()
                 + ";reason=" + change.getReason() + ";requestId=" + change.getRequestId() + ";journalEntryId="
                 + change.getJournalEntryId() + ";effectiveDate=" + change.getEffectiveDate() + ";override="
                 + (change.getOverrideJustification() != null);
@@ -660,6 +675,7 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
                 change.getKind(),
                 change.getPreviousAmount(),
                 change.getNewAmount(),
+                change.getCurrencyCode(),
                 change.getEffectiveDate(),
                 change.getJournalEntryId(),
                 number,
@@ -692,6 +708,32 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
                             + ", not the functional currency " + ledgerCurrency.code());
                 });
         return account;
+    }
+
+    /**
+     * ADR-0067 PC-9: a Stage A ledger books its own currency only, so a float amount in another currency is refused
+     * before any row is locked or created: 422 {@code CURRENCY_NOT_SUPPORTED}, the platform's one code. The request
+     * already proved the code is ISO 4217 (400 otherwise).
+     */
+    private String requireLedgerCurrency(@Nullable String currencyCode) {
+        String code = Objects.requireNonNull(currencyCode);
+        if (!ledgerCurrency.code().equals(code)) {
+            throw new CurrencyNotSupportedException("currencyCode " + code + " is not the functional currency "
+                    + ledgerCurrency.code() + "; a register float is held in the functional currency only");
+        }
+        return code;
+    }
+
+    /**
+     * The float keeps the currency it was created in (ADR-0067 R-1): once the ledger currency changes, a command in
+     * the new one never re-denominates it: 422 {@code CURRENCY_NOT_SUPPORTED}, nothing posts.
+     */
+    private static void requireFloatCurrency(RegisterFloat registerFloat, String currencyCode) {
+        if (!currencyCode.equals(registerFloat.getCurrencyCode())) {
+            throw new CurrencyNotSupportedException("Register " + registerFloat.getRegisterId()
+                    + " has its float held in " + registerFloat.getCurrencyCode() + "; " + currencyCode
+                    + " is not supported for it");
+        }
     }
 
     private void requireMinorUnit(BigDecimal amount) {

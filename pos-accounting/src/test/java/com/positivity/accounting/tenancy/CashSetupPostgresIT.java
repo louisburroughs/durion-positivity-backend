@@ -24,6 +24,7 @@ import com.positivity.accounting.internal.enums.RegisterFloatRelocationReason;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
 import com.positivity.accounting.internal.exception.CashSetupException;
+import com.positivity.accounting.internal.exception.CurrencyNotSupportedException;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.RegisterFloatRepository;
 import com.positivity.accounting.internal.service.CashAndPayablesSettings;
@@ -269,6 +270,35 @@ class CashSetupPostgresIT extends PostgresTenancyTestBase {
         assertThatThrownBy(() -> asTenant(tenant, () -> floats.changeFloat("T-1", change("175.00", bank, requestId))))
                 .extracting(e -> ((CashSetupException) e).getCode())
                 .isEqualTo(CashSetupException.Code.IDEMPOTENCY_CONFLICT);
+
+        // #2577 (ADR-0067 R-1, R-4): the float, every history row and the responses state the ledger currency; a
+        // command in another currency is 422 CURRENCY_NOT_SUPPORTED and posts nothing.
+        assertThat(down.response().currencyCode()).isEqualTo("USD");
+        JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
+        assertThat(owner.queryForList(
+                        "SELECT DISTINCT currency_code FROM register_float WHERE tenant_id = ?", String.class, tenant))
+                .containsExactly("USD");
+        assertThat(owner.queryForList(
+                        "SELECT DISTINCT currency_code FROM register_float_change WHERE tenant_id = ?",
+                        String.class,
+                        tenant))
+                .containsExactly("USD");
+        int beforeForeign = entryCount(tenant);
+        assertThatThrownBy(() -> asTenant(
+                        tenant,
+                        () -> floats.changeFloat(
+                                "T-1",
+                                new RegisterFloatChangeRequest(
+                                        LOCATION,
+                                        new BigDecimal("400.00"),
+                                        "CAD",
+                                        bank,
+                                        GO_LIVE,
+                                        "More change needed for the weekend",
+                                        UUIDv7Generator.generate(),
+                                        null))))
+                .isInstanceOf(CurrencyNotSupportedException.class);
+        assertThat(entryCount(tenant)).isEqualTo(beforeForeign);
 
         // Two-tenant isolation (ADR-0062): another tenant sees no float of T-1.
         UUID other = tenant();
@@ -788,6 +818,7 @@ class CashSetupPostgresIT extends PostgresTenancyTestBase {
                             new RegisterFloatChangeRequest(
                                     at,
                                     target,
+                                    "USD",
                                     bank,
                                     on,
                                     "Float changed for the property test",
@@ -991,6 +1022,7 @@ class CashSetupPostgresIT extends PostgresTenancyTestBase {
         RegisterFloatGoLiveRequest closed = new RegisterFloatGoLiveRequest(
                 LOCATION,
                 new BigDecimal("200.00"),
+                "USD",
                 LocalDate.of(2026, 8, 15),
                 "Counted float in drawer 1 at go-live",
                 UUIDv7Generator.generate());
@@ -1002,6 +1034,7 @@ class CashSetupPostgresIT extends PostgresTenancyTestBase {
         RegisterFloatChangeRequest overridden = new RegisterFloatChangeRequest(
                 LOCATION,
                 new BigDecimal("100.00"),
+                "USD",
                 bank,
                 LocalDate.of(2026, 8, 15),
                 "Float counted in the closed month",
@@ -1194,6 +1227,7 @@ class CashSetupPostgresIT extends PostgresTenancyTestBase {
         return new RegisterFloatGoLiveRequest(
                 LOCATION,
                 new BigDecimal(amount),
+                "USD",
                 GO_LIVE,
                 "Counted float in drawer 1 at go-live",
                 UUIDv7Generator.generate());
@@ -1203,6 +1237,7 @@ class CashSetupPostgresIT extends PostgresTenancyTestBase {
         return new RegisterFloatGoLiveRequest(
                 location,
                 new BigDecimal(amount),
+                "USD",
                 date,
                 "Counted float in drawer 1 at go-live",
                 UUIDv7Generator.generate());
@@ -1292,6 +1327,7 @@ class CashSetupPostgresIT extends PostgresTenancyTestBase {
         return new RegisterFloatChangeRequest(
                 LOCATION,
                 new BigDecimal(amount),
+                "USD",
                 bank,
                 GO_LIVE.plusDays(1),
                 "More change for the weekend",

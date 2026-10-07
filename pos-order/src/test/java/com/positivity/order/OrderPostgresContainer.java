@@ -68,6 +68,26 @@ public final class OrderPostgresContainer {
         return dataSource;
     }
 
+    /**
+     * The superuser on a fresh, empty database of this container, created on first use: a migration test runs
+     * Flyway from an older version there without touching the shared database the Spring contexts use.
+     */
+    public static synchronized DataSource ownerDataSource(String name) {
+        String database = "scratch_" + name.replaceAll("[^a-z0-9]", "_");
+        try (Connection connection = ownerDataSource().getConnection();
+                Statement statement = connection.createStatement()) {
+            statement.execute("DROP DATABASE IF EXISTS " + database);
+            statement.execute("CREATE DATABASE " + database);
+        } catch (SQLException e) {
+            throw new IllegalStateException("Unable to create the scratch database " + database, e);
+        }
+        PGSimpleDataSource dataSource = new PGSimpleDataSource();
+        dataSource.setUrl(POSTGRES.getJdbcUrl().replace("/" + POSTGRES.getDatabaseName(), "/" + database));
+        dataSource.setUser(POSTGRES.getUsername());
+        dataSource.setPassword(POSTGRES.getPassword());
+        return dataSource;
+    }
+
     private static synchronized void start() {
         if (!POSTGRES.isRunning()) {
             POSTGRES.start();

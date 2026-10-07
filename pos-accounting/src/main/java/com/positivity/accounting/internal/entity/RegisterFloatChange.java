@@ -85,6 +85,10 @@ public class RegisterFloatChange extends TenantScopedEntity {
     @Column(name = "new_amount", precision = 19, scale = 4, nullable = false, updatable = false)
     private BigDecimal newAmount;
 
+    /** The ISO 4217 code of previousAmount and newAmount: the register float's currency (#2577; ADR-0067 R-1). */
+    @Column(name = "currency_code", length = 3, nullable = false, updatable = false)
+    private String currencyCode;
+
     /** The bank side of a CHANGE; null for a go-live (opening balance equity) and a reversal. */
     @Column(name = "bank_gl_account_id", updatable = false)
     private UUID bankGlAccountId;

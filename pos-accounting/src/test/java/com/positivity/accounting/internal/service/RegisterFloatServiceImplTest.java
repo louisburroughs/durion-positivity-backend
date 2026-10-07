@@ -30,6 +30,7 @@ import com.positivity.accounting.internal.enums.RegisterFloatChangeKind;
 import com.positivity.accounting.internal.enums.RegisterFloatRelocationReason;
 import com.positivity.accounting.internal.enums.RegisterSessionStatus;
 import com.positivity.accounting.internal.exception.CashSetupException;
+import com.positivity.accounting.internal.exception.CurrencyNotSupportedException;
 import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
@@ -266,6 +267,7 @@ class RegisterFloatServiceImplTest {
                         new RegisterFloatChangeRequest(
                                 elsewhere,
                                 new BigDecimal("300.00"),
+                                "USD",
                                 BANK,
                                 DAY,
                                 "More change needed for the weekend",
@@ -282,6 +284,7 @@ class RegisterFloatServiceImplTest {
                         new RegisterFloatGoLiveRequest(
                                 elsewhere,
                                 new BigDecimal("180.00"),
+                                "USD",
                                 DAY,
                                 "Counted float in drawer 1 at go-live",
                                 UUID.randomUUID())))
@@ -317,6 +320,7 @@ class RegisterFloatServiceImplTest {
         RegisterFloatChangeRequest toDrawer = new RegisterFloatChangeRequest(
                 LOCATION,
                 new BigDecimal("100.00"),
+                "USD",
                 FLOAT_ACCOUNT,
                 DAY,
                 "Topping up the drawer",
@@ -385,8 +389,8 @@ class RegisterFloatServiceImplTest {
     @Test
     @DisplayName("a body without a justification of 10 characters, or a finer amount than cents, is 400")
     void requestShapeIsValidated() {
-        RegisterFloatGoLiveRequest shortJustification =
-                new RegisterFloatGoLiveRequest(LOCATION, new BigDecimal("200.00"), DAY, "too short", UUID.randomUUID());
+        RegisterFloatGoLiveRequest shortJustification = new RegisterFloatGoLiveRequest(
+                LOCATION, new BigDecimal("200.00"), "USD", DAY, "too short", UUID.randomUUID());
         assertThatThrownBy(() -> service.establishGoLive("T-1", shortJustification))
                 .isInstanceOf(InvalidRequestParameterException.class);
         assertThatThrownBy(() -> service.establishGoLive("T-1", goLive("200.001", UUID.randomUUID())))
@@ -405,6 +409,7 @@ class RegisterFloatServiceImplTest {
                 new RegisterFloatChangeRequest(
                         LOCATION,
                         new BigDecimal("50.00"),
+                        "USD",
                         BANK,
                         null,
                         "Funding a new register",
@@ -415,6 +420,151 @@ class RegisterFloatServiceImplTest {
         assertThat(outcome.response().kind()).isEqualTo(RegisterFloatChangeKind.CHANGE);
         verify(journalEntries).postJournalEntry(any(UUID.class), isNull());
         verify(resolver, never()).resolveGLAccount(anyString(), eq("OPENING_BALANCE_EQUITY"), any(LocalDateTime.class));
+    }
+
+    // ---- currencyCode (#2577; ADR-0067 R-1, R-3, PC-9) ----------------------------------------------------------
+
+    @Test
+    @DisplayName("#2577 AC1: a go-live or change without currencyCode, or with a code not on the ISO 4217 list, is 400"
+            + " and reaches no row")
+    void currencyCodeIsRequiredAndIso() {
+        for (String code : new String[] {null, "", "XYZ", "usd", "US", "USDX"}) {
+            assertThatThrownBy(() -> service.establishGoLive(
+                            "T-1",
+                            new RegisterFloatGoLiveRequest(
+                                    LOCATION,
+                                    new BigDecimal("200.00"),
+                                    code,
+                                    DAY,
+                                    "Counted float in drawer 1 at go-live",
+                                    UUID.randomUUID())))
+                    .as("go-live with %s", code)
+                    .isInstanceOf(InvalidRequestParameterException.class)
+                    .hasMessageContaining("currencyCode");
+            assertThatThrownBy(() -> service.changeFloat(
+                            "T-1",
+                            new RegisterFloatChangeRequest(
+                                    LOCATION,
+                                    new BigDecimal("300.00"),
+                                    code,
+                                    BANK,
+                                    DAY,
+                                    "More change needed for the weekend",
+                                    UUID.randomUUID(),
+                                    null)))
+                    .as("change with %s", code)
+                    .isInstanceOf(InvalidRequestParameterException.class)
+                    .hasMessageContaining("currencyCode");
+        }
+        verify(floats, never()).lockByRegisterId(any());
+        verify(journalEntries, never()).createJournalEntry(any());
+    }
+
+    @Test
+    @DisplayName("#2577 AC1: an ISO code other than the functional currency is 422 CURRENCY_NOT_SUPPORTED; nothing"
+            + " posts, no float row is created and no fact is queued")
+    void foreignCurrencyIsRefused() {
+        assertThatThrownBy(() -> service.establishGoLive(
+                        "T-1",
+                        new RegisterFloatGoLiveRequest(
+                                LOCATION,
+                                new BigDecimal("200.00"),
+                                "CAD",
+                                DAY,
+                                "Counted float in drawer 1 at go-live",
+                                UUID.randomUUID())))
+                .isInstanceOf(CurrencyNotSupportedException.class)
+                .hasMessageContaining("CAD")
+                .hasMessageContaining("USD");
+        assertThatThrownBy(() -> service.changeFloat(
+                        "T-1",
+                        new RegisterFloatChangeRequest(
+                                LOCATION,
+                                new BigDecimal("300.00"),
+                                "EUR",
+                                BANK,
+                                DAY,
+                                "More change needed for the weekend",
+                                UUID.randomUUID(),
+                                null)))
+                .isInstanceOf(CurrencyNotSupportedException.class);
+
+        verify(floats, never()).lockByRegisterId(any());
+        verify(floats, never()).saveAndFlush(any());
+        verify(journalEntries, never()).createJournalEntry(any());
+        verify(writer, never()).publish(any(), any());
+        verify(auditLogs, never()).save(any());
+        assertThat(standing).isEmpty();
+    }
+
+    @Test
+    @DisplayName("#2577: a float held in another currency than the ledger's now (the ledger currency changed) takes no"
+            + " change: 422 CURRENCY_NOT_SUPPORTED, nothing posts")
+    void floatHeldInAnotherCurrencyIsNotChanged() {
+        service.establishGoLive("T-1", goLive("200.00", UUID.randomUUID()));
+        registerFloat.setCurrencyCode("CAD");
+
+        assertThatThrownBy(() -> service.changeFloat("T-1", change("300.00", UUID.randomUUID())))
+                .isInstanceOf(CurrencyNotSupportedException.class)
+                .hasMessageContaining("CAD");
+        assertThat(capturedEntries()).hasSize(1);
+        assertThat(registerFloat.getAmount()).isEqualByComparingTo("200.00");
+    }
+
+    @Test
+    @DisplayName("#2577 AC2: the float row, its history rows, the responses and the schema-3 facts state currencyCode")
+    void currencyIsStatedOnRowsResponsesAndFacts() {
+        RegisterFloatService.Outcome goLive = service.establishGoLive("T-1", goLive("200.00", UUID.randomUUID()));
+        RegisterFloatService.Outcome changed = service.changeFloat("T-1", change("300.00", UUID.randomUUID()));
+
+        assertThat(goLive.response().currencyCode()).isEqualTo("USD");
+        assertThat(changed.response().currencyCode()).isEqualTo("USD");
+        assertThat(registerFloat.getCurrencyCode()).isEqualTo("USD");
+        assertThat(standing)
+                .hasSize(2)
+                .allSatisfy(row -> assertThat(row.getCurrencyCode()).isEqualTo("USD"));
+        ArgumentCaptor<AccountingAuditLog> audits = ArgumentCaptor.forClass(AccountingAuditLog.class);
+        verify(auditLogs, org.mockito.Mockito.times(2)).save(audits.capture());
+        assertThat(audits.getAllValues())
+                .allSatisfy(audit -> assertThat(audit.getNewValue()).contains("currencyCode=USD"));
+        ArgumentCaptor<DomainEventEnvelope<?>> facts = ArgumentCaptor.forClass(DomainEventEnvelope.class);
+        verify(writer, org.mockito.Mockito.times(2)).publish(eq("accounting.events.v1"), facts.capture());
+        assertThat(facts.getAllValues()).allSatisfy(envelope -> {
+            assertThat(envelope.schemaVersion()).isEqualTo(3);
+            assertThat(((RegisterFloatChangedV1) envelope.payload()).currencyCode())
+                    .isEqualTo("USD");
+        });
+    }
+
+    @Test
+    @DisplayName("#2577: a replay answers with the first result's currency; the code is part of the replayed body")
+    void replayEchoesTheFirstCurrency() {
+        UUID requestId = UUID.randomUUID();
+        service.changeFloat("T-1", change("300.00", requestId));
+        RegisterFloatChange first = standing.get(0);
+        when(changes.findByRequestId(requestId)).thenReturn(Optional.of(first));
+        when(journalEntries.getJournalEntry(first.getJournalEntryId()))
+                .thenReturn(JournalEntryResponse.builder()
+                        .entryNumber("JE-202610-000001")
+                        .build());
+
+        RegisterFloatService.Outcome replay = service.changeFloat("T-1", change("300.00", requestId));
+
+        assertThat(replay.replayed()).isTrue();
+        assertThat(replay.response().currencyCode()).isEqualTo("USD");
+        assertThatThrownBy(() -> service.changeFloat(
+                        "T-1",
+                        new RegisterFloatChangeRequest(
+                                LOCATION,
+                                new BigDecimal("300.00"),
+                                "CAD",
+                                BANK,
+                                DAY,
+                                "More change needed for the weekend",
+                                requestId,
+                                null)))
+                .extracting(e -> ((CashSetupException) e).getCode())
+                .isEqualTo(CashSetupException.Code.IDEMPOTENCY_CONFLICT);
     }
 
     // ---- relocation (#2571, AW32) -----------------------------------------------------------------------------
@@ -484,13 +634,17 @@ class RegisterFloatServiceImplTest {
         ArgumentCaptor<DomainEventEnvelope<?>> facts = ArgumentCaptor.forClass(DomainEventEnvelope.class);
         verify(writer, org.mockito.Mockito.times(2)).publish(eq("accounting.events.v1"), facts.capture());
         DomainEventEnvelope<?> envelope = facts.getAllValues().get(1);
-        assertThat(envelope.schemaVersion()).isEqualTo(2);
+        assertThat(envelope.schemaVersion()).isEqualTo(3);
         RegisterFloatChangedV1 fact = (RegisterFloatChangedV1) envelope.payload();
         assertThat(fact.kind()).isEqualTo(RegisterFloatChangedV1.Kind.RELOCATION);
         assertThat(fact.locationId()).isEqualTo(SHOP_B);
         assertThat(fact.previousLocationId()).isEqualTo(LOCATION);
         assertThat(fact.amount()).isEqualByComparingTo(fact.previousAmount());
         assertThat(fact.journalEntryId()).isEqualTo(moved.response().journalEntryId());
+        // #2577: the move carries the float's currency on its row, its response and its fact.
+        assertThat(fact.currencyCode()).isEqualTo("USD");
+        assertThat(row.getCurrencyCode()).isEqualTo("USD");
+        assertThat(moved.response().currencyCode()).isEqualTo("USD");
         RegisterFloatChangedV1 goLiveFact =
                 (RegisterFloatChangedV1) facts.getAllValues().get(0).payload();
         assertThat(goLiveFact.previousLocationId()).isNull();
@@ -629,6 +783,7 @@ class RegisterFloatServiceImplTest {
                 new RegisterFloatGoLiveRequest(
                         SHOP_B,
                         new BigDecimal("200.00"),
+                        "USD",
                         DAY,
                         "Counted float in drawer 1 at go-live",
                         UUID.randomUUID()));
@@ -698,6 +853,7 @@ class RegisterFloatServiceImplTest {
                 new RegisterFloatChangeRequest(
                         LOCATION,
                         new BigDecimal("300.00"),
+                        "USD",
                         BANK,
                         LocalDate.of(2026, 10, 10),
                         "More change needed for the weekend",
@@ -739,6 +895,7 @@ class RegisterFloatServiceImplTest {
                         new RegisterFloatChangeRequest(
                                 SHOP_B,
                                 new BigDecimal("300.00"),
+                                "USD",
                                 BANK,
                                 MOVE_DAY.minusDays(1),
                                 "More change needed for the weekend",
@@ -751,6 +908,7 @@ class RegisterFloatServiceImplTest {
                 new RegisterFloatChangeRequest(
                         SHOP_B,
                         new BigDecimal("300.00"),
+                        "USD",
                         BANK,
                         MOVE_DAY,
                         "More change needed for the weekend",
@@ -768,6 +926,7 @@ class RegisterFloatServiceImplTest {
                         new RegisterFloatGoLiveRequest(
                                 SHOP_B,
                                 new BigDecimal("200.00"),
+                                "USD",
                                 MOVE_DAY.minusDays(1),
                                 "Counted float in drawer 1 at go-live",
                                 UUID.randomUUID())))
@@ -963,11 +1122,18 @@ class RegisterFloatServiceImplTest {
 
     private static RegisterFloatGoLiveRequest goLive(String amount, UUID requestId) {
         return new RegisterFloatGoLiveRequest(
-                LOCATION, new BigDecimal(amount), DAY, "Counted float in drawer 1 at go-live", requestId);
+                LOCATION, new BigDecimal(amount), "USD", DAY, "Counted float in drawer 1 at go-live", requestId);
     }
 
     private static RegisterFloatChangeRequest change(String amount, UUID requestId) {
         return new RegisterFloatChangeRequest(
-                LOCATION, new BigDecimal(amount), BANK, DAY, "More change needed for the weekend", requestId, null);
+                LOCATION,
+                new BigDecimal(amount),
+                "USD",
+                BANK,
+                DAY,
+                "More change needed for the weekend",
+                requestId,
+                null);
     }
 }

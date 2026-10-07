@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.accounting.internal.dto.RegisterFloatResponse;
 import com.positivity.accounting.internal.enums.RegisterFloatChangeKind;
+import com.positivity.accounting.internal.exception.CurrencyNotSupportedException;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.RegisterFloatService;
 import com.positivity.domainevents.location.LocationAncestry.AncestorSets;
@@ -52,7 +53,8 @@ import org.springframework.test.web.servlet.MockMvc;
  * Controller-boundary proof of the float commands' location-scope gate (#2511, location-scope.yaml: gate): a
  * caller whose {@code accounting:float:manage} is scoped to a region may set and change floats only for that
  * region's registers. The register's own location is held by the service (FLOAT_REGISTER_LOCATION_MISMATCH),
- * so naming an in-scope location cannot reach another location's register.
+ * so naming an in-scope location cannot reach another location's register. #2577 (ADR-0067): the commands
+ * state their currency, refused at the boundary when missing or not ISO 4217, and the response echoes it.
  */
 @WebMvcTest(RegisterFloatController.class)
 @Import({LocationScopeAutoConfiguration.class, RegisterFloatLocationScopeTest.SliceTestConfig.class})
@@ -99,7 +101,7 @@ class RegisterFloatLocationScopeTest {
 
     private static String goLiveBody(UUID location) {
         return """
-                {"locationId":"%s","amount":200.00,"goLiveDate":"2026-10-01",
+                {"locationId":"%s","amount":200.00,"currencyCode":"USD","goLiveDate":"2026-10-01",
                  "justification":"Counted float in drawer 1 at go-live",
                  "requestId":"019a0000-0000-7000-8000-000000000201"}
                 """.formatted(location);
@@ -107,7 +109,8 @@ class RegisterFloatLocationScopeTest {
 
     private static String changeBody(UUID location) {
         return """
-                {"locationId":"%s","amount":300.00,"bankGlAccountId":"019a0000-0000-7000-8000-00000000b000",
+                {"locationId":"%s","amount":300.00,"currencyCode":"USD",
+                 "bankGlAccountId":"019a0000-0000-7000-8000-00000000b000",
                  "justification":"More change for the weekend",
                  "requestId":"019a0000-0000-7000-8000-000000000202"}
                 """.formatted(location);
@@ -136,6 +139,7 @@ class RegisterFloatLocationScopeTest {
                         kind,
                         BigDecimal.ZERO,
                         new BigDecimal("200.00"),
+                        "USD",
                         LocalDate.of(2026, 10, 1),
                         UUID.fromString("019a0000-0000-7000-8000-00000000e001"),
                         "JE-202610-000001",
@@ -154,7 +158,9 @@ class RegisterFloatLocationScopeTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(goLiveBody(SHOP_A)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.locationId").value(SHOP_A.toString()));
+                .andExpect(jsonPath("$.locationId").value(SHOP_A.toString()))
+                // #2577 (ADR-0067 R-1): the response states the currency of its amounts.
+                .andExpect(jsonPath("$.currencyCode").value("USD"));
     }
 
     @Test
@@ -263,6 +269,52 @@ class RegisterFloatLocationScopeTest {
                 .andExpect(status().isBadRequest());
 
         verify(registerFloatService, never()).relocate(any(), any());
+    }
+
+    // ---- currencyCode (#2577; ADR-0067 R-1, R-3, PC-9) ----------------------------------------------------------
+
+    @Test
+    @DisplayName("#2577 AC1: a go-live or change without currencyCode, or with a code not on the ISO 4217 list, is 400"
+            + " VALIDATION_ERROR before any scope decision; nothing posts")
+    void missingOrInvalidCurrencyIsRejected() throws Exception {
+        for (String body : List.of(
+                goLiveBody(SHOP_A).replace("\"currencyCode\":\"USD\",", ""),
+                goLiveBody(SHOP_A).replace("\"USD\"", "\"XYZ\""),
+                goLiveBody(SHOP_A).replace("\"USD\"", "\"usd\""),
+                goLiveBody(SHOP_A).replace("\"USD\"", "\"US\""))) {
+            mockMvc.perform(post(GO_LIVE)
+                            .with(authentication(scopedCaller()))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                    .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("currencyCode")))
+                    .andExpect(jsonPath("$.fieldErrors[0].field").value("currencyCode"));
+        }
+        mockMvc.perform(post(CHANGE)
+                        .with(authentication(scopedCaller()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(changeBody(SHOP_A).replace("\"currencyCode\":\"USD\",", "")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+
+        verify(registerFloatService, never()).establishGoLive(any(), any());
+        verify(registerFloatService, never()).changeFloat(any(), any());
+    }
+
+    @Test
+    @DisplayName("#2577 AC1: a code other than the functional currency answers 422 CURRENCY_NOT_SUPPORTED")
+    void foreignCurrencyIsUnprocessable() throws Exception {
+        when(registerFloatService.changeFloat(eq("T-1"), any()))
+                .thenThrow(new CurrencyNotSupportedException(
+                        "The register float is held in USD, the functional currency; CAD is not supported"));
+
+        mockMvc.perform(post(CHANGE)
+                        .with(authentication(scopedCaller()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(changeBody(SHOP_A).replace("\"USD\"", "\"CAD\"")))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("CURRENCY_NOT_SUPPORTED"));
     }
 
     /** Method security plus a fixed clock for the denial advice's timestamp; the chain permits every request. */

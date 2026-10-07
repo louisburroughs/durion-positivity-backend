@@ -24,6 +24,7 @@ import com.positivity.order.internal.entity.OrderPaymentRecord;
 import com.positivity.order.internal.entity.RegisterSession;
 import com.positivity.order.internal.entity.RegisterSessionStatus;
 import com.positivity.order.internal.entity.SalesOrderStatus;
+import com.positivity.order.internal.exception.CurrencyNotSupportedException;
 import com.positivity.order.internal.exception.RegisterFloatLocationMismatchException;
 import com.positivity.order.internal.exception.RegisterSessionConflictException;
 import com.positivity.order.internal.exception.RegisterSessionNotFoundException;
@@ -277,6 +278,7 @@ class RegisterSessionServiceImplTest {
                         .registerId(TERMINAL)
                         .locationId(LOCATION)
                         .amount(new BigDecimal("200.0000"))
+                        .currencyCode("USD")
                         .build()));
         when(registerSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -297,6 +299,7 @@ class RegisterSessionServiceImplTest {
                         .registerId(TERMINAL)
                         .locationId(LOCATION)
                         .amount(new BigDecimal("-25.0000"))
+                        .currencyCode("USD")
                         .build()));
         when(registerSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -315,6 +318,7 @@ class RegisterSessionServiceImplTest {
                         .registerId(TERMINAL)
                         .locationId(OTHER_LOCATION)
                         .amount(new BigDecimal("200.0000"))
+                        .currencyCode("USD")
                         .build()));
 
         assertThatThrownBy(() -> service.openSession(new OpenSessionCommand(TERMINAL, LOCATION)))
@@ -332,6 +336,30 @@ class RegisterSessionServiceImplTest {
     }
 
     @Test
+    @DisplayName("RSS-002f (#2577, ADR-0067 PC-9): a configured float in another currency than the drawer's is 422"
+            + " CURRENCY_NOT_SUPPORTED, never compared across currencies; no session row")
+    void open_floatInAnotherCurrencyIsRefused() {
+        when(registerSessionRepository.existsByTerminalIdAndStatusIn(eq(TERMINAL), any()))
+                .thenReturn(false);
+        when(registerFloatRepository.findByRegisterId(TERMINAL))
+                .thenReturn(Optional.of(ExtAccountingRegisterFloat.builder()
+                        .registerId(TERMINAL)
+                        .locationId(LOCATION)
+                        .amount(new BigDecimal("200.0000"))
+                        .currencyCode("CAD")
+                        .build()));
+
+        assertThatThrownBy(() -> service.openSession(new OpenSessionCommand(TERMINAL, LOCATION)))
+                .isInstanceOf(CurrencyNotSupportedException.class)
+                .hasMessageContaining(TERMINAL)
+                .hasMessageContaining("CAD")
+                .hasMessageContaining("USD");
+        verify(registerSessionRepository, never()).save(any());
+        // S40 (#2578): a refused open queues no order.session.opened.
+        verify(domainEventPublisher, never()).publishRegisterSessionOpened(any());
+    }
+
+    @Test
     @DisplayName("RSS-002d (#2573): a caller whose scope does not cover the float's location is not told it")
     void open_mismatchHidesAnOutOfScopeFloatLocation() {
         authenticate(openScopedTo(REGION_NODE));
@@ -342,6 +370,7 @@ class RegisterSessionServiceImplTest {
                         .registerId(TERMINAL)
                         .locationId(OTHER_LOCATION)
                         .amount(new BigDecimal("200.0000"))
+                        .currencyCode("USD")
                         .build()));
 
         assertThatThrownBy(() -> service.openSession(new OpenSessionCommand(TERMINAL, LOCATION)))
@@ -367,6 +396,7 @@ class RegisterSessionServiceImplTest {
                         .registerId(TERMINAL)
                         .locationId(OTHER_LOCATION)
                         .amount(new BigDecimal("180.0000"))
+                        .currencyCode("USD")
                         .build()));
         when(registerSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 

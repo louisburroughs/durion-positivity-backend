@@ -749,6 +749,7 @@ class AutomaticPaymentApplicationPostgresIT extends PostgresCommittingTestBase {
         DataSource isolated = AccountingPostgresContainer.ownerDataSource("payment-application-source-backfill");
         JdbcTemplate jdbc = new JdbcTemplate(isolated);
         Flyway.configure()
+                .placeholders(com.positivity.accounting.AccountingMigrations.placeholders())
                 .dataSource(isolated)
                 .locations(com.positivity.accounting.AccountingMigrations.releasedUpTo(7))
                 .target("7")
@@ -773,6 +774,7 @@ class AutomaticPaymentApplicationPostgresIT extends PostgresCommittingTestBase {
         }
 
         Flyway.configure()
+                .placeholders(com.positivity.accounting.AccountingMigrations.placeholders())
                 .dataSource(isolated)
                 .locations("classpath:db/migration")
                 .load()

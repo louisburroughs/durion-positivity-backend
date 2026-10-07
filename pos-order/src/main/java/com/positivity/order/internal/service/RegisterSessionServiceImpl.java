@@ -189,6 +189,15 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
             throw new RegisterFloatLocationMismatchException(
                     command.terminalId(), locationId, floatLocationVisible ? floatLocation : null);
         }
+        // ADR-0067: the drawer's currency for its whole life, whatever the configuration later says.
+        String drawerCurrency = functionalCurrency.code();
+        if (floatCopy.isPresent() && !drawerCurrency.equals(floatCopy.get().getCurrencyCode())) {
+            // #2577 (PC-9): a float is never compared or counted across currencies; like a float held at
+            // another location, it does not open this drawer.
+            throw new CurrencyNotSupportedException("Register " + command.terminalId() + " has its configured float"
+                    + " in " + floatCopy.get().getCurrencyCode() + "; this drawer counts " + drawerCurrency
+                    + ", so it does not open until accounting states the float in " + drawerCurrency);
+        }
 
         // AW16: the register's configured float, never a request value or the previous count; zero when
         // there is none, and never negative cash in a drawer.
@@ -200,8 +209,7 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                 .openedByClerkId(SecurityContextHelper.getCurrentUsernameOrDefault("system"))
                 .status(RegisterSessionStatus.OPEN)
                 .openingFloat(openingFloat)
-                // ADR-0067: the drawer's currency for its whole life, whatever the configuration later says.
-                .currencyCode(functionalCurrency.code())
+                .currencyCode(drawerCurrency)
                 .openedAt(now)
                 .build();
         RegisterSession saved = registerSessionRepository.save(session);
@@ -563,7 +571,8 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
      * The opening float (orchestrator decision l7): the register's configured float, zero when it has
      * none, and floored at zero — a negative accounting float (possible after a reversal) opens the drawer
      * at zero with a warning and {@value #OPENING_FLOAT_ADJUSTED}{@code {reason=negative}}; a drawer never
-     * holds negative cash. The caller has already refused a float held at another location (#2573).
+     * holds negative cash. The caller has already refused a float held at another location (#2573) or in
+     * another currency than the drawer's (#2577).
      */
     private BigDecimal openingFloat(String terminalId, Optional<ExtAccountingRegisterFloat> floatCopy) {
         BigDecimal configured = floatCopy.map(copy -> scale(copy.getAmount())).orElse(ZERO);
@@ -612,7 +621,9 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
 
     /**
      * A float movement must close the gap between the configured float and the float now in the
-     * drawer (opening float ± earlier float movements) exactly, in its direction (§4.6 "Float").
+     * drawer (opening float ± earlier float movements) exactly, in its direction (§4.6 "Float"). A float
+     * held at another location, or in another currency than the drawer's (#2577: 422 {@code
+     * CURRENCY_NOT_SUPPORTED}), is never compared.
      */
     private void requireRecordedFloatChange(
             RegisterSession session, List<CashMovement> recorded, CashMovementReason reason, BigDecimal amount) {
@@ -628,6 +639,14 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                     Refusal.FLOAT_CHANGE_NOT_RECORDED,
                     "The register's configured float is held at another location than this drawer's; no float"
                             + " change can be recorded on it here");
+        }
+        if (floatCopy.isPresent()
+                && !session.getCurrencyCode().equals(floatCopy.get().getCurrencyCode())) {
+            // #2577 (ADR-0067 PC-9): a drawer opened before the copy existed keeps its own stamp; a float in
+            // another currency is never compared with the drawer's cash.
+            throw new CurrencyNotSupportedException("The register's configured float is in "
+                    + floatCopy.get().getCurrencyCode() + "; this drawer counts " + session.getCurrencyCode()
+                    + ", so no float change can be recorded on it");
         }
         BigDecimal target = floatCopy.map(copy -> scale(copy.getAmount())).orElse(ZERO);
         BigDecimal gap = target.subtract(drawerFloat);

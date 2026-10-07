@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.order.internal.config.FunctionalCurrency;
 import com.positivity.order.internal.entity.ExtAccountingPettyExpenseCategory;
 import com.positivity.order.internal.entity.ExtAccountingRegisterFloat;
 import com.positivity.order.internal.entity.ProcessedEvent;
@@ -66,6 +67,7 @@ class AccountingEventsListenerTest {
                 categories,
                 floats,
                 sessions,
+                new FunctionalCurrency("USD"),
                 mock(PlatformTransactionManager.class),
                 meters);
         when(categories.findById(any())).thenReturn(Optional.empty());
@@ -130,6 +132,29 @@ class AccountingEventsListenerTest {
     }
 
     @Test
+    @DisplayName("#2577 (ADR-0067 R-1): a schema-3 float fact's currencyCode is copied with its amount")
+    void floatCurrencyCopied() {
+        listener.onAccountingEvent(floatFact("e-11", 2, "200.00")
+                .replace("\"schemaVersion\":1", "\"schemaVersion\":3")
+                .replace("\"kind\":\"CHANGE\"", "\"kind\":\"CHANGE\",\"currencyCode\":\"CAD\""));
+
+        ArgumentCaptor<ExtAccountingRegisterFloat> copy = ArgumentCaptor.forClass(ExtAccountingRegisterFloat.class);
+        verify(floats).save(copy.capture());
+        assertThat(copy.getValue().getCurrencyCode()).isEqualTo("CAD");
+    }
+
+    @Test
+    @DisplayName(
+            "#2577 (ADR-0067 PC-8): a float fact without currencyCode (schema 1 or 2) is in the functional currency")
+    void floatWithoutCurrencyIsInTheFunctionalCurrency() {
+        listener.onAccountingEvent(floatFact("e-12", 2, "200.00"));
+
+        ArgumentCaptor<ExtAccountingRegisterFloat> copy = ArgumentCaptor.forClass(ExtAccountingRegisterFloat.class);
+        verify(floats).save(copy.capture());
+        assertThat(copy.getValue().getCurrencyCode()).isEqualTo("USD");
+    }
+
+    @Test
     @DisplayName("#2573: a RELOCATION to B while a drawer is open at A moves the copy, counts once, leaves the session")
     void relocationWithAnOpenDrawerElsewhereIsCounted() {
         RegisterSession open = RegisterSession.builder()
@@ -180,6 +205,30 @@ class AccountingEventsListenerTest {
                         .find(AccountingEventsListener.FLOAT_LOCATION_MISMATCH)
                         .counter())
                 .isNull();
+    }
+
+    @Test
+    @DisplayName("#2577: a later fact without currencyCode (schema 1 or 2) keeps an existing copy's currency; its"
+            + " amount and location still apply by state")
+    void olderFactKeepsTheStoredCurrency() {
+        when(floats.findById(FLOAT_ID))
+                .thenReturn(Optional.of(ExtAccountingRegisterFloat.builder()
+                        .registerFloatId(FLOAT_ID)
+                        .registerId("T-1")
+                        .locationId(UUID.fromString("01900000-0000-7000-8000-0000000000bb"))
+                        .amount(new java.math.BigDecimal("150.0000"))
+                        .currencyCode("CAD")
+                        .aggregateVersion(4L)
+                        .build()));
+
+        listener.onAccountingEvent(floatFact("e-13", 5, "275.00"));
+
+        ArgumentCaptor<ExtAccountingRegisterFloat> copy = ArgumentCaptor.forClass(ExtAccountingRegisterFloat.class);
+        verify(floats).save(copy.capture());
+        assertThat(copy.getValue().getCurrencyCode()).as("never re-denominated").isEqualTo("CAD");
+        assertThat(copy.getValue().getAmount()).isEqualByComparingTo("275.00");
+        assertThat(copy.getValue().getLocationId()).hasToString("01900000-0000-7000-8000-0000000000aa");
+        assertThat(copy.getValue().getAggregateVersion()).isEqualTo(5L);
     }
 
     @Test

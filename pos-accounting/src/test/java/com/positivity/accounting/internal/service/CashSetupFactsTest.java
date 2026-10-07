@@ -101,6 +101,7 @@ class CashSetupFactsTest {
         registerFloat.setRegisterId("T-1");
         registerFloat.setLocationId(UUID.randomUUID());
         registerFloat.setAmount(new BigDecimal("150.00"));
+        registerFloat.setCurrencyCode("USD");
         RegisterFloatChange latest = new RegisterFloatChange();
         latest.setKind(RegisterFloatChangeKind.CHANGE);
         latest.setEffectiveDate(LocalDate.of(2026, 10, 2));
@@ -130,6 +131,9 @@ class CashSetupFactsTest {
         RegisterFloatChangedV1 fact = (RegisterFloatChangedV1) envelopes.get(2).payload();
         assertThat(fact.amount()).isEqualByComparingTo("150.00");
         assertThat(fact.previousAmount()).as("a republish changes nothing").isEqualByComparingTo("150.00");
+        // #2577 (ADR-0067 R-1): the republish states the float's currency, at schema version 3.
+        assertThat(fact.currencyCode()).isEqualTo("USD");
+        assertThat(envelopes.get(2).schemaVersion()).isEqualTo(3);
         assertThat(envelopes.get(2).aggregateId()).isEqualTo(registerFloat.getRegisterFloatId());
     }
 

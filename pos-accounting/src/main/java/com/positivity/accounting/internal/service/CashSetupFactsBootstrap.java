@@ -19,7 +19,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * Re-emits the current state of every petty-expense category and register float at each start, per tenant
  * (#2511 PROPOSED 11; ADR-0044 §4 "re-emit of current state"). Consumers keep a copy (pos-order's picker and
  * opening float, S16) and ignore versions they already hold, so a fact lost before this start is healed
- * without a replay request. A category the template sweep creates during this start queues its own fact, so
+ * without a replay request. A float's fact states its currency (#2577; ADR-0067 R-1). A category the template sweep creates during this start queues its own fact, so
  * the order of the two runners does not matter.
  */
 @Slf4j

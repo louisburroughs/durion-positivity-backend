@@ -39,6 +39,7 @@ class JournalEntryBalanceTriggerIT {
     @BeforeAll
     static void migrate() {
         Flyway.configure()
+                .placeholders(com.positivity.accounting.AccountingMigrations.placeholders())
                 .dataSource(DATABASE)
                 .locations("classpath:db/migration")
                 .load()
