@@ -10,6 +10,7 @@ import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.sli
 
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaCall;
+import com.tngtech.archunit.core.domain.JavaConstructorCall;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
@@ -67,6 +68,24 @@ public class ArchitectureTest {
 
     /** The one class that turns the clock into a date: in the tenant's zone, {@code now(clock.withZone(zone))}. */
     static final String ZONE_RESOLVER = "com.positivity.accounting.internal.service.AccountingCalendarZoneResolver";
+
+    static final String CUSTOMER_CREDIT = "com.positivity.accounting.internal.entity.CustomerCredit";
+
+    /**
+     * The one class that creates a {@code CustomerCredit} (#2554): it refuses one on the CASH walk-in account
+     * ({@code CASH_CUSTOMER_CREDIT_NOT_ALLOWED}, #2508) and enqueues its Dr 1090 / Cr 2300 issuance posting in the
+     * same transaction.
+     */
+    static final String CREDIT_ISSUER = "com.positivity.accounting.internal.service.PaymentApplicationServiceImpl";
+
+    /** Any {@code new CustomerCredit(..)}. Matched by owner name only, so no class hierarchy is resolved. */
+    static final DescribedPredicate<JavaConstructorCall> CUSTOMER_CREDIT_CONSTRUCTION =
+            new DescribedPredicate<>("construct a CustomerCredit") {
+                @Override
+                public boolean test(JavaConstructorCall input) {
+                    return CUSTOMER_CREDIT.equals(input.getTargetOwner().getName());
+                }
+            };
 
     // Layer packages. The bank reconciliation core (internal.bankrec) and its adapters (internal.bankfeed.*)
     // carry their own layer sub-packages (SPEC-manual-bank-reconciliation §2.1, #2300); the layering rules
@@ -325,6 +344,19 @@ public class ArchitectureTest {
             .because("#2558: a posting date and a period are cut in the tenant's accounting-calendar zone"
                     + " (AccountingCalendarZoneResolver), never in the clock's or the JVM's zone; a technical UTC"
                     + " value states ZoneOffset.UTC explicitly");
+
+    /** CustomerCreditIssuanceRuleTest proves this rule catches a second issuer and passes the real one. */
+    @ArchTest
+    static final ArchRule customer_credits_are_issued_only_on_the_guarded_posted_path = noClasses()
+            .that()
+            .resideInAPackage("com.positivity.accounting..")
+            .and()
+            .doNotHaveFullyQualifiedName(CREDIT_ISSUER)
+            .should()
+            .callConstructorWhere(CUSTOMER_CREDIT_CONSTRUCTION)
+            .because("#2554: a CustomerCredit is created only by PaymentApplicationServiceImpl, which refuses one on"
+                    + " the CASH walk-in account (CASH_CUSTOMER_CREDIT_NOT_ALLOWED) and posts its Dr 1090 / Cr 2300"
+                    + " issuance in the same transaction");
 
     // ---- Bank reconciliation core ↔ adapter walls (SPEC-manual-bank-reconciliation §2.1, §8.4; #2300) ----
     // The core (internal.bankrec) is provider- and format-neutral; the adapters (internal.bankfeed.*) reach it
