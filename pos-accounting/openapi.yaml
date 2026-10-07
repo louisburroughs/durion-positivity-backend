@@ -10038,9 +10038,9 @@ paths:
 
         Preconditions: caller holds accounting:float:manage; bankGlAccountId is an active BANK_CASH account in functional currency (422 FLOAT_BANK_ACCOUNT_NOT_ELIGIBLE); the new amount differs from the current one (422 FLOAT_AMOUNT_UNCHANGED); the effective date passes the period gate (a CLOSED period needs accounting:period:override and overrideJustification). Idempotent on requestId: a replay returns the first result with 200, another body with the same requestId is 409 IDEMPOTENCY_CONFLICT.
 
-        Required inputs: registerId (path), locationId, amount (zero or more), bankGlAccountId, justification (at least 10 characters), requestId; effectiveDate defaults to today in the tenant''s accounting time zone.
+        Required inputs: registerId (path), locationId, amount (zero or more), currencyCode (ISO 4217, the functional currency: 422 CURRENCY_NOT_SUPPORTED otherwise), bankGlAccountId, justification (at least 10 characters), requestId; effectiveDate defaults to today in the tenant''s accounting time zone.
 
-        Emits an ACCOUNTING_REGISTER_FLOAT_CHANGE event, queues accounting.float.changed, writes an audit row naming the caller, and returns 201 with the previous and new amount and the journal entry id and number.
+        Emits an ACCOUNTING_REGISTER_FLOAT_CHANGE event, queues accounting.float.changed, writes an audit row naming the caller, and returns 201 with the previous and new amount, their currencyCode, and the journal entry id and number.
 
         '
       operationId: changeRegisterFloat
@@ -10061,6 +10061,7 @@ paths:
                 value:
                   amount: 300.0
                   bankGlAccountId: 019a0000-0000-7000-8000-00000000b000
+                  currencyCode: USD
                   effectiveDate: '2026-10-15'
                   justification: More change needed for the weekend rush
                   locationId: 019a0000-0000-7000-8000-00000000a001
@@ -10087,7 +10088,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Missing or invalid field (VALIDATION_ERROR)
+          description: Missing or invalid field, a currencyCode missing or not on the ISO 4217 list included (VALIDATION_ERROR)
         '403':
           content:
             application/json:
@@ -10105,7 +10106,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: FLOAT_AMOUNT_UNCHANGED, FLOAT_BANK_ACCOUNT_NOT_ELIGIBLE, PERIOD_CLOSED, PERIOD_HARD_LOCKED, ACCOUNTING_TIME_ZONE_UNSET, GL_MAPPING_NOT_CONFIGURED, FLOAT_REGISTER_LOCATION_MISMATCH (the register belongs to another location) or FLOAT_DATE_BEFORE_RELOCATION (dated before the register's latest relocation)
+          description: CURRENCY_NOT_SUPPORTED (currencyCode is not the functional currency, or not the currency the register's float is held in), FLOAT_AMOUNT_UNCHANGED, FLOAT_BANK_ACCOUNT_NOT_ELIGIBLE, PERIOD_CLOSED, PERIOD_HARD_LOCKED, ACCOUNTING_TIME_ZONE_UNSET, GL_MAPPING_NOT_CONFIGURED, FLOAT_REGISTER_LOCATION_MISMATCH (the register belongs to another location) or FLOAT_DATE_BEFORE_RELOCATION (dated before the register's latest relocation)
       security:
       - bearerAuth:
         - accounting:float:manage
@@ -10122,9 +10123,9 @@ paths:
 
         Preconditions: caller holds accounting:float:manage; the go-live date falls in an OPEN period, with no override path (422 PERIOD_CLOSED or PERIOD_HARD_LOCKED otherwise); the register has no standing go-live and no standing float change (409 FLOAT_ALREADY_ESTABLISHED; correct a mistake by reversing the entry and running go-live again). Idempotent on requestId: a replay returns the first result with 200, another body with the same requestId is 409 IDEMPOTENCY_CONFLICT.
 
-        Required inputs: registerId (path, pos-order''s terminalId), locationId, amount (more than zero, functional currency), goLiveDate, justification (at least 10 characters), requestId.
+        Required inputs: registerId (path, pos-order''s terminalId), locationId, amount (more than zero), currencyCode (ISO 4217, the functional currency: 422 CURRENCY_NOT_SUPPORTED otherwise), goLiveDate, justification (at least 10 characters), requestId.
 
-        Emits an ACCOUNTING_REGISTER_FLOAT_GO_LIVE event, queues accounting.float.changed, writes an audit row naming the caller, and returns 201 with the previous and new amount and the journal entry id and number.
+        Emits an ACCOUNTING_REGISTER_FLOAT_GO_LIVE event, queues accounting.float.changed, writes an audit row naming the caller, and returns 201 with the previous and new amount, their currencyCode, and the journal entry id and number.
 
         '
       operationId: establishGoLiveRegisterFloat
@@ -10144,6 +10145,7 @@ paths:
                 description: Drawer 1 at go-live
                 value:
                   amount: 200.0
+                  currencyCode: USD
                   goLiveDate: '2026-10-01'
                   justification: Counted float in drawer 1 at go-live
                   locationId: 019a0000-0000-7000-8000-00000000a001
@@ -10170,7 +10172,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Missing or invalid field (VALIDATION_ERROR)
+          description: Missing or invalid field, a currencyCode missing or not on the ISO 4217 list included (VALIDATION_ERROR)
         '403':
           content:
             application/json:
@@ -10188,7 +10190,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: PERIOD_CLOSED, PERIOD_HARD_LOCKED, GL_MAPPING_NOT_CONFIGURED, FLOAT_REGISTER_LOCATION_MISMATCH (the register belongs to another location), or FLOAT_DATE_BEFORE_RELOCATION (dated before the register's latest relocation)
+          description: CURRENCY_NOT_SUPPORTED (currencyCode is not the functional currency, or not the currency the register's float is held in), PERIOD_CLOSED, PERIOD_HARD_LOCKED, GL_MAPPING_NOT_CONFIGURED, FLOAT_REGISTER_LOCATION_MISMATCH (the register belongs to another location), or FLOAT_DATE_BEFORE_RELOCATION (dated before the register's latest relocation)
       security:
       - bearerAuth:
         - accounting:float:manage
@@ -21216,6 +21218,12 @@ components:
           example: 019a0000-0000-7000-8000-00000000b000
           format: uuid
           type: string
+        currencyCode:
+          description: The ISO 4217 code of amount (ADR-0067); it must be the tenant's functional currency, else 422 CURRENCY_NOT_SUPPORTED
+          example: USD
+          maxLength: 3
+          minLength: 3
+          type: string
         effectiveDate:
           description: The date the change is posted on; today in the tenant's accounting time zone when omitted
           example: '2026-10-15'
@@ -21245,6 +21253,7 @@ components:
       required:
       - amount
       - bankGlAccountId
+      - currencyCode
       - justification
       - locationId
       - requestId
@@ -21256,6 +21265,12 @@ components:
           description: The register's change float on the go-live date, in functional currency; more than zero
           example: 200.0
           type: number
+        currencyCode:
+          description: The ISO 4217 code of amount (ADR-0067); it must be the tenant's functional currency, else 422 CURRENCY_NOT_SUPPORTED
+          example: USD
+          maxLength: 3
+          minLength: 3
+          type: string
         goLiveDate:
           description: The go-live date the entry is dated on; it must fall in an open period
           example: '2026-10-01'
@@ -21279,6 +21294,7 @@ components:
           type: string
       required:
       - amount
+      - currencyCode
       - goLiveDate
       - justification
       - locationId
@@ -21339,6 +21355,10 @@ components:
           description: The float after the command
           example: 300.0
           type: number
+        currencyCode:
+          description: 'The ISO 4217 code of previousAmount and amount: the currency the register''s float is held in, the tenant''s functional currency (ADR-0067)'
+          example: USD
+          type: string
         effectiveDate:
           description: The date the entry is dated on
           format: date
@@ -21378,6 +21398,7 @@ components:
           type: boolean
       required:
       - amount
+      - currencyCode
       - effectiveDate
       - kind
       - locationId

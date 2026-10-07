@@ -748,8 +748,8 @@ relocation refuses, under the float row lock, a register whose latest-opened ses
 session id; its location is logged, not returned). Accepted race: a session whose opened fact has not
 arrived does not block. The guard takes effect once pos-order publishes `order.session.opened` (S40,
 #2578); until then the replica holds only sessions seen through their close facts. The fact
-`accounting.float.changed` is schema version 2: kind `RELOCATION` and a nullable
-`previousLocationId`.
+`accounting.float.changed` is schema version 3: version 2 added kind `RELOCATION` and a nullable
+`previousLocationId`, version 3 adds `currencyCode` (#2577, below).
 
 ## Ledger currency (ADR-0067)
 
@@ -781,6 +781,16 @@ on an inbound fact means the ledger currency until producers stamp one (E-3).
   applies only to invoices in its own currency. The invoice replica carries no currency, so an invoice is
   in the ledger currency; a payment in another currency is refused with 422 `CURRENCY_NOT_SUPPORTED`
   (ADR-0067 PC-9 (a), ADR-0017 §2; #2334) before any application, credit or journal entry is written.
+- **Register float** (`/v1/accounting/registers/{registerId}/float[/go-live]`, #2577; R-1) — a go-live or
+  Change float states `currencyCode`: missing or not on the ISO 4217 list (`IsoCurrencyCodes`, never
+  normalised) is 400 `VALIDATION_ERROR` naming the field; a code other than the ledger currency, or than
+  the currency the register's float is held in, is 422 `CURRENCY_NOT_SUPPORTED` before any row is locked or
+  any entry posts. A replay is checked first and answers with the first result; the code is part of the
+  replayed body. `register_float` and `register_float_change` hold `currency_code NOT NULL` (V15; rows
+  that predate it take the ledger currency from the `ledger_currency` Flyway placeholder that
+  `FlywayConfig` binds from `LedgerCurrency`, never a literal). The response (`RegisterFloatResponse`)
+  and `accounting.float.changed` (schema version 3, additive) carry it, from every go-live, change,
+  relocation, reversal and start-up republish; a relocation request carries no amount and so no code.
 
 ## Vendor bill duplicate rule (#2501, ADR-0070 Decision 4)
 

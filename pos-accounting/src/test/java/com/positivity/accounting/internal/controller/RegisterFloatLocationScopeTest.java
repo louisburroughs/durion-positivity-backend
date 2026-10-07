@@ -288,7 +288,8 @@ class RegisterFloatLocationScopeTest {
                             .content(body))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
-                    .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("currencyCode")));
+                    .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("currencyCode")))
+                    .andExpect(jsonPath("$.fieldErrors[0].field").value("currencyCode"));
         }
         mockMvc.perform(post(CHANGE)
                         .with(authentication(scopedCaller()))
