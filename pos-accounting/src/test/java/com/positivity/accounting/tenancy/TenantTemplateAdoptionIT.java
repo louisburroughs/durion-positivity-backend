@@ -189,7 +189,12 @@ class TenantTemplateAdoptionIT extends PostgresCommittingTestBase {
                 .as("every template entry the old seeds wrote, the retread add-on included, is ADOPTED; the rest"
                         + " CREATED")
                 .containsExactlyInAnyOrder(
-                        "ADOPTED " + (templateEntries - S35_STATEMENT_LINES - S15_ENTRIES - S39_CHART_ROWS - S12_CHART_ROWS),
+                        "ADOPTED "
+                                + (templateEntries
+                                        - S35_STATEMENT_LINES
+                                        - S15_ENTRIES
+                                        - S39_CHART_ROWS
+                                        - S12_CHART_ROWS),
                         "CREATED " + (S35_STATEMENT_LINES + S15_ENTRIES + S39_CHART_ROWS + S12_CHART_ROWS));
         assertThat(owner.queryForObject(
                         "SELECT count(*) FROM accounting_template_entry WHERE tenant_id = ? AND target_row_id IS NULL",
@@ -200,7 +205,8 @@ class TenantTemplateAdoptionIT extends PostgresCommittingTestBase {
         assertThat(status.state()).isEqualTo(TenantTemplateState.UP_TO_DATE);
         assertThat(status.counts().adopted())
                 .isEqualTo(templateEntries - S35_STATEMENT_LINES - S15_ENTRIES - S39_CHART_ROWS - S12_CHART_ROWS);
-        assertThat(status.counts().created()).isEqualTo(S35_STATEMENT_LINES + S15_ENTRIES + S39_CHART_ROWS + S12_CHART_ROWS);
+        assertThat(status.counts().created())
+                .isEqualTo(S35_STATEMENT_LINES + S15_ENTRIES + S39_CHART_ROWS + S12_CHART_ROWS);
         assertThat(status.retreadPlantAddOn()).isTrue();
         assertThat(owner.queryForObject(
                         "SELECT count(*) FROM gl_account WHERE tenant_id = ?", Integer.class, PlatformTenant.ID))
