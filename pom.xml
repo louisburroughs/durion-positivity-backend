@@ -711,7 +711,7 @@
 			<properties>
 				<tests.forkCount>1</tests.forkCount>
 				<tests.reuseForks>true</tests.reuseForks>
-				<tests.jvmArgs>-Xms256m -Xmx1g -XX:MaxMetaspaceSize=512m</tests.jvmArgs>
+				<tests.jvmArgs>-Xms256m -Xmx1536m -XX:MaxMetaspaceSize=512m</tests.jvmArgs>
 			</properties>
 		</profile>
 	</profiles>
