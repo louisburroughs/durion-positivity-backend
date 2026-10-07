@@ -111,6 +111,7 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
         if (committed != null) {
             return replay(committed, hash);
         }
+        requireRegisterLocation(registerFloat, request.locationId());
         // Once per register (AW17): a standing go-live, or any standing float history, refuses a go-live.
         if (registerFloat.getGoLiveJournalEntryId() != null
                 || !changes.findByRegisterFloatIdAndKindInAndReversalJournalEntryIdIsNull(
@@ -140,7 +141,6 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
 
         BigDecimal previous = registerFloat.getAmount();
         registerFloat.setAmount(request.amount());
-        registerFloat.setLocationId(request.locationId());
         registerFloat.setGoLiveJournalEntryId(posted.getJournalEntryId());
         RegisterFloatChange change = change(
                 registerFloat,
@@ -187,6 +187,7 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
         if (committed != null) {
             return replay(committed, hash);
         }
+        requireRegisterLocation(registerFloat, request.locationId());
         BigDecimal previous = registerFloat.getAmount();
         BigDecimal difference = request.amount().subtract(previous);
         if (difference.signum() == 0) {
@@ -212,7 +213,6 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
         JournalEntryResponse posted = post(postingKey, date, description, lines, override);
 
         registerFloat.setAmount(request.amount());
-        registerFloat.setLocationId(request.locationId());
         RegisterFloatChange change = change(
                 registerFloat,
                 RegisterFloatChangeKind.CHANGE,
@@ -300,6 +300,20 @@ public class RegisterFloatServiceImpl implements RegisterFloatService {
             }
             return floats.lockByRegisterId(registerId).orElseThrow();
         });
+    }
+
+    /**
+     * A register belongs to the location of its first float command. The controller's location-scope gate judges
+     * the request's {@code locationId}, so a command naming another location must not reach (or move) this
+     * register: 422 FLOAT_REGISTER_LOCATION_MISMATCH, nothing posted.
+     */
+    private static void requireRegisterLocation(RegisterFloat registerFloat, UUID locationId) {
+        if (!registerFloat.getLocationId().equals(locationId)) {
+            throw new CashSetupException(
+                    CashSetupException.Code.FLOAT_REGISTER_LOCATION_MISMATCH,
+                    "Register " + registerFloat.getRegisterId() + " belongs to location "
+                            + registerFloat.getLocationId() + ", not " + locationId);
+        }
     }
 
     private RegisterFloatChange change(

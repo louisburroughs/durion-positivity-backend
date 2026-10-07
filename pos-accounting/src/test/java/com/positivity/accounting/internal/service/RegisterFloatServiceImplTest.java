@@ -232,6 +232,44 @@ class RegisterFloatServiceImplTest {
     }
 
     @Test
+    @DisplayName("a command naming another location than the register's is 422 FLOAT_REGISTER_LOCATION_MISMATCH,"
+            + " posts nothing and never moves the register")
+    void registerStaysAtItsLocation() {
+        service.establishGoLive("T-1", goLive("200.00", UUID.randomUUID()));
+        UUID elsewhere = UUID.fromString("019a0000-0000-7000-8000-00000000a002");
+
+        assertThatThrownBy(() -> service.changeFloat(
+                        "T-1",
+                        new RegisterFloatChangeRequest(
+                                elsewhere,
+                                new BigDecimal("300.00"),
+                                BANK,
+                                DAY,
+                                "More change needed for the weekend",
+                                UUID.randomUUID(),
+                                null)))
+                .extracting(e -> ((CashSetupException) e).getCode())
+                .isEqualTo(CashSetupException.Code.FLOAT_REGISTER_LOCATION_MISMATCH);
+        // A reversed go-live leaves the register at its location too.
+        registerFloat.setGoLiveJournalEntryId(null);
+        registerFloat.setAmount(BigDecimal.ZERO);
+        standing.clear();
+        assertThatThrownBy(() -> service.establishGoLive(
+                        "T-1",
+                        new RegisterFloatGoLiveRequest(
+                                elsewhere,
+                                new BigDecimal("180.00"),
+                                DAY,
+                                "Counted float in drawer 1 at go-live",
+                                UUID.randomUUID())))
+                .extracting(e -> ((CashSetupException) e).getCode())
+                .isEqualTo(CashSetupException.Code.FLOAT_REGISTER_LOCATION_MISMATCH);
+
+        assertThat(capturedEntries()).hasSize(1);
+        assertThat(registerFloat.getLocationId()).isEqualTo(LOCATION);
+    }
+
+    @Test
     @DisplayName("a change to the current amount is 422 FLOAT_AMOUNT_UNCHANGED")
     void unchangedAmountIsRefused() {
         service.establishGoLive("T-1", goLive("200.00", UUID.randomUUID()));

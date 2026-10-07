@@ -90,7 +90,9 @@ public class RegisterFloatController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description = "PERIOD_CLOSED, PERIOD_HARD_LOCKED, or GL_MAPPING_NOT_CONFIGURED",
+            description =
+                    "PERIOD_CLOSED, PERIOD_HARD_LOCKED, GL_MAPPING_NOT_CONFIGURED, or FLOAT_REGISTER_LOCATION_MISMATCH"
+                            + " (the register belongs to another location)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_REGISTER_FLOAT_GO_LIVE", apiVersion = "1")
     public ResponseEntity<RegisterFloatResponse> establishGoLive(
@@ -166,7 +168,8 @@ public class RegisterFloatController {
     @ApiResponse(
             responseCode = "422",
             description = "FLOAT_AMOUNT_UNCHANGED, FLOAT_BANK_ACCOUNT_NOT_ELIGIBLE, PERIOD_CLOSED, PERIOD_HARD_LOCKED,"
-                    + " ACCOUNTING_TIME_ZONE_UNSET or GL_MAPPING_NOT_CONFIGURED",
+                    + " ACCOUNTING_TIME_ZONE_UNSET, GL_MAPPING_NOT_CONFIGURED or FLOAT_REGISTER_LOCATION_MISMATCH (the register"
+                    + " belongs to another location)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_REGISTER_FLOAT_CHANGE", apiVersion = "1")
     public ResponseEntity<RegisterFloatResponse> changeFloat(

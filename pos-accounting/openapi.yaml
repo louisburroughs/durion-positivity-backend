@@ -10005,7 +10005,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: FLOAT_AMOUNT_UNCHANGED, FLOAT_BANK_ACCOUNT_NOT_ELIGIBLE, PERIOD_CLOSED, PERIOD_HARD_LOCKED, ACCOUNTING_TIME_ZONE_UNSET or GL_MAPPING_NOT_CONFIGURED
+          description: FLOAT_AMOUNT_UNCHANGED, FLOAT_BANK_ACCOUNT_NOT_ELIGIBLE, PERIOD_CLOSED, PERIOD_HARD_LOCKED, ACCOUNTING_TIME_ZONE_UNSET, GL_MAPPING_NOT_CONFIGURED or FLOAT_REGISTER_LOCATION_MISMATCH (the register belongs to another location)
       security:
       - bearerAuth:
         - accounting:float:manage
@@ -10088,7 +10088,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: PERIOD_CLOSED, PERIOD_HARD_LOCKED, or GL_MAPPING_NOT_CONFIGURED
+          description: PERIOD_CLOSED, PERIOD_HARD_LOCKED, GL_MAPPING_NOT_CONFIGURED, or FLOAT_REGISTER_LOCATION_MISMATCH (the register belongs to another location)
       security:
       - bearerAuth:
         - accounting:float:manage
