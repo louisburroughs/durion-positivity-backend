@@ -132,6 +132,27 @@ ledger, maintains `amountPaid`/`balanceDue`, and transitions
 Over-settlement raises `order.payment.integrity-alert`. Applied price overrides emit
 `order.line.commission-impact`. All Kafka paths are tier-1 `@KafkaRails` beans: always on outside the broker-less dev/test profiles, no flag.
 
+## Register session facts (CAP:550 S40, #2578)
+
+A register session publishes two facts on `order.events.v1` through the transactional outbox, both keyed on
+the session (`aggregateId = sessionId`, `aggregateVersion` = the session's version), so they share a
+partition and stay in order:
+
+- `order.session.opened` (`RegisterSessionOpenedV1`: `sessionId`, `terminalId`, nullable `locationId`,
+  `openedAt`) — queued in the open's transaction. A refused open (409 active session, 422
+  `REGISTER_FLOAT_LOCATION_MISMATCH`, 403 location scope) queues nothing.
+- `order.session.closed` (`RegisterSessionClosedV1`, schema 2) — queued in the confirm-close transaction.
+
+Contract: a terminal has at most one active (OPEN or CLOSING) session per tenant; a session is active from
+its opened fact until its closed fact; its `locationId` never changes while it is active; only the
+terminal's most recently opened session can be active. pos-accounting's register-relocation guard reads
+these facts (ADR-0044 R1: no synchronous call).
+
+At each start, `RegisterSessionFactsBootstrap` re-emits `order.session.opened` for every OPEN or CLOSING
+session of every tenant (`TenantIterator`, each tenant in its own transaction) at the session's current
+version, and none for a CLOSED session (ADR-0044 §4 backfill). Turn it off with
+`POS_ORDER_SESSION_BOOTSTRAP_REPUBLISH_ENABLED=false` (`pos.order.session.bootstrap-republish.enabled`).
+
 ## Purchase order transmission timeline (issue #1638)
 
 - `GET /v1/orders/purchase-orders/{poId}/transmission-events` (`listPurchaseOrderTransmissionEvents`,
@@ -250,6 +271,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `EUREKA_SERVER_URL`     | required | Eureka service discovery URL |
 | `POS_ORDER_FUNCTIONAL_CURRENCY` | required | ISO 4217 code of drawer money (ADR-0067 R-2; a Stage A interim until step A5 reads the tenant's functional currency). No default: unset or non-ISO fails startup. A drawer is stamped with it when it opens, and its movements, approvals and close fact keep that stamp, so a change applies to drawers opened afterwards. V4 stamps pre-existing drawers with it through the Flyway placeholder `${functional_currency}` (`FlywayConfig`). |
 | `POS_ORDER_SESSION_MAX_DENIED_APPROVALS` | `3` | Refused manager approvals per drawer session and manager sign-in name before the step-up stops asking pos-security-service for that name. Keep it below pos-security-service's sign-in lockout (`pos.security.lockout.max-attempts`, 5) so a register cannot lock a manager out; another manager can still approve. |
+| `POS_ORDER_SESSION_BOOTSTRAP_REPUBLISH_ENABLED` | `true` | At start, re-emit `order.session.opened` for every OPEN or CLOSING register session, per tenant (see [Register session facts](#register-session-facts-cap550-s40-2578)). |
 | `POS_SECURITY_API_SECRET` | required for approvals | Sent as `X-Internal-Api-Secret` on the step-up call; unset, every approval is 503 `CASH_MOVEMENT_APPROVAL_UNAVAILABLE` |
 
 ## Multitenancy (ADR-0062, WS3 wave 5)
