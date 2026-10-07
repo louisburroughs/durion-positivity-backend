@@ -57,4 +57,11 @@ class FactPostingOutcomeCombineTest {
                 .isEqualTo(new FactPostingOutcome.Skipped(PostingFailureReason.NOT_POSTABLE, "stale"));
         assertThat(FactPostingOutcome.combine(NOTHING, NOTHING)).isInstanceOf(FactPostingOutcome.NothingToPost.class);
     }
+
+    @Test
+    @DisplayName("A skip yields to a new entry and to an earlier posting, on either side")
+    void skipYieldsToPostings() {
+        assertThat(FactPostingOutcome.combine(SKIPPED, movementPosted)).isSameAs(movementPosted);
+        assertThat(FactPostingOutcome.combine(overShortEarlier, SKIPPED)).isSameAs(overShortEarlier);
+    }
 }

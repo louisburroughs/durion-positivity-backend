@@ -8,6 +8,7 @@ import com.positivity.accounting.internal.dto.PettyExpenseCategoryDeactivateRequ
 import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.accounting.internal.service.AccountingCalendarZoneResolver;
+import com.positivity.accounting.internal.service.FactPostingOutcome;
 import com.positivity.accounting.internal.service.KafkaFactIngestionRecorder;
 import com.positivity.accounting.internal.service.OrderEventsListener;
 import com.positivity.accounting.internal.service.PettyExpenseCategoryService;
@@ -29,6 +30,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -191,10 +193,63 @@ class RegisterCashMovementPostingPostgresIT extends PostgresTenancyTestBase {
         assertThat(records(tenant, session))
                 .allSatisfy(record -> assertThat(record.get("journal_entry_id")).isNotNull());
 
-        // Two-tenant isolation (ADR-0062): another tenant sees none of these entries.
+        // Two-tenant isolation (ADR-0062): another tenant sees none of these entries, and the same movements (the
+        // same movement ids) delivered to it post its own two entries: the posting keys are tenant-scoped. Its
+        // session id differs: the session replica's key is the session id alone (pos-order's UUIDv7 ids never repeat
+        // across tenants).
         UUID other = tenant();
         assertThat(entryCount(other)).isZero();
         assertThat(records(other, session)).isEmpty();
+        UUID otherSession = UUIDv7Generator.generate();
+        RegisterSessionClosedV1 sameMovements =
+                fact(otherSession, "0.00", "USD", fact.movements().toArray(Movement[]::new));
+        asTenant(other, () -> listener.onOrderEvent(envelope(UUID.randomUUID().toString(), sameMovements)));
+        assertThat(entryCount(other)).isEqualTo(2);
+        assertThat(net(lines(other), "1095")).isEqualByComparingTo("-40.40");
+        assertThat(records(other, otherSession))
+                .singleElement()
+                .satisfies(
+                        record -> assertThat(record.get("idempotency_outcome")).isEqualTo("NEW"));
+        assertThat(entryCount(tenant)).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("All or nothing: an over/short that fails after the movements posted rolls the movement entries back"
+            + " and leaves the fact unmarked")
+    void failingOverShortRollsTheMovementsBack() {
+        UUID tenant = tenant();
+        String eventId = UUID.randomUUID().toString();
+        OrderEventsListener failing = new OrderEventsListener(
+                clock,
+                objectMapper,
+                processedEventRepository,
+                new FailingOverShortPostingService(),
+                movementPostingService,
+                ingestionRecorder,
+                meterRegistry,
+                transactionManager,
+                zoneResolver,
+                sessionReplica);
+        RegisterSessionClosedV1 fact = fact(
+                UUIDv7Generator.generate(),
+                "-3.00",
+                "USD",
+                petty("SHOP_SUPPLIES", "18.40", "R-9"),
+                petty("STAFF_MEALS", "22.00", null));
+
+        assertThatThrownBy(() -> asTenant(tenant, () -> failing.onOrderEvent(envelope(eventId, fact))))
+                .isExactlyInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("simulated PERIOD_CLOSED");
+
+        assertThat(entryCount(tenant)).isZero();
+        assertThat(records(tenant, fact.sessionId())).isEmpty();
+        assertThat(asTenant(tenant, () -> processedEventRepository.existsById(eventId)))
+                .isFalse();
+
+        // The retry, once the over/short posts, posts the movements: none of their keys was kept.
+        asTenant(tenant, () -> listener.onOrderEvent(envelope(eventId, fact)));
+        assertThat(entryCount(tenant)).isEqualTo(3);
+        assertThat(net(lines(tenant), "1095")).isEqualByComparingTo("-43.40");
     }
 
     @Test
@@ -325,6 +380,20 @@ class RegisterCashMovementPostingPostgresIT extends PostgresTenancyTestBase {
     }
 
     // ---- fixtures -------------------------------------------------------------------------------------------------
+
+    /** An over/short posting that fails the way a closed period does, after the movements posted. */
+    private static final class FailingOverShortPostingService extends RegisterOverShortPostingService {
+
+        FailingOverShortPostingService() {
+            super(null, null, null, null, null, null);
+        }
+
+        @Override
+        public @NonNull FactPostingOutcome postOverShort(
+                @NonNull RegisterSessionClosedV1 fact, @NonNull String envelopeEventId) {
+            throw new IllegalStateException("simulated PERIOD_CLOSED");
+        }
+    }
 
     private Movement petty(String category, String amount, String receipt) {
         return petty(category, amount, receipt, "USD");

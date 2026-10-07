@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -41,9 +42,13 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  *   <li>{@code VENDOR_COD}: <b>not posted yet</b>. Its posting (Dr {@code ACCOUNTS_PAYABLE} / Cr {@code CASH_CLEARING}
  *       plus an AP payment with method {@code CASH}) is the vendor cash on delivery half of #2513, which waits on the
  *       vendor copy (S24, #2517) and the pay guard (S13, #2510); pos-order refuses the reason until then (#2576). A
- *       COD movement that arrives anyway is held: logged, counted on {@value #UNPOSTED_METRIC}{@code
- *       {reason=VENDOR_COD}}, and its idempotency key is left unregistered, so a replay of the close fact once the
- *       COD posting exists posts it and nothing else.
+ *       COD movement that arrives anyway is <b>skipped</b>: logged at ERROR and counted on {@value
+ *       #UNPOSTED_METRIC}{@code {reason=VENDOR_COD}}, which must alert, since the cash left the drawer and 1095 does
+ *       not show it. Nothing about it is registered. <b>Recovery is a backfill, never a redelivery:</b> every consumed
+ *       close fact is stored whole as its {@code accounting_event} row's {@code payload}, so the COD half selects the
+ *       {@code VENDOR_COD} movement ids of {@code payload.movements} that have no registered posting key and posts
+ *       them. A redelivered fact cannot do it: the same envelope id is dropped by {@code processed_events}, pos-order
+ *       has no re-emit of a close fact, and posting keys expire.
  *   <li>{@code BANK_DROP}, {@code FLOAT_INCREASE}, {@code FLOAT_DECREASE}: nothing at close (the deposit, S18; Change
  *       float, S15).
  *   <li>No reason (recorded before S16) or a reason this module does not know: nothing, logged and counted as {@code
@@ -57,14 +62,17 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * register float's (AW36): a register moves only between sessions.
  *
  * <p><b>Idempotency</b> is per movement: {@code REGISTER_CASH_MOVEMENT_GL_POSTING:<movementId>} is registered in the
- * same transaction as the entry, so a fact redelivered under a fresh envelope id posts nothing twice.
+ * same transaction as the entry, so a fact redelivered under a fresh envelope id posts nothing twice within the
+ * posting-key window (the {@code IdempotencyService} keys expire after 24 hours, as the over/short's do; non-expiring
+ * posting keys are #2595). The checks run in the over/short's order: idempotency, then currency, then the
+ * fact's contract.
  *
  * <p><b>Currency (ADR-0067 PC-9).</b> A session whose fact, or any movement to post, is in a currency other than the
  * ledger's posts nothing: it is held once per session as the {@code SUSPENDED / CURRENCY_NOT_SUPPORTED} record the
  * over/short hold writes, and the listener then skips the over/short, so the session posts all or nothing.
  *
- * <p>A closed period, a missing mapping or a petty expense that breaks the close fact's contract (not {@code OUT}, no
- * category, no positive amount) propagates: the listener's handler transaction rolls back the whole session and the
+ * <p>A closed period, a missing mapping or a petty expense that breaks the close fact's contract (no movement id, not
+ * {@code OUT}, no category, no positive amount) propagates: the listener's handler transaction rolls back the whole session and the
  * fact goes to retry and the DLQ.
  */
 @Slf4j
@@ -87,7 +95,10 @@ public class RegisterCashMovementPostingService {
     /** Movements posted, by reason (#2513 "Audit and observability"). */
     static final String POSTED_METRIC = "accounting.cash_movement.posted";
 
-    /** Movements left unposted that cash did leave the drawer for, by reason: {@code VENDOR_COD}, {@code UNCLASSIFIED}. */
+    /**
+     * Movements left unposted that cash did leave the drawer for, by reason: {@code VENDOR_COD}, {@code UNCLASSIFIED}.
+     * Any increment must alert: 1095 then misses cash that left the drawer.
+     */
     static final String UNPOSTED_METRIC = "accounting.cash_movement.unposted";
 
     static final int DESCRIPTION_MAX = 500;
@@ -96,8 +107,8 @@ public class RegisterCashMovementPostingService {
     enum Disposition {
         /** Posts at close: Dr {@code PETTY_EXPENSE_<categoryCode>} / Cr {@code CASH_CLEARING}. */
         POST_PETTY_EXPENSE,
-        /** The vendor cash on delivery half of #2513 is not built: held, not posted, key left unregistered. */
-        HOLD_VENDOR_COD,
+        /** The vendor cash on delivery half of #2513 is not built: skipped at ERROR, backfilled by that half. */
+        SKIP_VENDOR_COD,
         /** Posts nothing at close by design: a bank drop or a float change. */
         NOTHING_AT_CLOSE,
         /** No reason (recorded before S16) or one this module does not know: not posted. */
@@ -136,7 +147,7 @@ public class RegisterCashMovementPostingService {
         }
         return switch (reason) {
             case PETTY_EXPENSE -> Disposition.POST_PETTY_EXPENSE;
-            case VENDOR_COD -> Disposition.HOLD_VENDOR_COD;
+            case VENDOR_COD -> Disposition.SKIP_VENDOR_COD;
             case BANK_DROP, FLOAT_INCREASE, FLOAT_DECREASE -> Disposition.NOTHING_AT_CLOSE;
             default -> Disposition.UNCLASSIFIED;
         };
@@ -162,8 +173,8 @@ public class RegisterCashMovementPostingService {
         List<Movement> toPost = new ArrayList<>();
         for (Movement movement : movements) {
             switch (dispositionOf(movement.reason())) {
-                case POST_PETTY_EXPENSE -> toPost.add(requirePostable(fact, movement));
-                case HOLD_VENDOR_COD -> holdVendorCashOnDelivery(fact, movement);
+                case POST_PETTY_EXPENSE -> toPost.add(movement);
+                case SKIP_VENDOR_COD -> skipVendorCashOnDelivery(fact, movement);
                 case NOTHING_AT_CLOSE ->
                     log.debug(
                             "Drawer movement posts nothing at close | sessionId={} | movementId={} | reason={}",
@@ -177,36 +188,44 @@ public class RegisterCashMovementPostingService {
             return FactPostingOutcome.nothingToPost();
         }
 
-        // Business time, not processing time: redeliveries land in the same period.
-        LocalDateTime transactionDate = zoneResolver.postingDateTime(fact.closedAt());
-
-        // Never at par (ADR-0067 PC-9): the whole session is held once, and nothing posts.
-        if (inForeignCurrency(fact, toPost)) {
-            holdForeignCurrency(fact, toPost, envelopeEventId, transactionDate);
-            return new FactPostingOutcome.CurrencyHeld();
-        }
-
-        UUID firstPosted = null;
+        // The over/short's order: idempotency, then currency, then the fact's contract. A redelivery of a session
+        // already posted never writes a hold, and a foreign session is held even when a movement is malformed.
+        List<Movement> pending = new ArrayList<>();
         UUID firstEarlier = null;
         for (Movement movement : toPost) {
-            String idempotencyKey = IDEMPOTENCY_KEY_PREFIX + movement.movementId();
-            if (idempotencyService.isKeyProcessed(idempotencyKey)) {
+            if (movement.movementId() != null
+                    && idempotencyService.isKeyProcessed(IDEMPOTENCY_KEY_PREFIX + movement.movementId())) {
                 log.info(
                         "Drawer movement GL posting already processed, skipping | sessionId={} | movementId={}",
                         fact.sessionId(),
                         movement.movementId());
                 firstEarlier = firstEarlier == null ? toSourceEventId(movement.movementId()) : firstEarlier;
-                continue;
+            } else {
+                pending.add(movement);
             }
+        }
+        if (pending.isEmpty()) {
+            return new FactPostingOutcome.AlreadyPosted(null, firstEarlier);
+        }
+
+        // Business time, not processing time: redeliveries land in the same period.
+        LocalDateTime transactionDate = zoneResolver.postingDateTime(fact.closedAt());
+
+        // Never at par (ADR-0067 PC-9): the whole session is held once, and nothing posts.
+        if (inForeignCurrency(fact, pending)) {
+            holdForeignCurrency(fact, pending, envelopeEventId, transactionDate);
+            return new FactPostingOutcome.CurrencyHeld();
+        }
+
+        pending.forEach(movement -> requirePostable(fact, movement));
+        UUID firstPosted = null;
+        for (Movement movement : pending) {
             UUID posted = postPettyExpense(fact, movement, transactionDate);
-            idempotencyService.registerKey(idempotencyKey, posted);
+            idempotencyService.registerKey(IDEMPOTENCY_KEY_PREFIX + movement.movementId(), posted);
             countAfterCommit(POSTED_METRIC, movement.reason());
             firstPosted = firstPosted == null ? posted : firstPosted;
         }
-        if (firstPosted != null) {
-            return FactPostingOutcome.posted(firstPosted);
-        }
-        return new FactPostingOutcome.AlreadyPosted(null, firstEarlier);
+        return FactPostingOutcome.posted(firstPosted);
     }
 
     private UUID postPettyExpense(RegisterSessionClosedV1 fact, Movement movement, LocalDateTime transactionDate) {
@@ -257,7 +276,10 @@ public class RegisterCashMovementPostingService {
     /** A petty expense the close fact's contract allows to post; anything else fails the fact for retry / DLQ. */
     private static Movement requirePostable(RegisterSessionClosedV1 fact, Movement movement) {
         String problem = null;
-        if (!Movement.OUT.equals(movement.direction())) {
+        if (movement.movementId() == null) {
+            // Its posting key and source event would be shared with every other movement without one.
+            problem = "no movementId";
+        } else if (!Movement.OUT.equals(movement.direction())) {
             problem = "direction " + movement.direction() + " (a petty expense is OUT)";
         } else if (movement.categoryCode() == null || movement.categoryCode().isBlank()) {
             problem = "no categoryCode";
@@ -281,9 +303,12 @@ public class RegisterCashMovementPostingService {
             List<Movement> toPost,
             String envelopeEventId,
             LocalDateTime transactionDate) {
-        BigDecimal total = toPost.stream().map(Movement::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        // Held before the contract check, so a malformed movement may lack an amount or a currency.
+        BigDecimal total =
+                toPost.stream().map(Movement::amount).filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
         String currencies = Stream.concat(
                         Stream.of(fact.currencyCode()), toPost.stream().map(Movement::currencyCode))
+                .filter(Objects::nonNull)
                 .distinct()
                 .collect(Collectors.joining("/"));
         boolean variance = fact.overShort() != null && fact.overShort().signum() != 0;
@@ -310,11 +335,17 @@ public class RegisterCashMovementPostingService {
                 recorded);
     }
 
-    private void holdVendorCashOnDelivery(RegisterSessionClosedV1 fact, Movement movement) {
-        log.warn(
-                "Vendor cash on delivery not posted: its AP payment posting is not built yet (#2513 COD half, #2576);"
-                        + " a replay of the close fact posts it once it is | sessionId={} | terminalId={} | movementId={}"
-                        + " | vendorId={} | amount={} {}",
+    /**
+     * The COD half of #2513 is not built: the movement is skipped, at ERROR, and counted on {@value #UNPOSTED_METRIC}
+     * {@code {reason=VENDOR_COD}}, which must alert. Cash left the drawer and 1095 does not show it until the COD half
+     * backfills the movement from the stored close fact (see the class doc).
+     */
+    private void skipVendorCashOnDelivery(RegisterSessionClosedV1 fact, Movement movement) {
+        log.error(
+                "Vendor cash on delivery NOT POSTED: its AP payment posting is not built yet (#2513 COD half; pos-order"
+                        + " keeps the reason off until then, #2576). The COD half backfills it from this fact's"
+                        + " accounting_event payload | sessionId={} | terminalId={} | movementId={} | vendorId={}"
+                        + " | amount={} {}",
                 fact.sessionId(),
                 fact.terminalId(),
                 movement.movementId(),

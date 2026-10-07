@@ -1050,6 +1050,28 @@ class PostingEngineOrchestratorTest {
         }
 
         @Test
+        @DisplayName("#2513: a session held for a drawer movement's currency stays held although the fact's own"
+                + " currencyCode is the ledger's")
+        void foreignMovement_reSuspendsWithCurrencyReason() {
+            holdForCurrency("USD");
+            testPayload.put(
+                    "movements",
+                    List.of(
+                            Map.of("movementId", "m-1", "currencyCode", "USD"),
+                            Map.of("movementId", "m-2", "currencyCode", "CAD")));
+            when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+            when(reprocessingAttemptHistoryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+            PostingResult result = orchestrator.processEvent(testEvent, null, testUserId, true);
+
+            assertThat(result.getFailureReason()).isEqualTo(PostingFailureReason.CURRENCY_NOT_SUPPORTED);
+            assertThat(testEvent.getStatus()).isEqualTo(AccountingEventStatus.SUSPENDED);
+            assertThat(testEvent.getFailureDetails()).contains("CAD");
+            verify(postingRuleEvaluator, never()).evaluateEvent(any(), any());
+            verify(journalEntryService, never()).createJournalEntry(any());
+        }
+
+        @Test
         @DisplayName("A held fact whose currency the ledger now books goes on to rule evaluation")
         void nowLedgerCurrency_proceedsToEvaluation() {
             holdForCurrency("usd");

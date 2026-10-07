@@ -26,6 +26,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.HashMap;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -65,6 +66,9 @@ public class PostingEngineOrchestrator {
 
     /** The payload field a currency-held fact states its currency in (ADR-0067 E-3). */
     private static final String PAYLOAD_CURRENCY_FIELD = "currencyCode";
+
+    /** The payload list a register-session close fact states its drawer movements in, each with its own currency. */
+    private static final String PAYLOAD_MOVEMENTS_FIELD = "movements";
 
     private final Clock clock;
     private final PostingRuleEvaluator postingRuleEvaluator;
@@ -222,7 +226,8 @@ public class PostingEngineOrchestrator {
      * Currency hold (ADR-0067 PC-9, issue #2334): an event held because its fact states an amount
      * in a currency other than the ledger's ({@code failureReasonCode = CURRENCY_NOT_SUPPORTED},
      * written by {@link KafkaFactIngestionRecorder#recordCurrencyHeld}) stays SUSPENDED with
-     * that reason while its {@code payload.currencyCode} is still not the ledger currency — a
+     * that reason while its {@code payload.currencyCode}, or a {@code payload.movements[].currencyCode} (#2513), is
+     * still not the ledger currency — a
      * reprocess records an audited FAILURE attempt and posts nothing, rather than booking the
      * amount at par. Once the ledger books that currency the event continues to normal evaluation.
      * Events not held for their currency are not gated here.
@@ -233,9 +238,8 @@ public class PostingEngineOrchestrator {
         if (!PostingFailureReason.CURRENCY_NOT_SUPPORTED.name().equals(event.getFailureReasonCode())) {
             return Optional.empty();
         }
-        Object currency = event.getPayload() == null ? null : event.getPayload().get(PAYLOAD_CURRENCY_FIELD);
-        String currencyCode = currency == null ? null : currency.toString();
-        if (!ledgerCurrency.isForeign(currencyCode)) {
+        String currencyCode = foreignPayloadCurrency(event.getPayload());
+        if (currencyCode == null) {
             return Optional.empty();
         }
         String details = "Fact is in " + currencyCode + " but the ledger books " + ledgerCurrency.code()
@@ -254,6 +258,33 @@ public class PostingEngineOrchestrator {
         reprocessingAttemptHistoryRepository.save(attemptHistory);
 
         return Optional.of(PostingResult.failure(PostingFailureReason.CURRENCY_NOT_SUPPORTED, details));
+    }
+
+    /**
+     * The first currency a held fact states that is not the ledger's: its {@code currencyCode}, else a {@code
+     * payload.movements[].currencyCode} (a register session held for a drawer movement's currency, #2513); null when
+     * every stated currency is the ledger's.
+     */
+    private @Nullable String foreignPayloadCurrency(@Nullable Map<String, Object> payload) {
+        if (payload == null) {
+            return null;
+        }
+        Object currency = payload.get(PAYLOAD_CURRENCY_FIELD);
+        String currencyCode = currency == null ? null : currency.toString();
+        if (ledgerCurrency.isForeign(currencyCode)) {
+            return currencyCode;
+        }
+        if (payload.get(PAYLOAD_MOVEMENTS_FIELD) instanceof List<?> movements) {
+            for (Object movement : movements) {
+                if (movement instanceof Map<?, ?> fields && fields.get(PAYLOAD_CURRENCY_FIELD) != null) {
+                    String movementCurrency = fields.get(PAYLOAD_CURRENCY_FIELD).toString();
+                    if (ledgerCurrency.isForeign(movementCurrency)) {
+                        return movementCurrency;
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     /**

@@ -771,20 +771,29 @@ schema-1 fact has no movements and posts its over/short alone, as before.
   dimensioned `registerId` (the terminal), `sessionId` and the session's `locationId` — the session's, never the
   float row's (AW36). The description names the category, amount, receipt, register and close time. A category
   deactivated after its movement was recorded still resolves: its mapping key stays.
-- **Idempotency** — `REGISTER_CASH_MOVEMENT_GL_POSTING:<movementId>`, registered with the entry: a fact
-  redelivered under a new envelope id posts nothing twice and its record is `PROCESSED / DUPLICATE_IGNORED`.
+- **Idempotency** — `REGISTER_CASH_MOVEMENT_GL_POSTING:<movementId>`, registered with the entry and scoped to the
+  tenant: a fact redelivered under a new envelope id posts nothing twice and its record is `PROCESSED /
+  DUPLICATE_IGNORED`. This holds **within the posting-key window**: `IdempotencyService` keys expire after 24 hours,
+  as the over/short's do, pending the follow-up on non-expiring posting keys (#2595). The checks run in the over/short's
+  order — idempotency, then currency, then the fact's contract — so a redelivered session already posted never writes
+  a hold, and a foreign session with a malformed movement is held rather than sent to the DLQ.
 - **Failures** — a closed period or a missing mapping rolls the whole session back (over/short included) and
   propagates for retry and the DLQ, like the over/short; so does a petty expense that breaks the fact's contract
-  (not `OUT`, no category, no positive amount).
+  (no `movementId`, not `OUT`, no category, no positive amount). A missing mapping writes no ingestion row; a
+  reprocess route for `order.session.closed` (which would allow one) is a follow-up (#2594).
 - **Currency** — a session whose fact or any movement to post is not in the ledger currency posts nothing, over/short
   included, and is held once (Ledger currency below).
 - **Vendor cash on delivery** — its posting (Dr `ACCOUNTS_PAYABLE` / Cr `CASH_CLEARING` plus an AP payment of method
   `CASH`) is the second half of #2513, waiting on the vendor copy (S24, #2517) and the pay guard (S13, #2510); pos-order
-  refuses the reason until #2576. A `VENDOR_COD` movement that arrives meanwhile is logged (`WARN`), counted on
-  `accounting.cash_movement.unposted{reason=VENDOR_COD}` and not posted; its key stays unregistered, so replaying the
-  close fact once the posting exists posts that movement alone.
+  refuses the reason until #2576, which is blocked by that half. A `VENDOR_COD` movement that arrives meanwhile is
+  **skipped**: logged at `ERROR`, counted on `accounting.cash_movement.unposted{reason=VENDOR_COD}` — which must alert,
+  since the cash left the drawer and 1095 does not show it — and not posted. **Recovery is a backfill, never a
+  redelivery**: every consumed close fact is stored whole as its `accounting_event` row's `payload`, so the COD half
+  selects the `VENDOR_COD` ids in `payload.movements` that have no registered posting key and posts them. (A redelivery
+  cannot: the same envelope id is dropped by `processed_events`, pos-order has no re-emit of a close fact, and posting
+  keys expire.)
 - **Metrics** — `accounting.cash_movement.posted{reason}` and `accounting.cash_movement.unposted{reason}`, counted
-  after commit.
+  after commit. Any `unposted` increment must alert (operations configuration).
 
 ## Ledger currency (ADR-0067)
 
@@ -805,8 +814,9 @@ on an inbound fact means the ledger currency until producers stamp one (E-3).
 - **Releasing a hold** (#2334) — a held fact is `SUSPENDED`, not terminal, so it stays visible until a
   booking rate (ADR-0067 B1) or manual handling releases it. The scheduled auto-retry skips it, as it skips
   `PERIOD_CLOSED`; release goes through the audited `POST /v1/accounting/events/{eventId}/reprocess`. While
-  the fact's `currencyCode` is still not the ledger currency, a reprocess records a `FAILURE` attempt,
-  re-suspends it with `CURRENCY_NOT_SUPPORTED` and posts nothing.
+  the fact's `currencyCode`, or any of a session fact's `movements[].currencyCode` (#2513), is still not the
+  ledger currency, a reprocess records a `FAILURE` attempt, re-suspends it with `CURRENCY_NOT_SUPPORTED` and posts
+  nothing.
 - **Vendor bills from supplier invoices** (`supplier.invoice.received`, #2309) — the bill records the
   invoice's `currency` (`vendor_bill.currency`, on `VendorBillResponse`). A bill in another currency gets status
   `CURRENCY_HOLD` with the reason in `rejectionReason`: it is not matched, cannot be approved through

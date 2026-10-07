@@ -294,9 +294,10 @@ class RegisterCashMovementPostingServiceTest {
     }
 
     @Test
-    @DisplayName("Vendor cash on delivery is held, not posted, until its AP payment posting exists (#2576): no key is"
-            + " registered and it is counted; the session's petty expense still posts")
-    void vendorCashOnDeliveryIsHeldNotPosted() {
+    @DisplayName(
+            "Vendor cash on delivery is skipped, not posted, until its AP payment posting exists (#2513 COD half):"
+                    + " nothing about it is registered and it is counted for the alert; the session's petty expense still posts")
+    void vendorCashOnDeliveryIsSkippedNotPosted() {
         UUID entry = UUID.randomUUID();
         postsReturn(entry);
 
@@ -343,12 +344,12 @@ class RegisterCashMovementPostingServiceTest {
 
     @Test
     @DisplayName(
-            "Reason dispositions: petty posts, COD is held, drops and float changes post nothing, others unclassified")
+            "Reason dispositions: petty posts, COD is skipped, drops and float changes post nothing, others unclassified")
     void dispositions() {
         assertThat(RegisterCashMovementPostingService.dispositionOf("PETTY_EXPENSE"))
                 .isEqualTo(RegisterCashMovementPostingService.Disposition.POST_PETTY_EXPENSE);
         assertThat(RegisterCashMovementPostingService.dispositionOf("VENDOR_COD"))
-                .isEqualTo(RegisterCashMovementPostingService.Disposition.HOLD_VENDOR_COD);
+                .isEqualTo(RegisterCashMovementPostingService.Disposition.SKIP_VENDOR_COD);
         List<RegisterCashMovementPostingService.Disposition> nothing = new ArrayList<>();
         for (String reason : List.of("BANK_DROP", "FLOAT_INCREASE", "FLOAT_DECREASE")) {
             nothing.add(RegisterCashMovementPostingService.dispositionOf(reason));
@@ -384,7 +385,39 @@ class RegisterCashMovementPostingServiceTest {
                         eq(fact),
                         detail.capture());
         assertThat(detail.getValue()).contains("EUR", "USD", "ADR-0067");
-        verifyNoInteractions(glPostingService, glMappingResolver, idempotencyService);
+        verifyNoInteractions(glPostingService, glMappingResolver);
+        verify(idempotencyService, never()).registerKey(anyString(), any());
+    }
+
+    @Test
+    @DisplayName("Check order: a redelivery of a session already posted writes no currency hold, foreign or not")
+    void alreadyPostedSessionIsNeverHeld() {
+        when(idempotencyService.isKeyProcessed("REGISTER_CASH_MOVEMENT_GL_POSTING:" + PETTY_1))
+                .thenReturn(true);
+        RegisterSessionClosedV1 fact = fact(
+                "EUR",
+                LOCATION_ID,
+                List.of(movement(PETTY_1, "PETTY_EXPENSE", "OUT", "18.40", "EUR", "SHOP_SUPPLIES", null, null, null)));
+
+        assertThat(service.postMovements(fact, ENVELOPE_EVENT_ID))
+                .isEqualTo(new FactPostingOutcome.AlreadyPosted(
+                        null, RegisterCashMovementPostingService.toSourceEventId(PETTY_1)));
+        verifyNoInteractions(ingestionRecorder, glPostingService);
+    }
+
+    @Test
+    @DisplayName("Check order: a foreign session with a malformed movement is held, not failed to the DLQ")
+    void foreignSessionWithMalformedMovementIsHeld() {
+        RegisterSessionClosedV1 fact = fact(
+                "EUR",
+                LOCATION_ID,
+                List.of(
+                        movement(PETTY_1, "PETTY_EXPENSE", "OUT", "18.40", "EUR", "SHOP_SUPPLIES", null, null, null),
+                        movement(PETTY_2, "PETTY_EXPENSE", "IN", "5.00", "EUR", null, null, null, null)));
+
+        assertThat(service.postMovements(fact, ENVELOPE_EVENT_ID)).isInstanceOf(FactPostingOutcome.CurrencyHeld.class);
+        verify(ingestionRecorder).recordCurrencyHeld(any(), any(), any(), eq(SESSION_ID), any(), any(), anyString());
+        verifyNoInteractions(glPostingService);
     }
 
     @Test
@@ -441,6 +474,20 @@ class RegisterCashMovementPostingServiceTest {
                 .hasMessageContaining("direction IN");
         assertThatThrownBy(() -> service.postMovements(fact(petty(PETTY_1, null, "18.40", null)), ENVELOPE_EVENT_ID))
                 .hasMessageContaining("no categoryCode");
+        verifyNoInteractions(glPostingService);
+    }
+
+    @Test
+    @DisplayName("A petty expense without a movementId fails the fact: it would share its key and source event with"
+            + " every other movement without one")
+    void missingMovementIdFailsTheFact() {
+        assertThatThrownBy(() -> service.postMovements(
+                        fact(petty(PETTY_1, "SHOP_SUPPLIES", "18.40", null), petty(null, "STAFF_MEALS", "22.00", null)),
+                        ENVELOPE_EVENT_ID))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("no movementId");
+        verify(idempotencyService, never()).isKeyProcessed("REGISTER_CASH_MOVEMENT_GL_POSTING:null");
+        verify(idempotencyService, never()).registerKey(anyString(), any());
         verifyNoInteractions(glPostingService);
     }
 }
