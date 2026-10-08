@@ -125,8 +125,10 @@ class GoodsReceiptReprocessorTest {
         assertThat(closed.detail()).contains("reprocess after the period is reopened");
 
         // A hard lock is never reopened: the engine's wording, permanent, never "reprocess after it is open".
-        org.mockito.Mockito.doThrow(new com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException(
-                        java.time.LocalDate.of(2026, 10, 31), "2026-10-08 is on or before the hard lock 2026-10-31"))
+        org.mockito.Mockito.doThrow(
+                        new com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException(
+                                java.time.LocalDate.of(2026, 10, 31),
+                                "2026-10-08 is on or before the hard lock 2026-10-31"))
                 .when(postingService)
                 .postAccrual(any());
         GoodsReceiptReprocessor.Result locked = reprocessor.reprocess(stored(fact));
