@@ -10,12 +10,17 @@ import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
 import com.positivity.accounting.internal.dto.GoodsReceivedEvent;
 import com.positivity.accounting.internal.dto.VendorBillCommands;
 import com.positivity.accounting.internal.dto.VendorBillResponse;
+import com.positivity.accounting.internal.dto.VendorBillReview;
 import com.positivity.accounting.internal.dto.VendorInvoiceReceivedEvent;
+import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.PaymentMethod;
 import com.positivity.accounting.internal.enums.VendorBillApproverKind;
+import com.positivity.accounting.internal.enums.VendorBillDebitClass;
+import com.positivity.accounting.internal.enums.VendorBillDifferenceClass;
 import com.positivity.accounting.internal.enums.VendorBillPostingDateRule;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.VendorBillException;
+import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.accounting.internal.service.APPaymentService;
 import com.positivity.accounting.internal.service.ApApprovalPolicyService;
 import com.positivity.accounting.internal.service.VendorBillApprovalService;
@@ -46,6 +51,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Approval limits and separation of duties on the full Flyway chain (CAP:550 S13, #2510): the policy PUT/GET with its
@@ -87,6 +94,12 @@ class VendorBillApprovalLimitsPostgresIT extends PostgresTenancyTestBase {
 
     @Autowired
     private Clock clock;
+
+    @Autowired
+    private VendorBillRepository billRows;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     private final List<UUID> tenants = new ArrayList<>();
 
@@ -326,6 +339,92 @@ class VendorBillApprovalLimitsPostgresIT extends PostgresTenancyTestBase {
         }
     }
 
+    @Test
+    @DisplayName("AC13 (AW47): within a 1,100.00 clerk limit a clerk ACCEPTs an EDI bill of gross 1,085.00 with"
+            + " difference FREIGHT: Dr 2100 1,000.00 / Dr 5050 70.00 / Dr 5060 15.00 / Cr 2000 1,085.00, tier CLERK")
+    void ediAcceptWithFreight() {
+        UUID tenant = tenant();
+        signIn(CONTROLLER, CONTROLLER_GRANTS);
+        asTenant(tenant, () -> policies.set(limits("1100.00", "0.00", "Clerks approve up to 1,100", null)));
+        UUID billId = ediBill(tenant, "INV-AW47", today().minusDays(1), VendorBillStatus.MATCH_EXCEPTION);
+
+        signIn(CLERK, CLERK_GRANTS);
+        VendorBillResponse accepted = asTenant(
+                tenant,
+                () -> approvals.resolveException(
+                        billId,
+                        new VendorBillCommands.ResolveException(
+                                "ACCEPT",
+                                "Freight on the invoice, agreed",
+                                new VendorBillReview.Classification(VendorBillDebitClass.GOODS, null),
+                                null,
+                                new VendorBillReview.Difference(
+                                        VendorBillDifferenceClass.FREIGHT, null, "Freight not stated separately"))));
+
+        assertThat(accepted.getStatus()).isEqualTo(VendorBillStatus.APPROVED);
+        assertThat(accepted.getApproval().approvedBy()).isEqualTo(CLERK);
+        assertThat(lines(tenant, accepted.getPosting().journalEntryId()))
+                .containsExactlyInAnyOrder("2100 D1000.0000", "5050 D70.0000", "5060 D15.0000", "2000 C1085.0000");
+        assertThat(auditNewValue(tenant, billId, "VENDOR_BILL_MATCH_EXCEPTION_RESOLVE"))
+                .contains("tier=CLERK");
+    }
+
+    @Test
+    @DisplayName("AC2: a clerk's approve over the limit is 403 AP_APPROVAL_LIMIT_EXCEEDED, and its"
+            + " VENDOR_BILL_APPROVE_REFUSED row survives the rollback")
+    void limitRefusalIsAudited() {
+        UUID tenant = tenant();
+        UUID billId = ediBill(tenant, "INV-OVER", today().minusDays(1), VendorBillStatus.AWAITING_APPROVAL);
+
+        signIn(CLERK, CLERK_GRANTS);
+        assertThatThrownBy(() -> asTenant(
+                        tenant,
+                        () -> approvals.approve(
+                                billId,
+                                new VendorBillCommands.Approve(
+                                        null,
+                                        new VendorBillReview.Classification(VendorBillDebitClass.GOODS, null),
+                                        null,
+                                        new VendorBillReview.Difference(
+                                                VendorBillDifferenceClass.FREIGHT,
+                                                null,
+                                                "Freight not stated separately")))))
+                .isInstanceOfSatisfying(
+                        VendorBillException.class,
+                        refusal -> assertThat(refusal.getCode())
+                                .isEqualTo(VendorBillException.Code.AP_APPROVAL_LIMIT_EXCEEDED));
+        assertThat(status(tenant, billId)).isEqualTo("AWAITING_APPROVAL");
+        assertThat(count(tenant, "accounting_audit_log", "operation = 'VENDOR_BILL_APPROVE_REFUSED'"))
+                .isEqualTo(1);
+        assertThat(auditNewValue(tenant, billId, "VENDOR_BILL_APPROVE_REFUSED"))
+                .contains("code=AP_APPROVAL_LIMIT_EXCEEDED", "tier=OVER_LIMIT", "limit=0.00");
+        assertThat(count(tenant, "journal_entry", "true")).isZero();
+    }
+
+    /** An EDI bill as the supplier listener writes it: gross 1,085.00, net 1,000.00, tax 70.00, in {@code status}. */
+    private UUID ediBill(UUID tenant, String number, LocalDate billDate, VendorBillStatus status) {
+        return asTenant(
+                tenant,
+                () -> new TransactionTemplate(transactionManager).execute(_ -> {
+                    VendorBill bill = new VendorBill();
+                    bill.setVendorId(UUIDv7Generator.generate());
+                    bill.setVendorName("Supply House");
+                    bill.setBillNumber(number);
+                    bill.setBillDate(billDate.atStartOfDay());
+                    bill.setTotalAmount(new BigDecimal("1085.00"));
+                    bill.setNetAmount(new BigDecimal("1000.00"));
+                    bill.setTaxAmount(new BigDecimal("70.00"));
+                    bill.setStatedLineCount(1);
+                    bill.setCurrency("USD");
+                    bill.setStatus(status);
+                    bill.setOriginEventId(UUIDv7Generator.generate());
+                    bill.setOriginEventType("SUPPLIER_INVOICE_RECEIVED");
+                    bill.setCreatedBy("supplier");
+                    bill.setModifiedBy("supplier");
+                    return billRows.saveAndFlush(bill).getVendorBillId();
+                }));
+    }
+
     // ---- helpers --------------------------------------------------------------------------------------------
 
     private static ApApprovalPolicyRequest limits(String clerk, String auto, String justification, UUID requestId) {
@@ -349,6 +448,13 @@ class VendorBillApprovalLimitsPostgresIT extends PostgresTenancyTestBase {
                 .as("the match transaction committed")
                 .isEqualTo("AWAITING_APPROVAL");
         assertThat(count(tenant, "vendor_bill_match_evidence", "vendor_bill_id = '" + bill.getVendorBillId() + "'"))
+                .isEqualTo(1);
+        assertThat(count(
+                        tenant,
+                        "accounting_audit_log",
+                        "entity_id = '" + bill.getVendorBillId()
+                                + "' AND operation = 'VENDOR_BILL_AUTO_APPROVE_SKIPPED'"))
+                .as("exactly one skip row")
                 .isEqualTo(1);
         assertThat(auditNewValue(tenant, bill.getVendorBillId(), "VENDOR_BILL_AUTO_APPROVE_SKIPPED"))
                 .contains("code=" + code);

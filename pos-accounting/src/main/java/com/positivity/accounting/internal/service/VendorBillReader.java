@@ -133,7 +133,8 @@ public class VendorBillReader {
                 !openCandidates.isEmpty(),
                 totals.orElse(null),
                 openDeliveries(bill, channel, posting.orElse(null))));
-        checks.add(withinClerkLimit(bill.getStatus(), bill.getTotalAmount(), settings, currencyCode));
+        // The limits are the functional currency's (ADR-0067 R-6), whatever the bill's.
+        checks.add(withinClerkLimit(bill.getStatus(), bill.getTotalAmount(), settings, ledgerCurrency.code()));
 
         return VendorBillResponse.builder()
                 .vendorBillId(billId)
@@ -154,7 +155,7 @@ public class VendorBillReader {
                 .createdAt(bill.getCreatedAt())
                 .createdBy(bill.getCreatedBy())
                 .channel(channel)
-                .approval(approval(bill, approvedOnce, settings, currencyCode))
+                .approval(approval(bill, approvedOnce, settings, ledgerCurrency.code()))
                 .rejection(rejection(bill))
                 .statusExplanation(statusExplanation(bill))
                 .openAmount(openAmount)

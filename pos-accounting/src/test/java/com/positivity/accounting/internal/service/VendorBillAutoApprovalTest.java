@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -19,6 +20,7 @@ import com.positivity.accounting.internal.entity.VendorBillMatchEvidence;
 import com.positivity.accounting.internal.enums.VendorBillApproverKind;
 import com.positivity.accounting.internal.enums.VendorBillPostingDateRule;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
+import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.VendorBillLineRepository;
@@ -243,5 +245,23 @@ class VendorBillAutoApprovalTest {
         verify(auditLogs, never()).save(any());
         LocalDateTime unchanged = bill.getBillDate();
         assertThat(unchanged).isEqualTo(INVOICE_DATE.atStartOfDay());
+    }
+
+    @Test
+    @DisplayName("Ruling 6063520413 item 3: the pre-check passes, then the posting refuses (PERIOD_CLOSED in the race):"
+            + " the exception leaves approveIfEligible uncaught, the bill is not APPROVED and no row is saved")
+    void raceRefusalPropagates() {
+        billed("250.00", true);
+        AccountingPeriodClosedException closed = new AccountingPeriodClosedException("2026-10", "closed meanwhile");
+        when(postingService.post(any(), any(), any(), anyString())).thenThrow(closed);
+
+        assertThatThrownBy(() -> autoApproval.approveIfEligible(bill, evidence, 95))
+                .isSameAs(closed);
+
+        assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.AWAITING_APPROVAL);
+        assertThat(bill.getApprovedBy()).isNull();
+        assertThat(bill.getApprovedByKind()).isNull();
+        verify(bills, never()).save(any());
+        verify(auditLogs, never()).save(any());
     }
 }

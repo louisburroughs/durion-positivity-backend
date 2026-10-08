@@ -12,9 +12,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.accounting.BaseControllerSliceTest;
 import com.positivity.accounting.internal.exception.IdempotencyConflictException;
 import com.positivity.accounting.internal.exception.InvalidBillAllocationException;
+import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.accounting.internal.service.APPaymentService;
 import com.positivity.security.common.GatewaySecurityConfig;
 import com.positivity.web.common.WebCommonErrorAutoConfiguration;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -174,5 +176,33 @@ class APPaymentControllerErrorHandlingTest extends BaseControllerSliceTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("ILLEGAL_STATE"))
                 .andExpect(jsonPath("$.message").value("Vendor payment gateway session is not open"));
+    }
+
+    @Test
+    @DisplayName(
+            "S13 (#2510): AP_PAYMENT_SELF_APPROVED_BILL answers 403 with fieldErrors naming the bills, a nextAction"
+                    + " and the correlation id")
+    void selfApprovedBillEnvelope() throws Exception {
+        when(apPaymentService.getPaymentByRef(anyString())).thenReturn(Optional.empty());
+        when(apPaymentService.executePayment(any(), anyString()))
+                .thenThrow(new VendorBillException(
+                        VendorBillException.Code.AP_PAYMENT_SELF_APPROVED_BILL,
+                        "You approved a bill this payment would pay; another person pays them",
+                        List.of(new VendorBillException.FieldError("selfApprovedBillNumbers", "INV-B")),
+                        "Ask another person holding accounting:ap:pay to pay these bills"));
+
+        mockMvc.perform(withAuth(post("/v1/accounting/ap/payments"), "accounting:ap:pay")
+                        .header("X-Correlation-Id", CLIENT_CORRELATION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_PAYMENT_REQUEST))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("AP_PAYMENT_SELF_APPROVED_BILL"))
+                .andExpect(jsonPath("$.status").value(403))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("selfApprovedBillNumbers"))
+                .andExpect(jsonPath("$.fieldErrors[0].message").value("INV-B"))
+                .andExpect(jsonPath("$.nextAction")
+                        .value("Ask another person holding accounting:ap:pay to pay these bills"))
+                .andExpect(jsonPath("$.correlationId").value(CLIENT_CORRELATION_ID))
+                .andExpect(header().string("X-Correlation-Id", CLIENT_CORRELATION_ID));
     }
 }

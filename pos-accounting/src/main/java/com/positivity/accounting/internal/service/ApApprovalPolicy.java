@@ -127,9 +127,12 @@ public class ApApprovalPolicy {
                 CashAndPayablesSettings.parseTerms(stored.get(DEFAULT_TERMS)));
     }
 
-    /** An amount in the functional currency's minor unit, as the policy stores and returns it (ADR-0067). */
+    /**
+     * An amount in the functional currency's minor unit, as the policy stores and returns it (ADR-0067); a stored value
+     * finer than that is read rounded down, toward the stricter limit (#2622 review LOW-5).
+     */
     public @NonNull BigDecimal scaled(@NonNull BigDecimal amount) {
-        return amount.setScale(functionalCurrency.fractionDigits(), RoundingMode.HALF_UP);
+        return amount.setScale(functionalCurrency.fractionDigits(), RoundingMode.DOWN);
     }
 
     /** A stored limit: a non-negative amount; absent is 0, anything else is 0 with a warning. */

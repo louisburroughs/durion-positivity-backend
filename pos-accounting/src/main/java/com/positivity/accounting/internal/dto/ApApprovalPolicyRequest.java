@@ -21,7 +21,8 @@ public record ApApprovalPolicyRequest(
         @Schema(
                 description = "How much a clerk (accounting:ap:approve) may approve, the bill's absolute total"
                         + " including tax; at least 0, in the functional currency. 0 means every bill needs an"
-                        + " over-limit approver. Missing means unchanged",
+                        + " over-limit approver; at most 13 integer digits. Below the stored automatic limit, with no"
+                        + " autoApprovalLimit sent, it lowers the automatic limit with it. Missing means unchanged",
                 example = "2500.00",
                 requiredMode = NOT_REQUIRED)
         @Nullable
@@ -66,7 +67,6 @@ public record ApApprovalPolicyRequest(
                         + " case, no spaces (default NET30). Missing means unchanged",
                 example = "NET30",
                 requiredMode = NOT_REQUIRED)
-        @Size(max = 20)
         @Nullable
         String defaultTerms,
 

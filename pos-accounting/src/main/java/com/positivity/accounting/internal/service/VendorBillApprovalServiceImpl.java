@@ -66,15 +66,16 @@ import org.springframework.transaction.support.TransactionTemplate;
  *       (403 {@code AP_APPROVAL_LIMIT_EXCEEDED});
  *   <li>creator is not approver ({@link #creatorRule}), approve and {@code ACCEPT} only (403 {@code
  *       AP_BILL_SELF_APPROVAL}, or 400 {@code JUSTIFICATION_REQUIRED} for an exception use without one);
- *   <li>the bill's content ({@link #readyContent}): 422 {@code AP_BILL_ZERO_TOTAL}, {@code
- *       AP_BILL_TOTALS_UNRECONCILED} (AW47); S43 adds {@code AP_BILL_TAX_ON_RESALE_GOODS} at the end of this step;
- *   <li>the posting ({@link VendorBillPostingService#post}): {@code AP_BILL_UNCLASSIFIED}, {@code PERIOD_CLOSED},
- *       {@code PERIOD_HARD_LOCKED}, {@code GL_MAPPING_NOT_CONFIGURED}.
+ *   <li>the bill's content ({@link #readyContent}, {@link #requireClassified}): 422 {@code AP_BILL_ZERO_TOTAL},
+ *       {@code AP_BILL_TOTALS_UNRECONCILED} (AW47), {@code AP_BILL_UNCLASSIFIED}; S43 adds {@code
+ *       AP_BILL_TAX_ON_RESALE_GOODS} at the end of this step;
+ *   <li>the posting ({@link VendorBillPostingService#post}): {@code PERIOD_CLOSED}, {@code PERIOD_HARD_LOCKED}, {@code
+ *       GL_MAPPING_NOT_CONFIGURED}.
  * </ol>
  *
  * The identity guards come before the content guards, so someone who may not decide is never asked for a {@code
- * difference}. Each 403 of steps 3 and 4 is audited in its own transaction ({@code <operation>_REFUSED}), as a
- * refused posting is. Submit runs steps 2 and 5 only: the limit applies at decision time, never at submission.
+ * difference}. Each 403 of steps 3 and 4, {@code AP_BILL_UNCLASSIFIED} and every refused posting is audited in its own
+ * transaction ({@code <operation>_REFUSED}). Submit runs steps 2 and 5 only: the limit applies at decision time, never at submission.
  *
  * <p><b>Audit.</b> One {@code accounting_audit_log} row per decision (entity type {@value #AUDIT_ENTITY_TYPE}): the
  * actor, the tier from the policy in force, the clerk ({@code limit}) and automatic ({@code autoLimit}) limits, the
@@ -217,6 +218,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
             String exception = creatorRule(bill, settings, actor, command.justification(), "justification");
             // 5. content, 6. the posting
             readyContent(bill, difference);
+            requireClassified(bill, classification, difference, actor);
             Decision decision = new Decision(tier, settings, exception);
             approveAndPost(
                     bill,
@@ -279,6 +281,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
                     // ACCEPT's required reason is the justification of a creator exception (ruling 3).
                     String exception = creatorRule(bill, settings, actor, reason, "reason");
                     readyContent(bill, difference);
+                    requireClassified(bill, classification, difference, actor);
                     approveAndPost(
                             bill,
                             actor,
@@ -628,8 +631,9 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
 
     /**
      * Guard step 5, the bill's content (#2509 review; AW47), refused with 422 before anything is written: a total that
-     * is not 0.00, and the vendor's totals adding up or a {@code difference} decided. S43 adds the tax-on-resale check
-     * ({@code AP_BILL_TAX_ON_RESALE_GOODS}) at the end of this step.
+     * is not 0.00, and the vendor's totals adding up or a {@code difference} decided. On a decision {@link
+     * #requireClassified} follows; S43 adds the tax-on-resale check ({@code AP_BILL_TAX_ON_RESALE_GOODS}) at the end of
+     * this step.
      */
     private void readyContent(VendorBill bill, @Nullable DifferenceDecision difference) {
         if (bill.getTotalAmount() == null || bill.getTotalAmount().signum() == 0) {
@@ -640,6 +644,28 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
         }
         VendorBillPostingService.requireReconciled(
                 bill, difference != null ? difference.difference() : VendorBillPostingService.difference(bill));
+    }
+
+    /**
+     * Guard step 5's last content check (#2622 review LOW-4; ruling 1's order): the classification the decision would
+     * post with (the one given merged with the proposal) builds the entry's legs, writing nothing, so a bill without a
+     * needed class is 422 {@code AP_BILL_UNCLASSIFIED} before the posting, audited as {@code <operation>_REFUSED} as
+     * the posting's refusals are. S43's {@code AP_BILL_TAX_ON_RESALE_GOODS} comes after it.
+     */
+    private void requireClassified(
+            VendorBill bill,
+            VendorBillPostingService.@Nullable Classification given,
+            @Nullable DifferenceDecision difference,
+            String actor) {
+        VendorBillPostingService.Classification effective = requireExpenseKey(merge(given, bill));
+        try {
+            postingService.requirePostable(
+                    bill,
+                    effective,
+                    difference != null ? difference.difference() : VendorBillPostingService.difference(bill));
+        } catch (VendorBillException refused) {
+            throw new PostingRefused(bill.getVendorBillId(), bill.getBillNumber(), actor, refused);
+        }
     }
 
     /**

@@ -90,7 +90,8 @@ public class APPaymentController {
                 Emits an AP_PAYMENT_EXECUTE event; the call is idempotent on paymentRef, replaying the \
                 same ref with the same payload as a 200 instead of paying twice.
                 Returns 200 on an idempotent replay, 409 IDEMPOTENCY_CONFLICT when the paymentRef exists \
-                with a different payload, 400 when a bill is missing, unapproved or over-allocated, 403 \
+                with a different payload, 400 when a bill is missing, unapproved or over-allocated (allocation is \
+                refused before the gateway; nothing is charged), 403 \
                 AP_PAYMENT_SELF_APPROVED_BILL (fieldErrors name the bills by number) before any payment row \
                 is saved or the gateway is called, and 500 PAYMENT_GATEWAY_FAILURE when the gateway cannot \
                 be reached.

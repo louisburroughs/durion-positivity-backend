@@ -93,15 +93,16 @@ public class APPaymentServiceImpl implements APPaymentService {
         //   3. the pay guard, approver is not payer (S13);
         //   4. S24's remit-to check;
         //   5. S42's period check.
+        // A refused allocation (a bill missing, not APPROVED or another vendor's; over-allocation) is refused here,
+        // before the gateway: nothing is charged, no ap_payment row is saved, and the same paymentRef may be sent
+        // again once corrected (ruling 6063520413 item 4).
+        // The plan's bill locks (FOR UPDATE; the automatic plan locks every APPROVED bill of the vendor) are held
+        // until this transaction ends, across the gateway call below: a void or another payment of those bills waits
+        // for it. The gateway client sets no timeout of its own (the Stripe SDK's defaults, 30 s connect and 80 s
+        // read), and no lock_timeout or statement_timeout is configured on the database, so the wait is bounded by
+        // the gateway call alone.
         List<PlannedAllocation> plan = plan(request);
-        // Only the bills this payment pays: an explicit line of 0.00 pays nothing, so it never blocks.
-        payGuard.check(
-                plan.stream()
-                        .filter(planned -> planned.appliedAmount().signum() > 0)
-                        .map(PlannedAllocation::bill)
-                        .toList(),
-                currentUser,
-                request.getPaymentRef());
+        payGuard.check(plan.stream().map(PlannedAllocation::bill).toList(), currentUser, request.getPaymentRef());
         // ---- end of the pre-gateway block -------------------------------------------------------------------
 
         // Create payment entity
@@ -337,7 +338,10 @@ public class APPaymentServiceImpl implements APPaymentService {
                     allocationLine.getVendorBillId(),
                     locked.get(allocationLine.getVendorBillId()),
                     request.getVendorId());
-            allocations.add(new PlannedAllocation(bill, allocationLine.getAppliedAmount()));
+            if (allocationLine.getAppliedAmount().signum() != 0) {
+                // A line of 0.00 pays nothing: it is no allocation and blocks nothing (#2622 review LOW-3).
+                allocations.add(new PlannedAllocation(bill, allocationLine.getAppliedAmount()));
+            }
         }
 
         return allocations;

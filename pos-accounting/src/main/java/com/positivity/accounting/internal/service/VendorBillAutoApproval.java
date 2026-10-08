@@ -49,8 +49,11 @@ import org.springframework.transaction.support.TransactionTemplate;
  * so this is the ruling's "equivalent pre-check": every refusal the posting can answer is asked first, writing
  * nothing — the entry's legs in memory, then the posting date's period and each leg's mapping in a transaction of
  * its own, which a refusal rolls back alone. Only a pre-check that passes is followed by the posting. A period closed
- * or a mapping removed between the two (a race of milliseconds) fails the whole match, which rolls back and is
- * matched again; the bill is never left half-approved.
+ * or a mapping removed between the two (a race of milliseconds) makes the posting refuse: its exception is never
+ * caught here, so the whole {@code /match} rolls back and answers the posting's 422 ({@code PERIOD_CLOSED}, {@code
+ * PERIOD_HARD_LOCKED}, {@code GL_MAPPING_NOT_CONFIGURED}). Nothing retries it: the caller must resend the invoice, and
+ * a resend's pre-check then sees the refusal and ends matched, {@code AWAITING_APPROVAL}, with the skip row (ruling
+ * 6063520413 item 3). The bill is never left half-approved.
  */
 @Slf4j
 @Component
@@ -135,6 +138,9 @@ public class VendorBillAutoApproval {
                     code);
             return false;
         }
+        // Never caught (ruling 6063520413 item 3): a refusal here, in the pre-check's race, rolls the whole /match
+        // back;
+        // the caller must resend, and the resend's pre-check ends in the skipped state.
         VendorBillGlPosting posting = postingService.post(bill, NO_CLASSIFICATION, null, SYSTEM);
         String justification = "Approved automatically: match score " + score + " (strong >= " + STRONG_SCORE
                 + "), total " + bill.getTotalAmount().toPlainString() + " <= automatic limit " + limit.toPlainString();

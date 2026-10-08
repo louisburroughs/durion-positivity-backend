@@ -194,6 +194,10 @@ public class VendorBillController {
                 untouched), the generic 409 DUPLICATE_RESOURCE when a concurrent writer takes the number between \
                 the check and the commit, and 409 OPTIMISTIC_LOCK when the matched bill was decided meanwhile (send \
                 the invoice again).
+                In the rare race where a period closes or a mapping changes after automatic approval's pre-check, \
+                it answers the posting's 422 PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED with \
+                nothing written; resending the invoice is safe and ends matched, AWAITING_APPROVAL, with a \
+                VENDOR_BILL_AUTO_APPROVE_SKIPPED row.
                 """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
@@ -210,6 +214,12 @@ public class VendorBillController {
                     + "on the invoice date; referenceId is that bill's vendorBillId. DUPLICATE_RESOURCE, with no "
                     + "referenceId, when a concurrent writer takes the number between the check and the commit. "
                     + "OPTIMISTIC_LOCK when the matched bill was decided meanwhile",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED, only when a period closes or"
+                    + " a mapping changes between automatic approval's pre-check and its posting; nothing is written,"
+                    + " and resending the invoice is safe (it ends AWAITING_APPROVAL with the skip row)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<VendorBillResponse> matchVendorInvoice(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(

@@ -1079,10 +1079,22 @@ absent key reads as its default and an unreadable value as the stricter default,
 unchanged), `currencyCode` (required with a limit, the functional currency: 422 `CURRENCY_NOT_SUPPORTED` otherwise;
 a limit finer than the minor unit is 422 `AMOUNT_PRECISION_EXCEEDS_CURRENCY`), `justification` (>= 10 characters,
 400 `JUSTIFICATION_REQUIRED`) and `requestId` (UUID). A negative limit, an automatic limit above the clerk limit,
-terms outside the vocabulary or a missing `requestId` is 400 `VALIDATION_ERROR` with `fieldErrors`. Only a changed
-setting is written, with one `AP_APPROVAL_POLICY_SET` audit row (entity `ACCOUNTING_CONFIGURATION`, `old_value`, and
-`new_value` `setting=<KEY>;value=<NEW>;roles=<ROLES>;requestId=<UUID>`); a `requestId` already recorded writes
-nothing and returns the current policy. Both need `accounting:ap_approval_policy:manage`; events
+terms outside the vocabulary, a limit with more than 13 integer digits or a missing `requestId` is 400
+`VALIDATION_ERROR` with `fieldErrors`; the 400s answer before the 422s, and nothing is written on either. A clerk
+limit below the stored automatic limit, sent without an automatic limit, lowers the automatic limit to it (a clerk
+limit of 0 turns automatic approval off), on its own row tagged `cause=AP_CLERK_APPROVAL_LIMIT`; raising the clerk
+limit never raises the automatic limit, and an automatic limit sent above the clerk limit stays 400 (ruling
+6063520413 item 2).
+
+The audit log is the policy's history of record (ruling item 5): only a changed setting is written, with one
+`AP_APPROVAL_POLICY_SET` row (entity `ACCOUNTING_CONFIGURATION`, `old_value` the effective value before, `new_value`
+`setting=<KEY>;value=<NEW>;roles=<ROLES>[;cause=<KEY>];requestId=<UUID>`, every key and value percent-encoded for
+`%`, `;`, `=` and `,` so no role name can add or shadow a field; read first occurrence wins, and a row without escapes
+reads as it is). Idempotency: every PUT that passes validation also writes one `AP_APPROVAL_POLICY_REQUEST` row whose
+entity id is the `requestId`, a no-op PUT included, and `history[]` does not list it. A `requestId` already recorded
+writes nothing and returns the current policy, so a retried no-op never overwrites a change made since. The PUT takes a
+tenant-scoped transaction advisory lock first (two first PUTs on a fresh tenant serialize), then the rows `FOR
+UPDATE`. Both need `accounting:ap_approval_policy:manage`; events
 `ACCOUNTING_AP_APPROVAL_POLICY_VIEW` (fast read) and `_SET` (approval).
 
 **The tier.** A bill is `CLERK`-tier when the clerk limit is above 0 and the absolute value of its stored
@@ -1099,8 +1111,9 @@ allocation (409 `AP_BILL_NOT_VOIDABLE`); (3) the tier (403 `AP_APPROVAL_LIMIT_EX
 `accounting:ap:approve_over_limit`); (4) creator is not approver, approve and `ACCEPT` only (403
 `AP_BILL_SELF_APPROVAL`; under `AP_ALLOW_CREATOR_APPROVAL` it goes through with approve's `justification` or
 `ACCEPT`'s `reason`, audited `VENDOR_BILL_SOD_EXCEPTION`); (5) the content: 422 `AP_BILL_ZERO_TOTAL`,
-`AP_BILL_TOTALS_UNRECONCILED` (S43 adds `AP_BILL_TAX_ON_RESALE_GOODS` here); (6) the posting. Each 403 of (3) and (4)
-is audited as `<operation>_REFUSED` with `code=` in a transaction of its own. Submit runs (2) and (5) only.
+`AP_BILL_TOTALS_UNRECONCILED`, then `AP_BILL_UNCLASSIFIED` from a dry run of the entry's legs with the merged
+classification (audited `_REFUSED`; S43 adds `AP_BILL_TAX_ON_RESALE_GOODS` after it); (6) the posting
+(`PERIOD_CLOSED`, `PERIOD_HARD_LOCKED`, `GL_MAPPING_NOT_CONFIGURED`). Each 403 of (3) and (4) is audited as `<operation>_REFUSED` with `code=` in a transaction of its own. Submit runs (2) and (5) only.
 
 **Automatic approval.** Only on `/match`, a HIGH match within tolerance, and only when the automatic limit is above 0
 and the absolute total is at most min(automatic, clerk) limit: the system submits, approves (`approvedBy` and
@@ -1110,17 +1123,27 @@ today (AW42). Whatever would need a person, or would refuse the posting (`AP_BIL
 `AP_BILL_UNCLASSIFIED`, `PERIOD_CLOSED`, `PERIOD_HARD_LOCKED`, `GL_MAPPING_NOT_CONFIGURED`), leaves the bill
 `AWAITING_APPROVAL` with one `VENDOR_BILL_AUTO_APPROVE_SKIPPED` row naming the code; the match is kept. The posting is
 `MANDATORY` and the JPA dialect has no savepoints, so every refusal is asked first without writing (the legs in
-memory, then the period and the mappings in a transaction of its own); a period closed between the pre-check and the
-posting fails the whole match, which is sent again.
+memory, then the period and the mappings in a `REQUIRES_NEW` transaction of its own, which takes a second pooled
+connection while the match holds its first). In the rare race where a period closes or a mapping changes between the
+pre-check and the posting, the posting's exception is never caught: the whole `/match` rolls back and answers 422
+`PERIOD_CLOSED`, `PERIOD_HARD_LOCKED` or `GL_MAPPING_NOT_CONFIGURED`. Nothing retries it (the REST controller is the
+only caller); resending the invoice is safe, and the resend's pre-check ends matched, `AWAITING_APPROVAL`, with one
+`VENDOR_BILL_AUTO_APPROVE_SKIPPED` row (ruling item 3).
 
 **Approver is not payer.** `POST /v1/accounting/ap/payments` builds its allocation plan (explicit, or oldest due
-first), locks its bills and validates it before the payment row is saved and before the gateway is called; then the
+first; an explicit 0.00 line is dropped, so it is neither allocated nor able to block a later void), locks its bills
+and validates it before the payment row is saved and before the gateway is called: a missing bill, one not
+`APPROVED`, another vendor's or an over-allocation is refused before the gateway, nothing is charged and no
+`ap_payment` row is saved, so the same `paymentRef` may be sent again once corrected (ruling item 4). The plan's bill
+locks are held across the gateway call (the automatic plan locks every `APPROVED` bill of the vendor), bounded by
+the gateway client's own timeouts (the Stripe SDK defaults); the database sets no `lock_timeout`. Then the
 pay guard refuses the whole payment when the payer (the security context's username) approved a bill of the plan
 (`approvedByKind` `PERSON`): 403 `AP_PAYMENT_SELF_APPROVED_BILL`, `fieldErrors[selfApprovedBillNumbers]` naming each,
 one `VENDOR_BILL_PAYMENT_REFUSED` row per bill surviving the rollback. Under `AP_ALLOW_APPROVER_PAYMENT` it pays and
 audits each as `VENDOR_BILL_SOD_EXCEPTION`. A system approval never blocks. The pre-gateway block in
 `APPaymentServiceImpl.executePayment` is ordered and commented: S42 adds its request and period checks, S24 its vendor
-and remit-to checks, at the numbered places.
+and remit-to checks, at the numbered places. The payer, and so `ap_payment.created_by`, is the security context's
+username (`SecurityContextHelper`, ADR-0018), no longer `Authentication.getName()`.
 
 **The real due date.** `PUT /v1/accounting/vendor-bills/{billId}/due-date` `{dueDate, justification?}`
 (`ap:approve`; event `ACCOUNTING_VENDOR_BILL_DUE_DATE_SET`) in `PENDING_RECEIPT_MATCH`, `MATCH_EXCEPTION` or

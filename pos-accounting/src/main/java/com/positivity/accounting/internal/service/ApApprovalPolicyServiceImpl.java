@@ -33,14 +33,21 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * The AP approval policy's reads and writes (CAP:550 S13, #2510; SPEC-accounting-workspace §4.3, §5.5, §8.2; AW4-AW6,
- * AW33), on the bank-reconciliation policy precedent ({@code AccountingConfigurationServiceImpl
- * .setBankReconciliationPolicy}): one {@code accounting_configuration} row per setting, locked {@code FOR UPDATE}
- * while it changes, and one {@value #AUDIT_OPERATION} audit row per setting whose effective value changes.
+ * AW33; rulings 6063520413), on the bank-reconciliation policy precedent: one {@code accounting_configuration} row per
+ * setting, written only when its effective value changes, each change one {@value #AUDIT_OPERATION} audit row.
  *
- * <p><b>The audit row</b> is the history: entity type {@value #AUDIT_ENTITY_TYPE} (the setting's row), the actor, the
- * justification, the effective value before as {@code old_value}, and as {@code new_value} {@code
- * setting=<KEY>;value=<NEW>;roles=<ROLE,...>;requestId=<UUID>}. The request id makes the PUT idempotent: a replay finds
- * it recorded and writes nothing.
+ * <p><b>The audit rows are the history.</b> Entity type {@value #AUDIT_ENTITY_TYPE} (the setting's row), the actor,
+ * the justification, the effective value before as {@code old_value}, and as {@code new_value} {@code
+ * setting=<KEY>;value=<NEW>;roles=<ROLE,...>[;cause=<KEY>];requestId=<UUID>}, every key and value percent-encoded for
+ * {@code %}, {@code ;}, {@code =} and {@code ,}, read first-occurrence-wins ({@link #encode}, {@link #decode}).
+ *
+ * <p><b>Idempotent on {@code requestId}.</b> Every PUT that passes validation also writes one {@value
+ * #REQUEST_OPERATION} row whose entity id is the request id, a no-op PUT included; a replay finds it and writes
+ * nothing. The history lists only {@value #AUDIT_OPERATION} rows.
+ *
+ * <p><b>Lowering the clerk limit</b> below the stored automatic limit, with no automatic limit sent, lowers the
+ * automatic limit to it, on its own row tagged {@code cause=AP_CLERK_APPROVAL_LIMIT} (ruling item 2); an automatic
+ * limit sent above the clerk limit is 400.
  *
  * <p>A new value applies from the next decision, read or outlook; nothing posts, recomputes or back-dates (AW11), and
  * approved bills are never re-evaluated.
@@ -57,6 +64,16 @@ public class ApApprovalPolicyServiceImpl implements ApApprovalPolicyService {
     private static final String VALUE = "value";
     private static final String ROLES = "roles";
     private static final String REQUEST_ID = "requestId";
+    private static final String CAUSE = "cause";
+
+    /**
+     * One row per PUT that passed validation, a no-op included: the request id as its entity id, so a replay is found
+     * exactly (#2622 review M2). The history ({@value #AUDIT_OPERATION} rows) does not list it.
+     */
+    static final String REQUEST_OPERATION = "AP_APPROVAL_POLICY_REQUEST";
+
+    /** The largest number of integer digits a limit may have (#2622 review M3): 13, as {@code numeric(19,4)} money. */
+    static final int MAX_INTEGER_DIGITS = 13;
 
     private final Clock clock;
     private final ApApprovalPolicy policy;
@@ -69,7 +86,7 @@ public class ApApprovalPolicyServiceImpl implements ApApprovalPolicyService {
     @Transactional(readOnly = true)
     public @NonNull ApApprovalPolicyResponse get(int historyPage, int historySize) {
         int page = Math.max(historyPage, 0);
-        int size = historySize > 0 && historySize <= MAX_HISTORY_SIZE ? historySize : DEFAULT_HISTORY_SIZE;
+        int size = historySize <= 0 ? DEFAULT_HISTORY_SIZE : Math.min(historySize, MAX_HISTORY_SIZE);
         ApApprovalPolicy.Settings settings = policy.settings();
         Page<AccountingAuditLog> rows = auditLogRepository.findByOperation(
                 AUDIT_OPERATION,
@@ -105,8 +122,9 @@ public class ApApprovalPolicyServiceImpl implements ApApprovalPolicyService {
             configurationRepository.findWithLockByConfigKey(key).ifPresent(row -> rows.put(key, row));
         }
         UUID requestId = Objects.requireNonNull(request.requestId());
-        if (auditLogRepository.existsByOperationAndNewValueContaining(
-                AUDIT_OPERATION, ";" + REQUEST_ID + "=" + requestId)) {
+        // The replay check: one marker row per request id, written by every PUT that got this far, a no-op included
+        // (#2622 review M2), and matched exactly on its entity id, never on text a caller could shape.
+        if (auditLogRepository.existsByOperationAndEntityId(REQUEST_OPERATION, requestId)) {
             log.info("AP approval policy PUT {} replayed; nothing written", requestId);
             return get(0, DEFAULT_HISTORY_SIZE);
         }
@@ -115,13 +133,25 @@ public class ApApprovalPolicyServiceImpl implements ApApprovalPolicyService {
             AccountingConfiguration row = rows.get(key);
             current.put(key, effective(key, row == null ? null : row.getConfigValue()));
         }
-        requireAutoWithinClerk(
-                new BigDecimal(requested.getOrDefault(
-                        ApApprovalPolicy.CLERK_APPROVAL_LIMIT, current.get(ApApprovalPolicy.CLERK_APPROVAL_LIMIT))),
-                new BigDecimal(requested.getOrDefault(
-                        ApApprovalPolicy.AUTO_APPROVAL_LIMIT, current.get(ApApprovalPolicy.AUTO_APPROVAL_LIMIT))));
+        BigDecimal clerk = new BigDecimal(requested.getOrDefault(
+                ApApprovalPolicy.CLERK_APPROVAL_LIMIT, current.get(ApApprovalPolicy.CLERK_APPROVAL_LIMIT)));
+        Map<String, String> causes = new HashMap<>();
+        if (requested.containsKey(ApApprovalPolicy.AUTO_APPROVAL_LIMIT)) {
+            // An explicit automatic limit is never changed behind the caller's back (ruling 6063520413 item 2).
+            requireAutoWithinClerk(clerk, new BigDecimal(requested.get(ApApprovalPolicy.AUTO_APPROVAL_LIMIT)));
+        } else if (new BigDecimal(current.get(ApApprovalPolicy.AUTO_APPROVAL_LIMIT)).compareTo(clerk) > 0) {
+            // Ruling item 2 (c): a clerk limit below the stored automatic limit lowers it with it, its own audited
+            // row; a clerk limit of 0 turns automatic approval off. A stored state above the clerk limit is repaired.
+            requested.put(
+                    ApApprovalPolicy.AUTO_APPROVAL_LIMIT, policy.scaled(clerk).toPlainString());
+            causes.put(ApApprovalPolicy.AUTO_APPROVAL_LIMIT, ApApprovalPolicy.CLERK_APPROVAL_LIMIT);
+        }
 
-        String roles = String.join(",", VendorBillDecisions.callerRoles());
+        String roles = String.join(
+                ",",
+                VendorBillDecisions.callerRoles().stream()
+                        .map(ApApprovalPolicyServiceImpl::escape)
+                        .toList());
         int changed = 0;
         for (Map.Entry<String, String> setting : requested.entrySet()) {
             String key = setting.getKey();
@@ -136,18 +166,25 @@ public class ApApprovalPolicyServiceImpl implements ApApprovalPolicyService {
             }
             row.setConfigValue(setting.getValue());
             UUID entityId = configurationRepository.save(row).getConfigId();
-            AccountingAuditLog audit = new AccountingAuditLog();
-            audit.setEntityType(AUDIT_ENTITY_TYPE);
-            audit.setEntityId(entityId);
-            audit.setOperation(AUDIT_OPERATION);
-            audit.setUserId(actor);
-            audit.setJustification(justification);
-            audit.setOldValue(oldValue);
-            audit.setNewValue(SETTING + "=" + key + ";" + VALUE + "=" + setting.getValue() + ";" + ROLES + "=" + roles
-                    + ";" + REQUEST_ID + "=" + requestId);
-            auditLogRepository.save(audit);
+            Map<String, String> fields = new LinkedHashMap<>();
+            fields.put(SETTING, key);
+            fields.put(VALUE, setting.getValue());
+            fields.put(ROLES, roles);
+            if (causes.containsKey(key)) {
+                fields.put(CAUSE, causes.get(key));
+            }
+            fields.put(REQUEST_ID, requestId.toString());
+            auditLogRepository.save(
+                    auditRow(AUDIT_OPERATION, entityId, actor, justification, oldValue, encode(fields)));
             changed++;
         }
+        auditLogRepository.save(auditRow(
+                REQUEST_OPERATION,
+                requestId,
+                actor,
+                justification,
+                null,
+                encode(Map.of(REQUEST_ID, requestId.toString(), "changed", Integer.toString(changed)))));
         log.info("AP approval policy set by {}: {} setting(s) changed (requestId {})", actor, changed, requestId);
         return get(0, DEFAULT_HISTORY_SIZE);
     }
@@ -165,8 +202,8 @@ public class ApApprovalPolicyServiceImpl implements ApApprovalPolicyService {
             errors.add(new VendorBillException.FieldError(REQUEST_ID, "is required: a UUID generated once per change"));
         }
         boolean limitGiven = request.clerkApprovalLimit() != null || request.autoApprovalLimit() != null;
-        nonNegative(request.clerkApprovalLimit(), "clerkApprovalLimit", errors);
-        nonNegative(request.autoApprovalLimit(), "autoApprovalLimit", errors);
+        bounded(request.clerkApprovalLimit(), "clerkApprovalLimit", errors);
+        bounded(request.autoApprovalLimit(), "autoApprovalLimit", errors);
         if (limitGiven && !IsoCurrencyCodes.isIso(request.currencyCode())) {
             errors.add(new VendorBillException.FieldError(
                     "currencyCode", "is required with a limit and must be an ISO 4217 currency code"));
@@ -223,11 +260,77 @@ public class ApApprovalPolicyServiceImpl implements ApApprovalPolicyService {
         return requested;
     }
 
-    private static void nonNegative(
+    /**
+     * A limit is at least 0 and has at most {@value #MAX_INTEGER_DIGITS} integer digits, checked on the number as sent,
+     * before it is scaled or printed (#2622 review M3: {@code 1E+100000000} is refused, never expanded).
+     */
+    private static void bounded(
             @Nullable BigDecimal amount, String field, List<VendorBillException.FieldError> errors) {
-        if (amount != null && amount.signum() < 0) {
-            errors.add(new VendorBillException.FieldError(field, "must be at least 0"));
+        if (amount == null) {
+            return;
         }
+        if (amount.signum() < 0) {
+            errors.add(new VendorBillException.FieldError(field, "must be at least 0"));
+        } else if ((long) amount.precision() - amount.scale() > MAX_INTEGER_DIGITS) {
+            errors.add(new VendorBillException.FieldError(
+                    field, "must have at most " + MAX_INTEGER_DIGITS + " digits before the decimal point"));
+        }
+    }
+
+    private static AccountingAuditLog auditRow(
+            String operation,
+            UUID entityId,
+            String actor,
+            String justification,
+            @Nullable String oldValue,
+            String newValue) {
+        AccountingAuditLog audit = new AccountingAuditLog();
+        audit.setEntityType(AUDIT_ENTITY_TYPE);
+        audit.setEntityId(entityId);
+        audit.setOperation(operation);
+        audit.setUserId(actor);
+        audit.setJustification(justification);
+        audit.setOldValue(oldValue);
+        audit.setNewValue(newValue);
+        return audit;
+    }
+
+    /**
+     * {@code key=value;...}, each key and value percent-encoded for {@code %}, {@code ;}, {@code =} and {@code ,}, so
+     * no value, a role name included, can add or shadow a field (#2622 review M1).
+     */
+    static String encode(Map<String, String> fields) {
+        StringBuilder text = new StringBuilder();
+        fields.forEach((key, value) -> {
+            if (!text.isEmpty()) {
+                text.append(';');
+            }
+            text.append(escape(key)).append('=').append(escape(value));
+        });
+        return text.toString();
+    }
+
+    /** The fields of {@link #encode}; the first occurrence of a key wins. Rows without escapes read as they are. */
+    static Map<String, String> decode(@Nullable String text) {
+        Map<String, String> fields = new LinkedHashMap<>();
+        if (text == null) {
+            return fields;
+        }
+        for (String part : text.split(";")) {
+            int equals = part.indexOf('=');
+            if (equals > 0) {
+                fields.putIfAbsent(unescape(part.substring(0, equals)), unescape(part.substring(equals + 1)));
+            }
+        }
+        return fields;
+    }
+
+    private static String escape(String value) {
+        return value.replace("%", "%25").replace(";", "%3B").replace("=", "%3D").replace(",", "%2C");
+    }
+
+    private static String unescape(String value) {
+        return value.replace("%2C", ",").replace("%3D", "=").replace("%3B", ";").replace("%25", "%");
     }
 
     /** The automatic limit never exceeds the clerk limit (item 1): 400 {@code VALIDATION_ERROR} otherwise. */
@@ -257,20 +360,16 @@ public class ApApprovalPolicyServiceImpl implements ApApprovalPolicyService {
 
     /** One history row from its audit row; see the class comment for the {@code new_value} form. */
     static ApApprovalPolicyResponse.HistoryRow historyRow(AccountingAuditLog row) {
-        Map<String, String> fields = new HashMap<>();
-        if (row.getNewValue() != null) {
-            for (String part : row.getNewValue().split(";")) {
-                int equals = part.indexOf('=');
-                if (equals > 0) {
-                    fields.put(part.substring(0, equals), part.substring(equals + 1));
-                }
-            }
-        }
+        Map<String, String> fields = decode(row.getNewValue());
         String roles = fields.getOrDefault(ROLES, "");
         return new ApApprovalPolicyResponse.HistoryRow(
                 row.getTimestamp(),
                 row.getUserId(),
-                roles.isEmpty() ? List.of() : Arrays.asList(roles.split(",")),
+                roles.isEmpty()
+                        ? List.of()
+                        : Arrays.stream(roles.split(","))
+                                .map(ApApprovalPolicyServiceImpl::unescape)
+                                .toList(),
                 fields.getOrDefault(SETTING, ""),
                 row.getOldValue(),
                 fields.getOrDefault(VALUE, ""),

@@ -46,8 +46,8 @@ public interface AccountingAuditLogRepository extends JpaRepository<AccountingAu
     Page<AccountingAuditLog> findByOperation(@NonNull String operation, @NonNull Pageable pageable);
 
     /**
-     * Whether a row of {@code operation} carries {@code fragment} in its new value: an AP approval policy PUT's
-     * {@code requestId} replay check (CAP:550 S13, #2510).
+     * Whether a row of {@code operation} names {@code entityId}: the AP approval policy PUT's replay check, on the
+     * request id its marker row carries as entity id (CAP:550 S13, #2510).
      */
-    boolean existsByOperationAndNewValueContaining(@NonNull String operation, @NonNull String fragment);
+    boolean existsByOperationAndEntityId(@NonNull String operation, @NonNull UUID entityId);
 }

@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -37,7 +36,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -82,12 +80,29 @@ class ApApprovalPolicyServiceTest {
             written.add(inv.getArgument(0));
             return inv.getArgument(0);
         });
-        when(auditLogs.findByOperation(eq("AP_APPROVAL_POLICY_SET"), any(Pageable.class)))
-                .thenAnswer(inv -> new PageImpl<>(List.copyOf(written).reversed()));
-        when(auditLogs.existsByOperationAndNewValueContaining(eq("AP_APPROVAL_POLICY_SET"), anyString()))
-                .thenAnswer(inv ->
-                        written.stream().anyMatch(row -> row.getNewValue().contains(inv.getArgument(1, String.class))));
+        when(auditLogs.findByOperation(anyString(), any(Pageable.class))).thenAnswer(inv -> {
+            Pageable pageable = inv.getArgument(1);
+            List<AccountingAuditLog> rows =
+                    rows(inv.getArgument(0, String.class)).reversed();
+            int from = (int) Math.min(pageable.getOffset(), rows.size());
+            int to = Math.min(from + pageable.getPageSize(), rows.size());
+            return new PageImpl<>(rows.subList(from, to), pageable, rows.size());
+        });
+        when(auditLogs.existsByOperationAndEntityId(anyString(), any(UUID.class)))
+                .thenAnswer(inv -> rows(inv.getArgument(0, String.class)).stream()
+                        .anyMatch(row -> row.getEntityId().equals(inv.getArgument(1))));
         signIn("controller.cfo", "ROLE_CONTROLLER", "accounting:ap_approval_policy:manage");
+    }
+
+    /** The rows written under {@code operation}, oldest first. */
+    private List<AccountingAuditLog> rows(String operation) {
+        return written.stream()
+                .filter(row -> row.getOperation().equals(operation))
+                .toList();
+    }
+
+    private List<AccountingAuditLog> changes() {
+        return rows("AP_APPROVAL_POLICY_SET");
     }
 
     @AfterEach
@@ -145,7 +160,7 @@ class ApApprovalPolicyServiceTest {
         ApApprovalPolicyResponse after =
                 service.set(put("2500.00", null, null, "NET15", "Vendors moved to fifteen days", UUID.randomUUID()));
 
-        assertThat(written).extracting(AccountingAuditLog::getOldValue).containsExactly("0.00", "0.00", "NET30");
+        assertThat(changes()).extracting(AccountingAuditLog::getOldValue).containsExactly("0.00", "0.00", "NET30");
         assertThat(after.clerkApprovalLimit()).isEqualByComparingTo("2500.00");
         assertThat(after.autoApprovalLimit()).isEqualByComparingTo("500.00");
         assertThat(after.defaultTerms()).isEqualTo("NET15");
@@ -178,9 +193,12 @@ class ApApprovalPolicyServiceTest {
                 service.set(put("2500", null, null, null, "Routine parts bills up to 2,500", REQUEST));
 
         assertThat(replay.clerkApprovalLimit()).isEqualByComparingTo("3000.00");
-        assertThat(written).hasSize(2);
-        assertThat(written.stream().filter(row -> row.getNewValue().contains("requestId=" + REQUEST)))
+        assertThat(changes()).hasSize(2);
+        assertThat(changes().stream().filter(row -> row.getNewValue().contains("requestId=" + REQUEST)))
                 .hasSize(1);
+        assertThat(rows("AP_APPROVAL_POLICY_REQUEST"))
+                .extracting(AccountingAuditLog::getEntityId)
+                .containsOnlyOnce(REQUEST);
     }
 
     @Test
@@ -237,7 +255,7 @@ class ApApprovalPolicyServiceTest {
         ApApprovalPolicyRequest switchOnly =
                 new ApApprovalPolicyRequest(null, null, null, true, null, null, "Ten chars plus", REQUEST);
         service.set(switchOnly);
-        assertThat(written)
+        assertThat(changes())
                 .singleElement()
                 .satisfies(row ->
                         assertThat(row.getNewValue()).startsWith("setting=AP_ALLOW_CREATOR_APPROVAL;value=true"));
@@ -248,11 +266,159 @@ class ApApprovalPolicyServiceTest {
     void actorFromTheContext() {
         signIn("gm.gary", "ROLE_GENERAL_MANAGER", "accounting:ap_approval_policy:manage");
         service.set(put("1000", null, null, null, "Smaller shop, smaller limit", REQUEST));
-        ArgumentCaptor<AccountingAuditLog> row = ArgumentCaptor.forClass(AccountingAuditLog.class);
-        verify(auditLogs).save(row.capture());
-        assertThat(row.getValue().getUserId()).isEqualTo("gm.gary");
-        assertThat(row.getValue().getEntityType()).isEqualTo("ACCOUNTING_CONFIGURATION");
-        assertThat(row.getValue().getNewValue())
+        assertThat(changes()).hasSize(1);
+        AccountingAuditLog row = changes().getFirst();
+        assertThat(row.getUserId()).isEqualTo("gm.gary");
+        assertThat(row.getEntityType()).isEqualTo("ACCOUNTING_CONFIGURATION");
+        assertThat(row.getNewValue())
                 .isEqualTo("setting=AP_CLERK_APPROVAL_LIMIT;value=1000.00;roles=GENERAL_MANAGER;requestId=" + REQUEST);
+    }
+
+    private void storedRow(String key, String value) {
+        AccountingConfiguration row = new AccountingConfiguration();
+        row.setConfigKey(key);
+        row.setConfigValue(value);
+        row.setConfigId(UUID.randomUUID());
+        stored.put(key, row);
+    }
+
+    @Test
+    @DisplayName("Ruling 2(c)/AC8: lowering the clerk limit below the stored automatic limit lowers it too, on its own"
+            + " row tagged cause=AP_CLERK_APPROVAL_LIMIT; raising it later never raises the automatic limit")
+    void loweringTheClerkLimitLowersTheAutomaticLimit() {
+        service.set(put("2500", "500", null, null, "Routine parts bills up to 2,500", REQUEST));
+
+        ApApprovalPolicyResponse lowered =
+                service.set(put("300", null, null, null, "Tighter after the audit", UUID.randomUUID()));
+
+        assertThat(lowered.clerkApprovalLimit()).isEqualByComparingTo("300.00");
+        assertThat(lowered.autoApprovalLimit()).isEqualByComparingTo("300.00");
+        assertThat(changes().getLast().getNewValue())
+                .startsWith("setting=AP_AUTO_APPROVAL_LIMIT;value=300.00;")
+                .contains(";cause=AP_CLERK_APPROVAL_LIMIT;");
+        assertThat(changes().getLast().getOldValue()).isEqualTo("500.00");
+        assertThat(lowered.history().getFirst().setting()).isEqualTo("AP_AUTO_APPROVAL_LIMIT");
+
+        ApApprovalPolicyResponse raised =
+                service.set(put("1000", null, null, null, "Back to a looser clerk limit", UUID.randomUUID()));
+        assertThat(raised.autoApprovalLimit()).isEqualByComparingTo("300.00");
+    }
+
+    @Test
+    @DisplayName("Ruling 2(c): a clerk limit of 0 turns automatic approval off; lowering both at once writes both as"
+            + " sent; a stored automatic limit above the clerk limit is repaired by the next PUT")
+    void clerkZeroAndLoweringBoth() {
+        service.set(put("2500", "500", null, null, "Routine parts bills up to 2,500", REQUEST));
+        ApApprovalPolicyResponse off =
+                service.set(put("0", null, null, null, "Everything to a controller", UUID.randomUUID()));
+        assertThat(off.autoApprovalLimit()).isEqualByComparingTo("0.00");
+
+        service.set(put("400", "100", null, null, "Both limits set again", UUID.randomUUID()));
+        ApApprovalPolicyResponse both =
+                service.set(put("200", "50", null, null, "Both limits lowered", UUID.randomUUID()));
+        assertThat(both.clerkApprovalLimit()).isEqualByComparingTo("200.00");
+        assertThat(both.autoApprovalLimit()).isEqualByComparingTo("50.00");
+        assertThat(changes().subList(changes().size() - 2, changes().size()))
+                .allSatisfy(row -> assertThat(row.getNewValue()).doesNotContain("cause="));
+
+        storedRow("AP_CLERK_APPROVAL_LIMIT", "300.00");
+        storedRow("AP_AUTO_APPROVAL_LIMIT", "500.00");
+        ApApprovalPolicyResponse repaired =
+                service.set(put(null, null, null, "NET15", "Terms change, limits repaired", UUID.randomUUID()));
+        assertThat(repaired.autoApprovalLimit()).isEqualByComparingTo("300.00");
+    }
+
+    @Test
+    @DisplayName("Ruling 2: an explicit automatic limit above the resulting clerk limit stays 400, also when only the"
+            + " automatic limit is sent")
+    void explicitAutomaticAboveTheClerkLimitIsRefused() {
+        service.set(put("300", null, null, null, "Clerks approve up to 300", REQUEST));
+        assertThatThrownBy(() -> service.set(put(null, "500", null, null, "Automatic above it", UUID.randomUUID())))
+                .isInstanceOfSatisfying(
+                        VendorBillException.class,
+                        e -> assertThat(e.getFieldErrors())
+                                .extracting(VendorBillException.FieldError::field)
+                                .containsExactly("autoApprovalLimit"));
+    }
+
+    @Test
+    @DisplayName("#2622 M1: a hostile role name cannot add or shadow a field of the history row, nor fake a replay")
+    void hostileRoleNameIsEncoded() {
+        UUID victim = UUID.fromString("0199c0de-7a1b-7c2d-8e3f-000000000bad");
+        signIn(
+                "gm.gary",
+                "ROLE_X;value=0.00;setting=AP_DEFAULT_TERMS;requestId=" + victim,
+                "accounting:ap_approval_policy:manage");
+        service.set(put("1000", null, null, null, "Smaller shop, smaller limit", REQUEST));
+
+        ApApprovalPolicyResponse.HistoryRow row = service.get(0, 20).history().getFirst();
+        assertThat(row.setting()).isEqualTo("AP_CLERK_APPROVAL_LIMIT");
+        assertThat(row.newValue()).isEqualTo("1000.00");
+        assertThat(row.changedByRoles()).containsExactly("X;value=0.00;setting=AP_DEFAULT_TERMS;requestId=" + victim);
+
+        ApApprovalPolicyResponse notAReplay =
+                service.set(put("2000", null, null, null, "A different request, not a replay", victim));
+        assertThat(notAReplay.clerkApprovalLimit()).isEqualByComparingTo("2000.00");
+    }
+
+    @Test
+    @DisplayName("#2622 M1: rows without escapes still read as they are; the first occurrence of a field wins")
+    void decodeFallsBackAndFirstWins() {
+        assertThat(ApApprovalPolicyServiceImpl.decode(
+                        "setting=AP_CLERK_APPROVAL_LIMIT;value=2500.00;roles=CONTROLLER;requestId=r;value=0.00"))
+                .containsEntry("value", "2500.00")
+                .containsEntry("roles", "CONTROLLER");
+        assertThat(ApApprovalPolicyServiceImpl.decode(ApApprovalPolicyServiceImpl.encode(Map.of("roles", "A;B=C,D%"))))
+                .containsEntry("roles", "A;B=C,D%");
+    }
+
+    @Test
+    @DisplayName("#2622 M2: A sends a no-op, B changes the limit, A retries: the retry is a replay and writes nothing")
+    void noOpRequestIdIsRecorded() {
+        service.set(put("2500", null, null, null, "Routine parts bills up to 2,500", UUID.randomUUID()));
+        UUID noOp = UUID.fromString("0199c0de-7a1b-7c2d-8e3f-00000000a001");
+        service.set(put("2500", null, null, null, "Manager A saves without a change", noOp));
+        assertThat(changes()).hasSize(1);
+        signIn("gm.gary", "ROLE_GENERAL_MANAGER", "accounting:ap_approval_policy:manage");
+        service.set(put("3000", null, null, null, "Manager B raises the limit", UUID.randomUUID()));
+
+        signIn("controller.cfo", "ROLE_CONTROLLER", "accounting:ap_approval_policy:manage");
+        ApApprovalPolicyResponse retry =
+                service.set(put("2500", null, null, null, "Manager A saves without a change", noOp));
+
+        assertThat(retry.clerkApprovalLimit()).isEqualByComparingTo("3000.00");
+        assertThat(changes()).hasSize(2);
+        assertThat(retry.history()).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("#2622 M3: a limit with more than 13 integer digits is 400 VALIDATION_ERROR, never expanded")
+    void hugeLimitsAreRefused() {
+        for (String huge : List.of("1E+600", "1E+100000000", "10000000000000")) {
+            assertThatThrownBy(() -> service.set(put(huge, null, null, null, "Ten chars plus", REQUEST)))
+                    .isInstanceOfSatisfying(VendorBillException.class, e -> {
+                        assertThat(e.getCode()).isEqualTo(VendorBillException.Code.VALIDATION_ERROR);
+                        assertThat(e.getFieldErrors())
+                                .extracting(VendorBillException.FieldError::field)
+                                .containsExactly("clerkApprovalLimit");
+                    });
+        }
+        service.set(put("9999999999999.99", null, null, null, "The largest limit allowed", REQUEST));
+        assertThat(changes()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("#2622 L3/L6: history pages: page 1 of size 2 lists the third change and historyTotal 3; a size over"
+            + " 100 is clamped to 100")
+    void historyPages() {
+        service.set(put("2500", "500", null, "NET15", "Three settings at once", REQUEST));
+        ApApprovalPolicyResponse page = service.get(1, 2);
+        assertThat(page.historyPage()).isEqualTo(1);
+        assertThat(page.historySize()).isEqualTo(2);
+        assertThat(page.historyTotal()).isEqualTo(3);
+        assertThat(page.history())
+                .singleElement()
+                .satisfies(row -> assertThat(row.setting()).isEqualTo("AP_CLERK_APPROVAL_LIMIT"));
+        assertThat(service.get(0, 500).historySize()).isEqualTo(100);
     }
 }

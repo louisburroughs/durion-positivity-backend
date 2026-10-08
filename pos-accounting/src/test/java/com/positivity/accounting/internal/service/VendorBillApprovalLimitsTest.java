@@ -438,6 +438,30 @@ class VendorBillApprovalLimitsTest {
                     .satisfies(e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.AP_BILL_ZERO_TOTAL));
         }
 
+        @Test
+        @DisplayName("#2622 LOW-4: AP_BILL_UNCLASSIFIED is a content check after the 403s and before the posting:"
+                + " an over-limit clerk is 403; an approver gets 422, audited as _REFUSED, and nothing posts")
+        void unclassifiedIsAContentCheck() {
+            awaiting("3000.00");
+            org.mockito.Mockito.doThrow(new VendorBillException(
+                            VendorBillException.Code.AP_BILL_UNCLASSIFIED, "Bill INV-2510 needs a classification"))
+                    .when(postingService)
+                    .requirePostable(any(), any(), any());
+            signIn(CLERK, APPROVE, REJECT);
+            assertThatThrownBy(() -> service.approve(BILL_ID, approve(null)))
+                    .satisfies(
+                            e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.AP_APPROVAL_LIMIT_EXCEEDED));
+
+            signIn(GM, APPROVE, OVER_LIMIT);
+            assertThatThrownBy(() -> service.approve(BILL_ID, approve(null)))
+                    .satisfies(e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.AP_BILL_UNCLASSIFIED));
+            verify(postingService, never()).post(any(), any(), any(), anyString());
+            assertThat(auditRows())
+                    .extracting(AccountingAuditLog::getOperation)
+                    .containsExactly("VENDOR_BILL_APPROVE_REFUSED", "VENDOR_BILL_APPROVE_REFUSED");
+            assertThat(auditRows().getLast().getNewValue()).contains("code=AP_BILL_UNCLASSIFIED");
+        }
+
         private void ediBillInException() {
             bill.setOriginEventType(VendorBillReader.ORIGIN_SUPPLIER_INVOICE);
             bill.setStatus(VendorBillStatus.MATCH_EXCEPTION);

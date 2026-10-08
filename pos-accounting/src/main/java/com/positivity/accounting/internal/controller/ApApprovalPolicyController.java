@@ -100,8 +100,10 @@ public class ApApprovalPolicyController {
             description = """
                 Changes the settings the body gives, each optional (missing means unchanged): clerkApprovalLimit \
                 and autoApprovalLimit (amounts >= 0 in the functional currency, the automatic limit never above \
-                the clerk limit), allowCreatorApproval and allowApproverPayment (separation-of-duties exception \
-                switches), and defaultTerms (DUE_ON_RECEIPT or NET1 to NET120).
+                the clerk limit, at most 13 integer digits), allowCreatorApproval and allowApproverPayment \
+                (separation-of-duties exception switches), and defaultTerms (DUE_ON_RECEIPT or NET1 to NET120); a \
+                clerk limit below the stored automatic limit, sent without an automatic limit, lowers the automatic \
+                limit with it (a clerk limit of 0 turns automatic approval off).
                 Only a setting whose effective value changes is written, with one AP_APPROVAL_POLICY_SET audit row \
                 recording old and new value, the caller and their roles, the justification and the requestId; a \
                 new limit applies to the next decision at once, waiting bills included, and approved bills are \
@@ -111,10 +113,11 @@ public class ApApprovalPolicyController {
                 Preconditions: the caller holds accounting:ap_approval_policy:manage.
                 Required inputs: justification (at least 10 characters) and requestId (a UUID generated once per \
                 change); currencyCode (the functional currency) is required with either limit.
-                Emits ACCOUNTING_AP_APPROVAL_POLICY_SET; the call is idempotent: a requestId already recorded, or \
-                a body equal to the stored values, writes nothing and returns the current policy.
+                Emits ACCOUNTING_AP_APPROVAL_POLICY_SET; the call is idempotent on requestId, which every accepted \
+                PUT records, a no-op included: a replay writes nothing and returns the current policy.
                 Returns 200 with the GET body; 400 JUSTIFICATION_REQUIRED or VALIDATION_ERROR with fieldErrors \
-                (a negative limit, an automatic limit above the clerk limit, terms outside the vocabulary, a \
+                (a negative or over-long limit, an automatic limit sent above the clerk limit, terms outside the \
+                vocabulary, a \
                 missing currencyCode or requestId); 401; 403 FORBIDDEN; 422 CURRENCY_NOT_SUPPORTED for a \
                 currencyCode other than the functional currency, or AMOUNT_PRECISION_EXCEEDS_CURRENCY for a limit \
                 finer than its minor unit; nothing is written on a refusal.
