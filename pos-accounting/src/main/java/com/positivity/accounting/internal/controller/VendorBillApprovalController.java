@@ -486,8 +486,8 @@ public class VendorBillApprovalController {
                 (PENDING_RECEIPT_MATCH, MATCH_EXCEPTION, CURRENCY_HOLD), APPROVE (AWAITING_APPROVAL), PAY \
                 (APPROVED with an open amount above 0) and DONE (APPROVED, paid in full, the last payment \
                 dated in the current month). There is no due-date window, so bills without a due date count.
-                Use this tool for the live counts of the review; use listVendorBillsByStage for the bills of \
-                one stage, and listVendorBills for a due-date window.
+                Use this tool for the live counts of the review; do not use listVendorBillsByStage, which \
+                lists the bills of one stage, or listVendorBills, which needs a due-date window.
                 Preconditions: none beyond the caller holding accounting:ap:view.
                 Required inputs: none.
                 Emits an ACCOUNTING_VENDOR_BILL_STAGES_VIEW audit event; no state changes.
@@ -517,7 +517,7 @@ public class VendorBillApprovalController {
                 server sets the order: CHECK and APPROVE oldest first, PAY by due date with bills without \
                 one last, DONE newest paid first. There is no due-date window.
                 Use this tool for the bills behind one count of getVendorBillStageCounts; use \
-                getVendorBillById for one bill's full review read.
+                getVendorBillById instead for one bill's full review read.
                 Preconditions: none beyond the caller holding accounting:ap:view.
                 Required inputs: stage (CHECK, APPROVE, PAY or DONE); page (from 0) and size (capped at \
                 100) are optional.
