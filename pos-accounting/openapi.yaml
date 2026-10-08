@@ -370,7 +370,7 @@ paths:
       x-required-permissions:
       - accounting:ap_approval_policy:manage
     put:
-      description: 'Changes the settings the body gives, each optional (missing means unchanged): clerkApprovalLimit and autoApprovalLimit (amounts >= 0 in the functional currency, the automatic limit never above the clerk limit), allowCreatorApproval and allowApproverPayment (separation-of-duties exception switches), and defaultTerms (DUE_ON_RECEIPT or NET1 to NET120).
+      description: 'Changes the settings the body gives, each optional (missing means unchanged): clerkApprovalLimit and autoApprovalLimit (amounts >= 0 in the functional currency, the automatic limit never above the clerk limit, at most 13 integer digits), allowCreatorApproval and allowApproverPayment (separation-of-duties exception switches), and defaultTerms (DUE_ON_RECEIPT or NET1 to NET120); a clerk limit below the stored automatic limit, sent without an automatic limit, lowers the automatic limit with it (a clerk limit of 0 turns automatic approval off).
 
         Only a setting whose effective value changes is written, with one AP_APPROVAL_POLICY_SET audit row recording old and new value, the caller and their roles, the justification and the requestId; a new limit applies to the next decision at once, waiting bills included, and approved bills are never re-evaluated.
 
@@ -380,9 +380,9 @@ paths:
 
         Required inputs: justification (at least 10 characters) and requestId (a UUID generated once per change); currencyCode (the functional currency) is required with either limit.
 
-        Emits ACCOUNTING_AP_APPROVAL_POLICY_SET; the call is idempotent: a requestId already recorded, or a body equal to the stored values, writes nothing and returns the current policy.
+        Emits ACCOUNTING_AP_APPROVAL_POLICY_SET; the call is idempotent on requestId, which every accepted PUT records, a no-op included: a replay writes nothing and returns the current policy.
 
-        Returns 200 with the GET body; 400 JUSTIFICATION_REQUIRED or VALIDATION_ERROR with fieldErrors (a negative limit, an automatic limit above the clerk limit, terms outside the vocabulary, a missing currencyCode or requestId); 401; 403 FORBIDDEN; 422 CURRENCY_NOT_SUPPORTED for a currencyCode other than the functional currency, or AMOUNT_PRECISION_EXCEEDS_CURRENCY for a limit finer than its minor unit; nothing is written on a refusal.
+        Returns 200 with the GET body; 400 JUSTIFICATION_REQUIRED or VALIDATION_ERROR with fieldErrors (a negative or over-long limit, an automatic limit sent above the clerk limit, terms outside the vocabulary, a missing currencyCode or requestId); 401; 403 FORBIDDEN; 422 CURRENCY_NOT_SUPPORTED for a currencyCode other than the functional currency, or AMOUNT_PRECISION_EXCEEDS_CURRENCY for a limit finer than its minor unit; nothing is written on a refusal.
 
         '
       operationId: setApApprovalPolicy
@@ -523,7 +523,7 @@ paths:
 
         Emits an AP_PAYMENT_EXECUTE event; the call is idempotent on paymentRef, replaying the same ref with the same payload as a 200 instead of paying twice.
 
-        Returns 200 on an idempotent replay, 409 IDEMPOTENCY_CONFLICT when the paymentRef exists with a different payload, 400 when a bill is missing, unapproved or over-allocated, 403 AP_PAYMENT_SELF_APPROVED_BILL (fieldErrors name the bills by number) before any payment row is saved or the gateway is called, and 500 PAYMENT_GATEWAY_FAILURE when the gateway cannot be reached.
+        Returns 200 on an idempotent replay, 409 IDEMPOTENCY_CONFLICT when the paymentRef exists with a different payload, 400 when a bill is missing, unapproved or over-allocated (allocation is refused before the gateway; nothing is charged), 403 AP_PAYMENT_SELF_APPROVED_BILL (fieldErrors name the bills by number) before any payment row is saved or the gateway is called, and 500 PAYMENT_GATEWAY_FAILURE when the gateway cannot be reached.
 
         '
       operationId: executeApPayment
@@ -12539,6 +12539,8 @@ paths:
 
         Returns 400 when no pending receipt matches the invoice or the payload fails validation (a missing invoiceDate included), 409 AP_BILL_DUPLICATE when another live bill (any status except VOIDED or REJECTED) of the vendor already holds the invoiceReference on the invoiceDate, compared ignoring case, spacing, punctuation and leading zeros (referenceId names it, and the receipt bill is left untouched), the generic 409 DUPLICATE_RESOURCE when a concurrent writer takes the number between the check and the commit, and 409 OPTIMISTIC_LOCK when the matched bill was decided meanwhile (send the invoice again).
 
+        In the rare race where a period closes or a mapping changes after automatic approval''s pre-check, it answers the posting''s 422 PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED with nothing written; resending the invoice is safe and ends matched, AWAITING_APPROVAL, with a VENDOR_BILL_AUTO_APPROVE_SKIPPED row.
+
         '
       operationId: matchVendorInvoice
       requestBody:
@@ -12582,6 +12584,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: 'AP_BILL_DUPLICATE: another live bill of this vendor already holds this invoice reference on the invoice date; referenceId is that bill''s vendorBillId. DUPLICATE_RESOURCE, with no referenceId, when a concurrent writer takes the number between the check and the commit. OPTIMISTIC_LOCK when the matched bill was decided meanwhile'
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED, only when a period closes or a mapping changes between automatic approval's pre-check and its posting; nothing is written, and resending the invoice is safe (it ends AWAITING_APPROVAL with the skip row)
       security:
       - bearerAuth:
         - accounting:ap:pay
@@ -14220,7 +14228,7 @@ components:
           example: 500.0
           type: number
         clerkApprovalLimit:
-          description: How much a clerk (accounting:ap:approve) may approve, the bill's absolute total including tax; at least 0, in the functional currency. 0 means every bill needs an over-limit approver. Missing means unchanged
+          description: How much a clerk (accounting:ap:approve) may approve, the bill's absolute total including tax; at least 0, in the functional currency. 0 means every bill needs an over-limit approver; at most 13 integer digits. Below the stored automatic limit, with no autoApprovalLimit sent, it lowers the automatic limit with it. Missing means unchanged
           example: 2500.0
           type: number
         currencyCode:
@@ -14232,8 +14240,6 @@ components:
         defaultTerms:
           description: 'The default AP terms: DUE_ON_RECEIPT or NET<n>, n an integer from 1 to 120, upper case, no spaces (default NET30). Missing means unchanged'
           example: NET30
-          maxLength: 20
-          minLength: 0
           type: string
         justification:
           description: Why the policy changes; at least 10 characters (400 JUSTIFICATION_REQUIRED otherwise), recorded on every AP_APPROVAL_POLICY_SET audit row
