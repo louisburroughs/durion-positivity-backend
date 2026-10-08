@@ -3,10 +3,10 @@ package com.positivity.tax.internal.dto;
 import com.positivity.tax.common.validation.IsoCurrencyCode;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
@@ -85,11 +85,9 @@ public record PlausibilityCheckRequest(
         @Schema(
                 description = "Receipt total, tax included, above zero and at most the currency's decimals",
                 example = "150.00",
-                minimum = "0",
-                exclusiveMinimum = true,
                 requiredMode = Schema.RequiredMode.REQUIRED)
         @NotNull
-        @Positive
+        @DecimalMin(value = "0", inclusive = false)
         BigDecimal receiptTotal,
 
         @Schema(
