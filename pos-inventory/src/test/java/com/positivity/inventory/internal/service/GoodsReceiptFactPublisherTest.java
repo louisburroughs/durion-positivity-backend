@@ -142,9 +142,10 @@ class GoodsReceiptFactPublisherTest {
     /** Every SKU the receipt resolves takes {@code method}; resolved once per receipt, never per line. */
     @SuppressWarnings("unchecked")
     private void stubMethod(CostingMethod method) {
-        when(methods.resolveAll(any()))
-                .thenAnswer(invocation -> ((java.util.Set<String>) invocation.getArgument(0))
-                        .stream().collect(java.util.stream.Collectors.toMap(sku -> sku, sku -> method)));
+        org.mockito.Mockito.doAnswer(invocation -> ((java.util.Set<String>) invocation.getArgument(0))
+                        .stream().collect(java.util.stream.Collectors.toMap(sku -> sku, sku -> method)))
+                .when(methods)
+                .resolveAll(any());
     }
 
     private GoodsReceiptRecordedV1 publish(String currency, GoodsReceiptFactPublisher.GoodsReceiptLineFact... lines) {
