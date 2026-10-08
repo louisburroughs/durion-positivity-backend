@@ -39,4 +39,4 @@ decisions:
   - operation: BankDepositController.reverseBankDeposit
     shape: gate
     permission: accounting:deposit:reverse
-    reason: CAP:550 S18 (#2514); DepositServiceImpl.reverse gates on every location the stored deposit took cash from after locking it and before its status is read (and a requestId replay the same way); the generic journal-entry reversal of the same entry is gated by accounting:je:reverse alone, as for every entry, and DepositReversalReaction takes no scope decision.
+    reason: CAP:550 S18 (#2514); DepositServiceImpl.reverse gates on every location the stored deposit took cash from before its status is read, without a lock (deposit_session locations are immutable; the reversal itself locks in the generic sequence → entry → deposit order), and a requestId replay the same way; the generic journal-entry reversal of the same entry is gated by accounting:je:reverse alone, as for every entry, and DepositReversalReaction takes no scope decision.
