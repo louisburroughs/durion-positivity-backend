@@ -84,7 +84,7 @@ public class APPaymentController {
                 payments to invoices, and use listApBills first to find APPROVED bills to allocate against.
                 Preconditions: checked in this order before the gateway is called, charging nothing, the method \
                 is ACH, CHECK or WIRE, the currency is the functional currency, the bank account is eligible (active \
-                on the business date, not in a foreign currency), every allocated bill exists, is APPROVED, belongs \
+                from the start of the business date, not deactivated before the payment, not in a foreign currency), every allocated bill exists, is APPROVED, belongs \
                 to the vendor and fits the gross amount, the payer approved none of the bills paid (unless the AP \
                 approval policy allows it), the business date is not hard-locked, its period is open or overridden, \
                 and the AP_PAYMENT mappings ACCOUNTS_PAYABLE (and PAYMENT_FEES when a fee is charged) are set up.

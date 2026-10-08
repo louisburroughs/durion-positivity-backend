@@ -73,10 +73,9 @@ public class ExecuteAPPaymentRequest {
 
     @Nullable
     @Schema(
-            description =
-                    "GL account id of the BANK_CASH account the payment is made from: active on the execution date"
-                            + " and in the functional currency. May be omitted only when exactly one such account exists, which"
-                            + " is then used (CAP:550 S42, AW41)",
+            description = "GL account id of the BANK_CASH account the payment is made from: active at the start of the"
+                    + " execution date, not deactivated before the payment, and in the functional currency. May be"
+                    + " omitted only when exactly one such account exists, which is then used (CAP:550 S42, AW41)",
             example = "01936e5c-1111-7a3d-8b6e-2b3456789012")
     @JsonProperty("bankAccountId")
     private UUID bankAccountId;
