@@ -11,16 +11,23 @@ import com.positivity.order.internal.entity.ProcessedEvent;
 import com.positivity.order.internal.exception.PurchaseOrderVendorException;
 import com.positivity.order.internal.repository.ExtSupplierVendorRepository;
 import com.positivity.order.internal.repository.ProcessedEventRepository;
+import com.positivity.order.internal.repository.PurchaseOrderRepository;
+import com.positivity.order.internal.repository.PurchaseOrderTransmissionEventRepository;
 import com.positivity.order.internal.service.SupplierOrderResultListener;
 import com.positivity.order.internal.service.SupplierVendorGuard;
+import com.positivity.order.internal.service.SupplierVendorReplica;
 import com.positivity.tenancy.TenantContext;
+import java.time.Clock;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * pos-order's vendor copy on Postgres (CAP:550 S24, #2517; ADR-0062): the {@code supplier.vendor.updated} fact
@@ -32,7 +39,16 @@ import org.springframework.jdbc.core.JdbcTemplate;
 class SupplierVendorCopyIT extends PostgresTenancyTestBase {
 
     @Autowired
-    private SupplierOrderResultListener listener;
+    private SupplierVendorReplica vendorReplica;
+
+    @Autowired
+    private PurchaseOrderRepository purchaseOrders;
+
+    @Autowired
+    private PurchaseOrderTransmissionEventRepository transmissionEvents;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     @Autowired
     private ExtSupplierVendorRepository vendors;
@@ -45,6 +61,24 @@ class SupplierVendorCopyIT extends PostgresTenancyTestBase {
 
     @Autowired
     private DataSource dataSource;
+
+    private SupplierOrderResultListener listener;
+
+    /**
+     * Built here because the {@code pg} profile runs without Kafka, so no {@code @KafkaRails} listener bean exists;
+     * every collaborator is the context's own, so the handler transaction and its mark are the production ones.
+     */
+    @BeforeEach
+    void listener() {
+        listener = new SupplierOrderResultListener(
+                Clock.systemUTC(),
+                new ObjectMapper(),
+                processedEvents,
+                purchaseOrders,
+                transmissionEvents,
+                vendorReplica,
+                transactionManager);
+    }
 
     @AfterEach
     void clear() {
