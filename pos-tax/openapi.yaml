@@ -937,13 +937,9 @@ components:
           minimum: 0
           type: number
         taxType:
-          description: Configured tax type of this row; null for a country without a tax-type profile, and null when the value is unknown to the reader's build
-          enum:
-          - GST
-          - HST
-          - PST
-          - QST
+          description: Tax-type code of this row as the country profile configures it (1-32 upper-case letters, digits or underscores); null for a country without a tax-type profile
           example: GST
+          pattern: ^[A-Z0-9_]{1,32}$
           type:
           - string
           - 'null'
@@ -1416,13 +1412,9 @@ components:
           example: 0.0725
           type: number
         taxType:
-          description: Configured tax type of this component; null for a country without a tax-type profile, and null when the value is unknown to the reader's build
-          enum:
-          - GST
-          - HST
-          - PST
-          - QST
+          description: Tax-type code of this component as the country profile configures it (1-32 upper-case letters, digits or underscores); null for a country without a tax-type profile
           example: GST
+          pattern: ^[A-Z0-9_]{1,32}$
           type:
           - string
           - 'null'
@@ -1517,13 +1509,9 @@ components:
           - string
           - 'null'
         taxType:
-          description: Tax type code
-          enum:
-          - GST
-          - HST
-          - PST
-          - QST
+          description: Tax-type code as the country profile declares it (1-32 upper-case letters, digits or underscores); the vocabulary is configuration only
           example: GST
+          pattern: ^[A-Z0-9_]{1,32}$
           type: string
       required:
       - inputTaxRecoverable
