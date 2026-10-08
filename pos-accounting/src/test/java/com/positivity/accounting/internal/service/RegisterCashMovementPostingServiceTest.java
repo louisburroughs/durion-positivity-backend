@@ -380,6 +380,41 @@ class RegisterCashMovementPostingServiceTest {
                 .isEqualTo(RegisterCashMovementPostingService.Disposition.UNCLASSIFIED);
     }
 
+    @Test
+    @DisplayName(
+            "CAP:550 S18 (#2514): clearingEffect follows every disposition, so a reason that starts posting to 1095"
+                    + " at close must change the deposit's clearing net too")
+    void clearingEffectFollowsEveryDisposition() {
+        // One reason per disposition. A disposition added later fails the exhaustive switch below (it no longer
+        // compiles), and a reason moved to another disposition (the vendor cash on delivery half of #2513 moving
+        // VENDOR_COD off SKIP_VENDOR_COD) fails the expectation: either way the deposit side is revisited.
+        Map<String, RegisterCashMovementPostingService.Disposition> reasons = Map.of(
+                "PETTY_EXPENSE", RegisterCashMovementPostingService.Disposition.POST_PETTY_EXPENSE,
+                "VENDOR_COD", RegisterCashMovementPostingService.Disposition.SKIP_VENDOR_COD,
+                "BANK_DROP", RegisterCashMovementPostingService.Disposition.NOTHING_AT_CLOSE,
+                "FLOAT_INCREASE", RegisterCashMovementPostingService.Disposition.NOTHING_AT_CLOSE,
+                "FLOAT_DECREASE", RegisterCashMovementPostingService.Disposition.NOTHING_AT_CLOSE,
+                "A_REASON_NOBODY_KNOWS", RegisterCashMovementPostingService.Disposition.UNCLASSIFIED);
+        assertThat(reasons.values()).containsAll(List.of(RegisterCashMovementPostingService.Disposition.values()));
+        reasons.forEach((reason, disposition) -> {
+            assertThat(RegisterCashMovementPostingService.dispositionOf(reason))
+                    .as(reason)
+                    .isEqualTo(disposition);
+            String expected =
+                    switch (disposition) {
+                        // Dr expense / Cr 1095: a credit of the movement's amount.
+                        case POST_PETTY_EXPENSE -> "-12.50";
+                        // Not posted at close (yet): nothing reached 1095, so the deposit clears nothing for it.
+                        case SKIP_VENDOR_COD, NOTHING_AT_CLOSE, UNCLASSIFIED -> "0";
+                    };
+            Movement movement =
+                    movement(UUID.randomUUID(), reason, "OUT", "12.50", "USD", "SHOP_SUPPLIES", null, null, null);
+            assertThat(RegisterCashMovementPostingService.clearingEffect(movement))
+                    .as(reason)
+                    .isEqualByComparingTo(expected);
+        });
+    }
+
     // ---- currency and failures -----------------------------------------------------------------------------------
 
     @Test

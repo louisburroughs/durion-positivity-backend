@@ -43,6 +43,12 @@ public final class JournalEntrySourceTypes {
     /** One drawer cash movement of a closed register session, posted at close (CAP:550 S17, #2513). */
     public static final String REGISTER_CASH_MOVEMENT = "REGISTER_CASH_MOVEMENT";
 
+    /**
+     * A bank deposit of drawer cash (CAP:550 S18, #2514): Dr bank / Cr 1090 / Dr or Cr 1095; its source event id derives
+     * from the Record bank deposit command's {@code requestId} ({@code nameUUIDFromBytes("BANK_DEPOSIT:" + requestId)}).
+     */
+    public static final String BANK_DEPOSIT = "BANK_DEPOSIT";
+
     public static final String INVOICE_REVENUE = "INVOICE_REVENUE";
     public static final String INVOICE_REVENUE_REVERSAL = "INVOICE_REVENUE_REVERSAL";
 

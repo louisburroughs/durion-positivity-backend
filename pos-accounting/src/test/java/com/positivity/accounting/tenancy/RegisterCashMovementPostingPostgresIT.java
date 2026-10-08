@@ -15,6 +15,7 @@ import com.positivity.accounting.internal.service.PettyExpenseCategoryService;
 import com.positivity.accounting.internal.service.RegisterCashMovementPostingService;
 import com.positivity.accounting.internal.service.RegisterOverShortPostingService;
 import com.positivity.accounting.internal.service.RegisterSessionReplica;
+import com.positivity.accounting.internal.service.UndepositedSessionProjection;
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
 import com.positivity.domainevents.order.RegisterSessionClosedV1.Movement;
 import com.positivity.security.common.GatewaySecurityConstants;
@@ -88,6 +89,9 @@ class RegisterCashMovementPostingPostgresIT extends PostgresTenancyTestBase {
     private RegisterSessionReplica sessionReplica;
 
     @Autowired
+    private UndepositedSessionProjection undepositedSessions;
+
+    @Autowired
     private PettyExpenseCategoryService categories;
 
     private final List<UUID> tenants = new ArrayList<>();
@@ -107,7 +111,8 @@ class RegisterCashMovementPostingPostgresIT extends PostgresTenancyTestBase {
                 meterRegistry,
                 transactionManager,
                 zoneResolver,
-                sessionReplica);
+                sessionReplica,
+                undepositedSessions);
         closedAt = Instant.now(clock).truncatedTo(ChronoUnit.SECONDS).minus(2, ChronoUnit.HOURS);
     }
 
@@ -242,7 +247,8 @@ class RegisterCashMovementPostingPostgresIT extends PostgresTenancyTestBase {
                 meterRegistry,
                 transactionManager,
                 zoneResolver,
-                sessionReplica);
+                sessionReplica,
+                undepositedSessions);
         RegisterSessionClosedV1 fact = fact(
                 UUIDv7Generator.generate(),
                 "-3.00",
@@ -471,12 +477,15 @@ class RegisterCashMovementPostingPostgresIT extends PostgresTenancyTestBase {
     }
 
     private String envelope(String eventId, RegisterSessionClosedV1 fact) {
+        // A fact without movements is a schema-1 fact; schema 2 always carries the list (#2514 rejects it otherwise).
+        int schemaVersion = fact.movements() == null ? 1 : 2;
         return """
-                {"eventId":"%s","eventType":"%s","schemaVersion":2,"aggregateId":"%s","aggregateVersion":2,
+                {"eventId":"%s","eventType":"%s","schemaVersion":%d,"aggregateId":"%s","aggregateVersion":2,
                  "occurredAtUtc":"%s","sourceService":"pos-order","payload":%s}
                 """.formatted(
                         eventId,
                         RegisterSessionClosedV1.EVENT_TYPE,
+                        schemaVersion,
                         fact.sessionId(),
                         fact.closedAt(),
                         objectMapper.writeValueAsString(fact));

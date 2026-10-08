@@ -5,8 +5,9 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 
 /**
- * A refusal of a register float, petty-expense category or bank opening balance command (#2511, #2572;
- * SPEC-accounting-workspace §4.6, §7.1, OI-10): one stable code, one HTTP status, a message in business words.
+ * A refusal of a register float, petty-expense category, bank opening balance or bank deposit command (#2511, #2572,
+ * #2514; SPEC-accounting-workspace §4.5, §4.6, §7.1, OI-10): one stable code, one HTTP status, a message in business
+ * words.
  */
 public class CashSetupException extends RuntimeException {
 
@@ -16,6 +17,12 @@ public class CashSetupException extends RuntimeException {
         BANK_OPENING_BALANCE_ALREADY_ESTABLISHED(HttpStatus.CONFLICT),
         BANK_OPENING_BALANCE_EMPTY(HttpStatus.UNPROCESSABLE_CONTENT),
         BANK_OPENING_BALANCE_NOT_FIRST(HttpStatus.UNPROCESSABLE_CONTENT),
+        DEPOSIT_ALREADY_REVERSED(HttpStatus.CONFLICT),
+        DEPOSIT_BANK_ACCOUNT_NOT_ELIGIBLE(HttpStatus.UNPROCESSABLE_CONTENT),
+        DEPOSIT_NOT_FOUND(HttpStatus.NOT_FOUND),
+        DEPOSIT_REVERSAL_NOT_REVERSIBLE(HttpStatus.CONFLICT),
+        DEPOSIT_SESSION_ALREADY_DEPOSITED(HttpStatus.CONFLICT),
+        DEPOSIT_UNBALANCED(HttpStatus.UNPROCESSABLE_CONTENT),
         FLOAT_ALREADY_ESTABLISHED(HttpStatus.CONFLICT),
         FLOAT_AMOUNT_NEGATIVE(HttpStatus.UNPROCESSABLE_CONTENT),
         FLOAT_AMOUNT_UNCHANGED(HttpStatus.UNPROCESSABLE_CONTENT),

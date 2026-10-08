@@ -66,6 +66,8 @@ tags:
   name: Bank Accounts
 - description: Manage chart of accounts including lifecycle actions.
   name: GL Accounts
+- description: 'Drawer cash on its way to the bank: undeposited sessions and deposits.'
+  name: Bank Deposits
 - description: 'Accounting period lifecycle: list periods, close a period, reopen a closed period, and manage the org-level hard-lock date.'
   name: Accounting Periods
 - description: 'Bank statement file imports: upload, preview, mapping, correction, commit.'
@@ -3830,6 +3832,212 @@ paths:
       - Default GL Mappings
       x-required-permissions:
       - accounting:default-mapping:edit
+  /v1/accounting/deposits:
+    post:
+      description: 'Records a bank deposit of whole closed register sessions'' drawer cash in one step: posts one BANK_DEPOSIT entry dated depositDate, Dr the bank account by the sessions'' bank drops (one line, the one bank reconciliation matches to the statement credit), Cr 1090 Undeposited Funds by their expected cash and Dr 1095 Register Cash Clearing when their clearing net is a credit (Cr when a debit) by its size, a zero line left out and every amount computed from the sessions; the sessions become DEPOSITED.
+
+        Use this tool when the cash of one or more closed drawers reached the bank; do not use createJournalEntry, and never add a balancing line yourself: a deposit that does not balance is refused. To correct a deposit, reverse it and record it again.
+
+        Preconditions: caller holds accounting:deposit:create and reaches every session''s location (403 LOCATION_SCOPE_DENIED); currencyCode is the functional currency (422 CURRENCY_NOT_SUPPORTED); bankGlAccountId is an active, reconcilable BANK_CASH account in functional currency (422 DEPOSIT_BANK_ACCOUNT_NOT_ELIGIBLE); every sessionId names a closed session waiting to be deposited (400 VALIDATION_ERROR when unknown, 409 DEPOSIT_SESSION_ALREADY_DEPOSITED when a deposit already took it); the selection''s drops equal its expected cash plus its clearing net (422 DEPOSIT_UNBALANCED naming the difference; list the sessions first to see it) and are more than zero (400 otherwise); no amount finer than the currency''s minor unit (422 AMOUNT_PRECISION_EXCEEDS_CURRENCY); depositDate is in an OPEN period, or in a CLOSED one with accounting:period:override and overrideJustification (422 PERIOD_CLOSED otherwise), never before the hard-lock date (422 PERIOD_HARD_LOCKED). Idempotent on requestId: a replay returns the first result with 200 and replayed true, another body with the same requestId is 409 IDEMPOTENCY_CONFLICT.
+
+        Required inputs: bankGlAccountId, depositDate, currencyCode (ISO 4217, ADR-0067), sessionIds (1 to 200, distinct), requestId; optional depositSlipReference and overrideJustification.
+
+        Emits an ACCOUNTING_DEPOSIT_CREATE event, writes a BANK_DEPOSIT_RECORD audit row naming the caller, queues accounting.deposit.recorded (status RECORDED) and returns 201 with the deposit id, journalEntryNumber, slip reference, amounts and currencyCode, the sessions with their bag numbers and replayed false.
+
+        '
+      operationId: recordBankDeposit
+      requestBody:
+        content:
+          application/json:
+            examples:
+              One drawer's cash:
+                description: One drawer's cash
+                value:
+                  bankGlAccountId: 019a0000-0000-7000-8000-00000000b000
+                  currencyCode: USD
+                  depositDate: '2026-10-08'
+                  depositSlipReference: DS-20261008-01
+                  requestId: 019a0000-0000-7000-8000-000000000301
+                  sessionIds:
+                  - 019a0000-0000-7000-8000-00000000c001
+            schema:
+              $ref: '#/components/schemas/DepositRecordRequest'
+        description: The bank account, the date and the whole sessions deposited
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepositResponse'
+          description: 'A replayed requestId: the first result, replayed true'
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepositResponse'
+          description: The deposit was recorded
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'Missing or invalid field, named in fieldErrors: currencyCode missing or not ISO 4217, no or a repeated sessionId, a sessionId that names no undeposited session, or a selection with no bank drops (VALIDATION_ERROR)'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:deposit:create, or a session's location is outside the caller's reach (LOCATION_SCOPE_DENIED)
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: DEPOSIT_SESSION_ALREADY_DEPOSITED or IDEMPOTENCY_CONFLICT
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: DEPOSIT_UNBALANCED, DEPOSIT_BANK_ACCOUNT_NOT_ELIGIBLE, CURRENCY_NOT_SUPPORTED, AMOUNT_PRECISION_EXCEEDS_CURRENCY, PERIOD_CLOSED, PERIOD_HARD_LOCKED, ACCOUNTING_TIME_ZONE_UNSET or GL_MAPPING_NOT_CONFIGURED
+      security:
+      - bearerAuth:
+        - accounting:deposit:create
+      summary: Record Bank Deposit
+      tags:
+      - Bank Deposits
+      x-required-permissions:
+      - accounting:deposit:create
+  /v1/accounting/deposits/{depositId}:
+    get:
+      description: 'Returns a bank deposit of drawer cash as it stands: RECORDED or REVERSED, its amounts and currencyCode, its entry number, the sessions it took with their bag numbers and, once reversed, the reversal''s entry number, date and reason.
+
+        Use this tool to look up one deposit by id, e.g. after recording it; do not use it to list what is waiting to be deposited (listUndepositedSessions).
+
+        Preconditions: caller holds accounting:deposit:create and reaches every location the deposit took cash from (403 LOCATION_SCOPE_DENIED); the deposit exists (404 DEPOSIT_NOT_FOUND).
+
+        Required inputs: depositId (path).
+
+        Emits an ACCOUNTING_DEPOSIT_VIEW event and returns 200 with the deposit.
+
+        '
+      operationId: getBankDeposit
+      parameters:
+      - description: The deposit
+        in: path
+        name: depositId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepositResponse'
+          description: The deposit
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:deposit:create, or a session's location is outside the caller's reach (LOCATION_SCOPE_DENIED)
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No deposit with this id (DEPOSIT_NOT_FOUND)
+      security:
+      - bearerAuth:
+        - accounting:deposit:create
+      summary: Get Bank Deposit
+      tags:
+      - Bank Deposits
+      x-required-permissions:
+      - accounting:deposit:create
+  /v1/accounting/deposits/{depositId}/reversal:
+    post:
+      description: 'Reverses a bank deposit of drawer cash through the journal-entry reversal (ADR-0047): a reversing entry restores 1090 Undeposited Funds and 1095 Register Cash Clearing and takes the amount off the bank account, the deposit becomes REVERSED and its sessions wait to be deposited again. A reversed bank line matched in an approved bank reconciliation invalidates that reconciliation.
+
+        Use this tool to correct a wrong deposit, then record it again; do not edit a deposit or post a correcting journal entry instead (reverseJournalEntry on the deposit''s entry has the same effect).
+
+        Preconditions: caller holds accounting:deposit:reverse and reaches every location the deposit took cash from (403 LOCATION_SCOPE_DENIED); the deposit exists (404 DEPOSIT_NOT_FOUND) and is not already reversed (409 DEPOSIT_ALREADY_REVERSED); the reversal date (reversalDate, else the deposit''s date if its period is open, else today) is in an OPEN period, or in a CLOSED one with accounting:period:override and overrideJustification (422 PERIOD_CLOSED otherwise), never before the hard-lock date (422 PERIOD_HARD_LOCKED). Idempotent on requestId: a replay returns the first result with replayed true, another body with the same requestId is 409 IDEMPOTENCY_CONFLICT.
+
+        Required inputs: depositId (path), reason (10 to 400 characters), requestId; optional reversalDate and overrideJustification.
+
+        Emits an ACCOUNTING_DEPOSIT_REVERSE event, writes a BANK_DEPOSIT_REVERSE audit row naming the caller, queues accounting.deposit.recorded (status REVERSED) and returns 200 with the deposit, its reversal entry number, date and reason.
+
+        '
+      operationId: reverseBankDeposit
+      parameters:
+      - description: The deposit
+        in: path
+        name: depositId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Wrong bank account:
+                description: Wrong bank account
+                value:
+                  reason: Deposited into the wrong bank account
+                  requestId: 019a0000-0000-7000-8000-000000000302
+            schema:
+              $ref: '#/components/schemas/DepositReversalRequest'
+        description: Why the deposit is reversed
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepositResponse'
+          description: The deposit was reversed, or a replayed requestId's first result
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'Missing or invalid field, named in fieldErrors: a reason shorter than 10 or longer than 400 characters, or no requestId (VALIDATION_ERROR)'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:deposit:reverse, or a session's location is outside the caller's reach (LOCATION_SCOPE_DENIED)
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No deposit with this id (DEPOSIT_NOT_FOUND)
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: DEPOSIT_ALREADY_REVERSED or IDEMPOTENCY_CONFLICT
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: PERIOD_CLOSED or PERIOD_HARD_LOCKED
+      security:
+      - bearerAuth:
+        - accounting:deposit:reverse
+      summary: Reverse Bank Deposit
+      tags:
+      - Bank Deposits
+      x-required-permissions:
+      - accounting:deposit:reverse
   /v1/accounting/events:
     get:
       description: 'Lists ingested accounting events as a paginated projection with rich optional filters: event type, idempotency outcome, received-at range, event id, ingestion id, domain key, invoice id and processing status.
@@ -5598,7 +5806,7 @@ paths:
 
         Emits an ACCOUNTING_JOURNAL_ENTRY_REVERSE event and returns the posted reversal entry.
 
-        Returns 400 when the reason is blank, 404 JOURNAL_ENTRY_NOT_FOUND when the entry does not exist, 409 JE_ALREADY_REVERSED when the entry was already reversed (including a lost concurrent-reversal race), 409 JE_NOT_POSTED when it is DRAFT or PENDING, and 422 PERIOD_CLOSED or PERIOD_HARD_LOCKED for period-gate failures. A register float relocation entry is never reversed (409 FLOAT_RELOCATION_NOT_REVERSIBLE: move the register again), and a register float go-live or change entry of a register that has moved may not be reversed before its latest move (422 FLOAT_REVERSAL_BEFORE_RELOCATION, or 422 GL_MAPPING_NOT_CONFIGURED when its follow-up reclass finds no mapping).
+        Returns 400 when the reason is blank, 404 JOURNAL_ENTRY_NOT_FOUND when the entry does not exist, 409 JE_ALREADY_REVERSED when the entry was already reversed (including a lost concurrent-reversal race), 409 JE_NOT_POSTED when it is DRAFT or PENDING, and 422 PERIOD_CLOSED or PERIOD_HARD_LOCKED for period-gate failures. A register float relocation entry is never reversed (409 FLOAT_RELOCATION_NOT_REVERSIBLE: move the register again), nor is the reversal entry of a bank deposit (409 DEPOSIT_REVERSAL_NOT_REVERSIBLE: record the deposit again), and a register float go-live or change entry of a register that has moved may not be reversed before its latest move (422 FLOAT_REVERSAL_BEFORE_RELOCATION, or 422 GL_MAPPING_NOT_CONFIGURED when its follow-up reclass finds no mapping).
 
         '
       operationId: reverseJournalEntry
@@ -5653,7 +5861,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Entry is already reversed (JE_ALREADY_REVERSED), not yet posted (JE_NOT_POSTED), or a register float relocation entry (FLOAT_RELOCATION_NOT_REVERSIBLE)
+          description: Entry is already reversed (JE_ALREADY_REVERSED), not yet posted (JE_NOT_POSTED), a register float relocation entry (FLOAT_RELOCATION_NOT_REVERSIBLE) or a bank deposit's reversal entry (DEPOSIT_REVERSAL_NOT_REVERSIBLE)
         '422':
           content:
             application/json:
@@ -11784,6 +11992,70 @@ paths:
       - Accounting Tenant Template
       x-required-permissions:
       - accounting:coa:view
+  /v1/accounting/undeposited-sessions:
+    get:
+      description: 'Lists the closed register sessions whose drawer cash has not reached the bank, oldest first, with their business references (register, location, close date and its age in days, bag numbers) and amounts: the bank drops (depositAmount), the CASH tender total (expectedCash) and the clearing net, the signed sum (debit positive) of the 1095 Register Cash Clearing lines the session''s over/short and drawer movements posted. With one or more sessionId parameters it also returns selection: the totals, difference = depositAmount - expectedCash - clearingNet and the lines Record bank deposit would post (Dr bank, Cr 1090, Dr or Cr 1095), so a client never sums amounts itself. Nothing posts.
+
+        Use this tool to see what is waiting to be deposited and what a deposit of chosen sessions makes; do not use it for card, on-account or check amounts, which are never in a deposit.
+
+        Preconditions: caller holds accounting:deposit:create; a session outside the caller''s location reach is not listed; a sessionId that names no listed session is 400 VALIDATION_ERROR; bankGlAccountId, when given, is an active, reconcilable BANK_CASH account in functional currency (422 DEPOSIT_BANK_ACCOUNT_NOT_ELIGIBLE); the tenant''s accounting time zone is set (422 ACCOUNTING_TIME_ZONE_UNSET) and, for a selection, BANK_DEPOSIT is mapped (422 GL_MAPPING_NOT_CONFIGURED).
+
+        Required inputs: none; optional sessionId (repeatable) and bankGlAccountId, the account the preview''s bank line names.
+
+        Emits an ACCOUNTING_UNDEPOSITED_SESSIONS_VIEW event and returns 200 with asOf, currencyCode, the sessions and the selection (null without sessionId).
+
+        '
+      operationId: listUndepositedSessions
+      parameters:
+      - description: 'A session to select (repeatable): the response then carries its deposit'
+        in: query
+        name: sessionId
+        required: false
+        schema:
+          items:
+            format: uuid
+            type: string
+          type: array
+      - description: The bank account the selection preview's bank line names
+        in: query
+        name: bankGlAccountId
+        required: false
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UndepositedSessionsResponse'
+          description: The undeposited sessions and, for a selection, its deposit
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: A sessionId that names no undeposited session the caller may see (VALIDATION_ERROR)
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:deposit:create
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: DEPOSIT_BANK_ACCOUNT_NOT_ELIGIBLE (the preview's bankGlAccountId), ACCOUNTING_TIME_ZONE_UNSET or GL_MAPPING_NOT_CONFIGURED (the BANK_DEPOSIT keys of a selection)
+      security:
+      - bearerAuth:
+        - accounting:deposit:create
+      summary: List Undeposited Sessions
+      tags:
+      - Bank Deposits
+      x-required-permissions:
+      - accounting:deposit:create
   /v1/accounting/unpaid-walk-in-sales:
     get:
       description: 'Reads what is still owed on the CASH walk-in house account: the balance, its open invoices oldest sale first, the invoices whose business day has ended at their location (needsAttention), and walk-in payments with money left unapplied.
@@ -16762,6 +17034,270 @@ components:
       - debitAccountId
       - eventType
       - mappingId
+      type: object
+    DepositPreviewLine:
+      description: A line of the entry the deposit would post
+      properties:
+        accountName:
+          description: The account name; null as glAccountId
+          example: Register Cash Clearing
+          type: string
+        accountNumber:
+          description: The account number; null as glAccountId
+          example: '1095'
+          type: string
+        amount:
+          description: The line's amount, never negative
+          example: 43.0
+          type: number
+        glAccountId:
+          description: The GL account; null for the bank line when no bankGlAccountId was given
+          format: uuid
+          type: string
+        side:
+          description: DEBIT or CREDIT
+          enum:
+          - DEBIT
+          - CREDIT
+          example: DEBIT
+          type: string
+      type: object
+    DepositRecordRequest:
+      description: Record a bank deposit of whole closed register sessions' drawer cash
+      properties:
+        bankGlAccountId:
+          description: 'The bank account the cash went to: an active, reconcilable BANK_CASH account in functional currency'
+          example: 019a0000-0000-7000-8000-00000000b000
+          format: uuid
+          type: string
+        currencyCode:
+          description: The ISO 4217 code of the sessions' amounts (ADR-0067); it must be the tenant's functional currency, else 422 CURRENCY_NOT_SUPPORTED
+          example: USD
+          maxLength: 3
+          minLength: 3
+          type: string
+        depositDate:
+          description: The day the cash reached the bank; the entry is dated on it and passes the period gate
+          example: '2026-10-08'
+          format: date
+          type: string
+        depositSlipReference:
+          description: The bank's deposit slip number, kept with the deposit
+          example: DS-20261008-01
+          maxLength: 100
+          type: string
+        overrideJustification:
+          description: Why the deposit posts into a closed period; honoured only with accounting:period:override
+          example: Deposit slip found after the month was closed
+          maxLength: 1000
+          type: string
+        requestId:
+          description: Caller-generated UUIDv7 naming this request; a replay returns the first result
+          example: 019a0000-0000-7000-8000-000000000301
+          format: uuid
+          type: string
+        sessionIds:
+          description: 'The undeposited sessions the deposit takes, each whole: all its bank drops and its whole clearing net'
+          items:
+            example: 019a0000-0000-7000-8000-00000000c001
+            format: uuid
+            type: string
+          maxItems: 200
+          minItems: 1
+          type: array
+          uniqueItems: true
+      required:
+      - bankGlAccountId
+      - currencyCode
+      - depositDate
+      - requestId
+      - sessionIds
+      type: object
+    DepositResponse:
+      description: A bank deposit of whole closed register sessions' drawer cash
+      properties:
+        amount:
+          description: 'The bank debit: the total of the sessions'' bank drops'
+          example: 1197.0
+          type: number
+        bankAccountCode:
+          description: The bank account's number
+          example: '1000'
+          type: string
+        bankGlAccountId:
+          description: The bank account the cash went to
+          format: uuid
+          type: string
+        clearingNet:
+          description: 'The sessions'' clearing net, debit positive: the deposit debits 1095 Register Cash Clearing by its size when it is negative and credits it when positive'
+          example: -43.0
+          type: number
+        currencyCode:
+          description: 'ISO 4217 code of every amount: the functional currency'
+          example: USD
+          type: string
+        depositDate:
+          description: 'The day the cash reached the bank: the entry''s date'
+          format: date
+          type: string
+        depositId:
+          description: The deposit
+          format: uuid
+          type: string
+        depositSlipReference:
+          description: The bank's deposit slip number
+          example: DS-20261008-01
+          type: string
+        expectedCash:
+          description: 'The sessions'' expected cash: the credit to 1090 Undeposited Funds'
+          example: 1240.0
+          type: number
+        journalEntryId:
+          description: The deposit's entry
+          format: uuid
+          type: string
+        journalEntryNumber:
+          description: The deposit's entry number (the business reference)
+          example: JE-202610-41
+          type: string
+        recordedBy:
+          description: Who recorded it
+          type: string
+        replayed:
+          description: True when this answers a replayed requestId with the first result
+          type: boolean
+        reversalDate:
+          description: The reversal's date; null until reversed
+          format: date
+          type: string
+        reversalJournalEntryId:
+          description: The reversal's entry; null until reversed
+          format: uuid
+          type: string
+        reversalJournalEntryNumber:
+          description: The reversal's entry number; null until reversed
+          example: JE-202610-44
+          type: string
+        reversalReason:
+          description: Why it was reversed; null until reversed
+          type: string
+        reversedAt:
+          description: When it was reversed; null until reversed
+          format: date-time
+          type: string
+        reversedBy:
+          description: Who reversed it; null until reversed
+          type: string
+        sessions:
+          description: The sessions the deposit took, oldest close first
+          items:
+            $ref: '#/components/schemas/DepositSession'
+          type: array
+        status:
+          description: RECORDED, or REVERSED once its entry is reversed
+          enum:
+          - RECORDED
+          - REVERSED
+          type: string
+      type: object
+    DepositReversalRequest:
+      description: Reverse a bank deposit; its sessions wait to be deposited again
+      properties:
+        overrideJustification:
+          description: Why the reversal posts into a closed period; honoured only with accounting:period:override
+          example: Correction of a deposit in the closed month
+          maxLength: 1000
+          type: string
+        reason:
+          description: Why the deposit is reversed (at least 10 characters); kept with the deposit and the reversal entry
+          example: Deposited into the wrong bank account
+          maxLength: 400
+          minLength: 10
+          type: string
+        requestId:
+          description: Caller-generated UUIDv7 naming this request; a replay returns the first result
+          example: 019a0000-0000-7000-8000-000000000302
+          format: uuid
+          type: string
+        reversalDate:
+          description: The reversal entry's date; when omitted, the deposit's date if its period is open, else today
+          example: '2026-10-09'
+          format: date
+          type: string
+      required:
+      - reason
+      - requestId
+      type: object
+    DepositSelection:
+      description: What recording a deposit of the selected sessions posts; nothing posts here
+      properties:
+        balanced:
+          description: Whether difference is zero, so the deposit can be recorded
+          type: boolean
+        clearingNet:
+          description: The selected sessions' clearing net, debit positive
+          example: -43.0
+          type: number
+        depositAmount:
+          description: 'The bank debit: the selected sessions'' bank drops'
+          example: 1197.0
+          type: number
+        difference:
+          description: depositAmount - expectedCash - clearingNet; Record bank deposit refuses any value but zero (422 DEPOSIT_UNBALANCED)
+          example: 0.0
+          type: number
+        expectedCash:
+          description: 'The credit to 1090: the selected sessions'' expected cash'
+          example: 1240.0
+          type: number
+        lines:
+          description: 'The entry''s lines: bank, 1090 and 1095 (a zero line is left out)'
+          items:
+            $ref: '#/components/schemas/DepositPreviewLine'
+          type: array
+        sessionIds:
+          description: The selected sessions
+          items:
+            format: uuid
+            type: string
+          type: array
+      type: object
+    DepositSession:
+      description: A session the deposit took whole
+      properties:
+        bagNumbers:
+          description: The bag numbers of the session's bank drops
+          items:
+            type: string
+          type: array
+        clearingNet:
+          description: The session's clearing net, debit positive
+          example: -43.0
+          type: number
+        closedAt:
+          description: When the session closed
+          format: date-time
+          type: string
+        depositAmount:
+          description: 'The session''s bank drops: its share of the bank debit'
+          example: 1197.0
+          type: number
+        expectedCash:
+          description: The session's expected cash
+          example: 1240.0
+          type: number
+        locationId:
+          description: The session's location; null when it carried none
+          format: uuid
+          type: string
+        sessionId:
+          description: The register session
+          format: uuid
+          type: string
+        terminalId:
+          description: The register
+          example: T-7
+          type: string
       type: object
     Diagnostics:
       description: Opening terms (diagnostic only)
@@ -22578,6 +23114,103 @@ components:
       - count
       - currency
       - totalUnappliedAmount
+      type: object
+    UndepositedSession:
+      description: A closed register session whose drawer cash waits to be deposited
+      properties:
+        ageDays:
+          description: Days from the close date to asOf
+          example: 2
+          format: int64
+          type: integer
+        clearingNet:
+          description: The signed sum (debit positive) of the 1095 lines the session's over/short and drawer movements posted
+          example: -43.0
+          type: number
+        closeDate:
+          description: The close date in the tenant's accounting time zone
+          format: date
+          type: string
+        closedAt:
+          description: When the session closed
+          format: date-time
+          type: string
+        countedCash:
+          description: Cash counted at close
+          example: 200.0
+          type: number
+        depositAmount:
+          description: The total of the session's bank drops
+          example: 1197.0
+          type: number
+        drops:
+          description: The session's bank drops, in the order recorded
+          items:
+            $ref: '#/components/schemas/UndepositedSessionDrop'
+          type: array
+        expectedCash:
+          description: 'The CASH tender total: what the session''s sales put in 1090'
+          example: 1240.0
+          type: number
+        locationId:
+          description: The session's location; null when it carried none
+          format: uuid
+          type: string
+        openingFloat:
+          description: The drawer's opening float
+          example: 200.0
+          type: number
+        overShort:
+          description: 'Counted minus theoretical: positive over, negative short'
+          example: -3.0
+          type: number
+        sessionId:
+          description: The register session
+          format: uuid
+          type: string
+        terminalId:
+          description: The register
+          example: T-7
+          type: string
+        theoreticalCash:
+          description: Cash the drawer should have held at close
+          example: 203.0
+          type: number
+      type: object
+    UndepositedSessionDrop:
+      description: 'A bank drop: the bag and the amount the deposit takes'
+      properties:
+        amount:
+          description: The amount dropped
+          example: 1197.0
+          type: number
+        bagNumber:
+          description: The deposit bag; null when none was keyed
+          example: B-0912
+          type: string
+        movementId:
+          description: pos-order's drawer movement
+          format: uuid
+          type: string
+      type: object
+    UndepositedSessionsResponse:
+      description: Undeposited register sessions and, for a selection, the deposit they make
+      properties:
+        asOf:
+          description: 'Today in the tenant''s accounting time zone: the day the ages count to'
+          format: date
+          type: string
+        currencyCode:
+          description: 'ISO 4217 code of every amount: the functional currency'
+          example: USD
+          type: string
+        selection:
+          $ref: '#/components/schemas/DepositSelection'
+        sessions:
+          description: The undeposited sessions the caller may deposit, oldest close first
+          items:
+            $ref: '#/components/schemas/UndepositedSession'
+          type: array
       type: object
     UnpaidWalkInSalesResponse:
       description: Unpaid walk-in sales on the CASH house account, with the day-end needs-attention item

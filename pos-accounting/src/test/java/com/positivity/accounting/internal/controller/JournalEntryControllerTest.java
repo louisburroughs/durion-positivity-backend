@@ -347,6 +347,26 @@ class JournalEntryControllerTest extends BaseIntegrationTest {
         }
 
         @Test
+        @DisplayName("CAP:550 S18 (#2514): a bank deposit's reversal entry answers 409 DEPOSIT_REVERSAL_NOT_REVERSIBLE")
+        void reverse_depositReversalEntry_returns409NotReversible() throws Exception {
+            when(journalEntryService.reverseJournalEntry(eq(ENTRY_ID), eq(REASON), isNull(), isNull()))
+                    .thenThrow(new com.positivity.accounting.internal.exception.CashSetupException(
+                            com.positivity.accounting.internal.exception.CashSetupException.Code
+                                    .DEPOSIT_REVERSAL_NOT_REVERSIBLE,
+                            "Journal entry JE-202610-44 reverses bank deposit JE-202610-41 and is never reversed"
+                                    + " itself; record the deposit again instead",
+                            "019a0000-0000-7000-8000-00000000d001",
+                            "Record the deposit again"));
+
+            mockMvc.perform(withAuth(post("/v1/accounting/journal-entries/{id}/reverse", ENTRY_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(reversalBody(null)))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("DEPOSIT_REVERSAL_NOT_REVERSIBLE"))
+                    .andExpect(jsonPath("$.status").value(409));
+        }
+
+        @Test
         @DisplayName("Should map a not-yet-posted entry to 409 JE_NOT_POSTED")
         void reverse_draftEntry_returns409NotPosted() throws Exception {
             when(journalEntryService.reverseJournalEntry(eq(ENTRY_ID), eq(REASON), isNull(), isNull()))

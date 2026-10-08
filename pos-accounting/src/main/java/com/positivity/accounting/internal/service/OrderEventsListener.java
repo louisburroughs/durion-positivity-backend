@@ -93,6 +93,7 @@ public class OrderEventsListener {
     private final RegisterCashMovementPostingService registerCashMovementPostingService;
     private final KafkaFactIngestionRecorder ingestionRecorder;
     private final RegisterSessionReplica sessionReplica;
+    private final UndepositedSessionProjection undepositedSessions;
     private final Counter payloadRejectedCounter;
 
     private final AccountingCalendarZoneResolver zoneResolver;
@@ -110,9 +111,11 @@ public class OrderEventsListener {
             ObjectProvider<MeterRegistry> meterRegistry,
             PlatformTransactionManager transactionManager,
             AccountingCalendarZoneResolver zoneResolver,
-            RegisterSessionReplica sessionReplica) {
+            RegisterSessionReplica sessionReplica,
+            UndepositedSessionProjection undepositedSessions) {
         this.zoneResolver = zoneResolver;
         this.sessionReplica = sessionReplica;
+        this.undepositedSessions = undepositedSessions;
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
@@ -161,6 +164,7 @@ public class OrderEventsListener {
             return;
         }
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0L);
+        int schemaVersion = envelope.path("schemaVersion").intValue(1);
         if (opened) {
             onSessionOpened(envelope, eventId, aggregateVersion);
             return;
@@ -191,7 +195,7 @@ public class OrderEventsListener {
             // The replica first, in its own transaction: see the class doc ("Session replica").
             handlerTransaction.executeWithoutResult(_ -> sessionReplica.closed(fact, aggregateVersion));
             handlerTransaction.executeWithoutResult(_ -> {
-                FactPostingOutcome outcome = postSession(fact, eventId);
+                FactPostingOutcome outcome = postSession(fact, eventId, schemaVersion);
                 ingestionRecorder.record(
                         RegisterOverShortPostingService.SOURCE_SYSTEM,
                         RegisterSessionClosedV1.EVENT_TYPE,
@@ -210,14 +214,23 @@ public class OrderEventsListener {
     /**
      * Everything a closed session posts, inside the handler transaction so the session posts all or nothing (CAP:550
      * S17, #2513): its drawer movements, then its over/short. A session the movement posting held for its currency
-     * posts no over/short either; a schema-1 fact has no movements and posts the over/short alone.
+     * posts no over/short either; a schema-1 fact has no movements and posts the over/short alone. Once both posted,
+     * a schema-2 session in functional currency writes its undeposited-session row (CAP:550 S18, #2514), in the same
+     * transaction, so the row exists exactly when the 1095 lines its clearing net describes do; a held session writes
+     * none.
      */
-    private @NonNull FactPostingOutcome postSession(@NonNull RegisterSessionClosedV1 fact, @NonNull String eventId) {
+    private @NonNull FactPostingOutcome postSession(
+            @NonNull RegisterSessionClosedV1 fact, @NonNull String eventId, int schemaVersion) {
         FactPostingOutcome movements = registerCashMovementPostingService.postMovements(fact, eventId);
         if (movements instanceof FactPostingOutcome.CurrencyHeld) {
             return movements;
         }
-        return FactPostingOutcome.combine(registerOverShortPostingService.postOverShort(fact, eventId), movements);
+        FactPostingOutcome outcome =
+                FactPostingOutcome.combine(registerOverShortPostingService.postOverShort(fact, eventId), movements);
+        if (!(outcome instanceof FactPostingOutcome.CurrencyHeld)) {
+            undepositedSessions.record(fact, schemaVersion);
+        }
+        return outcome;
     }
 
     /**

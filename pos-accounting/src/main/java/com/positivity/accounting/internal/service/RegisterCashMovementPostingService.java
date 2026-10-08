@@ -52,8 +52,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  *       {@code VENDOR_COD} movement ids of {@code payload.movements} that have no registered posting key and posts
  *       them. A redelivered fact cannot do it: pos-order's manifest replay (#2579) re-sends a close fact under its
  *       original envelope id, which {@code processed_events} drops, and pos-order has no other re-emit of it.
- *   <li>{@code BANK_DROP}, {@code FLOAT_INCREASE}, {@code FLOAT_DECREASE}: nothing at close (the deposit, S18; Change
- *       float, S15).
+ *   <li>{@code BANK_DROP}, {@code FLOAT_INCREASE}, {@code FLOAT_DECREASE}: nothing at close (the deposit, S18,
+ *       {@link UndepositedSessionProjection}; Change float, S15).
  *   <li>No reason (recorded before S16) or a reason this module does not know: nothing, logged and counted as {@code
  *       UNCLASSIFIED}.
  * </ul>
@@ -157,6 +157,20 @@ public class RegisterCashMovementPostingService {
             case BANK_DROP, FLOAT_INCREASE, FLOAT_DECREASE -> Disposition.NOTHING_AT_CLOSE;
             default -> Disposition.UNCLASSIFIED;
         };
+    }
+
+    /**
+     * What closing the session posts to {@code CASH_CLEARING} (1095) for {@code movement}, signed debit positive
+     * (CAP:550 S18, #2514): a petty expense credits its amount, every other reason posts nothing to it at close. The
+     * undeposited-sessions read model adds the over/short to the sum of these for a session's clearing net, the part
+     * of 1095 its deposit clears, so a reason that starts posting at close (the vendor cash on delivery half of #2513)
+     * must change this too.
+     */
+    static @NonNull BigDecimal clearingEffect(@NonNull Movement movement) {
+        if (dispositionOf(movement.reason()) != Disposition.POST_PETTY_EXPENSE || movement.amount() == null) {
+            return BigDecimal.ZERO;
+        }
+        return movement.amount().negate();
     }
 
     /**

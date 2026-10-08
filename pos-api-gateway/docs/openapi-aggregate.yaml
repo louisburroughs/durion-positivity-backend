@@ -103,6 +103,12 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1default-mappings~1search
   /v1/accounting/default-mappings/{id}:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1default-mappings~1{id}
+  /v1/accounting/deposits:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1deposits
+  /v1/accounting/deposits/{depositId}:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1deposits~1{depositId}
+  /v1/accounting/deposits/{depositId}/reversal:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1deposits~1{depositId}~1reversal
   /v1/accounting/events:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1events
   /v1/accounting/events/contract:
@@ -317,6 +323,8 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1tenant-template~1add-ons~1retread-plant
   /v1/accounting/tenant-template/status:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1tenant-template~1status
+  /v1/accounting/undeposited-sessions:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1undeposited-sessions
   /v1/accounting/unpaid-walk-in-sales:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1unpaid-walk-in-sales
   /v1/accounting/vendor-bills:

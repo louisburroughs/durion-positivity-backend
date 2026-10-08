@@ -1048,13 +1048,16 @@ public enum PermissionCode {
     ACCOUNTING__FLOAT__MANAGE(553, "accounting:float:manage"),
     // ── Order (new) ────────────────────────────────────────────────────────────
     ORDER__SESSION_POLICY__MANAGE(554, "order:session_policy:manage"),
-    ORDER__SESSION__APPROVE_CASH_MOVEMENT(555, "order:session:approve_cash_movement");
+    ORDER__SESSION__APPROVE_CASH_MOVEMENT(555, "order:session:approve_cash_movement"),
+    // ── Accounting (new) ───────────────────────────────────────────────────────
+    ACCOUNTING__DEPOSIT__CREATE(556, "accounting:deposit:create"),
+    ACCOUNTING__DEPOSIT__REVERSE(557, "accounting:deposit:reverse");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 100;
+    public static final int CATALOG_VERSION = 101;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

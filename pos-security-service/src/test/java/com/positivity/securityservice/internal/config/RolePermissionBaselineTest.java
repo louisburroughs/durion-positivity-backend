@@ -703,6 +703,8 @@ class RolePermissionBaselineTest {
             // CAP:550 S23 (#2516): clerks keep the vendor master and request remit-to changes.
             expected.add("supplier:vendor:read");
             expected.add("supplier:vendor:write");
+            // CAP:550 S18 (#2514): clerks read the undeposited sessions and record bank deposits, never reverse them.
+            expected.add("accounting:deposit:create");
 
             assertThat(sqlSeededGrants.get("ACCOUNTING_CLERK"))
                     .as("ACCOUNTING_CLERK grants in the SQL seed")
@@ -710,6 +712,15 @@ class RolePermissionBaselineTest {
             assertThat(seededGrants.get("ACCOUNTING_CLERK"))
                     .as("ACCOUNTING_CLERK grants, SQL seed and bulk-load baseline together")
                     .containsExactlyInAnyOrderElementsOf(expected);
+        }
+
+        @Test
+        @DisplayName("CAP:550 S18: accounting:deposit:create is held by exactly ACCOUNTING_CLERK, ADMIN and CONTROLLER;"
+                + " accounting:deposit:reverse by exactly ADMIN and CONTROLLER (OI-5, AW31)")
+        void depositHolders() {
+            assertThat(holdersOf("accounting:deposit:create"))
+                    .containsExactly("ACCOUNTING_CLERK", "ADMIN", "CONTROLLER");
+            assertThat(holdersOf("accounting:deposit:reverse")).containsExactly("ADMIN", "CONTROLLER");
         }
 
         @Test

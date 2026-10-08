@@ -449,7 +449,9 @@ public class JournalEntryController {
                     exist, 409 JE_ALREADY_REVERSED when the entry was already reversed (including a lost \
                     concurrent-reversal race), 409 JE_NOT_POSTED when it is DRAFT or PENDING, and 422 \
                     PERIOD_CLOSED or PERIOD_HARD_LOCKED for period-gate failures. A register float relocation \
-                    entry is never reversed (409 FLOAT_RELOCATION_NOT_REVERSIBLE: move the register again), and \
+                    entry is never reversed (409 FLOAT_RELOCATION_NOT_REVERSIBLE: move the register again), nor is \
+                    the reversal entry of a bank deposit (409 DEPOSIT_REVERSAL_NOT_REVERSIBLE: record the deposit \
+                    again), and \
                     a register float go-live or change entry of a register that has moved may not be reversed \
                     before its latest move (422 FLOAT_REVERSAL_BEFORE_RELOCATION, or 422 \
                     GL_MAPPING_NOT_CONFIGURED when its follow-up reclass finds no mapping).
@@ -473,8 +475,9 @@ public class JournalEntryController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "Entry is already reversed (JE_ALREADY_REVERSED), not yet posted (JE_NOT_POSTED), or a"
-                    + " register float relocation entry (FLOAT_RELOCATION_NOT_REVERSIBLE)",
+            description = "Entry is already reversed (JE_ALREADY_REVERSED), not yet posted (JE_NOT_POSTED), a"
+                    + " register float relocation entry (FLOAT_RELOCATION_NOT_REVERSIBLE) or a bank deposit's reversal"
+                    + " entry (DEPOSIT_REVERSAL_NOT_REVERSIBLE)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
