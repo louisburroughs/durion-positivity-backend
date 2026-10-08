@@ -555,6 +555,28 @@ public class VendorBillPostingService {
         return account;
     }
 
+    private static VendorBillDebitClass requireClass(VendorBill bill, Classification classification) {
+        if (classification.debitClass() == null) {
+            throw unclassified(bill);
+        }
+        return classification.debitClass();
+    }
+
+    private static String expenseKey(VendorBill bill, Classification classification) {
+        String key = classification.expenseMappingKey();
+        if (key == null || key.isBlank()) {
+            throw unclassified(bill);
+        }
+        return key.trim();
+    }
+
+    private static VendorBillException unclassified(VendorBill bill) {
+        return new VendorBillException(
+                VendorBillException.Code.AP_BILL_UNCLASSIFIED,
+                "Bill " + bill.getBillNumber() + " has no class and its vendor no default; give the approval a"
+                        + " classification (debitClass, and expenseMappingKey for expenses)");
+    }
+
     private static void add(Map<String, BigDecimal> debits, String key, BigDecimal amount) {
         debits.merge(key, amount, BigDecimal::add);
     }
