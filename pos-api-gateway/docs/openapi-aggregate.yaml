@@ -1645,12 +1645,16 @@ paths:
     $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1vendors~1{vendorId}~1tax-registrations~1{registrationId}~1reveal
   /v1/tax/calculate:
     $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1calculate
+  /v1/tax/evidence-rules:
+    $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1evidence-rules
   /v1/tax/exemption-certificates:
     $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1exemption-certificates
   /v1/tax/exemption-certificates/{id}:
     $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1exemption-certificates~1{id}
   /v1/tax/mode:
     $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1mode
+  /v1/tax/plausibility-checks:
+    $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1plausibility-checks
   /v1/tax/rates:
     $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1rates
   /v1/tax/tax-types:
