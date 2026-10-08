@@ -10,6 +10,12 @@ permissions:
     description: "Approve vendor bills over the clerk limit"
   - name: "accounting:ap:pay"
     description: "Process payments"
+  - name: "accounting:ap_approval_policy:manage"
+    description: "Read and change the AP approval policy: approval limits, separation-of-duties switches and default AP terms (CAP:550 S13)"
+    grantTo:
+      - "ADMIN"
+      - "CONTROLLER"
+      - "GENERAL_MANAGER"
   - name: "accounting:ap:reject"
     description: "Reject vendor bills and void match exceptions or approved bills"
   - name: "accounting:ap:view"

@@ -11,6 +11,7 @@ import com.positivity.accounting.internal.entity.VendorBillMatchCandidate;
 import com.positivity.accounting.internal.entity.VendorBillMatchEvidence;
 import com.positivity.accounting.internal.enums.MatchConfidence;
 import com.positivity.accounting.internal.enums.VendorBillAction;
+import com.positivity.accounting.internal.enums.VendorBillApproverKind;
 import com.positivity.accounting.internal.enums.VendorBillDebitClass;
 import com.positivity.accounting.internal.enums.VendorBillDifferenceClass;
 import com.positivity.accounting.internal.enums.VendorBillStage;
@@ -24,8 +25,8 @@ import com.positivity.accounting.internal.repository.AccountingAuditLogRepositor
 import com.positivity.accounting.internal.repository.VendorBillMatchCandidateRepository;
 import com.positivity.accounting.internal.repository.VendorBillMatchEvidenceRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
+import com.positivity.accounting.internal.security.AccountingPermissions;
 import java.io.Serial;
-import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -53,10 +54,33 @@ import org.springframework.transaction.support.TransactionTemplate;
  * refused posting at approval rolls the whole approval back (AW42), and its refusal audit row is then written in a
  * transaction of its own ({@link #refusalTransaction}), so it survives the rollback: one row per refused approval.
  *
+ * <p><b>Guard order</b> (CAP:550 S13, #2510, ruling 1) on approve, {@code ACCEPT} and the void of an approved bill. The
+ * first guard that fails answers, before anything is written:
+ *
+ * <ol>
+ *   <li>the endpoint gate and {@link VendorBillDecisions#require} (403 {@code FORBIDDEN});
+ *   <li>the bill's state ({@link #readyState}): its status and an open ambiguous match (409 {@code
+ *       AP_BILL_NOT_APPROVABLE}), for approve and {@code ACCEPT} a goods-receipt bill's matched invoice (409 {@code
+ *       AP_BILL_AWAITING_INVOICE}, AW45), for the void an allocation (409 {@code AP_BILL_NOT_VOIDABLE});
+ *   <li>the tier ({@link #requireTier}): an {@code OVER_LIMIT} bill needs {@code accounting:ap:approve_over_limit}
+ *       (403 {@code AP_APPROVAL_LIMIT_EXCEEDED});
+ *   <li>creator is not approver ({@link #creatorRule}), approve and {@code ACCEPT} only (403 {@code
+ *       AP_BILL_SELF_APPROVAL}, or 400 {@code JUSTIFICATION_REQUIRED} for an exception use without one);
+ *   <li>the bill's content ({@link #readyContent}): 422 {@code AP_BILL_ZERO_TOTAL}, {@code
+ *       AP_BILL_TOTALS_UNRECONCILED} (AW47); S43 adds {@code AP_BILL_TAX_ON_RESALE_GOODS} at the end of this step;
+ *   <li>the posting ({@link VendorBillPostingService#post}): {@code AP_BILL_UNCLASSIFIED}, {@code PERIOD_CLOSED},
+ *       {@code PERIOD_HARD_LOCKED}, {@code GL_MAPPING_NOT_CONFIGURED}.
+ * </ol>
+ *
+ * The identity guards come before the content guards, so someone who may not decide is never asked for a {@code
+ * difference}. Each 403 of steps 3 and 4 is audited in its own transaction ({@code <operation>_REFUSED}), as a
+ * refused posting is. Submit runs steps 2 and 5 only: the limit applies at decision time, never at submission.
+ *
  * <p><b>Audit.</b> One {@code accounting_audit_log} row per decision (entity type {@value #AUDIT_ENTITY_TYPE}): the
- * actor, the tier used ({@code OVER_LIMIT}), the limit at that moment (0, the specification's default until S13
- * records the real one), the bill's total and currency, the latest match score and evidence id, the justification
- * and, for an approval, the entry and its date.
+ * actor, the tier from the policy in force, the clerk ({@code limit}) and automatic ({@code autoLimit}) limits, the
+ * exception switch used ({@code exception}: {@code CREATOR_APPROVAL} or {@code NONE}), the bill's total and currency,
+ * the latest match score and evidence id, the justification and, for an approval, the entry and its date. An
+ * exception use writes a {@value #AUDIT_SOD_EXCEPTION} row too.
  */
 @Slf4j
 @Service
@@ -70,12 +94,22 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
     static final String AUDIT_SELECT = "VENDOR_BILL_MATCH_CANDIDATE_SELECT";
     static final String AUDIT_VOID = "VENDOR_BILL_VOID";
     static final String AUDIT_RELEASE = "VENDOR_BILL_MATCH_CANDIDATE_RELEASE";
+    static final String AUDIT_DUE_DATE_SET = "VENDOR_BILL_DUE_DATE_SET";
 
-    /** Suffix of the audit operation that records an approval refused by its posting (AW42). */
+    /** One row per use of a separation-of-duties exception switch (§4.3, AW6; CAP:550 S13, #2510). */
+    static final String AUDIT_SOD_EXCEPTION = "VENDOR_BILL_SOD_EXCEPTION";
+
+    /** {@code exception=} of a decision row: the creator approved under {@code AP_ALLOW_CREATOR_APPROVAL}. */
+    static final String EXCEPTION_CREATOR_APPROVAL = "CREATOR_APPROVAL";
+
+    /** {@code exception=} of a decision row that used no exception switch. */
+    static final String EXCEPTION_NONE = "NONE";
+
+    /**
+     * Suffix of the audit operation that records a decision refused by its posting (AW42), or by the tier or the
+     * creator rule (S13).
+     */
     static final String AUDIT_REFUSED_SUFFIX = "_REFUSED";
-
-    /** The clerk limit in force until S13 stores one: the specification's default (§4.3, "unset = 0"). */
-    static final BigDecimal CLERK_LIMIT_DEFAULT = BigDecimal.ZERO;
 
     private static final Set<VendorBillStatus> SUBMITTABLE =
             EnumSet.of(VendorBillStatus.PENDING_RECEIPT_MATCH, VendorBillStatus.MATCH_EXCEPTION);
@@ -92,6 +126,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
     private final VendorBillReader reader;
     private final VendorBillLocks locks;
     private final LedgerCurrency ledgerCurrency;
+    private final ApApprovalPolicy policy;
     private final TransactionTemplate commandTransaction;
     private final TransactionTemplate refusalTransaction;
 
@@ -108,6 +143,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
             VendorBillReader reader,
             VendorBillLocks locks,
             LedgerCurrency ledgerCurrency,
+            ApApprovalPolicy policy,
             PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.bills = bills;
@@ -121,6 +157,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
         this.reader = reader;
         this.locks = locks;
         this.ledgerCurrency = ledgerCurrency;
+        this.policy = policy;
         this.commandTransaction = new TransactionTemplate(transactionManager);
         this.refusalTransaction = new TransactionTemplate(transactionManager);
         this.refusalTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -141,7 +178,8 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
             if (!SUBMITTABLE.contains(bill.getStatus())) {
                 throw notApprovable(bill, "sent for approval");
             }
-            readyToDecide(bill, difference, "sent for approval");
+            readyState(bill, "sent for approval");
+            readyContent(bill, difference);
             bill.setStatus(VendorBillStatus.AWAITING_APPROVAL);
             bill.setSubmittedBy(actor);
             bill.setSubmittedAt(Instant.now(clock));
@@ -168,11 +206,28 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
         DifferenceDecision difference = difference(command.difference());
         return approving(AUDIT_APPROVE, () -> {
             VendorBill bill = lock(billId);
+            // 2. state
             if (bill.getStatus() != VendorBillStatus.AWAITING_APPROVAL) {
                 throw notApprovable(bill, "approved");
             }
-            readyToDecide(bill, difference, "approved");
-            approveAndPost(bill, actor, justification, classification, difference, override, AUDIT_APPROVE, null);
+            readyState(bill, "approved");
+            // 3. tier, 4. creator is not approver: the approve body's justification carries an exception use
+            ApApprovalPolicy.Settings settings = policy.forDecision();
+            VendorBillReview.RequiredTier tier = requireTier(bill, settings, actor);
+            String exception = creatorRule(bill, settings, actor, command.justification(), "justification");
+            // 5. content, 6. the posting
+            readyContent(bill, difference);
+            Decision decision = new Decision(tier, settings, exception);
+            approveAndPost(
+                    bill,
+                    actor,
+                    exception == null ? justification : VendorBillDecisions.required(justification, "justification"),
+                    classification,
+                    difference,
+                    override,
+                    AUDIT_APPROVE,
+                    null,
+                    decision);
             return reader.read(bill);
         });
     }
@@ -218,12 +273,26 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
             }
             switch (resolution) {
                 case ACCEPT -> {
-                    readyToDecide(bill, difference, "accepted");
-                    approveAndPost(bill, actor, reason, classification, difference, override, AUDIT_RESOLVE, "ACCEPT");
+                    readyState(bill, "accepted");
+                    ApApprovalPolicy.Settings settings = policy.forDecision();
+                    VendorBillReview.RequiredTier tier = requireTier(bill, settings, actor);
+                    // ACCEPT's required reason is the justification of a creator exception (ruling 3).
+                    String exception = creatorRule(bill, settings, actor, reason, "reason");
+                    readyContent(bill, difference);
+                    approveAndPost(
+                            bill,
+                            actor,
+                            reason,
+                            classification,
+                            difference,
+                            override,
+                            AUDIT_RESOLVE,
+                            "ACCEPT",
+                            new Decision(tier, settings, exception));
                 }
                 case CORRECT -> correct(bill, actor, reason);
                 case VOID -> {
-                    // Never posted (AW42): nothing to reverse.
+                    // Never posted (AW42): nothing to reverse. Not an approval: no tier, no creator rule.
                     markVoided(bill, actor, reason);
                     audit(bill, AUDIT_RESOLVE, actor, reason, "action=VOID");
                 }
@@ -269,6 +338,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
             }
             Instant now = Instant.now(clock);
             long open = set.stream().filter(c -> !c.isResolved()).count();
+            LocalDateTime dueBefore = bill.getDueDate();
             keepWhatWasBilled(bill, selected, actor);
             for (VendorBillMatchCandidate candidate : set) {
                 if (!candidate.isResolved()) {
@@ -288,7 +358,12 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
                     + selected.getMatchScore() + ")");
             bill.setModifiedBy(actor);
             bills.save(bill);
-            audit(bill, AUDIT_SELECT, actor, null, "candidateId=" + candidateId + ";candidates=" + open);
+            audit(
+                    bill,
+                    AUDIT_SELECT,
+                    actor,
+                    null,
+                    "candidateId=" + candidateId + ";candidates=" + open + dueDateChange(dueBefore, bill.getDueDate()));
             named.stream()
                     .filter(b -> !b.getVendorBillId().equals(bill.getVendorBillId()))
                     .forEach(other -> release(other, invoiceEventId, actor));
@@ -303,7 +378,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
         String actor = VendorBillDecisions.actor();
         String reason = VendorBillDecisions.required(command.reason(), "reason");
         String override = VendorBillDecisions.optional(command.overrideJustification(), "overrideJustification");
-        return inTransaction(() -> {
+        return approving(AUDIT_VOID, () -> {
             VendorBill bill = lock(billId);
             if (bill.getStatus() == VendorBillStatus.APPROVED) {
                 voidApproved(bill, actor, reason, override);
@@ -325,6 +400,11 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
         });
     }
 
+    /**
+     * The void of an approved bill (AW42), in the guard order: the permission (ap:reject and either approve
+     * permission), the state (nothing allocated), then the tier against the current limit (ruling 4). The creator rule
+     * does not apply to a void.
+     */
     private void voidApproved(VendorBill bill, String actor, String reason, @Nullable String override) {
         VendorBillDecisions.require(VendorBillAction.VOID_APPROVED);
         if (allocations.existsByVendorBill_VendorBillId(bill.getVendorBillId())) {
@@ -333,6 +413,8 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
                     "Bill " + bill.getBillNumber() + " has payments allocated to it; correct it with a vendor"
                             + " credit note");
         }
+        ApApprovalPolicy.Settings settings = policy.forDecision();
+        VendorBillReview.RequiredTier tier = requireTier(bill, settings, actor);
         VendorBillGlPosting posting = postingService.reverse(bill, override, actor);
         markVoided(bill, actor, reason);
         audit(
@@ -341,7 +423,56 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
                 actor,
                 reason,
                 "action=VOID_APPROVED;reversalJournalEntryId=" + posting.getReversalJournalEntryId() + ";voidDate="
-                        + posting.getReversalDate() + (override == null ? "" : ";periodOverride=true"));
+                        + posting.getReversalDate() + (override == null ? "" : ";periodOverride=true"),
+                new Decision(tier, settings, null));
+    }
+
+    // ---- the real due date (S13, §4.2, AW11) ----------------------------------------------------------------
+
+    /** The statuses of approval review, in which a person may enter the real due date. */
+    static final Set<VendorBillStatus> REVIEW_STATUSES = VendorBillReader.REVIEW_STATUSES;
+
+    @Override
+    public @NonNull VendorBillResponse setDueDate(
+            @NonNull UUID billId, VendorBillCommands.@NonNull SetDueDate command) {
+        VendorBillDecisions.require(VendorBillAction.SET_DUE_DATE);
+        String actor = VendorBillDecisions.actor();
+        if (command.dueDate() == null) {
+            throw new VendorBillException(
+                    VendorBillException.Code.VALIDATION_ERROR,
+                    "dueDate is required (YYYY-MM-DD)",
+                    List.of(new VendorBillException.FieldError("dueDate", "is required")),
+                    null);
+        }
+        String justification = VendorBillDecisions.optional(command.justification(), "justification");
+        LocalDateTime dueDate = command.dueDate().atStartOfDay();
+        return inTransaction(() -> {
+            VendorBill bill = lock(billId);
+            if (!REVIEW_STATUSES.contains(bill.getStatus())) {
+                // Approved bills are locked; CURRENCY_HOLD never reaches review (ADR-0067).
+                throw notApprovable(
+                        bill,
+                        "given a due date: only a bill in PENDING_RECEIPT_MATCH, MATCH_EXCEPTION or AWAITING_APPROVAL"
+                                + " takes one");
+            }
+            LocalDateTime before = bill.getDueDate();
+            if (dueDate.equals(before)) {
+                return reader.read(bill);
+            }
+            bill.setDueDate(dueDate);
+            bill.setModifiedBy(actor);
+            bills.save(bill);
+            AccountingAuditLog row = auditRow(
+                    bill,
+                    AUDIT_DUE_DATE_SET,
+                    actor,
+                    justification,
+                    "dueDate=" + dueDate.toLocalDate(),
+                    decisionNow(bill));
+            row.setOldValue(before == null ? null : before.toLocalDate().toString());
+            auditLogs.save(row);
+            return reader.read(bill);
+        });
     }
 
     private void markVoided(VendorBill bill, String actor, String reason) {
@@ -435,7 +566,8 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
             @Nullable DifferenceDecision difference,
             @Nullable String override,
             String operation,
-            @Nullable String resolution) {
+            @Nullable String resolution,
+            Decision decision) {
         VendorBillPostingService.Classification effective = requireExpenseKey(merge(classification, bill));
         if (difference != null) {
             difference.applyTo(bill);
@@ -449,6 +581,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
         bill.setStatus(VendorBillStatus.APPROVED);
         bill.setRejectionReason(null);
         bill.setApprovedBy(actor);
+        bill.setApprovedByKind(VendorBillApproverKind.PERSON);
         bill.setApprovedAt(Instant.now(clock));
         bill.setApprovalJustification(justification);
         bill.setModifiedBy(actor);
@@ -464,15 +597,19 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
                         + ";postingDateRule=" + posting.getPostingDateRule() + ";roundingAdjustment="
                         + posting.getRoundingAdjustment().toPlainString()
                         + (details == null ? "" : ";" + details)
-                        + (override == null ? "" : ";periodOverride=true"));
+                        + (override == null ? "" : ";periodOverride=true"),
+                decision);
+        if (decision.exception() != null) {
+            audit(bill, AUDIT_SOD_EXCEPTION, actor, justification, "operation=" + operation, decision);
+        }
     }
 
     /**
-     * What every send, approval and acceptance needs first (#2509 review; AW45, AW47), refused before anything is
-     * written: no open ambiguous match naming the bill, a matched invoice for a goods-receipt bill, a total that is
-     * not 0.00, and the vendor's totals adding up or a {@code difference} decided.
+     * Guard step 2, the bill's state (#2509 review; AW45; S13 ruling 1), refused with 409 before anything is written:
+     * no open ambiguous match naming the bill, and a matched invoice for a goods-receipt bill. An AW45 bill has no
+     * billed total yet, so its tier means nothing: this runs before {@link #requireTier}.
      */
-    private void readyToDecide(VendorBill bill, @Nullable DifferenceDecision difference, String what) {
+    private void readyState(VendorBill bill, String what) {
         if (reader.hasOpenCandidates(bill.getVendorBillId())) {
             throw new VendorBillException(
                     VendorBillException.Code.AP_BILL_NOT_APPROVABLE,
@@ -487,6 +624,14 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
                             + " the invoice (POST /v1/accounting/vendor-bills/match) or select a candidate before it"
                             + " is " + what + ", or void the bill if no invoice will come");
         }
+    }
+
+    /**
+     * Guard step 5, the bill's content (#2509 review; AW47), refused with 422 before anything is written: a total that
+     * is not 0.00, and the vendor's totals adding up or a {@code difference} decided. S43 adds the tax-on-resale check
+     * ({@code AP_BILL_TAX_ON_RESALE_GOODS}) at the end of this step.
+     */
+    private void readyContent(VendorBill bill, @Nullable DifferenceDecision difference) {
         if (bill.getTotalAmount() == null || bill.getTotalAmount().signum() == 0) {
             throw new VendorBillException(
                     VendorBillException.Code.AP_BILL_ZERO_TOTAL,
@@ -497,7 +642,10 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
                 bill, difference != null ? difference.difference() : VendorBillPostingService.difference(bill));
     }
 
-    /** A posting refused at approval, carried out of the rolled-back transaction to be audited. */
+    /**
+     * A decision refused by its posting (AW42), its tier or the creator rule (S13), carried out of the rolled-back
+     * transaction to be audited.
+     */
     private static final class PostingRefused extends RuntimeException {
 
         @Serial
@@ -506,12 +654,18 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
         private final UUID billId;
         private final String billNumber;
         private final String actor;
+        private final @Nullable String details;
 
         PostingRefused(UUID billId, String billNumber, String actor, RuntimeException cause) {
+            this(billId, billNumber, actor, cause, null);
+        }
+
+        PostingRefused(UUID billId, String billNumber, String actor, RuntimeException cause, @Nullable String details) {
             super(cause);
             this.billId = billId;
             this.billNumber = billNumber;
             this.actor = actor;
+            this.details = details;
         }
 
         @Override
@@ -520,7 +674,10 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
         }
     }
 
-    /** Runs an approving command; a refused posting is audited in its own transaction, then rethrown as it was. */
+    /**
+     * Runs a deciding command; a refusal carried as {@link PostingRefused} (the posting, the tier, the creator rule) is
+     * audited in its own transaction, then rethrown as it was.
+     */
     private VendorBillResponse approving(String operation, Supplier<VendorBillResponse> work) {
         try {
             return inTransaction(work);
@@ -537,17 +694,23 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
         row.setOperation(operation + AUDIT_REFUSED_SUFFIX);
         row.setUserId(refused.actor);
         row.setNewValue(truncate(
-                "billNumber=" + refused.billNumber + ";code=" + codeOf(refused.getCause()) + ";message="
+                "billNumber=" + refused.billNumber + ";code=" + codeOf(refused.getCause())
+                        + (refused.details == null ? "" : ";" + refused.details) + ";message="
                         + refused.getCause().getMessage(),
                 2000));
         auditLogs.save(row);
         log.info(
-                "Approval of vendor bill {} refused by its posting ({}); the bill is unchanged",
+                "{} of vendor bill {} refused ({}); the bill is unchanged",
+                operation,
                 refused.billNumber,
                 codeOf(refused.getCause()));
     }
 
-    private static String codeOf(RuntimeException cause) {
+    /** The stable code of a refusal, for an audit row. */
+    static String codeOf(RuntimeException cause) {
+        if (cause instanceof VendorBillAutoApproval.Skip skip && skip.code() != null) {
+            return skip.code();
+        }
         if (cause instanceof VendorBillException vendorBill) {
             return vendorBill.getCode().name();
         }
@@ -741,31 +904,159 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
                         .orElse("");
     }
 
+    // ---- the tier and the creator rule (S13) -------------------------------------------------------------
+
+    /**
+     * The tier, the limits and the exception switch a decision used, for its audit row (S13, #2510).
+     *
+     * @param exception {@value #EXCEPTION_CREATOR_APPROVAL} when the creator approved under the switch, else null
+     */
+    record Decision(
+            VendorBillReview.@NonNull RequiredTier tier,
+            ApApprovalPolicy.@NonNull Settings settings,
+            @Nullable String exception) {
+
+        String auditText() {
+            return "tier=" + tier + ";limit=" + settings.clerkApprovalLimit().toPlainString() + ";autoLimit="
+                    + settings.autoApprovalLimit().toPlainString() + ";exception="
+                    + (exception == null ? EXCEPTION_NONE : exception);
+        }
+    }
+
+    /** The tier the bill needs under the policy in force now, for a row that is not a decision (submit, reject). */
+    private Decision decisionNow(VendorBill bill) {
+        ApApprovalPolicy.Settings settings = policy.settings();
+        return new Decision(settings.tier(bill.getTotalAmount()), settings, null);
+    }
+
+    /**
+     * Guard step 3 (S13, #2510; AW4, AW5): the bill's tier against the current clerk limit. An {@code OVER_LIMIT} bill
+     * needs {@code accounting:ap:approve_over_limit}; otherwise 403 {@code AP_APPROVAL_LIMIT_EXCEEDED}, naming the
+     * total and the limit, audited in its own transaction.
+     */
+    private VendorBillReview.RequiredTier requireTier(
+            VendorBill bill, ApApprovalPolicy.Settings settings, String actor) {
+        VendorBillReview.RequiredTier tier = settings.tier(bill.getTotalAmount());
+        if (VendorBillDecisions.mayDecideTier(tier)) {
+            return tier;
+        }
+        String currency = currencyOf(bill);
+        String total =
+                bill.getTotalAmount() == null ? "0.00" : bill.getTotalAmount().toPlainString();
+        String limit = settings.clerkApprovalLimit().toPlainString();
+        VendorBillException refusal = new VendorBillException(
+                VendorBillException.Code.AP_APPROVAL_LIMIT_EXCEEDED,
+                "Bill " + bill.getBillNumber() + " totals " + total + " " + currency + ", over the clerk approval limit"
+                        + " of " + limit + " " + currency + "; an approver over the limit decides it",
+                List.of(),
+                "Ask a holder of " + AccountingPermissions.AP_APPROVE_OVER_LIMIT + " (a CONTROLLER or GENERAL_MANAGER)"
+                        + " to decide this bill");
+        throw new PostingRefused(
+                bill.getVendorBillId(),
+                bill.getBillNumber(),
+                actor,
+                refusal,
+                new Decision(tier, settings, null).auditText() + ";totalAmount=" + total + ";currencyCode=" + currency);
+    }
+
+    /**
+     * Guard step 4, separation of duties 1 (§4.3, AW6; S13 rulings 1 and 3): the bill's creator may not approve or
+     * accept it, 403 {@code AP_BILL_SELF_APPROVAL} audited in its own transaction. Under {@code
+     * AP_ALLOW_CREATOR_APPROVAL} the decision goes through as an exception use, which needs a justification of at least
+     * 10 characters ({@code field}: approve's {@code justification}, {@code ACCEPT}'s {@code reason}). A bill a system
+     * created ({@code supplier}, {@code SYSTEM}) never matches a person.
+     *
+     * @return {@value #EXCEPTION_CREATOR_APPROVAL} when the exception is used, else null
+     */
+    private @Nullable String creatorRule(
+            VendorBill bill,
+            ApApprovalPolicy.Settings settings,
+            String actor,
+            @Nullable String justification,
+            String field) {
+        if (!actor.equals(bill.getCreatedBy())) {
+            return null;
+        }
+        if (!settings.allowCreatorApproval()) {
+            throw new PostingRefused(
+                    bill.getVendorBillId(),
+                    bill.getBillNumber(),
+                    actor,
+                    new VendorBillException(
+                            VendorBillException.Code.AP_BILL_SELF_APPROVAL,
+                            "You created bill " + bill.getBillNumber() + "; another person approves it",
+                            List.of(),
+                            "Ask another approver to decide this bill"),
+                    "createdBy=" + bill.getCreatedBy());
+        }
+        VendorBillDecisions.required(justification, field);
+        return EXCEPTION_CREATOR_APPROVAL;
+    }
+
+    private String currencyOf(VendorBill bill) {
+        return bill.getCurrency() == null || bill.getCurrency().isBlank()
+                ? ledgerCurrency.code()
+                : bill.getCurrency().trim();
+    }
+
+    /** {@code ;dueDate=OLD->NEW} when a match or a selection replaced the due date (ruling 7), else empty. */
+    static String dueDateChange(@Nullable LocalDateTime before, @Nullable LocalDateTime after) {
+        if (Objects.equals(before, after)) {
+            return "";
+        }
+        return ";dueDate=" + (before == null ? "" : before.toLocalDate()) + "->"
+                + (after == null ? "" : after.toLocalDate());
+    }
+
     private void audit(
             VendorBill bill, String operation, String actor, @Nullable String justification, @Nullable String details) {
+        audit(bill, operation, actor, justification, details, decisionNow(bill));
+    }
+
+    private void audit(
+            VendorBill bill,
+            String operation,
+            String actor,
+            @Nullable String justification,
+            @Nullable String details,
+            Decision decision) {
+        auditLogs.save(auditRow(bill, operation, actor, justification, details, decision));
+    }
+
+    private AccountingAuditLog auditRow(
+            VendorBill bill,
+            String operation,
+            String actor,
+            @Nullable String justification,
+            @Nullable String details,
+            Decision decision) {
         VendorBillMatchEvidence latest = evidence.findFirstByVendorBillIdOrderByRecordedAtDescMatchEvidenceIdDesc(
                         bill.getVendorBillId())
                 .orElse(null);
-        String currency =
-                bill.getCurrency() == null || bill.getCurrency().isBlank() ? ledgerCurrency.code() : bill.getCurrency();
         AccountingAuditLog row = new AccountingAuditLog();
         row.setEntityType(AUDIT_ENTITY_TYPE);
         row.setEntityId(bill.getVendorBillId());
         row.setOperation(operation);
         row.setUserId(actor);
         row.setJustification(justification == null ? null : truncate(justification, 1000));
-        row.setNewValue(truncate(
-                "billNumber=" + bill.getBillNumber() + ";status=" + bill.getStatus() + ";tier=OVER_LIMIT;limit="
-                        + CLERK_LIMIT_DEFAULT.toPlainString() + ";totalAmount="
-                        + (bill.getTotalAmount() == null
-                                ? ""
-                                : bill.getTotalAmount().toPlainString())
-                        + ";currencyCode=" + currency + ";matchScore="
-                        + (latest == null ? "" : String.valueOf(latest.getScore())) + ";evidenceId="
-                        + (latest == null ? "" : latest.getMatchEvidenceId())
-                        + (details == null ? "" : ";" + details),
-                2000));
-        auditLogs.save(row);
+        row.setNewValue(truncate(auditText(bill, latest, currencyOf(bill), decision, details), 2000));
+        return row;
+    }
+
+    /** The {@code new_value} of a decision row: the bill, the tier and limits in force, the match, the details. */
+    static String auditText(
+            VendorBill bill,
+            @Nullable VendorBillMatchEvidence latest,
+            String currency,
+            Decision decision,
+            @Nullable String details) {
+        return "billNumber=" + bill.getBillNumber() + ";status=" + bill.getStatus() + ";" + decision.auditText()
+                + ";totalAmount="
+                + (bill.getTotalAmount() == null ? "" : bill.getTotalAmount().toPlainString())
+                + ";currencyCode=" + currency + ";matchScore="
+                + (latest == null ? "" : String.valueOf(latest.getScore())) + ";evidenceId="
+                + (latest == null ? "" : latest.getMatchEvidenceId())
+                + (details == null ? "" : ";" + details);
     }
 
     private static boolean isBlank(@Nullable String value) {

@@ -1671,9 +1671,9 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 102")
+    @DisplayName("CATALOG_VERSION is 103")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(102);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(103);
     }
 
     @Test
@@ -2036,11 +2036,13 @@ class SecurityGatewayConfigTest {
         // catalog v101 (CAP:550 S18, #2514): bank deposits of drawer cash (bits 556-557)
         assertThat(GatewayPermissionCatalog.authorityForBit(556)).isEqualTo("PERM_accounting:deposit:create");
         assertThat(GatewayPermissionCatalog.authorityForBit(557)).isEqualTo("PERM_accounting:deposit:reverse");
-        // beyond array must return null
         // catalog v102 (CAP:550 S12, #2509): vendor-bill approval over the clerk limit (bit 558)
         assertThat(GatewayPermissionCatalog.authorityForBit(558)).isEqualTo("PERM_accounting:ap:approve_over_limit");
+        // catalog v103 (CAP:550 S13, #2510): the AP approval policy (bit 559)
+        assertThat(GatewayPermissionCatalog.authorityForBit(559))
+                .isEqualTo("PERM_accounting:ap_approval_policy:manage");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(559)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(560)).isNull();
     }
 
     @Test
@@ -2526,8 +2528,8 @@ class SecurityGatewayConfigTest {
         }
 
         @Test
-        @DisplayName(
-                "bits present, loc_scope absent → both bits headers set, X-Loc-Scope absent (fail-closed signal preserved)")
+        @DisplayName("bits present, loc_scope absent → both bits headers set, X-Loc-Scope absent (fail-closed signal"
+                + " preserved)")
         void bitsPresentScopeAbsent_forwardsBitsOnly() {
             String fin = encodePermBits(0);
             String token = buildScopedToken(fin, "", null);
@@ -2663,8 +2665,8 @@ class SecurityGatewayConfigTest {
         }
 
         @Test
-        @DisplayName(
-                "strict mode: inbound X-Loc-Scope on a token whose loc_scope is absent → 401 (cannot widen fail-closed)")
+        @DisplayName("strict mode: inbound X-Loc-Scope on a token whose loc_scope is absent → 401 (cannot widen"
+                + " fail-closed)")
         void strictMode_scopeHeaderOnScopelessToken_returns401() {
             String token = buildScopedToken(encodePermBits(0), "", null);
             GatewayAuthProperties props = new GatewayAuthProperties();
@@ -2695,8 +2697,8 @@ class SecurityGatewayConfigTest {
         }
 
         @Test
-        @DisplayName(
-                "loc_scope that is not a JSON object (e.g. the string \"ALL\") is an issuer defect → 401, nothing synthesised")
+        @DisplayName("loc_scope that is not a JSON object (e.g. the string \"ALL\") is an issuer defect → 401, nothing"
+                + " synthesised")
         void malformedScopeClaim_returns401() {
             String token = buildScopedToken(encodePermBits(0), "", "ALL");
             SimpleMeterRegistry registry = new SimpleMeterRegistry();

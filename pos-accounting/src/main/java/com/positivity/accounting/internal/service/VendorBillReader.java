@@ -71,6 +71,12 @@ public class VendorBillReader {
     static final String CHECK_WITHIN_PRICE_TOLERANCE = "WITHIN_PRICE_TOLERANCE";
     static final String CHECK_TOTALS_ADD_UP = "TOTALS_ADD_UP";
     static final String CHECK_OPEN_DELIVERIES_FROM_VENDOR = "OPEN_DELIVERIES_FROM_VENDOR";
+    static final String CHECK_WITHIN_CLERK_LIMIT = "WITHIN_CLERK_LIMIT";
+
+    /** {@code blockedReason} values of an action the rules block (S13, #2510); the tier wins when both apply. */
+    static final String BLOCKED_LIMIT = "AP_APPROVAL_LIMIT_EXCEEDED";
+
+    static final String BLOCKED_SELF_APPROVAL = "AP_BILL_SELF_APPROVAL";
 
     /** {@code MATCHED_TO_DELIVERY} FAIL reasons. */
     static final String REASON_PICK_A_MATCH = "PICK_A_MATCH";
@@ -101,6 +107,7 @@ public class VendorBillReader {
     private final JournalEntryRepository journalEntries;
     private final AccountingCalendarZoneResolver zoneResolver;
     private final LedgerCurrency ledgerCurrency;
+    private final ApApprovalPolicy policy;
 
     /** The full read of one bill, for the caller in the security context. */
     @Transactional(readOnly = true)
@@ -119,6 +126,14 @@ public class VendorBillReader {
                 && (bill.getStatus() == VendorBillStatus.APPROVED || bill.getStatus() == VendorBillStatus.VOIDED);
         VendorBillReview.Channel channel = channelOf(bill);
         Optional<VendorBillTotals> totals = VendorBillTotals.of(bill);
+        ApApprovalPolicy.Settings settings = policy.settings();
+        List<VendorBillReview.Check> checks = new ArrayList<>(checks(
+                channel,
+                matched ? latest.orElse(null) : null,
+                !openCandidates.isEmpty(),
+                totals.orElse(null),
+                openDeliveries(bill, channel, posting.orElse(null))));
+        checks.add(withinClerkLimit(bill.getStatus(), bill.getTotalAmount(), settings, currencyCode));
 
         return VendorBillResponse.builder()
                 .vendorBillId(billId)
@@ -139,7 +154,7 @@ public class VendorBillReader {
                 .createdAt(bill.getCreatedAt())
                 .createdBy(bill.getCreatedBy())
                 .channel(channel)
-                .approval(approval(bill, approvedOnce))
+                .approval(approval(bill, approvedOnce, settings, currencyCode))
                 .rejection(rejection(bill))
                 .statusExplanation(statusExplanation(bill))
                 .openAmount(openAmount)
@@ -149,19 +164,15 @@ public class VendorBillReader {
                         .toList())
                 .reissues(reissues(billId))
                 .lines(lines(stored, currencyCode))
-                .checks(checks(
-                        channel,
-                        matched ? latest.orElse(null) : null,
-                        !openCandidates.isEmpty(),
-                        totals.orElse(null),
-                        openDeliveries(bill, channel, posting.orElse(null))))
+                .checks(checks)
                 .availableActions(availableActions(
                         bill.getStatus(),
                         channel,
                         !openCandidates.isEmpty(),
                         awaitsInvoice(channel, matched),
                         nz(allocated).signum() != 0,
-                        posting.isPresent()))
+                        posting.isPresent(),
+                        blocks(bill, settings)))
                 .posting(posting.map(this::posting).orElse(null))
                 .build();
     }
@@ -247,7 +258,9 @@ public class VendorBillReader {
                 };
         Map<UUID, BigDecimal> allocated = allocatedBy(
                 rows.getContent().stream().map(VendorBill::getVendorBillId).toList());
-        return rows.map(bill -> stageRow(bill, nz(allocated.get(bill.getVendorBillId()))));
+        // One policy snapshot per page (ruling 8).
+        ApApprovalPolicy.Settings settings = policy.settings();
+        return rows.map(bill -> stageRow(bill, nz(allocated.get(bill.getVendorBillId())), settings));
     }
 
     private Page<VendorBill> donePage(int page, int size) {
@@ -292,7 +305,8 @@ public class VendorBillReader {
                         APPaymentAllocationRepository.VendorBillAllocationSum::getAllocated));
     }
 
-    private VendorBillReview.StageRow stageRow(VendorBill bill, BigDecimal allocated) {
+    private VendorBillReview.StageRow stageRow(
+            VendorBill bill, BigDecimal allocated, ApApprovalPolicy.Settings settings) {
         return new VendorBillReview.StageRow(
                 bill.getVendorBillId(),
                 bill.getBillNumber(),
@@ -304,12 +318,14 @@ public class VendorBillReader {
                 bill.getStatus(),
                 channelOf(bill),
                 bill.getSubmittedAt(),
-                nz(bill.getTotalAmount()).subtract(allocated));
+                nz(bill.getTotalAmount()).subtract(allocated),
+                REVIEW_STATUSES.contains(bill.getStatus()) ? settings.tier(bill.getTotalAmount()) : null);
     }
 
     // ---- the bill's blocks ----------------------------------------------------------------------------------
 
-    private static VendorBillReview.@Nullable Approval approval(VendorBill bill, boolean approvedOnce) {
+    private static VendorBillReview.@Nullable Approval approval(
+            VendorBill bill, boolean approvedOnce, ApApprovalPolicy.Settings settings, String currencyCode) {
         if (bill.getSubmittedAt() == null && !approvedOnce) {
             return null;
         }
@@ -328,12 +344,15 @@ public class VendorBillReader {
                 bill.getSubmittedAt(),
                 bill.getSubmittedBy(),
                 bill.getSubmissionJustification(),
-                VendorBillReview.RequiredTier.OVER_LIMIT,
+                settings.tier(bill.getTotalAmount()),
+                settings.clerkApprovalLimit(),
+                currencyCode,
                 proposed,
                 difference,
                 approvedOnce ? bill.getApprovedAt() : null,
                 approvedOnce ? bill.getApprovedBy() : null,
-                approvedOnce ? bill.getApprovalJustification() : null);
+                approvedOnce ? bill.getApprovalJustification() : null,
+                approvedOnce ? bill.getApprovedByKind() : null);
     }
 
     private static VendorBillReview.@Nullable Rejection rejection(VendorBill bill) {
@@ -529,8 +548,73 @@ public class VendorBillReader {
         return checks;
     }
 
+    /** Statuses of approval review: the tier, the {@code WITHIN_CLERK_LIMIT} check and the due date apply. */
+    static final Set<VendorBillStatus> REVIEW_STATUSES = EnumSet.of(
+            VendorBillStatus.PENDING_RECEIPT_MATCH,
+            VendorBillStatus.MATCH_EXCEPTION,
+            VendorBillStatus.AWAITING_APPROVAL);
+
     /**
-     * The decisions valid for the bill now whose permission the caller holds (P5). {@code blockedReason} is S13's.
+     * {@code WITHIN_CLERK_LIMIT} (S13, #2510): in the review statuses, PASS when the bill is {@code CLERK}-tier and
+     * FAIL when it is {@code OVER_LIMIT}, with {@code totalAmount}, {@code clerkLimit} and {@code currencyCode};
+     * NOT_APPLICABLE otherwise. Informational: the decision checks the tier again.
+     */
+    static VendorBillReview.@NonNull Check withinClerkLimit(
+            @NonNull VendorBillStatus status,
+            @Nullable BigDecimal totalAmount,
+            ApApprovalPolicy.@NonNull Settings settings,
+            @NonNull String currencyCode) {
+        if (!REVIEW_STATUSES.contains(status)) {
+            return new VendorBillReview.Check(
+                    CHECK_WITHIN_CLERK_LIMIT, VendorBillCheckOutcome.NOT_APPLICABLE, Map.of());
+        }
+        Map<String, String> args = new LinkedHashMap<>();
+        args.put("totalAmount", nz(totalAmount).toPlainString());
+        args.put("clerkLimit", settings.clerkApprovalLimit().toPlainString());
+        args.put("currencyCode", currencyCode);
+        return new VendorBillReview.Check(
+                CHECK_WITHIN_CLERK_LIMIT,
+                settings.tier(totalAmount) == VendorBillReview.RequiredTier.CLERK
+                        ? VendorBillCheckOutcome.PASS
+                        : VendorBillCheckOutcome.FAIL,
+                args);
+    }
+
+    /**
+     * What the rules block for the caller on a bill (S13, #2510): the tier ({@code AP_APPROVAL_LIMIT_EXCEEDED}) blocks
+     * approve, accept and the void of an approved bill; the creator rule ({@code AP_BILL_SELF_APPROVAL}) blocks approve
+     * and accept. The tier wins when both apply.
+     *
+     * @param approve the {@code blockedReason} of {@code APPROVE} and {@code ACCEPT_EXCEPTION}, null when allowed
+     * @param voidApproved the {@code blockedReason} of {@code VOID_APPROVED}, null when allowed
+     * @param creatorException whether the caller created the bill and the switch lets them approve it with a
+     *     justification
+     */
+    record Blocks(@Nullable String approve, @Nullable String voidApproved, boolean creatorException) {
+
+        /** Nothing blocked. */
+        static final Blocks NONE = new Blocks(null, null, false);
+    }
+
+    /** The caller's {@link Blocks} on {@code bill} under {@code settings}. */
+    static @NonNull Blocks blocks(@NonNull VendorBill bill, ApApprovalPolicy.@NonNull Settings settings) {
+        boolean overLimit = !VendorBillDecisions.mayDecideTier(settings.tier(bill.getTotalAmount()));
+        String caller = VendorBillDecisions.callerOrNull();
+        boolean creator = caller != null && caller.equals(bill.getCreatedBy());
+        String approve;
+        if (overLimit) {
+            approve = BLOCKED_LIMIT;
+        } else if (creator && !settings.allowCreatorApproval()) {
+            approve = BLOCKED_SELF_APPROVAL;
+        } else {
+            approve = null;
+        }
+        return new Blocks(approve, overLimit ? BLOCKED_LIMIT : null, creator && settings.allowCreatorApproval());
+    }
+
+    /**
+     * The decisions valid for the bill now whose permission the caller holds (P5); one the tier or the creator rule
+     * blocks is listed with {@code allowed = false} and its {@code blockedReason} (S13).
      *
      * <ul>
      *   <li>While an ambiguous match's candidates are open, the bill is picked first: no send or accept (#2509
@@ -538,6 +622,7 @@ public class VendorBillReader {
      *   <li>A goods-receipt bill no invoice is matched to is never sent, approved or accepted (AW45); in {@code
      *       PENDING_RECEIPT_MATCH} it can be voided ({@code VOID_UNMATCHED}).
      *   <li>An approved bill is voidable only with its posting and no allocation.
+     *   <li>{@code SET_DUE_DATE} in the review statuses, for a holder of {@code accounting:ap:approve}.
      * </ul>
      */
     static @NonNull List<VendorBillReview.AvailableAction> availableActions(
@@ -546,41 +631,45 @@ public class VendorBillReader {
             boolean hasOpenCandidates,
             boolean awaitingInvoice,
             boolean allocated,
-            boolean posted) {
+            boolean posted,
+            @NonNull Blocks blocks) {
         List<VendorBillReview.AvailableAction> actions = new ArrayList<>();
         boolean sendable = !hasOpenCandidates && !awaitingInvoice;
         switch (status) {
             case PENDING_RECEIPT_MATCH -> {
                 if (sendable) {
-                    offer(actions, VendorBillAction.SUBMIT_FOR_APPROVAL);
+                    offer(actions, blocks, VendorBillAction.SUBMIT_FOR_APPROVAL);
                 }
                 if (hasOpenCandidates) {
-                    offer(actions, VendorBillAction.SELECT_CANDIDATE);
+                    offer(actions, blocks, VendorBillAction.SELECT_CANDIDATE);
                 }
                 if (channel == VendorBillReview.Channel.GOODS_RECEIPT) {
-                    offer(actions, VendorBillAction.VOID_UNMATCHED);
+                    offer(actions, blocks, VendorBillAction.VOID_UNMATCHED);
                 }
+                offer(actions, blocks, VendorBillAction.SET_DUE_DATE);
             }
             case MATCH_EXCEPTION -> {
                 if (sendable) {
-                    offer(actions, VendorBillAction.SUBMIT_FOR_APPROVAL);
-                    offer(actions, VendorBillAction.ACCEPT_EXCEPTION);
+                    offer(actions, blocks, VendorBillAction.SUBMIT_FOR_APPROVAL);
+                    offer(actions, blocks, VendorBillAction.ACCEPT_EXCEPTION);
                 }
-                offer(actions, VendorBillAction.CORRECT_EXCEPTION);
-                offer(actions, VendorBillAction.VOID_EXCEPTION);
+                offer(actions, blocks, VendorBillAction.CORRECT_EXCEPTION);
+                offer(actions, blocks, VendorBillAction.VOID_EXCEPTION);
                 if (hasOpenCandidates) {
-                    offer(actions, VendorBillAction.SELECT_CANDIDATE);
+                    offer(actions, blocks, VendorBillAction.SELECT_CANDIDATE);
                 }
+                offer(actions, blocks, VendorBillAction.SET_DUE_DATE);
             }
             case AWAITING_APPROVAL -> {
                 if (!awaitingInvoice) {
-                    offer(actions, VendorBillAction.APPROVE);
+                    offer(actions, blocks, VendorBillAction.APPROVE);
                 }
-                offer(actions, VendorBillAction.REJECT);
+                offer(actions, blocks, VendorBillAction.REJECT);
+                offer(actions, blocks, VendorBillAction.SET_DUE_DATE);
             }
             case APPROVED -> {
                 if (posted && !allocated) {
-                    offer(actions, VendorBillAction.VOID_APPROVED);
+                    offer(actions, blocks, VendorBillAction.VOID_APPROVED);
                 }
             }
             default -> {
@@ -590,11 +679,20 @@ public class VendorBillReader {
         return actions;
     }
 
-    private static void offer(List<VendorBillReview.AvailableAction> actions, VendorBillAction action) {
-        if (VendorBillDecisions.mayTake(action)) {
-            actions.add(new VendorBillReview.AvailableAction(
-                    action, true, null, VendorBillDecisions.justificationRequired(action)));
+    private static void offer(List<VendorBillReview.AvailableAction> actions, Blocks blocks, VendorBillAction action) {
+        if (!VendorBillDecisions.mayTake(action)) {
+            return;
         }
+        String blockedReason =
+                switch (action) {
+                    case APPROVE, ACCEPT_EXCEPTION -> blocks.approve();
+                    case VOID_APPROVED -> blocks.voidApproved();
+                    default -> null;
+                };
+        boolean justificationRequired = VendorBillDecisions.justificationRequired(action)
+                || (action == VendorBillAction.APPROVE && blocks.creatorException());
+        actions.add(new VendorBillReview.AvailableAction(
+                action, blockedReason == null, blockedReason, justificationRequired));
     }
 
     private VendorBillReview.Posting posting(VendorBillGlPosting posting) {

@@ -169,9 +169,12 @@ public class VendorBillController {
             description = """
                 Runs the three-way match of a received vendor invoice against pending goods-received bills (never \
                 an EDI bill): a HIGH match (score 70 or more) within tolerance sends the bill to AWAITING_APPROVAL \
-                with submittedBy SYSTEM and never approves it, a MEDIUM score or a discrepancy parks it in \
-                MATCH_EXCEPTION, and an AMBIGUOUS match keeps the scored candidates for a person to select one; \
-                nothing is posted.
+                with submittedBy SYSTEM, and when its absolute total is within min(automatic, clerk) limit of the \
+                AP approval policy the system approves and posts it in the same transaction (approvedByKind \
+                SYSTEM, VENDOR_BILL_AUTO_APPROVE), unless it would need a person's input or its posting is refused \
+                (it then stays AWAITING_APPROVAL, VENDOR_BILL_AUTO_APPROVE_SKIPPED); a MEDIUM score or a \
+                discrepancy parks it in MATCH_EXCEPTION, and an AMBIGUOUS match keeps the scored candidates for a \
+                person to select one.
                 Every routed single match takes the invoice's number and its invoiceDate as the bill date (AW46) \
                 and keeps what the vendor billed (the billed total and each line's billed quantity and price) and \
                 an append-only evidence record with the receipt date, the score, the points per criterion (amount \
@@ -183,7 +186,7 @@ public class VendorBillController {
                 Required inputs: eventId, organizationId and vendorId (UUIDs), invoiceReference, invoiceDate and \
                 lineItems; dueDate is optional.
                 Emits an ACCOUNTING_VENDOR_BILL_MATCH event and writes a VENDOR_BILL_MATCH_ROUTED audit row; the \
-                returned bill's status conveys the outcome.
+                returned bill's status conveys the outcome, APPROVED included.
                 Returns 400 when no pending receipt matches the invoice or the payload fails validation (a missing \
                 invoiceDate included), 409 AP_BILL_DUPLICATE when another live bill (any status except VOIDED or \
                 REJECTED) of the vendor already holds the invoiceReference on the invoiceDate, compared ignoring \

@@ -1,7 +1,13 @@
 package com.positivity.accounting.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.dto.VendorBillReview;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.entity.VendorBillLine;
@@ -9,9 +15,19 @@ import com.positivity.accounting.internal.entity.VendorBillMatchEvidence;
 import com.positivity.accounting.internal.enums.MatchConfidence;
 import com.positivity.accounting.internal.enums.VendorBillAction;
 import com.positivity.accounting.internal.enums.VendorBillCheckOutcome;
+import com.positivity.accounting.internal.enums.VendorBillStage;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
+import com.positivity.accounting.internal.repository.APPaymentAllocationRepository;
+import com.positivity.accounting.internal.repository.JournalEntryRepository;
+import com.positivity.accounting.internal.repository.VendorBillGlPostingRepository;
+import com.positivity.accounting.internal.repository.VendorBillLineRepository;
+import com.positivity.accounting.internal.repository.VendorBillMatchCandidateRepository;
+import com.positivity.accounting.internal.repository.VendorBillMatchEvidenceRepository;
+import com.positivity.accounting.internal.repository.VendorBillReissueRepository;
+import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.security.common.GatewaySecurityConstants;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -19,6 +35,8 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -57,6 +75,10 @@ class VendorBillReaderTest {
     private static final VendorBillReview.Channel EDI = VendorBillReview.Channel.SUPPLIER_CONNECTION;
     private static final VendorBillReview.Channel RECEIPT = VendorBillReview.Channel.GOODS_RECEIPT;
 
+    /** What the tier blocks for a clerk on an over-limit bill (S13): approve, accept and the void of an approved bill. */
+    private static final VendorBillReader.Blocks OVER_LIMIT_BLOCKS =
+            new VendorBillReader.Blocks(VendorBillReader.BLOCKED_LIMIT, VendorBillReader.BLOCKED_LIMIT, false);
+
     private static List<VendorBillAction> actions(VendorBillStatus status, boolean candidates, boolean allocated) {
         return actions(status, EDI, candidates, false, allocated, true);
     }
@@ -68,26 +90,55 @@ class VendorBillReaderTest {
             boolean awaitingInvoice,
             boolean allocated,
             boolean posted) {
-        return VendorBillReader.availableActions(status, channel, candidates, awaitingInvoice, allocated, posted)
+        return VendorBillReader.availableActions(
+                        status, channel, candidates, awaitingInvoice, allocated, posted, VendorBillReader.Blocks.NONE)
                 .stream()
                 .map(VendorBillReview.AvailableAction::action)
                 .toList();
     }
 
     @Test
-    @DisplayName("AC12: a clerk sees submit, correct and void on an exception, reject on a bill awaiting approval,"
-            + " and never approve or accept (every bill is over the default limit)")
-    void clerk() {
+    @DisplayName(
+            "AC11 (S13): a clerk on an over-limit bill sees approve, accept and the void of an approved bill listed"
+                + " but not allowed, with blockedReason AP_APPROVAL_LIMIT_EXCEEDED; the due date is listed in review")
+    void clerkOverTheLimit() {
         signIn(CLERK);
-        assertThat(actions(VendorBillStatus.PENDING_RECEIPT_MATCH, false, false))
-                .containsExactly(VendorBillAction.SUBMIT_FOR_APPROVAL);
-        assertThat(actions(VendorBillStatus.MATCH_EXCEPTION, false, false))
+        assertThat(VendorBillReader.availableActions(
+                        VendorBillStatus.PENDING_RECEIPT_MATCH, EDI, false, false, false, false, OVER_LIMIT_BLOCKS))
+                .extracting(VendorBillReview.AvailableAction::action, VendorBillReview.AvailableAction::allowed)
                 .containsExactly(
-                        VendorBillAction.SUBMIT_FOR_APPROVAL,
-                        VendorBillAction.CORRECT_EXCEPTION,
-                        VendorBillAction.VOID_EXCEPTION);
-        assertThat(actions(VendorBillStatus.AWAITING_APPROVAL, false, false)).containsExactly(VendorBillAction.REJECT);
-        assertThat(actions(VendorBillStatus.APPROVED, false, false)).isEmpty();
+                        org.assertj.core.groups.Tuple.tuple(VendorBillAction.SUBMIT_FOR_APPROVAL, true),
+                        org.assertj.core.groups.Tuple.tuple(VendorBillAction.SET_DUE_DATE, true));
+        assertThat(VendorBillReader.availableActions(
+                        VendorBillStatus.MATCH_EXCEPTION, EDI, false, false, false, false, OVER_LIMIT_BLOCKS))
+                .extracting(VendorBillReview.AvailableAction::action, VendorBillReview.AvailableAction::blockedReason)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(VendorBillAction.SUBMIT_FOR_APPROVAL, null),
+                        org.assertj.core.groups.Tuple.tuple(
+                                VendorBillAction.ACCEPT_EXCEPTION, "AP_APPROVAL_LIMIT_EXCEEDED"),
+                        org.assertj.core.groups.Tuple.tuple(VendorBillAction.CORRECT_EXCEPTION, null),
+                        org.assertj.core.groups.Tuple.tuple(VendorBillAction.VOID_EXCEPTION, null),
+                        org.assertj.core.groups.Tuple.tuple(VendorBillAction.SET_DUE_DATE, null));
+        assertThat(VendorBillReader.availableActions(
+                        VendorBillStatus.AWAITING_APPROVAL, EDI, false, false, false, false, OVER_LIMIT_BLOCKS))
+                .extracting(
+                        VendorBillReview.AvailableAction::action,
+                        VendorBillReview.AvailableAction::allowed,
+                        VendorBillReview.AvailableAction::blockedReason)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(
+                                VendorBillAction.APPROVE, false, "AP_APPROVAL_LIMIT_EXCEEDED"),
+                        org.assertj.core.groups.Tuple.tuple(VendorBillAction.REJECT, true, null),
+                        org.assertj.core.groups.Tuple.tuple(VendorBillAction.SET_DUE_DATE, true, null));
+        assertThat(VendorBillReader.availableActions(
+                        VendorBillStatus.APPROVED, EDI, false, false, false, true, OVER_LIMIT_BLOCKS))
+                .as("AC16: VOID_APPROVED listed, blocked by the tier")
+                .extracting(
+                        VendorBillReview.AvailableAction::action,
+                        VendorBillReview.AvailableAction::allowed,
+                        VendorBillReview.AvailableAction::blockedReason)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple(
+                        VendorBillAction.VOID_APPROVED, false, "AP_APPROVAL_LIMIT_EXCEEDED"));
     }
 
     @Test
@@ -99,9 +150,13 @@ class VendorBillReaderTest {
                 .containsExactly(
                         VendorBillAction.CORRECT_EXCEPTION,
                         VendorBillAction.VOID_EXCEPTION,
-                        VendorBillAction.SELECT_CANDIDATE);
+                        VendorBillAction.SELECT_CANDIDATE,
+                        VendorBillAction.SET_DUE_DATE);
         assertThat(actions(VendorBillStatus.PENDING_RECEIPT_MATCH, RECEIPT, true, true, false, false))
-                .containsExactly(VendorBillAction.SELECT_CANDIDATE, VendorBillAction.VOID_UNMATCHED);
+                .containsExactly(
+                        VendorBillAction.SELECT_CANDIDATE,
+                        VendorBillAction.VOID_UNMATCHED,
+                        VendorBillAction.SET_DUE_DATE);
     }
 
     @Test
@@ -110,18 +165,22 @@ class VendorBillReaderTest {
     void goodsReceiptAwaitingItsInvoice() {
         signIn(CONTROLLER);
         assertThat(actions(VendorBillStatus.PENDING_RECEIPT_MATCH, RECEIPT, false, true, false, false))
-                .containsExactly(VendorBillAction.VOID_UNMATCHED);
+                .containsExactly(VendorBillAction.VOID_UNMATCHED, VendorBillAction.SET_DUE_DATE);
         assertThat(actions(VendorBillStatus.MATCH_EXCEPTION, RECEIPT, false, true, false, false))
-                .containsExactly(VendorBillAction.CORRECT_EXCEPTION, VendorBillAction.VOID_EXCEPTION);
+                .containsExactly(
+                        VendorBillAction.CORRECT_EXCEPTION,
+                        VendorBillAction.VOID_EXCEPTION,
+                        VendorBillAction.SET_DUE_DATE);
         assertThat(actions(VendorBillStatus.AWAITING_APPROVAL, RECEIPT, false, true, false, false))
-                .containsExactly(VendorBillAction.REJECT);
+                .containsExactly(VendorBillAction.REJECT, VendorBillAction.SET_DUE_DATE);
         assertThat(actions(VendorBillStatus.MATCH_EXCEPTION, RECEIPT, false, false, false, false))
                 .as("matched")
                 .containsExactly(
                         VendorBillAction.SUBMIT_FOR_APPROVAL,
                         VendorBillAction.ACCEPT_EXCEPTION,
                         VendorBillAction.CORRECT_EXCEPTION,
-                        VendorBillAction.VOID_EXCEPTION);
+                        VendorBillAction.VOID_EXCEPTION,
+                        VendorBillAction.SET_DUE_DATE);
         signIn("accounting:ap:view", "accounting:ap:reject");
         assertThat(actions(VendorBillStatus.PENDING_RECEIPT_MATCH, RECEIPT, false, true, false, false))
                 .containsExactly(VendorBillAction.VOID_UNMATCHED);
@@ -131,7 +190,7 @@ class VendorBillReaderTest {
     }
 
     @Test
-    @DisplayName("AC12: a controller sees approve and accept too, and the void of an unpaid approved bill")
+    @DisplayName("AC12: a controller sees approve and accept, allowed, and the void of an unpaid approved bill")
     void controller() {
         signIn(CONTROLLER);
         assertThat(actions(VendorBillStatus.MATCH_EXCEPTION, false, false))
@@ -139,9 +198,10 @@ class VendorBillReaderTest {
                         VendorBillAction.SUBMIT_FOR_APPROVAL,
                         VendorBillAction.ACCEPT_EXCEPTION,
                         VendorBillAction.CORRECT_EXCEPTION,
-                        VendorBillAction.VOID_EXCEPTION);
+                        VendorBillAction.VOID_EXCEPTION,
+                        VendorBillAction.SET_DUE_DATE);
         assertThat(actions(VendorBillStatus.AWAITING_APPROVAL, false, false))
-                .containsExactly(VendorBillAction.APPROVE, VendorBillAction.REJECT);
+                .containsExactly(VendorBillAction.APPROVE, VendorBillAction.REJECT, VendorBillAction.SET_DUE_DATE);
         assertThat(actions(VendorBillStatus.APPROVED, false, false)).containsExactly(VendorBillAction.VOID_APPROVED);
         assertThat(actions(VendorBillStatus.APPROVED, false, true))
                 .as("an approved bill with an allocation is not voidable")
@@ -177,23 +237,125 @@ class VendorBillReaderTest {
     }
 
     @Test
-    @DisplayName("Justification flags follow the commands: approve and select need none")
+    @DisplayName("Justification flags follow the commands: approve, select and the due date need none, unless the"
+            + " creator approves under the exception (S13)")
     void justificationFlags() {
         signIn(CONTROLLER);
         assertThat(VendorBillReader.availableActions(
-                        VendorBillStatus.AWAITING_APPROVAL, EDI, false, false, false, false))
+                        VendorBillStatus.AWAITING_APPROVAL,
+                        EDI,
+                        false,
+                        false,
+                        false,
+                        false,
+                        VendorBillReader.Blocks.NONE))
                 .extracting(VendorBillReview.AvailableAction::justificationRequired)
-                .containsExactly(false, true);
+                .containsExactly(false, true, false);
         assertThat(VendorBillReader.availableActions(
-                        VendorBillStatus.AWAITING_APPROVAL, EDI, false, false, false, false))
+                        VendorBillStatus.AWAITING_APPROVAL,
+                        EDI,
+                        false,
+                        false,
+                        false,
+                        false,
+                        VendorBillReader.Blocks.NONE))
                 .allSatisfy(action -> {
                     assertThat(action.allowed()).isTrue();
                     assertThat(action.blockedReason()).isNull();
                 });
         assertThat(VendorBillReader.availableActions(
-                        VendorBillStatus.PENDING_RECEIPT_MATCH, RECEIPT, false, true, false, false))
+                        VendorBillStatus.PENDING_RECEIPT_MATCH,
+                        RECEIPT,
+                        false,
+                        true,
+                        false,
+                        false,
+                        VendorBillReader.Blocks.NONE))
                 .extracting(VendorBillReview.AvailableAction::justificationRequired)
-                .containsExactly(true);
+                .containsExactly(true, false);
+        assertThat(VendorBillReader.availableActions(
+                        VendorBillStatus.AWAITING_APPROVAL,
+                        EDI,
+                        false,
+                        false,
+                        false,
+                        false,
+                        new VendorBillReader.Blocks(null, null, true)))
+                .as("the creator exception applies: APPROVE needs a justification")
+                .first()
+                .satisfies(action -> {
+                    assertThat(action.action()).isEqualTo(VendorBillAction.APPROVE);
+                    assertThat(action.justificationRequired()).isTrue();
+                    assertThat(action.allowed()).isTrue();
+                });
+    }
+
+    private static ApApprovalPolicy.Settings policy(String clerk, String auto, boolean creator) {
+        return new ApApprovalPolicy.Settings(new BigDecimal(clerk), new BigDecimal(auto), creator, false, "NET30");
+    }
+
+    private static VendorBill billOf(String total, String createdBy) {
+        VendorBill bill = new VendorBill(UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a09"));
+        bill.setTotalAmount(new BigDecimal(total));
+        bill.setCreatedBy(createdBy);
+        return bill;
+    }
+
+    @Test
+    @DisplayName("AC11 (S13): the tier blocks a clerk over the limit, never a controller; the creator rule blocks the"
+            + " creator; the tier wins when both apply; the switch turns the creator block into a justification")
+    void blocks() {
+        signIn(CLERK);
+        assertThat(VendorBillReader.blocks(billOf("2500.01", "other"), policy("2500.00", "0", false)))
+                .isEqualTo(
+                        new VendorBillReader.Blocks("AP_APPROVAL_LIMIT_EXCEEDED", "AP_APPROVAL_LIMIT_EXCEEDED", false));
+        assertThat(VendorBillReader.blocks(billOf("2500.00", "other"), policy("2500.00", "0", false)))
+                .isEqualTo(VendorBillReader.Blocks.NONE);
+        assertThat(VendorBillReader.blocks(billOf("100.00", "someone"), policy("2500.00", "0", false)))
+                .isEqualTo(new VendorBillReader.Blocks("AP_BILL_SELF_APPROVAL", null, false));
+        assertThat(VendorBillReader.blocks(billOf("3000.00", "someone"), policy("2500.00", "0", false)))
+                .as("the tier wins")
+                .isEqualTo(
+                        new VendorBillReader.Blocks("AP_APPROVAL_LIMIT_EXCEEDED", "AP_APPROVAL_LIMIT_EXCEEDED", false));
+        assertThat(VendorBillReader.blocks(billOf("100.00", "someone"), policy("2500.00", "0", true)))
+                .isEqualTo(new VendorBillReader.Blocks(null, null, true));
+        signIn(CONTROLLER);
+        assertThat(VendorBillReader.blocks(billOf("2500.01", "other"), policy("2500.00", "0", false)))
+                .isEqualTo(VendorBillReader.Blocks.NONE);
+    }
+
+    @Test
+    @DisplayName("S13: WITHIN_CLERK_LIMIT passes within the limit and fails over it in review; not applicable outside")
+    void withinClerkLimit() {
+        VendorBillReview.Check within = VendorBillReader.withinClerkLimit(
+                VendorBillStatus.AWAITING_APPROVAL, new BigDecimal("-2500.00"), policy("2500.00", "0", false), "USD");
+        assertThat(within.code()).isEqualTo("WITHIN_CLERK_LIMIT");
+        assertThat(within.outcome()).isEqualTo(VendorBillCheckOutcome.PASS);
+        assertThat(within.args())
+                .containsEntry("totalAmount", "-2500.00")
+                .containsEntry("clerkLimit", "2500.00")
+                .containsEntry("currencyCode", "USD");
+        assertThat(VendorBillReader.withinClerkLimit(
+                                VendorBillStatus.MATCH_EXCEPTION,
+                                new BigDecimal("2500.01"),
+                                policy("2500.00", "0", false),
+                                "USD")
+                        .outcome())
+                .isEqualTo(VendorBillCheckOutcome.FAIL);
+        assertThat(VendorBillReader.withinClerkLimit(
+                                VendorBillStatus.APPROVED,
+                                new BigDecimal("10.00"),
+                                policy("2500.00", "0", false),
+                                "USD")
+                        .outcome())
+                .isEqualTo(VendorBillCheckOutcome.NOT_APPLICABLE);
+        assertThat(VendorBillReader.withinClerkLimit(
+                                VendorBillStatus.CURRENCY_HOLD,
+                                new BigDecimal("10.00"),
+                                policy("2500.00", "0", false),
+                                "USD")
+                        .outcome())
+                .isEqualTo(VendorBillCheckOutcome.NOT_APPLICABLE);
     }
 
     private static VendorBillMatchEvidence evidence(MatchConfidence confidence) {
@@ -345,5 +507,59 @@ class VendorBillReaderTest {
         VendorBillMatchEvidence selection = evidence(MatchConfidence.AMBIGUOUS);
         selection.setSource(VendorBillMatchEvidence.Source.CANDIDATE_SELECTION);
         assertThat(VendorBillReader.invoiceMatched(selection, List.of(billed))).isTrue();
+    }
+
+    @Test
+    @DisplayName("AC11 (S13): a stage row carries the live requiredTier in review and none outside it; one policy"
+            + " snapshot per page")
+    void stageRowTier() {
+        VendorBillRepository bills = mock();
+        APPaymentAllocationRepository allocations = mock();
+        ApApprovalPolicy approvalPolicy = mock();
+        VendorBillReader reader = new VendorBillReader(
+                Clock.systemUTC(),
+                bills,
+                mock(VendorBillLineRepository.class),
+                mock(VendorBillMatchEvidenceRepository.class),
+                mock(VendorBillMatchCandidateRepository.class),
+                mock(VendorBillGlPostingRepository.class),
+                mock(VendorBillReissueRepository.class),
+                allocations,
+                mock(JournalEntryRepository.class),
+                mock(AccountingCalendarZoneResolver.class),
+                new LedgerCurrency("USD"),
+                approvalPolicy);
+        VendorBill over = billOf("3000.00", "clerk.ana");
+        over.setStatus(VendorBillStatus.AWAITING_APPROVAL);
+        over.setBillNumber("INV-OVER");
+        over.setBillDate(java.time.LocalDateTime.of(2026, 10, 1, 0, 0));
+        VendorBill within = new VendorBill(UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a0a"));
+        within.setTotalAmount(new BigDecimal("100.00"));
+        within.setStatus(VendorBillStatus.AWAITING_APPROVAL);
+        within.setBillNumber("INV-WITHIN");
+        within.setBillDate(java.time.LocalDateTime.of(2026, 10, 1, 0, 0));
+        when(bills.findByStatusIn(any(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of(over, within)));
+        when(allocations.sumAllocatedAmountByVendorBillIdIn(any())).thenReturn(List.of());
+        when(approvalPolicy.settings()).thenReturn(policy("2500.00", "0", false));
+
+        assertThat(reader.byStage(VendorBillStage.APPROVE, 0, 20).getContent())
+                .extracting(VendorBillReview.StageRow::billNumber, VendorBillReview.StageRow::requiredTier)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("INV-OVER", VendorBillReview.RequiredTier.OVER_LIMIT),
+                        org.assertj.core.groups.Tuple.tuple("INV-WITHIN", VendorBillReview.RequiredTier.CLERK));
+        verify(approvalPolicy, times(1)).settings();
+
+        VendorBill approved = billOf("100.00", "clerk.ana");
+        approved.setStatus(VendorBillStatus.APPROVED);
+        approved.setBillNumber("INV-PAY");
+        approved.setBillDate(java.time.LocalDateTime.of(2026, 10, 1, 0, 0));
+        when(bills.findByStatusAndOpenAmountGreaterThan(any(), any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(approved)));
+        assertThat(reader.byStage(VendorBillStage.PAY, 0, 20)
+                        .getContent()
+                        .get(0)
+                        .requiredTier())
+                .as("ruling 8: null outside the review statuses")
+                .isNull();
     }
 }

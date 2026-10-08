@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -88,7 +89,13 @@ class VendorBillApprovalControllerTest extends BaseControllerSliceTest {
                                 post(BASE + "/" + BILL_ID + "/submit-for-approval"),
                                 "{\"justification\":\"No delivery!\"}"),
                         List.of(APPROVE, OVER_LIMIT)),
-                Arguments.of("approve", json(post(BASE + "/" + BILL_ID + "/approve"), "{}"), List.of(OVER_LIMIT)),
+                // S13 (#2510): either approve permission passes the gate; the tier is the service's check.
+                Arguments.of(
+                        "approve", json(post(BASE + "/" + BILL_ID + "/approve"), "{}"), List.of(APPROVE, OVER_LIMIT)),
+                Arguments.of(
+                        "due-date",
+                        json(put(BASE + "/" + BILL_ID + "/due-date"), "{\"dueDate\":\"2026-11-07\"}"),
+                        List.of(APPROVE)),
                 Arguments.of(
                         "reject",
                         json(post(BASE + "/" + BILL_ID + "/reject"), "{\"reason\":\"Wrong vendor\"}"),
@@ -132,6 +139,7 @@ class VendorBillApprovalControllerTest extends BaseControllerSliceTest {
         when(approvalService.resolveException(any(), any())).thenReturn(awaiting());
         when(approvalService.selectCandidate(any())).thenReturn(awaiting());
         when(approvalService.voidBill(any(), any())).thenReturn(awaiting());
+        when(approvalService.setDueDate(any(), any())).thenReturn(awaiting());
         for (String authorities : allowed) {
             MockHttpServletRequestBuilder request = endpoints()
                     .filter(a -> a.get()[0].equals(name))
@@ -176,6 +184,8 @@ class VendorBillApprovalControllerTest extends BaseControllerSliceTest {
                 Arguments.of(VendorBillException.Code.AP_BILL_UNCLASSIFIED, 422),
                 Arguments.of(VendorBillException.Code.AP_BILL_TOTALS_UNRECONCILED, 422),
                 Arguments.of(VendorBillException.Code.AP_BILL_ZERO_TOTAL, 422),
+                Arguments.of(VendorBillException.Code.AP_APPROVAL_LIMIT_EXCEEDED, 403),
+                Arguments.of(VendorBillException.Code.AP_BILL_SELF_APPROVAL, 403),
                 Arguments.of(VendorBillException.Code.JUSTIFICATION_REQUIRED, 400),
                 Arguments.of(VendorBillException.Code.VALIDATION_ERROR, 400));
     }
@@ -212,6 +222,43 @@ class VendorBillApprovalControllerTest extends BaseControllerSliceTest {
                         json(post(BASE + "/" + BILL_ID + "/void"), "{\"reason\":\"Billed twice by mistake\"}"), REJECT))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("S13: AP_APPROVAL_LIMIT_EXCEEDED answers 403 with its nextAction naming the over-limit permission")
+    void limitRefusalCarriesTheNextAction() throws Exception {
+        when(approvalService.approve(eq(BILL_ID), any()))
+                .thenThrow(new VendorBillException(
+                        VendorBillException.Code.AP_APPROVAL_LIMIT_EXCEEDED,
+                        "Bill INV-1 totals 2500.01 USD, over the clerk approval limit of 2500.00 USD",
+                        List.of(),
+                        "Ask a holder of accounting:ap:approve_over_limit to decide this bill"));
+
+        mockMvc.perform(withAuth(json(post(BASE + "/" + BILL_ID + "/approve"), "{}"), APPROVE))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("AP_APPROVAL_LIMIT_EXCEEDED"))
+                .andExpect(jsonPath("$.nextAction")
+                        .value(org.hamcrest.Matchers.containsString("accounting:ap:approve_over_limit")));
+    }
+
+    @Test
+    @DisplayName("AC12 (S13): a due-date body carrying approvedBy or operatorId binds without it")
+    void dueDateIgnoresAnActorInTheBody() throws Exception {
+        when(approvalService.setDueDate(eq(BILL_ID), any())).thenReturn(awaiting());
+
+        mockMvc.perform(withAuth(
+                        json(
+                                put(BASE + "/" + BILL_ID + "/due-date"),
+                                "{\"dueDate\":\"2026-11-07\",\"approvedBy\":\"someone-else\","
+                                        + "\"operatorId\":\"someone-else\"}"),
+                        APPROVE))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<VendorBillCommands.SetDueDate> body =
+                ArgumentCaptor.forClass(VendorBillCommands.SetDueDate.class);
+        verify(approvalService).setDueDate(eq(BILL_ID), body.capture());
+        org.assertj.core.api.Assertions.assertThat(body.getValue())
+                .isEqualTo(new VendorBillCommands.SetDueDate(java.time.LocalDate.of(2026, 11, 7), null));
     }
 
     @Test

@@ -362,8 +362,11 @@ SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', 
 --   enforced; accounting:ap:approve_over_limit is new (bit 558).
 --     accounting:ap:approve             -> ACCOUNTING_CLERK, ADMIN, CONTROLLER, GENERAL_MANAGER
 --     accounting:ap:reject              -> ACCOUNTING_CLERK, ADMIN, CONTROLLER, GENERAL_MANAGER
---     accounting:ap:approve_over_limit  -> ADMIN, CONTROLLER, GENERAL_MANAGER (until S13's clerk limit, every bill
---                                          is over it, so clerks send bills for approval and never approve)
+--     accounting:ap:approve_over_limit  -> ADMIN, CONTROLLER, GENERAL_MANAGER (a bill over the clerk limit; clerks
+--                                          approve within it, CAP:550 S13)
+-- * CAP:550 S13 (#2510, SPEC-accounting-workspace §4.3, §5.5, AW4/AW5/AW33, Security sign-off OI-5, AW31): the AP
+--   approval policy (clerk and automatic limits, separation-of-duties switches, default AP terms) is new (bit 559).
+--     accounting:ap_approval_policy:manage -> ADMIN, CONTROLLER, GENERAL_MANAGER
 --
 -- IDEMPOTENCY
 -- Every statement below is ON CONFLICT DO NOTHING, and role/permission ids are
@@ -411,6 +414,7 @@ FROM (VALUES
     ('accounting:ap:pay', 'accounting', 'ap', 'pay', 4),
     ('accounting:ap:reject', 'accounting', 'ap', 'reject', 263),
     ('accounting:ap:view', 'accounting', 'ap', 'view', 3),
+    ('accounting:ap_approval_policy:manage', 'accounting', 'ap_approval_policy', 'manage', 559),
     ('accounting:coa:create', 'accounting', 'coa', 'create', 6),
     ('accounting:coa:deactivate', 'accounting', 'coa', 'deactivate', 264),
     ('accounting:coa:edit', 'accounting', 'coa', 'edit', 7),
@@ -990,6 +994,7 @@ FROM (VALUES
     ('ADMIN', 'accounting:ap:pay'),
     ('ADMIN', 'accounting:ap:reject'),
     ('ADMIN', 'accounting:ap:view'),
+    ('ADMIN', 'accounting:ap_approval_policy:manage'),
     ('ADMIN', 'accounting:coa:create'),
     ('ADMIN', 'accounting:coa:deactivate'),
     ('ADMIN', 'accounting:coa:edit'),
@@ -1467,6 +1472,7 @@ FROM (VALUES
     ('CONTROLLER', 'accounting:ap:pay'),
     ('CONTROLLER', 'accounting:ap:reject'),
     ('CONTROLLER', 'accounting:ap:view'),
+    ('CONTROLLER', 'accounting:ap_approval_policy:manage'),
     ('CONTROLLER', 'accounting:coa:create'),
     ('CONTROLLER', 'accounting:coa:deactivate'),
     ('CONTROLLER', 'accounting:coa:edit'),
@@ -1555,6 +1561,7 @@ FROM (VALUES
     ('GENERAL_MANAGER', 'accounting:ap:pay'),
     ('GENERAL_MANAGER', 'accounting:ap:reject'),
     ('GENERAL_MANAGER', 'accounting:ap:view'),
+    ('GENERAL_MANAGER', 'accounting:ap_approval_policy:manage'),
     ('GENERAL_MANAGER', 'accounting:customer-credit:refund'),
     ('GENERAL_MANAGER', 'accounting:payment:apply'),
     ('GENERAL_MANAGER', 'appointments:reschedule:approve'),
@@ -1898,6 +1905,7 @@ BEGIN
         ('accounting:ap:pay'),
         ('accounting:ap:reject'),
         ('accounting:ap:view'),
+        ('accounting:ap_approval_policy:manage'),
         ('accounting:coa:create'),
         ('accounting:coa:deactivate'),
         ('accounting:coa:edit'),

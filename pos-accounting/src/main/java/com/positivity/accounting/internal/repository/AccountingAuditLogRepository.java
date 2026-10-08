@@ -40,4 +40,14 @@ public interface AccountingAuditLogRepository extends JpaRepository<AccountingAu
 
     /** The latest audit row of an operation (bank reconciliation policy {@code updatedAt}/{@code updatedBy}, #2305). */
     Optional<AccountingAuditLog> findFirstByOperationOrderByTimestampDesc(@NonNull String operation);
+
+    /** The rows of one operation, a page at a time; the order is the {@code pageable}'s (the AP approval policy history). */
+    @NonNull
+    Page<AccountingAuditLog> findByOperation(@NonNull String operation, @NonNull Pageable pageable);
+
+    /**
+     * Whether a row of {@code operation} carries {@code fragment} in its new value: an AP approval policy PUT's
+     * {@code requestId} replay check (CAP:550 S13, #2510).
+     */
+    boolean existsByOperationAndNewValueContaining(@NonNull String operation, @NonNull String fragment);
 }

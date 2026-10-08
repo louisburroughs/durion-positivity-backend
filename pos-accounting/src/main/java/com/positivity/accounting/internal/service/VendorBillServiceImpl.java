@@ -59,10 +59,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  * Receipt Accrual Workflow:
  * <ol>
  * <li>GoodsReceivedEvent → creates a bill in PENDING_RECEIPT_MATCH; nothing posts (AW37)</li>
- * <li>VendorInvoiceReceivedEvent → three-way match → AWAITING_APPROVAL for a HIGH match (submitted by SYSTEM; the
- * automatic limit is 0 until S13), MATCH_EXCEPTION for a MEDIUM match or a discrepancy, the candidates kept for an
- * ambiguous one. No match writes an approval field (G12); every match keeps what the vendor billed and its evidence
- * (AW39)</li>
+ * <li>VendorInvoiceReceivedEvent → three-way match → AWAITING_APPROVAL for a HIGH match (submitted by SYSTEM),
+ * then APPROVED and posted by the system when it is within the automatic limit and nothing needs a person
+ * ({@link VendorBillAutoApproval}, CAP:550 S13); MATCH_EXCEPTION for a MEDIUM match or a discrepancy, the candidates
+ * kept for an ambiguous one. Every match keeps what the vendor billed and its evidence (AW39)</li>
  * <li>Approve, reject, resolve, select and void: {@link VendorBillApprovalServiceImpl}; the bill posts at approval
  * ({@link VendorBillPostingService})</li>
  * </ol>
@@ -91,6 +91,7 @@ public class VendorBillServiceImpl implements VendorBillService {
     private final VendorBillReader reader;
     private final AccountingAuditLogRepository auditLogs;
     private final VendorBillLocks locks;
+    private final VendorBillAutoApproval autoApproval;
 
     private final AccountingCalendarZoneResolver zoneResolver;
 
@@ -115,7 +116,8 @@ public class VendorBillServiceImpl implements VendorBillService {
             VendorBillInvoiceMatcher matcher,
             VendorBillReader reader,
             AccountingAuditLogRepository auditLogs,
-            VendorBillLocks locks) {
+            VendorBillLocks locks,
+            VendorBillAutoApproval autoApproval) {
         this.zoneResolver = zoneResolver;
         this.clock = clock;
         this.billRepository = billRepository;
@@ -128,6 +130,7 @@ public class VendorBillServiceImpl implements VendorBillService {
         this.reader = reader;
         this.auditLogs = auditLogs;
         this.locks = locks;
+        this.autoApproval = autoApproval;
         this.goodsReceiptTransaction = new TransactionTemplate(transactionManager);
     }
 
@@ -378,7 +381,7 @@ public class VendorBillServiceImpl implements VendorBillService {
                     bill.getBillNumber(),
                     matcher.compare(bill, invoiceLines),
                     currentUser);
-            auditRouted(bill, evidence, "AMBIGUOUS");
+            auditRouted(bill, evidence, "AMBIGUOUS", "");
             return reader.read(bill);
         }
 
@@ -424,7 +427,7 @@ public class VendorBillServiceImpl implements VendorBillService {
                     bill.getVendorBillId(),
                     event.getInvoiceReference());
         } else if (matchResult.getConfidence() == MatchConfidence.HIGH_CONFIDENCE) {
-            // A HIGH match goes to approval, never approves (G12): the automatic limit is 0 until S13.
+            // A HIGH match goes to approval; within the automatic limit the system then approves it, below.
             bill.setStatus(VendorBillStatus.AWAITING_APPROVAL);
             bill.setSubmittedBy(SYSTEM_USER);
             bill.setSubmittedAt(Instant.now(clock));
@@ -438,9 +441,11 @@ public class VendorBillServiceImpl implements VendorBillService {
                     "Medium confidence match - requires review (score=" + matchResult.getBestScore() + ")");
             outcome = "MEDIUM";
         }
-        // AW46: the vendor's number and date; the receipt date stays in the evidence.
+        // AW46: the vendor's number and date; the receipt date stays in the evidence. The invoice's due date replaces
+        // one a person entered before the match (S13 ruling 7), audited in the routed row.
         bill.setBillNumber(event.getInvoiceReference());
         bill.setBillDate(event.getInvoiceDate());
+        LocalDateTime dueBefore = bill.getDueDate();
         if (event.getDueDate() != null) {
             bill.setDueDate(event.getDueDate());
         }
@@ -459,7 +464,12 @@ public class VendorBillServiceImpl implements VendorBillService {
                 receivedBillNumber,
                 comparison,
                 currentUser);
-        auditRouted(bill, evidence, outcome);
+        auditRouted(bill, evidence, outcome, VendorBillApprovalServiceImpl.dueDateChange(dueBefore, bill.getDueDate()));
+        if ("HIGH".equals(outcome)) {
+            // Automatic approval (S13, #2510): within the automatic limit and needing no person, the system approves
+            // and posts in this transaction; otherwise the bill stays AWAITING_APPROVAL.
+            autoApproval.approveIfEligible(bill, evidence, matchResult.getBestScore());
+        }
 
         log.info(
                 "Three-way match routed | billId={} | invoiceRef={} | status={}",
@@ -474,7 +484,7 @@ public class VendorBillServiceImpl implements VendorBillService {
      * One {@code VENDOR_BILL_MATCH_ROUTED} audit row per routed match, written as the system's (#2509): where the
      * match sent the bill, its score and evidence. Nothing is approved here.
      */
-    private void auditRouted(VendorBill bill, VendorBillMatchEvidence evidence, String outcome) {
+    private void auditRouted(VendorBill bill, VendorBillMatchEvidence evidence, String outcome, String details) {
         AccountingAuditLog row = new AccountingAuditLog();
         row.setEntityType("VENDOR_BILL");
         row.setEntityId(bill.getVendorBillId());
@@ -483,7 +493,7 @@ public class VendorBillServiceImpl implements VendorBillService {
         row.setNewValue("billNumber=" + bill.getBillNumber() + ";outcome=" + outcome + ";status=" + bill.getStatus()
                 + ";totalAmount=" + bill.getTotalAmount().toPlainString() + ";currencyCode="
                 + evidence.getCurrencyCode() + ";matchScore=" + evidence.getScore() + ";evidenceId="
-                + evidence.getMatchEvidenceId() + ";requestedBy=" + getCurrentUser());
+                + evidence.getMatchEvidenceId() + ";requestedBy=" + getCurrentUser() + details);
         auditLogs.save(row);
     }
 
@@ -527,7 +537,7 @@ public class VendorBillServiceImpl implements VendorBillService {
      * - Purchase order present on the receipt: 5 points
      *
      * Confidence levels:
-     * - HIGH_CONFIDENCE: Single candidate with 70 points or more (sent for approval, #2509; never approves)
+     * - HIGH_CONFIDENCE: Single candidate with 70 points or more (sent for approval, #2509; approved by the system within the automatic limit, #2510)
      * - MEDIUM_CONFIDENCE: Single candidate with 50 to 69 points (manual review)
      * - AMBIGUOUS: Multiple candidates with 50 points or more (select from list)
      * - NO_MATCH: No candidate with 50 points or more (refused)
