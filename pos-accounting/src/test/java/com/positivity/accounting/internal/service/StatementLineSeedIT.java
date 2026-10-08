@@ -272,7 +272,9 @@ class StatementLineSeedIT extends PostgresCommittingTestBase {
                                     + " AND statement_type = 'BALANCE_SHEET'",
                             Integer.class,
                             tenant))
-                    .as("tenant %s: the eight balance-sheet mappings, 1080, 3000 and 3900 (#2511) and 2100 (#2509)", tenant)
+                    .as(
+                            "tenant %s: the eight balance-sheet mappings, 1080, 3000 and 3900 (#2511) and 2100 (#2509)",
+                            tenant)
                     .isEqualTo(12);
             assertThat(owner.queryForObject(
                             "SELECT count(*) FROM statement_line_mappings WHERE tenant_id = ? AND statement_type ="
