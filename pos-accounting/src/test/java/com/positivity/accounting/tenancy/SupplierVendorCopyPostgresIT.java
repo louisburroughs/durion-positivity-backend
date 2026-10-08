@@ -298,6 +298,72 @@ class SupplierVendorCopyPostgresIT extends PostgresTenancyTestBase {
     }
 
     @Test
+    @DisplayName(
+            "paymentDetailsChanged counts only open bills: a fully paid bill approved at an older version does not")
+    void paymentDetailsChangedCountsOpenBillsOnly() {
+        UUID tenant = tenant();
+        UUID vendorId = UUIDv7Generator.generate();
+        asTenant(
+                tenant,
+                () -> listener.onSupplierEvent(
+                        vendorFact(UUIDv7Generator.generate().toString(), vendorId, 2, "")
+                                .replace("\"remitToVersion\":0", "\"remitToVersion\":2")));
+        JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
+        UUID paid = approvedBill(owner, tenant, vendorId, "S24-PAID-1", "100.00", 1);
+        UUID payment = UUIDv7Generator.generate();
+        owner.update(
+                "INSERT INTO ap_payment (tenant_id, payment_id, vendor_id, currency, gross_amount, status, created_at,"
+                        + " created_by, payment_ref) VALUES (?, ?, ?, 'USD', 100.00, 'GL_POSTED', now(), 'it', ?)",
+                tenant,
+                payment,
+                vendorId,
+                "S24-PAY-" + payment);
+        owner.update(
+                "INSERT INTO ap_payment_allocation (tenant_id, allocation_id, payment_id, vendor_bill_id,"
+                        + " applied_amount, created_at) VALUES (?, ?, ?, ?, 100.00, now())",
+                tenant,
+                UUIDv7Generator.generate(),
+                payment,
+                paid);
+
+        assertThat(asTenant(
+                        tenant,
+                        () -> bills.findVendorIdsWithBillsApprovedAtAnotherRemitTo(
+                                List.of(vendorId), com.positivity.accounting.internal.enums.VendorBillStatus.APPROVED)))
+                .as("a fully paid bill approved at version 1")
+                .isEmpty();
+
+        approvedBill(owner, tenant, vendorId, "S24-OPEN-1", "50.00", 1);
+        assertThat(asTenant(
+                        tenant,
+                        () -> bills.findVendorIdsWithBillsApprovedAtAnotherRemitTo(
+                                List.of(vendorId), com.positivity.accounting.internal.enums.VendorBillStatus.APPROVED)))
+                .as("an open bill approved at version 1")
+                .containsExactly(vendorId);
+        owner.update("DELETE FROM ap_payment_allocation WHERE tenant_id = ?", tenant);
+        owner.update("DELETE FROM ap_payment WHERE tenant_id = ?", tenant);
+        owner.update("DELETE FROM vendor_bill WHERE tenant_id = ?", tenant);
+    }
+
+    private static UUID approvedBill(
+            JdbcTemplate owner, UUID tenant, UUID vendorId, String number, String total, int approvedAt) {
+        UUID billId = UUIDv7Generator.generate();
+        owner.update(
+                "INSERT INTO vendor_bill (tenant_id, vendor_bill_id, vendor_id, bill_number, bill_number_key, status,"
+                        + " total_amount, bill_date, created_at, modified_at, created_by, modified_by, approved_at,"
+                        + " approved_by, approved_remit_to_version) VALUES (?, ?, ?, ?, ?, 'APPROVED', ?::numeric,"
+                        + " TIMESTAMP '2026-10-01 00:00:00', now(), now(), 'it', 'it', now(), 'it', ?)",
+                tenant,
+                billId,
+                vendorId,
+                number,
+                number.replace("-", ""),
+                total,
+                approvedAt);
+        return billId;
+    }
+
+    @Test
     @DisplayName("ap_vendor is gone (V20)")
     void apVendorDropped() {
         assertThat(new JdbcTemplate(ownerDataSource())

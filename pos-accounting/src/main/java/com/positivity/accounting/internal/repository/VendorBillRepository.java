@@ -10,6 +10,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -331,16 +332,20 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
      * Whether any bill or credit note of the vendor was ever approved, by a person or the system, voided ones included
      * (CAP:550 S24, #2517, ruling 2): the vendor creator's first-bill rule. A void never clears {@code approved_at}.
      */
-    boolean existsByVendorIdAndApprovedAtIsNotNull(UUID vendorId);
+    boolean existsByVendorIdAndApprovedAtIsNotNull(@NonNull UUID vendorId);
 
     /**
-     * The vendors among {@code vendorIds} with at least one {@code APPROVED} bill approved at a remit-to version other
-     * than the copy's current one, or at none (CAP:550 S24, #2517, rule 6): the {@code paymentDetailsChanged} flag of
-     * the vendor read, before any confirmation is considered.
+     * The vendors among {@code vendorIds} with at least one open {@code status} bill (its total less its allocations
+     * above 0, as the open-bill reads above count it) approved at a remit-to version other than the copy's current
+     * one, or at none (CAP:550 S24, #2517, rules 6 and 8): the {@code paymentDetailsChanged} flag of the vendor read,
+     * before any confirmation is considered. A bill fully paid stays {@code APPROVED} and no longer counts.
      */
     @Query("select distinct b.vendorId from VendorBill b, ExtSupplierVendor v"
             + " where v.vendorId = b.vendorId and b.vendorId in :vendorIds and b.status = :status"
-            + " and (b.approvedRemitToVersion is null or b.approvedRemitToVersion <> v.remitToVersion)")
+            + " and (b.approvedRemitToVersion is null or b.approvedRemitToVersion <> v.remitToVersion)"
+            + " and b.totalAmount - coalesce((select sum(a.appliedAmount) from APPaymentAllocation a"
+            + " where a.vendorBill.vendorBillId = b.vendorBillId), 0) > 0")
+    @NonNull
     List<UUID> findVendorIdsWithBillsApprovedAtAnotherRemitTo(
-            @Param("vendorIds") Collection<UUID> vendorIds, @Param("status") VendorBillStatus status);
+            @Param("vendorIds") @NonNull Collection<UUID> vendorIds, @Param("status") @NonNull VendorBillStatus status);
 }

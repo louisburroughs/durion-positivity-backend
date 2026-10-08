@@ -32,11 +32,11 @@
 WITH params AS (
     SELECT CAST(:due_from AS date) AS due_from, CAST(:due_to AS date) AS due_to
 )
-SELECT b.vendor_bill_id AS bill_id, b.vendor_id, v.name AS vendor_name, b.bill_number,
+SELECT b.vendor_bill_id AS bill_id, b.vendor_id, v.display_name AS vendor_name, b.bill_number,
        b.due_date, b.total_amount AS amount, b.status
 FROM vendor_bill b
 CROSS JOIN params p
-LEFT JOIN ap_vendor v ON v.vendor_id = b.vendor_id
+LEFT JOIN ext_supplier_vendor v ON v.vendor_id = b.vendor_id
 WHERE b.due_date >= p.due_from::timestamp
   AND b.due_date <  (p.due_to + 1)::timestamp
 ORDER BY b.due_date, b.vendor_bill_id;

@@ -41,6 +41,7 @@ public interface SupplierOutboxEventRepository extends JpaRepository<SupplierOut
      * reconciliation-manifest window, which {@code ManifestPublisher} narrows by each row's eventId timestamp. A
      * global table read across every tenant; the publisher groups the rows by their {@code tenant_id}.
      */
+    @NonNull
     List<SupplierOutboxEventEntity> findByTopicAndPublishedAtIsNotNullAndCreatedAtBetween(
             @NonNull String topic, @NonNull Instant from, @NonNull Instant to);
 
