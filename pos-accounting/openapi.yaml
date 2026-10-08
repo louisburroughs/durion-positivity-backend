@@ -517,7 +517,7 @@ paths:
 
         Use this tool to pay a vendor; do not use applyPayment, which is the AR-side application of customer payments to invoices, and use listApBills first to find APPROVED bills to allocate against.
 
-        Preconditions: checked in this order before the gateway is called, charging nothing, the method is ACH, CHECK or WIRE, the currency is the functional currency, the bank account is eligible (active on the business date, not in a foreign currency), every allocated bill exists, is APPROVED, belongs to the vendor and fits the gross amount, the payer approved none of the bills paid (unless the AP approval policy allows it), the business date is not hard-locked, its period is open or overridden, and the AP_PAYMENT mappings ACCOUNTS_PAYABLE (and PAYMENT_FEES when a fee is charged) are set up.
+        Preconditions: checked in this order before the gateway is called, charging nothing, the method is ACH, CHECK or WIRE, the currency is the functional currency, the bank account is eligible (active from the start of the business date, not deactivated before the payment, not in a foreign currency), every allocated bill exists, is APPROVED, belongs to the vendor and fits the gross amount, the payer approved none of the bills paid (unless the AP approval policy allows it), the business date is not hard-locked, its period is open or overridden, and the AP_PAYMENT mappings ACCOUNTS_PAYABLE (and PAYMENT_FEES when a fee is charged) are set up.
 
         Required inputs: vendorId (UUID), grossAmount (min 0.01), currency (ISO 4217), paymentRef (max 100 chars, the idempotency key) and paymentMethod; bankAccountId may be omitted only when exactly one eligible account exists, and feeAmount, overrideJustification (10-1000 chars, honoured with accounting:period:override), paymentSource, memo and explicit allocations are optional.
 
@@ -13578,7 +13578,7 @@ components:
           format: uuid
           type: string
         glPostError:
-          description: Why the posting was refused, as its code (GL_MAPPING_NOT_CONFIGURED, PERIOD_CLOSED, PERIOD_HARD_LOCKED, ACCOUNTING_TIME_ZONE_UNSET) while the payment is GL_POST_FAILED
+          description: Why the posting was refused, as its code (GL_MAPPING_NOT_CONFIGURED, PERIOD_CLOSED, PERIOD_HARD_LOCKED, ACCOUNTING_TIME_ZONE_UNSET, GL_ACCOUNT_NOT_ACTIVE) or GL_POST_RETRIES_EXHAUSTED (the outbox gave up on a transient failure) while the payment is GL_POST_FAILED; in every case gl-posting-retry is the remedy once the cause is fixed
           example: GL_MAPPING_NOT_CONFIGURED
           type: string
         glPostedAt:
@@ -18600,7 +18600,7 @@ components:
             $ref: '#/components/schemas/AllocationLineRequest'
           type: array
         bankAccountId:
-          description: 'GL account id of the BANK_CASH account the payment is made from: active on the execution date and in the functional currency. May be omitted only when exactly one such account exists, which is then used (CAP:550 S42, AW41)'
+          description: 'GL account id of the BANK_CASH account the payment is made from: active at the start of the execution date, not deactivated before the payment, and in the functional currency. May be omitted only when exactly one such account exists, which is then used (CAP:550 S42, AW41)'
           example: 01936e5c-1111-7a3d-8b6e-2b3456789012
           format: uuid
           type: string
