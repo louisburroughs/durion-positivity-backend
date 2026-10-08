@@ -52,6 +52,8 @@ class InventoryEventsListenerTest {
             mock(InventoryAdjustmentPostingService.class);
     private final InventoryRevaluationPostingService revaluationPostingService =
             mock(InventoryRevaluationPostingService.class);
+    private final GoodsReceiptAccrualPostingService goodsReceiptPostingService =
+            mock(GoodsReceiptAccrualPostingService.class);
     private final KafkaFactIngestionRecorder ingestionRecorder = mock(KafkaFactIngestionRecorder.class);
 
     private InventoryEventsListener listener;
@@ -65,6 +67,7 @@ class InventoryEventsListenerTest {
                 postingService,
                 adjustmentPostingService,
                 revaluationPostingService,
+                goodsReceiptPostingService,
                 ingestionRecorder,
                 org.mockito.Mockito.mock(ObjectProvider.class),
                 mock(PlatformTransactionManager.class),
@@ -595,5 +598,183 @@ class InventoryEventsListenerTest {
                         any(),
                         any(),
                         any());
+    }
+    // ---- goodsreceipt.recorded (CAP:550 S41, #2602; AW38)
+    // ------------------------------------------------------------
+
+    private static final UUID RECEIPT_ID = UUID.fromString("00000000-0000-0000-0000-0000000000c1");
+
+    /** The fact as pos-inventory publishes it, every additive v1 field included. */
+    private String goodsReceipt(String eventId) {
+        return """
+                {"eventId":"%s","eventType":"goodsreceipt.recorded","schemaVersion":1,
+                 "aggregateId":"00000000-0000-0000-0000-0000000000c2","aggregateVersion":0,
+                 "occurredAtUtc":"2026-10-08T09:30:00Z","sourceService":"pos-inventory",
+                 "payload":{"receiptId":"%s","receiptNumber":"GR-1","purchaseOrderId":"00000000-0000-0000-0000-0000000000c2",
+                   "locationId":null,"totalAccruedAmountMinor":40000,"occurredAt":"2026-10-08T09:30:00Z",
+                   "currencyCode":"USD",
+                   "lines":[{"poLineId":"00000000-0000-0000-0000-0000000000c3","sku":"SKU-1","quantityReceived":4,
+                     "accruedAmountMinor":40000,"receiptLineId":"00000000-0000-0000-0000-0000000000c4",
+                     "productId":"00000000-0000-0000-0000-0000000000c5","inventoryValueMinor":38000,
+                     "costSource":"STANDARD","ledgerEntryId":"00000000-0000-0000-0000-0000000000c6"}]}}
+                """.formatted(eventId, RECEIPT_ID);
+    }
+
+    @Test
+    @DisplayName("S41: a postable receipt deserializes per the pinned schema, posts, and is recorded with its entry")
+    void goodsReceiptPostsAndRecords() {
+        UUID journalEntryId = UUID.randomUUID();
+        when(goodsReceiptPostingService.assess(any()))
+                .thenReturn(new GoodsReceiptAccrualPostingService.Assessment.Postable(java.util.List.of()));
+        when(goodsReceiptPostingService.postAccrual(any())).thenReturn(journalEntryId);
+
+        listener.onInventoryEvent(goodsReceipt("g-1"));
+
+        ArgumentCaptor<com.positivity.domainevents.inventory.GoodsReceiptRecordedV1> fact =
+                ArgumentCaptor.forClass(com.positivity.domainevents.inventory.GoodsReceiptRecordedV1.class);
+        verify(goodsReceiptPostingService).postAccrual(fact.capture());
+        assertThat(fact.getValue().currencyCode()).isEqualTo("USD");
+        assertThat(fact.getValue().lines()).singleElement().satisfies(line -> {
+            assertThat(line.inventoryValueMinor()).isEqualTo(38_000L);
+            assertThat(line.costSource()).isEqualTo("STANDARD");
+            assertThat(line.receiptLineId()).isEqualTo(UUID.fromString("00000000-0000-0000-0000-0000000000c4"));
+        });
+        verify(ingestionRecorder)
+                .recordPosted(
+                        eq(InventoryEventsListener.SOURCE_SYSTEM),
+                        eq("goodsreceipt.recorded"),
+                        eq("g-1"),
+                        eq(RECEIPT_ID),
+                        eq(java.time.LocalDateTime.of(2026, 10, 8, 9, 30)),
+                        any(),
+                        eq(journalEntryId),
+                        eq(GoodsReceiptAccrualPostingService.toSourceEventId(RECEIPT_ID)));
+        verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName(
+            "S41 AC3: a receipt re-emitted under a new eventId is recorded DUPLICATE_IGNORED (no entry of its own)")
+    void reEmittedGoodsReceiptRecordedAsDuplicate() {
+        when(goodsReceiptPostingService.assess(any()))
+                .thenReturn(new GoodsReceiptAccrualPostingService.Assessment.Postable(java.util.List.of()));
+        when(goodsReceiptPostingService.postAccrual(any())).thenReturn(null);
+
+        listener.onInventoryEvent(goodsReceipt("g-2"));
+
+        verify(ingestionRecorder).recordPosted(any(), any(), eq("g-2"), eq(RECEIPT_ID), any(), any(), isNull(), any());
+        verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName("S41 AC3: the same eventId twice is dropped before any transaction")
+    void duplicateGoodsReceiptEventIdDropped() {
+        when(processedEvents.existsById("g-3")).thenReturn(true);
+
+        listener.onInventoryEvent(goodsReceipt("g-3"));
+
+        verifyNoInteractions(goodsReceiptPostingService);
+        verifyNoInteractions(ingestionRecorder);
+        verify(processedEvents, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("S41 AC4: a currency hold is recorded SUSPENDED / CURRENCY_NOT_SUPPORTED, nothing posted, marked")
+    void currencyHeldGoodsReceipt() {
+        when(goodsReceiptPostingService.assess(any()))
+                .thenReturn(new GoodsReceiptAccrualPostingService.Assessment.CurrencyNotSupported("in EUR"));
+
+        listener.onInventoryEvent(goodsReceipt("g-4"));
+
+        verify(ingestionRecorder)
+                .recordCurrencyHeld(
+                        eq(InventoryEventsListener.SOURCE_SYSTEM),
+                        eq("goodsreceipt.recorded"),
+                        eq("g-4"),
+                        eq(RECEIPT_ID),
+                        any(),
+                        any(),
+                        eq("in EUR"));
+        verify(goodsReceiptPostingService, never()).postAccrual(any());
+        verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName("S41 AC10: a malformed receipt is recorded SUSPENDED / VALIDATION_ERROR, nothing posted, marked")
+    void malformedGoodsReceiptHeld() {
+        when(goodsReceiptPostingService.assess(any()))
+                .thenReturn(new GoodsReceiptAccrualPostingService.Assessment.Malformed("lines do not sum"));
+
+        listener.onInventoryEvent(goodsReceipt("g-5"));
+
+        verify(ingestionRecorder)
+                .recordSuspended(
+                        eq(InventoryEventsListener.SOURCE_SYSTEM),
+                        eq("goodsreceipt.recorded"),
+                        eq("g-5"),
+                        eq(RECEIPT_ID),
+                        any(),
+                        any(),
+                        eq(com.positivity.accounting.internal.enums.AccountingEventStatus.SUSPENDED),
+                        eq("VALIDATION_ERROR"),
+                        eq("lines do not sum"));
+        verify(goodsReceiptPostingService, never()).postAccrual(any());
+        verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName("S41 AC11: an uncosted receipt is recorded SKIPPED / UNCOSTED_FACT, nothing posted, marked")
+    void uncostedGoodsReceiptSkipped() {
+        when(goodsReceiptPostingService.assess(any()))
+                .thenReturn(new GoodsReceiptAccrualPostingService.Assessment.Uncosted("every line uncosted"));
+
+        listener.onInventoryEvent(goodsReceipt("g-6"));
+
+        verify(ingestionRecorder)
+                .recordUncostedSkip(
+                        eq(InventoryEventsListener.SOURCE_SYSTEM),
+                        eq("goodsreceipt.recorded"),
+                        eq("g-6"),
+                        eq(RECEIPT_ID),
+                        any(),
+                        any(),
+                        eq("every line uncosted"));
+        verify(goodsReceiptPostingService, never()).postAccrual(any());
+        verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName("S41: nothing accrued and nothing valued is recorded PROCESSED with no entry")
+    void goodsReceiptWithNothingToPost() {
+        when(goodsReceiptPostingService.assess(any()))
+                .thenReturn(new GoodsReceiptAccrualPostingService.Assessment.NothingToPost());
+
+        listener.onInventoryEvent(goodsReceipt("g-7"));
+
+        verify(ingestionRecorder)
+                .recordNothingToPost(
+                        eq(InventoryEventsListener.SOURCE_SYSTEM),
+                        eq("goodsreceipt.recorded"),
+                        eq("g-7"),
+                        eq(RECEIPT_ID),
+                        any(),
+                        any());
+        verify(goodsReceiptPostingService, never()).postAccrual(any());
+        verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName("S41 AC5: a closed period propagates for retry and the DLQ, unrecorded and unmarked")
+    void goodsReceiptPostingFailurePropagates() {
+        when(goodsReceiptPostingService.assess(any()))
+                .thenReturn(new GoodsReceiptAccrualPostingService.Assessment.Postable(java.util.List.of()));
+        when(goodsReceiptPostingService.postAccrual(any()))
+                .thenThrow(new com.positivity.accounting.internal.exception.AccountingPeriodClosedException(
+                        "2026-10", "period 2026-10 is CLOSED"));
+
+        assertThatExceptionOfType(com.positivity.accounting.internal.exception.AccountingPeriodClosedException.class)
+                .isThrownBy(() -> listener.onInventoryEvent(goodsReceipt("g-8")));
+
+        verify(processedEvents, never()).save(any());
     }
 }

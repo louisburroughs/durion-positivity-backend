@@ -18,6 +18,7 @@ General-ledger accounting service for the Durion Positivity ETSMS platform. Mana
 - Apply or refund AR customer credits, relieving the customer-credit liability recognized at issuance
 - Post inventory shrinkage (Dr Inventory Shrinkage 5100 / Cr Inventory 1300) from `inventory.scrap.posted` facts on `inventory.events.v1`, exactly once per scrap; uncosted scraps (ADR-0048 interim `costSource=NONE`) are logged and skipped, never posted
 - Post inventory adjustments (cycle-count variances and manual adjustments) from `inventory.adjustment.posted` facts on `inventory.events.v1`, exactly once per adjustment: a loss posts Dr 5100 / Cr 1300 and a gain Dr 1300 / Cr 5100 for `abs(quantityDelta) × unitCost` through the `INVENTORY_ADJUSTMENT` posting category; uncosted facts are counted and recorded `SKIPPED`, never posted (see Inventory Posting Facts below)
+- Post a goods receipt's accrual from `goodsreceipt.recorded` facts on `inventory.events.v1` (CAP:550 S41, #2602; AW38), exactly once per receipt: Dr 1300 at inventory's value / Cr 2100 Goods Received Not Yet Billed at the accrued value / Dr or Cr 5050 the difference, through the `GOODS_RECEIPT` posting category; a fact with no currency or a foreign one is held `SUSPENDED / CURRENCY_NOT_SUPPORTED`, a malformed one `SUSPENDED / VALIDATION_ERROR`, an uncosted one `SKIPPED / UNCOSTED_FACT` (see Inventory Posting Facts below)
 - Post manual cost revaluations from `inventory.product-value.changed` facts on `inventory.events.v1`, exactly once per revaluation: a write-up posts Dr 1300 / Cr 5000 and a write-down Dr 5000 / Cr 1300 for `abs(totalValueDelta)` through the `INVENTORY_REVALUATION` posting category; a zero delta posts no entry but is still recorded `PROCESSED` (see Inventory Posting Facts below)
 - Manage monthly accounting periods (list, close, reopen)
 - Produce financial reports (income statement, balance sheet)
@@ -1298,7 +1299,7 @@ unbound connection, through the repository and through raw SQL) and `TenancySche
 non-whitelisted table has `tenant_id`, RLS enabled and forced, and the `tenant_isolation` policy; the pool is
 `pos_app` with no bypass), both on Testcontainers Postgres (`./mvnw -pl pos-accounting verify`).
 
-## Inventory Posting Facts (issues #1043, #2191, #2193)
+## Inventory Posting Facts (issues #1043, #2191, #2193, #2602)
 
 `InventoryEventsListener` dispatches `inventory.events.v1` on `eventType`; every other type on the topic is
 ignored without recording its eventId.
@@ -1307,18 +1308,33 @@ ignored without recording its eventId.
 | --- | --- | --- |
 | `inventory.scrap.posted` (`ScrapPostedV1`) | `INVENTORY_SHRINKAGE`: `SHRINKAGE_EXPENSE` → 5100, `INVENTORY_ASSET` → 1300 | Dr 5100 / Cr 1300 for `quantity × unitCost` |
 | `inventory.adjustment.posted` (`InventoryAdjustedV1`, `adjustmentKind` `CYCLE_COUNT` or `MANUAL_ADJUSTMENT`) | `INVENTORY_ADJUSTMENT`: `ADJUSTMENT_LOSS` → 5100, `ADJUSTMENT_GAIN` → 5100, `INVENTORY_ASSET` → 1300 | loss (`quantityDelta < 0`): Dr `ADJUSTMENT_LOSS` / Cr `INVENTORY_ASSET`; gain: Dr `INVENTORY_ASSET` / Cr `ADJUSTMENT_GAIN`, for `abs(quantityDelta) × unitCost` |
+| `goodsreceipt.recorded` (`GoodsReceiptRecordedV1`, a delivery received into stock; CAP:550 S41, #2602) | `GOODS_RECEIPT`: `INVENTORY_ASSET` → 1300, `GOODS_RECEIVED_NOT_BILLED` → 2100, `PURCHASE_PRICE_DIFFERENCE` → 5050 | one entry per receipt, per costed line: Dr `INVENTORY_ASSET` at `inventoryValueMinor` / Cr `GOODS_RECEIVED_NOT_BILLED` at `accruedAmountMinor` / Dr or Cr `PURCHASE_PRICE_DIFFERENCE` for `accrued − value` (the `STANDARD` variance, pack-price rounding); an unpriced line (accrual 0, value > 0) credits 5050 at its value on its own journal line, described as unpriced. Every line description carries the receipt line, PO line or sku, `costSource` and `ledgerEntryId` |
 | `inventory.product-value.changed` (`ProductValueChangedV1`, manual cost revaluation) | `INVENTORY_REVALUATION`: `INVENTORY_ASSET` → 1300, `REVALUATION_OFFSET` → 5000 (#2186 D7, final) | write-up (`totalValueDelta > 0`): Dr `INVENTORY_ASSET` / Cr `REVALUATION_OFFSET`; write-down: Dr `REVALUATION_OFFSET` / Cr `INVENTORY_ASSET`, for `abs(totalValueDelta)` as delivered — inventory has already multiplied the cost delta by on-hand, accounting never recomputes it |
 
 - **Accounts** resolve through the mapping keys (seeded in `R__seed_reference_accounting.sql`), never hardcoded.
   A gain credits 5100 so count over/short nets in one account (#2186 D2); scrap and count corrections are
   separate categories so finance can remap either (D4). `reasonCode` rides into the entry description only.
 - **Date** — the fact's `occurredAt` (business time); the period gate applies.
+- **Goods receipts (AW38)** — the currency is checked first: no `currencyCode`, or one other than the ledger's,
+  is never booked at par and is held `SUSPENDED / CURRENCY_NOT_SUPPORTED` (ADR-0067 PC-9). Then the line rules,
+  over lines with a quantity (zero-quantity lines are ignored); Accounting never fills in a value Inventory did
+  not state. A line without `receiptLineId`, a null `inventoryValueMinor` beside a non-zero accrual, or line
+  accruals that do not sum to `totalAccruedAmountMinor` hold the whole fact `SUSPENDED / VALIDATION_ERROR`
+  (excluded from auto-retry, recorded once per receipt, never a partial posting). A line with no value and no
+  accrual is uncosted and contributes nothing; when every line is, the fact is `SKIPPED / UNCOSTED_FACT`.
+  Nothing accrued and nothing valued is `PROCESSED` with no entry. Amounts convert from minor units by the
+  currency's exponent only, never rounded (PC-5 (a)). `costSource` and `ledgerEntryId` are description only:
+  never branched on, a missing `ledgerEntryId` never holds a posting. The ingestion record keeps the fact as its
+  `payload`, so each posted line (`receiptLineId`, `poLineId`, quantity, accrual, value) stays readable for bill
+  matching and 2100 reconciliation. A vendor bill never debits 1300; its approval clears 2100 (Vendor Bill
+  Approval above); a bill decision never reverses a receipt.
 - **Idempotency** — envelope `eventId` in `processed_events`, checked before any transaction; posting key
   `INVENTORY_SHRINKAGE_GL_POSTING:<scrapId>` / `INVENTORY_ADJUSTMENT_GL_POSTING:<kind>:<adjustmentId>` /
-  `INVENTORY_REVALUATION_GL_POSTING:<revaluationId>`; journal entry
+  `INVENTORY_REVALUATION_GL_POSTING:<revaluationId>` / `GOODS_RECEIPT_ACCRUAL:<receiptId>`; journal entry
   `sourceEventId = nameUUIDFromBytes("INVENTORY_SHRINKAGE:" + scrapId)` /
   `nameUUIDFromBytes("INVENTORY_ADJUSTMENT:" + kind + ":" + adjustmentId)` /
-  `nameUUIDFromBytes("INVENTORY_REVALUATION:" + revaluationId)`. A fact whose posting key has expired is still
+  `nameUUIDFromBytes("INVENTORY_REVALUATION:" + revaluationId)` /
+  `nameUUIDFromBytes("GOODS_RECEIPT_ACCRUAL:" + receiptId)` (source type `GOODS_RECEIPT_ACCRUAL`). A fact whose posting key has expired is still
   recognised as posted by its `sourceEventId`.
 - **Transaction shape** (ADR-0044 as amended by #2146; `OrderEventsListener` has the same shape) — the listener
   method is not transactional. The posting, posting key, ingestion record and processed mark commit together
@@ -1341,9 +1357,10 @@ ignored without recording its eventId.
   with `GET /v1/accounting/events?eventType=inventory.adjustment.posted&domainKeyId=<adjustmentId>` (or
   `eventType=inventory.product-value.changed&domainKeyId=<revaluationId>`).
   **Kafka facts are not REST-retryable**: they never end `FAILED` or `SUSPENDED`, which are the only statuses
-  the retry scheduler and `retryAccountingEvent` select; a failed fact is replayed from the DLQ instead. The one
-  exception is a fact held for its currency (see Ledger currency above): `SUSPENDED / CURRENCY_NOT_SUPPORTED`,
-  skipped by the retry scheduler and released only through the audited reprocess.
+  the retry scheduler and `retryAccountingEvent` select; a failed fact is replayed from the DLQ instead. The
+  exceptions are a fact held for its currency (see Ledger currency above): `SUSPENDED / CURRENCY_NOT_SUPPORTED`,
+  skipped by the retry scheduler and released only through the audited reprocess; and a malformed goods receipt,
+  `SUSPENDED / VALIDATION_ERROR`, also skipped by the retry scheduler (its payload never changes).
 - **Event envelope contract** (`GET /v1/accounting/events/contract`, issue #2207) — `version`/`fields`/`examples`
   describe the submission envelope as before; four additive optional sections document the rest of the
   ingestion surface, each sourced from the real rules rather than a hand-typed list that could drift:
@@ -1370,7 +1387,7 @@ transaction as the posting and the `processed_events` mark:
 
 | Listener | `eventType` | `sourceSystem` | `domainKeyId` | Row |
 |---|---|---|---|---|
-| `InventoryEventsListener` | `inventory.scrap.posted`, `inventory.adjustment.posted`, `inventory.product-value.changed` | `pos-inventory` | scrap / adjustment / revaluation id | see Inventory Posting Facts above |
+| `InventoryEventsListener` | `inventory.scrap.posted`, `inventory.adjustment.posted`, `inventory.product-value.changed`, `goodsreceipt.recorded` | `pos-inventory` | scrap / adjustment / revaluation / receipt id | see Inventory Posting Facts above; a goods receipt can also be `SUSPENDED / CURRENCY_NOT_SUPPORTED` or `SUSPENDED / VALIDATION_ERROR` |
 | `InvoiceEventsListener` | `invoice.invoice.updated` | `pos-invoice` | invoice id | `PROCESSED / NEW` + `journalEntryId` when revenue (or its reversal) posts; `PROCESSED / DUPLICATE_IGNORED` + the earlier entry when the cycle was already posted (the `POSTED` fact after every `FINALIZED` one); `PROCESSED / NEW`, no entry, for a zero total or a revert with nothing open; `SKIPPED / NOT_POSTABLE` for a stale fact, a deposit-take invoice, no `finalizedAt`, or a status that neither recognizes nor reverses (`ERROR`) |
 | `OrderEventsListener` | `order.session.closed` | `pos-order` | session id | `PROCESSED / NEW` + an entry it posted (the over/short's, else the first drawer movement's; every movement entry carries the `sessionId` dimension, #2513); `PROCESSED / NEW`, no entry, when nothing posts (a zero variance and no movement to post); `PROCESSED / DUPLICATE_IGNORED` when every posting key of the session was already registered; a foreign-currency hold is the `SUSPENDED / CURRENCY_NOT_SUPPORTED` row (Ledger currency above) |
 | `SupplierInvoiceEventsListener` | `supplier.invoice.received` | `pos-supplier` | vendor bill id | `PROCESSED / NEW`, no entry (nothing posts on ingest; the bill posts at approval, #2509), for a new bill, a duplicate flagged on the live original and a re-issue of an approved bill recorded as an exception item; `PROCESSED / DUPLICATE_IGNORED` for a duplicate identical to the live bill held, under the duplicate rule above (#2501) |
