@@ -452,4 +452,30 @@ class SupplierVendorControllerWebMvcTest {
                 .isFalse();
         verifyNoInteractions(vendorService);
     }
+
+    @Test
+    @DisplayName("#2621 AC 20: a misshapen scheme is 400 VALIDATION_ERROR on its field and the body does not echo it")
+    void misshapenSchemeIsNotEchoed() throws Exception {
+        when(vendorService.createVendor(any()))
+                .thenThrow(new com.positivity.supplier.internal.exception.SupplierValidationException(
+                        "VALIDATION_ERROR",
+                        "Tax registration refused: taxRegistrations[0].scheme must be letters",
+                        List.of(new com.positivity.shared.error.ApiError.FieldError(
+                                "taxRegistrations[0].scheme", "must be letters"))));
+        String body = mockMvc.perform(authed(
+                        post(BASE).contentType(MediaType.APPLICATION_JSON).content("""
+                                        {"legalName":"L","displayName":"D","defaultPaymentTerms":"NET30",
+                                         "defaultCurrency":"USD",
+                                         "taxRegistrations":[{"scheme":"EIN123","number":"000-00-1234"}]}
+                                        """),
+                        SupplierPermissions.VENDOR_WRITE))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("taxRegistrations[0].scheme"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        assertThat(body.contains("EIN123") || body.contains("000-00-1234"))
+                .as("submitted value absent from the error body")
+                .isFalse();
+    }
 }

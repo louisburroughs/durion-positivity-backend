@@ -7,6 +7,7 @@ import com.positivity.supplier.internal.entity.VendorTaxRegistration;
 import com.positivity.supplier.internal.enums.TaxIdRevealOutcome;
 import com.positivity.supplier.internal.exception.SupplierNotFoundException;
 import com.positivity.supplier.internal.exception.SupplierValidationException;
+import com.positivity.supplier.internal.exception.TaxIdRevealReasonRejectedException;
 import com.positivity.supplier.internal.exception.VendorTaxIdUnreadableException;
 import com.positivity.supplier.internal.repository.SupplierVendorRepository;
 import com.positivity.supplier.internal.repository.SupplierVendorTaxIdRevealRepository;
@@ -17,6 +18,7 @@ import com.positivity.supplier.internal.vendor.service.model.TaxIdRevealView;
 import com.positivity.tenancy.TenantContext;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -35,13 +37,18 @@ import org.springframework.transaction.annotation.Transactional;
  * <ol>
  *   <li>Load the vendor and the registration (404 otherwise). Nothing has been decrypted.
  *   <li>Decrypt, catching only the unreadable case. A failure is a reveal that happened and produced nothing.
+ *   <li>Refuse a reason that contains the number itself (Security confirmation on louisburroughs/durion#571):
+ *       separators removed from both, compared case-insensitively. The refusal is 400 {@code VALIDATION_ERROR},
+ *       reveals nothing, and records {@code REASON_REJECTED} with no reason, because that reason held the
+ *       number. The reason is never logged.
  *   <li>Write the audit row through {@link VendorTaxIdRevealRecorder}, in this transaction, with no catch. If
  *       it fails, the exception propagates, the transaction rolls back, and the number never leaves this
  *       method.
  *   <li>Only then return the number, or rethrow the unreadable failure.
  * </ol>
  *
- * <p>{@code noRollbackFor = VendorTaxIdUnreadableException}: an unreadable number is the attempt most worth
+ * <p>{@code noRollbackFor} the unreadable and reason-rejected exceptions: each is a reveal that happened and
+ * returned nothing, and its row must survive. An unreadable number is the attempt most worth
  * recording (a ciphertext copied between rows, a key retired without being carried into
  * {@code previous-keys}), and rolling back would delete that evidence. It is logged with the vendor,
  * registration and key id only.
@@ -61,7 +68,7 @@ public class VendorTaxIdRevealServiceImpl implements VendorTaxIdRevealService {
 
     @Override
     @NonNull
-    @Transactional(noRollbackFor = VendorTaxIdUnreadableException.class)
+    @Transactional(noRollbackFor = {VendorTaxIdUnreadableException.class, TaxIdRevealReasonRejectedException.class})
     public TaxIdRevealView reveal(
             @NonNull UUID vendorId, @NonNull UUID registrationId, @NonNull TaxIdRevealRequest request) {
         Objects.requireNonNull(registrationId, "registrationId must not be null");
@@ -81,6 +88,13 @@ public class VendorTaxIdRevealServiceImpl implements VendorTaxIdRevealService {
             number = cipher.open(tenantId, vendorId, registrationId, registration.numberCiphertext());
         } catch (VendorTaxIdUnreadableException ex) {
             failure = ex;
+        }
+
+        if (number != null && reasonCarries(request.reason(), number)) {
+            number = null;
+            // The row first, with no reason: that reason holds the number. Then the refusal, which keeps the row.
+            recorder.record(vendorId, registration, null, TaxIdRevealOutcome.REASON_REJECTED);
+            throw new TaxIdRevealReasonRejectedException();
         }
 
         // Before anything is returned, in this transaction, with no catch.
@@ -128,6 +142,16 @@ public class VendorTaxIdRevealServiceImpl implements VendorTaxIdRevealService {
                 size,
                 found.getTotalElements(),
                 found.getTotalPages());
+    }
+
+    /** Whether {@code reason} contains {@code number}, separators removed from both, ignoring case. */
+    static boolean reasonCarries(String reason, String number) {
+        String bareNumber = alphanumerics(number);
+        return !bareNumber.isEmpty() && alphanumerics(reason).contains(bareNumber);
+    }
+
+    private static String alphanumerics(String value) {
+        return value.replaceAll("[^A-Za-z0-9]", "").toLowerCase(Locale.ROOT);
     }
 
     @NonNull

@@ -714,7 +714,8 @@ public class SupplierVendorController {
                     Emits a SUPPLIER_VENDOR_TAX_ID_REVEAL audit event and writes one reveal audit row; no row,
                     no number. The response carries Cache-Control: no-store and must never be cached, logged or
                     put in a URL.
-                    Returns 200 with the number, 400 JUSTIFICATION_REQUIRED or VALIDATION_ERROR, 404
+                    Returns 200 with the number, 400 JUSTIFICATION_REQUIRED, or VALIDATION_ERROR for an over-long
+                    reason or one that contains the number itself (recorded as REASON_REJECTED, nothing revealed), 404
                     SUPPLIER_VENDOR_NOT_FOUND or SUPPLIER_VENDOR_TAX_REGISTRATION_NOT_FOUND, and 500
                     SUPPLIER_VENDOR_TAX_ID_UNREADABLE when the stored number cannot be decrypted, which is
                     still recorded.
@@ -723,7 +724,8 @@ public class SupplierVendorController {
     @ApiResponse(
             responseCode = "400",
             description = "JUSTIFICATION_REQUIRED: the reason is missing or shorter than 10 characters;"
-                    + " VALIDATION_ERROR: it is longer than 500.",
+                    + " VALIDATION_ERROR: it is longer than 500, or it contains the number itself, which reveals"
+                    + " nothing and records a REASON_REJECTED row without the reason.",
             content = @Content(mediaType = JSON, schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
@@ -782,7 +784,7 @@ public class SupplierVendorController {
             description = """
                     Returns one page of a vendor's tax-registration reveals, newest first: who revealed which
                     registration, their roles, the reason, the correlation id, when, and whether it was
-                    REVEALED or UNREADABLE.
+                    REVEALED, UNREADABLE or REASON_REJECTED.
                     Use this tool to review who saw a vendor's full numbers; do not use it to read a number,
                     which only revealSupplierVendorTaxRegistration returns, and use getSupplierVendor instead
                     for the masked registrations.

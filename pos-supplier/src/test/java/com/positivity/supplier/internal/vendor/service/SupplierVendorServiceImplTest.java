@@ -737,6 +737,50 @@ class SupplierVendorServiceImplTest extends PostgresSliceTestBase {
                     .as("toString never prints the number")
                     .doesNotContain(SSN);
         }
+
+        /**
+         * AC 20 (ADR-0072 Decision 2; Security confirmation on louisburroughs/durion#571): every entry carrying a
+         * number has its scheme and region shape-checked after trim and upper-casing; the value is never echoed.
+         * [M] allowing a digit in region fails {@code US-123} here.
+         */
+        @Test
+        @DisplayName("AC 20: EIN123, a 17-character scheme and region US-123 are 400 on the matching field;"
+                + " gst_hst / qc are stored as GST_HST / QC")
+        void schemeAndRegionShapes() {
+            for (Object[] refused : new Object[][] {
+                {"EIN123", null, "taxRegistrations[0].scheme"},
+                {"ABCDEFGHIJKLMNOPQ", null, "taxRegistrations[0].scheme"},
+                {"EIN", "US-123", "taxRegistrations[0].region"}
+            }) {
+                String scheme = (String) refused[0];
+                String region = (String) refused[1];
+                assertThatThrownBy(() -> createWith(new TaxRegistrationDto(null, scheme, SSN, region)))
+                        .isInstanceOfSatisfying(SupplierValidationException.class, failure -> {
+                            assertThat(failure.getCode()).isEqualTo(SupplierValidationException.VALIDATION_ERROR);
+                            assertThat(failure.getFieldErrors())
+                                    .extracting(ApiErrorField::of)
+                                    .containsExactly((String) refused[2]);
+                            String said = failure.getMessage() + failure.getFieldErrors();
+                            assertThat(said.contains(scheme) || (region != null && said.contains(region)))
+                                    .as("submitted value absent")
+                                    .isFalse();
+                        });
+            }
+
+            VendorView stored = createWith(new TaxRegistrationDto(null, " gst_hst ", "000000000RT0001", "qc"));
+            assertThat(stored.taxRegistrations()).singleElement().satisfies(view -> {
+                assertThat(view.scheme()).isEqualTo("GST_HST");
+                assertThat(view.region()).isEqualTo("QC");
+            });
+            JsonNode element = stored(stored.vendorId()).get(0);
+            assertThat(element.path("scheme").stringValue()).isEqualTo("GST_HST");
+            assertThat(element.path("region").stringValue()).isEqualTo("QC");
+            assertThat(createWith(new TaxRegistrationDto(null, "VAT/IVA", "FAKE00001234", "ca-qc"))
+                            .taxRegistrations()
+                            .getFirst()
+                            .region())
+                    .isEqualTo("CA-QC");
+        }
     }
 
     /** Field name of an {@code ApiError.FieldError}, for {@code extracting}. */

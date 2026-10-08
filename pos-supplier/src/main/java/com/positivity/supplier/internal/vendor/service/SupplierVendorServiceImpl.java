@@ -476,8 +476,11 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
      *   <li>an id this vendor does not hold, or one sent twice, is refused; a stored id left out is removed.
      * </ul>
      *
+     * <p>Every entry that carries a number has its (already upper-cased) scheme and region checked against
+     * {@link TaxRegistrationDto#SCHEME_SHAPE} and {@link TaxRegistrationDto#REGION_SHAPE} (ADR-0072 Decision 2).
+     *
      * <p>Every refusal is a 400 {@code VALIDATION_ERROR} naming {@code taxRegistrations[i].<field>} and never
-     * carries the number.
+     * carries the number, the scheme or the region.
      */
     private List<VendorTaxRegistration> resolveTaxRegistrations(
             UUID tenantId, UUID vendorId, List<VendorTaxRegistration> stored, List<TaxRegistrationDto> requested) {
@@ -490,6 +493,9 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
         for (int i = 0; i < requested.size(); i++) {
             TaxRegistrationDto entry = requested.get(i);
             String field = "taxRegistrations[" + i + "].";
+            if (entry.number() != null) {
+                requireShapes(entry, field);
+            }
             UUID registrationId = entry.registrationId();
             if (registrationId == null) {
                 if (entry.number() == null) {
@@ -515,6 +521,19 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
             }
         }
         return resolved;
+    }
+
+    /** The value is never echoed: the message names the rule only. */
+    private static void requireShapes(TaxRegistrationDto entry, String field) {
+        if (!TaxRegistrationDto.SCHEME_SHAPE.matcher(entry.scheme()).matches()) {
+            throw fieldInvalid(
+                    field + "scheme",
+                    "must be letters, spaces, _, / or -, start with a letter, at most 16 characters, and no digit");
+        }
+        if (entry.region() != null
+                && !TaxRegistrationDto.REGION_SHAPE.matcher(entry.region()).matches()) {
+            throw fieldInvalid(field + "region", "must be two letters, optionally - and one to three letters");
+        }
     }
 
     private VendorTaxRegistration seal(UUID tenantId, UUID vendorId, UUID registrationId, TaxRegistrationDto entry) {

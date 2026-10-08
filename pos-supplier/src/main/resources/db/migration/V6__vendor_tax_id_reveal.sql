@@ -1,8 +1,9 @@
 -- durion-positivity-backend#2621 (CAP:550; Security ruling on #2617, ruling 4): the reveal audit of vendor
 -- tax-registration numbers. One row per reveal through POST /v1/supplier/vendors/{vendorId}/tax-registrations/
 -- {registrationId}/reveal, written in the reveal's own transaction BEFORE the number is returned (no row, no
--- number), including a reveal whose ciphertext could not be decrypted (outcome UNREADABLE). A 403 writes
--- nothing. Read through GET /v1/supplier/vendors/{vendorId}/tax-id-reveals (supplier:audit:read).
+-- number), including a reveal whose ciphertext could not be decrypted (outcome UNREADABLE) and one refused
+-- because its reason contained the number (outcome REASON_REJECTED, reason NULL: that reason held the
+-- number; Security confirmation on louisburroughs/durion#571). A 403 or 404 writes nothing. Read through GET /v1/supplier/vendors/{vendorId}/tax-id-reveals (supplier:audit:read).
 --
 -- The row never holds the number or last4. Append-only: the code never updates or deletes a row, and the
 -- application role loses UPDATE and DELETE on the table below. No foreign key to supplier_vendor: the record
@@ -19,12 +20,12 @@ CREATE TABLE public.supplier_vendor_tax_id_reveal (
     scheme character varying(32) NOT NULL,
     revealed_by character varying(255) NOT NULL,
     revealed_by_roles character varying(1000) NOT NULL,
-    reason character varying(500) NOT NULL,
+    reason character varying(500),
     correlation_id character varying(100),
     revealed_at timestamp(6) with time zone NOT NULL,
     outcome character varying(16) NOT NULL,
-    CONSTRAINT chk_svtir_outcome CHECK (((outcome)::text = ANY ((ARRAY['REVEALED'::character varying, 'UNREADABLE'::character varying])::text[]))),
-    CONSTRAINT chk_svtir_reason CHECK ((length(btrim((reason)::text)) >= 10))
+    CONSTRAINT chk_svtir_outcome CHECK (((outcome)::text = ANY ((ARRAY['REVEALED'::character varying, 'UNREADABLE'::character varying, 'REASON_REJECTED'::character varying])::text[]))),
+    CONSTRAINT chk_svtir_reason CHECK (((((outcome)::text = 'REASON_REJECTED'::text) AND (reason IS NULL)) OR (((outcome)::text <> 'REASON_REJECTED'::text) AND (reason IS NOT NULL) AND (length(btrim((reason)::text)) >= 10))))
 );
 
 COMMENT ON TABLE public.supplier_vendor_tax_id_reveal IS

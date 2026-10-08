@@ -78,10 +78,17 @@ connection profile belongs to exactly one vendor. No endpoint deletes a vendor.
     `number` to replace its number; and a new registration without `registrationId` and with its `number`
     (1–64 characters). An id the vendor does not hold is 400; a stored registration left out is removed. A
     PUT that keeps every registration unchanged publishes nothing. No message or log echoes a number.
+  - **Shapes (ADR-0072 Decision 2).** `scheme` and `region` are trimmed and upper-cased (`gst_hst` → `GST_HST`,
+    `qc` → `QC`). On every entry that carries a `number`, `scheme` must match `^[A-Z][A-Z _/-]{0,15}$` and
+    `region` `^[A-Z]{2}(-[A-Z]{1,3})?$` — no digits, so neither can hold part of a number — or 400
+    `VALIDATION_ERROR` on `taxRegistrations[i].scheme` / `.region`, never echoing the value. `V4` and `V5`
+    refuse to run (counts only) if a stored or queued registration breaks them.
   - **Reveal.** Only `supplier:vendor_tax_id:reveal` (ADMIN, CONTROLLER) sees a number, with a reason of
     10–500 characters. The `supplier_vendor_tax_id_reveal` audit row (actor, roles, reason, correlation id,
-    outcome `REVEALED` | `UNREADABLE`; never the number or `last4`) is written in the same transaction
-    before the number is returned: if it cannot be written, nothing is revealed. The rows are read through
+    outcome `REVEALED` | `UNREADABLE` | `REASON_REJECTED`; never the number or `last4`) is written in the same
+    transaction before the number is returned: if it cannot be written, nothing is revealed. A reason that
+    contains the number itself (separators and case ignored) is 400 `VALIDATION_ERROR`, reveals nothing, and
+    records `REASON_REJECTED` with a null reason; the reason is never logged. The rows are read through
     `supplier:audit:read`, so a controller's reveals are reviewed by someone else. A 403 writes nothing.
 - **`supplier.vendor.updated` schema version 2** (`SupplierVendorUpdatedV1`) on `supplier.events.v1`, key
   `vendorId`, `aggregateVersion` = the vendor's `@Version`: queued through the outbox in the transaction of

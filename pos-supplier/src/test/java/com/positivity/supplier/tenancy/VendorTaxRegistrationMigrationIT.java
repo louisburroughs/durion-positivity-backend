@@ -132,7 +132,8 @@ class VendorTaxRegistrationMigrationIT {
         UUID vendorEmpty = UUID.fromString("01980000-0000-7000-8000-00000000a0a2");
         String registrationsA = "[{\"scheme\":\"SSN\",\"number\":\"" + SSN + "\",\"region\":null},"
                 + "{\"scheme\":\"BN\",\"number\":\"" + SHORT + "\",\"region\":\"ON\"}]";
-        String registrationsB = "[{\"scheme\":\"GST_HST\",\"number\":\"" + BN + "\",\"region\":\"ON\"}]";
+        // Lower case and padded, as a pre-#2621 API stored it: both migrations store it trimmed and upper-cased.
+        String registrationsB = "[{\"scheme\":\" gst_hst \",\"number\":\"" + BN + "\",\"region\":\"on\"}]";
         String otherPayload = "{\"eventType\":\"supplier.stock.snapshot.ready\",\"schemaVersion\":1,"
                 + "\"payload\":{\"number\":\"" + SSN + "\"}}";
         String vendorPublished;
@@ -176,6 +177,8 @@ class VendorTaxRegistrationMigrationIT {
         assertThat(a.get(1).path("last4").isNull()).as("under 8 alphanumerics").isTrue();
         assertThat(a.get(1).path("region").stringValue()).isEqualTo("ON");
         assertThat(b.get(0).path("last4").stringValue()).isEqualTo("0001");
+        assertThat(b.get(0).path("scheme").stringValue()).isEqualTo("GST_HST");
+        assertThat(b.get(0).path("region").stringValue()).isEqualTo("ON");
         assertThat(open(TENANT_A, vendorA, a.get(0))).isEqualTo(SSN);
         assertThat(open(TENANT_A, vendorA, a.get(1))).isEqualTo(SHORT);
         assertThat(open(TENANT_B, vendorB, b.get(0))).isEqualTo(BN);
@@ -256,6 +259,59 @@ class VendorTaxRegistrationMigrationIT {
                 assertThat(count).isEqualTo(2);
             }
         }
+    }
+
+    /**
+     * #2621 item 15: a stored registration whose scheme or region breaks the ADR-0072 shape stops V4 before
+     * anything is written, with a count and no value; the rows stay as they were for correction.
+     */
+    @Test
+    @DisplayName("a misshapen stored scheme stops V4 with a count and no value; nothing is written")
+    void misshapenStoredRegistrationStopsTheMigration() throws Exception {
+        flyway("3").migrate();
+        UUID vendor = UUID.fromString("01980000-0000-7000-8000-00000000c0c1");
+        String misshapen = "[{\"scheme\":\"EIN123\",\"number\":\"" + SSN + "\",\"region\":null}]";
+        try (Connection connection = database.getConnection();
+                Statement statement = connection.createStatement()) {
+            vendor(statement, TENANT_A, vendor, "V-000001", misshapen);
+        }
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> flyway(null).migrate())
+                .satisfies(failure -> {
+                    String said = String.valueOf(failure.getMessage())
+                            + (failure.getCause() == null
+                                    ? ""
+                                    : failure.getCause().getMessage());
+                    assertThat(said).contains("1 stored vendor tax registration");
+                    assertThat(said.contains("EIN123") || said.contains(SSN))
+                            .as("value absent")
+                            .isFalse();
+                });
+        assertThat(storedRegistrations().get(vendor)).as("nothing written").contains("\"number\"");
+    }
+
+    @Test
+    @DisplayName("a misshapen region in a queued v1 fact stops V5 with a count and no value")
+    void misshapenOutboxRegionStopsTheScrub() throws Exception {
+        flyway("3").migrate();
+        UUID vendor = UUID.fromString("01980000-0000-7000-8000-00000000c0c2");
+        String misshapen = "[{\"scheme\":\"EIN\",\"number\":\"" + SSN + "\",\"region\":\"US-123\"}]";
+        try (Connection connection = database.getConnection();
+                Statement statement = connection.createStatement()) {
+            outbox(statement, TENANT_A, "supplier.vendor.updated", vendorFactV1(vendor, misshapen), true, null);
+        }
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> flyway(null).migrate())
+                .satisfies(failure -> {
+                    StringBuilder said = new StringBuilder();
+                    for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+                        said.append(cause.getMessage());
+                    }
+                    assertThat(said.toString()).contains("1 supplier.vendor.updated outbox registration");
+                    assertThat(said.toString().contains("US-123"))
+                            .as("value absent")
+                            .isFalse();
+                });
     }
 
     private String open(UUID tenantId, UUID vendorId, JsonNode element) {

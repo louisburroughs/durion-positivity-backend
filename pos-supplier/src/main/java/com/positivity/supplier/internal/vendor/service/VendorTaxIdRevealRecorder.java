@@ -13,6 +13,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,7 +30,8 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>The row holds the actor and roles from the security context (ADR-0018; pos-supplier stores no
  * {@code personId}, so ADR-0022's claim is not recorded here), the reason, the request's correlation id and
- * the outcome. Never the number and never {@code last4}.
+ * the outcome. Never the number and never {@code last4}; and no reason on a {@code REASON_REJECTED} row, whose
+ * reason held the number.
  */
 @Component
 @RequiredArgsConstructor
@@ -43,18 +45,22 @@ public class VendorTaxIdRevealRecorder {
     /**
      * Records one reveal of {@code registration} of {@code vendorId}. Deliberately catches nothing.
      *
-     * @param outcome {@code REVEALED}, or {@code UNREADABLE} when decryption failed and nothing is returned
+     * @param reason the reason given; {@code null} for {@code REASON_REJECTED} only, whose reason held the number
+     * @param outcome {@code REVEALED}; {@code UNREADABLE} when decryption failed; {@code REASON_REJECTED} when the
+     *     reason contained the number. Nothing is returned for the last two
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void record(
             @NonNull UUID vendorId,
             @NonNull VendorTaxRegistration registration,
-            @NonNull String reason,
+            @Nullable String reason,
             @NonNull TaxIdRevealOutcome outcome) {
         Objects.requireNonNull(vendorId, "vendorId must not be null");
         Objects.requireNonNull(registration, "registration must not be null");
-        Objects.requireNonNull(reason, "reason must not be null");
         Objects.requireNonNull(outcome, "outcome must not be null");
+        if ((outcome == TaxIdRevealOutcome.REASON_REJECTED) != (reason == null)) {
+            throw new IllegalArgumentException("reason is null exactly when the outcome is REASON_REJECTED");
+        }
         SupplierVendorTaxIdRevealEntity row = SupplierVendorTaxIdRevealEntity.builder()
                 .vendorId(vendorId)
                 .registrationId(registration.registrationId())

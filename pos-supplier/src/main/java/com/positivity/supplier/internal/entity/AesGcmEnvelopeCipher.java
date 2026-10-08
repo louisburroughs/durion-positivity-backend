@@ -46,8 +46,8 @@ import org.springframework.core.env.Environment;
  *
  * <h2>Key policy</h2>
  *
- * A real key is mandatory unless <strong>every</strong> active profile is {@code dev} or {@code test}; an
- * empty profile set requires one. See {@link AuditPayloadCipher} for why the polarity is an allowlist.
+ * An ephemeral key is allowed only when <strong>at least one profile is active and every active profile</strong>
+ * is {@code dev} or {@code test}; otherwise the key is required, an empty profile set included. See {@link AuditPayloadCipher} for why the polarity is an allowlist.
  *
  * <p>Nonces are 96 random bits per message from {@link SecureRandom}, never derived from anything.
  */

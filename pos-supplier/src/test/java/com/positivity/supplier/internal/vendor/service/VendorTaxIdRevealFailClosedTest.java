@@ -108,6 +108,23 @@ class VendorTaxIdRevealFailClosedTest {
         Transactional revealTransaction = reveal.getAnnotation(Transactional.class);
         assertThat(revealTransaction.propagation()).isEqualTo(Propagation.REQUIRED);
         assertThat(revealTransaction.noRollbackFor())
-                .containsExactly(com.positivity.supplier.internal.exception.VendorTaxIdUnreadableException.class);
+                .containsExactlyInAnyOrder(
+                        com.positivity.supplier.internal.exception.VendorTaxIdUnreadableException.class,
+                        com.positivity.supplier.internal.exception.TaxIdRevealReasonRejectedException.class);
+    }
+
+    @Test
+    @DisplayName("the reason check ignores separators and case, and never matches an empty number")
+    void reasonCarriesIgnoresSeparatorsAndCase() {
+        assertThat(VendorTaxIdRevealServiceImpl.reasonCarries("checking 000-00-1234 per W-9", NUMBER))
+                .isTrue();
+        assertThat(VendorTaxIdRevealServiceImpl.reasonCarries("W-9 lists 000001234", NUMBER))
+                .isTrue();
+        assertThat(VendorTaxIdRevealServiceImpl.reasonCarries("bn fake1234rt on file", "FAKE-1234-RT"))
+                .isTrue();
+        assertThat(VendorTaxIdRevealServiceImpl.reasonCarries("Verifying W-9 received 2026-10-08", NUMBER))
+                .isFalse();
+        assertThat(VendorTaxIdRevealServiceImpl.reasonCarries("anything at all here", "--"))
+                .isFalse();
     }
 }

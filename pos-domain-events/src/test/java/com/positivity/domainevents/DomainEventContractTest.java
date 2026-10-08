@@ -361,6 +361,13 @@ class DomainEventContractTest {
             "secret");
 
     /**
+     * Any component name ending in this, compared case-insensitively, is RESTRICTED too: a registration number
+     * under any prefix ({@code supplierRegistrationNumber}, {@code vatRegistrationNumber}) per ADR-0072
+     * Decision 6, as Security confirmed on louisburroughs/durion#571.
+     */
+    private static final String RESTRICTED_SUFFIX = "registrationnumber";
+
+    /**
      * Exceptions to {@link #noRestrictedFieldNames}, keyed {@code <record FQN>#<component path>}, each
      * valued with the written reason and the Security sign-off reference. It starts empty (ruling 8): on
      * {@code main} the only match was {@code SupplierVendorUpdatedV1.TaxRegistration.number}, which #2621
@@ -391,6 +398,24 @@ class DomainEventContractTest {
                 .containsExactlyInAnyOrder("items[].taxId", "byScheme[].ssn", "cards[].pan", "owner.password");
         assertThat(restrictedFieldPaths(GuardProbe.Inner.class)).containsExactly("taxId");
         assertThat(restrictedFieldPaths(CleanProbe.class)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("#2621 AC 16: any name ending in registrationNumber, in any case, at any depth, fails the guard")
+    void restrictedNameGuardCatchesRegistrationNumberSuffix() {
+        assertThat(restrictedFieldPaths(SuffixProbe.class))
+                .containsExactlyInAnyOrder(
+                        "supplierRegistrationNumber", "lines[].VATREGISTRATIONNUMBER", "registrationnumber");
+    }
+
+    /** Test-only: registration numbers under a prefix, in mixed case and nested in a list. */
+    record SuffixProbe(
+            String supplierRegistrationNumber,
+            List<Line> lines,
+            String registrationnumber,
+            String registrationNumberLast4) {
+
+        record Line(String VATREGISTRATIONNUMBER) {}
     }
 
     /** Test-only shapes for the guard; never scanned, because the scan reads the main classes only. */
@@ -430,7 +455,8 @@ class DomainEventContractTest {
         }
         for (RecordComponent component : type.getRecordComponents()) {
             String path = prefix.isEmpty() ? component.getName() : prefix + "." + component.getName();
-            if (RESTRICTED_NAMES.contains(component.getName().toLowerCase(Locale.ROOT))) {
+            String name = component.getName().toLowerCase(Locale.ROOT);
+            if (RESTRICTED_NAMES.contains(name) || name.endsWith(RESTRICTED_SUFFIX)) {
                 found.add(path);
             }
             walkType(component.getGenericType(), path, found, visiting);

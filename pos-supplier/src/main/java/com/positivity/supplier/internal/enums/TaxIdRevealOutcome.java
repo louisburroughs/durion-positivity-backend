@@ -5,5 +5,7 @@ public enum TaxIdRevealOutcome {
     /** The number was decrypted and returned. */
     REVEALED,
     /** The stored ciphertext could not be decrypted; nothing was returned. */
-    UNREADABLE
+    UNREADABLE,
+    /** The reason contained the number itself; nothing was returned and the reason is not stored. */
+    REASON_REJECTED
 }

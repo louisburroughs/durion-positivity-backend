@@ -156,14 +156,17 @@ class VendorTaxIdRevealServiceTest extends PostgresSliceTestBase {
                 .setParameter(1, vendorId)
                 .getResultList();
         return rows.stream()
-                .map(row -> Map.of(
-                        "outcome", row[0],
-                        "revealedBy", row[1],
-                        "roles", row[2],
-                        "reason", row[3],
-                        "correlationId", row[4] == null ? "" : row[4],
-                        "scheme", row[5],
-                        "registrationId", row[6]))
+                .map(row -> {
+                    Map<String, Object> values = new java.util.HashMap<>();
+                    values.put("outcome", row[0]);
+                    values.put("revealedBy", row[1]);
+                    values.put("roles", row[2]);
+                    values.put("reason", row[3]);
+                    values.put("correlationId", row[4] == null ? "" : row[4]);
+                    values.put("scheme", row[5]);
+                    values.put("registrationId", row[6]);
+                    return values;
+                })
                 .toList();
     }
 
@@ -192,6 +195,39 @@ class VendorTaxIdRevealServiceTest extends PostgresSliceTestBase {
                     .as("number and last4 absent from the audit row")
                     .isFalse();
         });
+    }
+
+    /**
+     * AC 11 (Security confirmation on louisburroughs/durion#571): a reason that carries the number itself is
+     * refused after the number is decrypted, separators ignored, and leaves exactly one REASON_REJECTED row with
+     * no reason. [M] skipping that row fails this test.
+     */
+    @Test
+    @DisplayName("AC 11: a reason containing the number is 400 VALIDATION_ERROR, reveals nothing, and leaves one"
+            + " REASON_REJECTED row with a null reason")
+    void reasonCarryingTheNumberIsRejected() {
+        VendorView vendor = vendorWith("Sole Reasoned", SSN);
+        UUID registrationId = vendor.taxRegistrations().getFirst().registrationId();
+
+        assertThatThrownBy(() -> asController(() -> revealService.reveal(
+                        vendor.vendorId(), registrationId, new TaxIdRevealRequest("checking 000-00-1234 per W-9"))))
+                .isInstanceOfSatisfying(SupplierValidationException.class, refused -> {
+                    assertThat(refused.getCode()).isEqualTo(SupplierValidationException.VALIDATION_ERROR);
+                    assertThat(refused.getMessage()).as("number absent").doesNotContain(SSN);
+                });
+        assertThat(revealRows(vendor.vendorId())).singleElement().satisfies(row -> {
+            assertThat(row.get("outcome")).isEqualTo("REASON_REJECTED");
+            assertThat(row.get("reason")).isNull();
+        });
+
+        // Separators and case do not hide it: the bare digits in a reason match the stored "000-00-1234".
+        assertThatThrownBy(() -> asController(() -> revealService.reveal(
+                        vendor.vendorId(), registrationId, new TaxIdRevealRequest("W-9 lists 000001234 again"))))
+                .isInstanceOf(SupplierValidationException.class);
+        assertThat(revealRows(vendor.vendorId()))
+                .extracting(row -> row.get("outcome"))
+                .containsOnly("REASON_REJECTED")
+                .hasSize(2);
     }
 
     @Test
@@ -335,6 +371,22 @@ class VendorTaxIdRevealServiceTest extends PostgresSliceTestBase {
                                     vendor.version())));
             asController(
                     () -> revealService.reveal(updated.vendorId(), registrationId, new TaxIdRevealRequest(REASON)));
+            assertThatThrownBy(() -> asController(() -> revealService.reveal(
+                            updated.vendorId(), registrationId, new TaxIdRevealRequest("per W-9 " + SSN))))
+                    .isInstanceOf(SupplierValidationException.class);
+            assertThatThrownBy(() -> as(
+                            "clerk.a",
+                            List.of(),
+                            () -> vendorService.updateVendor(
+                                    updated.vendorId(),
+                                    new VendorUpdateRequest(
+                                            vendor.legalName(),
+                                            vendor.displayName(),
+                                            List.of(new TaxRegistrationDto(null, "EIN123", "000-00-4321", "US-123")),
+                                            "NET30",
+                                            "USD",
+                                            updated.version()))))
+                    .isInstanceOf(SupplierValidationException.class);
             as("admin", List.of("ROLE_ADMIN"), () -> vendorService.replayFacts(null, 1000));
             publishPending(true);
             replayService.replayEventsBetween(start, Instant.now(clock).plusSeconds(5));
@@ -368,6 +420,10 @@ class VendorTaxIdRevealServiceTest extends PostgresSliceTestBase {
                                     : event.getThrowableProxy().getMessage());
                     return text.contains(SSN)
                             || text.contains(SSN_BARE)
+                            || text.contains("EIN123")
+                            || text.contains("US-123")
+                            || text.contains("000-00-4321")
+                            || text.contains("per W-9")
                             || text.contains("last4")
                             || text.contains("numberCiphertext");
                 })

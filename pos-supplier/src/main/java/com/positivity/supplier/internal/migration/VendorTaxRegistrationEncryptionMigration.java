@@ -3,6 +3,7 @@ package com.positivity.supplier.internal.migration;
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.supplier.internal.entity.VendorTaxIdCipher;
 import com.positivity.supplier.internal.entity.VendorTaxRegistration;
+import com.positivity.supplier.internal.vendor.service.model.TaxRegistrationDto;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -10,6 +11,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
 import org.flywaydb.core.api.MigrationVersion;
@@ -51,6 +53,12 @@ import tools.jackson.databind.node.ObjectNode;
  *       Flyway's transaction; each element is sealed under its own row's {@code tenant_id}.
  *   <li><strong>Counts only.</strong> It logs how many vendors and registrations it touched, never a value.
  *       An element it cannot interpret fails the migration with its position, not its content.
+ *   <li><strong>Shapes first, counts only.</strong> {@code scheme} and {@code region} are trimmed and upper-cased
+ *       and must match {@link TaxRegistrationDto#SCHEME_SHAPE} and {@link TaxRegistrationDto#REGION_SHAPE}
+ *       (ADR-0072 Decision 2), because the publisher copies them onto the fact beside {@code last4}. If any
+ *       stored registration breaks them, the migration fails before writing anything and reports how many, never
+ *       which values: those registrations must be corrected before the number leaves the clear (Security
+ *       confirmation on louisburroughs/durion#571, item 15 of #2621).
  *   <li>The vendor {@code version} is not advanced and no fact is queued: this is storage, not a change.
  * </ul>
  */
@@ -100,6 +108,7 @@ public class VendorTaxRegistrationEncryptionMigration implements JavaMigration {
             statement.execute("ALTER TABLE public.supplier_vendor NO FORCE ROW LEVEL SECURITY");
         }
         List<Object[]> updates = new ArrayList<>();
+        int misshapen = 0;
         try (Statement statement = connection.createStatement();
                 ResultSet rows = statement.executeQuery("SELECT tenant_id, vendor_id, tax_registrations::text"
                         + " FROM public.supplier_vendor WHERE jsonb_array_length(tax_registrations) > 0")) {
@@ -115,6 +124,11 @@ public class VendorTaxRegistrationEncryptionMigration implements JavaMigration {
                         rewritten.add(element);
                         alreadySealed++;
                     } else if (element.hasNonNull("number") && element.hasNonNull("scheme")) {
+                        if (!conforms(element)) {
+                            misshapen++;
+                            position++;
+                            continue;
+                        }
                         rewritten.add(sealElement(tenantId, vendorId, element));
                         sealed++;
                         changed = true;
@@ -130,6 +144,11 @@ public class VendorTaxRegistrationEncryptionMigration implements JavaMigration {
                     vendors++;
                 }
             }
+        }
+        if (misshapen > 0) {
+            // Counts only. Nothing has been written: the whole migration rolls back with this exception.
+            throw new IllegalStateException("V4: " + misshapen + " stored vendor tax registration(s) have a scheme or"
+                    + " region that breaks the ADR-0072 Decision 2 shape; correct them before migrating (#2621)");
         }
         try (PreparedStatement update = connection.prepareStatement("UPDATE public.supplier_vendor"
                 + " SET tax_registrations = ?::jsonb WHERE tenant_id = ? AND vendor_id = ?")) {
@@ -151,6 +170,21 @@ public class VendorTaxRegistrationEncryptionMigration implements JavaMigration {
                 alreadySealed);
     }
 
+    /** Trimmed and upper-cased, as the API stores them; {@code null} for an absent or JSON-null value. */
+    @Nullable
+    static String normalise(@Nullable JsonNode value) {
+        return value == null || value.isNull() ? null : value.asString().strip().toUpperCase(Locale.ROOT);
+    }
+
+    static boolean conforms(JsonNode element) {
+        String scheme = normalise(element.get("scheme"));
+        String region = normalise(element.get("region"));
+        return scheme != null
+                && TaxRegistrationDto.SCHEME_SHAPE.matcher(scheme).matches()
+                && (region == null
+                        || TaxRegistrationDto.REGION_SHAPE.matcher(region).matches());
+    }
+
     private ObjectNode sealElement(UUID tenantId, UUID vendorId, JsonNode element) {
         String number = element.get("number").asString();
         UUID registrationId = element.hasNonNull("registrationId")
@@ -158,12 +192,12 @@ public class VendorTaxRegistrationEncryptionMigration implements JavaMigration {
                 : UUIDv7Generator.generate();
         ObjectNode sealedElement = JSON.createObjectNode();
         sealedElement.put("registrationId", registrationId.toString());
-        sealedElement.put("scheme", element.get("scheme").asString());
-        JsonNode region = element.get("region");
-        if (region == null || region.isNull()) {
+        sealedElement.put("scheme", normalise(element.get("scheme")));
+        String region = normalise(element.get("region"));
+        if (region == null) {
             sealedElement.putNull("region");
         } else {
-            sealedElement.put("region", region.asString());
+            sealedElement.put("region", region);
         }
         String last4 = VendorTaxRegistration.last4Of(number);
         if (last4 == null) {
