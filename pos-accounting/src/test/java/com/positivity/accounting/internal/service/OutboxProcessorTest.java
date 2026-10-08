@@ -217,8 +217,13 @@ class OutboxProcessorTest {
     private void pendingApPayment(UUID paymentId) throws Exception {
         testOutbox.setPayload(objectMapper.writeValueAsString(APPaymentGLPostingEvent.builder()
                 .eventId(eventId)
+                .organizationId(UUID.fromString("00000000-0000-0000-0000-000000000010"))
                 .paymentId(paymentId)
                 .paymentRef("PAY-412")
+                .vendorId(UUID.fromString("00000000-0000-0000-0000-000000000030"))
+                .grossAmount(new java.math.BigDecimal("412.00"))
+                .currency("USD")
+                .paymentMethod("ACH")
                 .allocations(List.of())
                 .build()));
         when(outboxRepository.findPendingForRetry(eq(OutboxStatus.PENDING), any(Instant.class), any(Pageable.class)))

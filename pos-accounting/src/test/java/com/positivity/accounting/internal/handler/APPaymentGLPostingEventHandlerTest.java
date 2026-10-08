@@ -39,8 +39,14 @@ class APPaymentGLPostingEventHandlerTest {
     private static APPaymentGLPostingEvent event() {
         return APPaymentGLPostingEvent.builder()
                 .eventId(UUID.randomUUID())
+                .organizationId(UUID.fromString("00000000-0000-4000-a000-000000000010"))
                 .paymentId(PAYMENT_ID)
                 .paymentRef("PAY-412")
+                .vendorId(UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f5001"))
+                .grossAmount(new java.math.BigDecimal("412.00"))
+                .currency("USD")
+                .paymentMethod("ACH")
+                .allocations(java.util.List.of())
                 .build();
     }
 
