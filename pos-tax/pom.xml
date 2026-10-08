@@ -14,7 +14,7 @@
 
     <artifactId>pos-tax</artifactId>
     <name>POS Tax Service</name>
-    <description>Tax calculation service with external API passthrough and test mode support</description>
+    <description>Tax stubs that let pos-accounting stories begin: placeholder rates and rules, not tax law, held for expert advice (see the stub register in README.md)</description>
 
     <properties>
         <!-- Coverage ratchet: measured 83.2% line / 77.8% branch by the gate's own

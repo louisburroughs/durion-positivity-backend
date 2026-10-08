@@ -1,5 +1,12 @@
 # pos-tax
 
+> **Status: a collection of stubs.** pos-tax exists so that pos-accounting stories can begin. Its rates, rules and
+> answers are placeholders, not tax law. Every tax question is held for expert advice: rates, which supplies are
+> taxable, what is recoverable and at what share, evidence thresholds, registration formats, claim limits and filing.
+> When accounting needs a new tax function, it is stubbed here and added to the [stub register](#stub-register).
+> The platform owner set this rule on 2026-10-08 (durion `domains/accounting/SPEC-accounting-workspace.md`, AW45;
+> louisburroughs/durion#553).
+
 Tax calculation service for the Durion Positivity ETSMS platform. Supports two operating modes: test mode with configurable flat rates per jurisdiction type, and production mode that proxies calls to an external tax API with retry and exponential backoff.
 
 ## Responsibilities
@@ -23,6 +30,32 @@ Tax calculation service for the Durion Positivity ETSMS platform. Supports two o
 
 - `POST /v1/tax/calculate` — calculate tax for a set of line items
 - `GET /v1/tax/mode` — returns current operating mode (`test` or `production`)
+
+## Stub register
+
+pos-tax is a collection of stubs (status note above). This register lists every tax function that callers rely on,
+what the stub answers today, and which questions wait for expert advice.
+
+**Rules for a stub**
+
+- It has a fixed contract and a deterministic answer. Placeholder values (rates, thresholds, shares, formats) come
+  from configuration or fixture rows, never from a literal in code, and tests use fixture values.
+- It never claims to be tax law. Its row names the questions held for expert advice.
+- Callers code against the contract, not the placeholder. Replacing a stub with the advised rule changes pos-tax or
+  its configuration, never the caller.
+- A new tax function that accounting needs is added the same way. The accounting story names the stub, its contract
+  and its placeholder behaviour; the pos-tax change adds a row here; the durion spec cites it
+  (`SPEC-accounting-workspace.md` §7.3).
+- A stub becomes a real rule only after the expert advice is recorded in the spec's decision log.
+
+| Function | Contract | Stub behaviour today | Callers | Held for expert advice |
+| --- | --- | --- | --- | --- |
+| Sales tax calculation | `POST /v1/tax/calculate` (`tax:calculate`) | Test mode (`TAX_TEST_MODE`, default `true`; Compose sets it): the configured flat rates per jurisdiction type, or the effective-dated schedule, for any address. A line marked `taxExempt`, or backed by an active exemption certificate, is taxed zero | pos-order, pos-workorder, pos-invoice | Real rates, which supplies are taxable, every non-US regime |
+| Refund calculation | `/calculate` with `calculationType = REFUND` | Priced by the same test-mode rates, as of the original sale date | pos-invoice | As above |
+| Rate lookup | `GET /v1/tax/rates` (`tax:rates:view`) | Test mode answers from the configured rates. Any other provider answers 501 `TAX_RATE_LOOKUP_UNSUPPORTED` | none in code | Real rates |
+| Provider document lifecycle | `POST /v1/tax/transactions/{referenceId}/commit` and `/void` (`tax:commit`) | Test mode: a no-op that always succeeds, logged in `tax_provider_transaction`. The AvaTax adapter exists, but no environment enables it | pos-invoice | Filing and the provider choice |
+| Exemption certificates | `/v1/tax/exemption-certificates` (`tax:exemption:view`, `tax:exemption:manage`) | A tenant registry. A claim without an active certificate is taxed and flagged, never refused | none outside pos-tax | Which exemptions are valid, and what evidence they need |
+| Use tax (planned) | `/calculate` with `calculationType = USE` (AW44; louisburroughs/durion-positivity-backend#2604) | Priced exactly like `SALE`; test mode always answers | pos-accounting | Which purchases owe use tax, per-state rules, filing (louisburroughs/durion-positivity-backend#2599) |
 
 ## Configuration
 
