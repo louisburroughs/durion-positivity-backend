@@ -6234,7 +6234,7 @@ components:
           example: REVEALED
           type: string
         reason:
-          description: Reason given; null only on a REASON_REJECTED row, whose reason held the number.
+          description: Reason given; null on REASON_REJECTED and UNREADABLE rows, where it is not kept.
           example: Verifying W-9 received 2026-10-08
           type: string
         registrationId:
@@ -6266,14 +6266,26 @@ components:
           description: Its scheme at the time.
           example: GST_HST
           type: string
+      required:
+      - outcome
+      - registrationId
+      - revealId
+      - revealedAt
+      - revealedBy
+      - revealedByRoles
+      - scheme
       type: object
     TaxIdRevealRequest:
       description: Why the full registration number is needed. Kept on the reveal audit row.
       properties:
         reason:
-          description: Reason, 10 to 500 characters once trimmed.
+          description: Reason, 10 to 500 characters once trimmed. Must not contain the number itself.
           example: Verifying W-9 received 2026-10-08
+          maxLength: 500
+          minLength: 10
           type: string
+      required:
+      - reason
       type: object
     TaxIdRevealView:
       description: 'A revealed registration number. RESTRICTED: never cache, log, or put it in a URL.'
@@ -6295,6 +6307,10 @@ components:
           description: Registration scheme.
           example: GST_HST
           type: string
+      required:
+      - number
+      - registrationId
+      - scheme
       type: object
     TaxRegistrationDto:
       description: 'One tax registration of a vendor, as a create or update sends it. Reads never return the number: send registrationId without number to keep a stored registration.'
@@ -6337,6 +6353,9 @@ components:
           description: Registration scheme.
           example: GST_HST
           type: string
+      required:
+      - registrationId
+      - scheme
       type: object
     TransmissionResolutionRequest:
       properties:
