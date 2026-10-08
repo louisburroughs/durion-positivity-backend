@@ -34,13 +34,48 @@ class DlqRunbookTest {
         return commands;
     }
 
+    /** CHK-006, as ruled on PR #2624 (issuecomment-6066876483): structure first, the full value only when unlogged. */
     @Test
-    @DisplayName("the runbook names the permitted terminal arrangements for single-record inspection (CHK-006)")
+    @DisplayName("CHK-006: one-record inspection is structure-only first, full value only in an unlogged session")
     void permittedTerminals() throws Exception {
         String runbook = Files.readString(Path.of("../docs/OPERATIONS_RUNBOOK.md"));
         assertThat(runbook)
-                .contains("Permitted terminal arrangements for single-record inspection")
-                .contains("Session Manager");
+                .contains("**Step 1: structure only (any SSM session, logged or not).**")
+                .contains("jq missing: STOP here, do not print the raw value")
+                .contains("Never fall back\nto printing the raw value")
+                .contains("paths(scalars)")
+                .contains("**Step 2: the full value or headers (only when step 1 is not enough).**")
+                .contains("aws ssm get-document --name SSM-SessionManagerRunShell")
+                .contains("`s3BucketName` and `cloudWatchLogGroupName` are both empty")
+                .contains("never with a `--document-name` override")
+                .contains("If logging is on,\n  full values are never printed on that host.")
+                .contains("session-restore or saved-scrollback feature is off")
+                .contains("**Record the inspection, never the value:**")
+                .contains("an AI assistant's or agent's shell");
+        // The step-1 filter prints the record's shape, never its value or headers.
+        assertThat(consumerCommands())
+                .filteredOn(command -> command.contains("paths(scalars)"))
+                .singleElement()
+                .satisfies(command -> assertThat(command)
+                        .contains("--property print.headers=false")
+                        .contains("--max-messages 1")
+                        .doesNotContain("--from-beginning"));
+    }
+
+    @Test
+    @DisplayName("ADR-0072 Decision 7: the DLQ cutoff is taken after consumers and retries drain, then inventoried")
+    void dlqCutoffFollowsConsumerProgress() throws Exception {
+        String runbook = Files.readString(Path.of("../docs/OPERATIONS_RUNBOOK.md"));
+        int progress = runbook.indexOf("**Consumer progress and drained retries:**");
+        int dlqCutoff = runbook.indexOf("**DLQ cutoff, only now:**");
+        int inventory = runbook.indexOf("**DLQ inventory, separately:**");
+        int delete = runbook.indexOf("**Delete up to the cutoffs**");
+        assertThat(progress).isPositive();
+        assertThat(dlqCutoff).isGreaterThan(progress);
+        assertThat(inventory).isGreaterThan(dlqCutoff);
+        assertThat(delete).isGreaterThan(inventory);
+        assertThat(runbook)
+                .contains("docker cp /tmp/supplier-cutoffs.json kafka-positivity:/tmp/supplier-cutoffs.json");
     }
 
     @Test

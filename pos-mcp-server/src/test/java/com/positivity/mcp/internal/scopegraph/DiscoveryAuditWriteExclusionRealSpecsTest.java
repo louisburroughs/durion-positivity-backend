@@ -230,8 +230,7 @@ class DiscoveryAuditWriteExclusionRealSpecsTest {
                 .noneMatch(coordinates -> OpenApiToolMapper.hasRevealPath(pathOf(coordinates)));
         assertThat(discoveredPermissions.values())
                 .as("discovered tools requiring a …:reveal permission")
-                .noneMatch(
-                        permissions -> permissions.stream().anyMatch(code -> code.matches("^[a-z_]+:[a-z_]+:reveal$")));
+                .noneMatch(permissions -> permissions.stream().anyMatch(code -> code.matches("^[^:]+:[^:]+:reveal$")));
     }
 
     /**

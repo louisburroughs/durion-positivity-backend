@@ -683,21 +683,26 @@ number stored before #2621; it logs counts only.
 - **Hard gate before the deploy: the counts** (ADR-0072 Decision 9). Run the read-only counts in PR #2624 through
   SSM as `pos_user`: registrations grouped by **validated** scheme (a misshapen scheme counts as `UNVALIDATED`, never
   printed), split by **verified fixture provenance** versus **unknown provenance**, vendors holding one, and the two
-  shape-break counts. Counts only, never values. Unknown provenance counts as potentially real and stops the
-  rollout as a data incident; any non-zero shape-break count stops the deploy.
+  shape-break counts. Counts only, never values. `VERIFIED_FIXTURE` needs **both** an evidenced fixture creator
+  (`created_by` on the evidenced list) **and** a fake-value shape checked inside the query (the separator-free
+  number starts with `000` or contains `FAKE`, ADR-0072 Decision 10); everything else is `UNKNOWN`. For alpha, the
+  platform owner's confirmation that alpha holds no real vendor data (on #2617 and PR #2624) is the provenance
+  evidence. Unknown provenance otherwise counts as potentially real and stops the rollout as a data incident; any
+  non-zero shape-break count stops the deploy.
 - **Order and purge:** follow `docs/OPERATIONS_RUNBOOK.md`, "Withdrawing a RESTRICTED field in place": consumers
   first, stop every old writer, V4–V6, fixed per-partition cutoffs on `supplier.events.v1` and its DLQ, consumer
   progress, DLQ inventory and recovery, then `kafka-delete-records.sh` up to the cutoffs.
 - **If V4 or V5 refuses** ("N stored vendor tax registration(s) …" or "N supplier.vendor.updated outbox
-  registration(s) …"): nothing was written; the migration rolled back and the previous release keeps running.
+  registration(s) …"): nothing was written; the migration rolled back and the schema is still at V3. The old
+  instance is already stopped (stop-the-world), so **restart the previous image**, which runs on V3 unchanged.
   Never `SELECT` the offending values.
-  - A stored registration: correct it through the vendor form on the running (pre-#2621) release, re-entering it
-    with a conforming scheme and region.
+  - A stored registration: correct it through the vendor form on that restarted (pre-#2621) release, re-entering
+    it with a conforming scheme and region.
   - A queued outbox row: it is a v1 copy of a fact and is never needed again. Delete exactly those rows with the
     shape-break predicate of the count (`DELETE FROM supplier_event_outbox o USING … WHERE <same predicate>`),
     never by listing them, and re-emit the vendor's facts (`POST /v1/supplier/vendors/facts/replay`) after the
     deploy.
-  - Re-run the counts until both are zero, then deploy again.
+  - Re-run the counts until both are zero, then stop the previous image again and deploy.
 
 To rotate: move the current key into `previous-keys`, set a new `key` and a new `key-id`. **A retired
 key must stay in `previous-keys` for the whole retention window** — remove it and every payload it

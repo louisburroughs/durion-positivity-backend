@@ -200,9 +200,13 @@ public class OpenApiToolMapper {
 
     // ── Reveal operations are never tools (#2621; Security ruling on #2617 / #2621, ADR-0072 Decision 4) ──
 
-    /** The permission marker: a {@code <domain>:<resource>:reveal} entry in {@code x-required-permissions}. */
+    /**
+     * The permission marker: a {@code <domain>:<resource>:reveal} entry in {@code x-required-permissions}. Wider than
+     * ADR-0072's {@code ^[a-z_]+:[a-z_]+:reveal$} on purpose: any domain and resource spelling (hyphenated,
+     * camelCase, digits) matches, so the exclusion can only catch more operations, never fewer.
+     */
     private static final java.util.regex.Pattern REVEAL_PERMISSION =
-            java.util.regex.Pattern.compile("^[a-z_]+:[a-z_]+:reveal$");
+            java.util.regex.Pattern.compile("^[^:]+:[^:]+:reveal$");
 
     /**
      * Whether an operation returns a RESTRICTED value and so is never an agent tool (ADR-0072 Decision 4, CHK-010).

@@ -36,6 +36,12 @@ public record TaxIdRevealRequest(
                     SupplierValidationException.JUSTIFICATION_REQUIRED,
                     "reason must be at least " + MIN_REASON_LENGTH + " characters");
         }
+        // Control characters (U+0000 among them, which PostgreSQL text cannot hold) are refused here as a 400, so
+        // they never reach the insert as a 500 whose driver detail could carry the reason. Never echoed.
+        if (reason.codePoints().anyMatch(Character::isISOControl)) {
+            throw new SupplierValidationException(
+                    SupplierValidationException.VALIDATION_ERROR, "reason must not contain control characters");
+        }
         if (length > MAX_REASON_LENGTH) {
             throw new SupplierValidationException(
                     SupplierValidationException.VALIDATION_ERROR,

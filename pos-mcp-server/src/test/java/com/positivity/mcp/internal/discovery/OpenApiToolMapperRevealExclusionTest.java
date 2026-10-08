@@ -42,7 +42,7 @@ class OpenApiToolMapperRevealExclusionTest {
                 "/v3/api-docs",
                 Duration.ofSeconds(5),
                 List.of(),
-                List.of("/supplier/", "/people/", "/v1/"),
+                List.of("/supplier/", "/people/", "/vehicle-fitment/", "/v1/"),
                 null,
                 List.of(),
                 List.of(),
@@ -77,6 +77,10 @@ class OpenApiToolMapperRevealExclusionTest {
                 new PathItem()
                         .post(operation("revealNote", "supplier:vendor:read"))
                         .get(operation("peekNote", "supplier:vendor:read")));
+        // Only the permission marker, with a hyphenated and camelCase domain/resource, on a non-/reveal path.
+        items.put(
+                "/vehicle-fitment/v1/vehicle-fitment/owners/{id}",
+                new PathItem().get(operation("getOwnerVin", "vehicle-fitment:ownerVin:reveal")));
         // Both markers.
         items.put(
                 "/supplier/v1/supplier/vendors/{vendorId}/tax-registrations/{registrationId}/reveal",
@@ -131,7 +135,7 @@ class OpenApiToolMapperRevealExclusionTest {
     @Test
     @DisplayName("a domain whose reveal operation was dropped counts as seen, so a stale tool row is pruned")
     void revealDomainIsSeenForThePrune() {
-        assertThat(mapper().excludedWriteDomains(spec())).contains("supplier", "people");
+        assertThat(mapper().excludedWriteDomains(spec())).contains("supplier", "people", "vehicle-fitment");
     }
 
     @Test
@@ -142,6 +146,12 @@ class OpenApiToolMapperRevealExclusionTest {
         assertThat(OpenApiToolMapper.hasRevealPermission(operation("b", "supplier:vendor:read")))
                 .isFalse();
         assertThat(OpenApiToolMapper.hasRevealPermission(operation("c", "supplier:reveal:read")))
+                .isFalse();
+        assertThat(OpenApiToolMapper.hasRevealPermission(operation("d", "vehicle-fitment:ownerVin:reveal")))
+                .isTrue();
+        assertThat(OpenApiToolMapper.hasRevealPermission(operation("e", "pos2:pii_v2:reveal")))
+                .isTrue();
+        assertThat(OpenApiToolMapper.hasRevealPermission(operation("f", "supplier:vendor:reveal:extra")))
                 .isFalse();
         assertThat(OpenApiToolMapper.hasRevealPermission(new Operation())).isFalse();
         assertThat(OpenApiToolMapper.hasRevealPath("/v1/x/{id}/reveal")).isTrue();

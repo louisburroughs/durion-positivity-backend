@@ -1272,7 +1272,7 @@ docker exec kafka-positivity /opt/kafka/bin/kafka-console-consumer.sh \
 ```
 
 When the cause needs one record's value or headers, print **that one named record only**, by its partition
-and offset from the metadata listing, and only from a permitted terminal (below):
+and offset from the metadata listing, and only under step 2 below (headers count as a full value):
 
 ```bash
 docker exec kafka-positivity /opt/kafka/bin/kafka-console-consumer.sh \
@@ -1280,18 +1280,61 @@ docker exec kafka-positivity /opt/kafka/bin/kafka-console-consumer.sh \
   --partition N --offset M --max-messages 1 --property print.headers=true
 ```
 
-**Permitted terminal arrangements for single-record inspection.** `docker exec` on the broker host does not
-keep the output there: whatever terminal shows it can carry or keep it.
+**Inspecting one record.** `docker exec` on the broker host does not keep the output there: whatever
+terminal shows it can carry or keep it. A Session Manager session that is logged copies everything printed
+into S3 or CloudWatch Logs, which is a log under ADR-0072 Decision 2. Work in two steps.
 
-- **Allowed:** an interactive AWS SSM Session Manager session to the alpha host (the alpha access path; SSH is
-  blocked) opened from the operator's own workstation terminal, **provided the session is not logged**: the
-  Session Manager preferences in use must not stream or store session output to S3 or CloudWatch Logs. Check
-  this before inspecting a value; if session logging is on, do not inspect values in that session.
-- **On the workstation:** a local terminal emulator only. No `tmux`/`screen` logging, no `script`/`asciinema`
-  or other session recording, no screen sharing or screen recording while the value is on screen. Clear the
-  scrollback when done (`clear && printf '\e[3J'`).
-- **Not allowed:** CI jobs, workflow logs, shared or pair-programming sessions, browser-based terminals that
-  keep transcripts, an AI assistant's or agent's shell (its transcript is stored), and any redirect to a file.
+**Step 1: structure only (any SSM session, logged or not).** Read the cause first from the consuming
+service's own log for that offset. Then print the record's shape, filtered on the broker host so the value
+never reaches your session:
+
+```bash
+command -v jq >/dev/null || echo "jq missing: STOP here, do not print the raw value"
+docker exec kafka-positivity /opt/kafka/bin/kafka-console-consumer.sh \
+  --bootstrap-server localhost:9092 --topic workorder.events.v1.dlq \
+  --partition N --offset M --max-messages 1 \
+  --property print.key=false --property print.headers=false --property print.value=true \
+| jq -c '{eventType, schemaVersion,
+          fields: [paths(scalars) as $p
+                   | ($p | map(tostring) | join(".")) + ":" + (getpath($p) | type)
+                     + ":" + (getpath($p) | tostring | length | tostring)]}'
+```
+
+This prints `eventType`, `schemaVersion`, and each field's path, type and length, never a value. A record
+that is not JSON gives a `jq` parse error, which shows no content. If `jq` is missing, stop. Never fall back
+to printing the raw value.
+
+**Step 2: the full value or headers (only when step 1 is not enough).** Allowed only when every condition
+below holds. Otherwise reproduce locally with a synthetic record (fake values only, ADR-0072 Decision 10), or
+escalate to the platform owner.
+
+- **The session is not logged.** Before opening it, run:
+
+  ```bash
+  aws ssm get-document --name SSM-SessionManagerRunShell --region us-east-1 \
+    --query Content --output text \
+  | jq '.inputs | {s3BucketName, cloudWatchLogGroupName, cloudWatchStreamingEnabled}'
+  ```
+
+  Value inspection is permitted only when `s3BucketName` and `cloudWatchLogGroupName` are both empty. Open
+  the session with that default document only, never with a `--document-name` override. If logging is on,
+  full values are never printed on that host.
+- **Allowed terminal:** an interactive AWS SSM Session Manager session to the alpha host (the alpha access
+  path; SSH is blocked), opened from a local terminal emulator on the operator's own workstation.
+- **On the workstation:**
+  - no `tmux` or `screen` logging, and no `script`, `asciinema` or other session recording;
+  - no screen sharing, screen recording, remote desktop or VDI while the value is on screen;
+  - the emulator's session-restore or saved-scrollback feature is off for that window;
+  - clear the scrollback when done (`clear && printf '\e[3J'`).
+- **Not allowed:**
+  - CI jobs and workflow logs;
+  - shared or pair-programming sessions;
+  - browser-based terminals that keep transcripts;
+  - an AI assistant's or agent's shell (its transcript is stored);
+  - a shared machine;
+  - any redirect to a file.
+- **Record the inspection, never the value:** who, when, topic, partition, offset and why, on the tracking
+  issue or PR.
 
 Rules:
 
@@ -1312,7 +1355,10 @@ steps in order and put the evidence on the pull request (CHK-007):
 1. **Incident check first** (ADR-0072 Decision 9, IC-001): the read-only, counts-only check, through SSM as
    `pos_user`. Group only by **validated** attributes: a scheme outside its shape counts in the fixed bucket
    `UNVALIDATED`, and its raw content is never printed. Count entries of **verified fixture provenance**
-   apart from **unknown provenance**, and put the provenance evidence beside the counts. Unknown provenance
+   apart from **unknown provenance**, and put the provenance evidence beside the counts. Verified fixture
+   provenance needs both an evidenced fixture creator and a fake-value shape tested inside the query (for
+   registrations, the separator-free number starts with `000` or contains `FAKE`, ADR-0072 Decision 10); the
+   creator alone is never enough. Unknown provenance
    counts as potentially real: any such entry stops the rollout as a data incident for the Platform Owner.
    The queries for #2621 are on PR #2624.
 2. **Consumers first:** every consumer that applies the event type accepts the new `schemaVersion`, and skips
@@ -1320,28 +1366,35 @@ steps in order and put the evidence on the pull request (CHK-007):
 3. **Stop every old writer and publisher** of the event type (for #2621: stop pos-supplier entirely).
 4. **Backfill and scrub** (for #2621: Flyway V4 encrypts, V5 scrubs the outbox, V6 adds the reveal audit), then
    start the new publisher. Stop-the-world only: no old instance runs alongside.
-5. **Fixed cutoffs:** record, per partition, the end offset of the topic **and** of its DLQ, taken after the
-   last possible old-format publication (the moment the old publisher stopped). A moving high-water mark is
-   never the deletion boundary.
+5. **Topic cutoff:** record, per partition, the end offset of the **topic**, taken after the last possible
+   old-format publication (the moment the old publisher stopped). A moving high-water mark is never the
+   deletion boundary.
 
    ```bash
    docker exec kafka-positivity /opt/kafka/bin/kafka-get-offsets.sh --bootstrap-server localhost:9092 \
      --topic supplier.events.v1 --time -1
-   docker exec kafka-positivity /opt/kafka/bin/kafka-get-offsets.sh --bootstrap-server localhost:9092 \
-     --topic supplier.events.v1.dlq --time -1
    ```
-6. **Consumer progress:** every consumer group of the topic has committed past the cutoffs
-   (`kafka-consumer-groups.sh --describe --all-groups`, metadata only).
-7. **DLQ inventory, separately:** zero lag on the topic says nothing about the DLQ. List the event type's DLQ
-   records up to the cutoff with the metadata-only command above, and record for each its recovery (a
-   sanitised replay from the owner's current state, e.g. `POST /v1/supplier/vendors/facts/replay`) or its
-   approved disposition.
-8. **Delete up to the cutoffs** on every partition of the topic and its DLQ, from an offsets file holding the
-   recorded cutoffs (never "latest"):
+6. **Consumer progress and drained retries:** every consumer group of the topic has committed past the topic
+   cutoff (`kafka-consumer-groups.sh --describe --all-groups`, metadata only), **and** each consumer's retry
+   and backoff for records before the cutoff has finished: no consumer log shows a retry still pending for a
+   `supplier.events.v1` offset below the cutoff. A v1 record still in a consumer's retry can otherwise be
+   dead-lettered after the publisher stopped.
+7. **DLQ cutoff, only now:** record, per partition, the end offset of the **DLQ** (`supplier.events.v1.dlq`,
+   `--time -1`). Taken after step 6, it covers every v1 record that could still be dead-lettered.
+8. **DLQ inventory, separately:** zero lag on the topic says nothing about the DLQ. **Every DLQ record up to
+   the DLQ cutoff is in scope**, whatever its event type: a dead-letter record's key and headers are not
+   trusted to classify it, and its value is not read. Count them per partition with the metadata-only command
+   above (counts and offsets only), and record their recovery: a sanitised replay of the affected vendors from
+   the owner's current state (`POST /v1/supplier/vendors/facts/replay`, which re-emits every vendor at v2; other
+   supplier event types stay replayable from the outbox), or an approved disposition.
+9. **Delete up to the cutoffs** on every partition of the topic and its DLQ, from an offsets file holding the
+   recorded cutoffs (never "latest"). The file lives on the host, so copy it into the broker container first:
 
    ```bash
+   docker cp /tmp/supplier-cutoffs.json kafka-positivity:/tmp/supplier-cutoffs.json
    docker exec kafka-positivity /opt/kafka/bin/kafka-delete-records.sh --bootstrap-server localhost:9092 \
      --offset-json-file /tmp/supplier-cutoffs.json
+   docker exec kafka-positivity rm /tmp/supplier-cutoffs.json
    ```
    Other event types in the range stay replayable from the outbox.
 

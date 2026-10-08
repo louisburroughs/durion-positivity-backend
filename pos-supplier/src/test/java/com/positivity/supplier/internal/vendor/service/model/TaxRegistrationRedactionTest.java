@@ -29,4 +29,24 @@ class TaxRegistrationRedactionTest {
         assertThat(new TaxIdRevealView(ID, "SSN", null, "000-00-1234").toString())
                 .doesNotContain("000-00-1234");
     }
+
+    @Test
+    @DisplayName("a reason with a control character (U+0000, tab, newline) is 400 VALIDATION_ERROR without echo")
+    void reasonRefusesControlCharacters() {
+        for (String reason : new String[] {
+            "Verifying W-9\u0000 received",
+            "Verifying\tW-9 received",
+            "Verifying W-9\nreceived today",
+            "W-9 check\u007F ok"
+        }) {
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> new TaxIdRevealRequest(reason))
+                    .isInstanceOfSatisfying(
+                            com.positivity.supplier.internal.exception.SupplierValidationException.class, refused -> {
+                                assertThat(refused.getCode()).isEqualTo("VALIDATION_ERROR");
+                                assertThat(refused.getMessage()).doesNotContain("W-9");
+                            });
+        }
+        assertThat(new TaxIdRevealRequest("  Verifying W-9 received  ").reason())
+                .isEqualTo("Verifying W-9 received");
+    }
 }
