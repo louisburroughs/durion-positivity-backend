@@ -201,4 +201,72 @@ class OutboxProcessorTest {
         // Cleanup was attempted before the exception was caught (not an early return)
         verify(outboxService).cleanupOldEvents(any(Instant.class));
     }
+
+    // ---- CAP:550 S42 (#2603): AP payment delivery through the real handler ----------------------------------------
+
+    private OutboxProcessor processorDeliveringTo(
+            com.positivity.accounting.internal.handler.APPaymentGLPostingEventHandler handler) {
+        return new OutboxProcessor(
+                clock,
+                outboxRepository,
+                outboxService,
+                event -> handler.onAPPaymentGLPosting((APPaymentGLPostingEvent) event),
+                objectMapper);
+    }
+
+    private void pendingApPayment(UUID paymentId) throws Exception {
+        testOutbox.setPayload(objectMapper.writeValueAsString(APPaymentGLPostingEvent.builder()
+                .eventId(eventId)
+                .paymentId(paymentId)
+                .paymentRef("PAY-412")
+                .allocations(List.of())
+                .build()));
+        when(outboxRepository.findPendingForRetry(eq(OutboxStatus.PENDING), any(Instant.class), any(Pageable.class)))
+                .thenReturn(List.of(testOutbox));
+    }
+
+    @Test
+    @DisplayName("S42 AC7: a transient posting failure is retried by the outbox; the next poll posts and completes it")
+    void apPaymentTransientFailureIsRetried() throws Exception {
+        UUID paymentId = UUID.fromString("00000000-0000-0000-0000-000000000042");
+        APPaymentPostingService postingService = org.mockito.Mockito.mock(APPaymentPostingService.class);
+        APPaymentFailurePersistenceService failures =
+                org.mockito.Mockito.mock(APPaymentFailurePersistenceService.class);
+        when(postingService.postPending(paymentId))
+                .thenThrow(new org.springframework.dao.CannotAcquireLockException("lock timeout"))
+                .thenReturn(UUID.fromString("00000000-0000-0000-0000-0000000000e1"));
+        pendingApPayment(paymentId);
+        OutboxProcessor delivering =
+                processorDeliveringTo(new com.positivity.accounting.internal.handler.APPaymentGLPostingEventHandler(
+                        postingService, failures));
+
+        delivering.processPendingEvents();
+        verify(outboxService).markAsFailed(eq(outboxId), any(String.class), eq(5));
+        verify(outboxService, never()).markAsPublished(outboxId);
+
+        delivering.processPendingEvents();
+        verify(outboxService).markAsPublished(outboxId);
+        verify(postingService, org.mockito.Mockito.times(2)).postPending(paymentId);
+        verify(failures, never()).persistGLPostRefusal(any(), any());
+    }
+
+    @Test
+    @DisplayName("S42 AC6: a refused posting completes the outbox row without spending a retry")
+    void apPaymentRefusalCompletesTheRow() throws Exception {
+        UUID paymentId = UUID.fromString("00000000-0000-0000-0000-000000000043");
+        APPaymentPostingService postingService = org.mockito.Mockito.mock(APPaymentPostingService.class);
+        APPaymentFailurePersistenceService failures =
+                org.mockito.Mockito.mock(APPaymentFailurePersistenceService.class);
+        when(postingService.postPending(paymentId))
+                .thenThrow(new com.positivity.accounting.internal.exception.GLMappingNotConfiguredException("missing"));
+        pendingApPayment(paymentId);
+
+        processorDeliveringTo(new com.positivity.accounting.internal.handler.APPaymentGLPostingEventHandler(
+                        postingService, failures))
+                .processPendingEvents();
+
+        verify(failures).persistGLPostRefusal(paymentId, "GL_MAPPING_NOT_CONFIGURED");
+        verify(outboxService).markAsPublished(outboxId);
+        verify(outboxService, never()).markAsFailed(any(), any(), org.mockito.ArgumentMatchers.anyInt());
+    }
 }

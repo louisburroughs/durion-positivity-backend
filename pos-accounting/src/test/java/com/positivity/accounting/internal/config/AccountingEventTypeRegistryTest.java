@@ -104,21 +104,16 @@ class AccountingEventTypeRegistryTest {
         assertThat(AccountingEventTypeRegistry.entries())
                 .filteredOn(e -> e.ingestion() == Ingestion.API)
                 .extracting(Entry::code)
-                .containsExactlyInAnyOrder("INVOICE_PAYMENT", "AP_PAYMENT_GL_POSTING");
+                .containsExactly("INVOICE_PAYMENT");
     }
 
     @Test
-    @DisplayName("the AP payment API type posts a journal entry through the posting engine; VENDOR_BILL_GL_POSTING is"
-            + " retired (#2509): a vendor bill posts at approval")
-    void apGlPostingTypesPostToGl() {
+    @DisplayName("AC10 (S42, #2603): no *_GL_POSTING type is registered: a vendor bill posts at approval (#2509) and an"
+            + " AP payment from the outbox through the AP_PAYMENT category")
+    void noGlPostingTypeIsRegistered() {
         assertThat(AccountingEventTypeRegistry.entries())
-                .filteredOn(e -> e.code().endsWith("_GL_POSTING"))
-                .hasSize(1)
-                .allSatisfy(e -> {
-                    assertThat(e.ingestion()).isEqualTo(Ingestion.API);
-                    assertThat(e.sourceDomain()).isEqualTo("accounting");
-                    assertThat(e.postsToGl()).isTrue();
-                });
+                .extracting(Entry::code)
+                .noneMatch(code -> code.endsWith("_GL_POSTING"));
     }
 
     @Test
@@ -156,10 +151,14 @@ class AccountingEventTypeRegistryTest {
         assertThat(AccountingEventTypeRegistry.isRetired("VENDOR_BILL_GL_POSTING"))
                 .isTrue();
         assertThat(AccountingEventTypeRegistry.isRetired("AP_PAYMENT_GL_POSTING"))
-                .isFalse();
+                .as("retired by S42 (#2603)")
+                .isTrue();
+        assertThat(AccountingEventTypeRegistry.isRetired(" ap_payment_gl_posting "))
+                .isTrue();
+        assertThat(AccountingEventTypeRegistry.isRetired("INVOICE_PAYMENT")).isFalse();
         assertThat(AccountingEventTypeRegistry.isRetired(null)).isFalse();
         assertThat(AccountingEventTypeRegistry.entries())
                 .extracting(Entry::code)
-                .doesNotContain("VENDOR_BILL_GL_POSTING");
+                .doesNotContain("VENDOR_BILL_GL_POSTING", "AP_PAYMENT_GL_POSTING");
     }
 }

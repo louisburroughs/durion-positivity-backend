@@ -163,7 +163,7 @@ class AccountingAnalyticsServiceImplTest {
         payment.setVendorName(vendorName);
         payment.setGrossAmount(new BigDecimal(gross));
         payment.setStatus(APPaymentStatus.GATEWAY_SUCCEEDED);
-        payment.setPaymentDate(paymentDate);
+        payment.setPaymentDate(paymentDate.toLocalDate());
         payment.setCreatedBy("test");
         return payment;
     }

@@ -94,6 +94,7 @@ class VendorBillApprovalLimitsTest {
                 mock(VendorBillLocks.class),
                 new LedgerCurrency("USD"),
                 policy,
+                mock(ApLockTimeout.class),
                 mock(PlatformTransactionManager.class));
         bill = new VendorBill(BILL_ID);
         bill.setVendorId(UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4c02"));

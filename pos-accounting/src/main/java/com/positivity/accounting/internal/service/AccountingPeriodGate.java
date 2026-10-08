@@ -98,12 +98,73 @@ public class AccountingPeriodGate {
     @Transactional(propagation = Propagation.MANDATORY)
     public void assertPostingAllowed(
             @NonNull LocalDate transactionDate, @NonNull UUID journalEntryId, @Nullable String overrideJustification) {
+        Optional<String> closed = closedPeriodOf(transactionDate);
+        if (closed.isEmpty()) {
+            return;
+        }
+        requireCallerOverride(transactionDate, closed.get(), overrideJustification);
+        recordOverrideAudit(closed.get(), journalEntryId, overrideJustification, currentActor());
+    }
+
+    /**
+     * The AP pay command's period check, before any journal entry exists (CAP:550 S42, #2603; slot 5 of its pre-gateway
+     * block): the same rules as {@link #assertPostingAllowed}, in the same order (time zone, hard lock, closed period),
+     * with the period row locked to the end of the transaction. Nothing is written: the accepted override is stored on
+     * the payment and audited when its entry posts ({@link #assertPostingAllowedWithRecordedOverride}).
+     *
+     * @param date                  the payment's execution date
+     * @param overrideJustification the caller's justification, honoured only with {@link
+     *                              AccountingPermissions#PERIOD_OVERRIDE}
+     * @return true when the date's period is CLOSED and the caller's override was accepted; false when it is open
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean assertPaymentDateAllowed(@NonNull LocalDate date, @Nullable String overrideJustification) {
+        Optional<String> closed = closedPeriodOf(date);
+        if (closed.isEmpty()) {
+            return false;
+        }
+        requireCallerOverride(date, closed.get(), overrideJustification);
+        return true;
+    }
+
+    /**
+     * {@link #assertPostingAllowed} for a posting that runs without its caller (the outbox), applying a closed-period
+     * override accepted and stored earlier (CAP:550 S42, #2603): an AP payment's override, given by its payer with
+     * {@link AccountingPermissions#PERIOD_OVERRIDE} on the pay command. The authority was checked then; the override
+     * audit row names {@code actor}.
+     *
+     * @param transactionDate the entry's transaction date
+     * @param journalEntryId  the entry being posted
+     * @param justification   the stored justification, or null when none was given
+     * @param actor           who gave the override
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void assertPostingAllowedWithRecordedOverride(
+            @NonNull LocalDate transactionDate,
+            @NonNull UUID journalEntryId,
+            @Nullable String justification,
+            @NonNull String actor) {
+        Optional<String> closed = closedPeriodOf(transactionDate);
+        if (closed.isEmpty()) {
+            return;
+        }
+        if (justification == null || justification.isBlank()) {
+            throw closedWithoutJustification(transactionDate, closed.get());
+        }
+        recordOverrideAudit(closed.get(), journalEntryId, justification, actor);
+    }
+
+    /**
+     * The time zone and hard-lock checks, then the period, read under a row lock: the code of the CLOSED period of
+     * {@code date}, or empty when it is open (a missing row counts as open).
+     */
+    private Optional<String> closedPeriodOf(LocalDate date) {
         // Fail closed (#2558 ruling): the gate refuses every posting while the tenant has no accounting time zone,
         // whether or not its date was derived through the resolver (an explicit date, an open original period).
         zoneResolver.zone();
-        assertNotHardLocked(transactionDate);
+        assertNotHardLocked(date);
 
-        String periodCode = YearMonth.from(transactionDate).toString();
+        String periodCode = YearMonth.from(date).toString();
 
         // Locked read (FOR UPDATE): holding the period row until the posting
         // transaction ends closes the gate-vs-close window — a concurrent
@@ -114,26 +175,28 @@ public class AccountingPeriodGate {
                 .findWithLockByPeriodCode(periodCode)
                 .map(period -> period.getStatus() == AccountingPeriodStatus.OPEN)
                 .orElse(true);
-        if (periodOpen) {
-            return;
-        }
+        return periodOpen ? Optional.empty() : Optional.of(periodCode);
+    }
 
-        if (overrideJustification == null || overrideJustification.isBlank()) {
-            throw new AccountingPeriodClosedException(
-                    periodCode,
-                    "Transaction date " + transactionDate + " falls in CLOSED accounting period " + periodCode
-                            + "; supply an override justification with the " + AccountingPermissions.PERIOD_OVERRIDE
-                            + " permission to post anyway");
+    private static void requireCallerOverride(LocalDate date, String periodCode, @Nullable String justification) {
+        if (justification == null || justification.isBlank()) {
+            throw closedWithoutJustification(date, periodCode);
         }
         if (!hasOverrideAuthority()) {
             throw new AccountingPeriodClosedException(
                     periodCode,
-                    "Transaction date " + transactionDate + " falls in CLOSED accounting period " + periodCode
+                    "Transaction date " + date + " falls in CLOSED accounting period " + periodCode
                             + "; caller lacks the " + AccountingPermissions.PERIOD_OVERRIDE
                             + " permission required to override");
         }
+    }
 
-        recordOverrideAudit(periodCode, journalEntryId, overrideJustification);
+    private static AccountingPeriodClosedException closedWithoutJustification(LocalDate date, String periodCode) {
+        return new AccountingPeriodClosedException(
+                periodCode,
+                "Transaction date " + date + " falls in CLOSED accounting period " + periodCode
+                        + "; supply an override justification with the " + AccountingPermissions.PERIOD_OVERRIDE
+                        + " permission to post anyway");
     }
 
     /**
@@ -175,8 +238,7 @@ public class AccountingPeriodGate {
         }
     }
 
-    private void recordOverrideAudit(String periodCode, UUID journalEntryId, String justification) {
-        String actor = currentActor();
+    private void recordOverrideAudit(String periodCode, UUID journalEntryId, String justification, String actor) {
         AccountingAuditLog auditLog = new AccountingAuditLog();
         auditLog.setEntityType(AUDIT_ENTITY_TYPE_JOURNAL_ENTRY);
         auditLog.setEntityId(journalEntryId);

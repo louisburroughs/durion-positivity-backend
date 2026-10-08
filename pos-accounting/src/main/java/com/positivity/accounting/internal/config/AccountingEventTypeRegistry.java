@@ -20,11 +20,13 @@ import org.jspecify.annotations.Nullable;
 /**
  * Code-first registry of the accounting event types this module records (#2436). The Kafka
  * listeners derive their {@code RECORDED_EVENT_TYPES} from it, and every type the module's own code
- * submits through the API path ({@link #INVOICE_PAYMENT}, {@link #AP_PAYMENT_GL_POSTING}) is declared
+ * submits through the API path ({@link #INVOICE_PAYMENT}) is declared
  * here and referenced by its submitter, so {@code GET /v1/accounting/events/types} lists types with no
  * traffic yet and cannot drift from what the code records. {@code VENDOR_BILL_GL_POSTING} is retired
  * (CAP:550 S12, #2509; AW40): a vendor bill posts at approval through the {@code VENDOR_BILL} posting
- * category, and V17 closed the events of that type SKIPPED / {@code RETIRED_EVENT_TYPE}.
+ * category, and V17 closed the events of that type SKIPPED / {@code RETIRED_EVENT_TYPE}. {@code
+ * AP_PAYMENT_GL_POSTING} is retired the same way (CAP:550 S42, #2603; AW40, AW41): an AP payment posts
+ * from the outbox through the {@code AP_PAYMENT} posting category, and V19 closed its events.
  *
  * <p>The API submit path ({@code POST /v1/accounting/events}) validates that {@code eventType} is
  * present and not {@linkplain #isRetired retired} (400 {@code VALIDATION_ERROR}; #2509 review): a
@@ -43,8 +45,8 @@ public final class AccountingEventTypeRegistry {
     public static final String INVOICE_PAYMENT = "INVOICE_PAYMENT";
 
     /**
-     * Event type of an AP payment, submitted in-process by {@code APPaymentGLPostingEventHandler} and
-     * posted by the posting engine (Dr AP, Cr Cash/Bank).
+     * Event type of an AP payment's GL posting, retired (CAP:550 S42, #2603; AW40, AW41): the payment posts from the
+     * outbox through the {@code AP_PAYMENT} posting category. The posting engine never posted one (no rule version).
      */
     public static final String AP_PAYMENT_GL_POSTING = "AP_PAYMENT_GL_POSTING";
 
@@ -55,7 +57,7 @@ public final class AccountingEventTypeRegistry {
     public static final String VENDOR_BILL_GL_POSTING = "VENDOR_BILL_GL_POSTING";
 
     /** Types no longer accepted: each is posted by something else now, and recording one would post twice. */
-    private static final Set<String> RETIRED = Set.of(VENDOR_BILL_GL_POSTING);
+    private static final Set<String> RETIRED = Set.of(VENDOR_BILL_GL_POSTING, AP_PAYMENT_GL_POSTING);
 
     /** Source domains. */
     public static final String DOMAIN_INVOICE = "invoice";
@@ -137,13 +139,7 @@ public final class AccountingEventTypeRegistry {
                     DOMAIN_PAYMENT,
                     Ingestion.KAFKA,
                     false),
-            new Entry(INVOICE_PAYMENT, "Invoice payment (AR subledger)", DOMAIN_PAYMENT, Ingestion.API, false),
-            new Entry(
-                    AP_PAYMENT_GL_POSTING,
-                    "AP payment GL posting (accounts payable)",
-                    DOMAIN_ACCOUNTING,
-                    Ingestion.API,
-                    true));
+            new Entry(INVOICE_PAYMENT, "Invoice payment (AR subledger)", DOMAIN_PAYMENT, Ingestion.API, false));
 
     private AccountingEventTypeRegistry() {}
 

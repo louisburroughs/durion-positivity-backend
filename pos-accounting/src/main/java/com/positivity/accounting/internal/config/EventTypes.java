@@ -16,7 +16,8 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 164 event types (includes +3 from approval limits and separation of duties (CAP:550 S13, Issue #2510):
+     * Total: 164 event types (includes +1 ACCOUNTING_AP_PAYMENT_GL_POSTING_RETRY and -1 for the retired
+     * AP_PAYMENT_GL_POSTING (CAP:550 S42, Issue #2603), +3 from approval limits and separation of duties (CAP:550 S13, Issue #2510):
      * ACCOUNTING_VENDOR_BILL_DUE_DATE_SET, ACCOUNTING_AP_APPROVAL_POLICY_VIEW, ACCOUNTING_AP_APPROVAL_POLICY_SET,
      * +6 from the vendor-bill approval lifecycle and -1 for the retired
      * VENDOR_BILL_GL_POSTING (CAP:550 S12, Issue #2509): ACCOUNTING_VENDOR_BILL_SUBMIT, _APPROVE, _REJECT, _VOID,
@@ -393,8 +394,11 @@ public final class EventTypes {
                                         + " issue #1597)")
                         .build(),
 
-                // AP Payment GL Posting - 1 event (Issue #128)
-                EventTypeRegistration.write("AP_PAYMENT_GL_POSTING", "Post AP payment to GL (Dr AP, Cr Cash/Bank)")
+                // AP payment posting retry - 1 event (CAP:550 S42, Issue #2603; spec §7.1 "Events (AW42)"). The
+                // AP_PAYMENT_GL_POSTING event is retired: the outbox posts through the AP_PAYMENT category.
+                EventTypeRegistration.write(
+                                "ACCOUNTING_AP_PAYMENT_GL_POSTING_RETRY",
+                                "Post again an AP payment whose posting was refused (Dr 2000 / Dr 6030 / Cr bank)")
                         .build(),
 
                 // AR Payment Application GL Posting - 1 event (story C1, Issue #954)

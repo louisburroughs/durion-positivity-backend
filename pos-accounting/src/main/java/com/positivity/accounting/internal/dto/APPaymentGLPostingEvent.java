@@ -78,11 +78,6 @@ public class APPaymentGLPostingEvent {
     private BigDecimal feeAmount;
 
     @Nullable
-    @Schema(description = "Net payment amount after fees", example = "4975.00")
-    @JsonProperty("netAmount")
-    private BigDecimal netAmount;
-
-    @Nullable
     @Schema(description = "Unapplied remainder not allocated to any bill", example = "0.00")
     @JsonProperty("unappliedAmount")
     private BigDecimal unappliedAmount;

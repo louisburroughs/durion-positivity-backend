@@ -163,9 +163,10 @@ public class EventIngestionController {
                 Lists every accounting event type the deployed code records, each with its code, display \
                 name, source domain, ingestion path (KAFKA or API) and whether a fact of that type can \
                 produce a journal entry. KAFKA types are recorded by the module's topic listeners; API \
-                types are the ones the module's own code submits through submitEvent (INVOICE_PAYMENT, \
-                AP_PAYMENT_GL_POSTING). Vendor bills post at approval through the VENDOR_BILL posting \
-                category; VENDOR_BILL_GL_POSTING is retired.
+                types are the ones the module's own code submits through submitEvent (INVOICE_PAYMENT). \
+                Vendor bills post at approval through the VENDOR_BILL posting category and AP payments from \
+                the outbox through the AP_PAYMENT posting category; VENDOR_BILL_GL_POSTING and \
+                AP_PAYMENT_GL_POSTING are retired.
                 submitEvent checks only that eventType is present and accepts any string, so a caller \
                 can record a type this list does not hold; such an event is posted only when an active \
                 posting rule set or default GL mapping resolves its type, and is otherwise suspended.

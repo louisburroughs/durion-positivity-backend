@@ -128,6 +128,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
     private final VendorBillLocks locks;
     private final LedgerCurrency ledgerCurrency;
     private final ApApprovalPolicy policy;
+    private final ApLockTimeout lockTimeout;
     private final TransactionTemplate commandTransaction;
     private final TransactionTemplate refusalTransaction;
 
@@ -145,6 +146,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
             VendorBillLocks locks,
             LedgerCurrency ledgerCurrency,
             ApApprovalPolicy policy,
+            ApLockTimeout lockTimeout,
             PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.bills = bills;
@@ -159,6 +161,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
         this.locks = locks;
         this.ledgerCurrency = ledgerCurrency;
         this.policy = policy;
+        this.lockTimeout = lockTimeout;
         this.commandTransaction = new TransactionTemplate(transactionManager);
         this.refusalTransaction = new TransactionTemplate(transactionManager);
         this.refusalTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -807,7 +810,12 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
         return Objects.requireNonNull(commandTransaction.execute(_ -> work.get()));
     }
 
+    /**
+     * The bill, row-locked. The wait is bounded first (CAP:550 S42, #2627): a bill an AP payment holds across its gateway
+     * call answers 409 {@code LOCK_TIMEOUT} after {@code accounting.ap.lock-timeout} instead of queueing behind it.
+     */
     private VendorBill lock(UUID billId) {
+        lockTimeout.apply();
         return bills.lockById(billId).orElseThrow(VendorBillApprovalServiceImpl::notFound);
     }
 

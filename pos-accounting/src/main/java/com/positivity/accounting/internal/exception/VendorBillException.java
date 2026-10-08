@@ -64,6 +64,16 @@ public class VendorBillException extends RuntimeException {
          * duties 2, AW6); the field errors name the bills by number. 403, before any payment row or gateway call.
          */
         AP_PAYMENT_SELF_APPROVED_BILL(HttpStatus.FORBIDDEN),
+        /**
+         * An AP payment by {@code CREDIT_CARD} or {@code OTHER}: no funding account is modelled for them yet (OI-17;
+         * CAP:550 S42, #2603). 422, the first check of the pay command, before the gateway.
+         */
+        AP_PAYMENT_METHOD_NOT_SUPPORTED(HttpStatus.UNPROCESSABLE_CONTENT),
+        /**
+         * {@code gl-posting-retry} of an AP payment that is not {@code GL_POST_FAILED}: already posted, still pending,
+         * or never past the gateway (CAP:550 S42, #2603). 409.
+         */
+        AP_PAYMENT_NOT_RETRYABLE(HttpStatus.CONFLICT),
         /** A justification or reason absent, blank or under 10 characters. */
         JUSTIFICATION_REQUIRED(HttpStatus.BAD_REQUEST),
         /** A request field outside its contract (an unknown action, a class the document cannot take). */

@@ -150,7 +150,8 @@ FROM (VALUES
     ('REGISTER_FLOAT', 'Register change float: go-live against opening balance equity, changes against a bank account (#2511, AW16-AW17)'),
     ('OPENING_BALANCE', 'A bank account''s opening balance at cutover, against opening balance equity (#2572, OI-10)'),
     ('GOODS_RECEIPT', 'A delivery received into stock: Dr inventory / Cr goods received not yet billed / price difference (AW38, S41)'),
-    ('VENDOR_BILL', 'A vendor bill or credit note at approval: Cr accounts payable / Dr by line class (AW37-AW40, S12)')
+    ('VENDOR_BILL', 'A vendor bill or credit note at approval: Cr accounts payable / Dr by line class (AW37-AW40, S12)'),
+    ('AP_PAYMENT', 'A vendor payment from a bank account: Dr accounts payable / Dr bank fee / Cr the payment''s bank (AW40-AW41, S42)')
 ) AS t(name, description)
 ON CONFLICT (tenant_id, posting_category_id) DO UPDATE SET
     category_name = EXCLUDED.category_name,
@@ -225,7 +226,9 @@ FROM (VALUES
     ('VENDOR_BILL', 'EXPENSE_POSTAGE_SHIPPING', 'Postage and shipping (AW18, AW30)'),
     ('VENDOR_BILL', 'EXPENSE_CLEANING_JANITORIAL', 'Cleaning and janitorial (AW18, AW30)'),
     ('VENDOR_BILL', 'EXPENSE_STAFF_MEALS', 'Staff meals (AW18, AW30)'),
-    ('VENDOR_BILL', 'EXPENSE_VEHICLE_FUEL', 'Vehicle fuel (AW18, AW30)')
+    ('VENDOR_BILL', 'EXPENSE_VEHICLE_FUEL', 'Vehicle fuel (AW18, AW30)'),
+    ('AP_PAYMENT', 'ACCOUNTS_PAYABLE', 'Debit side of a vendor payment: the gross paid, applied or not (2000, AW41)'),
+    ('AP_PAYMENT', 'PAYMENT_FEES', 'Debit side of the fee the bank charged on a vendor payment (6030, AW41)')
 ) AS t(category, key_name, description)
 ON CONFLICT (tenant_id, mapping_key_id) DO UPDATE SET
     posting_category_id = EXCLUDED.posting_category_id,
@@ -301,7 +304,9 @@ FROM (VALUES
     ('VENDOR_BILL', 'EXPENSE_POSTAGE_SHIPPING', 'ACCOUNTING', 'VENDOR_BILL_EXPENSE_POSTAGE_SHIPPING', '6380'),
     ('VENDOR_BILL', 'EXPENSE_CLEANING_JANITORIAL', 'ACCOUNTING', 'VENDOR_BILL_EXPENSE_CLEANING_JANITORIAL', '6375'),
     ('VENDOR_BILL', 'EXPENSE_STAFF_MEALS', 'ACCOUNTING', 'VENDOR_BILL_EXPENSE_STAFF_MEALS', '6295'),
-    ('VENDOR_BILL', 'EXPENSE_VEHICLE_FUEL', 'ACCOUNTING', 'VENDOR_BILL_EXPENSE_VEHICLE_FUEL', '6250')
+    ('VENDOR_BILL', 'EXPENSE_VEHICLE_FUEL', 'ACCOUNTING', 'VENDOR_BILL_EXPENSE_VEHICLE_FUEL', '6250'),
+    ('AP_PAYMENT', 'ACCOUNTS_PAYABLE', 'ACCOUNTING', 'AP_PAYMENT_ACCOUNTS_PAYABLE', '2000'),
+    ('AP_PAYMENT', 'PAYMENT_FEES', 'ACCOUNTING', 'AP_PAYMENT_PAYMENT_FEES', '6030')
 ) AS t(category, key_name, source_system, external_code, account_code)
 ON CONFLICT (tenant_id, gl_mapping_id) DO UPDATE SET
     source_system = EXCLUDED.source_system,

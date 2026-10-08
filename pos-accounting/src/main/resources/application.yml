@@ -147,6 +147,11 @@ pos:
 payment:
   gateway:
     provider: ${PAYMENT_GATEWAY_PROVIDER:stripe}
+    # Bounds on every gateway call (CAP:550 S42, #2627): the AP pay command holds its bills' row locks
+    # across the call. A timeout means the outcome is unknown: nothing is persisted and the caller resends
+    # the same paymentRef, whose idempotency key replays the outcome.
+    connect-timeout: ${PAYMENT_GATEWAY_CONNECT_TIMEOUT:5s}
+    read-timeout: ${PAYMENT_GATEWAY_READ_TIMEOUT:20s}
 
 stripe:
   api-key: ${STRIPE_API_KEY}
@@ -185,3 +190,7 @@ springdoc:
 accounting:
   ledger:
     base-currency: USD
+  ap:
+    # SET LOCAL lock_timeout on the AP pay command and the vendor-bill decisions (CAP:550 S42, #2627): a
+    # wait for a bill or period row lock beyond it answers 409 LOCK_TIMEOUT and persists nothing.
+    lock-timeout: ${ACCOUNTING_AP_LOCK_TIMEOUT:5s}

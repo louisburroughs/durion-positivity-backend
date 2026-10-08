@@ -29,6 +29,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -308,6 +309,26 @@ public class JournalEntryServiceImpl implements JournalEntryService {
      */
     @Override
     public JournalEntryResponse postJournalEntry(UUID journalEntryId, @Nullable String overrideJustification) {
+        return post(
+                journalEntryId,
+                transactionDate -> accountingPeriodGate.assertPostingAllowed(
+                        transactionDate, journalEntryId, overrideJustification));
+    }
+
+    /**
+     * Posts a draft entry under a closed-period override recorded earlier (CAP:550 S42, #2603); see {@link
+     * JournalEntryService#postJournalEntryWithRecordedOverride}.
+     */
+    @Override
+    public JournalEntryResponse postJournalEntryWithRecordedOverride(
+            UUID journalEntryId, String justification, String actor) {
+        return post(
+                journalEntryId,
+                transactionDate -> accountingPeriodGate.assertPostingAllowedWithRecordedOverride(
+                        transactionDate, journalEntryId, justification, actor));
+    }
+
+    private JournalEntryResponse post(UUID journalEntryId, Consumer<LocalDate> periodGate) {
         JournalEntry entry = findById(journalEntryId);
 
         if (entry.getStatus() != JournalEntryStatus.DRAFT) {
@@ -326,7 +347,7 @@ public class JournalEntryServiceImpl implements JournalEntryService {
         // hard-lock / closed-period / override rules on the transaction date.
         LocalDate transactionDate = entry.getTransactionDate().toLocalDate();
         accountingPeriodService.ensurePeriodExists(transactionDate);
-        accountingPeriodGate.assertPostingAllowed(transactionDate, journalEntryId, overrideJustification);
+        periodGate.accept(transactionDate);
 
         assignEntryNumber(entry);
         entry.setStatus(JournalEntryStatus.POSTED);

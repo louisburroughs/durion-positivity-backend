@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.controller;
 
+import com.positivity.accounting.internal.dto.APPaymentGLPostingRetryRequest;
 import com.positivity.accounting.internal.dto.APPaymentResponse;
 import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
 import com.positivity.accounting.internal.dto.VendorBillSummaryResponse;
@@ -50,6 +51,7 @@ import org.springframework.web.server.ResponseStatusException;
  * Endpoints:
  * <ul>
  * <li>POST /v1/accounting/ap/payments - Execute vendor payment</li>
+ * <li>POST /v1/accounting/ap/payments/{paymentId}/gl-posting-retry - Post a refused payment again (CAP:550 S42)</li>
  * <li>GET /v1/accounting/ap/payments/{paymentId} - Get payment details</li>
  * <li>GET /v1/accounting/ap/bills - List eligible vendor bills</li>
  * </ul>
@@ -75,33 +77,39 @@ public class APPaymentController {
             operationId = "executeApPayment",
             summary = "Execute Vendor Payment",
             description = """
-                Executes an AP vendor payment through the payment gateway, optionally allocating it \
-                across approved vendor bills, and posts the corresponding GL entries.
-                Use this tool to pay a vendor; do not use applyPayment, which is the AR-side application \
-                of customer payments to invoices, and use listApBills first to find APPROVED bills to \
-                allocate against.
-                Preconditions: every allocated bill must exist, be APPROVED and belong to the vendor, \
-                the allocation total must not exceed the gross amount, and the payer must not be the person \
-                who approved any bill the payment allocates to, explicit or oldest due first (separation of \
-                duties, unless the tenant's AP approval policy allows it; a system approval never blocks).
-                Required inputs: vendorId (UUID), grossAmount (min 0.01), currency (3-char ISO code), \
-                paymentRef (max 100 chars, the idempotency key) and paymentMethod (e.g. ACH, CHECK); \
-                feeAmount, netAmount, paymentSource, memo and explicit allocations are optional.
-                Emits an AP_PAYMENT_EXECUTE event; the call is idempotent on paymentRef, replaying the \
-                same ref with the same payload as a 200 instead of paying twice.
-                Returns 200 on an idempotent replay, 409 IDEMPOTENCY_CONFLICT when the paymentRef exists \
-                with a different payload, 400 when a bill is missing, unapproved or over-allocated (allocation is \
-                refused before the gateway; nothing is charged), 403 \
-                AP_PAYMENT_SELF_APPROVED_BILL (fieldErrors name the bills by number) before any payment row \
-                is saved or the gateway is called, and 500 PAYMENT_GATEWAY_FAILURE when the gateway cannot \
-                be reached.
+                Executes an AP vendor payment through the payment gateway from a functional-currency BANK_CASH \
+                account, optionally allocating it across approved vendor bills; the outbox then posts Dr 2000 the \
+                gross, Dr 6030 the fee and Cr the bank account on the payment's business date (AP_PAYMENT category).
+                Use this tool to pay a vendor; do not use applyPayment, which is the AR-side application of customer \
+                payments to invoices, and use listApBills first to find APPROVED bills to allocate against.
+                Preconditions, checked in this order before the gateway is called and persisting nothing: the method \
+                is ACH, CHECK or WIRE, the currency is the functional currency, the bank account is eligible (active \
+                on the business date, not in a foreign currency), every allocated bill exists, is APPROVED, belongs \
+                to the vendor and fits the gross amount, the payer approved none of the bills paid (unless the AP \
+                approval policy allows it), the business date is not hard-locked, its period is open or overridden, \
+                and the AP_PAYMENT mappings ACCOUNTS_PAYABLE (and PAYMENT_FEES when a fee is charged) are set up.
+                Required inputs: vendorId (UUID), grossAmount (min 0.01), currency (ISO 4217), paymentRef (max 100 \
+                chars, the idempotency key) and paymentMethod; bankAccountId may be omitted only when exactly one \
+                eligible account exists, and feeAmount, overrideJustification (10-1000 chars, honoured with \
+                accounting:period:override), paymentSource, memo and explicit allocations are optional.
+                Emits an AP_PAYMENT_EXECUTE event; the call is idempotent on paymentRef, replaying the same ref with \
+                the same payload (the bank account compared as resolved) as a 200 instead of paying twice, and a \
+                gateway failure or timeout leaves no payment behind, so the same paymentRef is simply sent again.
+                Returns 400 VALIDATION_ERROR for a malformed body, an unknown currency code, a refused allocation \
+                or fieldErrors[bankAccountId], 403 AP_PAYMENT_SELF_APPROVED_BILL, 409 IDEMPOTENCY_CONFLICT or \
+                LOCK_TIMEOUT, 422 AP_PAYMENT_METHOD_NOT_SUPPORTED, CURRENCY_NOT_SUPPORTED, \
+                ACCOUNTING_TIME_ZONE_UNSET, PERIOD_HARD_LOCKED, PERIOD_CLOSED or GL_MAPPING_NOT_CONFIGURED, and 500 \
+                PAYMENT_GATEWAY_FAILURE when the gateway fails or times out.
                 """,
             tags = {"AP Payments"})
     @ApiResponse(responseCode = "200", description = "Idempotent replay: existing payment returned")
     @ApiResponse(responseCode = "201", description = "Payment executed successfully (new payment created)")
     @ApiResponse(
             responseCode = "400",
-            description = "Validation error: negative amounts, invalid bills, etc.",
+            description = "VALIDATION_ERROR: a malformed body, a currency that is not ISO 4217, a bill missing,"
+                    + " unapproved, another vendor's or over-allocated, or fieldErrors[bankAccountId] when the bank"
+                    + " account is missing and not exactly one is eligible, or the one supplied is not eligible;"
+                    + " nothing is charged",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
@@ -110,11 +118,22 @@ public class APPaymentController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "Conflict: paymentRef exists with different payload",
+            description = "IDEMPOTENCY_CONFLICT: paymentRef exists with a different payload; LOCK_TIMEOUT: another"
+                    + " request held these bills or the period row beyond accounting.ap.lock-timeout, nothing was"
+                    + " persisted, retry",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "Refused before the gateway, in this order: AP_PAYMENT_METHOD_NOT_SUPPORTED (CREDIT_CARD,"
+                    + " OTHER), CURRENCY_NOT_SUPPORTED (not the functional currency), ACCOUNTING_TIME_ZONE_UNSET,"
+                    + " PERIOD_HARD_LOCKED, PERIOD_CLOSED (no overrideJustification with accounting:period:override),"
+                    + " GL_MAPPING_NOT_CONFIGURED (AP_PAYMENT/ACCOUNTS_PAYABLE, or PAYMENT_FEES with a fee); nothing"
+                    + " is charged or persisted",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "500",
-            description = "Payment gateway failure",
+            description = "PAYMENT_GATEWAY_FAILURE: the gateway failed or timed out; the outcome is unknown, nothing"
+                    + " was persisted, and the same paymentRef is sent again (its idempotency key replays the outcome)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @SecurityRequirement(
             name = "bearerAuth",
@@ -134,7 +153,9 @@ public class APPaymentController {
                                                             value = """
                                                                 {"vendorId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
                                                                  "grossAmount":250.00,
+                                                                 "feeAmount":1.50,
                                                                  "currency":"USD",
+                                                                 "bankAccountId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a60",
                                                                  "paymentRef":"ap-pay-2026-08-13-007",
                                                                  "paymentMethod":"ACH",
                                                                  "allocations":[
@@ -168,6 +189,80 @@ public class APPaymentController {
         // New payment: return 201 Created
         APPaymentResponse response = apPaymentService.executePayment(request, currentUser);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PostMapping("/payments/{paymentId}/gl-posting-retry")
+    @EmitEvent(id = "ACCOUNTING_AP_PAYMENT_GL_POSTING_RETRY", apiVersion = "1")
+    @Operation(
+            operationId = "retryApPaymentGlPosting",
+            summary = "Retry AP Payment GL Posting",
+            description = """
+                Posts again the ledger entry of an executed AP payment whose posting was refused, on the payment's \
+                own stored date: Dr 2000 the gross, Dr 6030 the fee, Cr the bank account it was paid from.
+                Use this tool once the reason in glPostError is fixed (a GL mapping set up, a period reopened, or \
+                with an override); do not use executeApPayment again, which would pay the vendor twice, and do not \
+                use the journal-entry endpoints instead, which would post the payment outside its own record.
+                Preconditions: the payment exists and is GL_POST_FAILED; the payment row is locked for the retry, \
+                and the entry is never re-dated, so a payment whose date is now hard-locked stays GL_POST_FAILED.
+                Required inputs: paymentId (UUID) as a path parameter and an optional body with \
+                overrideJustification (10-1000 chars, honoured with accounting:period:override and audited under \
+                the caller); without one, an override the payer gave on the pay command applies.
+                Emits ACCOUNTING_AP_PAYMENT_GL_POSTING_RETRY; on success the payment is GL_POSTED with its journal \
+                entry id, and a refused retry leaves it GL_POST_FAILED with the new reason in glPostError.
+                Returns 404 NOT_FOUND when no such payment exists, 409 AP_PAYMENT_NOT_RETRYABLE when it is not \
+                GL_POST_FAILED (already posted, pending, or a gateway state), 409 LOCK_TIMEOUT when another request \
+                holds it, and 422 GL_MAPPING_NOT_CONFIGURED, PERIOD_CLOSED, PERIOD_HARD_LOCKED or \
+                ACCOUNTING_TIME_ZONE_UNSET when the posting is still refused.
+                """,
+            tags = {"AP Payments"})
+    @ApiResponse(responseCode = "200", description = "Posted: the payment is GL_POSTED with its journal entry id")
+    @ApiResponse(
+            responseCode = "400",
+            description = "VALIDATION_ERROR: overrideJustification under 10 or over 1000 characters",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "FORBIDDEN without accounting:je:post",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "NOT_FOUND: no such AP payment",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "AP_PAYMENT_NOT_RETRYABLE: the payment is not GL_POST_FAILED; LOCK_TIMEOUT: another request"
+                    + " held the payment or the period row beyond accounting.ap.lock-timeout",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description =
+                    "The posting is still refused: GL_MAPPING_NOT_CONFIGURED, PERIOD_CLOSED, PERIOD_HARD_LOCKED or"
+                            + " ACCOUNTING_TIME_ZONE_UNSET; the payment stays GL_POST_FAILED with this code in glPostError",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:je:post"})
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.JE_POST + "')")
+    public @NonNull ResponseEntity<APPaymentResponse> retryGlPosting(
+            @PathVariable
+                    @Parameter(description = "Payment UUID", example = "01936e5c-7890-7a3d-8b6e-2b3456789012")
+                    @NonNull
+                    UUID paymentId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Optional closed-period override of the caller; may be omitted.",
+                            required = false,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Retry with an override", value = """
+                                                                {"overrideJustification":"June reopened for audit; posting the vendor payment"}
+                                                                """)))
+                    @Valid
+                    @RequestBody(required = false)
+                    @Nullable
+                    APPaymentGLPostingRetryRequest request) {
+        String override = request == null ? null : request.getOverrideJustification();
+        return ResponseEntity.ok(apPaymentService.retryGLPosting(paymentId, override));
     }
 
     @GetMapping("/payments/{paymentId}")

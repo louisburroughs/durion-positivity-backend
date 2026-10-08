@@ -820,11 +820,12 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
         // fifteen keys and mappings, and the balance-sheet lines of 1080, 3000 and 3900. #2572 adds the
         // OPENING_BALANCE category with its OPENING_BALANCE_EQUITY key and mapping (3900). #2509 (S12, AW38-AW40)
         // adds 2100, 5050 and 5060, the GOODS_RECEIPT and VENDOR_BILL categories with their 3 + 13 keys and
-        // mappings, and the statement lines of 2100, 5050 and 5060.
+        // mappings, and the statement lines of 2100, 5050 and 5060. #2603 (S42, AW40-AW41) adds the AP_PAYMENT
+        // category with its ACCOUNTS_PAYABLE and PAYMENT_FEES keys and mappings (2000, 6030).
         assertThat(platformBefore.get("gl_account")).isEqualTo(71);
-        assertThat(platformBefore.get("posting_category")).isEqualTo(19);
-        assertThat(platformBefore.get("mapping_key")).isEqualTo(63);
-        assertThat(platformBefore.get("gl_mapping")).isEqualTo(63);
+        assertThat(platformBefore.get("posting_category")).isEqualTo(20);
+        assertThat(platformBefore.get("mapping_key")).isEqualTo(65);
+        assertThat(platformBefore.get("gl_mapping")).isEqualTo(65);
         assertThat(platformBefore.get("default_gl_mapping")).isEqualTo(1);
         // 42 L&O + 12 (#2524) + 3 (#2511) + 3 (#2509)
         assertThat(platformBefore.get("statement_line_mappings")).isEqualTo(60);

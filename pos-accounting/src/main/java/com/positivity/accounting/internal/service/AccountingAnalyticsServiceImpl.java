@@ -349,7 +349,7 @@ public class AccountingAnalyticsServiceImpl implements AccountingAnalyticsServic
         LocalDateTime endOfDay = endDate.atTime(LocalTime.MAX);
 
         List<APPayment> settledPayments = apPaymentRepository.findByStatusInAndPaymentDateBetween(
-                SETTLED_AP_PAYMENT_STATUSES, startOfDay, endOfDay);
+                SETTLED_AP_PAYMENT_STATUSES, startDate, endDate);
         List<VendorBill> billsInWindow = vendorBillRepository.findByBillDateBetween(startOfDay, endOfDay);
 
         Map<UUID, BigDecimal> paidByVendor = new LinkedHashMap<>();

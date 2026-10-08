@@ -45,7 +45,8 @@ General-ledger accounting service for the Durion Positivity ETSMS platform. Mana
 - `POST /v1/accounting/journal-entries/{journalEntryId}/post` — post a DRAFT entry (assigns `entryNumber`, runs the period gate; permission `accounting:je:post`, event `ACCOUNTING_JOURNAL_ENTRY_POST`)
 - `POST /v1/accounting/journal-entries/{journalEntryId}/reverse` — reverse a POSTED entry (permission `accounting:je:reverse`, event `ACCOUNTING_JOURNAL_ENTRY_REVERSE`)
 - `POST /v1/payment-applications` — apply a payment to an invoice
-- `POST /v1/ap-payments` — record an accounts-payable payment
+- `POST /v1/accounting/ap/payments` — pay a vendor from a `BANK_CASH` account through the gateway (permission `accounting:ap:pay`, event `AP_PAYMENT_EXECUTE`; see [AP payments](#ap-payments-post-through-ap_payment-cap550-s42-2603-2627))
+- `POST /v1/accounting/ap/payments/{paymentId}/gl-posting-retry` — post again a payment whose posting was refused (permission `accounting:je:post`, event `ACCOUNTING_AP_PAYMENT_GL_POSTING_RETRY`)
 - `POST /v1/credit-memos` — create a credit memo
 - `GET /v1/accounting/tenant-template/status` — where the caller's tenant stands against the accounting template (permission `accounting:coa:view`, event `ACCOUNTING_TENANT_TEMPLATE_STATUS_VIEW`; see [Tenant provisioning](#tenant-provisioning-the-accounting-template-2526))
 - `PUT /v1/accounting/tenant-template/add-ons/retread-plant` — turn the retread-plant add-on on for the caller's tenant (permission `accounting:coa:create`, event `ACCOUNTING_TENANT_TEMPLATE_ADD_ON_ENABLE`)
@@ -1137,7 +1138,7 @@ and validates it before the payment row is saved and before the gateway is calle
 `APPROVED`, another vendor's or an over-allocation is refused before the gateway, nothing is charged and no
 `ap_payment` row is saved, so the same `paymentRef` may be sent again once corrected (ruling item 4). The plan's bill
 locks are held across the gateway call (the automatic plan locks every `APPROVED` bill of the vendor), bounded by
-the gateway client's own timeouts (the Stripe SDK defaults); the database sets no `lock_timeout`. Then the
+the gateway's connect and read timeouts, and every wait for them by `accounting.ap.lock-timeout` (S42, #2627). Then the
 pay guard refuses the whole payment when the payer (the security context's username) approved a bill of the plan
 (`approvedByKind` `PERSON`): 403 `AP_PAYMENT_SELF_APPROVED_BILL`, `fieldErrors[selfApprovedBillNumbers]` naming each,
 one `VENDOR_BILL_PAYMENT_REFUSED` row per bill surviving the rollback. Under `AP_ALLOW_APPROVER_PAYMENT` it pays and
@@ -1154,6 +1155,80 @@ recorded as `dueDate=OLD->NEW` on the match's audit row; one set after the match
 
 **Data.** V18 adds `vendor_bill.approved_by_kind` (`PERSON` | `SYSTEM`, checked), backfilled `SYSTEM` where
 `approved_by = 'SYSTEM'` and `PERSON` for any other approver. No pos-tax function is used (AW48).
+
+## AP payments post through AP_PAYMENT (CAP:550 S42, #2603, #2627)
+
+AW40, AW41: an AP payment reaches the books from the bank account it was paid from, with the fee the bank charged,
+on the day it executed. No posting-rule version is involved: `AP_PAYMENT_GL_POSTING` is retired (V19 closed its events
+SKIPPED / `RETIRED_EVENT_TYPE`, and `POST /v1/accounting/events` refuses it).
+
+**The pay command.** `POST /v1/accounting/ap/payments` takes `bankAccountId` (the GL account id of an eligible
+`BANK_CASH` account: active on the execution date and not in a foreign currency per its bank profile) and an optional
+`overrideJustification` (10-1000 characters). `bankAccountId` may be omitted only when exactly one eligible account
+exists; inactive and foreign-currency accounts are not counted. `netAmount` is gone from the request, the response, the
+outbox event, the entity and the table: the bank pays gross + fee. An idempotent replay compares the resolved bank
+account (an omitted one resolves to the one eligible account on the stored date). The response adds `bankAccountId`
+and `paymentDate`.
+
+**Guard order** (`APPaymentServiceImpl.executePayment`, `APPaymentPreGatewayChecks`). Every refusal comes before the
+gateway is called and persists nothing, so the same `paymentRef` may be sent again; the first refusal wins:
+
+| Slot | Status | Code | When |
+| --- | --- | --- | --- |
+| 1a | 422 | `AP_PAYMENT_METHOD_NOT_SUPPORTED` | `CREDIT_CARD` or `OTHER` (OI-17) |
+| 1b | 400 / 422 | `VALIDATION_ERROR` / `CURRENCY_NOT_SUPPORTED` | not ISO 4217 / not the functional currency (ADR-0067) |
+| 1c | 400 | `VALIDATION_ERROR` `fieldErrors[bankAccountId]` | missing and not exactly one eligible, or the supplied one not eligible |
+| 2, 3 | 400 / 403 | allocation refusals, `AP_PAYMENT_SELF_APPROVED_BILL` | S13 |
+| 2-5 | 409 | `LOCK_TIMEOUT` | a bill or the period row lock waited beyond `accounting.ap.lock-timeout` |
+| 5a | 422 | `ACCOUNTING_TIME_ZONE_UNSET` | no accounting time zone (fails closed) |
+| 5b | 422 | `PERIOD_HARD_LOCKED` | the execution date is hard-locked |
+| 5c | 422 | `PERIOD_CLOSED` | its period is closed, without an `overrideJustification` and `accounting:period:override` |
+| 5d | 422 | `GL_MAPPING_NOT_CONFIGURED` | no `AP_PAYMENT/ACCOUNTS_PAYABLE` mapping on the date, or no `PAYMENT_FEES` with a fee above 0 |
+
+S24 adds its vendor check at the end of slot 1 and its remit-to check in slot 4.
+
+**Execution date.** The tenant's business date (accounting time zone) is read once and fixed in slot 5 on
+`ap_payment.payment_date` (`DATE`): the date the period check used, the date the entry posts on and the date a retry
+posts on. It is never re-dated; a payment whose date is later hard-locked stays `GL_POST_FAILED` (S19 reports it).
+
+**Posting** (`APPaymentPostingService`, from the outbox). It reads the `ap_payment` row, locked, never the event:
+Dr `AP_PAYMENT/ACCOUNTS_PAYABLE` (2000) the gross, Dr `AP_PAYMENT/PAYMENT_FEES` (6030) the fee when above 0, Cr the
+payment's own bank account the gross + fee, dated `payment_date`, source `AP_PAYMENT` with source event id
+`nameUUIDFromBytes("AP_PAYMENT:" + paymentId)`. The payment stores its entry and moves to `GL_POSTED`; a second
+delivery or a retry posts nothing. Allocations post nothing; an unapplied amount stays a debit in 2000 for the vendor.
+The `AP_PAYMENT` category, its keys and mappings are template rows (`R__seed_reference_accounting.sql`) that S37's
+applier and startup sweep give every tenant. No pos-tax function is used: a payment has no tax leg (AW48, OI-4).
+
+**Refused after execution.** The money has moved, so the payment stands. A refusal at the outbox
+(`GL_MAPPING_NOT_CONFIGURED`, `PERIOD_CLOSED`, `PERIOD_HARD_LOCKED`, `ACCOUNTING_TIME_ZONE_UNSET`) is not transient:
+the payment goes `GL_POST_FAILED` with the code in `glPostError`, recorded in its own transaction, and the outbox row
+completes without spending its retries. Any other exception retries through the outbox.
+
+**The period override travels with the payment.** A closed-period override accepted in slot 5c is stored
+(`period_override_justification`, `period_override_by`); the outbox posting applies it as the payer
+(`AccountingPeriodGate.assertPostingAllowedWithRecordedOverride`), and the `PERIOD_OVERRIDE_POST` audit row names the
+payer.
+
+**Retry.** `POST /v1/accounting/ap/payments/{paymentId}/gl-posting-retry` `{overrideJustification?}`
+(`accounting:je:post`; `accounting:period:override` for the override) locks the payment and posts a `GL_POST_FAILED`
+one on its stored date: 200 with the payment `GL_POSTED`; 404 `NOT_FOUND`; 409 `AP_PAYMENT_NOT_RETRYABLE` for any
+other status; 409 `LOCK_TIMEOUT`; 422 `GL_MAPPING_NOT_CONFIGURED`, `PERIOD_CLOSED`, `PERIOD_HARD_LOCKED` or
+`ACCOUNTING_TIME_ZONE_UNSET` with the payment left `GL_POST_FAILED` and the new code in `glPostError`. A caller's own
+override is applied and audited for the caller; without one, an override stored by the pay command applies.
+
+**Bounded waits (#2627).** Every gateway call carries `payment.gateway.connect-timeout` (default 5 s) and
+`payment.gateway.read-timeout` (default 20 s) on its Stripe `RequestOptions`. The pay command, the retry and the
+vendor-bill decisions that lock a bill (approve, reject, void, due-date change, send, resolve) run `SET LOCAL
+lock_timeout` from `accounting.ap.lock-timeout` (default 5 s) first; a wait beyond it answers 409 `LOCK_TIMEOUT`
+("Another request is working on these bills; retry"), and the transaction rolls back. A gateway timeout means the
+outcome is unknown: the transaction rolls back (no `ap_payment` row, no allocation, no posting) and the caller sends
+the same `paymentRef` again within the gateway idempotency window (`STRIPE_IDEMPOTENCY_WINDOW_HOURS`), whose key
+replays the original outcome. If `idle_in_transaction_session_timeout` is ever set for pos-accounting, it must exceed
+connect + read. The automatic plan still locks every `APPROVED` bill of the vendor.
+
+**Data.** V19 makes `ap_payment.payment_date` a `DATE`, adds the foreign key `(tenant_id, bank_account_id)` →
+`gl_account` and the two override columns, drops `net_amount`, and retires the `AP_PAYMENT_GL_POSTING` events. Same
+table, same row-level security policy.
 
 ## Vendor bill duplicate rule (#2501, ADR-0070 Decision 4)
 
@@ -1254,6 +1329,9 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `AP_APPROVAL_LIMIT_EXCEEDED` | 403 | The bill's absolute total is over the clerk limit and the caller lacks `accounting:ap:approve_over_limit` (approve, `ACCEPT`, void of an approved bill); `nextAction` names the permission (#2510) |
 | `AP_BILL_SELF_APPROVAL` | 403 | The caller created the bill and the policy does not allow a creator to approve it (approve, `ACCEPT`) (#2510) |
 | `AP_PAYMENT_SELF_APPROVED_BILL` | 403 | The payer approved a bill the payment would pay; `fieldErrors[selfApprovedBillNumbers]` name them; nothing is paid (#2510) |
+| `AP_PAYMENT_METHOD_NOT_SUPPORTED` | 422 | An AP payment by `CREDIT_CARD` or `OTHER`: no funding account is modelled for them (OI-17); refused first, before the gateway (#2603) |
+| `AP_PAYMENT_NOT_RETRYABLE` | 409 | `gl-posting-retry` of an AP payment that is not `GL_POST_FAILED` (already posted, pending, or a gateway state) (#2603) |
+| `LOCK_TIMEOUT` | 409 | A row lock waited beyond `accounting.ap.lock-timeout` on the AP pay command, its retry or a vendor-bill decision: another request is working on these bills; nothing was persisted, retry (#2627) |
 | `UNAUTHENTICATED` | 401 | No usable authentication on the request |
 | `FORBIDDEN` | 403 | Caller lacks the required permission |
 | `AUTHORIZATION_DENIED` | 403 | Audit-trail event creation refused because the caller may not record that event |
@@ -1306,7 +1384,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `ILLEGAL_STATE` | 409 | Any other `IllegalStateException` raised by this module's services |
 | `UNBALANCED_ENTRY` | 422 | Journal entry debits and credits do not balance (or has no lines) |
 | `GL_ACCOUNT_NOT_ACTIVE` | 422 | GL account is not active on the transaction date, or was never activated |
-| `GL_MAPPING_NOT_CONFIGURED` | 422 | No GL mapping (posting category/key/effective date) is configured for the request |
+| `GL_MAPPING_NOT_CONFIGURED` | 422 | No GL mapping (posting category/key/effective date) is configured for the request; an AP payment names the missing `AP_PAYMENT/<key>` as `referenceId` (#2601, #2603) |
 | `PERIOD_CLOSED` | 422 | The transaction date falls in a closed accounting period |
 | `PERIOD_HARD_LOCKED` | 422 | The transaction date falls in a hard-locked accounting period |
 | `HARD_LOCK_DATE_REGRESSION` | 422 | The requested hard-lock date is earlier than the current one |
@@ -1319,7 +1397,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `WRITE_OFF_THRESHOLD_EXCEEDED` | 422 | A settlement write-off exceeds the configured threshold |
 | `WHOLE_REQUEST_REVERSAL_REQUIRED` | 422 | A payment application that was applied as one request must be reversed as one request |
 | `ACCOUNT_NOT_RECONCILABLE` | 422 | The GL account is not flagged as reconcilable |
-| `CURRENCY_NOT_SUPPORTED` | 422 | A document in a currency the ledger does not book (ADR-0067 PC-9): a payment applied to invoices in another currency, refused before anything is written (#2334); a bank account, statement or import in another currency; a bank opening balance whose `currencyCode` is not the account's currency (#2572) |
+| `CURRENCY_NOT_SUPPORTED` | 422 | A document in a currency the ledger does not book (ADR-0067 PC-9): a payment applied to invoices in another currency, refused before anything is written (#2334); an AP payment in another currency, refused before the gateway (#2603); a bank account, statement or import in another currency; a bank opening balance whose `currencyCode` is not the account's currency (#2572) |
 | `MATCH_AMOUNT_MISMATCH` | 422 | The matched statement and ledger amounts differ |
 | `RECONCILIATION_ADJUSTMENT_SIGN_INVALID` | 422 | A reconciliation adjustment carries the wrong sign for its type |
 | `RECONCILIATION_NOT_BALANCED` | 422 | Submit or approve while the live difference is beyond ±0.01; `fieldErrors` carries the `difference` |
@@ -1356,6 +1434,8 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `pos.accounting.outbox.poll-interval-ms`            | `1000`               | Kafka outbox drain interval (#1843) |
 | `pos.accounting.outbox.send-timeout-ms`             | `10000`              | Broker ack timeout per outbox row (#1843) |
 | `stripe.api-key`                                    | required             | Stripe API key for payment processing    |
+| `payment.gateway.connect-timeout` / `payment.gateway.read-timeout` | `5s` / `20s` | Connect and read timeouts of every gateway call, on its Stripe `RequestOptions` (`PAYMENT_GATEWAY_CONNECT_TIMEOUT`, `PAYMENT_GATEWAY_READ_TIMEOUT`; #2627) |
+| `accounting.ap.lock-timeout`                        | `5s`                 | `SET LOCAL lock_timeout` on the AP pay command, its retry and the vendor-bill decisions; a longer wait is 409 `LOCK_TIMEOUT` (`ACCOUNTING_AP_LOCK_TIMEOUT`; #2627) |
 | `pos.accounting.kafka.tenant-events-topic`          | `tenant.events.v1`   | Tenant lifecycle facts; `tenant.created` provisions the new tenant from the accounting template (#2526) |
 | `pos.accounting.kafka.tenant-events-consumer-group` | `pos-accounting-tenant-events` | Consumer group of the `tenant.created` listener; reads from the earliest offset (#2526) |
 | `pos.accounting.tenant-template.startup-sweep.enabled` | `true`            | Apply the accounting template to every registry tenant at each start (#2526). The default override-policy thresholds and refund policy reach a tenant only through provisioning (this sweep, `tenant.created`, or an add-on choice), no longer from a startup runner of their own |

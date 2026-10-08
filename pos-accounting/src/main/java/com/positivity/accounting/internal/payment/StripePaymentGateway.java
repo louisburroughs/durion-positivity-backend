@@ -6,6 +6,7 @@ import com.stripe.exception.StripeException;
 import com.stripe.model.Charge;
 import com.stripe.net.RequestOptions;
 import java.math.RoundingMode;
+import java.time.Duration;
 import java.util.Optional;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
@@ -24,6 +25,13 @@ import org.springframework.stereotype.Component;
  * marketplace)
  * - STRIPE_IDEMPOTENCY_WINDOW_HOURS: Idempotency key window in hours (default:
  * 24)
+ *
+ * <p>Every call is bounded by {@code payment.gateway.connect-timeout} (default 5 s) and {@code
+ * payment.gateway.read-timeout} (default 20 s), set on its {@link RequestOptions} (CAP:550 S42, #2627): the AP pay
+ * command holds its bills' row locks across this call, so the Stripe SDK defaults (30 s connect, 80 s read) would keep
+ * approvals, voids and other payments of the vendor waiting. A timeout means the outcome is unknown, not that the
+ * payment failed: the pay command rolls back and the caller resends the same {@code paymentRef}, whose idempotency key
+ * replays the original outcome within the idempotency window.
  */
 @Component
 @ConditionalOnProperty(name = "payment.gateway.provider", havingValue = "stripe", matchIfMissing = true)
@@ -33,14 +41,20 @@ public class StripePaymentGateway implements PaymentGatewayProvider {
     private static final Logger log = LoggerFactory.getLogger(StripePaymentGateway.class);
 
     private final Optional<String> connectAccount;
+    private final Duration connectTimeout;
+    private final Duration readTimeout;
 
     @SuppressWarnings("java:S1172")
     public StripePaymentGateway(
             @Value("${stripe.api-key:}") String apiKey,
             @Value("${stripe.connect-account:}") String connectAccount,
-            @Value("${stripe.idempotency-window-hours:24}") long idempotencyWindowHours) {
+            @Value("${stripe.idempotency-window-hours:24}") long idempotencyWindowHours,
+            @Value("${payment.gateway.connect-timeout:5s}") Duration connectTimeout,
+            @Value("${payment.gateway.read-timeout:20s}") Duration readTimeout) {
         this.connectAccount =
                 connectAccount != null && !connectAccount.isBlank() ? Optional.of(connectAccount) : Optional.empty();
+        this.connectTimeout = requirePositive(connectTimeout, "payment.gateway.connect-timeout");
+        this.readTimeout = requirePositive(readTimeout, "payment.gateway.read-timeout");
 
         if (apiKey == null || apiKey.isBlank()) {
             throw new IllegalStateException(
@@ -77,14 +91,7 @@ public class StripePaymentGateway implements PaymentGatewayProvider {
             chargeParams.put("description", request.getMemo());
             chargeParams.put("metadata", buildMetadata(request));
 
-            // RequestOptions with idempotency key and Stripe Connect account (if
-            // applicable)
-            var requestOptions = RequestOptions.builder()
-                    .setIdempotencyKey(request.getIdempotencyKey())
-                    .setStripeAccount(connectAccount.orElse(null))
-                    .build();
-
-            Charge charge = Charge.create(chargeParams, requestOptions);
+            Charge charge = Charge.create(chargeParams, requestOptions(request.getIdempotencyKey()));
 
             // Map Stripe charge status to gateway response
             GatewayPaymentStatus status = mapChargeStatus(charge);
@@ -141,6 +148,27 @@ public class StripePaymentGateway implements PaymentGatewayProvider {
             throw new PaymentGatewayException(
                     "Failed to retrieve Stripe charge status for charge ID: " + transactionId, e);
         }
+    }
+
+    /**
+     * The options of one call: its idempotency key, the Stripe Connect account (if any), and the configured connect and
+     * read timeouts (#2627).
+     */
+    @NonNull
+    RequestOptions requestOptions(@NonNull String idempotencyKey) {
+        return RequestOptions.builder()
+                .setIdempotencyKey(idempotencyKey)
+                .setStripeAccount(connectAccount.orElse(null))
+                .setConnectTimeout(Math.toIntExact(connectTimeout.toMillis()))
+                .setReadTimeout(Math.toIntExact(readTimeout.toMillis()))
+                .build();
+    }
+
+    private static Duration requirePositive(Duration timeout, String property) {
+        if (timeout == null || timeout.isNegative() || timeout.isZero()) {
+            throw new IllegalStateException(property + " must be a positive duration, was " + timeout);
+        }
+        return timeout;
     }
 
     @Override
