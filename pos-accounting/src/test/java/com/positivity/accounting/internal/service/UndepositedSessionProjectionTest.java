@@ -111,7 +111,26 @@ class UndepositedSessionProjectionTest {
         assertThat(row.getExpectedCash()).isEqualByComparingTo("0");
         assertThat(row.getDepositAmount()).isEqualByComparingTo("0");
         assertThat(row.getClearingNet()).isEqualByComparingTo("2.00");
+        assertThat(row.getStatus())
+                .as("an over leaves a clearing net to deposit")
+                .isEqualTo(UndepositedSessionStatus.UNDEPOSITED);
         assertThat(savedDrops).isEmpty();
+    }
+
+    @Test
+    @DisplayName("review MINOR-2: a card-only session with no over/short has nothing to deposit: NOTHING_TO_DEPOSIT")
+    void cardOnlySessionWithoutVarianceHasNothingToDeposit() {
+        RegisterSessionClosedV1 fact = fact(
+                "USD",
+                "0.00",
+                List.of(new TenderTotal("CARD", new BigDecimal("500.00"))),
+                movement("FLOAT_INCREASE", "IN", "50.00", null));
+
+        assertThat(projection.record(fact, 2)).isTrue();
+
+        UndepositedSession row = savedSession();
+        assertThat(row.getStatus()).isEqualTo(UndepositedSessionStatus.NOTHING_TO_DEPOSIT);
+        assertThat(row.getDepositId()).isNull();
     }
 
     @Test
@@ -152,7 +171,13 @@ class UndepositedSessionProjectionTest {
                 CLOSED_AT,
                 CLOSED_AT,
                 null);
-        assertThat(projection.record(schemaOneShape, 2)).as("no movements").isFalse();
+        assertThat(projection.record(schemaOneShape, 1))
+                .as("schema 1 without movements")
+                .isFalse();
+        assertThatThrownBy(() -> projection.record(schemaOneShape, 2))
+                .as("schema 2 without its movements list goes to retry / DLQ, never marked done without a row")
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("no movements list");
 
         verify(sessions, never()).saveAndFlush(any());
     }

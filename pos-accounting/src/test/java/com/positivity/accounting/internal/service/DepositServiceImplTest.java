@@ -38,6 +38,7 @@ import com.positivity.accounting.internal.exception.AccountingPeriodClosedExcept
 import com.positivity.accounting.internal.exception.CashSetupException;
 import com.positivity.accounting.internal.exception.CurrencyNotSupportedException;
 import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
+import com.positivity.accounting.internal.exception.JournalEntryNotReversibleException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.DepositRepository;
 import com.positivity.accounting.internal.repository.DepositSessionRepository;
@@ -201,8 +202,6 @@ class DepositServiceImplTest {
                         .findFirst());
         when(deposits.findById(any()))
                 .thenAnswer(invocation -> Optional.ofNullable(depositRows.get(invocation.<UUID>getArgument(0))));
-        when(deposits.lockById(any()))
-                .thenAnswer(invocation -> Optional.ofNullable(depositRows.get(invocation.<UUID>getArgument(0))));
         when(deposits.lockByJournalEntryId(any()))
                 .thenAnswer(invocation -> depositRows.values().stream()
                         .filter(row -> invocation.getArgument(0).equals(row.getJournalEntryId()))
@@ -302,7 +301,10 @@ class DepositServiceImplTest {
         JournalEntryCreateRequest entry = onlyEntry();
         assertThat(entry.getTransactionDate()).isEqualTo(DEPOSIT_DATE.atStartOfDay());
         assertThat(entry.getSourceEventType()).isEqualTo("BANK_DEPOSIT");
-        assertThat(entry.getSourceEventId()).isNotNull();
+        assertThat(entry.getSourceEventId())
+                .as("derived from the command's requestId, the deposit's durable natural key")
+                .isEqualTo(DepositServiceImpl.sourceEventId(
+                        depositRows.values().iterator().next().getRequestId()));
         assertThat(entry.getLines())
                 .extracting(
                         JournalEntryCreateRequest.JournalEntryLineRequest::getGlAccountId,
@@ -455,25 +457,183 @@ class DepositServiceImplTest {
     }
 
     @Test
-    @DisplayName("AC7: a card-only session has expected cash 0 and adds nothing to a deposit; alone it is 400, no"
-            + " cash to take to the bank")
-    void cardOnlySessionAddsNothing() {
+    @DisplayName("AC7: a card-only session with an over of 2.00 dropped to the bag adds no expected cash: no card"
+            + " amount is in the deposit")
+    void cardOnlySessionAddsNoExpectedCash() {
         UndepositedSession cash = workedExample(SHOP_A);
-        UndepositedSession cardOnly = session(SHOP_A, "0.00", "0.00");
+        UndepositedSession cardOnly = session(SHOP_A, "0.00", "2.00", drop("2.00", "B-0914"));
 
         DepositResponse response = service.record(
                         request(UUID.randomUUID(), cash.getSessionId(), cardOnly.getSessionId()))
                 .response();
 
-        assertThat(response.amount()).isEqualByComparingTo("1197.00");
-        assertThat(response.expectedCash()).isEqualByComparingTo("1240.00");
-        assertThat(onlyEntry().getLines()).hasSize(3);
+        assertThat(response.amount()).isEqualByComparingTo("1199.00");
+        assertThat(response.expectedCash()).as("the cash session's sales only").isEqualByComparingTo("1240.00");
+        assertThat(response.clearingNet()).isEqualByComparingTo("-41.00");
+        assertThat(onlyEntry().getLines())
+                .extracting(
+                        JournalEntryCreateRequest.JournalEntryLineRequest::getGlAccountId,
+                        l -> l.getDebitAmount().toPlainString(),
+                        l -> l.getCreditAmount().toPlainString())
+                .containsExactly(
+                        tuple(BANK, "1199.00", "0"),
+                        tuple(UNDEPOSITED_FUNDS, "0", "1240.00"),
+                        tuple(CASH_CLEARING, "41.00", "0"));
         assertThat(cardOnly.getStatus()).isEqualTo(UndepositedSessionStatus.DEPOSITED);
+    }
 
-        UndepositedSession another = session(SHOP_A, "0.00", "0.00");
-        assertThatThrownBy(() -> service.record(request(UUID.randomUUID(), another.getSessionId())))
+    @Test
+    @DisplayName("review MINOR-1: no drops against expected cash 1,240.00 is 422 DEPOSIT_UNBALANCED naming 1,240.00 and"
+            + " counted; a selection balanced at zero drops is 400, no cash to take to the bank")
+    @SuppressWarnings("unchecked")
+    void missingDropsAreUnbalanced() {
+        io.micrometer.core.instrument.MeterRegistry registry =
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        ObjectProvider<io.micrometer.core.instrument.MeterRegistry> provider = mock(ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(registry);
+        DepositServiceImpl counted = new DepositServiceImpl(
+                sessions,
+                drops,
+                deposits,
+                depositSessions,
+                glAccounts,
+                resolver,
+                journalEntries,
+                auditLogs,
+                zoneResolver,
+                new LedgerCurrency("USD"),
+                new FunctionalCurrency(new LedgerCurrency("USD")),
+                currencies,
+                facts,
+                provider);
+        UndepositedSession noDrop = session(SHOP_A, "1240.00", "0.00");
+
+        assertThatThrownBy(() -> counted.record(request(UUID.randomUUID(), noDrop.getSessionId())))
+                .isInstanceOfSatisfying(CashSetupException.class, e -> {
+                    assertThat(e.getCode()).isEqualTo(CashSetupException.Code.DEPOSIT_UNBALANCED);
+                    assertThat(e.getMessage()).contains("1240.00").contains("short");
+                });
+        assertThat(registry.get(DepositServiceImpl.UNBALANCED_METRIC).counter().count())
+                .isEqualTo(1.0);
+
+        // Petty 20.00 paid from 20.00 of cash sales, nothing dropped: balanced, but no bank line to post.
+        UndepositedSession balancedAtZero = session(SHOP_A, "20.00", "-20.00");
+        assertThatThrownBy(() -> counted.record(request(UUID.randomUUID(), balancedAtZero.getSessionId())))
                 .isInstanceOf(InvalidRequestParameterException.class)
                 .hasMessageContaining("no bank drops");
+        assertThat(registry.get(DepositServiceImpl.UNBALANCED_METRIC).counter().count())
+                .isEqualTo(1.0);
+        assertThat(created).isEmpty();
+    }
+
+    @Test
+    @DisplayName("review MINOR-2: a NOTHING_TO_DEPOSIT session is never listed and a deposit naming it is 400")
+    void nothingToDepositIsNeverListedOrTaken() {
+        UndepositedSession cash = workedExample(SHOP_A);
+        UndepositedSession nothing = session(SHOP_A, "0.00", "0.00");
+        nothing.setStatus(UndepositedSessionStatus.NOTHING_TO_DEPOSIT);
+
+        assertThat(service.undeposited(List.of(), null).sessions())
+                .extracting(UndepositedSessionsResponse.Session::sessionId)
+                .containsExactly(cash.getSessionId());
+        assertThatThrownBy(
+                        () -> service.record(request(UUID.randomUUID(), cash.getSessionId(), nothing.getSessionId())))
+                .isInstanceOf(InvalidRequestParameterException.class)
+                .hasMessageContaining("nothing to deposit");
+        assertThat(created).isEmpty();
+        assertThat(nothing.getStatus()).isEqualTo(UndepositedSessionStatus.NOTHING_TO_DEPOSIT);
+    }
+
+    @Test
+    @DisplayName("review MAJOR-1: the reversal entry of a deposit is never reversed (409"
+            + " DEPOSIT_REVERSAL_NOT_REVERSIBLE)")
+    void reversalEntryIsNeverReversed() {
+        UndepositedSession session = workedExample(SHOP_A);
+        DepositResponse recorded = service.record(request(UUID.randomUUID(), session.getSessionId()))
+                .response();
+        DepositResponse reversed = service.reverse(
+                        recorded.depositId(),
+                        new DepositReversalRequest(
+                                "Deposited into the wrong bank account", null, null, UUID.randomUUID()))
+                .response();
+        assertThat(depositRows.get(recorded.depositId()).getReversalRequestId())
+                .as("the reaction stamps the command's request on the deposit it reverses")
+                .isNotNull();
+
+        DepositReversalReaction reaction = new DepositReversalReaction(
+                deposits,
+                depositSessions,
+                sessions,
+                journalEntryRows,
+                auditLogs,
+                facts,
+                Clock.fixed(Instant.parse("2026-10-10T12:00:00Z"), ZoneOffset.UTC));
+        when(deposits.lockByReversalJournalEntryId(reversed.reversalJournalEntryId()))
+                .thenReturn(Optional.of(depositRows.get(recorded.depositId())));
+        LedgerReversalApplied reversalOfTheReversal = new LedgerReversalApplied(
+                reversed.reversalJournalEntryId(),
+                UUID.randomUUID(),
+                DEPOSIT_DATE,
+                List.of(UUID.randomUUID()),
+                Set.of(BANK),
+                "controller.cfo",
+                null,
+                "Undo the wrong reversal");
+        assertThatThrownBy(() -> reaction.onReversed(reversalOfTheReversal))
+                .isInstanceOfSatisfying(CashSetupException.class, e -> {
+                    assertThat(e.getCode()).isEqualTo(CashSetupException.Code.DEPOSIT_REVERSAL_NOT_REVERSIBLE);
+                    assertThat(e.getMessage()).contains("record the deposit again");
+                });
+        assertThat(depositRows.get(recorded.depositId()).getStatus()).isEqualTo(DepositStatus.REVERSED);
+        assertThat(session.getStatus()).isEqualTo(UndepositedSessionStatus.UNDEPOSITED);
+    }
+
+    @Test
+    @DisplayName("review LOW-1: Reverse deposit takes no lock before the reversal; losing the entry's race to another"
+            + " reversal is 409 DEPOSIT_ALREADY_REVERSED")
+    void lostReversalRaceIsAlreadyReversed() {
+        UndepositedSession session = workedExample(SHOP_A);
+        DepositResponse recorded = service.record(request(UUID.randomUUID(), session.getSessionId()))
+                .response();
+        // doThrow: re-stubbing with when() would run the stubbed reversal.
+        org.mockito.Mockito.doThrow(new JournalEntryNotReversibleException(
+                        recorded.journalEntryId(),
+                        com.positivity.accounting.internal.enums.JournalEntryStatus.REVERSED))
+                .when(journalEntries)
+                .reverseJournalEntry(any(UUID.class), anyString(), any(), any());
+
+        assertThatThrownBy(() -> service.reverse(
+                        recorded.depositId(),
+                        new DepositReversalRequest(
+                                "Deposited into the wrong bank account", null, null, UUID.randomUUID())))
+                .extracting(e -> ((CashSetupException) e).getCode())
+                .isEqualTo(CashSetupException.Code.DEPOSIT_ALREADY_REVERSED);
+        verify(deposits, never()).lockByJournalEntryId(any());
+        assertThat(org.springframework.transaction.support.TransactionSynchronizationManager.getResourceMap())
+                .as("the request is unbound again")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("review LOW-3: the read's preview takes only a bank account Record would take (422"
+            + " DEPOSIT_BANK_ACCOUNT_NOT_ELIGIBLE)")
+    void previewBankAccountIsEligible() {
+        UndepositedSession session = workedExample(SHOP_A);
+        bank.setReconcilable(false);
+
+        assertThatThrownBy(() -> service.undeposited(List.of(session.getSessionId()), BANK))
+                .extracting(e -> ((CashSetupException) e).getCode())
+                .isEqualTo(CashSetupException.Code.DEPOSIT_BANK_ACCOUNT_NOT_ELIGIBLE);
+        assertThatThrownBy(() -> service.undeposited(List.of(session.getSessionId()), UUID.randomUUID()))
+                .extracting(e -> ((CashSetupException) e).getCode())
+                .isEqualTo(CashSetupException.Code.DEPOSIT_BANK_ACCOUNT_NOT_ELIGIBLE);
+        assertThat(service.undeposited(List.of(session.getSessionId()), null)
+                        .selection()
+                        .lines()
+                        .get(0)
+                        .accountNumber())
+                .as("without a bank account the bank line names none")
+                .isNull();
     }
 
     // ---- whole sessions, accounts, currency ---------------------------------------------------------------------

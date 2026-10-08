@@ -25,11 +25,11 @@ public interface DepositRepository extends JpaRepository<Deposit, UUID> {
     @NonNull
     Optional<Deposit> findByJournalEntryId(@NonNull UUID journalEntryId);
 
-    /** The deposit, row-locked to the end of the transaction: its reversals serialize on it. */
+    /** The deposit a journal entry reverses, row-locked to the end of the transaction. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT d FROM Deposit d WHERE d.depositId = :depositId")
+    @Query("SELECT d FROM Deposit d WHERE d.reversalJournalEntryId = :journalEntryId")
     @NonNull
-    Optional<Deposit> lockById(@Param("depositId") @NonNull UUID depositId);
+    Optional<Deposit> lockByReversalJournalEntryId(@Param("journalEntryId") @NonNull UUID journalEntryId);
 
     /** The deposit that owns a journal entry, row-locked to the end of the transaction. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)

@@ -5,7 +5,8 @@
 -- writes in the handler transaction that posts the session's drawer movements and over/short (S17): its bank drops,
 -- its expected cash (the CASH tender total) and its clearing net (the signed sum of the 1095 lines those postings
 -- made; debit positive). A session is UNDEPOSITED until a deposit takes it whole, DEPOSITED while that deposit
--- stands, and UNDEPOSITED again once the deposit's entry is reversed (ADR-0047).
+-- stands, and UNDEPOSITED again once the deposit's entry is reversed (ADR-0047). A session with no drops, no expected
+-- cash and a zero clearing net (card tenders only, no over/short) has nothing to deposit: NOTHING_TO_DEPOSIT, terminal.
 --
 -- deposit is one Record bank deposit command: the entry it posted (source type BANK_DEPOSIT), the request id and
 -- body hash that make it idempotent, and, once reversed, the reversal's own entry, request id and hash.
@@ -35,7 +36,7 @@ CREATE TABLE public.undeposited_session (
     version integer DEFAULT 0 NOT NULL,
     created_at timestamp(6) with time zone NOT NULL,
     modified_at timestamp(6) with time zone NOT NULL,
-    CONSTRAINT undeposited_session_status_check CHECK (((status)::text = ANY (ARRAY['UNDEPOSITED'::text, 'DEPOSITED'::text]))),
+    CONSTRAINT undeposited_session_status_check CHECK (((status)::text = ANY (ARRAY['UNDEPOSITED'::text, 'DEPOSITED'::text, 'NOTHING_TO_DEPOSIT'::text]))),
     CONSTRAINT undeposited_session_deposit_check CHECK ((((status)::text = 'DEPOSITED'::text) = (deposit_id IS NOT NULL)))
 );
 
@@ -53,6 +54,9 @@ CREATE INDEX undeposited_session_tenant_idx ON public.undeposited_session USING 
 -- The read lists the undeposited sessions oldest first.
 CREATE INDEX undeposited_session_status_idx
     ON public.undeposited_session USING btree (tenant_id, status, closed_at);
+-- A deposit's reversal returns the sessions it took.
+CREATE INDEX undeposited_session_deposit_idx
+    ON public.undeposited_session USING btree (tenant_id, deposit_id);
 
 ALTER TABLE public.undeposited_session ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.undeposited_session FORCE ROW LEVEL SECURITY;
@@ -147,9 +151,14 @@ ALTER TABLE ONLY public.deposit
 ALTER TABLE ONLY public.deposit
     ADD CONSTRAINT deposit_journal_entry_fk FOREIGN KEY (tenant_id, journal_entry_id)
         REFERENCES public.journal_entry(tenant_id, journal_entry_id);
+ALTER TABLE ONLY public.deposit
+    ADD CONSTRAINT deposit_reversal_journal_entry_fk FOREIGN KEY (tenant_id, reversal_journal_entry_id)
+        REFERENCES public.journal_entry(tenant_id, journal_entry_id);
 CREATE INDEX deposit_tenant_idx ON public.deposit USING btree (tenant_id);
--- A journal-entry reversal asks whether a deposit owns the reversed entry.
+-- A journal-entry reversal asks whether a deposit owns the reversed entry, or whether the entry is a deposit's
+-- reversal (never reversed itself, ADR-0047).
 CREATE INDEX deposit_entry_idx ON public.deposit USING btree (tenant_id, journal_entry_id);
+CREATE INDEX deposit_reversal_entry_idx ON public.deposit USING btree (tenant_id, reversal_journal_entry_id);
 
 ALTER TABLE public.deposit ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.deposit FORCE ROW LEVEL SECURITY;
@@ -187,8 +196,12 @@ ALTER TABLE ONLY public.deposit_session
 ALTER TABLE ONLY public.deposit_session
     ADD CONSTRAINT deposit_session_deposit_fk FOREIGN KEY (tenant_id, deposit_id)
         REFERENCES public.deposit(tenant_id, deposit_id);
+ALTER TABLE ONLY public.deposit_session
+    ADD CONSTRAINT deposit_session_session_fk FOREIGN KEY (tenant_id, session_id)
+        REFERENCES public.undeposited_session(tenant_id, session_id);
 CREATE INDEX deposit_session_tenant_idx ON public.deposit_session USING btree (tenant_id);
 CREATE INDEX deposit_session_deposit_idx ON public.deposit_session USING btree (tenant_id, deposit_id);
+CREATE INDEX deposit_session_session_idx ON public.deposit_session USING btree (tenant_id, session_id);
 
 ALTER TABLE public.deposit_session ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.deposit_session FORCE ROW LEVEL SECURITY;

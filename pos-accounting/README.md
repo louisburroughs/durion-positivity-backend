@@ -821,31 +821,37 @@ deposit, and a wrong deposit is reversed, never edited (AW10, ADR-0047).
   **expected cash** (the `CASH` tender total, what the session's sales put in 1090) and the **clearing net** (the
   signed sum, debit positive, of the 1095 lines the session's over/short and petty expenses posted:
   `overShort − Σ petty`). A schema-1 fact, a session closed in another currency or with a drop in one, and a session
-  S17 held for its currency write no row (ADR-0067 PC-9: never deposited at par); a redelivery writes nothing. No
-  call to pos-order (ADR-0044).
+  S17 held for its currency write no row (ADR-0067 PC-9: never deposited at par); a redelivery writes nothing; a
+  schema-2 fact without its `movements` list goes to retry / DLQ. A session with no drops, no expected cash and a zero
+  clearing net (card tenders only, no over/short) is written `NOTHING_TO_DEPOSIT`, terminal: never listed, counted in
+  the gauges or taken by a deposit. No call to pos-order (ADR-0044).
 - **Read** — `GET /v1/accounting/undeposited-sessions` lists the `UNDEPOSITED` sessions the caller's
   `accounting:deposit:create` reaches, oldest first, with register, location, close date, age in days, bag numbers
   and amounts. With `sessionId` parameters it adds `selection`: `depositAmount`, `expectedCash`, `clearingNet`,
   `difference = depositAmount − expectedCash − clearingNet`, `balanced` and the entry's lines, so the dialog (S20)
-  never sums amounts (P7). A `sessionId` it does not list is 400. Nothing posts.
+  never sums amounts (P7). A `sessionId` it does not list is 400; a `bankGlAccountId` Record would refuse is 422
+  `DEPOSIT_BANK_ACCOUNT_NOT_ELIGIBLE`. Nothing posts.
 - **Record bank deposit** — `POST /v1/accounting/deposits` `{bankGlAccountId, depositDate, currencyCode, sessionIds,
   requestId, depositSlipReference?, overrideJustification?}`. One entry, source type `BANK_DEPOSIT`, dated
-  `depositDate` through the period gate: Dr the bank account by the drops (one line, the line bank reconciliation
-  matches), Cr `UNDEPOSITED_FUNDS` (1090) by the expected cash, Dr `CASH_CLEARING` (1095) when the clearing net is a
+  `depositDate` through the period gate, its `sourceEventId` = `nameUUIDFromBytes("BANK_DEPOSIT:" + requestId)`: Dr the
+  bank account by the drops (one line, the line bank reconciliation matches), Cr `UNDEPOSITED_FUNDS` (1090) by the expected cash, Dr `CASH_CLEARING` (1095) when the clearing net is a
   credit, Cr when a debit (a zero line is left out); accounts through the `BANK_DEPOSIT` posting category. Sessions
   are taken whole and become `DEPOSITED`; their rows are locked in session-id order, so two clerks serialize.
   Refusals: 422 `CURRENCY_NOT_SUPPORTED`, 422 `DEPOSIT_BANK_ACCOUNT_NOT_ELIGIBLE` (not an active, reconcilable
-  `BANK_CASH` account in functional currency), 400 for an unknown session or a selection with no drops, 403
+  `BANK_CASH` account in functional currency), 400 for an unknown session or one with nothing to deposit, 403
   `LOCATION_SCOPE_DENIED`, 409 `DEPOSIT_SESSION_ALREADY_DEPOSITED`, 422 `AMOUNT_PRECISION_EXCEEDS_CURRENCY`, 422
-  `DEPOSIT_UNBALANCED` naming the difference (no plug line is ever written), 422 `PERIOD_CLOSED` /
-  `PERIOD_HARD_LOCKED`. Idempotent on `requestId`: a replay returns the first result (`replayed: true`, 200), another
+  `DEPOSIT_UNBALANCED` naming the difference (missing drops included; no plug line is ever written), then 400 when
+  the selection balances at zero drops (no bank line to post), 422 `PERIOD_CLOSED` / `PERIOD_HARD_LOCKED`. Idempotent on `requestId`: a replay returns the first result (`replayed: true`, 200), another
   body is 409 `IDEMPOTENCY_CONFLICT`.
 - **Reverse deposit** — `POST /v1/accounting/deposits/{depositId}/reversal` `{reason (10-400), reversalDate?,
   overrideJustification?, requestId}` reverses the entry through the journal-entry reversal (its default date, period
   gate and override); `DepositReversalReaction` marks the deposit `REVERSED` and returns its sessions to
   `UNDEPOSITED`. The same reaction runs when the deposit's entry is reversed through
-  `POST /v1/accounting/journal-entries/{id}/reverse`, so the deposit and the ledger never disagree. 404
-  `DEPOSIT_NOT_FOUND`, 409 `DEPOSIT_ALREADY_REVERSED`, 409 `IDEMPOTENCY_CONFLICT`.
+  `POST /v1/accounting/journal-entries/{id}/reverse`, so the deposit and the ledger never disagree. The command takes
+  no lock before the reversal, so both routes lock in the reversal's order (entry-number sequence, entry, deposit,
+  sessions) and serialize; the loser of a race is 409 `DEPOSIT_ALREADY_REVERSED`. The deposit's reversal entry is
+  never reversed itself (409 `DEPOSIT_REVERSAL_NOT_REVERSIBLE`: record the deposit again). 404 `DEPOSIT_NOT_FOUND`,
+  409 `DEPOSIT_ALREADY_REVERSED`, 409 `IDEMPOTENCY_CONFLICT`.
 - **Location scope** — every session and deposit is gated on its stored location (location-scope.yaml); a session
   with no location is reachable only by an unscoped caller.
 - **Fact** — `accounting.deposit.recorded` v1 on `accounting.events.v1` (`DepositRecordedV1`, aggregate = the

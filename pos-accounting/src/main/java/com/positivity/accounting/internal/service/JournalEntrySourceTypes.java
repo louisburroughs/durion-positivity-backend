@@ -45,7 +45,7 @@ public final class JournalEntrySourceTypes {
 
     /**
      * A bank deposit of drawer cash (CAP:550 S18, #2514): Dr bank / Cr 1090 / Dr or Cr 1095; its source event id derives
-     * from the deposit's id.
+     * from the Record bank deposit command's {@code requestId} ({@code nameUUIDFromBytes("BANK_DEPOSIT:" + requestId)}).
      */
     public static final String BANK_DEPOSIT = "BANK_DEPOSIT";
 

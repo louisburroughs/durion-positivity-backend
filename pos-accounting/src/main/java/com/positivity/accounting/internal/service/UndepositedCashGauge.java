@@ -13,6 +13,7 @@ import java.time.Instant;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -22,8 +23,11 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Drawer cash not yet at the bank, as gauges (CAP:550 S18, #2514 "Audit and observability"; feeds the S19 1090-age
- * warning): the bank drops of every undeposited session across all tenants, and the age in days of the oldest. Both are
- * refreshed on a poll, one tenant at a time; a tenant whose read fails is skipped for that poll.
+ * warning): the bank drops of every undeposited session across all tenants, and the age in days of the oldest ({@code
+ * NOTHING_TO_DEPOSIT} sessions never count). Both are refreshed on a poll through {@link TenantIterator#sweep}, one
+ * tenant at a time: a tenant's figures join the totals only once both its reads succeeded, a tenant whose read fails is
+ * left out of that poll, and a poll over an incomplete tenant list keeps the previous values rather than publish a
+ * partial fleet total.
  */
 @Slf4j
 @Component
@@ -76,14 +80,30 @@ public class UndepositedCashGauge {
         Instant now = Instant.now(clock);
         AtomicReference<BigDecimal> total = new AtomicReference<>(BigDecimal.ZERO);
         AtomicReference<Instant> oldest = new AtomicReference<>();
-        tenantIterator.forEachActiveTenant(tenantId -> transaction.executeWithoutResult(status -> {
-            total.accumulateAndGet(
-                    sessions.sumDepositAmountByStatus(UndepositedSessionStatus.UNDEPOSITED), BigDecimal::add);
-            sessions.findFirstByStatusOrderByClosedAtAsc(UndepositedSessionStatus.UNDEPOSITED)
-                    .map(UndepositedSession::getClosedAt)
-                    .ifPresent(closedAt -> oldest.accumulateAndGet(
-                            closedAt, (current, next) -> current == null || next.isBefore(current) ? next : current));
-        }));
+        TenantIterator.Sweep sweep = tenantIterator.sweep(tenantId -> {
+            TenantCash cash = transaction.execute(status -> new TenantCash(
+                    sessions.sumDepositAmountByStatus(UndepositedSessionStatus.UNDEPOSITED),
+                    sessions.findFirstByStatusOrderByClosedAtAsc(UndepositedSessionStatus.UNDEPOSITED)
+                            .map(UndepositedSession::getClosedAt)
+                            .orElse(null)));
+            if (cash == null) {
+                return;
+            }
+            // Merged only now, both reads done: a tenant whose second read fails adds nothing.
+            total.accumulateAndGet(cash.amount(), BigDecimal::add);
+            if (cash.oldestClosedAt() != null) {
+                oldest.accumulateAndGet(
+                        cash.oldestClosedAt(),
+                        (current, next) -> current == null || next.isBefore(current) ? next : current);
+            }
+        });
+        if (!sweep.completeTenantList()) {
+            log.warn(
+                    "Undeposited drawer cash gauges kept at {} / {} day(s): the tenant list was incomplete",
+                    amount.get(),
+                    oldestAgeDays.get());
+            return;
+        }
         amount.set(total.get());
         oldestAgeDays.set(
                 oldest.get() == null
@@ -91,6 +111,9 @@ public class UndepositedCashGauge {
                         : Math.max(0, Duration.between(oldest.get(), now).toDays()));
         log.debug("Undeposited drawer cash {} across tenants, oldest {} day(s)", total.get(), oldestAgeDays.get());
     }
+
+    /** One tenant's undeposited drops and its oldest undeposited close. */
+    private record TenantCash(BigDecimal amount, @Nullable Instant oldestClosedAt) {}
 
     /** The last poll's total, for tests. */
     BigDecimal amount() {

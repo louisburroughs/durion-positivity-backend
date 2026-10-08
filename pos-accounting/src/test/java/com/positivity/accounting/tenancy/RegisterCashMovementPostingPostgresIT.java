@@ -477,12 +477,15 @@ class RegisterCashMovementPostingPostgresIT extends PostgresTenancyTestBase {
     }
 
     private String envelope(String eventId, RegisterSessionClosedV1 fact) {
+        // A fact without movements is a schema-1 fact; schema 2 always carries the list (#2514 rejects it otherwise).
+        int schemaVersion = fact.movements() == null ? 1 : 2;
         return """
-                {"eventId":"%s","eventType":"%s","schemaVersion":2,"aggregateId":"%s","aggregateVersion":2,
+                {"eventId":"%s","eventType":"%s","schemaVersion":%d,"aggregateId":"%s","aggregateVersion":2,
                  "occurredAtUtc":"%s","sourceService":"pos-order","payload":%s}
                 """.formatted(
                         eventId,
                         RegisterSessionClosedV1.EVENT_TYPE,
+                        schemaVersion,
                         fact.sessionId(),
                         fact.closedAt(),
                         objectMapper.writeValueAsString(fact));
