@@ -28,8 +28,11 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -289,9 +292,21 @@ public class APPaymentServiceImpl implements APPaymentService {
             @NonNull APPayment payment, @NonNull ExecuteAPPaymentRequest request) {
         List<APPaymentAllocation> allocations = new ArrayList<>();
         int sequence = 1;
+        // Every bill locked in id order before any status is read (#2509 review, A3): a void or another payment of
+        // the same bills waits, and the status read here is the one the allocation commits against.
+        Map<UUID, VendorBill> locked = billRepository
+                .lockByVendorBillIdIn(request.getAllocations().stream()
+                        .map(ExecuteAPPaymentRequest.AllocationLineRequest::getVendorBillId)
+                        .distinct()
+                        .toList())
+                .stream()
+                .collect(Collectors.toMap(VendorBill::getVendorBillId, Function.identity()));
 
         for (ExecuteAPPaymentRequest.AllocationLineRequest allocationLine : request.getAllocations()) {
-            VendorBill bill = validateBillForAllocation(allocationLine.getVendorBillId(), payment.getVendorId());
+            VendorBill bill = validateBillForAllocation(
+                    allocationLine.getVendorBillId(),
+                    locked.get(allocationLine.getVendorBillId()),
+                    payment.getVendorId());
 
             APPaymentAllocation allocation = new APPaymentAllocation();
             allocation.setPayment(payment);
@@ -335,10 +350,11 @@ public class APPaymentServiceImpl implements APPaymentService {
         return allocations;
     }
 
-    private @NonNull VendorBill validateBillForAllocation(@NonNull UUID vendorBillId, @NonNull UUID expectedVendorId) {
-        VendorBill bill = billRepository
-                .findById(vendorBillId)
-                .orElseThrow(() -> new InvalidBillAllocationException("Bill not found: " + vendorBillId));
+    private @NonNull VendorBill validateBillForAllocation(
+            @NonNull UUID vendorBillId, @Nullable VendorBill bill, @NonNull UUID expectedVendorId) {
+        if (bill == null) {
+            throw new InvalidBillAllocationException("Bill not found: " + vendorBillId);
+        }
 
         if (bill.getStatus() != VendorBillStatus.APPROVED) {
             throw new InvalidBillAllocationException("Bill " + vendorBillId + " is not approved for payment");
@@ -353,7 +369,9 @@ public class APPaymentServiceImpl implements APPaymentService {
     }
 
     private @NonNull List<VendorBill> getEligibleBillsSortedByDueDate(@NonNull UUID vendorId) {
-        List<VendorBill> bills = billRepository.findByVendorIdAndStatus(vendorId, VendorBillStatus.APPROVED);
+        // Locked in id order, the status evaluated on the locked rows (#2509 review, A3), then sorted for allocation.
+        List<VendorBill> bills =
+                new ArrayList<>(billRepository.lockByVendorIdAndStatus(vendorId, VendorBillStatus.APPROVED));
         bills.sort(Comparator.comparing(VendorBill::getDueDate, Comparator.nullsLast(Comparator.naturalOrder()))
                 .thenComparing(VendorBill::getBillDate, Comparator.nullsLast(Comparator.naturalOrder()))
                 .thenComparing(VendorBill::getVendorBillId));

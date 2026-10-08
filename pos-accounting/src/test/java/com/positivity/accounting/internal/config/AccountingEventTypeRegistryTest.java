@@ -102,15 +102,16 @@ class AccountingEventTypeRegistryTest {
         assertThat(AccountingEventTypeRegistry.entries())
                 .filteredOn(e -> e.ingestion() == Ingestion.API)
                 .extracting(Entry::code)
-                .containsExactlyInAnyOrder("INVOICE_PAYMENT", "VENDOR_BILL_GL_POSTING", "AP_PAYMENT_GL_POSTING");
+                .containsExactlyInAnyOrder("INVOICE_PAYMENT", "AP_PAYMENT_GL_POSTING");
     }
 
     @Test
-    @DisplayName("the vendor bill and AP payment API types post a journal entry through the posting engine")
+    @DisplayName("the AP payment API type posts a journal entry through the posting engine; VENDOR_BILL_GL_POSTING is"
+            + " retired (#2509): a vendor bill posts at approval")
     void apGlPostingTypesPostToGl() {
         assertThat(AccountingEventTypeRegistry.entries())
                 .filteredOn(e -> e.code().endsWith("_GL_POSTING"))
-                .hasSize(2)
+                .hasSize(1)
                 .allSatisfy(e -> {
                     assertThat(e.ingestion()).isEqualTo(Ingestion.API);
                     assertThat(e.sourceDomain()).isEqualTo("accounting");
@@ -145,5 +146,18 @@ class AccountingEventTypeRegistryTest {
                 .filter(e -> e.ingestion() == Ingestion.KAFKA)
                 .map(Entry::code)
                 .toList();
+    }
+
+    @Test
+    @DisplayName("LOW-8 (#2509 review): VENDOR_BILL_GL_POSTING is retired and never registered")
+    void vendorBillGlPostingIsRetired() {
+        assertThat(AccountingEventTypeRegistry.isRetired("VENDOR_BILL_GL_POSTING"))
+                .isTrue();
+        assertThat(AccountingEventTypeRegistry.isRetired("AP_PAYMENT_GL_POSTING"))
+                .isFalse();
+        assertThat(AccountingEventTypeRegistry.isRetired(null)).isFalse();
+        assertThat(AccountingEventTypeRegistry.entries())
+                .extracting(Entry::code)
+                .doesNotContain("VENDOR_BILL_GL_POSTING");
     }
 }

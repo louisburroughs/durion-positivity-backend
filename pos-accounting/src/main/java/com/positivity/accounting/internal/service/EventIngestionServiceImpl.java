@@ -876,8 +876,13 @@ public class EventIngestionServiceImpl implements EventIngestionService {
     public List<String> validateEvent(Map<String, Object> event) {
         List<String> errors = new java.util.ArrayList<>();
 
-        if (event.get(EVENT_TYPE) == null) {
+        Object eventType = event.get(EVENT_TYPE);
+        if (eventType == null) {
             errors.add("eventType is required");
+        } else if (AccountingEventTypeRegistry.isRetired(String.valueOf(eventType))) {
+            // #2509 review: a retired type is posted by something else now; recording it would post twice.
+            errors.add("eventType " + eventType + " is retired; a vendor bill posts at its approval"
+                    + " (POST /v1/accounting/vendor-bills/{billId}/approve)");
         }
         if (event.get(PAYLOAD) == null) {
             errors.add("payload is required");

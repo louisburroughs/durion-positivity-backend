@@ -317,7 +317,8 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
         assertThat(status.attention()).isEmpty();
 
         assertThat(owner.queryForObject(
-                        "SELECT count(*) FROM processed_events WHERE event_id = ? AND owner = 'tenant' AND tenant_id = ?",
+                        "SELECT count(*) FROM processed_events WHERE event_id = ? AND owner = 'tenant' AND tenant_id ="
+                                + " ?",
                         Integer.class,
                         eventId,
                         t2))
@@ -443,7 +444,8 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
 
     @Test
     @DisplayName(
-            "a template addition is added and a renamed account, a deactivated key and a remap stay as the tenant left them")
+            "a template addition is added and a renamed account, a deactivated key and a remap stay as the tenant left"
+                    + " them")
     void tenantChangesSurviveATemplateAddition() {
         UUID t2 = newTenant();
         AccountingTemplate snapshot = templateReader.snapshot();
@@ -524,7 +526,8 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
 
     @Test
     @DisplayName(
-            "the tenant's own 6295 is untouched, the template's is a CONFLICT, its mapping WITHHELD; renumbering heals both")
+            "the tenant's own 6295 is untouched, the template's is a CONFLICT, its mapping WITHHELD; renumbering heals"
+                    + " both")
     void aClashingAccountIsLeftAloneAndHealsWhenRenumbered() {
         UUID t3 = newTenant();
         // The template as it was before S15 (#2511) put 6295 Staff Meals & Refreshments and its category in it.
@@ -552,13 +555,14 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
         provision(t3, withStaffMeals);
 
         assertThat(accountRow(t3, tireDisposal)).as("T3's 6295 is unchanged").isEqualTo(ownAccountBefore);
+        // Two mappings post to 6295 since #2509: the petty expense and the VENDOR_BILL expense key, both withheld.
         assertThat(count(t3, "gl_mapping"))
-                .as("every mapping but the withheld one")
-                .isEqualTo(count(withStaffMeals.only(templateReader::owns), AccountingTemplate.GlMapping.class) - 1);
+                .as("every mapping but the two withheld ones")
+                .isEqualTo(count(withStaffMeals.only(templateReader::owns), AccountingTemplate.GlMapping.class) - 2);
         TenantTemplateStatusResponse status = status(t3);
         assertThat(status.state()).isEqualTo(TenantTemplateState.NEEDS_ATTENTION);
         assertThat(status.counts().conflict()).isEqualTo(1);
-        assertThat(status.counts().withheld()).isEqualTo(2);
+        assertThat(status.counts().withheld()).isEqualTo(3);
         assertThat(status.attention())
                 .extracting(
                         TenantTemplateStatusResponse.AttentionItem::entryKey,
@@ -575,6 +579,11 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
                                 "GL_MAPPING:REGISTER_CASH_MOVEMENT/PETTY_EXPENSE_STAFF_MEALS",
                                 TemplateEntryReason.DEPENDS_ON_CONFLICT,
                                 "REGISTER_CASH_MOVEMENT / PETTY_EXPENSE_STAFF_MEALS posts to account 6295",
+                                "6295 Tire disposal, expense"),
+                        tuple(
+                                "GL_MAPPING:VENDOR_BILL/EXPENSE_STAFF_MEALS",
+                                TemplateEntryReason.DEPENDS_ON_CONFLICT,
+                                "VENDOR_BILL / EXPENSE_STAFF_MEALS posts to account 6295",
                                 "6295 Tire disposal, expense"),
                         tuple(
                                 "PETTY_EXPENSE_CATEGORY:STAFF_MEALS",
@@ -625,8 +634,8 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
     // ------------------------------------------------------------------------------------------
 
     @Test
-    @DisplayName(
-            "on a reset database the sweep gives the default tenant the template and adopts its V2 rows, add-on included")
+    @DisplayName("on a reset database the sweep gives the default tenant the template and adopts its V2 rows, add-on"
+            + " included")
     void theSweepProvisionsTheDefaultTenantAndAdoptsItsV2Rows() {
         AccountingTemplateStartupSweep sweep = new AccountingTemplateStartupSweep(
                 new TenantIterator(() -> List.of(TENANT_A)), templateReader, provisioner, meterRegistry);
@@ -729,9 +738,9 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
                 }));
         for (UUID tenant : List.of(untouched, renamed)) {
             assertThat(owner().queryForObject(
-                                    "SELECT count(*) FROM statement_line_mappings l JOIN gl_account a ON a.gl_account_id ="
-                                            + " l.gl_account_id WHERE l.tenant_id = ? AND l.statement_type = 'INCOME_STATEMENT'"
-                                            + " AND a.account_code = '4000'",
+                                    "SELECT count(*) FROM statement_line_mappings l JOIN gl_account a ON"
+                                            + " a.gl_account_id = l.gl_account_id WHERE l.tenant_id = ? AND"
+                                            + " l.statement_type = 'INCOME_STATEMENT' AND a.account_code = '4000'",
                                     Integer.class,
                                     tenant))
                     .as("exactly one income-statement line for 4000")
@@ -809,13 +818,16 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
         }
         // #2511 (S15) adds 1080, 3000, 3900, 6295, 6375 and 6380 (6040 takes 6115's place), three categories,
         // fifteen keys and mappings, and the balance-sheet lines of 1080, 3000 and 3900. #2572 adds the
-        // OPENING_BALANCE category with its OPENING_BALANCE_EQUITY key and mapping (3900).
-        assertThat(platformBefore.get("gl_account")).isEqualTo(68);
-        assertThat(platformBefore.get("posting_category")).isEqualTo(17);
-        assertThat(platformBefore.get("mapping_key")).isEqualTo(47);
-        assertThat(platformBefore.get("gl_mapping")).isEqualTo(47);
+        // OPENING_BALANCE category with its OPENING_BALANCE_EQUITY key and mapping (3900). #2509 (S12, AW38-AW40)
+        // adds 2100, 5050 and 5060, the GOODS_RECEIPT and VENDOR_BILL categories with their 3 + 13 keys and
+        // mappings, and the statement lines of 2100, 5050 and 5060.
+        assertThat(platformBefore.get("gl_account")).isEqualTo(71);
+        assertThat(platformBefore.get("posting_category")).isEqualTo(19);
+        assertThat(platformBefore.get("mapping_key")).isEqualTo(63);
+        assertThat(platformBefore.get("gl_mapping")).isEqualTo(63);
         assertThat(platformBefore.get("default_gl_mapping")).isEqualTo(1);
-        assertThat(platformBefore.get("statement_line_mappings")).isEqualTo(57); // 42 L&O + 12 (#2524) + 3 (#2511)
+        // 42 L&O + 12 (#2524) + 3 (#2511) + 3 (#2509)
+        assertThat(platformBefore.get("statement_line_mappings")).isEqualTo(60);
     }
 
     // ------------------------------------------------------------------------------------------
@@ -914,7 +926,8 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
 
     @Test
     @DisplayName(
-            "the retread add-on is absent until a controller turns it on, audited with the caller; a replay changes nothing")
+            "the retread add-on is absent until a controller turns it on, audited with the caller; a replay changes"
+                    + " nothing")
     void retreadAddOnIsCreatedOnlyOnTheTenantsChoice() {
         UUID t2 = newTenant();
         AccountingTemplate snapshot = templateReader.snapshot();
@@ -974,7 +987,8 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
 
     @Test
     @DisplayName(
-            "a tenant holding only a location override of a new template line gets the global line; the override is untouched")
+            "a tenant holding only a location override of a new template line gets the global line; the override is"
+                    + " untouched")
     void locationOverrideIsNotAdoptedAsTheGlobalLine() {
         UUID t2 = newTenant();
         AccountingTemplate snapshot = templateReader.snapshot();
@@ -1005,7 +1019,8 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
                             .getMappingId();
                 }));
         List<String> overrideBefore = owner().queryForList(
-                        "SELECT row_to_json(l)::text FROM statement_line_mappings l WHERE tenant_id = ? AND mapping_id = ?",
+                        "SELECT row_to_json(l)::text FROM statement_line_mappings l WHERE tenant_id = ? AND mapping_id"
+                                + " = ?",
                         String.class,
                         t2,
                         overrideId);
@@ -1027,9 +1042,10 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
                                 OperationType.SUM)));
 
         List<Map<String, Object>> lines = owner().queryForList(
-                        "SELECT l.location_id, l.statement_line_code, l.account_name FROM statement_line_mappings l JOIN"
-                                + " gl_account a ON a.gl_account_id = l.gl_account_id WHERE l.tenant_id = ? AND a.account_code"
-                                + " = '4100' AND l.statement_type = 'INCOME_STATEMENT' ORDER BY l.location_id NULLS FIRST",
+                        "SELECT l.location_id, l.statement_line_code, l.account_name FROM statement_line_mappings l"
+                                + " JOIN gl_account a ON a.gl_account_id = l.gl_account_id WHERE l.tenant_id = ? AND"
+                                + " a.account_code = '4100' AND l.statement_type = 'INCOME_STATEMENT' ORDER BY"
+                                + " l.location_id NULLS FIRST",
                         t2);
         assertThat(lines).hasSize(2);
         assertThat(lines.get(0))
@@ -1040,7 +1056,8 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
                 .containsEntry("location_id", "TULSA")
                 .containsEntry("statement_line_code", "TULSA_PARTS");
         assertThat(owner().queryForList(
-                                "SELECT row_to_json(l)::text FROM statement_line_mappings l WHERE tenant_id = ? AND mapping_id = ?",
+                                "SELECT row_to_json(l)::text FROM statement_line_mappings l WHERE tenant_id = ? AND"
+                                        + " mapping_id = ?",
                                 String.class,
                                 t2,
                                 overrideId))
@@ -1053,7 +1070,8 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
                                 t2))
                 .isEqualTo("CREATED");
         assertThat(owner().queryForObject(
-                                "SELECT outcome FROM accounting_template_entry WHERE tenant_id = ? AND entry_key = 'ACCOUNT:4100'",
+                                "SELECT outcome FROM accounting_template_entry WHERE tenant_id = ? AND entry_key ="
+                                        + " 'ACCOUNT:4100'",
                                 String.class,
                                 t2))
                 .isEqualTo("ADOPTED");
@@ -1061,7 +1079,8 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
 
     @Test
     @DisplayName(
-            "a sweep that arrives while an add-on choice is being committed applies the full template, not the stale generic one")
+            "a sweep that arrives while an add-on choice is being committed applies the full template, not the stale"
+                    + " generic one")
     void sweepWaitingBehindAnAddOnChoiceAppliesTheFullTemplate() throws Exception {
         UUID t2 = newTenant();
         AccountingTemplate snapshot = templateReader.snapshot();
@@ -1263,10 +1282,10 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
 
     private static String created(String eventId, UUID tenantId) {
         return """
-                {"eventId":"%s","eventType":"tenant.created","aggregateVersion":1,
-                 "payload":{"tenantId":"%s","slug":"acme","displayName":"Acme","status":"PENDING",
-                            "initialAdminEmail":"owner@acme.example"}}
-                """.formatted(eventId, tenantId);
+            {"eventId":"%s","eventType":"tenant.created","aggregateVersion":1,
+             "payload":{"tenantId":"%s","slug":"acme","displayName":"Acme","status":"PENDING",
+                        "initialAdminEmail":"owner@acme.example"}}
+            """.formatted(eventId, tenantId);
     }
 
     /** An {@code invoice.invoice.updated} fact for a 1,000.00 sale plus 80.00 tax, finalized. */

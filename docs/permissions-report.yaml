@@ -1,9 +1,9 @@
-generatedAt: "2026-10-08T01:31:40.997258+00:00"
+generatedAt: "2026-10-08T11:51:40.125850+00:00"
 root: "."
 summary:
   manifestCount: 24
-  permissionCount: 522
-  uniquePermissionCount: 522
+  permissionCount: 525
+  uniquePermissionCount: 525
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -12,12 +12,18 @@ manifests:
     domain: "accounting"
     serviceName: "pos-accounting"
     version: "1.0"
-    permissionCount: 59
+    permissionCount: 62
     permissions:
       - name: "accounting:analytics:view"
         description: "View Wave 2 read-only accounting analytics (invoiced-vs-collected, payment-lag cohorts)"
+      - name: "accounting:ap:approve"
+        description: "Send vendor bills for approval, correct match exceptions and select match candidates"
+      - name: "accounting:ap:approve_over_limit"
+        description: "Approve vendor bills over the clerk limit"
       - name: "accounting:ap:pay"
         description: "Process payments"
+      - name: "accounting:ap:reject"
+        description: "Reject vendor bills and void match exceptions or approved bills"
       - name: "accounting:ap:view"
         description: "View accounts payable"
       - name: "accounting:coa:create"
@@ -1226,8 +1232,26 @@ permissions:
     serviceName: "pos-accounting"
     module: "pos-accounting"
     source: "pos-accounting/src/main/resources/permissions.yaml"
+  - name: "accounting:ap:approve"
+    description: "Send vendor bills for approval, correct match exceptions and select match candidates"
+    domain: "accounting"
+    serviceName: "pos-accounting"
+    module: "pos-accounting"
+    source: "pos-accounting/src/main/resources/permissions.yaml"
+  - name: "accounting:ap:approve_over_limit"
+    description: "Approve vendor bills over the clerk limit"
+    domain: "accounting"
+    serviceName: "pos-accounting"
+    module: "pos-accounting"
+    source: "pos-accounting/src/main/resources/permissions.yaml"
   - name: "accounting:ap:pay"
     description: "Process payments"
+    domain: "accounting"
+    serviceName: "pos-accounting"
+    module: "pos-accounting"
+    source: "pos-accounting/src/main/resources/permissions.yaml"
+  - name: "accounting:ap:reject"
+    description: "Reject vendor bills and void match exceptions or approved bills"
     domain: "accounting"
     serviceName: "pos-accounting"
     module: "pos-accounting"

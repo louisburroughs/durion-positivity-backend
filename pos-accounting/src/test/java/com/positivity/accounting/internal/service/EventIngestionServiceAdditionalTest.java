@@ -520,6 +520,20 @@ class EventIngestionServiceAdditionalTest {
     }
 
     @Test
+    @DisplayName("LOW-8 (#2509 review): a retired type is refused, whatever its case; the bill posts at approval")
+    void validateEvent_RetiredTypeIsRefused() {
+        for (String retired : List.of("VENDOR_BILL_GL_POSTING", " vendor_bill_gl_posting ")) {
+            Map<String, Object> event = new HashMap<>();
+            event.put("eventType", retired);
+            event.put("payload", Map.of("amount", "100.00"));
+
+            assertThat(service.validateEvent(event))
+                    .singleElement()
+                    .satisfies(error -> assertThat(error).contains("is retired", "/approve"));
+        }
+    }
+
+    @Test
     @DisplayName("validateEvent should return error when eventType is missing")
     void validateEvent_MissingEventType() {
         Map<String, Object> event = new HashMap<>();

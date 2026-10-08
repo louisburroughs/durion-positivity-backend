@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -18,8 +19,10 @@ import ch.qos.logback.core.read.ListAppender;
 import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.entity.Vendor;
 import com.positivity.accounting.internal.entity.VendorBill;
+import com.positivity.accounting.internal.entity.VendorBillReissue;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
+import com.positivity.accounting.internal.repository.VendorBillReissueRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.accounting.internal.repository.VendorRepository;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -83,6 +86,12 @@ class SupplierInvoiceEventsListenerTest {
     private VendorRepository vendorRepository;
 
     @Mock
+    private VendorBillReissueRepository reissueRepository;
+
+    @Mock
+    private VendorBillLocks locks;
+
+    @Mock
     private KafkaFactIngestionRecorder ingestionRecorder;
 
     private SupplierInvoiceEventsListener listener;
@@ -100,7 +109,11 @@ class SupplierInvoiceEventsListenerTest {
                 ingestionRecorder,
                 // The real guard over the mocked repository: the listener's lookup is the rule's query.
                 new VendorBillDuplicateGuard(vendorBillRepository, noMeters),
+                reissueRepository,
+                locks,
                 mock(PlatformTransactionManager.class));
+        // The lock re-reads the bill as it is now; here it is unchanged.
+        lenient().when(locks.lock(any())).thenAnswer(inv -> inv.getArgument(0));
         when(processedEventRepository.existsById(any())).thenReturn(false);
         when(vendorBillRepository.findLiveDuplicate(any(), any(), any(), any(), any()))
                 .thenReturn(Optional.empty());
@@ -115,15 +128,30 @@ class SupplierInvoiceEventsListenerTest {
         return event(eventId, number, type, total, currency, "2026-08-14");
     }
 
+    /** An invoice whose totals add up (AW47): tax 48.00 and the net the rest of the gross. */
     private static String event(
             String eventId, String number, String type, String total, String currency, String invoiceDate) {
+        String net = new BigDecimal(total).subtract(new BigDecimal("48.00")).toPlainString();
+        return event(eventId, number, type, currency, invoiceDate, total, net, "48.00", "[]");
+    }
+
+    private static String event(
+            String eventId,
+            String number,
+            String type,
+            String currency,
+            String invoiceDate,
+            String gross,
+            String net,
+            String tax,
+            String lines) {
         return """
             {"eventId":"%s","eventType":"supplier.invoice.received","payload":{
               "vendorProfileId":"%s","supplierRef":"michelin-de","vendorInvoiceNumber":"%s",
               "invoiceDate":"%s","type":"%s","currency":"%s",
-              "totalNetAmount":240.00,"totalTaxAmount":48.00,"totalGrossAmount":%s,
-              "vendorOrderReference":"PO-778","occurredAt":"2026-08-16T08:00:00Z","lines":[]}}
-            """.formatted(eventId, PROFILE, number, invoiceDate, type, currency, total);
+              "totalNetAmount":%s,"totalTaxAmount":%s,"totalGrossAmount":%s,
+              "vendorOrderReference":"PO-778","occurredAt":"2026-08-16T08:00:00Z","lines":%s}}
+            """.formatted(eventId, PROFILE, number, invoiceDate, type, currency, net, tax, gross, lines);
     }
 
     /** The rule's window for the default invoice date, 2026-08-14. */
@@ -238,6 +266,90 @@ class SupplierInvoiceEventsListenerTest {
                         any(),
                         any(),
                         eq(new FactPostingOutcome.AlreadyPosted(null, null)));
+    }
+
+    @Test
+    @DisplayName("AW39 (#2509): a new EDI bill keeps the net and tax its document states")
+    void newBillKeepsTheStatedNetAndTax() {
+        listener.onSupplierEvent(event(EVENT_1, "INV-1", "INVOICE", "288.00"));
+
+        VendorBill created = captured();
+        assertThat(created.getTotalAmount()).isEqualByComparingTo("288.00");
+        assertThat(created.getNetAmount()).isEqualByComparingTo("240.00");
+        assertThat(created.getTaxAmount()).isEqualByComparingTo("48.00");
+    }
+
+    @Nested
+    @DisplayName("the vendor's own totals: gross vs net + tax (AW47)")
+    class Totals {
+
+        private VendorBill created(String gross, String net, String tax, String lines) {
+            listener.onSupplierEvent(event(EVENT_1, "INV-1", "INVOICE", "USD", "2026-08-14", gross, net, tax, lines));
+            return captured();
+        }
+
+        @Test
+        @DisplayName("AC(a): gross 1,085.00 / net 1,000.00 / tax 70.00 is created in MATCH_EXCEPTION, explained")
+        void apartBeyondTheToleranceIsAnException() {
+            VendorBill bill = created("1085.00", "1000.00", "70.00", "[]");
+
+            assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.MATCH_EXCEPTION);
+            assertThat(bill.getRejectionReason())
+                    .isEqualTo("The vendor's totals don't add up: net 1000.00 + tax 70.00 ≠ total 1085.00");
+            assertThat(bill.getTotalAmount()).isEqualByComparingTo("1085.00");
+            assertThat(bill.getStatedLineCount()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("AC(c): 0.01 apart on a one-line document waits for its receipt as usual")
+        void withinTheToleranceIsPending() {
+            assertThat(created("1070.01", "1000.00", "70.00", "[]").getStatus())
+                    .isEqualTo(VendorBillStatus.PENDING_RECEIPT_MATCH);
+        }
+
+        @Test
+        @DisplayName("No net stated: net = gross - tax; a net and no tax: tax = gross - net; neither: tax 0")
+        void missingAmountsAreDerived() {
+            VendorBill noNet = created("1070.00", "null", "70.00", "[]");
+            assertThat(noNet.getNetAmount()).isEqualByComparingTo("1000.00");
+            assertThat(noNet.getTaxAmount()).isEqualByComparingTo("70.00");
+            assertThat(noNet.getStatus()).isEqualTo(VendorBillStatus.PENDING_RECEIPT_MATCH);
+        }
+
+        @Test
+        @DisplayName(
+                "AW47 ruling (#2509 comment 6059252089): gross 1,085.00 and net 1,000.00 with no tax: the tax is 0,"
+                        + " the totals are checked, MATCH_EXCEPTION with a difference of 85.00")
+        void missingTaxIsZeroAndChecked() {
+            VendorBill noTax = created("1085.00", "1000.00", "null", "[]");
+
+            assertThat(noTax.getTaxAmount()).isEqualByComparingTo("0");
+            assertThat(noTax.getNetAmount()).isEqualByComparingTo("1000.00");
+            assertThat(noTax.getStatus()).isEqualTo(VendorBillStatus.MATCH_EXCEPTION);
+            assertThat(noTax.getRejectionReason())
+                    .isEqualTo("The vendor's totals don't add up: net 1000.00 + tax 0.00 ≠ total 1085.00");
+            assertThat(VendorBillTotals.of(noTax).orElseThrow().difference()).isEqualByComparingTo("85.00");
+        }
+
+        @Test
+        @DisplayName("Neither net nor tax stated: net = gross, tax 0")
+        void grossAlone() {
+            VendorBill gross = created("1070.00", "null", "null", "[]");
+            assertThat(gross.getNetAmount()).isEqualByComparingTo("1070.00");
+            assertThat(gross.getTaxAmount()).isEqualByComparingTo("0");
+            assertThat(gross.getStatus()).isEqualTo(VendorBillStatus.PENDING_RECEIPT_MATCH);
+        }
+    }
+
+    @Test
+    @DisplayName("AW39: a credit note's net and tax carry its sign, like its total")
+    void creditNoteNetAndTaxAreNegative() {
+        listener.onSupplierEvent(event(EVENT_1, "CN-1", "CREDIT_NOTE", "288.00"));
+
+        VendorBill created = captured();
+        assertThat(created.getTotalAmount()).isEqualByComparingTo("-288.00");
+        assertThat(created.getNetAmount()).isEqualByComparingTo("-240.00");
+        assertThat(created.getTaxAmount()).isEqualByComparingTo("-48.00");
     }
 
     @Test
@@ -443,6 +555,95 @@ class SupplierInvoiceEventsListenerTest {
         }
 
         @Test
+        @DisplayName("B-MAJ3: the original is locked and re-read first; one voided meanwhile is retried, never flagged")
+        void originalDecidedMeanwhileIsRetried() {
+            VendorBill found = held("100.00", VendorBillStatus.APPROVED);
+            liveOriginal("INV1", found);
+            when(locks.lock(found)).thenAnswer(inv -> {
+                found.setStatus(VendorBillStatus.VOIDED);
+                return found;
+            });
+
+            assertThatThrownBy(() -> listener.onSupplierEvent(event(EVENT_1, "inv-1", "INVOICE", "120.00")))
+                    .isInstanceOf(org.springframework.dao.ConcurrencyFailureException.class);
+            verify(reissueRepository, never()).save(any());
+            verify(processedEventRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("L5: a bill awaiting approval re-issued at another amount goes to MATCH_EXCEPTION without its"
+                + " submission, proposal or difference")
+        void reissueOfABillAwaitingApprovalClearsItsSubmission() {
+            VendorBill original = held("100.00", VendorBillStatus.AWAITING_APPROVAL);
+            original.setSubmittedAt(NOW);
+            original.setSubmittedBy("clerk.ana");
+            original.setSubmissionJustification("Checked with the vendor");
+            original.setProposedDebitClass(com.positivity.accounting.internal.enums.VendorBillDebitClass.GOODS);
+            original.setProposedExpenseMappingKey("EXPENSE_SHOP_SUPPLIES");
+            original.setDifferenceClass(com.positivity.accounting.internal.enums.VendorBillDifferenceClass.FREIGHT);
+            original.setDifferenceJustification("Freight on the invoice");
+            liveOriginal("INV1", original);
+
+            listener.onSupplierEvent(event(EVENT_1, "inv-1", "INVOICE", "120.00"));
+
+            assertThat(original.getStatus()).isEqualTo(VendorBillStatus.MATCH_EXCEPTION);
+            assertThat(original.getSubmittedAt()).isNull();
+            assertThat(original.getSubmittedBy()).isNull();
+            assertThat(original.getSubmissionJustification()).isNull();
+            assertThat(original.getProposedDebitClass()).isNull();
+            assertThat(original.getProposedExpenseMappingKey()).isNull();
+            assertThat(original.getDifferenceClass()).isNull();
+            assertThat(original.getDifferenceJustification()).isNull();
+        }
+
+        @Test
+        @DisplayName("AC14 (#2509): an APPROVED bill re-issued at another amount stays APPROVED with its approval, and"
+                + " one exception item linked to it records both amounts")
+        void reissueOfAnApprovedBillIsAnExceptionItem() {
+            VendorBill original = held("100.00", VendorBillStatus.APPROVED);
+            original.setApprovedBy("controller.cfo");
+            original.setApprovedAt(NOW);
+            original.setApprovalJustification("Checked against the delivery note");
+            liveOriginal("INV1", original);
+
+            listener.onSupplierEvent(event(EVENT_1, "inv-1", "INVOICE", "120.00"));
+
+            assertThat(original.getStatus()).isEqualTo(VendorBillStatus.APPROVED);
+            assertThat(original.getApprovedBy()).isEqualTo("controller.cfo");
+            assertThat(original.getApprovedAt()).isEqualTo(NOW);
+            assertThat(original.getApprovalJustification()).isEqualTo("Checked against the delivery note");
+            assertThat(original.getRejectionReason()).isNull();
+            assertThat(original.getTotalAmount()).isEqualByComparingTo("100.00");
+            verify(vendorBillRepository, never()).save(any());
+            verify(vendorBillRepository, never()).saveAndFlush(any());
+            ArgumentCaptor<VendorBillReissue> item = ArgumentCaptor.forClass(VendorBillReissue.class);
+            verify(reissueRepository).save(item.capture());
+            assertThat(item.getValue().getVendorBillId()).isEqualTo(ORIGINAL_ID);
+            assertThat(item.getValue().getIncomingBillNumber()).isEqualTo("inv-1");
+            assertThat(item.getValue().getIncomingBillDate()).isEqualTo(DAY.toLocalDate());
+            assertThat(item.getValue().getIncomingAmount()).isEqualByComparingTo("120.00");
+            assertThat(item.getValue().getIncomingCurrencyCode()).isEqualTo("USD");
+            assertThat(item.getValue().getHeldAmount()).isEqualByComparingTo("100.00");
+            assertThat(item.getValue().getHeldCurrencyCode()).isEqualTo("USD");
+            assertThat(item.getValue().getSourceEventId()).isEqualTo(UUID.fromString(EVENT_1));
+            assertThat(item.getValue().getCreatedAt())
+                    .as("ADR-0024: auditing stamps createdAt on insert (VendorBillDuplicateRulePostgresIT)")
+                    .isNull();
+        }
+
+        @Test
+        @DisplayName("AC14: a redelivered re-issue of an approved bill records no second exception item")
+        void redeliveredReissueOfAnApprovedBillRecordsOneItem() {
+            liveOriginal("INV1", held("100.00", VendorBillStatus.APPROVED));
+            when(reissueRepository.existsBySourceEventId(UUID.fromString(EVENT_1)))
+                    .thenReturn(true);
+
+            listener.onSupplierEvent(event(EVENT_1, "inv-1", "INVOICE", "120.00"));
+
+            verify(reissueRepository, never()).save(any());
+        }
+
+        @Test
         @DisplayName(
                 "criterion 10: when the rule answers that no live bill holds the number, the fact becomes a new bill")
         void factWithNoLiveOriginalBecomesANewBill() {
@@ -625,10 +826,9 @@ class SupplierInvoiceEventsListenerTest {
         }
 
         /**
-         * The held bill keeps its original currency and amount, and MATCH_EXCEPTION resolves by
-         * ACCEPT straight to APPROVED with no currency check (VendorBillServiceImpl
-         * #resolveMatchException). Moving it there on a currency change would let a EUR bill be
-         * approved as a ledger payable at par, so it stays held, with the change in its reason.
+         * The held bill keeps its original currency and amount. Moving it to MATCH_EXCEPTION on a currency
+         * change would put a EUR bill in the queue a person approves from (and approval posts it, AW37,
+         * AW43), so it stays held, with the change in its reason.
          */
         @Test
         @DisplayName("a held bill re-issued in yet another currency stays held and names both currencies")

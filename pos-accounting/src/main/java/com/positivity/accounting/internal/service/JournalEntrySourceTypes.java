@@ -49,6 +49,12 @@ public final class JournalEntrySourceTypes {
      */
     public static final String BANK_DEPOSIT = "BANK_DEPOSIT";
 
+    /**
+     * A vendor bill or credit note posted at its approval (CAP:550 S12, #2509; AW37); its void reverses the entry
+     * under the same source.
+     */
+    public static final String VENDOR_BILL = "VENDOR_BILL";
+
     public static final String INVOICE_REVENUE = "INVOICE_REVENUE";
     public static final String INVOICE_REVENUE_REVERSAL = "INVOICE_REVENUE_REVERSAL";
 

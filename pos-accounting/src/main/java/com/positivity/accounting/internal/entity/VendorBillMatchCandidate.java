@@ -15,12 +15,17 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -101,6 +106,40 @@ public class VendorBillMatchCandidate extends TenantScopedEntity {
      */
     @Column(name = "score_breakdown", length = 1000)
     private String scoreBreakdown;
+
+    /** Points for the amount criterion, of 40 (P3); null on candidates scored before #2509. */
+    @Column(name = "amount_points")
+    private Integer amountPoints;
+
+    /** Points for the products criterion, of 30 (P3). */
+    @Column(name = "product_points")
+    private Integer productPoints;
+
+    /** Points for the date criterion, of 20 (P3). */
+    @Column(name = "date_points")
+    private Integer datePoints;
+
+    /** Points for the purchase-order criterion, of 5 (P3). */
+    @Column(name = "purchase_order_points")
+    private Integer purchaseOrderPoints;
+
+    /** The invoice the candidate was scored against: its reference, dates, total and lines (#2509). */
+    @Column(name = "invoice_reference", length = 50)
+    private String invoiceReference;
+
+    @Column(name = "invoice_date")
+    private LocalDateTime invoiceDate;
+
+    @Column(name = "invoice_due_date")
+    private LocalDateTime invoiceDueDate;
+
+    @Column(name = "invoice_total_amount", precision = 19, scale = 4)
+    private BigDecimal invoiceTotalAmount;
+
+    /** The invoice's lines as billed: {@code productId}, {@code description}, {@code quantity}, {@code unitPrice}. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "invoice_lines")
+    private List<Map<String, Object>> invoiceLines;
 
     /** Whether this candidate set has been resolved (selected or dismissed). */
     @Column(name = "resolved", nullable = false)

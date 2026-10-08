@@ -102,10 +102,9 @@ class APPaymentServiceTest {
                 .thenReturn(List.of());
         // Default: allocationRepository.saveAll returns empty list
         when(allocationRepository.saveAll(any())).thenReturn(List.of());
-        // Default: billRepository.findByVendorIdAndStatus returns empty mutable list
-        // (service calls bills.sort() in-place; List.of() is immutable)
-        when(billRepository.findByVendorIdAndStatus(any(UUID.class), any(VendorBillStatus.class)))
-                .thenReturn(new java.util.ArrayList<>());
+        // Default: the locked APPROVED bills of the vendor are none (#2509 review, A3)
+        when(billRepository.lockByVendorIdAndStatus(any(UUID.class), any(VendorBillStatus.class)))
+                .thenReturn(List.of());
     }
 
     // ========================================

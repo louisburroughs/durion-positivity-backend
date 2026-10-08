@@ -10,6 +10,7 @@ import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -18,7 +19,8 @@ import lombok.NoArgsConstructor;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Vendor bill response DTO.
+ * Vendor bill response DTO: the bill, and for the review screen (#2509) its approval, rejection, match evidence,
+ * lines, checks, the caller's available actions and its posting.
  */
 @Data
 @Builder
@@ -115,19 +117,92 @@ public class VendorBillResponse {
     @JsonProperty("createdBy")
     private String createdBy;
 
-    @Nullable
+    @Schema(description = "Where the bill came from", example = "SUPPLIER_CONNECTION", requiredMode = NOT_REQUIRED)
+    @JsonProperty("channel")
+    private VendorBillReview.@Nullable Channel channel;
+
     @Schema(
-            description = "Approval justification (if status = APPROVED)",
-            example = "Approved by AP manager",
+            description = "The submission and, on an approved bill, the approval; null before the bill is sent",
             requiredMode = NOT_REQUIRED)
-    @JsonProperty("approvalJustification")
-    private String approvalJustification;
+    @JsonProperty("approval")
+    private VendorBillReview.@Nullable Approval approval;
+
+    @Schema(description = "Who rejected or voided the bill; only for REJECTED and VOIDED", requiredMode = NOT_REQUIRED)
+    @JsonProperty("rejection")
+    private VendorBillReview.@Nullable Rejection rejection;
 
     @Nullable
     @Schema(
-            description = "Rejection or exception reason (status REJECTED, MATCH_EXCEPTION or CURRENCY_HOLD)",
-            example = "Incorrect invoice amount",
+            description = "Why the bill is held: the MATCH_EXCEPTION or CURRENCY_HOLD explanation; null in any other"
+                    + " status",
+            example = "Quantity or price mismatch detected during three-way match",
             requiredMode = NOT_REQUIRED)
-    @JsonProperty("rejectionReason")
-    private String rejectionReason;
+    @JsonProperty("statusExplanation")
+    private String statusExplanation;
+
+    @Schema(description = "Total less allocated payments", example = "412.00", requiredMode = REQUIRED)
+    @NotNull
+    @JsonProperty("openAmount")
+    private BigDecimal openAmount;
+
+    @Schema(description = "The latest match evidence; null before any match", requiredMode = NOT_REQUIRED)
+    @JsonProperty("match")
+    private VendorBillReview.@Nullable Match match;
+
+    @Schema(
+            description = "Unresolved candidates of every ambiguous match naming this bill, each with its"
+                    + " invoiceEventId; pick one with the select command before sending or accepting the bill",
+            requiredMode = REQUIRED)
+    @NotNull
+    @JsonProperty("openCandidates")
+    private List<VendorBillReview.Candidate> openCandidates;
+
+    @Schema(
+            description = "Re-issues of this approved bill under its number, held as exception items",
+            requiredMode = REQUIRED)
+    @NotNull
+    @JsonProperty("reissues")
+    private List<VendorBillReview.Reissue> reissues;
+
+    @Nullable
+    @Schema(
+            description = "The net the vendor's document states (AW47); null on a bill without header totals",
+            example = "1000.00",
+            requiredMode = NOT_REQUIRED)
+    @JsonProperty("netAmount")
+    private BigDecimal netAmount;
+
+    @Nullable
+    @Schema(
+            description = "The tax the vendor's document states, never recalculated (AW39, AW47)",
+            example = "70.00",
+            requiredMode = NOT_REQUIRED)
+    @JsonProperty("taxAmount")
+    private BigDecimal taxAmount;
+
+    @Schema(
+            description = "Received lines with what the vendor billed; empty for a bill without lines",
+            requiredMode = REQUIRED)
+    @NotNull
+    @JsonProperty("lines")
+    private List<VendorBillReview.Line> lines;
+
+    @Schema(
+            description = "MATCHED_TO_DELIVERY, WITHIN_PRICE_TOLERANCE, TOTALS_ADD_UP and, on an EDI bill classified"
+                    + " GOODS, OPEN_DELIVERIES_FROM_VENDOR",
+            requiredMode = REQUIRED)
+    @NotNull
+    @JsonProperty("checks")
+    private List<VendorBillReview.Check> checks;
+
+    @Schema(
+            description = "The decisions valid for the bill's status that the caller holds a permission for (P5)",
+            requiredMode = REQUIRED)
+    @NotNull
+    @JsonProperty("availableActions")
+    private List<VendorBillReview.AvailableAction> availableActions;
+
+    @Schema(description = "The entry posted at approval; null until approved", requiredMode = NOT_REQUIRED)
+    @JsonProperty("posting")
+    private VendorBillReview.@Nullable Posting posting;
 }

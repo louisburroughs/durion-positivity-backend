@@ -2,8 +2,10 @@ package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
+import jakarta.persistence.LockModeType;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -11,6 +13,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -53,34 +56,34 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
      * allocations.
      */
     @Query(value = """
-                        SELECT vb
-                        FROM VendorBill vb
-                        WHERE vb.status = :status
-                                AND (
-                                                vb.totalAmount - COALESCE(
-                                                                (SELECT SUM(a.appliedAmount)
-                                                                 FROM APPaymentAllocation a
-                                                                 WHERE a.vendorBill.vendorBillId = vb.vendorBillId),
-                                                                0
-                                                )
-                                ) > :openAmountThreshold
-                        ORDER BY CASE WHEN vb.dueDate IS NULL THEN 1 ELSE 0 END ASC,
-                                 vb.dueDate ASC,
-                                 vb.billDate ASC,
-                                 vb.vendorBillId ASC
-                        """, countQuery = """
-                        SELECT COUNT(vb)
-                        FROM VendorBill vb
-                        WHERE vb.status = :status
-                                AND (
-                                                vb.totalAmount - COALESCE(
-                                                                (SELECT SUM(a.appliedAmount)
-                                                                 FROM APPaymentAllocation a
-                                                                 WHERE a.vendorBill.vendorBillId = vb.vendorBillId),
-                                                                0
-                                                )
-                                ) > :openAmountThreshold
-                        """)
+        SELECT vb
+        FROM VendorBill vb
+        WHERE vb.status = :status
+                AND (
+                                vb.totalAmount - COALESCE(
+                                                (SELECT SUM(a.appliedAmount)
+                                                 FROM APPaymentAllocation a
+                                                 WHERE a.vendorBill.vendorBillId = vb.vendorBillId),
+                                                0
+                                )
+                ) > :openAmountThreshold
+        ORDER BY CASE WHEN vb.dueDate IS NULL THEN 1 ELSE 0 END ASC,
+                 vb.dueDate ASC,
+                 vb.billDate ASC,
+                 vb.vendorBillId ASC
+        """, countQuery = """
+            SELECT COUNT(vb)
+            FROM VendorBill vb
+            WHERE vb.status = :status
+                    AND (
+                                    vb.totalAmount - COALESCE(
+                                                    (SELECT SUM(a.appliedAmount)
+                                                     FROM APPaymentAllocation a
+                                                     WHERE a.vendorBill.vendorBillId = vb.vendorBillId),
+                                                    0
+                                    )
+                    ) > :openAmountThreshold
+            """)
     Page<VendorBill> findByStatusAndOpenAmountGreaterThan(
             @Param("status") VendorBillStatus status,
             @Param("openAmountThreshold") BigDecimal openAmountThreshold,
@@ -101,36 +104,36 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
      * with pagination.
      */
     @Query(value = """
-                        SELECT vb
-                        FROM VendorBill vb
-                        WHERE vb.vendorId = :vendorId
-                                AND vb.status = :status
-                                AND (
-                                                vb.totalAmount - COALESCE(
-                                                                (SELECT SUM(a.appliedAmount)
-                                                                 FROM APPaymentAllocation a
-                                                                 WHERE a.vendorBill.vendorBillId = vb.vendorBillId),
-                                                                0
-                                                )
-                                ) > :openAmountThreshold
-                        ORDER BY CASE WHEN vb.dueDate IS NULL THEN 1 ELSE 0 END ASC,
-                                 vb.dueDate ASC,
-                                 vb.billDate ASC,
-                                 vb.vendorBillId ASC
-                        """, countQuery = """
-                        SELECT COUNT(vb)
-                        FROM VendorBill vb
-                        WHERE vb.vendorId = :vendorId
-                                AND vb.status = :status
-                                AND (
-                                                vb.totalAmount - COALESCE(
-                                                                (SELECT SUM(a.appliedAmount)
-                                                                 FROM APPaymentAllocation a
-                                                                 WHERE a.vendorBill.vendorBillId = vb.vendorBillId),
-                                                                0
-                                                )
-                                ) > :openAmountThreshold
-                        """)
+        SELECT vb
+        FROM VendorBill vb
+        WHERE vb.vendorId = :vendorId
+                AND vb.status = :status
+                AND (
+                                vb.totalAmount - COALESCE(
+                                                (SELECT SUM(a.appliedAmount)
+                                                 FROM APPaymentAllocation a
+                                                 WHERE a.vendorBill.vendorBillId = vb.vendorBillId),
+                                                0
+                                )
+                ) > :openAmountThreshold
+        ORDER BY CASE WHEN vb.dueDate IS NULL THEN 1 ELSE 0 END ASC,
+                 vb.dueDate ASC,
+                 vb.billDate ASC,
+                 vb.vendorBillId ASC
+        """, countQuery = """
+            SELECT COUNT(vb)
+            FROM VendorBill vb
+            WHERE vb.vendorId = :vendorId
+                    AND vb.status = :status
+                    AND (
+                                    vb.totalAmount - COALESCE(
+                                                    (SELECT SUM(a.appliedAmount)
+                                                     FROM APPaymentAllocation a
+                                                     WHERE a.vendorBill.vendorBillId = vb.vendorBillId),
+                                                    0
+                                    )
+                    ) > :openAmountThreshold
+            """)
     Page<VendorBill> findByVendorIdAndStatusAndOpenAmountGreaterThan(
             @Param("vendorId") UUID vendorId,
             @Param("status") VendorBillStatus status,
@@ -197,17 +200,17 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
      * @return the live original, if there is one
      */
     @Query("""
-            SELECT vb
-            FROM VendorBill vb
-            WHERE vb.vendorId = :vendorId
-              AND vb.billNumberKey = :billNumberKey
-              AND vb.billDate >= :dayStart
-              AND vb.billDate < :nextDayStart
-              AND vb.status NOT IN (
-                    com.positivity.accounting.internal.enums.VendorBillStatus.VOIDED,
-                    com.positivity.accounting.internal.enums.VendorBillStatus.REJECTED)
-              AND (:excludeBillId IS NULL OR vb.vendorBillId <> :excludeBillId)
-            """)
+        SELECT vb
+        FROM VendorBill vb
+        WHERE vb.vendorId = :vendorId
+          AND vb.billNumberKey = :billNumberKey
+          AND vb.billDate >= :dayStart
+          AND vb.billDate < :nextDayStart
+          AND vb.status NOT IN (
+                com.positivity.accounting.internal.enums.VendorBillStatus.VOIDED,
+                com.positivity.accounting.internal.enums.VendorBillStatus.REJECTED)
+          AND (:excludeBillId IS NULL OR vb.vendorBillId <> :excludeBillId)
+        """)
     Optional<VendorBill> findLiveDuplicate(
             @Param("vendorId") UUID vendorId,
             @Param("billNumberKey") String billNumberKey,
@@ -218,17 +221,18 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
     /**
      * Find unpaid bills (status = APPROVED or PENDING_REVIEW) for a vendor.
      */
-    @Query("SELECT vb FROM VendorBill vb " + "WHERE vb.vendorId = :vendorId "
-            + "AND vb.status IN (com.positivity.accounting.internal.enums.VendorBillStatus.APPROVED, com.positivity.accounting.internal.enums.VendorBillStatus.PENDING_RECEIPT_MATCH) "
-            + "ORDER BY vb.dueDate ASC")
+    @Query("SELECT vb FROM VendorBill vb WHERE vb.vendorId = :vendorId AND vb.status IN"
+            + " (com.positivity.accounting.internal.enums.VendorBillStatus.APPROVED,"
+            + " com.positivity.accounting.internal.enums.VendorBillStatus.PENDING_RECEIPT_MATCH) ORDER BY"
+            + " vb.dueDate ASC")
     List<VendorBill> findUnpaidBillsForVendor(UUID vendorId);
 
     /**
      * Get total amount owed to a vendor (APPROVED or PENDING_REVIEW status).
      */
-    @Query(
-            "SELECT COALESCE(SUM(vb.totalAmount), 0) FROM VendorBill vb " + "WHERE vb.vendorId = :vendorId "
-                    + "AND vb.status IN (com.positivity.accounting.internal.enums.VendorBillStatus.APPROVED, com.positivity.accounting.internal.enums.VendorBillStatus.PENDING_RECEIPT_MATCH)")
+    @Query("SELECT COALESCE(SUM(vb.totalAmount), 0) FROM VendorBill vb WHERE vb.vendorId = :vendorId AND vb.status IN"
+            + " (com.positivity.accounting.internal.enums.VendorBillStatus.APPROVED,"
+            + " com.positivity.accounting.internal.enums.VendorBillStatus.PENDING_RECEIPT_MATCH)")
     BigDecimal getTotalOwedToVendor(UUID vendorId);
 
     /**
@@ -247,4 +251,78 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
      * @return Optional containing the bill if found
      */
     Optional<VendorBill> findByOriginEventId(UUID originEventId);
+
+    /**
+     * The bill under a row lock for the length of the transaction (#2509; the {@code ReconciliationSupport.lock}
+     * precedent): every transition takes it, so of two concurrent decisions one wins and the other, re-reading the
+     * status, is refused.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT vb FROM VendorBill vb WHERE vb.vendorBillId = :billId")
+    Optional<VendorBill> lockById(@Param("billId") UUID billId);
+
+    /**
+     * The bills of {@code billIds} under row locks taken in id order (#2509 review, A3): a payment allocating to
+     * several bills locks them all before it reads their status, in the one order every such payment uses.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT vb FROM VendorBill vb WHERE vb.vendorBillId IN :billIds ORDER BY vb.vendorBillId")
+    List<VendorBill> lockByVendorBillIdIn(@Param("billIds") Collection<UUID> billIds);
+
+    /**
+     * A vendor's bills in {@code status} under row locks taken in id order (#2509 review, A3). The status is
+     * evaluated on the locked row, so a bill voided meanwhile is not returned.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT vb FROM VendorBill vb
+        WHERE vb.vendorId = :vendorId AND vb.status = :status
+        ORDER BY vb.vendorBillId
+        """)
+    List<VendorBill> lockByVendorIdAndStatus(
+            @Param("vendorId") UUID vendorId, @Param("status") VendorBillStatus status);
+
+    /**
+     * A vendor's bills of one origin in any of {@code statuses}, oldest first (AW45: the goods-receipt bills still open
+     * when its EDI bill is read).
+     */
+    List<VendorBill> findByVendorIdAndOriginEventTypeAndStatusInOrderByCreatedAtAscVendorBillIdAsc(
+            UUID vendorId, String originEventType, Collection<VendorBillStatus> statuses);
+
+    // ===== Stage reads (#2509; SPEC-accounting-workspace §5.2): no due-date window =====
+
+    /** Bills in any of {@code statuses}, paged; the caller sets the order. */
+    Page<VendorBill> findByStatusIn(Collection<VendorBillStatus> statuses, Pageable pageable);
+
+    long countByStatusIn(Collection<VendorBillStatus> statuses);
+
+    /** {@code PAY}: approved bills with an open amount above zero. */
+    @Query("""
+        SELECT COUNT(vb)
+        FROM VendorBill vb
+        WHERE vb.status = com.positivity.accounting.internal.enums.VendorBillStatus.APPROVED
+          AND vb.totalAmount - COALESCE(
+                (SELECT SUM(a.appliedAmount) FROM APPaymentAllocation a
+                 WHERE a.vendorBill.vendorBillId = vb.vendorBillId), 0) > 0
+        """)
+    long countApprovedWithOpenAmount();
+
+    /**
+     * {@code DONE}: approved bills paid in full whose last allocation's payment is dated in {@code [from, to)}. The
+     * set is one month's paid bills; the service orders it newest paid first.
+     */
+    @Query("""
+        SELECT vb
+        FROM VendorBill vb
+        WHERE vb.status = com.positivity.accounting.internal.enums.VendorBillStatus.APPROVED
+          AND vb.totalAmount - COALESCE(
+                (SELECT SUM(a.appliedAmount) FROM APPaymentAllocation a
+                 WHERE a.vendorBill.vendorBillId = vb.vendorBillId), 0) <= 0
+          AND (SELECT MAX(p.payment.paymentDate) FROM APPaymentAllocation p
+               WHERE p.vendorBill.vendorBillId = vb.vendorBillId) >= :from
+          AND (SELECT MAX(p.payment.paymentDate) FROM APPaymentAllocation p
+               WHERE p.vendorBill.vendorBillId = vb.vendorBillId) < :to
+        """)
+    List<VendorBill> findApprovedPaidInFullWithLastPaymentBetween(
+            @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 }

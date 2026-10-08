@@ -41,8 +41,8 @@ public interface APPaymentAllocationRepository extends JpaRepository<APPaymentAl
      * @param vendorBillId UUID of the vendor bill
      * @return Sum of all allocations, or 0 if no allocations exist
      */
-    @Query(
-            "SELECT COALESCE(SUM(a.appliedAmount), 0) FROM APPaymentAllocation a WHERE a.vendorBill.vendorBillId = :vendorBillId")
+    @Query("SELECT COALESCE(SUM(a.appliedAmount), 0) FROM APPaymentAllocation a WHERE a.vendorBill.vendorBillId ="
+            + " :vendorBillId")
     BigDecimal sumAllocatedAmountByVendorBillId(@Param("vendorBillId") UUID vendorBillId);
 
     /**
@@ -54,11 +54,11 @@ public interface APPaymentAllocationRepository extends JpaRepository<APPaymentAl
      * @return one row per bill that has at least one allocation
      */
     @Query("""
-            SELECT a.vendorBill.vendorBillId AS vendorBillId, COALESCE(SUM(a.appliedAmount), 0) AS allocated
-            FROM APPaymentAllocation a
-            WHERE a.vendorBill.vendorBillId IN :vendorBillIds
-            GROUP BY a.vendorBill.vendorBillId
-            """)
+        SELECT a.vendorBill.vendorBillId AS vendorBillId, COALESCE(SUM(a.appliedAmount), 0) AS allocated
+        FROM APPaymentAllocation a
+        WHERE a.vendorBill.vendorBillId IN :vendorBillIds
+        GROUP BY a.vendorBill.vendorBillId
+        """)
     List<VendorBillAllocationSum> sumAllocatedAmountByVendorBillIdIn(
             @Param("vendorBillIds") Collection<UUID> vendorBillIds);
 
@@ -67,5 +67,25 @@ public interface APPaymentAllocationRepository extends JpaRepository<APPaymentAl
         UUID getVendorBillId();
 
         BigDecimal getAllocated();
+    }
+
+    /** Whether anything is allocated to the bill: an approved bill with any allocation is not voidable (AW42). */
+    boolean existsByVendorBill_VendorBillId(UUID vendorBillId);
+
+    /** The date of the last payment allocated to each bill that has one (#2509, the DONE stage's order). */
+    @Query("""
+        SELECT a.vendorBill.vendorBillId AS vendorBillId, MAX(a.payment.paymentDate) AS lastPaymentDate
+        FROM APPaymentAllocation a
+        WHERE a.vendorBill.vendorBillId IN :vendorBillIds
+        GROUP BY a.vendorBill.vendorBillId
+        """)
+    List<VendorBillLastPayment> findLastPaymentDateByVendorBillIdIn(
+            @Param("vendorBillIds") Collection<UUID> vendorBillIds);
+
+    /** Projection for {@link #findLastPaymentDateByVendorBillIdIn(Collection)}. */
+    interface VendorBillLastPayment {
+        UUID getVendorBillId();
+
+        java.time.LocalDateTime getLastPaymentDate();
     }
 }

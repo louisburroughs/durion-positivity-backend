@@ -16,7 +16,9 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 156 event types (includes +4 from bank deposits of drawer cash (CAP:550 S18, Issue #2514):
+     * Total: 161 event types (includes +6 from the vendor-bill approval lifecycle and -1 for the retired
+     * VENDOR_BILL_GL_POSTING (CAP:550 S12, Issue #2509): ACCOUNTING_VENDOR_BILL_SUBMIT, _APPROVE, _REJECT, _VOID,
+     * _STAGES_VIEW, _STAGE_LIST, +4 from bank deposits of drawer cash (CAP:550 S18, Issue #2514):
      * ACCOUNTING_UNDEPOSITED_SESSIONS_VIEW, ACCOUNTING_DEPOSIT_CREATE, ACCOUNTING_DEPOSIT_VIEW,
      * ACCOUNTING_DEPOSIT_REVERSE, +1 from the bank opening balance (CAP:550, Issue #2572):
      * ACCOUNTING_BANK_OPENING_BALANCE_ESTABLISH, +1 from the unpaid walk-in sales read (CAP:550 S11, Issue #2508):
@@ -287,7 +289,8 @@ public final class EventTypes {
                 // FinancialReportingController sales-tax liability - 1 event (parity-T8, Issue #966)
                 EventTypeRegistration.search(
                                 "REPORT_TAX_LIABILITY_GENERATE",
-                                "Generate Sales-Tax Liability report (per-jurisdiction taxable/exempt base, net tax, GL drift)")
+                                "Generate Sales-Tax Liability report (per-jurisdiction taxable/exempt base, net tax,"
+                                        + " GL drift)")
                         .build(),
 
                 // TaxLiabilitySnapshotController - 4 events (Issue #998 Phase-2 item 2)
@@ -324,7 +327,7 @@ public final class EventTypes {
                                 "Dry-run mapping/rule resolution for a hypothetical event (no persistence)")
                         .build(),
 
-                // VendorBillService - 6 events (CAP-053 Issue #130)
+                // VendorBillService - 8 events (CAP-053 Issue #130; VENDOR_BILL_GL_POSTING retired by #2509)
                 EventTypeRegistration.write(
                                 "ACCOUNTING_VENDOR_BILL_CREATE",
                                 "Create vendor bill from goods received event (Receipt Accrual)")
@@ -338,9 +341,6 @@ public final class EventTypes {
                         .build(),
                 EventTypeRegistration.fastRead("ACCOUNTING_VENDOR_BILL_GET", "Get vendor bill details by ID")
                         .build(),
-                EventTypeRegistration.write(
-                                "VENDOR_BILL_GL_POSTING", "Post vendor bill to GL (Dr Inventory/Expense, Cr AP)")
-                        .build(),
                 EventTypeRegistration.fastRead(
                                 "ACCOUNTING_VENDOR_BILL_GET_BY_EVENT",
                                 "Get vendor bill by origin event ID (idempotency check)")
@@ -351,7 +351,26 @@ public final class EventTypes {
                         .build(),
                 EventTypeRegistration.approval(
                                 "ACCOUNTING_VENDOR_BILL_MATCH_CANDIDATE_SELECT",
-                                "Select match candidate to approve vendor bill from ambiguous match")
+                                "Select a match candidate of an ambiguous match; the bill goes to approval")
+                        .build(),
+                // Vendor-bill approval lifecycle - 6 events (CAP:550 S12, Issue #2509)
+                EventTypeRegistration.approval("ACCOUNTING_VENDOR_BILL_SUBMIT", "Send a vendor bill for approval")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "ACCOUNTING_VENDOR_BILL_APPROVE", "Approve a vendor bill; the approval posts it")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "ACCOUNTING_VENDOR_BILL_REJECT", "Reject a vendor bill awaiting approval")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "ACCOUNTING_VENDOR_BILL_VOID",
+                                "Void an approved vendor bill with nothing allocated; reverses its entry")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_VENDOR_BILL_STAGES_VIEW", "Count vendor bills in each Bills to pay stage")
+                        .build(),
+                EventTypeRegistration.search(
+                                "ACCOUNTING_VENDOR_BILL_STAGE_LIST", "List the vendor bills of one Bills to pay stage")
                         .build(),
                 EventTypeRegistration.search(
                                 "ACCOUNTING_VENDOR_BILL_LIST_VIEW",

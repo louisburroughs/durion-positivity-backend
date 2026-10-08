@@ -66,29 +66,54 @@ public class BillMatchResult {
                 example = "amount=40, vendor=30, date=17",
                 requiredMode = REQUIRED)
         String scoreBreakdown;
+
+        /** Points for the amount criterion, of 40 (P3, #2509). */
+        @Schema(description = "Points for the amount criterion, of 40", example = "40", requiredMode = REQUIRED)
+        int amountPoints;
+
+        /** Points for the products criterion, of 30. */
+        @Schema(description = "Points for the products criterion, of 30", example = "30", requiredMode = REQUIRED)
+        int productPoints;
+
+        /** Points for the date criterion, of 20. */
+        @Schema(description = "Points for the date criterion, of 20", example = "20", requiredMode = REQUIRED)
+        int datePoints;
+
+        /** Points for the purchase-order criterion, of 5. */
+        @Schema(description = "Points for the purchase-order criterion, of 5", example = "5", requiredMode = REQUIRED)
+        int purchaseOrderPoints;
     }
+
+    /** The best match with its points (null if NO_MATCH or AMBIGUOUS). */
+    @Nullable
+    @Schema(
+            description = "The best match with its points (single-candidate outcomes only)",
+            requiredMode = NOT_REQUIRED)
+    ScoredBill bestScored;
 
     /**
      * Create a high confidence match result.
      */
-    public static BillMatchResult highConfidence(VendorBill bill, int score, String details) {
+    public static BillMatchResult highConfidence(ScoredBill best) {
         return BillMatchResult.builder()
-                .bestMatch(bill)
+                .bestMatch(best.getBill())
+                .bestScored(best)
                 .confidence(MatchConfidence.HIGH_CONFIDENCE)
-                .bestScore(score)
-                .matchingDetails(details)
+                .bestScore(best.getTotalScore())
+                .matchingDetails(best.getScoreBreakdown())
                 .build();
     }
 
     /**
      * Create a medium confidence match result.
      */
-    public static BillMatchResult mediumConfidence(VendorBill bill, int score, String details) {
+    public static BillMatchResult mediumConfidence(ScoredBill best) {
         return BillMatchResult.builder()
-                .bestMatch(bill)
+                .bestMatch(best.getBill())
+                .bestScored(best)
                 .confidence(MatchConfidence.MEDIUM_CONFIDENCE)
-                .bestScore(score)
-                .matchingDetails(details)
+                .bestScore(best.getTotalScore())
+                .matchingDetails(best.getScoreBreakdown())
                 .build();
     }
 

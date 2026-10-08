@@ -153,19 +153,24 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
      * S35, #2524). Settled ({@code PAID}), voided, rejected and currency-held ({@code CURRENCY_HOLD},
      * not a ledger-currency payable, #2309) bills stay out.
      */
-    private static final Set<VendorBillStatus> OPEN_PAYABLE_STATUSES =
-            Set.of(VendorBillStatus.PENDING_RECEIPT_MATCH, VendorBillStatus.MATCH_EXCEPTION, VendorBillStatus.APPROVED);
+    private static final Set<VendorBillStatus> OPEN_PAYABLE_STATUSES = Set.of(
+            VendorBillStatus.PENDING_RECEIPT_MATCH,
+            VendorBillStatus.MATCH_EXCEPTION,
+            VendorBillStatus.AWAITING_APPROVAL,
+            VendorBillStatus.APPROVED);
 
     /** The one status whose open bills are aged. */
     private static final Set<VendorBillStatus> APPROVED_PAYABLE_STATUSES = Set.of(VendorBillStatus.APPROVED);
 
     /**
-     * Statuses of open bills not yet approved, reported beside the buckets and never aged (AW11). S12
-     * (#2509) adds {@code AWAITING_APPROVAL} here. A bill in any other status is neither aged nor
-     * counted as unapproved.
+     * Statuses of open bills not yet approved, reported beside the buckets and never aged (AW11), the bills
+     * awaiting approval included (#2509). A bill in any other status is neither aged nor counted as
+     * unapproved.
      */
-    private static final Set<VendorBillStatus> UNAPPROVED_PAYABLE_STATUSES =
-            Set.of(VendorBillStatus.PENDING_RECEIPT_MATCH, VendorBillStatus.MATCH_EXCEPTION);
+    private static final Set<VendorBillStatus> UNAPPROVED_PAYABLE_STATUSES = Set.of(
+            VendorBillStatus.PENDING_RECEIPT_MATCH,
+            VendorBillStatus.MATCH_EXCEPTION,
+            VendorBillStatus.AWAITING_APPROVAL);
 
     /**
      * Chart-of-accounts code of the single Sales-Tax Payable account (D-4: one GL
@@ -405,7 +410,8 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         List<EntryNumberGapCheck> entryNumberGaps = rows.isEmpty() ? List.of() : checkEntryNumberGaps(asOf);
 
         log.info(
-                "Trial balance generated as of {}: accounts={}, totalDebit={}, totalCredit={}, balanced={}, gapScopes={}",
+                "Trial balance generated as of {}: accounts={}, totalDebit={}, totalCredit={}, balanced={},"
+                        + " gapScopes={}",
                 asOf,
                 rows.size(),
                 totalDebit,
@@ -938,7 +944,8 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
                 reconcileAgainstTaxPayable(totalNetTax, unattributedCredits, startDateTime, endDateTime);
 
         log.info(
-                "Sales-tax liability generated for {}..{}: jurisdictions={}, gross={}, credits={}, netTax={}, glDrift={}",
+                "Sales-tax liability generated for {}..{}: jurisdictions={}, gross={}, credits={}, netTax={},"
+                        + " glDrift={}",
                 startDate,
                 endDate,
                 rows.size(),

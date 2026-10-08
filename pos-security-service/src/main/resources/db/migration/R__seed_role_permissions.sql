@@ -142,10 +142,11 @@ SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', 
 --   accounting-management role -- GL configuration, journal entries, chart of
 --   accounts, the close cycle, reconciliation, AP and exports -- and holds the
 --   accounting-management codes ACCOUNT_MANAGER used to hold, revoked from
---   ACCOUNT_MANAGER by V25 in the same change. accounting:ap:approve,
---   accounting:ap:reject and the accounting:mapping:* family are retired
---   (superseded by accounting:ap:pay and the gl-mapping/mapping-key/
---   default-mapping families, §3) and are not granted to any role.
+--   ACCOUNT_MANAGER by V25 in the same change. The accounting:mapping:* family is
+--   retired (superseded by the gl-mapping/mapping-key/default-mapping families,
+--   §3) and is not granted to any role. accounting:ap:approve and
+--   accounting:ap:reject were retired with it and are reinstated by CAP:550 S12
+--   (#2509, below): the vendor-bill approval lifecycle enforces them.
 -- * workorder:start / workorder:workorder:start split-brain (#1499/#1512, §2
 --   finding 1 / §7 task 2 of durion/domains/security/rbac-permission-role-audit-2026-08.md): the
 --   start endpoint enforced workorder:start while the detail-response
@@ -356,6 +357,13 @@ SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', 
 --     accounting:deposit:create   -> ADMIN, CONTROLLER, ACCOUNTING_CLERK (reads the undeposited sessions and
 --                                    records the deposit)
 --     accounting:deposit:reverse  -> ADMIN, CONTROLLER (a wrong deposit is reversed and recorded again)
+-- * CAP:550 S12 (#2509, SPEC-accounting-workspace §4.3, AW4/AW5, Security sign-off OI-5 2026-10-05, AW31): the
+--   vendor-bill approval lifecycle. accounting:ap:approve (262) and accounting:ap:reject (263) are reinstated and
+--   enforced; accounting:ap:approve_over_limit is new (bit 558).
+--     accounting:ap:approve             -> ACCOUNTING_CLERK, ADMIN, CONTROLLER, GENERAL_MANAGER
+--     accounting:ap:reject              -> ACCOUNTING_CLERK, ADMIN, CONTROLLER, GENERAL_MANAGER
+--     accounting:ap:approve_over_limit  -> ADMIN, CONTROLLER, GENERAL_MANAGER (until S13's clerk limit, every bill
+--                                          is over it, so clerks send bills for approval and never approve)
 --
 -- IDEMPOTENCY
 -- Every statement below is ON CONFLICT DO NOTHING, and role/permission ids are
@@ -399,6 +407,7 @@ SELECT gen_random_uuid(), c.name, c.name, c.domain, c.resource, c.action,
 FROM (VALUES
     ('accounting:analytics:view', 'accounting', 'analytics', 'view', 496),
     ('accounting:ap:approve', 'accounting', 'ap', 'approve', 262),
+    ('accounting:ap:approve_over_limit', 'accounting', 'ap', 'approve_over_limit', 558),
     ('accounting:ap:pay', 'accounting', 'ap', 'pay', 4),
     ('accounting:ap:reject', 'accounting', 'ap', 'reject', 263),
     ('accounting:ap:view', 'accounting', 'ap', 'view', 3),
@@ -944,6 +953,8 @@ ON CONFLICT DO NOTHING;
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id
 FROM (VALUES
+    ('ACCOUNTING_CLERK', 'accounting:ap:approve'),
+    ('ACCOUNTING_CLERK', 'accounting:ap:reject'),
     ('ACCOUNTING_CLERK', 'accounting:ap:view'),
     ('ACCOUNTING_CLERK', 'accounting:coa:view'),
     ('ACCOUNTING_CLERK', 'accounting:customer-credit:view'),
@@ -974,7 +985,10 @@ FROM (VALUES
     ('ACCOUNTING_CLERK', 'vehicle-inventory:registry:view'),
     ('ACCOUNTING_CLERK', 'workorder:workorder:view'),
     ('ADMIN', 'accounting:analytics:view'),
+    ('ADMIN', 'accounting:ap:approve'),
+    ('ADMIN', 'accounting:ap:approve_over_limit'),
     ('ADMIN', 'accounting:ap:pay'),
+    ('ADMIN', 'accounting:ap:reject'),
     ('ADMIN', 'accounting:ap:view'),
     ('ADMIN', 'accounting:coa:create'),
     ('ADMIN', 'accounting:coa:deactivate'),
@@ -1448,7 +1462,10 @@ FROM (VALUES
     ('ADMIN', 'workorder:workorder:reopen_completed'),
     ('ADMIN', 'workorder:workorder:start'),
     ('ADMIN', 'workorder:workorder:view'),
+    ('CONTROLLER', 'accounting:ap:approve'),
+    ('CONTROLLER', 'accounting:ap:approve_over_limit'),
     ('CONTROLLER', 'accounting:ap:pay'),
+    ('CONTROLLER', 'accounting:ap:reject'),
     ('CONTROLLER', 'accounting:ap:view'),
     ('CONTROLLER', 'accounting:coa:create'),
     ('CONTROLLER', 'accounting:coa:deactivate'),
@@ -1533,7 +1550,10 @@ FROM (VALUES
     ('DISPATCHER', 'workorder:position:assign'),
     ('DISPATCHER', 'workorder:workorder:assign-technician'),
     ('DISPATCHER', 'workorder:workorder:view'),
+    ('GENERAL_MANAGER', 'accounting:ap:approve'),
+    ('GENERAL_MANAGER', 'accounting:ap:approve_over_limit'),
     ('GENERAL_MANAGER', 'accounting:ap:pay'),
+    ('GENERAL_MANAGER', 'accounting:ap:reject'),
     ('GENERAL_MANAGER', 'accounting:ap:view'),
     ('GENERAL_MANAGER', 'accounting:customer-credit:refund'),
     ('GENERAL_MANAGER', 'accounting:payment:apply'),
@@ -1873,7 +1893,10 @@ BEGIN
       INTO missing_permissions
       FROM (VALUES
         ('accounting:analytics:view'),
+        ('accounting:ap:approve'),
+        ('accounting:ap:approve_over_limit'),
         ('accounting:ap:pay'),
+        ('accounting:ap:reject'),
         ('accounting:ap:view'),
         ('accounting:coa:create'),
         ('accounting:coa:deactivate'),

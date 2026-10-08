@@ -32,6 +32,8 @@ import org.junit.jupiter.api.Test;
 @DisplayName("PermissionCode catalog contract (PERM-001)")
 class PermissionCodeTest {
 
+    // 559 / 102: catalog v102 added accounting:ap:approve_over_limit (558, CAP:550 S12 #2509 — vendor-bill approval
+    // over the clerk limit, AW4-AW5, Security sign-off AW31), on top of v101; it also reinstated 262 and 263.
     // 558 / 101: catalog v101 added accounting:deposit:create and accounting:deposit:reverse (556-557, CAP:550 S18
     // #2514 — bank deposits of drawer cash, AW10, Security sign-off OI-5/AW31), on top of v100.
     // 556 / 100: catalog v100 added order:session_policy:manage and order:session:approve_cash_movement (554-555,
@@ -78,8 +80,8 @@ class PermissionCodeTest {
     // people:employee_pii:view (519), v82's crm:fact:replay (518), v81's people:self:view (517)
     // and v80's catalog:service:ingest (516). Both numbers move together by design: the version
     // bump is what tells a running gateway its cached catalog is stale.
-    private static final int EXPECTED_PERMISSION_COUNT = 558;
-    private static final int EXPECTED_CATALOG_VERSION = 101;
+    private static final int EXPECTED_PERMISSION_COUNT = 559;
+    private static final int EXPECTED_CATALOG_VERSION = 102;
 
     // -------------------------------------------------------------------------
     // AC-1: Catalog size — EXPECTED_PERMISSION_COUNT entries

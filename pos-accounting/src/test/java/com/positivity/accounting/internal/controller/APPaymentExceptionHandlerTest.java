@@ -11,7 +11,6 @@ import com.positivity.accounting.internal.exception.InvalidBillAllocationExcepti
 import com.positivity.accounting.internal.exception.PaymentGatewayException;
 import com.positivity.accounting.internal.exception.UnsupportedSortPropertyException;
 import com.positivity.accounting.internal.exception.VendorBillMatchNotFoundException;
-import com.positivity.accounting.internal.exception.VendorBillOperatorActionException;
 import com.positivity.shared.error.ApiError;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolation;
@@ -90,9 +89,6 @@ class APPaymentExceptionHandlerTest {
                     Named.of("handleInvalidBillAllocation", (HandlerInvocation)
                             request -> handler.handleInvalidBillAllocation(
                                     new InvalidBillAllocationException("allocation exceeds gross amount"), request)),
-                    Named.of("handleVendorBillOperatorAction", (HandlerInvocation)
-                            request -> handler.handleVendorBillOperatorAction(
-                                    new VendorBillOperatorActionException("already resolved"), request)),
                     Named.of("handleVendorBillMatchNotFound", (HandlerInvocation)
                             request -> handler.handleVendorBillMatchNotFound(
                                     new VendorBillMatchNotFoundException("no matching bill"), request)),

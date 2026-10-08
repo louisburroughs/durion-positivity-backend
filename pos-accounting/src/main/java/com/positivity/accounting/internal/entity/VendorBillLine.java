@@ -71,6 +71,28 @@ public class VendorBillLine extends TenantScopedEntity {
     @Column(name = "is_inventory_item", nullable = false)
     private boolean isInventoryItem = true;
 
+    /**
+     * Quantity the vendor billed for this line (AW39), written by a match or a candidate selection: 0 for a received
+     * line the invoice did not bill. Null while the bill has not been matched, when the received quantity is what is
+     * billed.
+     */
+    @Column(name = "billed_quantity", precision = 19, scale = 4)
+    private BigDecimal billedQuantity;
+
+    /** Unit price the vendor billed for this line (AW39); null while the bill has not been matched. */
+    @Column(name = "billed_unit_price", precision = 19, scale = 4)
+    private BigDecimal billedUnitPrice;
+
+    /** The billed quantity: the received quantity while the bill has not been matched. */
+    public BigDecimal effectiveBilledQuantity() {
+        return billedQuantity != null ? billedQuantity : quantity;
+    }
+
+    /** The billed unit price: the received price while the bill has not been matched. */
+    public BigDecimal effectiveBilledUnitPrice() {
+        return billedUnitPrice != null ? billedUnitPrice : unitPrice;
+    }
+
     @Transient
     public UUID getVendorBillId() {
         return vendorBill != null ? vendorBill.getVendorBillId() : null;

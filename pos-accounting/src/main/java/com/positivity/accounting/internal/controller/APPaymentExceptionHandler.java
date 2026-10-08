@@ -7,7 +7,6 @@ import com.positivity.accounting.internal.exception.InvalidBillAllocationExcepti
 import com.positivity.accounting.internal.exception.PaymentGatewayException;
 import com.positivity.accounting.internal.exception.UnsupportedSortPropertyException;
 import com.positivity.accounting.internal.exception.VendorBillMatchNotFoundException;
-import com.positivity.accounting.internal.exception.VendorBillOperatorActionException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.servlet.http.HttpServletRequest;
@@ -36,7 +35,6 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * - UnsupportedSortPropertyException → 400 Bad Request
  * - PaymentGatewayException → 500 Internal Server Error
  * - InvalidBillAllocationException → 400 Bad Request (AP payment bill allocation)
- * - VendorBillOperatorActionException → 400 Bad Request (vendor-bill match/exception workflow)
  * - VendorBillMatchNotFoundException → 400 Bad Request (no matching vendor bill)
  * - ConstraintViolationException → 400 Bad Request
  *
@@ -115,19 +113,6 @@ public class APPaymentExceptionHandler {
     public ResponseEntity<ApiError> handleInvalidBillAllocation(
             InvalidBillAllocationException ex, HttpServletRequest request) {
         log.warn("Invalid bill allocation: {}", ex.getMessage());
-        return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", ex.getMessage(), request);
-    }
-
-    /**
-     * Vendor-bill match/exception operator actions (resolveMatchException,
-     * selectMatchCandidate): bill/candidate missing, wrong state, already resolved, or an
-     * unrecognized resolution action. 400 VALIDATION_ERROR, deliberately not 404 — both
-     * endpoints document this explicitly.
-     */
-    @ExceptionHandler(VendorBillOperatorActionException.class)
-    public ResponseEntity<ApiError> handleVendorBillOperatorAction(
-            VendorBillOperatorActionException ex, HttpServletRequest request) {
-        log.warn("Vendor bill operator action rejected: {}", ex.getMessage());
         return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", ex.getMessage(), request);
     }
 

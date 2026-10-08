@@ -55,6 +55,7 @@ import com.positivity.accounting.internal.exception.TaxSnapshotNotFoundException
 import com.positivity.accounting.internal.exception.TaxSnapshotPeriodNotClosedException;
 import com.positivity.accounting.internal.exception.UnbalancedRulesException;
 import com.positivity.accounting.internal.exception.VendorBillDuplicateException;
+import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.EntityNotFoundException;
@@ -191,10 +192,31 @@ public class AccountingExceptionHandler {
         return build(HttpStatus.UNPROCESSABLE_CONTENT, "GL_ACCOUNT_NOT_ACTIVE", ex.getMessage(), request);
     }
 
+    /**
+     * A posting with no active mapping for one of its keys (#2601): 422, guided when the posting named the mapping
+     * ({@code referenceId} {@code CATEGORY/KEY} and a {@code nextAction}), as a vendor-bill approval does.
+     */
     @ExceptionHandler(GLMappingNotConfiguredException.class)
     public ResponseEntity<ApiError> handleGLMappingNotConfigured(
             GLMappingNotConfiguredException ex, HttpServletRequest request) {
-        return build(HttpStatus.UNPROCESSABLE_CONTENT, "GL_MAPPING_NOT_CONFIGURED", ex.getMessage(), request);
+        if (ex.getNextAction() == null) {
+            return build(HttpStatus.UNPROCESSABLE_CONTENT, "GL_MAPPING_NOT_CONFIGURED", ex.getMessage(), request);
+        }
+        String correlationId = resolveCorrelationId(request);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        return new ResponseEntity<>(
+                ApiError.guided(
+                        "GL_MAPPING_NOT_CONFIGURED",
+                        ex.getMessage(),
+                        HttpStatus.UNPROCESSABLE_CONTENT.value(),
+                        Instant.now(clock).toString(),
+                        correlationId,
+                        ex.getReferenceId(),
+                        ex.getNextAction(),
+                        null),
+                headers,
+                HttpStatus.UNPROCESSABLE_CONTENT);
     }
 
     /**
@@ -216,6 +238,15 @@ public class AccountingExceptionHandler {
     public ResponseEntity<ApiError> handleAccountNotInactive(
             AccountNotInactiveException ex, HttpServletRequest request) {
         return build(HttpStatus.CONFLICT, "ACCOUNT_NOT_INACTIVE", ex.getMessage(), request);
+    }
+
+    /**
+     * Vendor-bill command refusals (#2509): the exception carries its code and status (404
+     * {@code VENDOR_BILL_NOT_FOUND}, 409 {@code AP_BILL_NOT_APPROVABLE}, 422 {@code AP_BILL_UNCLASSIFIED}, ...).
+     */
+    @ExceptionHandler(VendorBillException.class)
+    public ResponseEntity<ApiError> handleVendorBill(VendorBillException ex, HttpServletRequest request) {
+        return build(ex.getCode().status(), ex.getCode().name(), ex.getMessage(), request);
     }
 
     /**

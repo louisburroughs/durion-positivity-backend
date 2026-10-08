@@ -27,7 +27,8 @@ class PostingFailureReasonTest {
                         PostingFailureReason.UNCOSTED_FACT,
                         PostingFailureReason.MISSING_AMOUNT,
                         PostingFailureReason.ZERO_AMOUNT,
-                        PostingFailureReason.NOT_POSTABLE);
+                        PostingFailureReason.NOT_POSTABLE,
+                        PostingFailureReason.RETIRED_EVENT_TYPE);
     }
 
     @Test

@@ -181,6 +181,12 @@ class AccountingExceptionHandlerTest {
                                             .FLOAT_ALREADY_ESTABLISHED,
                                     "Register T-1 already has a float"),
                             request)),
+                    Named.of("handleVendorBill", (HandlerInvocation) request -> handler.handleVendorBill(
+                            new com.positivity.accounting.internal.exception.VendorBillException(
+                                    com.positivity.accounting.internal.exception.VendorBillException.Code
+                                            .AP_BILL_NOT_APPROVABLE,
+                                    "Bill INV-1 is APPROVED and cannot be approved"),
+                            request)),
                     Named.of("handleDuplicateEvent", (HandlerInvocation)
                             request -> handler.handleDuplicateEvent(new DuplicateEventException("duplicate"), request)),
                     Named.of("handleUnbalancedEntry", (HandlerInvocation) request ->
@@ -501,6 +507,33 @@ class AccountingExceptionHandlerTest {
             assertThat(response.getBody()).isNotNull();
             assertThat(response.getBody().code()).isEqualTo("OPTIMISTIC_LOCK");
         }
+    }
+
+    @Test
+    @DisplayName("A4 (#2601): a mapping refusal that names its mapping is guided: referenceId CATEGORY/KEY and"
+            + " nextAction; one that does not stays plain")
+    void glMappingRefusalIsGuided() {
+        AccountingExceptionHandler handler = new AccountingExceptionHandler(TEST_CLOCK);
+
+        ResponseEntity<ApiError> guided = handler.handleGLMappingNotConfigured(
+                new GLMappingNotConfiguredException(
+                        "Bill INV-1 cannot post on 2026-10-01: no mapping",
+                        "VENDOR_BILL",
+                        "EXPENSE_SHOP_SUPPLIES",
+                        "Map VENDOR_BILL / EXPENSE_SHOP_SUPPLIES to an active account effective on 2026-10-01"),
+                requestWithoutHeader());
+        assertThat(guided.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(guided.getBody()).isNotNull();
+        assertThat(guided.getBody().code()).isEqualTo("GL_MAPPING_NOT_CONFIGURED");
+        assertThat(guided.getBody().referenceId()).isEqualTo("VENDOR_BILL/EXPENSE_SHOP_SUPPLIES");
+        assertThat(guided.getBody().nextAction()).startsWith("Map VENDOR_BILL / EXPENSE_SHOP_SUPPLIES");
+        assertThat(guided.getHeaders().getFirst("X-Correlation-Id")).isNotBlank();
+
+        ResponseEntity<ApiError> plain = handler.handleGLMappingNotConfigured(
+                new GLMappingNotConfiguredException("not configured"), requestWithoutHeader());
+        assertThat(plain.getBody()).isNotNull();
+        assertThat(plain.getBody().code()).isEqualTo("GL_MAPPING_NOT_CONFIGURED");
+        assertThat(plain.getBody().nextAction()).isNull();
     }
 
     @Test

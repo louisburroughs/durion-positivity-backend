@@ -8,11 +8,13 @@ package com.positivity.accounting.internal.enums;
  * <ol>
  * <li>PENDING_RECEIPT_MATCH: Created from GoodsReceivedEvent, awaiting
  * invoice</li>
- * <li>APPROVED: Three-way match successful, ready for payment</li>
  * <li>MATCH_EXCEPTION: Discrepancy detected, awaits manual resolution</li>
  * <li>CURRENCY_HOLD: Stated in a currency other than the ledger's; held (#2309)</li>
+ * <li>AWAITING_APPROVAL: Sent for approval; approved or rejected by a person allowed to (#2509, AW8)</li>
+ * <li>APPROVED: Approved and posted in one transaction (AW37); ready for payment</li>
+ * <li>REJECTED: Rejected while awaiting approval; terminal</li>
  * <li>PAID: Payment processed</li>
- * <li>VOIDED: Cancelled/reversed</li>
+ * <li>VOIDED: Voided from MATCH_EXCEPTION, or from APPROVED while nothing is allocated (AW42)</li>
  * </ol>
  *
  * @see <a href=
@@ -25,9 +27,8 @@ package com.positivity.accounting.internal.enums;
  */
 public enum VendorBillStatus {
     /**
-     * Bill created from GoodsReceivedEvent, awaiting VendorInvoiceReceivedEvent for
-     * three-way
-     * match. GL posting: Dr Inventory/Expense, Cr AP (provisional).
+     * Bill created from a GoodsReceivedEvent or a supplier invoice, awaiting its three-way match or a person's
+     * decision to send it for approval without one. Nothing is posted (AW37).
      */
     PENDING_RECEIPT_MATCH,
 
@@ -48,12 +49,20 @@ public enum VendorBillStatus {
     CURRENCY_HOLD,
 
     /**
-     * Bill has been approved for payment.
+     * Sent for approval (#2509, AW8): by a person with a justification, by a HIGH match ({@code submittedBy =
+     * SYSTEM}) or by a candidate selection. Approve moves it to {@link #APPROVED}, reject to {@link #REJECTED}.
+     * Nothing is posted yet.
+     */
+    AWAITING_APPROVAL,
+
+    /**
+     * Approved, and posted in the same transaction (AW37): approved if and only if posted. Locked; paid in parts,
+     * it stays APPROVED. Voided only while nothing is allocated to it (AW42).
      */
     APPROVED,
 
     /**
-     * Bill has been rejected (incorrect amount, missing documentation, etc.).
+     * Rejected while awaiting approval (incorrect amount, missing documentation, etc.); terminal. Never posted.
      */
     REJECTED,
 
@@ -63,7 +72,8 @@ public enum VendorBillStatus {
     PAID,
 
     /**
-     * Bill voided/reversed (replaces CANCELLED in new workflows).
+     * Voided: from MATCH_EXCEPTION (never posted), or from APPROVED while nothing is allocated, its entry reversed on
+     * the void date (AW42). Terminal.
      */
     VOIDED
 }

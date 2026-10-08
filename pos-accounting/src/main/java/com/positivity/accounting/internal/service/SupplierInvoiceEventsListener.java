@@ -5,8 +5,10 @@ import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
 import com.positivity.accounting.internal.entity.Vendor;
 import com.positivity.accounting.internal.entity.VendorBill;
+import com.positivity.accounting.internal.entity.VendorBillReissue;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
+import com.positivity.accounting.internal.repository.VendorBillReissueRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.accounting.internal.repository.VendorRepository;
 import com.positivity.domainevents.supplier.SupplierInvoiceReceivedV1;
@@ -22,6 +24,7 @@ import java.util.Optional;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -50,8 +53,8 @@ import tools.jackson.databind.ObjectMapper;
  * attention is the scarce resource, and the exception queue would stop meaning anything. An
  * invoice that genuinely never matches surfaces through ageing, which is what ageing is for.
  *
- * <p><strong>2. No journal entry is created on ingest.</strong> The status flow posts at approval
- * ({@code PENDING_RECEIPT_MATCH} → {@code APPROVED} → {@code PAID}), and an unapproved vendor
+ * <p><strong>2. No journal entry is created on ingest.</strong> The bill posts once, at approval (AW37;
+ * {@code VendorBillPostingService}, #2509), and an unapproved vendor
  * invoice is a claim rather than a liability anyone has agreed to. Posting on arrival would put
  * money in the ledger on the vendor's say-so alone, and a vendor that invoices in error would move
  * our accounts before anybody looked at it.
@@ -129,6 +132,8 @@ public class SupplierInvoiceEventsListener {
     private final LedgerCurrency ledgerCurrency;
     private final KafkaFactIngestionRecorder ingestionRecorder;
     private final VendorBillDuplicateGuard duplicateGuard;
+    private final VendorBillReissueRepository reissues;
+    private final VendorBillLocks locks;
 
     /** The handler plus its processed mark, or a failure's mark alone, per transaction; see the class doc. */
     private final TransactionTemplate handlerTransaction;
@@ -142,6 +147,8 @@ public class SupplierInvoiceEventsListener {
             LedgerCurrency ledgerCurrency,
             KafkaFactIngestionRecorder ingestionRecorder,
             VendorBillDuplicateGuard duplicateGuard,
+            VendorBillReissueRepository reissues,
+            VendorBillLocks locks,
             PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
@@ -151,6 +158,8 @@ public class SupplierInvoiceEventsListener {
         this.ledgerCurrency = ledgerCurrency;
         this.ingestionRecorder = ingestionRecorder;
         this.duplicateGuard = duplicateGuard;
+        this.reissues = reissues;
+        this.locks = locks;
         this.handlerTransaction = new TransactionTemplate(transactionManager);
         this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -254,7 +263,7 @@ public class SupplierInvoiceEventsListener {
         // this date. A voided or rejected bill is not one, so its re-issue becomes a new bill below.
         Optional<VendorBill> existing = duplicateGuard.findOriginal(vendorId, billNumber, billDate, null);
         if (existing.isPresent()) {
-            boolean flagged = flagReissue(existing.get(), fact, billNumber);
+            boolean flagged = flagReissue(existing.get(), fact, billNumber, eventId);
             duplicateGuard.record(
                     VendorBillDuplicateGuard.Channel.EDI,
                     flagged ? VendorBillDuplicateGuard.Outcome.FLAGGED : VendorBillDuplicateGuard.Outcome.IGNORED,
@@ -280,6 +289,21 @@ public class SupplierInvoiceEventsListener {
         bill.setBillNumber(billNumber);
         bill.setBillDate(billDate);
         bill.setTotalAmount(signedTotal(fact));
+        if (fact.totalGrossAmount() != null) {
+            // The net and tax as stated (AW39), signed like the total (AW47, ruling #2509 comment 6059252089): a
+            // missing tax is 0; no net stated, net = gross - tax, so a derived net never disagrees with the gross;
+            // neither, net = gross and tax 0. A net and a gross stated without a tax are checked as net + 0.
+            BigDecimal gross = bill.getTotalAmount();
+            BigDecimal net = fact.totalNetAmount() == null ? null : signed(fact, fact.totalNetAmount());
+            BigDecimal tax = fact.totalTaxAmount() == null ? null : signed(fact, fact.totalTaxAmount());
+            tax = tax == null ? BigDecimal.ZERO : tax;
+            if (net == null) {
+                net = gross.subtract(tax);
+            }
+            bill.setNetAmount(net);
+            bill.setTaxAmount(tax);
+            bill.setStatedLineCount(Math.max(1, fact.lines().size()));
+        }
         // The figure is only a sum of money with its currency, so the bill keeps the one the vendor
         // stated (ADR-0067 DF-1).
         bill.setCurrency(fact.currency());
@@ -298,6 +322,12 @@ public class SupplierInvoiceEventsListener {
                     fact.totalGrossAmount() == null
                             ? VendorBillStatus.MATCH_EXCEPTION
                             : VendorBillStatus.PENDING_RECEIPT_MATCH);
+            // AW47: a document whose gross is not its net + tax, beyond the rounding tolerance, waits for a person
+            // to say where the gap posts, to correct it or to void it.
+            VendorBillTotals.of(bill).filter(totals -> !totals.reconciled()).ifPresent(totals -> {
+                bill.setStatus(VendorBillStatus.MATCH_EXCEPTION);
+                bill.setRejectionReason(totals.explanation());
+            });
         }
         bill.setOriginEventId(UUID.fromString(eventId));
         bill.setOriginEventType(ORIGIN_EVENT_TYPE);
@@ -403,9 +433,20 @@ public class SupplierInvoiceEventsListener {
      * review; a bill held for its currency stays held, so a re-issue never releases it into a queue
      * where it could be approved at par (#2309).
      *
+     * <p>An approved bill is locked (#2509, §4.3): it keeps its status and approval fields, and the
+     * re-issue is recorded as an exception item linked to it, with both amounts, for a person to
+     * settle by credit note or with the vendor. Bills not yet approved keep the flagging above.
+     *
      * @return whether the bill was flagged; {@code false} for a re-issue identical to the bill held
      */
-    private boolean flagReissue(VendorBill bill, SupplierInvoiceReceivedV1 fact, String billNumber) {
+    private boolean flagReissue(VendorBill found, SupplierInvoiceReceivedV1 fact, String billNumber, String eventId) {
+        // The bill was found without a lock: lock it and see it as it is now. A decision that voided or rejected it
+        // meanwhile means it is no longer the original, so the event is retried and becomes a bill of its own.
+        VendorBill bill = locks.lock(found);
+        if (bill.getStatus() == VendorBillStatus.VOIDED || bill.getStatus() == VendorBillStatus.REJECTED) {
+            throw new ConcurrencyFailureException("Vendor bill " + bill.getBillNumber() + " became " + bill.getStatus()
+                    + " while its re-issue was being read; retried");
+        }
         BigDecimal incoming = signedTotal(fact);
         boolean amountChanged = bill.getTotalAmount() != null && incoming.compareTo(bill.getTotalAmount()) != 0;
         boolean currencyChanged =
@@ -414,13 +455,40 @@ public class SupplierInvoiceEventsListener {
             log.debug("Vendor invoice {} already held; nothing to do", billNumber);
             return false;
         }
+        if (bill.getStatus() == VendorBillStatus.APPROVED || bill.getStatus() == VendorBillStatus.PAID) {
+            UUID sourceEventId = UUID.fromString(eventId);
+            if (!reissues.existsBySourceEventId(sourceEventId)) {
+                VendorBillReissue item = new VendorBillReissue();
+                item.setVendorBillId(bill.getVendorBillId());
+                item.setIncomingBillNumber(billNumber);
+                item.setIncomingBillDate(fact.invoiceDate());
+                item.setIncomingAmount(incoming);
+                item.setIncomingCurrencyCode(effectiveCurrency(fact.currency()));
+                item.setHeldAmount(bill.getTotalAmount() == null ? BigDecimal.ZERO : bill.getTotalAmount());
+                item.setHeldCurrencyCode(effectiveCurrency(bill.getCurrency()));
+                item.setSourceEventId(sourceEventId);
+                reissues.save(item);
+            }
+            log.info(
+                    "Vendor invoice {} re-issued at {} {} against an approved bill of {} {}; recorded as an exception"
+                            + " item, the bill is unchanged",
+                    billNumber,
+                    incoming,
+                    fact.currency(),
+                    bill.getTotalAmount(),
+                    effectiveCurrency(bill.getCurrency()));
+            return true;
+        }
         String change = "Re-issued under the same number at " + incoming + " " + fact.currency() + " against a bill of "
                 + bill.getTotalAmount() + " " + effectiveCurrency(bill.getCurrency());
         if (bill.getStatus() == VendorBillStatus.CURRENCY_HOLD) {
             bill.setRejectionReason(currencyHoldReason(effectiveCurrency(bill.getCurrency())) + ". " + change);
         } else {
+            // Checked again from the start (#2509 review, L5): a bill that was awaiting approval keeps no submission,
+            // proposal or difference, as after a CORRECT.
             bill.setStatus(VendorBillStatus.MATCH_EXCEPTION);
             bill.setRejectionReason(change);
+            bill.clearSubmission();
         }
         vendorBillRepository.save(bill);
         // INFO: the one WARN for a flag is the duplicate guard's, which names the original (#2501).
@@ -455,6 +523,12 @@ public class SupplierInvoiceEventsListener {
     private static BigDecimal signedTotal(SupplierInvoiceReceivedV1 fact) {
         BigDecimal total = fact.totalGrossAmount() == null ? BigDecimal.ZERO : fact.totalGrossAmount();
         BigDecimal magnitude = total.abs();
+        return fact.isPayable() ? magnitude : magnitude.negate();
+    }
+
+    /** A stated amount signed by the document type, as {@link #signedTotal}; absent is zero. */
+    private static BigDecimal signed(SupplierInvoiceReceivedV1 fact, BigDecimal amount) {
+        BigDecimal magnitude = amount == null ? BigDecimal.ZERO : amount.abs();
         return fact.isPayable() ? magnitude : magnitude.negate();
     }
 

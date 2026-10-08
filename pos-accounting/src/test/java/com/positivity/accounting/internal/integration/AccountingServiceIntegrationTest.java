@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.integration;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.isA;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -45,6 +46,9 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
     private GLAccountRepository glAccountRepository;
 
     @Autowired
+    private com.positivity.accounting.internal.repository.AccountingAuditLogRepository auditLogRepository;
+
+    @Autowired
     private StatementLineMappingRepository statementLineMappingRepository;
 
     private static final UUID ORG_ID = UUID.fromString("00000000-0000-4000-a000-000000000010");
@@ -70,15 +74,15 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
     @DisplayName("Should create GL account via REST wrapper")
     void testCreateGLAccount() throws Exception {
         String payload = """
-        {
-          "organizationId": "%s",
-          "accountCode": "1000",
-          "accountName": "Cash",
-          "description": "Cash - Operating Account",
-          "accountType": "ASSET",
-          "activationDate": "2025-01-01T00:00:00"
-        }
-        """.formatted(ORG_ID);
+            {
+              "organizationId": "%s",
+              "accountCode": "1000",
+              "accountName": "Cash",
+              "description": "Cash - Operating Account",
+              "accountType": "ASSET",
+              "activationDate": "2025-01-01T00:00:00"
+            }
+            """.formatted(ORG_ID);
 
         mockMvc.perform(withAuth(post(BASE_URL + "/gl-accounts"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -115,10 +119,10 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         account = glAccountRepository.save(account);
 
         String payload = """
-        {
-          "effectiveDate": "2025-01-01"
-        }
-        """;
+            {
+              "effectiveDate": "2025-01-01"
+            }
+            """;
 
         mockMvc.perform(withAuth(post(BASE_URL + "/gl-accounts/" + account.getGlAccountId() + "/activate"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -152,14 +156,14 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         // Send X-Authorities WITHOUT accounting:coa:create so @PreAuthorize rejects
         String insufficientAuthorities = "accounting:je:view";
         String payload = """
-        {
-          "organizationId": "%s",
-          "accountCode": "4000",
-          "accountName": "Unauthorized Cash",
-          "accountType": "ASSET",
-          "activationDate": "2025-01-01T00:00:00"
-        }
-        """.formatted(ORG_ID);
+            {
+              "organizationId": "%s",
+              "accountCode": "4000",
+              "accountName": "Unauthorized Cash",
+              "accountType": "ASSET",
+              "activationDate": "2025-01-01T00:00:00"
+            }
+            """.formatted(ORG_ID);
 
         mockMvc.perform(post(BASE_URL + "/gl-accounts")
                         .header("X-Authorities", insufficientAuthorities)
@@ -194,22 +198,22 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         revenueAccount = glAccountRepository.save(revenueAccount);
 
         String payload = """
-        {
-          "organizationId": "%s",
-          "transactionDate": "2025-01-01T10:00:00Z",
-          "description": "Invoice received",
-          "lines": [
             {
-              "glAccountId": "%s",
-              "debitAmount": 1000.00
-            },
-            {
-              "glAccountId": "%s",
-              "creditAmount": 1000.00
+              "organizationId": "%s",
+              "transactionDate": "2025-01-01T10:00:00Z",
+              "description": "Invoice received",
+              "lines": [
+                {
+                  "glAccountId": "%s",
+                  "debitAmount": 1000.00
+                },
+                {
+                  "glAccountId": "%s",
+                  "creditAmount": 1000.00
+                }
+              ]
             }
-          ]
-        }
-        """.formatted(ORG_ID, cashAccount.getGlAccountId(), revenueAccount.getGlAccountId());
+            """.formatted(ORG_ID, cashAccount.getGlAccountId(), revenueAccount.getGlAccountId());
 
         mockMvc.perform(withAuth(post(BASE_URL + "/journal-entries"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -232,21 +236,21 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         account1 = glAccountRepository.save(account1);
 
         String payload = """
-        {
-          "organizationId": "%s",
-          "transactionDate": "2025-01-01T10:00:00Z",
-          "lines": [
             {
-              "glAccountId": "%s",
-              "debitAmount": 1000.00
-            },
-            {
-              "glAccountId": "%s",
-              "creditAmount": 500.00
+              "organizationId": "%s",
+              "transactionDate": "2025-01-01T10:00:00Z",
+              "lines": [
+                {
+                  "glAccountId": "%s",
+                  "debitAmount": 1000.00
+                },
+                {
+                  "glAccountId": "%s",
+                  "creditAmount": 500.00
+                }
+              ]
             }
-          ]
-        }
-        """.formatted(ORG_ID, account1.getGlAccountId(), account1.getGlAccountId());
+            """.formatted(ORG_ID, account1.getGlAccountId(), account1.getGlAccountId());
 
         mockMvc.perform(withAuth(post(BASE_URL + "/journal-entries"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -281,15 +285,15 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
 
         // Create entry
         String createPayload = """
-        {
-          "organizationId": "%s",
-          "transactionDate": "2025-01-01T10:00:00Z",
-          "lines": [
-            {"glAccountId": "%s", "debitAmount": 100.00},
-            {"glAccountId": "%s", "creditAmount": 100.00}
-          ]
-        }
-        """.formatted(ORG_ID, account1.getGlAccountId(), account2.getGlAccountId());
+            {
+              "organizationId": "%s",
+              "transactionDate": "2025-01-01T10:00:00Z",
+              "lines": [
+                {"glAccountId": "%s", "debitAmount": 100.00},
+                {"glAccountId": "%s", "creditAmount": 100.00}
+              ]
+            }
+            """.formatted(ORG_ID, account1.getGlAccountId(), account2.getGlAccountId());
 
         MvcResult createResult = mockMvc.perform(withAuth(post(BASE_URL + "/journal-entries"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -323,15 +327,15 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         account = glAccountRepository.save(account);
 
         String payload = """
-        {
-          "organizationId": "%s",
-          "transactionDate": "2025-01-01T10:00:00Z",
-          "lines": [
-            {"glAccountId": "%s", "debitAmount": 100.00},
-            {"glAccountId": "%s", "creditAmount": 100.00}
-          ]
-        }
-        """.formatted(ORG_ID, account.getGlAccountId(), account.getGlAccountId());
+            {
+              "organizationId": "%s",
+              "transactionDate": "2025-01-01T10:00:00Z",
+              "lines": [
+                {"glAccountId": "%s", "debitAmount": 100.00},
+                {"glAccountId": "%s", "creditAmount": 100.00}
+              ]
+            }
+            """.formatted(ORG_ID, account.getGlAccountId(), account.getGlAccountId());
 
         MvcResult result = mockMvc.perform(withAuth(post(BASE_URL + "/journal-entries"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -372,14 +376,14 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         glAccountRepository.save(arAccount);
 
         String createPayload = """
-        {
-          "name": "AR Auto-Post v1",
-          "eventType": "billing.invoicePosted",
-          "description": "Automatic posting rules for AR invoices",
-          "rulesDefinition": "{}",
-          "createdBy": "testuser"
-        }
-        """;
+            {
+              "name": "AR Auto-Post v1",
+              "eventType": "billing.invoicePosted",
+              "description": "Automatic posting rules for AR invoices",
+              "rulesDefinition": "{}",
+              "createdBy": "testuser"
+            }
+            """;
 
         MvcResult createResult = mockMvc.perform(withAuth(post(BASE_URL + "/posting-rules"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -420,13 +424,13 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
     @DisplayName("Should return 409 when modifying published rule set")
     void testModifyPublishedRuleSetFails() throws Exception {
         String createPayload = """
-        {
-          "name": "Test Rules",
-          "eventType": "test.event",
-          "rulesDefinition": "{}",
-          "createdBy": "testuser"
-        }
-        """;
+            {
+              "name": "Test Rules",
+              "eventType": "test.event",
+              "rulesDefinition": "{}",
+              "createdBy": "testuser"
+            }
+            """;
 
         MvcResult createResult = mockMvc.perform(withAuth(post(BASE_URL + "/posting-rules"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -445,13 +449,13 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
 
         // Try to update published set - should return 409
         String updatePayload = """
-        {
-          "name": "Updated Rules",
-          "eventType": "test.event.updated",
-          "rulesDefinition": "{}",
-          "createdBy": "testuser"
-        }
-        """;
+            {
+              "name": "Updated Rules",
+              "eventType": "test.event.updated",
+              "rulesDefinition": "{}",
+              "createdBy": "testuser"
+            }
+            """;
 
         mockMvc.perform(withAuth(put(BASE_URL + "/posting-rules/" + ruleSetId.toString()))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -479,19 +483,19 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         account = glAccountRepository.save(account);
 
         String payload = """
-        {
-          "organizationId": "%s",
-          "sourceSystem": "ERP_LEGACY",
-          "externalCode": "1000-COGS",
-          "glAccountId": "%s",
-          "effectiveStartDate": "2025-01-01T00:00:00",
-          "effectiveEndDate": "2025-12-31T23:59:59",
-          "dimensions": {
-            "businessUnitId": "BU-001",
-            "locationId": "NYC"
-          }
-        }
-        """.formatted(ORG_ID, account.getGlAccountId());
+            {
+              "organizationId": "%s",
+              "sourceSystem": "ERP_LEGACY",
+              "externalCode": "1000-COGS",
+              "glAccountId": "%s",
+              "effectiveStartDate": "2025-01-01T00:00:00",
+              "effectiveEndDate": "2025-12-31T23:59:59",
+              "dimensions": {
+                "businessUnitId": "BU-001",
+                "locationId": "NYC"
+              }
+            }
+            """.formatted(ORG_ID, account.getGlAccountId());
 
         mockMvc.perform(withAuth(post(BASE_URL + "/mappings"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -519,15 +523,15 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
 
         // Create the mapping first
         String createPayload = """
-        {
-          "organizationId": "%s",
-          "sourceSystem": "ERP_LEGACY",
-          "externalCode": "1000-COGS",
-          "glAccountId": "%s",
-          "effectiveStartDate": "2025-01-01T00:00:00",
-          "effectiveEndDate": "2025-12-31T23:59:59"
-        }
-        """.formatted(ORG_ID, account.getGlAccountId());
+            {
+              "organizationId": "%s",
+              "sourceSystem": "ERP_LEGACY",
+              "externalCode": "1000-COGS",
+              "glAccountId": "%s",
+              "effectiveStartDate": "2025-01-01T00:00:00",
+              "effectiveEndDate": "2025-12-31T23:59:59"
+            }
+            """.formatted(ORG_ID, account.getGlAccountId());
 
         mockMvc.perform(withAuth(post(BASE_URL + "/mappings"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -536,13 +540,13 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
 
         // Now resolve the mapping
         String resolvePayload = """
-        {
-          "organizationId": "%s",
-          "sourceSystem": "ERP_LEGACY",
-          "externalCode": "1000-COGS",
-          "transactionDate": "2025-06-15T10:00:00Z"
-        }
-        """.formatted(ORG_ID);
+            {
+              "organizationId": "%s",
+              "sourceSystem": "ERP_LEGACY",
+              "externalCode": "1000-COGS",
+              "transactionDate": "2025-06-15T10:00:00Z"
+            }
+            """.formatted(ORG_ID);
 
         mockMvc.perform(withAuth(post(BASE_URL + "/mappings/resolve"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -559,18 +563,18 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
     @DisplayName("Should submit accounting event successfully")
     void testSubmitAccountingEvent() throws Exception {
         String eventPayload = """
-        {
-          "organizationId": "%s",
-          "sourceSystem": "billing-service",
-          "eventType": "billing.invoicePosted",
-          "transactionDate": "2025-01-01T10:00:00Z",
-          "payload": {
-            "invoiceId": "%s",
-            "customerId": "%s",
-            "totalAmount": 1000.00
-          }
-        }
-        """.formatted(ORG_ID, INVOICE_ID, CUSTOMER_ID);
+            {
+              "organizationId": "%s",
+              "sourceSystem": "billing-service",
+              "eventType": "billing.invoicePosted",
+              "transactionDate": "2025-01-01T10:00:00Z",
+              "payload": {
+                "invoiceId": "%s",
+                "customerId": "%s",
+                "totalAmount": 1000.00
+              }
+            }
+            """.formatted(ORG_ID, INVOICE_ID, CUSTOMER_ID);
 
         mockMvc.perform(withAuth(post(BASE_URL + "/events"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -584,14 +588,14 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
     @DisplayName("Should detect and reject duplicate events (idempotency)")
     void testDuplicateEventRejection() throws Exception {
         String eventPayload = """
-        {
-          "organizationId": "%s",
-          "sourceSystem": "billing-service",
-          "eventType": "billing.invoicePosted",
-          "transactionDate": "2025-01-01T10:00:00Z",
-          "payload": {"invoiceId": "%s"}
-        }
-        """.formatted(ORG_ID, INVOICE_ID);
+            {
+              "organizationId": "%s",
+              "sourceSystem": "billing-service",
+              "eventType": "billing.invoicePosted",
+              "transactionDate": "2025-01-01T10:00:00Z",
+              "payload": {"invoiceId": "%s"}
+            }
+            """.formatted(ORG_ID, INVOICE_ID);
 
         // Submit first
         mockMvc.perform(withAuth(post(BASE_URL + "/events"))
@@ -622,24 +626,24 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
 
         // Step 1: POST GoodsReceivedEvent → create bill in PENDING_RECEIPT_MATCH
         String goodsReceivedPayload = """
-        {
-          "eventId": "%s",
-          "organizationId": "%s",
-          "purchaseOrderId": "%s",
-          "vendorId": "%s",
-          "vendorName": "Test Vendor Corp",
-          "receivedDate": "2025-01-10T10:00:00",
-          "lineItems": [
             {
-              "productId": "%s",
-              "description": "Widget A",
-              "quantity": 100,
-              "unitPrice": 10.00,
-              "isInventoryItem": true
+              "eventId": "%s",
+              "organizationId": "%s",
+              "purchaseOrderId": "%s",
+              "vendorId": "%s",
+              "vendorName": "Test Vendor Corp",
+              "receivedDate": "2025-01-10T10:00:00",
+              "lineItems": [
+                {
+                  "productId": "%s",
+                  "description": "Widget A",
+                  "quantity": 100,
+                  "unitPrice": 10.00,
+                  "isInventoryItem": true
+                }
+              ]
             }
-          ]
-        }
-        """.formatted(eventId, ORG_ID, purchaseOrderId, vendorId, productId);
+            """.formatted(eventId, ORG_ID, purchaseOrderId, vendorId, productId);
 
         MvcResult createResult = mockMvc.perform(withAuth(post(BASE_URL + "/vendor-bills"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -666,30 +670,34 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         // Step 3: POST VendorInvoiceReceivedEvent with matching quantities/prices →
         // three-way match
         String invoiceReceivedPayload = """
-        {
-          "eventId": "%s",
-          "organizationId": "%s",
-          "vendorId": "%s",
-          "invoiceReference": "INV-98765",
-          "invoiceDate": "2025-01-11T12:00:00",
-          "dueDate": "2025-02-10T12:00:00",
-          "lineItems": [
             {
-              "productId": "%s",
-              "description": "Widget A",
-              "quantity": 100,
-              "unitPrice": 10.00
+              "eventId": "%s",
+              "organizationId": "%s",
+              "vendorId": "%s",
+              "invoiceReference": "INV-98765",
+              "invoiceDate": "2025-01-11T12:00:00",
+              "dueDate": "2025-02-10T12:00:00",
+              "lineItems": [
+                {
+                  "productId": "%s",
+                  "description": "Widget A",
+                  "quantity": 100,
+                  "unitPrice": 10.00
+                }
+              ]
             }
-          ]
-        }
-        """.formatted(nextUuid(), ORG_ID, vendorId, productId);
+            """.formatted(nextUuid(), ORG_ID, vendorId, productId);
 
         mockMvc.perform(withAuth(post(BASE_URL + "/vendor-bills/match"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(invoiceReceivedPayload))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.vendorBillId").value(vendorBillId.toString()))
-                .andExpect(jsonPath("$.status").value("APPROVED"))
+                // #2509: a HIGH match goes to approval, submitted by SYSTEM; it never approves (G12).
+                .andExpect(jsonPath("$.status").value("AWAITING_APPROVAL"))
+                .andExpect(jsonPath("$.approval.submittedBy").value("SYSTEM"))
+                .andExpect(jsonPath("$.approval.approvedBy").doesNotExist())
+                .andExpect(jsonPath("$.match.score").value(95))
                 .andExpect(jsonPath("$.billNumber").value("INV-98765"));
 
         // Step 4: Create a second bill for the discrepancy scenario
@@ -697,24 +705,24 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         UUID purchaseOrderId2 = nextUuid();
 
         String goodsReceivedPayload2 = """
-        {
-          "eventId": "%s",
-          "organizationId": "%s",
-          "purchaseOrderId": "%s",
-          "vendorId": "%s",
-          "vendorName": "Test Vendor Corp",
-          "receivedDate": "2025-01-12T10:00:00",
-          "lineItems": [
             {
-              "productId": "%s",
-              "description": "Widget A",
-              "quantity": 100,
-              "unitPrice": 10.00,
-              "isInventoryItem": true
+              "eventId": "%s",
+              "organizationId": "%s",
+              "purchaseOrderId": "%s",
+              "vendorId": "%s",
+              "vendorName": "Test Vendor Corp",
+              "receivedDate": "2025-01-12T10:00:00",
+              "lineItems": [
+                {
+                  "productId": "%s",
+                  "description": "Widget A",
+                  "quantity": 100,
+                  "unitPrice": 10.00,
+                  "isInventoryItem": true
+                }
+              ]
             }
-          ]
-        }
-        """.formatted(eventId2, ORG_ID, purchaseOrderId2, vendorId, productId);
+            """.formatted(eventId2, ORG_ID, purchaseOrderId2, vendorId, productId);
 
         MvcResult createResult2 = mockMvc.perform(withAuth(post(BASE_URL + "/vendor-bills"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -730,23 +738,23 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
 
         // Step 5: POST invoice with price variance > 5% → MATCH_EXCEPTION
         String discrepancyInvoicePayload = """
-        {
-          "eventId": "%s",
-          "organizationId": "%s",
-          "vendorId": "%s",
-          "invoiceReference": "INV-99999",
-          "invoiceDate": "2025-01-13T12:00:00",
-          "dueDate": "2025-02-12T12:00:00",
-          "lineItems": [
             {
-              "productId": "%s",
-              "description": "Widget A",
-              "quantity": 100,
-              "unitPrice": 12.00
+              "eventId": "%s",
+              "organizationId": "%s",
+              "vendorId": "%s",
+              "invoiceReference": "INV-99999",
+              "invoiceDate": "2025-01-13T12:00:00",
+              "dueDate": "2025-02-12T12:00:00",
+              "lineItems": [
+                {
+                  "productId": "%s",
+                  "description": "Widget A",
+                  "quantity": 100,
+                  "unitPrice": 12.00
+                }
+              ]
             }
-          ]
-        }
-        """.formatted(nextUuid(), ORG_ID, vendorId, productId);
+            """.formatted(nextUuid(), ORG_ID, vendorId, productId);
 
         mockMvc.perform(withAuth(post(BASE_URL + "/vendor-bills/match"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -755,21 +763,33 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
                 .andExpect(jsonPath("$.vendorBillId").value(vendorBillId2.toString()))
                 .andExpect(jsonPath("$.status").value("MATCH_EXCEPTION"));
 
-        // Step 6: Resolve the match exception → ACCEPT → APPROVED
+        // Step 6: Resolve the match exception with CORRECT, which approves nothing. AC6 (#2509): the body's
+        // operatorId is ignored and the recorded actor is the caller (ADR-0018).
         String resolvePayload = """
-        {
-          "resolutionAction": "ACCEPT",
-          "reason": "Price increase approved by AP manager",
-          "operatorId": "%s"
-        }
-        """.formatted(TEST_USER);
+            {
+              "resolutionAction": "CORRECT",
+              "reason": "Receipt quantities re-counted by the warehouse",
+              "operatorId": "someone-else"
+            }
+            """;
 
-        mockMvc.perform(withAuth(post(BASE_URL + "/vendor-bills/" + vendorBillId2 + "/resolve-exception"))
+        mockMvc.perform(withAuth(
+                                post(BASE_URL + "/vendor-bills/" + vendorBillId2 + "/resolve-exception"),
+                                "accounting:ap:approve,accounting:ap:view")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(resolvePayload))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.vendorBillId").value(vendorBillId2.toString()))
-                .andExpect(jsonPath("$.status").value("APPROVED"));
+                .andExpect(jsonPath("$.status").value("PENDING_RECEIPT_MATCH"))
+                .andExpect(jsonPath("$.approval").doesNotExist())
+                .andExpect(jsonPath("$.rejection").doesNotExist());
+        assertThat(auditLogRepository.findByEntityTypeAndEntityIdOrderByTimestampAsc("VENDOR_BILL", vendorBillId2))
+                .filteredOn(row -> "VENDOR_BILL_MATCH_EXCEPTION_RESOLVE".equals(row.getOperation()))
+                .singleElement()
+                .satisfies(row -> {
+                    assertThat(row.getUserId()).isEqualTo(TEST_USER).isNotEqualTo("someone-else");
+                    assertThat(row.getNewValue()).contains("action=CORRECT");
+                });
     }
 
     @Test

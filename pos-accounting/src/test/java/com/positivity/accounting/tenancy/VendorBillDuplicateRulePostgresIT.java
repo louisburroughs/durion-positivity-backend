@@ -17,16 +17,21 @@ import com.positivity.accounting.internal.entity.VendorBillNumbers;
 import com.positivity.accounting.internal.entity.VendorBillNumbersTest;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.VendorBillDuplicateException;
+import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.accounting.internal.repository.VendorBillLineRepository;
 import com.positivity.accounting.internal.repository.VendorBillMatchCandidateRepository;
+import com.positivity.accounting.internal.repository.VendorBillReissueRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.accounting.internal.repository.VendorRepository;
 import com.positivity.accounting.internal.service.AccountingSequenceLocker;
 import com.positivity.accounting.internal.service.KafkaFactIngestionRecorder;
 import com.positivity.accounting.internal.service.SupplierInvoiceEventsListener;
 import com.positivity.accounting.internal.service.VendorBillDuplicateGuard;
+import com.positivity.accounting.internal.service.VendorBillInvoiceMatcher;
+import com.positivity.accounting.internal.service.VendorBillLocks;
+import com.positivity.accounting.internal.service.VendorBillReader;
 import com.positivity.accounting.internal.service.VendorBillService;
 import com.positivity.accounting.internal.service.VendorBillServiceImpl;
 import com.positivity.accounting.internal.service.VendorDirectoryService;
@@ -68,7 +73,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
@@ -98,6 +102,9 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
     private static final LocalDateTime OCT_1_EVENING = LocalDateTime.of(2026, 10, 1, 17, 0);
 
     private final JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
+
+    @Autowired
+    private VendorBillLocks locks;
 
     @Autowired
     private Clock clock;
@@ -136,7 +143,16 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
     private VendorBillMatchCandidateRepository matchCandidates;
 
     @Autowired
-    private ApplicationEventPublisher eventPublisher;
+    private VendorBillReissueRepository reissues;
+
+    @Autowired
+    private VendorBillInvoiceMatcher matcher;
+
+    @Autowired
+    private VendorBillReader reader;
+
+    @Autowired
+    private AccountingAuditLogRepository auditLogs;
 
     @Autowired
     private VendorDirectoryService vendorDirectoryService;
@@ -171,6 +187,8 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
                 ledgerCurrency,
                 ingestionRecorder,
                 guard,
+                reissues,
+                locks,
                 transactionManager);
     }
 
@@ -181,10 +199,16 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
                     "DELETE FROM accounting_event WHERE domain_key_id IN"
                             + " (SELECT vendor_bill_id::text FROM vendor_bill WHERE vendor_id = ?)",
                     written);
-            owner.update(
-                    "DELETE FROM vendor_bill_line WHERE vendor_bill_id IN"
-                            + " (SELECT vendor_bill_id FROM vendor_bill WHERE vendor_id = ?)",
-                    written);
+            for (String child : List.of(
+                    "vendor_bill_line",
+                    "vendor_bill_match_evidence",
+                    "vendor_bill_match_candidate",
+                    "vendor_bill_reissue")) {
+                owner.update(
+                        "DELETE FROM " + child + " WHERE vendor_bill_id IN"
+                                + " (SELECT vendor_bill_id FROM vendor_bill WHERE vendor_id = ?)",
+                        written);
+            }
             owner.update("DELETE FROM vendor_bill WHERE vendor_id = ?", written);
             owner.update("DELETE FROM ap_vendor WHERE vendor_id = ?", written);
         }
@@ -324,6 +348,27 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
                 .containsEntry("idempotency_outcome", "DUPLICATE_IGNORED");
     }
 
+    @Test
+    @DisplayName("AC14 (#2509): an APPROVED bill re-issued at another amount stays APPROVED; one exception item, its"
+            + " created_at stamped by auditing (ADR-0024)")
+    void reissueOfAnApprovedBillIsRecordedWithItsCreatedAt() {
+        UUID original = insertBill(TENANT_A, vendor, "INV-1", OCT_1_MORNING, "APPROVED");
+
+        deliver(TENANT_A, "inv-1", "2026-10-01", "120.00");
+
+        assertThat(status(original)).isEqualTo("APPROVED");
+        assertThat(billCount(vendor)).isEqualTo(1);
+        List<Map<String, Object>> items = owner.queryForList(
+                "SELECT vendor_bill_id, incoming_amount, held_amount, created_at FROM vendor_bill_reissue"
+                        + " WHERE vendor_bill_id = ?",
+                original);
+        assertThat(items).singleElement().satisfies(item -> {
+            assertThat((BigDecimal) item.get("incoming_amount")).isEqualByComparingTo("120.00");
+            assertThat((BigDecimal) item.get("held_amount")).isEqualByComparingTo("100.00");
+            assertThat(item.get("created_at")).isNotNull();
+        });
+    }
+
     @ParameterizedTest(name = "original {0}")
     @EnumSource(
             value = VendorBillStatus.class,
@@ -364,7 +409,8 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
         assertThat(billCount(vendor)).isEqualTo(2);
         assertThat(status(lastYear)).isEqualTo("PAID");
         assertThat(owner.queryForObject(
-                        "SELECT status FROM vendor_bill WHERE vendor_id = ? AND bill_date = TIMESTAMP '2026-10-01 00:00:00'",
+                        "SELECT status FROM vendor_bill WHERE vendor_id = ? AND bill_date = TIMESTAMP '2026-10-01"
+                                + " 00:00:00'",
                         String.class,
                         vendor))
                 .isEqualTo("PENDING_RECEIPT_MATCH");
@@ -374,7 +420,8 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
 
     @Test
     @DisplayName(
-            "criteria 14, 5, 4: Flyway alone is enough to number a bill; a replay returns the bill; a repeated number is refused")
+            "criteria 14, 5, 4: Flyway alone is enough to number a bill; a replay returns the bill; a repeated number"
+                    + " is refused")
     void goodsReceiptIsNumberedOnAFlywayOnlyDatabaseAndRefusesARepeatedNumber() {
         GoodsReceivedEvent first = goodsReceived(UUID.randomUUID());
 
@@ -428,6 +475,8 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
                 ledgerCurrency,
                 ingestionRecorder,
                 racing,
+                reissues,
+                locks,
                 transactionManager);
 
         String eventId = deliver(TENANT_A, "inv-1", "2026-10-01", "100.00");
@@ -508,7 +557,8 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
 
     @Test
     @DisplayName(
-            "a match that loses the race is stopped by the index: the goods-receipt bill is unchanged, one bill holds the number")
+            "a match that loses the race is stopped by the index: the goods-receipt bill is unchanged, one bill holds"
+                    + " the number")
     void matchThatLosesTheRaceIsStoppedByTheIndex() {
         UUID product = UUID.randomUUID();
         UUID goodsReceiptBill = inTenant(TENANT_A, () -> {
@@ -572,12 +622,15 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
                 bills,
                 billLines,
                 matchCandidates,
-                eventPublisher,
                 vendorDirectoryService,
                 racing,
                 sequenceLocker,
                 transactionManager,
-                com.positivity.accounting.internal.service.TestZoneResolvers.utc(java.time.Clock.systemUTC()));
+                com.positivity.accounting.internal.service.TestZoneResolvers.utc(java.time.Clock.systemUTC()),
+                matcher,
+                reader,
+                auditLogs,
+                locks);
     }
 
     /**
@@ -684,7 +737,8 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
 
     @Test
     @DisplayName(
-            "the directory write rides with the bill: another tenant's row under the same vendor id does not fail the create")
+            "the directory write rides with the bill: another tenant's row under the same vendor id does not fail the"
+                    + " create")
     void directoryRowOfAnotherTenantUnderTheSameIdDoesNotFailTheCreate() {
         owner.update(
                 "INSERT INTO ap_vendor (tenant_id, vendor_id, name, status, created_at, updated_at)"
@@ -715,20 +769,22 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
                 .containsExactly("Acme Tire and Wheel");
     }
 
-    /** The production service, wired by hand so that it commits without posting to the ledger. */
+    /** The production service, wired by hand with the test's zone (creation posts nothing, AW37). */
     private VendorBillService committingService() {
-        ApplicationEventPublisher noGlPosting = event -> {};
         return new VendorBillServiceImpl(
                 clock,
                 bills,
                 billLines,
                 matchCandidates,
-                noGlPosting,
                 vendorDirectoryService,
                 guard,
                 sequenceLocker,
                 transactionManager,
-                com.positivity.accounting.internal.service.TestZoneResolvers.utc(java.time.Clock.systemUTC()));
+                com.positivity.accounting.internal.service.TestZoneResolvers.utc(java.time.Clock.systemUTC()),
+                matcher,
+                reader,
+                auditLogs,
+                locks);
     }
 
     private String create(VendorBillService service, UUID tenant, UUID vendorId) {
@@ -791,7 +847,8 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
 
     @Test
     @DisplayName(
-            "criterion 13: V4 stops on existing violations, names a group and changes nothing; it runs once they are resolved")
+            "criterion 13: V4 stops on existing violations, names a group and changes nothing; it runs once they are"
+                    + " resolved")
     void migrationStopsOnExistingViolationsAndChangesNothing() {
         DataSource isolated = AccountingPostgresContainer.ownerDataSource("vendor-bill-duplicate-guard");
         JdbcTemplate jdbc = new JdbcTemplate(isolated);
@@ -871,9 +928,8 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
         owner.update(
                 "INSERT INTO vendor_bill (tenant_id, vendor_bill_id, vendor_id, vendor_name, bill_number,"
                         + " bill_number_key, bill_date, total_amount, currency, status, created_at, modified_at,"
-                        + " created_by, modified_by)"
-                        + " VALUES (?, ?, ?, 'Acme Tire', ?, ?, ?, 100.00, 'USD', ?, TIMESTAMPTZ '2026-09-01 00:00:00+00',"
-                        + " TIMESTAMPTZ '2026-09-01 00:00:00+00', 'test', 'test')",
+                        + " created_by, modified_by) VALUES (?, ?, ?, 'Acme Tire', ?, ?, ?, 100.00, 'USD', ?, TIMESTAMPTZ"
+                        + " '2026-09-01 00:00:00+00', TIMESTAMPTZ '2026-09-01 00:00:00+00', 'test', 'test')",
                 tenant,
                 id,
                 vendorId,
@@ -942,12 +998,12 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
         String eventId = UUID.randomUUID().toString();
         eventIds.add(eventId);
         String message = """
-                {"eventId":"%s","eventType":"supplier.invoice.received","payload":{
-                  "vendorProfileId":"%s","supplierRef":"acme-tire","vendorInvoiceNumber":"%s",
-                  "invoiceDate":"%s","type":"INVOICE","currency":"USD",
-                  "totalNetAmount":%s,"totalTaxAmount":0.00,"totalGrossAmount":%s,
-                  "vendorOrderReference":"PO-778","occurredAt":"2026-10-01T08:00:00Z","lines":[]}}
-                """.formatted(eventId, vendor, invoiceNumber, invoiceDate, total, total);
+            {"eventId":"%s","eventType":"supplier.invoice.received","payload":{
+              "vendorProfileId":"%s","supplierRef":"acme-tire","vendorInvoiceNumber":"%s",
+              "invoiceDate":"%s","type":"INVOICE","currency":"USD",
+              "totalNetAmount":%s,"totalTaxAmount":0.00,"totalGrossAmount":%s,
+              "vendorOrderReference":"PO-778","occurredAt":"2026-10-01T08:00:00Z","lines":[]}}
+            """.formatted(eventId, vendor, invoiceNumber, invoiceDate, total, total);
         asTenant(tenant, () -> listener.onSupplierEvent(message));
         return eventId;
     }

@@ -6,26 +6,23 @@ package com.positivity.accounting.internal.enums;
  */
 public enum MatchConfidence {
     /**
-     * Single candidate with score > 70 points.
-     * Auto-approve without human review.
+     * Single candidate with a score of 70 points or more. Sent for approval ({@code AWAITING_APPROVAL}, submitter
+     * {@code SYSTEM}); never approves on its own (#2509, G12).
      */
     HIGH_CONFIDENCE,
 
     /**
-     * Single candidate with score 50-70 points.
-     * Require human review before approval.
+     * Single candidate with a score from 50 to 69 points. {@code MATCH_EXCEPTION}: a person reviews it.
      */
     MEDIUM_CONFIDENCE,
 
     /**
-     * Multiple candidates with score > 50 points.
-     * Create approval task with all candidates for manual selection.
+     * Several candidates with 50 points or more. The candidates are kept for a person to select one.
      */
     AMBIGUOUS,
 
     /**
-     * No candidates with score > 50 points.
-     * Create exception for procurement team.
+     * No candidate with 50 points or more. Refused: no pending receipt matches the invoice.
      */
     NO_MATCH
 }
