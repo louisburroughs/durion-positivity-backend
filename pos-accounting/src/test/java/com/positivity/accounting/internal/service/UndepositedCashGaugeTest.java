@@ -35,11 +35,11 @@ class UndepositedCashGaugeTest {
     void sumsAcrossTenants() {
         UndepositedSessionRepository sessions = mock(UndepositedSessionRepository.class);
         TenantIterator tenants = mock(TenantIterator.class);
-        when(tenants.forEachActiveTenant(any())).thenAnswer(invocation -> {
+        when(tenants.sweep(any())).thenAnswer(invocation -> {
             Consumer<UUID> work = invocation.getArgument(0);
             work.accept(UUID.randomUUID());
             work.accept(UUID.randomUUID());
-            return 2;
+            return new TenantIterator.Sweep(2, true);
         });
         when(sessions.sumDepositAmountByStatus(UndepositedSessionStatus.UNDEPOSITED))
                 .thenReturn(new BigDecimal("1197.00"), new BigDecimal("300.00"));
@@ -60,6 +60,53 @@ class UndepositedCashGaugeTest {
                 .isEqualTo(1497.0);
         assertThat(registry.get(UndepositedCashGauge.OLDEST_AGE_GAUGE).gauge().value())
                 .isEqualTo(6.0);
+    }
+
+    @Test
+    @DisplayName("a tenant whose second read fails adds nothing, and a poll over an incomplete tenant list keeps the"
+            + " previous values")
+    @SuppressWarnings("unchecked")
+    void partialReadsNeverPublishPartialTotals() {
+        UndepositedSessionRepository sessions = mock(UndepositedSessionRepository.class);
+        TenantIterator tenants = mock(TenantIterator.class);
+        when(sessions.sumDepositAmountByStatus(UndepositedSessionStatus.UNDEPOSITED))
+                .thenReturn(new BigDecimal("1197.00"), new BigDecimal("300.00"), new BigDecimal("50.00"));
+        when(sessions.findFirstByStatusOrderByClosedAtAsc(UndepositedSessionStatus.UNDEPOSITED))
+                .thenReturn(Optional.of(closedAt("2026-10-06T20:00:00Z")))
+                .thenThrow(new IllegalStateException("simulated read failure"))
+                .thenReturn(Optional.of(closedAt("2026-09-01T20:00:00Z")));
+        // As TenantIterator.sweep does: a tenant whose work throws is logged and skipped.
+        when(tenants.sweep(any()))
+                .thenAnswer(invocation -> {
+                    Consumer<UUID> work = invocation.getArgument(0);
+                    work.accept(UUID.randomUUID());
+                    try {
+                        work.accept(UUID.randomUUID());
+                    } catch (IllegalStateException skipped) {
+                        // the second tenant's oldest-row read failed
+                    }
+                    return new TenantIterator.Sweep(1, true);
+                })
+                .thenAnswer(invocation -> {
+                    Consumer<UUID> work = invocation.getArgument(0);
+                    work.accept(UUID.randomUUID());
+                    return new TenantIterator.Sweep(1, false);
+                });
+        ObjectProvider<MeterRegistry> provider = mock(ObjectProvider.class);
+        UndepositedCashGauge gauge = new UndepositedCashGauge(
+                sessions, tenants, mock(PlatformTransactionManager.class), Clock.fixed(NOW, ZoneOffset.UTC), provider);
+
+        gauge.refresh();
+        assertThat(gauge.amount())
+                .as("only the tenant whose reads both succeeded")
+                .isEqualByComparingTo("1197.00");
+        assertThat(gauge.oldestAgeDays()).isEqualTo(2);
+
+        gauge.refresh();
+        assertThat(gauge.amount())
+                .as("an incomplete tenant list keeps the last values")
+                .isEqualByComparingTo("1197.00");
+        assertThat(gauge.oldestAgeDays()).isEqualTo(2);
     }
 
     private static UndepositedSession closedAt(String instant) {

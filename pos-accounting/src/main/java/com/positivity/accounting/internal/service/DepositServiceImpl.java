@@ -21,6 +21,7 @@ import com.positivity.accounting.internal.enums.UndepositedSessionStatus;
 import com.positivity.accounting.internal.exception.CashSetupException;
 import com.positivity.accounting.internal.exception.CurrencyNotSupportedException;
 import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
+import com.positivity.accounting.internal.exception.JournalEntryNotReversibleException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.DepositRepository;
 import com.positivity.accounting.internal.repository.DepositSessionRepository;
@@ -29,7 +30,6 @@ import com.positivity.accounting.internal.repository.UndepositedSessionDropRepos
 import com.positivity.accounting.internal.repository.UndepositedSessionRepository;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.security.common.SecurityContextHelper;
-import com.positivity.shared.id.UUIDv7Generator;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
@@ -82,7 +82,10 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * <p><b>Reversal.</b> Reverse deposit reverses the entry through {@link JournalEntryService#reverseJournalEntry} (the
  * default date rules, the period gate and its override, ADR-0047); {@link DepositReversalReaction} marks the deposit
  * {@code REVERSED} and returns its sessions to {@code UNDEPOSITED}, exactly as it does for the same entry reversed
- * through the generic journal-entry reversal, so the deposit and the ledger never disagree.
+ * through the generic journal-entry reversal, so the deposit and the ledger never disagree. Reverse deposit takes no
+ * lock of its own first: both routes lock in the generic reversal's order (the entry-number sequence, the entry, the
+ * deposit, its sessions), so they serialize rather than deadlock, and the entry's conditional flip to REVERSED decides
+ * a race (the loser is 409 {@code DEPOSIT_ALREADY_REVERSED}). The reversal entry is never reversed itself.
  *
  * <p><b>Location scope (ADR-0061).</b> The read lists only the sessions whose location the caller's {@code
  * accounting:deposit:create} reaches; a session outside it is unknown to the selection. The commands gate on each
@@ -222,13 +225,8 @@ public class DepositServiceImpl implements DepositService {
             List<UndepositedSession> selected, @Nullable UUID bankGlAccountId, LocalDate asOf) {
         Totals totals = Totals.of(selected);
         LocalDateTime at = asOf.atStartOfDay();
-        GLAccount bank = null;
-        if (bankGlAccountId != null) {
-            bank = glAccounts
-                    .findById(bankGlAccountId)
-                    .orElseThrow(() -> InvalidRequestParameterException.forField(
-                            "bankGlAccountId", "No GL account " + bankGlAccountId));
-        }
+        // The account Record bank deposit would accept on that day, else 422 DEPOSIT_BANK_ACCOUNT_NOT_ELIGIBLE.
+        GLAccount bank = bankGlAccountId == null ? null : requireEligibleBankAccount(bankGlAccountId, asOf);
         Map<UUID, GLAccount> accounts = new LinkedHashMap<>();
         UUID undepositedFunds = glMappingResolver.resolveGLAccount(POSTING_CATEGORY, UNDEPOSITED_FUNDS_KEY, at);
         UUID cashClearing = glMappingResolver.resolveGLAccount(POSTING_CATEGORY, CASH_CLEARING_KEY, at);
@@ -317,6 +315,12 @@ public class DepositServiceImpl implements DepositService {
         // ADR-0061: the caller's reach at each stored session's location, after the lock and before its status.
         locked.forEach(session -> requireInScope(AccountingPermissions.DEPOSIT_CREATE, session.getLocationId()));
         for (UndepositedSession session : locked) {
+            if (session.getStatus() == UndepositedSessionStatus.NOTHING_TO_DEPOSIT) {
+                throw InvalidRequestParameterException.forField(
+                        "sessionIds",
+                        "Register " + session.getTerminalId() + "'s session " + session.getSessionId()
+                                + " has nothing to deposit: no bank drops, no cash sales, no over/short");
+            }
             if (session.getStatus() != UndepositedSessionStatus.UNDEPOSITED) {
                 throw alreadyDeposited(session);
             }
@@ -328,21 +332,24 @@ public class DepositServiceImpl implements DepositService {
         amounts.put("selection.expectedCash", totals.expectedCash());
         amounts.put("selection.clearingNet", totals.clearingNet());
         functionalCurrency.requireMinorUnits(amounts);
-        if (totals.depositAmount().signum() == 0) {
-            throw InvalidRequestParameterException.forField(
-                    "sessionIds",
-                    "The selected sessions hold no bank drops: there is no cash to take to the bank;"
-                            + " deposit them together with a session that does");
-        }
+        // The balance identity first: a selection whose drops are missing is unbalanced, and says by how much.
         if (totals.difference().signum() != 0) {
             if (unbalanced != null) {
                 unbalanced.increment();
             }
             throw unbalancedRefusal(totals);
         }
+        if (totals.depositAmount().signum() == 0) {
+            // Balanced at zero (e.g. a petty expense paid from the day's cash sales, no drop): an entry cannot post a
+            // zero bank line, so these sessions ride along with a deposit that takes cash to the bank.
+            throw InvalidRequestParameterException.forField(
+                    "sessionIds",
+                    "The selected sessions hold no bank drops: there is no cash to take to the bank;"
+                            + " deposit them together with a session that does");
+        }
 
         // Business-date posting through the period gate: closed → accounting:period:override + justification.
-        JournalEntryResponse posted = post(bank, depositDate, totals, locked.size(), slip, override);
+        JournalEntryResponse posted = post(requestId, bank, depositDate, totals, locked.size(), slip, override);
 
         Deposit deposit = new Deposit();
         deposit.setBankGlAccountId(bank.getGlAccountId());
@@ -411,6 +418,7 @@ public class DepositServiceImpl implements DepositService {
     }
 
     private JournalEntryResponse post(
+            UUID requestId,
             GLAccount bank,
             LocalDate depositDate,
             Totals totals,
@@ -429,7 +437,7 @@ public class DepositServiceImpl implements DepositService {
         addLine(lines, cashClearing, totals.clearingNet().negate(), "Register cash clearing taken to the bank");
         JournalEntryResponse created = journalEntryService.createJournalEntry(JournalEntryCreateRequest.builder()
                 .transactionDate(at)
-                .sourceEventId(sourceEventId(UUIDv7Generator.generate()))
+                .sourceEventId(sourceEventId(requestId))
                 .sourceEventType(POSTING_CATEGORY)
                 .description(description)
                 .lines(lines)
@@ -453,9 +461,12 @@ public class DepositServiceImpl implements DepositService {
                 .build());
     }
 
-    /** The source event of a deposit's entry, derived from the command's own posting key. */
-    static @NonNull UUID sourceEventId(@NonNull UUID postingKey) {
-        return UUID.nameUUIDFromBytes((POSTING_CATEGORY + ":" + postingKey).getBytes(StandardCharsets.UTF_8));
+    /**
+     * The source event of a deposit's entry: derived from the Record bank deposit command's {@code requestId}, the
+     * durable natural key of the deposit, so the entry traces back to the request that recorded it.
+     */
+    static @NonNull UUID sourceEventId(@NonNull UUID requestId) {
+        return UUID.nameUUIDFromBytes((POSTING_CATEGORY + ":" + requestId).getBytes(StandardCharsets.UTF_8));
     }
 
     private Outcome replayRecord(Deposit original, String hash) {
@@ -489,27 +500,30 @@ public class DepositServiceImpl implements DepositService {
         if (replayed != null) {
             return replayReversal(replayed, depositId, hash);
         }
-        Deposit deposit = deposits.lockById(depositId).orElseThrow(() -> notFound(depositId));
-        // A concurrent duplicate of this request waited on the lock: it answers with the first result.
-        Deposit committed = deposits.findByReversalRequestId(requestId).orElse(null);
-        if (committed != null) {
-            return replayReversal(committed, depositId, hash);
-        }
+        // No lock here: the reversal below takes its locks in the generic route's order (the entry-number sequence,
+        // the entry, then the deposit and its sessions in DepositReversalReaction), so this command and POST
+        // /journal-entries/{id}/reverse of the same entry serialize instead of deadlocking. The status read here is
+        // advisory; the entry's conditional flip to REVERSED decides a race.
+        Deposit deposit = deposits.findById(depositId).orElseThrow(() -> notFound(depositId));
         List<DepositSession> taken = sessionsOf(deposit);
-        // ADR-0061: the caller's reach at every location the deposit took cash from, after the lock.
+        // ADR-0061: the caller's reach at every location the deposit took cash from, before its status is read.
         requireInScope(AccountingPermissions.DEPOSIT_REVERSE, taken);
         if (deposit.getStatus() == DepositStatus.REVERSED) {
-            throw new CashSetupException(
-                    CashSetupException.Code.DEPOSIT_ALREADY_REVERSED,
-                    "Bank deposit " + deposit.getJournalEntryNumber() + " was already reversed by "
-                            + deposit.getReversalJournalEntryNumber() + "; record a new deposit instead",
-                    deposit.getDepositId().toString(),
-                    null);
+            throw alreadyReversed(deposit);
         }
-        deposit.setReversalRequestId(requestId);
-        deposit.setReversalRequestHash(hash);
+
+        // The EXISTING reversal (ADR-0047): default date rules, period gate and override. Its in-process event reaches
+        // DepositReversalReaction in this transaction, which marks the deposit REVERSED with this request's id and
+        // hash and returns the sessions.
         try {
-            deposits.saveAndFlush(deposit);
+            DepositReversalReaction.underRequest(
+                    new DepositReversalReaction.ReversalRequest(depositId, requestId, hash),
+                    () -> journalEntryService.reverseJournalEntry(
+                            deposit.getJournalEntryId(), reason, request.reversalDate(), override));
+        } catch (JournalEntryNotReversibleException lostRace) {
+            // Reversed meanwhile, by another Reverse deposit or as a journal entry. A concurrent duplicate of this
+            // very request lands here too; retried, it answers with the first result.
+            throw alreadyReversed(deposit);
         } catch (DataIntegrityViolationException e) {
             if (!String.valueOf(e.getMostSpecificCause().getMessage()).contains(REVERSAL_REQUEST_UNIQUE)) {
                 throw e;
@@ -518,10 +532,6 @@ public class DepositServiceImpl implements DepositService {
                     CashSetupException.Code.IDEMPOTENCY_CONFLICT,
                     "requestId " + requestId + " was concurrently used by another command");
         }
-
-        // The EXISTING reversal (ADR-0047): default date rules, period gate and override. Its in-process event reaches
-        // DepositReversalReaction in this transaction, which marks the deposit REVERSED and returns the sessions.
-        journalEntryService.reverseJournalEntry(deposit.getJournalEntryId(), reason, request.reversalDate(), override);
 
         // The reversal clears the persistence context (JournalEntryRepository.markReversed): read the deposit again.
         Deposit reversed = deposits.findById(depositId).orElseThrow(() -> notFound(depositId));
@@ -595,6 +605,17 @@ public class DepositServiceImpl implements DepositService {
                         + "; a session is deposited whole, once",
                 session.getSessionId().toString(),
                 "Refresh the undeposited sessions and select again");
+    }
+
+    private static CashSetupException alreadyReversed(Deposit deposit) {
+        String by =
+                deposit.getReversalJournalEntryNumber() == null ? "" : " by " + deposit.getReversalJournalEntryNumber();
+        return new CashSetupException(
+                CashSetupException.Code.DEPOSIT_ALREADY_REVERSED,
+                "Bank deposit " + deposit.getJournalEntryNumber() + " was already reversed" + by
+                        + "; record a new deposit instead",
+                deposit.getDepositId().toString(),
+                null);
     }
 
     private CashSetupException unbalancedRefusal(Totals totals) {

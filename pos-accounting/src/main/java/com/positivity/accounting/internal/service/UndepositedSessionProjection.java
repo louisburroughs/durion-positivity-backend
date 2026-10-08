@@ -34,11 +34,16 @@ import org.springframework.transaction.annotation.Transactional;
  * plus each movement's {@link RegisterCashMovementPostingService#clearingEffect} (a petty expense's credit). A deposit
  * balances when the drops equal the expected cash plus the clearing net.
  *
+ * <p><b>Nothing to deposit.</b> A session with no drops, no expected cash and a zero clearing net (card tenders only,
+ * no over/short) is written {@code NOTHING_TO_DEPOSIT}, terminal: it is never listed, counted in the undeposited gauges
+ * or taken by a deposit. A card-only session with an over/short or a petty expense keeps a clearing net and waits
+ * {@code UNDEPOSITED}.
+ *
  * <p><b>No row</b> for a schema-1 fact (no movements, so no drops), for a session closed in a currency other than the
  * ledger's, or with a bank drop in one (ADR-0067 PC-9: never deposited at par; the listener skips a session S17 held
- * for its currency before it gets here). A bank drop that breaks the close fact's contract (no movement id, a movement
- * id named twice, not {@code OUT}, no positive amount) propagates, so the whole session rolls back for retry / DLQ, as
- * a malformed petty expense does.
+ * for its currency before it gets here). A schema-2 fact without its {@code movements} list, or with a bank drop that
+ * breaks the close fact's contract (no movement id, a movement id named twice, not {@code OUT}, no positive amount),
+ * propagates, so the whole session rolls back for retry / DLQ, as a malformed petty expense does.
  */
 @Slf4j
 @Component
@@ -57,15 +62,21 @@ public class UndepositedSessionProjection {
      * @param fact the consumed session-closed fact
      * @param schemaVersion the envelope's schema version; below 2 writes nothing
      * @return whether a row was written
+     * @throws IllegalArgumentException for a schema-2 fact without its movements list or with a malformed bank drop
      */
     @Transactional
     public boolean record(@NonNull RegisterSessionClosedV1 fact, int schemaVersion) {
-        if (schemaVersion < 2 || fact.movements() == null) {
+        if (schemaVersion < 2) {
             log.debug(
                     "Schema-{} close fact writes no undeposited session | sessionId={}",
                     schemaVersion,
                     fact.sessionId());
             return false;
+        }
+        if (fact.movements() == null) {
+            // Version 2 always carries the list (empty when nothing moved); without it the drops are unknown.
+            throw new IllegalArgumentException("Close fact of session " + fact.sessionId() + " is schema version "
+                    + schemaVersion + " but carries no movements list; its bank drops cannot be read");
         }
         if (sessions.existsBySessionId(fact.sessionId())) {
             log.debug("Undeposited session already written, skipping | sessionId={}", fact.sessionId());
@@ -111,7 +122,10 @@ public class UndepositedSessionProjection {
         session.setClearingNet(clearingNet);
         session.setDepositAmount(depositAmount);
         session.setCurrencyCode(fact.currencyCode());
-        session.setStatus(UndepositedSessionStatus.UNDEPOSITED);
+        boolean nothingToDeposit =
+                depositAmount.signum() == 0 && expectedCash.signum() == 0 && clearingNet.signum() == 0;
+        session.setStatus(
+                nothingToDeposit ? UndepositedSessionStatus.NOTHING_TO_DEPOSIT : UndepositedSessionStatus.UNDEPOSITED);
         UndepositedSession saved = sessions.saveAndFlush(session);
 
         List<UndepositedSessionDrop> rows = new ArrayList<>();
@@ -127,9 +141,10 @@ public class UndepositedSessionProjection {
         drops.saveAll(rows);
 
         log.info(
-                "Undeposited session written | sessionId={} | terminalId={} | drops={} | depositAmount={}"
+                "Undeposited session written | sessionId={} | status={} | terminalId={} | drops={} | depositAmount={}"
                         + " | expectedCash={} | clearingNet={} | currency={}",
                 fact.sessionId(),
+                saved.getStatus(),
                 fact.terminalId(),
                 rows.size(),
                 depositAmount,

@@ -71,7 +71,10 @@ public class BankDepositController {
                     do not use it for card, on-account or check amounts, which are never in a deposit.
                     Preconditions: caller holds accounting:deposit:create; a session outside the caller's location \
                     reach is not listed; a sessionId that names no listed session is 400 VALIDATION_ERROR; \
-                    bankGlAccountId, when given, names a GL account (400 otherwise).
+                    bankGlAccountId, when given, is an active, reconcilable BANK_CASH account in functional currency \
+                    (422 DEPOSIT_BANK_ACCOUNT_NOT_ELIGIBLE); the tenant's accounting time zone is set (422 \
+                    ACCOUNTING_TIME_ZONE_UNSET) and, for a selection, BANK_DEPOSIT is mapped (422 \
+                    GL_MAPPING_NOT_CONFIGURED).
                     Required inputs: none; optional sessionId (repeatable) and bankGlAccountId, the account the \
                     preview's bank line names.
                     Emits an ACCOUNTING_UNDEPOSITED_SESSIONS_VIEW event and returns 200 with asOf, currencyCode, the \
@@ -81,12 +84,17 @@ public class BankDepositController {
     @ApiResponse(responseCode = "200", description = "The undeposited sessions and, for a selection, its deposit")
     @ApiResponse(
             responseCode = "400",
-            description = "A sessionId that names no undeposited session the caller may see, or an unknown"
-                    + " bankGlAccountId (VALIDATION_ERROR)",
+            description = "A sessionId that names no undeposited session the caller may see (VALIDATION_ERROR)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = "Caller lacks accounting:deposit:create",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description =
+                    "DEPOSIT_BANK_ACCOUNT_NOT_ELIGIBLE (the preview's bankGlAccountId), ACCOUNTING_TIME_ZONE_UNSET"
+                            + " or GL_MAPPING_NOT_CONFIGURED (the BANK_DEPOSIT keys of a selection)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_UNDEPOSITED_SESSIONS_VIEW", apiVersion = "1")
     public ResponseEntity<UndepositedSessionsResponse> listUndepositedSessions(
@@ -125,9 +133,9 @@ public class BankDepositController {
                     bankGlAccountId is an active, reconcilable BANK_CASH account in functional currency (422 \
                     DEPOSIT_BANK_ACCOUNT_NOT_ELIGIBLE); every sessionId names a closed session waiting to be \
                     deposited (400 VALIDATION_ERROR when unknown, 409 DEPOSIT_SESSION_ALREADY_DEPOSITED when a \
-                    deposit already took it); the selection holds bank drops (400 otherwise) and its drops equal its \
-                    expected cash plus its clearing net (422 DEPOSIT_UNBALANCED naming the difference; list the \
-                    sessions first to see it); no amount finer than the currency's minor unit (422 \
+                    deposit already took it); the selection's drops equal its expected cash plus its clearing net \
+                    (422 DEPOSIT_UNBALANCED naming the difference; list the sessions first to see it) and are more \
+                    than zero (400 otherwise); no amount finer than the currency's minor unit (422 \
                     AMOUNT_PRECISION_EXCEEDS_CURRENCY); depositDate is in an OPEN period, or in a CLOSED one with \
                     accounting:period:override and overrideJustification (422 PERIOD_CLOSED otherwise), never \
                     before the hard-lock date (422 PERIOD_HARD_LOCKED). Idempotent on requestId: a replay returns \

@@ -13,6 +13,7 @@ import com.positivity.accounting.internal.exception.AccountingPeriodClosedExcept
 import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
 import com.positivity.accounting.internal.exception.CashSetupException;
 import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
+import com.positivity.accounting.internal.exception.JournalEntryNotReversibleException;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.accounting.internal.service.AccountingCalendarZoneResolver;
 import com.positivity.accounting.internal.service.DepositService;
@@ -248,6 +249,31 @@ class BankDepositPostgresIT extends PostgresTenancyTestBase {
         assertThat(net(tenant, "1090")).isEqualByComparingTo("0");
         assertThat(net(tenant, "1000")).isEqualByComparingTo("0");
         assertThat(status(tenant, session)).isEqualTo("UNDEPOSITED");
+
+        // Review MAJOR-1 (ADR-0047): the deposit's reversal entry is never reversed; nothing moves.
+        int entriesBefore = count(tenant, "SELECT count(*) FROM journal_entry WHERE tenant_id = ?");
+        assertThatThrownBy(() -> asTenant(
+                        tenant,
+                        () -> journalEntries.reverseJournalEntry(
+                                reversed.reversalJournalEntryId(), "Undo the wrong reversal", null)))
+                .isInstanceOfSatisfying(
+                        CashSetupException.class,
+                        e -> assertThat(e.getCode())
+                                .isEqualTo(CashSetupException.Code.DEPOSIT_REVERSAL_NOT_REVERSIBLE));
+        assertThat(count(tenant, "SELECT count(*) FROM journal_entry WHERE tenant_id = ?"))
+                .isEqualTo(entriesBefore);
+        assertThat(new JdbcTemplate(ownerDataSource())
+                        .queryForObject(
+                                "SELECT status FROM journal_entry WHERE journal_entry_id = ?",
+                                String.class,
+                                reversed.reversalJournalEntryId()))
+                .isEqualTo("POSTED");
+        assertThat(net(tenant, "1095")).isEqualByComparingTo("-43.00");
+        assertThat(net(tenant, "1090")).isEqualByComparingTo("0");
+        assertThat(net(tenant, "1000")).isEqualByComparingTo("0");
+        assertThat(asTenant(tenant, () -> deposits.get(deposit.depositId())).status())
+                .isEqualTo(DepositStatus.REVERSED);
+
         assertThatThrownBy(() -> asTenant(
                         tenant,
                         () -> deposits.reverse(
@@ -292,6 +318,10 @@ class BankDepositPostgresIT extends PostgresTenancyTestBase {
                 () -> listener.onOrderEvent(envelope(UUID.randomUUID().toString(), 1, workedExample(schemaOne))));
         UUID foreign = UUIDv7Generator.generate();
         closeSession(tenant, fact(foreign, "0.00", "CAD", "100.00", drop("100.00", "B-CAD")));
+        // Review MINOR-2: card tenders only, no over/short: nothing to deposit, never listed.
+        UUID cardOnly = UUIDv7Generator.generate();
+        closeSession(tenant, fact(cardOnly, "0.00", "USD", "0.00"));
+        assertThat(status(tenant, cardOnly)).isEqualTo("NOTHING_TO_DEPOSIT");
         int entries = count(tenant, "SELECT count(*) FROM journal_entry WHERE tenant_id = ?");
 
         signIn("clerk.ann", CLERK_GRANTS);
@@ -352,6 +382,93 @@ class BankDepositPostgresIT extends PostgresTenancyTestBase {
         assertThat(count(tenant, "SELECT count(*) FROM deposit WHERE tenant_id = ?"))
                 .isEqualTo(1);
         assertThat(net(tenant, "1000")).isEqualByComparingTo("1197.00");
+    }
+
+    @Test
+    @DisplayName("review LOW-6: the same requestId sent twice at once is one deposit; the second answers replayed")
+    void concurrentReplaysOfOneRequest() throws Exception {
+        UUID tenant = tenant();
+        UUID session = UUIDv7Generator.generate();
+        closeSession(tenant, workedExample(session));
+        UUID bank = provisionedAccountId(tenant, "1000");
+        DepositRecordRequest request =
+                new DepositRecordRequest(bank, today, "USD", List.of(session), UUIDv7Generator.generate(), null, null);
+
+        List<Object> outcomes = racePair(
+                race(new CountDownLatch(0), tenant, () -> deposits.record(request)),
+                race(new CountDownLatch(0), tenant, () -> deposits.record(request)));
+
+        assertThat(outcomes).allMatch(DepositService.Outcome.class::isInstance);
+        assertThat(outcomes)
+                .extracting(outcome -> ((DepositService.Outcome) outcome).replayed())
+                .containsExactlyInAnyOrder(false, true);
+        assertThat(outcomes)
+                .extracting(
+                        outcome -> ((DepositService.Outcome) outcome).response().depositId())
+                .containsOnly(
+                        ((DepositService.Outcome) outcomes.get(0)).response().depositId());
+        assertThat(count(tenant, "SELECT count(*) FROM deposit WHERE tenant_id = ?"))
+                .isEqualTo(1);
+        assertThat(net(tenant, "1000")).isEqualByComparingTo("1197.00");
+    }
+
+    @Test
+    @DisplayName("review LOW-1: Reverse deposit racing the generic journal-entry reversal of the same entry: one"
+            + " reverses, the other is refused, never a deadlock")
+    void reversalRoutesSerialize() throws Exception {
+        UUID tenant = tenant();
+        UUID session = UUIDv7Generator.generate();
+        closeSession(tenant, workedExample(session));
+        UUID bank = provisionedAccountId(tenant, "1000");
+        signIn("clerk.ann", CLERK_GRANTS);
+        DepositResponse deposit = asTenant(
+                        tenant,
+                        () -> deposits.record(new DepositRecordRequest(
+                                bank, today, "USD", List.of(session), UUIDv7Generator.generate(), null, null)))
+                .response();
+
+        List<Object> outcomes = racePair(
+                race(
+                        new CountDownLatch(0),
+                        tenant,
+                        () -> deposits.reverse(
+                                deposit.depositId(),
+                                new DepositReversalRequest(
+                                        "Deposited into the wrong bank account",
+                                        null,
+                                        null,
+                                        UUIDv7Generator.generate()))),
+                race(
+                        new CountDownLatch(0),
+                        tenant,
+                        () -> journalEntries.reverseJournalEntry(
+                                deposit.journalEntryId(), "Wrong deposit slip", null)));
+
+        assertThat(outcomes)
+                .as("exactly one route reverses; the other is refused as already reversed, never deadlocked")
+                .filteredOn(outcome -> !(outcome instanceof RuntimeException))
+                .hasSize(1);
+        assertThat(outcomes)
+                .filteredOn(RuntimeException.class::isInstance)
+                .singleElement()
+                .satisfies(refusal -> {
+                    if (refusal instanceof CashSetupException cash) {
+                        assertThat(cash.getCode()).isEqualTo(CashSetupException.Code.DEPOSIT_ALREADY_REVERSED);
+                    } else {
+                        assertThat(refusal).isInstanceOf(JournalEntryNotReversibleException.class);
+                    }
+                });
+        assertThat(
+                        count(
+                                tenant,
+                                "SELECT count(*) FROM journal_entry WHERE tenant_id = ? AND source_event_type = 'BANK_DEPOSIT'"))
+                .as("the deposit's entry and one reversal")
+                .isEqualTo(2);
+        assertThat(net(tenant, "1000")).isEqualByComparingTo("0");
+        assertThat(net(tenant, "1090")).isEqualByComparingTo("0");
+        assertThat(status(tenant, session)).isEqualTo("UNDEPOSITED");
+        assertThat(asTenant(tenant, () -> deposits.get(deposit.depositId())).status())
+                .isEqualTo(DepositStatus.REVERSED);
     }
 
     @Test
@@ -452,10 +569,33 @@ class BankDepositPostgresIT extends PostgresTenancyTestBase {
 
     // ---- fixtures -------------------------------------------------------------------------------------------------
 
+    /** Runs two racers from one start signal; each answers its result or its refusal. */
+    private List<Object> racePair(Callable<Object> first, Callable<Object> second) throws Exception {
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            List<Future<Object>> racers = new ArrayList<>();
+            for (Callable<Object> racer : List.of(first, second)) {
+                racers.add(pool.submit(() -> {
+                    start.await();
+                    return racer.call();
+                }));
+            }
+            start.countDown();
+            List<Object> outcomes = new ArrayList<>();
+            for (Future<Object> racer : racers) {
+                outcomes.add(racer.get(60, TimeUnit.SECONDS));
+            }
+            return outcomes;
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
     private Callable<Object> race(CountDownLatch start, UUID tenant, Callable<Object> work) {
         return () -> {
             start.await();
-            signIn("clerk.ann", CLERK_GRANTS);
+            signIn("controller.cfo", CLERK_GRANTS, "accounting:deposit:reverse");
             try {
                 return asTenant(tenant, () -> {
                     try {
@@ -466,7 +606,7 @@ class BankDepositPostgresIT extends PostgresTenancyTestBase {
                         throw new IllegalStateException(e);
                     }
                 });
-            } catch (CashSetupException e) {
+            } catch (CashSetupException | JournalEntryNotReversibleException e) {
                 return e;
             } finally {
                 SecurityContextHolder.clearContext();
