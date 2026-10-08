@@ -32,18 +32,28 @@ Tax calculation service for the Durion Positivity ETSMS platform. Supports two o
 ## API Endpoints
 
 - `POST /v1/tax/calculate` — calculate tax for a set of line items
+- `GET /v1/tax/rates` — rate-only lookup for an address (`tax:rates:view`)
+- `GET /v1/tax/tax-types?countryCode=` — a country's configured tax types, regimes and currency (`tax:rates:view`, service
+  authority; CAP:550 S32a)
+- `POST /v1/tax/transactions/{referenceId}/commit` and `/void` — provider document lifecycle (`tax:commit`)
 - `GET /v1/tax/mode` — returns current operating mode (`test` or `production`)
+
+Error codes beyond validation: 422 `TAX_JURISDICTION_NOT_CONFIGURED` (a profiled country has no rate row for the region on
+the date) and 501 `TAX_RATE_LOOKUP_UNSUPPORTED` (rate lookup on a deployment-wide provider other than test mode).
 
 ## Provider plug-ins
 
 ADR-0071 (durion `docs/adr/0071-tax-per-tenant-pluggable-providers.adr.md`; spec AW58, AW59) decides how pos-tax is reached and
-which engine answers. Today one provider serves the whole deployment (`TAX_TEST_MODE`, `pos.tax.provider`); the plug-in binding
-below replaces both switches.
+which engine answers. Today the interim per-country default `pos.tax.default-providers.<country>` routes a configured country to
+its plug-in in every provider mode (CAP:550 S32a); every other country keeps the deployment-wide switch (`TAX_TEST_MODE`,
+`pos.tax.provider`). The plug-in binding below (ADR-0071 step 1, louisburroughs/durion-positivity-backend#2629) replaces both
+switches and makes the default map its fallback.
 
 | Plug-in | What it is | Status |
 | --- | --- | --- |
 | `US_SELF` | The test-mode calculator: configured placeholder rates (stubs) | Exists, as test mode |
-| `CA_SELF` | The Canadian stubs of AW57: typed rates, registration status, number shape, evidence rule, plausibility | Planned (#2522) |
+| `<country>_SELF` | The configuration-driven self-hosted plug-in, one per country profiled under `pos.tax.countries` (`SelfHostedTaxPlugin`): typed placeholder rates from the profile's rows; commit and void are logged no-ops | Exists (CAP:550 S32a, #2636), routed by the per-country default |
+| `CA_SELF` | The first configured country's self-hosted plug-in (typed rates today; registration status, number shape, evidence rule and plausibility follow in S32b–S32c) | Exists (#2636), routed by the per-country default `pos.tax.default-providers.CA`; no rate ships |
 | `AVALARA` | The AvaTax adapter (`AvalaraTaxProvider`) | Exists; no environment enables it |
 
 - **Binding.** A tenant-scoped `tax_provider_binding` names the plug-in per tenant and country (`countryCode`, `providerId`,
@@ -84,11 +94,11 @@ what the stub answers today, and which questions wait for expert advice.
 | --- | --- | --- | --- | --- |
 | Sales tax calculation | `POST /v1/tax/calculate` (`tax:calculate`) | Test mode (`TAX_TEST_MODE`, default `true`; Compose sets it): the configured flat rates per jurisdiction type, or the effective-dated schedule, for any address. A line marked `taxExempt` with no exemption claim is taxed zero. A claim (a reason code or a certificate id) is taxed zero only when an active certificate is valid on the transaction date for the destination's state; otherwise the line is taxed and flagged, never refused | pos-order, pos-workorder, pos-invoice | Real rates, which supplies are taxable, every non-US regime |
 | Refund calculation | `/calculate` with `calculationType = REFUND` | Positive amounts at the same test-mode rates, as of the `transactionDate` the caller sends (for a refund, the original sale date; it defaults to today). A finalized invoice's credit reverses its stored tax and never calls this | none in code | As above |
-| Rate lookup | `GET /v1/tax/rates` (`tax:rates:view`) | Test mode answers from the configured rates. Any other provider answers 501 `TAX_RATE_LOOKUP_UNSUPPORTED` | none in code | Real rates |
+| Rate lookup | `GET /v1/tax/rates` (`tax:rates:view`) | A country routed by `pos.tax.default-providers` is answered by its plug-in in every mode (typed rows, below). Otherwise test mode answers from the configured rates, and any other provider answers 501 `TAX_RATE_LOOKUP_UNSUPPORTED` | none in code | Real rates |
 | Provider document lifecycle | `POST /v1/tax/transactions/{referenceId}/commit` and `/void` (`tax:commit`) | Test mode: a no-op that always succeeds, logged in `tax_provider_transaction`. The AvaTax adapter exists, but no environment enables it | pos-invoice | Filing and the provider choice |
 | Exemption certificates | `/v1/tax/exemption-certificates` (`tax:exemption:view`, `tax:exemption:manage`) | A tenant registry. A claim without an active certificate is taxed and flagged, never refused | none outside pos-tax; pos-customer becomes its front door (ADR-0071, no story yet) | Which exemptions are valid, and what evidence they need |
 | Use tax (planned) | `/calculate` with `calculationType = USE` (AW44; louisburroughs/durion-positivity-backend#2604) | Priced exactly like `SALE`; test mode always answers | pos-accounting | Which purchases owe use tax, per-state rules, filing (louisburroughs/durion-positivity-backend#2599) |
-| Canadian rates (planned) | `GET /v1/tax/rates?countryCode=CA`; `/calculate` rows gain `taxType` and `inputTaxRecoverable` (AW57; louisburroughs/durion-positivity-backend#2522) | A configured rate per province and tax type, in every provider mode, `source = STUB`; every row typed; placeholder recoverability GST, HST and QST yes, PST no. A country facet stops the US defaults from pricing a Canadian address (today they do) | pos-accounting, pos-invoice (the `taxType` hand-off) | Rates, which supplies are taxable, what is recoverable |
+| Typed rates (per-country profile) | `GET /v1/tax/rates`, `POST /v1/tax/calculate` and `GET /v1/tax/tax-types` for a profiled country; rate rows and line rows carry `taxType` and `inputTaxRecoverable` (AW57; CAP:550 S32a, louisburroughs/durion-positivity-backend#2636) | Built. The country's plug-in answers in every provider mode from its configured rows, `source = STUB`: one typed component or row per tax type in effect for the region on the date, HALF_UP at the currency exponent per row; no row → 422 `TAX_JURISDICTION_NOT_CONFIGURED`, never another country's rates. An exemption claim is taxed and flagged. **No rate ships**: the first configured country (`CA`) has placeholder tax types, regimes and recoverability only. Other countries (the US) are unchanged, with both fields null | pos-accounting, pos-invoice (the `taxType` hand-off) | Rates, which supplies are taxable or exempt, what is recoverable, how taxes stack, the tax-type list and regime grouping |
 | Tax registration status (planned) | A tenant's registration per regime (`GST_HST`, `QST`) as of a date (AW49, AW57) | Effective-dated, overlap refused; written only by pos-accounting, the front door (AW59); published as `tax.registration.changed` by outbox (AW58) | pos-accounting, pos-order (replicas) | Registration rules |
 | Registration-number shape (planned) | `wellFormed` for a supplier's number (AW53, AW57) | A configurable pattern; by default any non-blank value is well formed | pos-accounting | Number formats |
 | Evidence rule (planned) | `GET /v1/tax/evidence-rules?countryCode=CA&asOf=` (AW53, AW57) | One configured row: from 100.00 CAD, `appliesTo` drawer receipts and vendor bills | pos-accounting, pos-order | The threshold, the $500 tier, what is compared, whether bills are in scope |
@@ -98,6 +108,8 @@ what the stub answers today, and which questions wait for expert advice.
 
 | Property                                 | Default          | Description                              |
 | ---------------------------------------- | ---------------- | ---------------------------------------- |
+| `pos.tax.default-providers.<country>`    | `CA: CA_SELF`    | Interim per-country default plug-in (see below) |
+| `pos.tax.countries.<country>`            | `CA` placeholders, no rates | Per-country tax profile (see below) |
 | `pos.tax.test-mode.enabled`              | `false`          | Enable flat-rate test mode               |
 | `pos.tax.test-mode.default-rates.STATE`  | `0.0725`         | State rate in test mode                  |
 | `pos.tax.test-mode.default-rates.COUNTY` | `0.01`           | County rate in test mode                 |
@@ -132,6 +144,45 @@ pos:
             COUNTY: 0.0125
             CITY: 0.0025
 ```
+
+### Per-country profiles and default providers (CAP:550 S32a)
+
+Every value here is a **placeholder held for expert advice** (AW48, OI-4), never tax law. Code names no country, regime or tax
+type: adding a country is a configuration block, a `default-providers` entry and, where needed, new `TaxType` values in
+pos-tax-common (the platform's tax-type vocabulary; consumers store the code as a string, so a new value needs no migration).
+
+```yaml
+pos.tax:
+  default-providers:
+    XX: XX_SELF                 # the self-hosted plug-in of a profiled country is <country>_SELF
+  countries:
+    XX:
+      currency: EUR             # ISO 4217; its minor-unit exponent is the rounding scale
+      tax-types:                # keys are TaxType codes
+        GST: { regime: R_1, jurisdiction-type: COUNTRY, input-tax-recoverable: true }
+        PST: { jurisdiction-type: PROVINCE, input-tax-recoverable: false }   # no regime
+      regimes:                  # what a tenant registers under and recovery is keyed by
+        "[R_1]": { regions: [] }  # empty = the whole country; a key with "_" needs Spring's "[...]" map-key notation
+      rates:                    # none ship; tests and dev use fixtures marked "not tax law"
+        - { region-code: X1, tax-type: GST, rate: 0.01, effective-from: 2026-01-01, effective-to: 2026-12-31 }
+```
+
+- **Routing.** An address whose country has a `default-providers` entry is answered by that plug-in for rate lookup,
+  calculation (sale and refund), commit and void, in every provider mode. Every other country keeps the switch above. A plug-in
+  serves only its own country.
+- **Rows.** `effective-from` and `effective-to` are inclusive; `effective-to` is optional. The rows of the destination region in
+  effect on the date answer, one per tax type; with none, 422 `TAX_JURISDICTION_NOT_CONFIGURED`.
+- **Startup check** (`TaxCountryProfiles`). Startup fails, naming the property, when a country code is not ISO 3166-1 alpha-2
+  (assigned or user-assigned, so a fixture may use `ZZ`); a currency is missing or not ISO 4217; a `tax-types` key is not a
+  `TaxType`; a tax type names an undeclared regime, lacks `jurisdiction-type` or `input-tax-recoverable`; a region code is not 1–3
+  letters or digits; a rate row names an undeclared tax type, has a rate outside [0, 1), lacks `effective-from` or ends before it
+  starts; two rows of one region and tax type, or of one region and regime, are in effect on the same date (one rate per regime);
+  or a `default-providers` entry names a plug-in other than its own country's `<country>_SELF`.
+- **Lifecycle log.** A committable calculation priced by a plug-in records an `ESTIMATED` row in `tax_provider_transaction`
+  naming the plug-in (`provider`), so its commit and void reach the same plug-in as logged no-ops; the re-commit job ignores
+  `ESTIMATED` rows. No new column was needed: `provider` already names the provider that owns each document.
+- **Callers (ADR-0021 §3).** pos-order, pos-invoice and pos-accounting call computation and the tax-types read directly with the
+  service authority; there is no gateway route.
 
 ### Rounding reconciliation
 

@@ -383,7 +383,8 @@ class InvoiceTaxBreakdownWriterTest {
                 {"subtotal":100.00,"totalTax":1.10,"total":101.10,"effectiveTaxRate":1.10,"jurisdictions":[],
                  "testMode":true,"calculatedAt":"2026-07-20T00:00:00Z",
                  "lineItemTaxes":[{"lineItemId":"1","subtotal":100.00,"taxAmount":1.10,"total":101.10,
-                   "jurisdictions":[{"jurisdictionType":"COUNTRY","code":"ZZ","rate":0.011,"amount":1.10,
+                   "taxExempt":false,"exemptionDenied":false,
+                   "jurisdictions":[{"jurisdictionType":"COUNTRY","code":"ZZ","rate":0.011,"amount":1.10,"exempt":false,
                                      "taxType":"A_TYPE_FROM_A_LATER_BUILD","inputTaxRecoverable":true}]}]}
                 """;
 

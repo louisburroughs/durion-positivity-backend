@@ -305,6 +305,23 @@ list (spec §4.4 item 2, ADR-0057) — keyed on that flag only, never on a name 
 `truncated`/`limit` semantics are unchanged. Rows replicated before pos-customer published the field
 hold null until a party-fact replay at the same version fills them.
 
+### Tax type on the tax rows (V4, CAP:550 S32a, #2636)
+
+`invoice_line_tax.tax_type` and `invoice_tax_summary.tax_type` (`varchar(32) NULL`, no default, no CHECK) hold the tax-type
+code pos-tax priced each row with (`TaxCalculationResponse.LineItemTax.jurisdictions[].taxType`, the pos-tax-common `TaxType`
+code, e.g. `GST`). pos-tax-common owns the value set, so a new value needs no migration here.
+
+- **Copy, never infer.** `InvoiceTaxBreakdownWriter` copies the value exactly as received. An absent value, or one this build
+  does not know (it deserializes as null), is stored null and the row is **still written**, so the invoice tax still equals
+  the sum of its rows. pos-invoice never derives a type from the jurisdiction type, code, rate or country.
+- **Rollup.** The `invoice_tax_summary` key is `jurisdictionType|jurisdictionCode|taxType`, so two tax types sharing a
+  jurisdiction are never merged.
+- **DRAFT only, no backfill.** The column is written only by the DRAFT re-price path, which rebuilds the rows wholesale; a
+  finalized invoice's rows are frozen (BILL-DEC-004). Existing rows stay null permanently (all are US, where null is correct).
+- **Event.** `InvoiceUpdatedV1.taxBreakdown[].taxType` (`TaxBreakdownLine.taxType`, nullable String, last component) carries the
+  stored code; additive within schema version 1, same topic, no dual-publish (ADR-0044 §3). A US invoice's rows carry null.
+- **No read contract change.** No invoice or receipt endpoint, DTO or SDK exposes the breakdown or the type.
+
 ## Development
 
 ```bash

@@ -170,7 +170,7 @@ class TaxCountryProfilesTest {
                 new YamlPropertySourceLoader().load("application", new ClassPathResource("application.yml"));
         TaxProperties shipped = new Binder(ConfigurationPropertySources.from(yaml))
                 .bind("pos.tax", TaxProperties.class)
-                .orElseThrow();
+                .get();
 
         TaxCountryProfiles profiles = new TaxCountryProfiles(shipped);
 
