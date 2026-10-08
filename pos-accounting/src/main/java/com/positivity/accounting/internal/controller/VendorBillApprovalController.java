@@ -183,9 +183,11 @@ public class VendorBillApprovalController {
                 Returns 200 with the bill read, its posting included; 400 JUSTIFICATION_REQUIRED (also a creator's \
                 approval without one), VALIDATION_ERROR or ARGUMENT_NOT_VALID; 401 without a valid token; 403 \
                 FORBIDDEN, AP_APPROVAL_LIMIT_EXCEEDED (nextAction names accounting:ap:approve_over_limit) or \
-                AP_BILL_SELF_APPROVAL, each limit or creator refusal audited as VENDOR_BILL_APPROVE_REFUSED; 404 \
+                AP_BILL_SELF_APPROVAL (the bill's creator, or the vendor's creator on its first bill, reason \
+                VENDOR_CREATOR_FIRST_BILL), each limit or creator refusal audited as VENDOR_BILL_APPROVE_REFUSED; 404 \
                 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE or AP_BILL_AWAITING_INVOICE; 422 \
-                AP_BILL_UNCLASSIFIED, AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, \
+                AP_BILL_UNCLASSIFIED (only when neither the classification, the proposal nor the vendor's AP \
+                defaults give a class), AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, \
                 PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED (guided: referenceId CATEGORY/KEY and nextAction), \
                 each leaving the bill as it was.
                 """,
@@ -347,8 +349,10 @@ public class VendorBillApprovalController {
                 Returns 200 with the bill read; 400 VALIDATION_ERROR for an unknown action, JUSTIFICATION_REQUIRED \
                 for a missing or short reason, or ARGUMENT_NOT_VALID; 401 without a valid token; 403 FORBIDDEN \
                 without the action's permission, or for ACCEPT AP_APPROVAL_LIMIT_EXCEEDED or AP_BILL_SELF_APPROVAL \
-                (audited as VENDOR_BILL_MATCH_EXCEPTION_RESOLVE_REFUSED); 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE or, for \
-                ACCEPT, AP_BILL_AWAITING_INVOICE; for ACCEPT, 422 AP_BILL_UNCLASSIFIED, AP_BILL_TOTALS_UNRECONCILED, \
+                (also the vendor's creator on its first bill, reason VENDOR_CREATOR_FIRST_BILL; audited as \
+                VENDOR_BILL_MATCH_EXCEPTION_RESOLVE_REFUSED); 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE or, for \
+                ACCEPT, AP_BILL_AWAITING_INVOICE; for ACCEPT, 422 AP_BILL_UNCLASSIFIED (no class given, proposed or \
+                defaulted for the vendor), AP_BILL_TOTALS_UNRECONCILED, \
                 AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED, leaving the bill \
                 as it was.
                 """,

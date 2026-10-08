@@ -74,6 +74,23 @@ public class VendorBillException extends RuntimeException {
          * or never past the gateway (CAP:550 S42, #2603). 409.
          */
         AP_PAYMENT_NOT_RETRYABLE(HttpStatus.CONFLICT),
+        /**
+         * A new bill or AP payment names a vendor that is not in accounting's copy of the pos-supplier vendor master
+         * (CAP:550 S24, #2517; AW23). 422: the request is well formed, the vendor is unknown here. The vendor reads and
+         * commands answer 404 {@code VENDOR_NOT_FOUND} instead ({@link VendorNotFoundException}).
+         */
+        VENDOR_NOT_FOUND(HttpStatus.UNPROCESSABLE_CONTENT),
+        /**
+         * A new bill or AP payment names an {@code INACTIVE} vendor (CAP:550 S24, #2517; AW23): an inactive vendor takes
+         * no new business, and its open bills are not paid while it is inactive. 422.
+         */
+        VENDOR_INACTIVE(HttpStatus.UNPROCESSABLE_CONTENT),
+        /**
+         * A bill the payment would pay was approved at another remit-to version than the vendor's current one, and no
+         * one other than the payer confirmed the current version; or a confirmation names a version that is not the
+         * current one (CAP:550 S24, #2517, rules 6 and 7). 409, before any payment row or gateway call.
+         */
+        VENDOR_PAYMENT_DETAILS_CHANGED(HttpStatus.CONFLICT),
         /** A justification or reason absent, blank or under 10 characters. */
         JUSTIFICATION_REQUIRED(HttpStatus.BAD_REQUEST),
         /** A request field outside its contract (an unknown action, a class the document cannot take). */

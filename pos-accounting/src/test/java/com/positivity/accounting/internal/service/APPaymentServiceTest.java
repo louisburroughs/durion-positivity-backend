@@ -13,6 +13,7 @@ import com.positivity.accounting.internal.dto.APPaymentResponse;
 import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
 import com.positivity.accounting.internal.dto.VendorBillSummaryResponse;
 import com.positivity.accounting.internal.entity.APPayment;
+import com.positivity.accounting.internal.entity.ExtSupplierVendor;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
@@ -103,6 +104,10 @@ class APPaymentServiceTest {
     @Mock
     private ApLockTimeout lockTimeout;
 
+    /** Accounting's copy of the vendor master (S24): the paid vendor is in it and active; slot 4 passes. */
+    @Mock
+    private SupplierVendorCopies vendorCopies;
+
     @InjectMocks
     private APPaymentServiceImpl service;
 
@@ -130,6 +135,14 @@ class APPaymentServiceTest {
         when(preGatewayChecks.checkPeriodAndMapping(any(), any(), any()))
                 .thenReturn(new APPaymentPreGatewayChecks.Execution(BUSINESS_DATE, false));
         when(preGatewayChecks.defaultBankAccount(any())).thenReturn(Optional.of(BANK_ID));
+        when(vendorCopies.requireForNewBusiness(any(UUID.class), any())).thenAnswer(inv -> {
+            ExtSupplierVendor vendor = new ExtSupplierVendor();
+            vendor.setVendorId(inv.getArgument(0));
+            vendor.setVendorNumber("V-000001");
+            vendor.setDisplayName("Acme Parts");
+            vendor.setStatus(ExtSupplierVendor.ACTIVE);
+            return vendor;
+        });
     }
 
     // ========================================
@@ -582,8 +595,71 @@ class APPaymentServiceTest {
     }
 
     @Test
-    @DisplayName("S42 guard order: lock timeout, slot 1, slot 2 (bill locks), slot 3 (pay guard), slot 5, then the"
-            + " payment row and the gateway")
+    @DisplayName("S24 AC 5: an inactive vendor is 422 VENDOR_INACTIVE before any bill lock, row or gateway call")
+    void inactiveVendorRefusedBeforeTheGateway() {
+        ExecuteAPPaymentRequest request =
+                buildRequest(testPaymentRef, testVendorId, new BigDecimal("100.00"), PaymentMethod.ACH);
+        when(paymentRepository.findByPaymentRef(testPaymentRef)).thenReturn(Optional.empty());
+        when(vendorCopies.requireForNewBusiness(testVendorId, "A payment"))
+                .thenThrow(new com.positivity.accounting.internal.exception.VendorBillException(
+                        com.positivity.accounting.internal.exception.VendorBillException.Code.VENDOR_INACTIVE,
+                        "A payment cannot name vendor V-000001: the vendor is inactive"));
+
+        assertThatThrownBy(() -> service.executePayment(request, "ana"))
+                .isInstanceOfSatisfying(
+                        com.positivity.accounting.internal.exception.VendorBillException.class,
+                        e -> assertThat(e.getCode())
+                                .isEqualTo(
+                                        com.positivity.accounting.internal.exception.VendorBillException.Code
+                                                .VENDOR_INACTIVE));
+        verify(billRepository, never()).lockByVendorIdAndStatus(any(), any());
+        verify(paymentRepository, never()).save(any());
+        verify(paymentGateway, never()).executePayment(any());
+    }
+
+    @Test
+    @DisplayName("S24 AC 6: a changed remit-to is 409 VENDOR_PAYMENT_DETAILS_CHANGED with no row and no gateway call")
+    void changedRemitToRefusedBeforeTheGateway() {
+        VendorBill bill = approvedBill("INV-R", "50.00", "bob");
+        ExecuteAPPaymentRequest request =
+                buildRequest(testPaymentRef, testVendorId, new BigDecimal("50.00"), PaymentMethod.ACH);
+        request.setAllocations(List.of(
+                new ExecuteAPPaymentRequest.AllocationLineRequest(bill.getVendorBillId(), new BigDecimal("50.00"))));
+        when(paymentRepository.findByPaymentRef(testPaymentRef)).thenReturn(Optional.empty());
+        when(billRepository.lockByVendorBillIdIn(any())).thenReturn(List.of(bill));
+        org.mockito.Mockito.doThrow(new com.positivity.accounting.internal.exception.VendorBillException(
+                        com.positivity.accounting.internal.exception.VendorBillException.Code
+                                .VENDOR_PAYMENT_DETAILS_CHANGED,
+                        "Vendor V-000001's payment details changed after bills INV-R were approved"))
+                .when(vendorCopies)
+                .requireRemitToUnchanged(any(), any(), eq("ana"));
+
+        assertThatThrownBy(() -> service.executePayment(request, "ana"))
+                .isInstanceOf(com.positivity.accounting.internal.exception.VendorBillException.class);
+        verify(preGatewayChecks, never()).checkPeriodAndMapping(any(), any(), any());
+        verify(paymentRepository, never()).save(any());
+        verify(paymentGateway, never()).executePayment(any());
+    }
+
+    @Test
+    @DisplayName("S24: the payment keeps the copy's display name as vendorName")
+    void paymentTakesTheCopysName() {
+        ExecuteAPPaymentRequest request =
+                buildRequest(testPaymentRef, testVendorId, new BigDecimal("10.00"), PaymentMethod.ACH);
+        when(paymentRepository.findByPaymentRef(testPaymentRef)).thenReturn(Optional.empty());
+        savesAssignId();
+        gatewaySucceeds();
+
+        service.executePayment(request, "ana");
+
+        org.mockito.ArgumentCaptor<APPayment> saved = org.mockito.ArgumentCaptor.forClass(APPayment.class);
+        verify(paymentRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
+        assertThat(saved.getAllValues().getFirst().getVendorName()).isEqualTo("Acme Parts");
+    }
+
+    @Test
+    @DisplayName("S42/S24 guard order: lock timeout, slot 1 (1a-1c, then 1d the vendor), slot 2 (bill locks), slot 3"
+            + " (pay guard), slot 4 (remit-to), slot 5, then the payment row and the gateway")
     void slotsRunInTheirOrderBeforeTheGateway() {
         VendorBill bill = approvedBill("INV-S", "412.00", "bob");
         ExecuteAPPaymentRequest request =
@@ -599,11 +675,19 @@ class APPaymentServiceTest {
         APPaymentResponse result = service.executePayment(request, "ana");
 
         org.mockito.InOrder order = org.mockito.Mockito.inOrder(
-                lockTimeout, preGatewayChecks, billRepository, payGuard, paymentRepository, paymentGateway);
+                lockTimeout,
+                preGatewayChecks,
+                vendorCopies,
+                billRepository,
+                payGuard,
+                paymentRepository,
+                paymentGateway);
         order.verify(lockTimeout).apply();
         order.verify(preGatewayChecks).checkRequest(request, Optional.of(BUSINESS_DATE));
+        order.verify(vendorCopies).requireForNewBusiness(testVendorId, "A payment");
         order.verify(billRepository).lockByVendorBillIdIn(any());
         order.verify(payGuard).check(List.of(bill), "ana", testPaymentRef);
+        order.verify(vendorCopies).requireRemitToUnchanged(eq(List.of(bill)), any(), eq("ana"));
         order.verify(preGatewayChecks).checkPeriodAndMapping(Optional.of(BUSINESS_DATE), new BigDecimal("1.50"), null);
         order.verify(paymentRepository).save(any(APPayment.class));
         order.verify(paymentGateway).executePayment(any());

@@ -213,6 +213,14 @@ public class VendorBill extends TenantScopedEntity {
     @Column(name = "approved_by_kind", length = 10)
     private VendorBillApproverKind approvedByKind;
 
+    /**
+     * The vendor's remit-to version in the copy when the bill was approved, by a person or the system (CAP:550 S24,
+     * #2517; 0 when the vendor has no remit-to). Payment compares it with the current version; never cleared, not even
+     * by a void.
+     */
+    @Column(name = "approved_remit_to_version")
+    private Integer approvedRemitToVersion;
+
     @Column(name = "rejected_at")
     private Instant rejectedAt;
 

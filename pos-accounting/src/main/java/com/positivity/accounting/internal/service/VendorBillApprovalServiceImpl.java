@@ -65,7 +65,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  *   <li>the tier ({@link #requireTier}): an {@code OVER_LIMIT} bill needs {@code accounting:ap:approve_over_limit}
  *       (403 {@code AP_APPROVAL_LIMIT_EXCEEDED});
  *   <li>creator is not approver ({@link #creatorRule}), approve and {@code ACCEPT} only (403 {@code
- *       AP_BILL_SELF_APPROVAL}, or 400 {@code JUSTIFICATION_REQUIRED} for an exception use without one);
+ *       AP_BILL_SELF_APPROVAL}, or 400 {@code JUSTIFICATION_REQUIRED} for an exception use without one); the vendor's
+ *       creator on its first bill is refused the same way, reason {@code VENDOR_CREATOR_FIRST_BILL} (CAP:550 S24);
  *   <li>the bill's content ({@link #readyContent}, {@link #requireClassified}): 422 {@code AP_BILL_ZERO_TOTAL},
  *       {@code AP_BILL_TOTALS_UNRECONCILED} (AW47), {@code AP_BILL_UNCLASSIFIED}; S43 adds {@code
  *       AP_BILL_TAX_ON_RESALE_GOODS} at the end of this step;
@@ -103,6 +104,13 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
     /** {@code exception=} of a decision row: the creator approved under {@code AP_ALLOW_CREATOR_APPROVAL}. */
     static final String EXCEPTION_CREATOR_APPROVAL = "CREATOR_APPROVAL";
 
+    /**
+     * The reason of an {@code AP_BILL_SELF_APPROVAL} refusal of the vendor's creator on its first bill (CAP:550 S24,
+     * #2517, ruling 2): in the 403 message and the refusal audit; {@code blockedReason} stays {@code
+     * AP_BILL_SELF_APPROVAL}.
+     */
+    static final String VENDOR_CREATOR_FIRST_BILL = "VENDOR_CREATOR_FIRST_BILL";
+
     /** {@code exception=} of a decision row that used no exception switch. */
     static final String EXCEPTION_NONE = "NONE";
 
@@ -129,6 +137,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
     private final LedgerCurrency ledgerCurrency;
     private final ApApprovalPolicy policy;
     private final ApLockTimeout lockTimeout;
+    private final SupplierVendorCopies vendorCopies;
     private final TransactionTemplate commandTransaction;
     private final TransactionTemplate refusalTransaction;
 
@@ -147,6 +156,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
             LedgerCurrency ledgerCurrency,
             ApApprovalPolicy policy,
             ApLockTimeout lockTimeout,
+            SupplierVendorCopies vendorCopies,
             PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.bills = bills;
@@ -162,6 +172,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
         this.ledgerCurrency = ledgerCurrency;
         this.policy = policy;
         this.lockTimeout = lockTimeout;
+        this.vendorCopies = vendorCopies;
         this.commandTransaction = new TransactionTemplate(transactionManager);
         this.refusalTransaction = new TransactionTemplate(transactionManager);
         this.refusalTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -574,7 +585,8 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
             String operation,
             @Nullable String resolution,
             Decision decision) {
-        VendorBillPostingService.Classification effective = requireExpenseKey(merge(classification, bill));
+        VendorBillPostingService.Classification effective =
+                requireExpenseKey(merge(classification, bill, vendorCopies.apDefaults(bill.getVendorId())));
         if (difference != null) {
             difference.applyTo(bill);
         }
@@ -590,6 +602,8 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
         bill.setApprovedByKind(VendorBillApproverKind.PERSON);
         bill.setApprovedAt(Instant.now(clock));
         bill.setApprovalJustification(justification);
+        // The remit-to the approval was given against (CAP:550 S24, rule 5): payment re-checks it. Never cleared.
+        bill.setApprovedRemitToVersion(vendorCopies.remitToVersion(bill.getVendorId()));
         bill.setModifiedBy(actor);
         bills.save(bill);
         String details = differenceDetails(bill);
@@ -660,7 +674,8 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
             VendorBillPostingService.@Nullable Classification given,
             @Nullable DifferenceDecision difference,
             String actor) {
-        VendorBillPostingService.Classification effective = requireExpenseKey(merge(given, bill));
+        VendorBillPostingService.Classification effective =
+                requireExpenseKey(merge(given, bill, vendorCopies.apDefaults(bill.getVendorId())));
         try {
             postingService.requirePostable(
                     bill,
@@ -846,17 +861,41 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
     }
 
     /**
-     * The classification an approval posts with (#2509 review, LOW-12): each field given wins, an absent one is the
-     * proposal's; null when neither says anything.
+     * The classification an approval posts with (#2509 review, LOW-12; CAP:550 S24 rule 10, AW39), field by field: the
+     * one given wins, then the proposal made at submission, then the vendor's AP default; null when none says anything,
+     * which leaves a bill needing a class 422 {@code AP_BILL_UNCLASSIFIED}. A person's choice always beats the default
+     * (ruling 1 of #2517): a default is what applies when nobody says otherwise.
+     *
+     * @param vendorDefault the vendor's default class and key ({@link SupplierVendorCopies#apDefaults}), or null
      */
     static VendorBillPostingService.@Nullable Classification merge(
-            VendorBillPostingService.@Nullable Classification given, @NonNull VendorBill bill) {
+            VendorBillPostingService.@Nullable Classification given,
+            @NonNull VendorBill bill,
+            VendorBillPostingService.@Nullable Classification vendorDefault) {
+        // A credit note posts as EXPENSE or PRICE_ALLOWANCE (AW39): a vendor default of GOODS never classes one.
+        VendorBillDebitClass defaultClass = vendorDefault == null
+                        || (vendorDefault.debitClass() == VendorBillDebitClass.GOODS
+                                && bill.getTotalAmount() != null
+                                && bill.getTotalAmount().signum() < 0)
+                ? null
+                : vendorDefault.debitClass();
         VendorBillDebitClass debitClass =
-                given != null && given.debitClass() != null ? given.debitClass() : bill.getProposedDebitClass();
-        String key = given != null && given.expenseMappingKey() != null
-                ? given.expenseMappingKey()
-                : bill.getProposedExpenseMappingKey();
+                firstNonNull(given == null ? null : given.debitClass(), bill.getProposedDebitClass(), defaultClass);
+        String key = firstNonNull(
+                given == null ? null : given.expenseMappingKey(),
+                bill.getProposedExpenseMappingKey(),
+                vendorDefault == null ? null : vendorDefault.expenseMappingKey());
         return debitClass == null && key == null ? null : new VendorBillPostingService.Classification(debitClass, key);
+    }
+
+    @SafeVarargs
+    private static <T> @Nullable T firstNonNull(@Nullable T... candidates) {
+        for (T candidate : candidates) {
+            if (candidate != null) {
+                return candidate;
+            }
+        }
+        return null;
     }
 
     /** An EXPENSE classification names its key (400 VALIDATION_ERROR). */
@@ -1008,7 +1047,10 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
             String actor,
             @Nullable String justification,
             String field) {
-        if (!actor.equals(bill.getCreatedBy())) {
+        boolean billCreator = actor.equals(bill.getCreatedBy());
+        // CAP:550 S24 rule 9 (ruling 2 of #2517): the vendor's creator may not approve its first bill either.
+        boolean vendorCreatorFirstBill = !billCreator && vendorCopies.isCreatorsFirstBill(bill.getVendorId(), actor);
+        if (!billCreator && !vendorCreatorFirstBill) {
             return null;
         }
         if (!settings.allowCreatorApproval()) {
@@ -1016,12 +1058,22 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
                     bill.getVendorBillId(),
                     bill.getBillNumber(),
                     actor,
-                    new VendorBillException(
-                            VendorBillException.Code.AP_BILL_SELF_APPROVAL,
-                            "You created bill " + bill.getBillNumber() + "; another person approves it",
-                            List.of(),
-                            "Ask another approver to decide this bill"),
-                    "createdBy=" + bill.getCreatedBy());
+                    billCreator
+                            ? new VendorBillException(
+                                    VendorBillException.Code.AP_BILL_SELF_APPROVAL,
+                                    "You created bill " + bill.getBillNumber() + "; another person approves it",
+                                    List.of(),
+                                    "Ask another approver to decide this bill")
+                            : new VendorBillException(
+                                    VendorBillException.Code.AP_BILL_SELF_APPROVAL,
+                                    VENDOR_CREATOR_FIRST_BILL + ": you created the vendor of bill "
+                                            + bill.getBillNumber() + " and no bill of that vendor has been approved"
+                                            + " yet; another person approves its first bill",
+                                    List.of(),
+                                    "Ask another approver to decide this bill"),
+                    billCreator
+                            ? "createdBy=" + bill.getCreatedBy()
+                            : "reason=" + VENDOR_CREATOR_FIRST_BILL + ";vendorCreatedBy=" + actor);
         }
         VendorBillDecisions.required(justification, field);
         return EXCEPTION_CREATOR_APPROVAL;

@@ -10,15 +10,14 @@ import com.positivity.accounting.BaseContractIntegrationTest;
 import com.positivity.accounting.internal.dto.AccountingEventSubmitRequest;
 import com.positivity.accounting.internal.entity.ExtCustomerParty;
 import com.positivity.accounting.internal.entity.ExtInvoice;
+import com.positivity.accounting.internal.entity.ExtSupplierVendor;
 import com.positivity.accounting.internal.entity.LocationProfile;
-import com.positivity.accounting.internal.entity.Vendor;
-import com.positivity.accounting.internal.enums.VendorStatus;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.internal.repository.ExtCustomerPartyRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
+import com.positivity.accounting.internal.repository.ExtSupplierVendorRepository;
 import com.positivity.accounting.internal.repository.LocationProfileRepository;
 import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository;
-import com.positivity.accounting.internal.repository.VendorRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -81,7 +80,7 @@ class AccountingEventPayloadReferenceContractBehaviorIT extends BaseContractInte
     private ExtCustomerPartyRepository extCustomerPartyRepository;
 
     @Autowired
-    private VendorRepository vendorRepository;
+    private ExtSupplierVendorRepository vendorRepository;
 
     @Autowired
     private LocationProfileRepository locationProfileRepository;
@@ -122,12 +121,15 @@ class AccountingEventPayloadReferenceContractBehaviorIT extends BaseContractInte
                 .updatedAt(Instant.now(Clock.systemUTC()))
                 .build());
 
-        Vendor vendor = new Vendor();
+        // S24: vendors are read from accounting's copy of the pos-supplier vendor master.
+        ExtSupplierVendor vendor = new ExtSupplierVendor();
         vendor.setVendorId(KNOWN_VENDOR_ID);
-        vendor.setName(VENDOR_NAME);
+        vendor.setDisplayName(VENDOR_NAME);
         vendor.setVendorNumber("V-8801");
-        vendor.setStatus(VendorStatus.ACTIVE);
-        vendor.setCreatedAt(Instant.now(Clock.systemUTC()));
+        vendor.setStatus(ExtSupplierVendor.ACTIVE);
+        vendor.setRemitToVersion(0);
+        vendor.setCreatedBy("buyer.ben");
+        vendor.setAggregateVersion(1L);
         vendor.setUpdatedAt(Instant.now(Clock.systemUTC()));
         vendorRepository.save(vendor);
     }

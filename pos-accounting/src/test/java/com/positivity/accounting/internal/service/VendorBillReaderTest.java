@@ -528,7 +528,8 @@ class VendorBillReaderTest {
                 mock(JournalEntryRepository.class),
                 mock(AccountingCalendarZoneResolver.class),
                 new LedgerCurrency("USD"),
-                approvalPolicy);
+                approvalPolicy,
+                mock(SupplierVendorCopies.class));
         VendorBill over = billOf("3000.00", "clerk.ana");
         over.setStatus(VendorBillStatus.AWAITING_APPROVAL);
         over.setBillNumber("INV-OVER");

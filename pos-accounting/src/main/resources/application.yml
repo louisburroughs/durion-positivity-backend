@@ -114,6 +114,11 @@ pos:
       order-manifest-topic: ${POS_ACCOUNTING_KAFKA_ORDER_MANIFEST_TOPIC:order.manifest.v1}
       order-manifest-consumer-group: ${POS_ACCOUNTING_KAFKA_ORDER_MANIFEST_CONSUMER_GROUP:pos-accounting-order-manifests}
       order-commands-topic: ${POS_ACCOUNTING_KAFKA_ORDER_COMMANDS_TOPIC:order.commands.v1}
+      # CAP:550 S24 (#2517): pos-supplier's reconciliation manifest of supplier.events.v1, and where drift-repair
+      # replay requests go (SupplierManifestListener).
+      supplier-manifest-topic: ${POS_ACCOUNTING_KAFKA_SUPPLIER_MANIFEST_TOPIC:supplier.manifest.v1}
+      supplier-manifest-consumer-group: ${POS_ACCOUNTING_KAFKA_SUPPLIER_MANIFEST_CONSUMER_GROUP:pos-accounting-supplier-manifests}
+      supplier-commands-topic: ${POS_ACCOUNTING_KAFKA_SUPPLIER_COMMANDS_TOPIC:supplier.commands.v1}
       workorder-commands-topic: ${POS_ACCOUNTING_KAFKA_WORKORDER_COMMANDS_TOPIC:workorder.commands.v1}
       # Workorder fact feed resolving outstanding invoice-regeneration commands (#1537 D1)
       workorder-events-topic: ${POS_ACCOUNTING_KAFKA_WORKORDER_EVENTS_TOPIC:workorder.events.v1}

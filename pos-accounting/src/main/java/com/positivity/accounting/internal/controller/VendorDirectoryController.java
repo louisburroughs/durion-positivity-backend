@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.controller;
 
+import com.positivity.accounting.internal.dto.VendorApSettingsRequest;
+import com.positivity.accounting.internal.dto.VendorRemitToConfirmationRequest;
 import com.positivity.accounting.internal.dto.VendorResponse;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.VendorDirectoryService;
@@ -9,35 +11,36 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 
 /**
- * REST controller for the AP vendor directory (Issue #816).
- *
- * <p>
- * Provides vendor name → vendorId resolution for the frontend vendor-payment
- * typeahead, mirroring the CRM party search pattern used by customer-lookup:
- * a debounce-friendly name search plus a single-vendor fetch to label
- * deep-linked ids.
+ * The AP vendors (Issue #816; CAP:550 S24, #2517; SPEC-accounting-workspace §4.9): reads served from accounting's copy
+ * of the pos-supplier vendor master, and the two vendor commands that stay accounting's (AW23), the remit-to
+ * confirmation and the AP defaults. The vendor master itself is pos-supplier's; nothing here writes the copy. The
+ * actor of a command is the caller (ADR-0018). No location is taken or reached: vendors are the tenant's (ADR-0061
+ * does not apply).
  *
  * @see VendorDirectoryService
  */
@@ -47,21 +50,14 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 @Tag(
         name = "Vendor Directory API",
-        description = "Vendor search and lookup endpoints for name-to-vendorId resolution (typeahead support)")
+        description = "Vendors from accounting's copy of the pos-supplier vendor master, and their AP settings")
 @Validated
 public class VendorDirectoryController {
 
+    private static final String TAG = "Vendor Directory API";
+
     private final VendorDirectoryService vendorDirectoryService;
 
-    /**
-     * Search vendors by name (typeahead).
-     *
-     * GET /v1/accounting/vendors?name={term}
-     *
-     * @param name  optional name search term; blank/absent lists all vendors
-     * @param limit maximum results to return (server caps at 100)
-     * @return name-matched vendors ordered by name
-     */
     @GetMapping
     @EmitEvent(id = "ACCOUNTING_VENDOR_SEARCH", apiVersion = "1")
     @SecurityRequirement(
@@ -72,42 +68,48 @@ public class VendorDirectoryController {
             operationId = "searchVendors",
             summary = "Search Vendors By Name",
             description = """
-                    Searches the AP vendor directory with a case-insensitive name-contains match, returning \
-                    vendors ordered by name for typeahead use.
-                    Use this tool to resolve a vendor name to its vendorId; use getVendorById instead when a \
-                    vendor id is already known and only its label is needed.
-                    Preconditions: none; a blank or absent name lists all vendors up to the limit.
-                    Required inputs: none; name is an optional contains term and limit defaults to 20 with a \
-                    server cap of 100.
+                    Searches accounting's copy of the pos-supplier vendor master with a case-insensitive \
+                    name-contains match, returning active and inactive vendors ordered by name, each with its \
+                    vendorNumber, status, current remitToVersion and paymentDetailsChanged flag.
+                    Use this tool to resolve a vendor name to its pos-supplier vendorId; use getVendorById instead \
+                    when a vendor id is already known, and use pos-supplier's vendor endpoints to change a vendor.
+                    Preconditions: the caller holds accounting:ap:view; a vendor appears once its \
+                    supplier.vendor.updated fact has been copied (seed with POST /v1/supplier/vendors/facts/replay).
+                    Required inputs: none; name is an optional contains term, status (ACTIVE or INACTIVE) an \
+                    optional filter, and limit defaults to 20 with a server cap of 100.
                     Emits an ACCOUNTING_VENDOR_SEARCH audit event; no state changes.
-                    Returns 200 with an empty list when no vendor name matches.
+                    Returns 200 with an empty list when no vendor matches, and 400 VALIDATION_ERROR for a status \
+                    outside ACTIVE and INACTIVE.
                     """,
-            tags = {"Vendor Directory API"})
+            tags = {TAG})
     @ApiResponse(
             responseCode = "200",
             description = "Matching vendors returned",
             content = @Content(array = @ArraySchema(schema = @Schema(implementation = VendorResponse.class))))
+    @ApiResponse(
+            responseCode = "400",
+            description = "VALIDATION_ERROR: status is not ACTIVE or INACTIVE",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<VendorResponse>> searchVendors(
             @Parameter(description = "Name search term (case-insensitive contains)", example = "acme")
                     @Nullable
                     @RequestParam(required = false)
                     String name,
+            @Parameter(description = "ACTIVE or INACTIVE; absent returns both", example = "ACTIVE")
+                    @Nullable
+                    @RequestParam(required = false)
+                    String status,
             @Parameter(description = "Maximum results to return (server caps at 100)", example = "20")
                     @RequestParam(required = false, defaultValue = "20")
                     int limit) {
-        log.info("Received vendor search request | termLength={} | limit={}", name == null ? 0 : name.length(), limit);
-
-        return ResponseEntity.ok(vendorDirectoryService.searchVendors(name, limit));
+        log.info(
+                "Received vendor search request | termLength={} | status={} | limit={}",
+                name == null ? 0 : name.length(),
+                status,
+                limit);
+        return ResponseEntity.ok(vendorDirectoryService.searchVendors(name, status, limit));
     }
 
-    /**
-     * Get a single vendor by id (label resolution for preset ids).
-     *
-     * GET /v1/accounting/vendors/{vendorId}
-     *
-     * @param vendorId the vendor UUID
-     * @return vendor with 200 status, or 404 if not found
-     */
     @GetMapping("/{vendorId}")
     @EmitEvent(id = "ACCOUNTING_VENDOR_GET", apiVersion = "1")
     @SecurityRequirement(
@@ -118,34 +120,169 @@ public class VendorDirectoryController {
             operationId = "getVendorById",
             summary = "Get Vendor By Id",
             description = """
-                    Returns one AP vendor by its identifier, typically to display a name for a deep-linked \
-                    vendor id.
-                    Use this tool when the vendor id is already known; use searchVendors instead when \
-                    resolving a name typed by a user.
-                    Preconditions: the vendor must exist in the AP vendor directory.
-                    Required inputs: vendorId (UUID) as a path parameter; there is no request body.
+                    Returns one vendor from accounting's copy of the pos-supplier vendor master, with its \
+                    vendorNumber, status, remitToVersion, paymentDetailsChanged and apSettings (the AP defaults \
+                    and the last remit-to confirmation).
+                    Use this tool when the vendor id is already known, for example before confirming a changed \
+                    remit-to; use searchVendors instead when resolving a name typed by a user.
+                    Preconditions: the caller holds accounting:ap:view and the vendor has been copied from \
+                    pos-supplier.
+                    Required inputs: vendorId (the pos-supplier vendor UUID) as a path parameter; there is no \
+                    request body.
                     Emits an ACCOUNTING_VENDOR_GET audit event; no state changes.
-                    Returns 404 when no vendor exists for the supplied id.
+                    Returns 404 VENDOR_NOT_FOUND when the vendor is not in the copy.
                     """,
-            tags = {"Vendor Directory API"})
+            tags = {TAG})
     @ApiResponse(
             responseCode = "200",
             description = "Vendor found",
             content = @Content(schema = @Schema(implementation = VendorResponse.class)))
     @ApiResponse(
             responseCode = "404",
-            description = "Vendor not found",
+            description = "VENDOR_NOT_FOUND: the vendor is not in the copy",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<VendorResponse> getVendorById(
-            @Parameter(description = "Vendor identifier", example = "550e8400-e29b-41d4-a716-446655440001")
+            @Parameter(description = "pos-supplier vendor id", example = "550e8400-e29b-41d4-a716-446655440001")
                     @NonNull
                     @PathVariable
                     UUID vendorId) {
         log.info("Received vendor lookup request | vendorId={}", vendorId);
+        return ResponseEntity.ok(vendorDirectoryService.getVendorById(vendorId));
+    }
 
-        return vendorDirectoryService
-                .getVendorById(vendorId)
-                .map(ResponseEntity::ok)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Vendor not found"));
+    @PostMapping("/{vendorId}/remit-to-confirmation")
+    @EmitEvent(id = "ACCOUNTING_VENDOR_REMIT_TO_CONFIRM", apiVersion = "1")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:ap:approve"})
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_APPROVE + "')")
+    @Operation(
+            operationId = "confirmVendorRemitTo",
+            summary = "Confirm Vendor Remit-To",
+            description = """
+                    Records that the caller confirmed the vendor's current remit-to version, when, and how it was \
+                    verified, so its bills approved at an earlier version can be paid again.
+                    A payment then passes for those bills, provided the payer is not the confirmer; a later \
+                    remit-to change needs a new confirmation.
+                    Use this tool after verifying a changed remit-to with the vendor; do not use it to change the \
+                    remit-to itself, use pos-supplier's remit-to change approval instead.
+                    Preconditions: the caller holds accounting:ap:approve and the vendor is in the copy.
+                    Required inputs: remitToVersion (the vendor's current version) and justification (at least 10 \
+                    characters).
+                    Emits ACCOUNTING_VENDOR_REMIT_TO_CONFIRM and writes a REMIT_TO_CONFIRM audit row.
+                    Returns 200 with the vendor read; 400 VALIDATION_ERROR or JUSTIFICATION_REQUIRED; 404 \
+                    VENDOR_NOT_FOUND; 409 VENDOR_PAYMENT_DETAILS_CHANGED when the version is not the current one.
+                    """,
+            tags = {TAG})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Confirmed; the vendor as getVendorById returns it",
+            content = @Content(schema = @Schema(implementation = VendorResponse.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "VALIDATION_ERROR (no remitToVersion) or JUSTIFICATION_REQUIRED",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "FORBIDDEN without accounting:ap:approve",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "VENDOR_NOT_FOUND: the vendor is not in the copy",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "VENDOR_PAYMENT_DETAILS_CHANGED: remitToVersion is not the vendor's current version",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<VendorResponse> confirmVendorRemitTo(
+            @Parameter(description = "pos-supplier vendor id", example = "550e8400-e29b-41d4-a716-446655440001")
+                    @NonNull
+                    @PathVariable
+                    UUID vendorId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The version confirmed and how it was verified.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Confirm version 3", value = """
+                                                {"remitToVersion":3,
+                                                 "justification":"Called the vendor's accounts desk; address confirmed"}
+                                                """)))
+                    @Valid
+                    @RequestBody
+                    @NonNull
+                    VendorRemitToConfirmationRequest request) {
+        return ResponseEntity.ok(vendorDirectoryService.confirmRemitTo(vendorId, request));
+    }
+
+    @PutMapping("/{vendorId}/ap-settings")
+    @EmitEvent(id = "ACCOUNTING_VENDOR_AP_SETTINGS_SET", apiVersion = "1")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:ap_approval_policy:manage"})
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_APPROVAL_POLICY_MANAGE + "')")
+    @Operation(
+            operationId = "setVendorApSettings",
+            summary = "Set Vendor AP Settings",
+            description = """
+                    Sets the vendor's AP defaults: defaultDebitClass (GOODS or EXPENSE) and \
+                    defaultExpenseMappingKey (an active VENDOR_BILL key EXPENSE_<CODE>); a field left out is \
+                    unchanged and a field sent as null clears it.
+                    An approval falls back to them only when neither the approver's classification nor the \
+                    proposal made at submission names a class or key; they never touch a posted entry, and each \
+                    change writes an AP_VENDOR_SETTINGS_SET audit row, old to new.
+                    Use this tool when a controller sets how a vendor's bills are classed by default; do not use \
+                    it to classify one bill, use the approval's classification instead.
+                    Preconditions: the caller holds accounting:ap_approval_policy:manage and the vendor is in the \
+                    copy; an inactive vendor may be set.
+                    Required inputs: justification (at least 10 characters) and requestId (a UUID generated once \
+                    per change); EXPENSE needs a key, sent or already set.
+                    Emits ACCOUNTING_VENDOR_AP_SETTINGS_SET; the call is idempotent on requestId: a replay writes \
+                    nothing and returns the vendor as it is.
+                    Returns 200 with the vendor read; 400 VALIDATION_ERROR with fieldErrors or \
+                    JUSTIFICATION_REQUIRED; 403 FORBIDDEN; 404 VENDOR_NOT_FOUND; nothing is written on a refusal.
+                    """,
+            tags = {TAG})
+    @ApiResponse(
+            responseCode = "200",
+            description = "The vendor as getVendorById returns it, after the change",
+            content = @Content(schema = @Schema(implementation = VendorResponse.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "VALIDATION_ERROR with fieldErrors (a class outside GOODS/EXPENSE, a key that is not an"
+                    + " active VENDOR_BILL key EXPENSE_<CODE>, EXPENSE without a key, no requestId) or"
+                    + " JUSTIFICATION_REQUIRED",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "FORBIDDEN without accounting:ap_approval_policy:manage",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "VENDOR_NOT_FOUND: the vendor is not in the copy",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<VendorResponse> setVendorApSettings(
+            @Parameter(description = "pos-supplier vendor id", example = "550e8400-e29b-41d4-a716-446655440001")
+                    @NonNull
+                    @PathVariable
+                    UUID vendorId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The defaults to change, the justification and the request id.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Shop supplies by default", value = """
+                                                {"defaultDebitClass":"EXPENSE",
+                                                 "defaultExpenseMappingKey":"EXPENSE_SHOP_SUPPLIES",
+                                                 "justification":"Header-only bills of this vendor are shop supplies",
+                                                 "requestId":"0199c0de-7a1b-7c2d-8e3f-4a5b6c7d8e9f"}
+                                                """)))
+                    @Valid
+                    @RequestBody
+                    @NonNull
+                    VendorApSettingsRequest request) {
+        return ResponseEntity.ok(vendorDirectoryService.setApSettings(vendorId, request));
     }
 }

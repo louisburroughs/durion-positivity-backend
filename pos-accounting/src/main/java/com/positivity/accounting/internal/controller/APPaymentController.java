@@ -84,9 +84,11 @@ public class APPaymentController {
                 payments to invoices, and use listApBills first to find APPROVED bills to allocate against.
                 Preconditions: checked in this order before the gateway is called, charging nothing, the method \
                 is ACH, CHECK or WIRE, the currency is the functional currency, the bank account is eligible (active \
-                from the start of the business date, not deactivated before the payment, not in a foreign currency), every allocated bill exists, is APPROVED, belongs \
-                to the vendor and fits the gross amount, the payer approved none of the bills paid (unless the AP \
-                approval policy allows it), the business date is not hard-locked, its period is open or overridden, \
+                from the start of the business date, not deactivated before the payment, not in a foreign currency), the \
+                vendor is an ACTIVE pos-supplier vendor in accounting's copy, every allocated bill exists, is \
+                APPROVED, belongs to the vendor and fits the gross amount, the payer approved none of the bills paid \
+                (unless the AP approval policy allows it), every bill was approved at the vendor's current remit-to \
+                version or someone other than the payer confirmed it, the business date is not hard-locked, its period is open or overridden, \
                 and the AP_PAYMENT mappings ACCOUNTS_PAYABLE (and PAYMENT_FEES when a fee is charged) are set up.
                 Required inputs: vendorId (UUID), grossAmount (min 0.01), currency (ISO 4217), paymentRef (max 100 \
                 chars, the idempotency key) and paymentMethod; bankAccountId may be omitted only when exactly one \
@@ -96,8 +98,9 @@ public class APPaymentController {
                 the same payload (the bank account compared as resolved) as a 200 instead of paying twice, and a \
                 gateway failure or timeout leaves no payment behind, so the same paymentRef is simply sent again.
                 Returns 400 VALIDATION_ERROR for a malformed body, an unknown currency code, a refused allocation \
-                or fieldErrors[bankAccountId], 403 AP_PAYMENT_SELF_APPROVED_BILL, 409 IDEMPOTENCY_CONFLICT or \
-                LOCK_TIMEOUT, 422 AP_PAYMENT_METHOD_NOT_SUPPORTED, CURRENCY_NOT_SUPPORTED, \
+                or fieldErrors[bankAccountId], 403 AP_PAYMENT_SELF_APPROVED_BILL, 409 IDEMPOTENCY_CONFLICT, \
+                LOCK_TIMEOUT or VENDOR_PAYMENT_DETAILS_CHANGED (naming each bill and the vendor number), 422 \
+                AP_PAYMENT_METHOD_NOT_SUPPORTED, CURRENCY_NOT_SUPPORTED, VENDOR_NOT_FOUND, VENDOR_INACTIVE, \
                 ACCOUNTING_TIME_ZONE_UNSET, PERIOD_HARD_LOCKED, PERIOD_CLOSED or GL_MAPPING_NOT_CONFIGURED, and 500 \
                 PAYMENT_GATEWAY_FAILURE when the gateway fails or times out.
                 """,
@@ -119,12 +122,15 @@ public class APPaymentController {
     @ApiResponse(
             responseCode = "409",
             description = "IDEMPOTENCY_CONFLICT: paymentRef exists with a different payload; LOCK_TIMEOUT: another"
-                    + " request held these bills beyond accounting.ap.lock-timeout, the payment was not saved, retry",
+                    + " request held these bills beyond accounting.ap.lock-timeout, the payment was not saved, retry;"
+                    + " VENDOR_PAYMENT_DETAILS_CHANGED: a bill was approved at another remit-to version and no one but"
+                    + " the payer confirmed the current one (fieldErrors name the bills); nothing is paid",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
             description = "Refused before the gateway, in this order: AP_PAYMENT_METHOD_NOT_SUPPORTED (CREDIT_CARD,"
-                    + " OTHER), CURRENCY_NOT_SUPPORTED (not the functional currency), ACCOUNTING_TIME_ZONE_UNSET,"
+                    + " OTHER), CURRENCY_NOT_SUPPORTED (not the functional currency), VENDOR_NOT_FOUND (not in the"
+                    + " pos-supplier vendor copy), VENDOR_INACTIVE, ACCOUNTING_TIME_ZONE_UNSET,"
                     + " PERIOD_HARD_LOCKED, PERIOD_CLOSED (no overrideJustification with accounting:period:override),"
                     + " GL_MAPPING_NOT_CONFIGURED (AP_PAYMENT/ACCOUNTS_PAYABLE, or PAYMENT_FEES with a fee); nothing"
                     + " is charged or persisted",

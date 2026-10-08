@@ -1493,6 +1493,43 @@ A deletion cannot be replayed — a deleted row is gone, so its tombstone exists
 stream. A freshly seeded replica therefore holds what the catalog currently has, which is what
 resolution needs; it will not learn about items removed before the seed.
 
+#### pos-supplier: seeding the vendor copies (CAP:550 S24, #2517)
+
+pos-accounting and pos-order each keep a copy of the pos-supplier vendor master (`ext_supplier_vendor`),
+written only by their `supplier.vendor.updated` consumers. Both copies start empty after V20 (pos-accounting)
+and V7 (pos-order). Seed them per tenant, with a token of that tenant, paging until `complete: true`:
+
+```bash
+# Vendors (supplier.vendor.updated, schema version 2) — re-emits every vendor at its current version
+curl -X POST "https://<gateway>/supplier/v1/supplier/vendors/facts/replay?limit=200" \
+  -H "Authorization: Bearer $TOKEN" -H "X-API-Version: 1"
+```
+
+Until a vendor is copied, a goods-receipt bill or an AP payment naming it is refused (422
+`VENDOR_NOT_FOUND`), a purchase order naming it is refused at create, approve and transmit, and its EDI
+invoices are held (`supplier_invoice_hold`, reason `VENDOR_NOT_IN_COPY`) and become bills when the vendor
+arrives. Consumers apply only schema version 2 or later; a version 1 vendor fact still on the broker is
+marked and counted (`accounting.supplier_vendor.skipped`), never applied.
+
+**Alpha AP data is reseeded, not migrated (ADR-0070 Consequences).** Bills and AP payments created before S24
+name vendor-profile ids or caller-supplied ids that are not pos-supplier vendor ids, and their bills carry no
+approved remit-to version. Reset them together with the journal entries they posted, so the ledger stays
+whole (ADR-0047 forbids deleting entries alone), then seed the copies and re-create test bills through the new
+paths (goods receipt with a copied vendor, EDI with a `vendorId`):
+
+```sql
+-- pos_accounting_db, per tenant, in one transaction (as the owner): AP payments, their allocations and
+-- entries, then bills, their lines, match rows, postings and entries. Review the counts before COMMIT.
+BEGIN;
+-- 1. the journal entries the bills and AP payments posted (source types VENDOR_BILL and AP_PAYMENT),
+--    their lines and links, by journal_entry_id;
+-- 2. ap_payment_allocation, ap_payment;
+-- 3. vendor_bill_gl_posting, vendor_bill_match_evidence, vendor_bill_match_candidate, vendor_bill_reissue,
+--    vendor_bill_line, vendor_bill;
+-- 4. supplier_invoice_hold.
+COMMIT;
+```
+
 #### Issue #1514: rehydrating the putaway replica columns
 
 Category-based putaway matches a received line against the item's catalog category/subcategory and

@@ -80,7 +80,8 @@ public final class EventTypes {
      * CAP-053 Vendor Bill workflow + GL Mapping, +3 from PRD missing endpoints:
      * ACCOUNTING_REPORT_EXPORT_REQUEST, ACCOUNTING_REPORT_EXPORT_STATUS,
      * ACCOUNTING_REPORT_EXPORT_LIST, +2 from the vendor directory
-     * (Issue #816): ACCOUNTING_VENDOR_SEARCH, ACCOUNTING_VENDOR_GET, +3
+     * (Issue #816): ACCOUNTING_VENDOR_SEARCH, ACCOUNTING_VENDOR_GET, +2 vendor commands (CAP:550 S24, #2517):
+     * ACCOUNTING_VENDOR_REMIT_TO_CONFIRM, ACCOUNTING_VENDOR_AP_SETTINGS_SET, +3
      * from accounting period lifecycle (Story B1, Issue #937):
      * ACCOUNTING_PERIOD_LIST, ACCOUNTING_PERIOD_CLOSE,
      * ACCOUNTING_PERIOD_REOPEN, +2 previously emitted but unregistered
@@ -443,6 +444,15 @@ public final class EventTypes {
                                 "ACCOUNTING_VENDOR_SEARCH", "Search AP vendor directory by name (typeahead)")
                         .build(),
                 EventTypeRegistration.fastRead("ACCOUNTING_VENDOR_GET", "Get AP vendor directory entry by ID")
+                        .build(),
+                // VendorDirectoryController — the vendor commands that stay accounting's (CAP:550 S24, #2517)
+                EventTypeRegistration.approval(
+                                "ACCOUNTING_VENDOR_REMIT_TO_CONFIRM",
+                                "Confirm a vendor's changed remit-to version so its approved bills can be paid")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "ACCOUNTING_VENDOR_AP_SETTINGS_SET",
+                                "Set a vendor's AP defaults (default debit class and expense key)")
                         .build(),
 
                 // AccountingPeriodController — 3 events (Story B1, Issue #937)

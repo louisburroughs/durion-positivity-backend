@@ -6,6 +6,7 @@ import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
 import com.positivity.accounting.internal.dto.VendorBillSummaryResponse;
 import com.positivity.accounting.internal.entity.APPayment;
 import com.positivity.accounting.internal.entity.APPaymentAllocation;
+import com.positivity.accounting.internal.entity.ExtSupplierVendor;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
@@ -70,6 +71,7 @@ public class APPaymentServiceImpl implements APPaymentService {
     private final APPaymentPreGatewayChecks preGatewayChecks;
     private final APPaymentPostingService postingService;
     private final ApLockTimeout lockTimeout;
+    private final SupplierVendorCopies vendorCopies;
 
     /** One allocation of the plan: the bill, locked, and the amount applied to it. */
     record PlannedAllocation(
@@ -100,10 +102,12 @@ public class APPaymentServiceImpl implements APPaymentService {
         //        1b. currency: not the functional currency -> 422 CURRENCY_NOT_SUPPORTED (S42, ADR-0067 PC-9 (a));
         //        1c. bank account: missing and not exactly one eligible, or not eligible -> 400 VALIDATION_ERROR
         //            fieldErrors[bankAccountId] (S42, AW41);
-        //        1d. S24's vendor exists and is active;
+        //        1d. the vendor: not in the copy -> 422 VENDOR_NOT_FOUND, INACTIVE -> 422 VENDOR_INACTIVE (S24, AW23;
+        //            an inactive vendor's existing bills are not paid either, ruling 3 of #2517);
         //   2. the allocation plan, its bills locked in id order (explicit, or oldest due first; S13);
         //   3. the pay guard, approver is not payer -> 403 AP_PAYMENT_SELF_APPROVED_BILL (S13);
-        //   4. S24's remit-to check;
+        //   4. the remit-to check: a planned bill approved at another remit-to version than the copy's current one,
+        //      unless someone other than the payer confirmed it -> 409 VENDOR_PAYMENT_DETAILS_CHANGED (S24, rule 6);
         //   5. the period and mapping checks (APPaymentPreGatewayChecks#checkPeriodAndMapping, S42):
         //        5a. time zone -> 422 ACCOUNTING_TIME_ZONE_UNSET; 5b. hard lock -> 422 PERIOD_HARD_LOCKED;
         //        5c. closed period without an accepted override -> 422 PERIOD_CLOSED (the period row read unlocked: no
@@ -119,10 +123,13 @@ public class APPaymentServiceImpl implements APPaymentService {
         // how long they are held.
         lockTimeout.apply();
         Optional<LocalDate> businessDate = preGatewayChecks.businessDate();
-        UUID bankAccountId = preGatewayChecks.checkRequest(request, businessDate); // slot 1 (S24 adds 1d after it)
+        UUID bankAccountId = preGatewayChecks.checkRequest(request, businessDate); // slot 1, 1a-1c
+        ExtSupplierVendor vendor = vendorCopies.requireForNewBusiness(request.getVendorId(), "A payment"); // 1d
         List<PlannedAllocation> plan = plan(request); // slot 2
-        payGuard.check(plan.stream().map(PlannedAllocation::bill).toList(), currentUser, request.getPaymentRef());
-        // slot 4: S24's remit-to check goes here.
+        List<VendorBill> plannedBills =
+                plan.stream().map(PlannedAllocation::bill).toList();
+        payGuard.check(plannedBills, currentUser, request.getPaymentRef()); // slot 3
+        vendorCopies.requireRemitToUnchanged(plannedBills, vendor, currentUser); // slot 4
         APPaymentPreGatewayChecks.Execution execution = preGatewayChecks.checkPeriodAndMapping(
                 businessDate, request.getFeeAmount(), request.getOverrideJustification()); // slot 5
         // ---- end of the pre-gateway block -------------------------------------------------------------------
@@ -131,6 +138,7 @@ public class APPaymentServiceImpl implements APPaymentService {
         APPayment payment = new APPayment();
         payment.setPaymentRef(request.getPaymentRef());
         payment.setVendorId(request.getVendorId());
+        payment.setVendorName(vendor.getDisplayName());
         payment.setGrossAmount(request.getGrossAmount());
         payment.setFeeAmount(request.getFeeAmount());
         payment.setCurrency(request.getCurrency().trim().toUpperCase(Locale.ROOT));

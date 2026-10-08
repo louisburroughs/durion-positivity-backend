@@ -10,9 +10,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.accounting.BaseIntegrationTest;
 import com.positivity.accounting.internal.dto.VendorResponse;
+import com.positivity.accounting.internal.exception.VendorNotFoundException;
 import com.positivity.accounting.internal.service.VendorDirectoryService;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -35,7 +35,9 @@ class VendorDirectoryControllerTest extends BaseIntegrationTest {
         return VendorResponse.builder()
                 .vendorId(VENDOR_ID)
                 .name("Acme Auto Parts")
+                .vendorNumber("V-000123")
                 .status("ACTIVE")
+                .remitToVersion(1)
                 .build();
     }
 
@@ -46,19 +48,21 @@ class VendorDirectoryControllerTest extends BaseIntegrationTest {
         @Test
         @DisplayName("Should return name-matched vendors")
         void shouldReturnMatchedVendors() throws Exception {
-            when(vendorDirectoryService.searchVendors(eq("acme"), anyInt())).thenReturn(List.of(acme()));
+            when(vendorDirectoryService.searchVendors(eq("acme"), any(), anyInt()))
+                    .thenReturn(List.of(acme()));
 
             mockMvc.perform(withAuth(get("/v1/accounting/vendors").param("name", "acme")))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$[0].vendorId").value(VENDOR_ID.toString()))
                     .andExpect(jsonPath("$[0].name").value("Acme Auto Parts"))
+                    .andExpect(jsonPath("$[0].vendorNumber").value("V-000123"))
                     .andExpect(jsonPath("$[0].status").value("ACTIVE"));
         }
 
         @Test
         @DisplayName("Should list vendors when no name term is given")
         void shouldListWithoutTerm() throws Exception {
-            when(vendorDirectoryService.searchVendors(any(), anyInt())).thenReturn(List.of(acme()));
+            when(vendorDirectoryService.searchVendors(any(), any(), anyInt())).thenReturn(List.of(acme()));
 
             mockMvc.perform(withAuth(get("/v1/accounting/vendors")))
                     .andExpect(status().isOk())
@@ -80,7 +84,7 @@ class VendorDirectoryControllerTest extends BaseIntegrationTest {
         @Test
         @DisplayName("Should resolve a single vendor by id")
         void shouldResolveVendorById() throws Exception {
-            when(vendorDirectoryService.getVendorById(VENDOR_ID)).thenReturn(Optional.of(acme()));
+            when(vendorDirectoryService.getVendorById(VENDOR_ID)).thenReturn(acme());
 
             mockMvc.perform(withAuth(get("/v1/accounting/vendors/{vendorId}", VENDOR_ID)))
                     .andExpect(status().isOk())
@@ -89,12 +93,13 @@ class VendorDirectoryControllerTest extends BaseIntegrationTest {
         }
 
         @Test
-        @DisplayName("Should return 404 for unknown vendor")
+        @DisplayName("Should return 404 VENDOR_NOT_FOUND for a vendor not in the copy (S24)")
         void shouldReturn404ForUnknownVendor() throws Exception {
-            when(vendorDirectoryService.getVendorById(VENDOR_ID)).thenReturn(Optional.empty());
+            when(vendorDirectoryService.getVendorById(VENDOR_ID)).thenThrow(new VendorNotFoundException(VENDOR_ID));
 
             mockMvc.perform(withAuth(get("/v1/accounting/vendors/{vendorId}", VENDOR_ID)))
-                    .andExpect(status().isNotFound());
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.code").value("VENDOR_NOT_FOUND"));
         }
 
         @Test

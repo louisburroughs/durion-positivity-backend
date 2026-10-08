@@ -326,4 +326,21 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
         """)
     List<VendorBill> findApprovedPaidInFullWithLastPaymentBetween(
             @Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    /**
+     * Whether any bill or credit note of the vendor was ever approved, by a person or the system, voided ones included
+     * (CAP:550 S24, #2517, ruling 2): the vendor creator's first-bill rule. A void never clears {@code approved_at}.
+     */
+    boolean existsByVendorIdAndApprovedAtIsNotNull(UUID vendorId);
+
+    /**
+     * The vendors among {@code vendorIds} with at least one {@code APPROVED} bill approved at a remit-to version other
+     * than the copy's current one, or at none (CAP:550 S24, #2517, rule 6): the {@code paymentDetailsChanged} flag of
+     * the vendor read, before any confirmation is considered.
+     */
+    @Query("select distinct b.vendorId from VendorBill b, ExtSupplierVendor v"
+            + " where v.vendorId = b.vendorId and b.vendorId in :vendorIds and b.status = :status"
+            + " and (b.approvedRemitToVersion is null or b.approvedRemitToVersion <> v.remitToVersion)")
+    List<UUID> findVendorIdsWithBillsApprovedAtAnotherRemitTo(
+            @Param("vendorIds") Collection<UUID> vendorIds, @Param("status") VendorBillStatus status);
 }

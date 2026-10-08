@@ -17,14 +17,15 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.positivity.accounting.internal.config.LedgerCurrency;
-import com.positivity.accounting.internal.entity.Vendor;
+import com.positivity.accounting.internal.entity.ExtSupplierVendor;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.entity.VendorBillReissue;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
+import com.positivity.accounting.internal.repository.ExtSupplierVendorRepository;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
+import com.positivity.accounting.internal.repository.SupplierInvoiceHoldRepository;
 import com.positivity.accounting.internal.repository.VendorBillReissueRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
-import com.positivity.accounting.internal.repository.VendorRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -59,10 +60,14 @@ import tools.jackson.databind.ObjectMapper;
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
-@DisplayName("SupplierInvoiceEventsListener — vendor invoices as AP bills (#1227)")
-class SupplierInvoiceEventsListenerTest {
+@DisplayName("SupplierEventsListener — vendor invoices as AP bills (#1227; S24 vendor key)")
+class SupplierEventsListenerTest {
 
     private static final UUID PROFILE = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f7a01");
+
+    /** The pos-supplier vendor the facts name (S24): the bill's vendor, never the profile. */
+    private static final UUID VENDOR = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f7a02");
+
     private static final Instant NOW = Instant.parse("2026-08-16T09:00:00Z");
 
     /** Envelope event ids are UUIDv7 in this system; the listener records one on the bill. */
@@ -83,7 +88,10 @@ class SupplierInvoiceEventsListenerTest {
     private VendorBillRepository vendorBillRepository;
 
     @Mock
-    private VendorRepository vendorRepository;
+    private ExtSupplierVendorRepository vendorCopy;
+
+    @Mock
+    private SupplierInvoiceHoldRepository holds;
 
     @Mock
     private VendorBillReissueRepository reissueRepository;
@@ -94,30 +102,44 @@ class SupplierInvoiceEventsListenerTest {
     @Mock
     private KafkaFactIngestionRecorder ingestionRecorder;
 
-    private SupplierInvoiceEventsListener listener;
+    private SupplierEventsListener listener;
 
     @BeforeEach
     void setUp() {
         ObjectProvider<MeterRegistry> noMeters = mock();
-        listener = new SupplierInvoiceEventsListener(
+        listener = new SupplierEventsListener(
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 new ObjectMapper(),
                 processedEventRepository,
                 vendorBillRepository,
-                vendorRepository,
+                vendorCopy,
+                holds,
                 new LedgerCurrency("USD"),
                 ingestionRecorder,
                 // The real guard over the mocked repository: the listener's lookup is the rule's query.
                 new VendorBillDuplicateGuard(vendorBillRepository, noMeters),
                 reissueRepository,
                 locks,
+                noMeters,
                 mock(PlatformTransactionManager.class));
         // The lock re-reads the bill as it is now; here it is unchanged.
         lenient().when(locks.lock(any())).thenAnswer(inv -> inv.getArgument(0));
         when(processedEventRepository.existsById(any())).thenReturn(false);
         when(vendorBillRepository.findLiveDuplicate(any(), any(), any(), any(), any()))
                 .thenReturn(Optional.empty());
-        when(vendorRepository.existsById(any())).thenReturn(false);
+        when(vendorCopy.findById(VENDOR)).thenReturn(Optional.of(activeVendor()));
+    }
+
+    /** VENDOR as accounting's copy holds it: active (S24). */
+    private static ExtSupplierVendor activeVendor() {
+        ExtSupplierVendor vendor = new ExtSupplierVendor();
+        vendor.setVendorId(VENDOR);
+        vendor.setVendorNumber("V-000123");
+        vendor.setDisplayName("Michelin Deutschland");
+        vendor.setStatus(ExtSupplierVendor.ACTIVE);
+        vendor.setCreatedBy("buyer.ben");
+        vendor.setAggregateVersion(1);
+        return vendor;
     }
 
     private static String event(String eventId, String number, String type, String total) {
@@ -150,15 +172,16 @@ class SupplierInvoiceEventsListenerTest {
               "vendorProfileId":"%s","supplierRef":"michelin-de","vendorInvoiceNumber":"%s",
               "invoiceDate":"%s","type":"%s","currency":"%s",
               "totalNetAmount":%s,"totalTaxAmount":%s,"totalGrossAmount":%s,
-              "vendorOrderReference":"PO-778","occurredAt":"2026-08-16T08:00:00Z","lines":%s}}
-            """.formatted(eventId, PROFILE, number, invoiceDate, type, currency, net, tax, gross, lines);
+              "vendorOrderReference":"PO-778","occurredAt":"2026-08-16T08:00:00Z","lines":%s,
+              "vendorId":"%s"}}
+            """.formatted(eventId, PROFILE, number, invoiceDate, type, currency, net, tax, gross, lines, VENDOR);
     }
 
     /** The rule's window for the default invoice date, 2026-08-14. */
     private static final LocalDateTime DAY = LocalDateTime.of(2026, 8, 14, 0, 0);
 
     private void liveOriginal(String key, VendorBill original) {
-        when(vendorBillRepository.findLiveDuplicate(PROFILE, key, DAY, DAY.plusDays(1), null))
+        when(vendorBillRepository.findLiveDuplicate(VENDOR, key, DAY, DAY.plusDays(1), null))
                 .thenReturn(Optional.of(original));
     }
 
@@ -195,7 +218,7 @@ class SupplierInvoiceEventsListenerTest {
                         eq(java.time.LocalDateTime.of(2026, 8, 14, 0, 0)),
                         any(),
                         eq(new FactPostingOutcome.NothingToPost()));
-        assertThat(SupplierInvoiceEventsListener.RECORDED_EVENT_TYPES).containsExactly("supplier.invoice.received");
+        assertThat(SupplierEventsListener.RECORDED_EVENT_TYPES).containsExactly("supplier.invoice.received");
     }
 
     @Test
@@ -209,17 +232,14 @@ class SupplierInvoiceEventsListenerTest {
     }
 
     @Test
-    @DisplayName("the supplier's profile id is the accounting vendor id, and the directory learns it")
-    void vendorDirectoryEntryIsCreated() {
+    @DisplayName("S24: the fact's pos-supplier vendorId is the bill's vendor, named as the copy names it")
+    void vendorIdIsTheBillsVendor() {
         listener.onSupplierEvent(event(EVENT_3, "INV-3", "INVOICE", "288.00"));
 
-        // Judgment 3. Vendor states its id is assigned by the system owning the relationship, which
-        // for an EDIWheel vendor is pos-supplier. A separate accounting id plus a mapping table
-        // would create the ambiguity that rule exists to avoid.
-        ArgumentCaptor<Vendor> captor = ArgumentCaptor.forClass(Vendor.class);
-        verify(vendorRepository).save(captor.capture());
-        assertThat(captor.getValue().getVendorId()).isEqualTo(PROFILE);
-        assertThat(captured().getVendorId()).isEqualTo(PROFILE);
+        // Judgment 3 (S24): one vendor key, the pos-supplier vendor id, never the vendor profile id.
+        VendorBill bill = captured();
+        assertThat(bill.getVendorId()).isEqualTo(VENDOR).isNotEqualTo(PROFILE);
+        assertThat(bill.getVendorName()).isEqualTo("Michelin Deutschland");
     }
 
     @Test
@@ -431,8 +451,9 @@ class SupplierInvoiceEventsListenerTest {
               "vendorProfileId":"%s","supplierRef":"michelin-de","vendorInvoiceNumber":"INV-X",
               "invoiceDate":"2026-08-14","type":"INVOICE","currency":"USD",
               "totalNetAmount":null,"totalTaxAmount":null,"totalGrossAmount":null,
-              "vendorOrderReference":null,"occurredAt":"2026-08-16T08:00:00Z","lines":[]}}
-            """.formatted(EVENT_1, PROFILE);
+              "vendorOrderReference":null,"occurredAt":"2026-08-16T08:00:00Z","lines":[],
+              "vendorId":"%s"}}
+            """.formatted(EVENT_1, PROFILE, VENDOR);
 
         listener.onSupplierEvent(noTotal);
 
@@ -497,7 +518,7 @@ class SupplierInvoiceEventsListenerTest {
 
         private VendorBill held(String amount, VendorBillStatus status) {
             VendorBill bill = new VendorBill(ORIGINAL_ID);
-            bill.setVendorId(PROFILE);
+            bill.setVendorId(VENDOR);
             bill.setBillNumber("INV-1");
             bill.setBillDate(DAY);
             bill.setTotalAmount(new BigDecimal(amount));
@@ -652,7 +673,7 @@ class SupplierInvoiceEventsListenerTest {
             // What the listener owes is to ask the rule and, on "none", to create and touch nothing else.
             listener.onSupplierEvent(event(EVENT_1, "INV-1", "INVOICE", "100.00"));
 
-            verify(vendorBillRepository).findLiveDuplicate(PROFILE, "INV1", DAY, DAY.plusDays(1), null);
+            verify(vendorBillRepository).findLiveDuplicate(VENDOR, "INV1", DAY, DAY.plusDays(1), null);
             VendorBill created = captured();
             assertThat(created.getStatus()).isEqualTo(VendorBillStatus.PENDING_RECEIPT_MATCH);
             assertThat(created.getBillNumberKey()).isEqualTo("INV1");
@@ -698,13 +719,13 @@ class SupplierInvoiceEventsListenerTest {
             // Last year's bill is live, on its own date; the rule is asked about this invoice's date.
             VendorBill lastYear = held("100.00", VendorBillStatus.PAID);
             LocalDateTime lastYearDay = LocalDateTime.of(2025, 10, 1, 0, 0);
-            when(vendorBillRepository.findLiveDuplicate(PROFILE, "INV1", lastYearDay, lastYearDay.plusDays(1), null))
+            when(vendorBillRepository.findLiveDuplicate(VENDOR, "INV1", lastYearDay, lastYearDay.plusDays(1), null))
                     .thenReturn(Optional.of(lastYear));
 
             listener.onSupplierEvent(event(EVENT_1, "INV-1", "INVOICE", "100.00", "USD", "2026-10-01"));
 
             LocalDateTime thisYearDay = LocalDateTime.of(2026, 10, 1, 0, 0);
-            verify(vendorBillRepository).findLiveDuplicate(PROFILE, "INV1", thisYearDay, thisYearDay.plusDays(1), null);
+            verify(vendorBillRepository).findLiveDuplicate(VENDOR, "INV1", thisYearDay, thisYearDay.plusDays(1), null);
             assertThat(captured().getBillDate()).isEqualTo(thisYearDay);
             assertThat(lastYear.getStatus()).isEqualTo(VendorBillStatus.PAID);
         }
@@ -714,7 +735,7 @@ class SupplierInvoiceEventsListenerTest {
         void collisionRunsTheHandlerOnceMore() {
             VendorBill original = held("100.00", VendorBillStatus.PENDING_RECEIPT_MATCH);
             // The check sees nothing, the competing writer commits, the second run's check sees its bill.
-            when(vendorBillRepository.findLiveDuplicate(PROFILE, "INV1", DAY, DAY.plusDays(1), null))
+            when(vendorBillRepository.findLiveDuplicate(VENDOR, "INV1", DAY, DAY.plusDays(1), null))
                     .thenReturn(Optional.empty())
                     .thenReturn(Optional.of(original));
             when(vendorBillRepository.saveAndFlush(any()))
@@ -723,7 +744,7 @@ class SupplierInvoiceEventsListenerTest {
             listener.onSupplierEvent(event(EVENT_1, "INV-1", "INVOICE", "100.00"));
 
             verify(vendorBillRepository, times(1)).saveAndFlush(any());
-            verify(vendorBillRepository, times(2)).findLiveDuplicate(PROFILE, "INV1", DAY, DAY.plusDays(1), null);
+            verify(vendorBillRepository, times(2)).findLiveDuplicate(VENDOR, "INV1", DAY, DAY.plusDays(1), null);
             verify(ingestionRecorder)
                     .record(
                             any(),

@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.accounting.internal.dto.GoodsReceivedEvent;
 import com.positivity.accounting.internal.dto.VendorBillResponse;
 import com.positivity.accounting.internal.entity.AccountingSequence;
+import com.positivity.accounting.internal.entity.ExtSupplierVendor;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.entity.VendorBillLine;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
@@ -39,7 +40,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 
 /**
  * Unit tests of goods-receipt bill creation in VendorBillServiceImpl: the per-tenant bill number, the vendor
- * directory, and (AW37, #2509) that creation posts nothing: the bill posts once, at approval.
+ * copy (S24), and (AW37, #2509) that creation posts nothing: the bill posts once, at approval.
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("VendorBillService - goods-receipt bill creation")
@@ -69,8 +70,9 @@ class VendorBillCreationTest {
     @Mock
     private VendorBillInvoiceMatcher matcher;
 
+    /** Accounting's copy of the vendor master (S24): the vendor is in it and active. */
     @Mock
-    private VendorDirectoryService vendorDirectoryService;
+    private SupplierVendorCopies vendorCopies;
 
     /** A mock answers "no duplicate": these tests are about creation, not the rule (#2501). */
     @Mock
@@ -133,6 +135,14 @@ class VendorBillCreationTest {
                                 .isInventoryItem(false)
                                 .build()))
                 .build();
+        ExtSupplierVendor vendor = new ExtSupplierVendor();
+        vendor.setVendorId(testVendorId);
+        vendor.setVendorNumber("V-000003");
+        vendor.setDisplayName("Copy Vendor Name");
+        vendor.setStatus(ExtSupplierVendor.ACTIVE);
+        lenient()
+                .when(vendorCopies.requireForNewBusiness(testVendorId, "A bill"))
+                .thenReturn(vendor);
     }
 
     @Test
@@ -180,29 +190,31 @@ class VendorBillCreationTest {
     }
 
     @Test
-    @DisplayName("Should record vendor in directory when bill is created")
-    void shouldRecordVendorInDirectory() {
+    @DisplayName("S24: the bill is named as the vendor copy names the vendor, never as the caller does")
+    void billTakesTheCopysVendorName() {
         when(billRepository.findByOriginEventId(testEvent.getEventId())).thenReturn(Optional.empty());
         when(billRepository.saveAndFlush(any(VendorBill.class))).thenReturn(createSavedBill());
 
         vendorBillService.handleGoodsReceivedEvent(testEvent);
 
-        // On the bill's own connection (#2501): the counter row lock is held, so no second
-        // connection may be requested.
-        verify(vendorDirectoryService).recordVendorInCurrentTransaction(testVendorId, "Test Vendor Inc");
+        ArgumentCaptor<VendorBill> saved = ArgumentCaptor.forClass(VendorBill.class);
+        verify(billRepository).saveAndFlush(saved.capture());
+        assertThat(saved.getValue().getVendorId()).isEqualTo(testVendorId);
+        assertThat(saved.getValue().getVendorName()).isEqualTo("Copy Vendor Name");
     }
 
     @Test
-    @DisplayName("The directory row is written after the bill is flushed, on the bill's connection")
-    void directoryRowIsWrittenAfterTheBill() {
+    @DisplayName("S24: the vendor is checked against the copy before the bill number is drawn")
+    void vendorIsCheckedBeforeTheNumberIsDrawn() {
         when(billRepository.findByOriginEventId(testEvent.getEventId())).thenReturn(Optional.empty());
         when(billRepository.saveAndFlush(any(VendorBill.class))).thenReturn(createSavedBill());
 
         vendorBillService.handleGoodsReceivedEvent(testEvent);
 
-        InOrder order = inOrder(billRepository, vendorDirectoryService);
+        InOrder order = inOrder(vendorCopies, sequenceLocker, billRepository);
+        order.verify(vendorCopies).requireForNewBusiness(testVendorId, "A bill");
+        order.verify(sequenceLocker).lockOrProvision("BILL-202401");
         order.verify(billRepository).saveAndFlush(any(VendorBill.class));
-        order.verify(vendorDirectoryService).recordVendorInCurrentTransaction(testVendorId, "Test Vendor Inc");
     }
 
     @Test

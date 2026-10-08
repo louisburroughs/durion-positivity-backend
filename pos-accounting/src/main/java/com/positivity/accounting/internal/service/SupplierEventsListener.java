@@ -2,28 +2,38 @@ package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.config.AccountingEventTypeRegistry;
 import com.positivity.accounting.internal.config.LedgerCurrency;
+import com.positivity.accounting.internal.entity.ExtSupplierVendor;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
-import com.positivity.accounting.internal.entity.Vendor;
+import com.positivity.accounting.internal.entity.SupplierInvoiceHold;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.entity.VendorBillReissue;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
+import com.positivity.accounting.internal.repository.ExtSupplierVendorRepository;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
+import com.positivity.accounting.internal.repository.SupplierInvoiceHoldRepository;
 import com.positivity.accounting.internal.repository.VendorBillReissueRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
-import com.positivity.accounting.internal.repository.VendorRepository;
+import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.supplier.SupplierInvoiceReceivedV1;
+import com.positivity.domainevents.supplier.SupplierVendorUpdatedV1;
 import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.kafka.RetryableConsumerFailures;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.io.Serial;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -36,7 +46,33 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Creates AP vendor bills from vendor invoices fetched over EDIWheel B3.3 (CAP-321 #1227).
+ * The module's one consumer of {@code supplier.events.v1}: AP vendor bills from vendor invoices fetched over EDIWheel
+ * B3.3 (CAP-321 #1227), and accounting's copy of the pos-supplier vendor master (CAP:550 S24, #2517).
+ *
+ * <h2>One consumer, every supplier fact marked</h2>
+ *
+ * The vendor branch is added here rather than in a listener of its own: {@code processed_events} is keyed by event id,
+ * so a second consumer group on the topic would suppress this one. Every fact this consumer reads, handled or not, is
+ * marked with {@code owner = "supplier"} (and the tenant), which is what {@link SupplierManifestListener} compares with
+ * pos-supplier's manifest.
+ *
+ * <h2>The vendor copy (S24)</h2>
+ *
+ * A {@code supplier.vendor.updated} fact upserts {@code ext_supplier_vendor} under {@link ReplicaVersionGuard}: it
+ * applies when its {@code aggregateVersion} is at least the stored one, so a replay repairs and a late older fact
+ * changes nothing. Only {@code schemaVersion} 2 or later is applied (Security ruling #2617, ADR-0072): the version is
+ * read from the envelope before the payload is mapped, and an older fact is marked, counted as {@code
+ * accounting.supplier_vendor.skipped{eventType, schemaVersion}} and skipped, its payload never logged. Seeding comes
+ * from pos-supplier's {@code POST /v1/supplier/vendors/facts/replay}. No log line, metric tag or exception message of
+ * the vendor branch names a tax registration, {@code last4} included.
+ *
+ * <h2>The vendor key (S24)</h2>
+ *
+ * An invoice names its vendor by the fact's {@code vendorId}, never by {@code vendorProfileId}. A fact without one is
+ * held ({@code VENDOR_ID_MISSING}, until S25 turns it into a draft); a vendor not yet copied is held too ({@code
+ * VENDOR_NOT_IN_COPY}) and released, through the same bill creation, once the vendor is copied. A hold is written with
+ * the processed mark, so an invoice fact is never dropped. An {@code INACTIVE} vendor's invoice becomes a {@code
+ * MATCH_EXCEPTION} bill naming the vendor as inactive (ruling 3).
  *
  * <h2>Three judgments made here, and why</h2>
  *
@@ -59,12 +95,9 @@ import tools.jackson.databind.ObjectMapper;
  * money in the ledger on the vendor's say-so alone, and a vendor that invoices in error would move
  * our accounts before anybody looked at it.
  *
- * <p><strong>3. The supplier's vendor profile id is the accounting vendor id.</strong> {@link
- * Vendor} states that its id is "assigned by the upstream system that owns the vendor relationship",
- * and for a vendor we transact with over EDIWheel that system is pos-supplier. The directory entry
- * is created on first sight so the AP screens can resolve a name; the alternative — inventing a
- * separate accounting vendor id and a mapping table to reconcile it — would create the very
- * ambiguity the upstream-assigns rule exists to avoid.
+ * <p><strong>3. The pos-supplier vendor id is the accounting vendor id</strong> (S24 replaces the vendor profile id
+ * used before): one vendor appears once in aged payables and in the duplicate rule, whichever channel its bills
+ * arrive by.
  *
  * <h2>One bill per invoice, however many times we are told</h2>
  *
@@ -107,7 +140,7 @@ import tools.jackson.databind.ObjectMapper;
 @Slf4j
 @Component
 @KafkaRails
-public class SupplierInvoiceEventsListener {
+public class SupplierEventsListener {
 
     /** Producing domain, per the repo-wide {@code processed_events} convention. */
     static final String OWNER = "supplier";
@@ -128,38 +161,44 @@ public class SupplierInvoiceEventsListener {
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
     private final VendorBillRepository vendorBillRepository;
-    private final VendorRepository vendorRepository;
+    private final ExtSupplierVendorRepository vendorCopy;
+    private final SupplierInvoiceHoldRepository holds;
     private final LedgerCurrency ledgerCurrency;
     private final KafkaFactIngestionRecorder ingestionRecorder;
     private final VendorBillDuplicateGuard duplicateGuard;
     private final VendorBillReissueRepository reissues;
     private final VendorBillLocks locks;
+    private final @Nullable MeterRegistry meterRegistry;
 
     /** The handler plus its processed mark, or a failure's mark alone, per transaction; see the class doc. */
     private final TransactionTemplate handlerTransaction;
 
-    public SupplierInvoiceEventsListener(
+    public SupplierEventsListener(
             Clock clock,
             ObjectMapper objectMapper,
             ProcessedEventRepository processedEventRepository,
             VendorBillRepository vendorBillRepository,
-            VendorRepository vendorRepository,
+            ExtSupplierVendorRepository vendorCopy,
+            SupplierInvoiceHoldRepository holds,
             LedgerCurrency ledgerCurrency,
             KafkaFactIngestionRecorder ingestionRecorder,
             VendorBillDuplicateGuard duplicateGuard,
             VendorBillReissueRepository reissues,
             VendorBillLocks locks,
+            ObjectProvider<MeterRegistry> meterRegistry,
             PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.vendorBillRepository = vendorBillRepository;
-        this.vendorRepository = vendorRepository;
+        this.vendorCopy = vendorCopy;
+        this.holds = holds;
         this.ledgerCurrency = ledgerCurrency;
         this.ingestionRecorder = ingestionRecorder;
         this.duplicateGuard = duplicateGuard;
         this.reissues = reissues;
         this.locks = locks;
+        this.meterRegistry = meterRegistry.getIfAvailable();
         this.handlerTransaction = new TransactionTemplate(transactionManager);
         this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -195,15 +234,23 @@ public class SupplierInvoiceEventsListener {
      *     answered by one more run; false on that second run, whose collision propagates
      */
     private void handle(JsonNode envelope, String eventType, String eventId, boolean mayRunOnceMore) {
+        boolean vendorFact = SupplierVendorUpdatedV1.EVENT_TYPE.equals(eventType);
+        UUID copied;
         try {
-            handlerTransaction.executeWithoutResult(_ -> {
+            copied = handlerTransaction.execute(_ -> {
+                UUID vendorId = null;
                 if (SupplierInvoiceReceivedV1.EVENT_TYPE.equals(eventType)) {
-                    apply(envelope, eventId);
+                    applyInvoice(envelope, eventId, true);
+                } else if (vendorFact) {
+                    vendorId = applyVendor(envelope, eventId);
                 } else {
                     log.debug("Ignoring supplier event type={} eventId={}", eventType, eventId);
                 }
                 markProcessed(eventId);
+                return vendorId;
             });
+        } catch (VendorCopyWriteFailure e) {
+            throw e.getCause();
         } catch (IngestionRecordFailure e) {
             throw e.getCause();
         } catch (DuplicateRuleCollision e) {
@@ -239,23 +286,257 @@ public class SupplierInvoiceEventsListener {
             }
             // Genuinely unreadable: a payload this build cannot parse will not parse on retry
             // either, and blocking the partition would stop every other vendor's invoices too.
-            log.warn("Skipping malformed supplier invoice event eventId={}", eventId, e);
+            if (vendorFact) {
+                // A vendor fact's mapping error may quote the payload (ADR-0072): its class only, never its message.
+                log.warn(
+                        "Skipping malformed supplier event eventId={} eventType={} ({})",
+                        eventId,
+                        eventType,
+                        e.getClass().getSimpleName());
+            } else {
+                log.warn("Skipping malformed supplier invoice event eventId={}", eventId, e);
+            }
             handlerTransaction.executeWithoutResult(_ -> markProcessed(eventId));
+            return;
+        }
+        if (copied != null) {
+            releaseHolds(copied);
         }
     }
 
     private void markProcessed(@NonNull String eventId) {
         processedEventRepository.save(ProcessedEvent.builder()
                 .eventId(eventId)
+                .owner(OWNER)
                 .processedAt(Instant.now(clock))
                 .build());
     }
 
-    private void apply(JsonNode envelope, String eventId) {
+    // ---- the vendor copy (S24) ------------------------------------------------------------------------------
+
+    /**
+     * Applies a {@code supplier.vendor.updated} fact to the copy (rule 1): {@code schemaVersion} 2 or later only, read
+     * from the envelope before the payload is mapped; then the version guard; then the upsert.
+     *
+     * @return the vendor id when the copy was written, so its held invoices can be released; null when skipped
+     */
+    private @Nullable UUID applyVendor(JsonNode envelope, String eventId) {
+        int schemaVersion = envelope.path("schemaVersion").intValue(0);
+        if (schemaVersion < SupplierVendorUpdatedV1.SCHEMA_VERSION) {
+            // Security ruling #2617: a version 1 fact may carry a full registration number. It is never mapped, never
+            // applied and never logged; it is marked by the caller, so the manifest still counts it.
+            countSkippedVendorFact(schemaVersion);
+            log.info(
+                    "Skipping supplier vendor fact below schemaVersion {} eventId={} eventType={} schemaVersion={}",
+                    SupplierVendorUpdatedV1.SCHEMA_VERSION,
+                    eventId,
+                    SupplierVendorUpdatedV1.EVENT_TYPE,
+                    schemaVersion);
+            return null;
+        }
+        SupplierVendorUpdatedV1 fact =
+                objectMapper.treeToValue(envelope.path("payload"), SupplierVendorUpdatedV1.class);
+        long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
+        ExtSupplierVendor copy = vendorCopy.findById(fact.vendorId()).orElse(null);
+        if (copy != null && ReplicaVersionGuard.isStale(copy.getAggregateVersion(), aggregateVersion)) {
+            log.debug(
+                    "Ignoring stale supplier vendor fact eventId={} vendorId={} version={} held={}",
+                    eventId,
+                    fact.vendorId(),
+                    aggregateVersion,
+                    copy.getAggregateVersion());
+            return null;
+        }
+        if (copy == null) {
+            copy = new ExtSupplierVendor();
+            copy.setVendorId(fact.vendorId());
+        }
+        copy.setVendorNumber(fact.vendorNumber());
+        copy.setDisplayName(fact.displayName());
+        copy.setStatus(fact.status().name());
+        copy.setStatusChangedAt(fact.statusChangedAt());
+        copy.setRemitTo(remitTo(fact.remitTo()));
+        copy.setRemitToVersion(fact.remitToVersion());
+        copy.setRemitToChangedAt(fact.remitToChangedAt());
+        copy.setRemitToRequestedBy(fact.remitToRequestedBy());
+        copy.setRemitToApprovedBy(fact.remitToApprovedBy());
+        copy.setDefaultPaymentTerms(fact.defaultPaymentTerms());
+        copy.setDefaultCurrency(fact.defaultCurrency());
+        // As the fact carries them, {scheme, region, last4}; never validated, never read by a rule here (AW48).
+        copy.setTaxRegistrations(fact.taxRegistrations().stream()
+                .map(SupplierEventsListener::registration)
+                .toList());
+        copy.setCreatedBy(fact.createdBy());
+        copy.setAggregateVersion(aggregateVersion);
+        copy.setUpdatedAt(Instant.now(clock));
+        try {
+            vendorCopy.saveAndFlush(copy);
+        } catch (DataIntegrityViolationException e) {
+            // Postgres quotes the failing row in a constraint violation's detail, registrations included: the
+            // exception that propagates (and may reach a DLQ) carries only the constraint's name (ADR-0072).
+            throw new VendorCopyWriteFailure(new DataIntegrityViolationException("The vendor copy refused vendor "
+                    + fact.vendorNumber() + " (eventId " + eventId + "): " + constraintName(e)));
+        }
+        log.info(
+                "Copied supplier vendor {} vendorId={} version={} status={} remitToVersion={}",
+                fact.vendorNumber(),
+                fact.vendorId(),
+                aggregateVersion,
+                fact.status(),
+                fact.remitToVersion());
+        return fact.vendorId();
+    }
+
+    private static @Nullable Map<String, Object> remitTo(SupplierVendorUpdatedV1.@Nullable RemitTo remitTo) {
+        if (remitTo == null) {
+            return null;
+        }
+        Map<String, Object> copy = new LinkedHashMap<>();
+        copy.put("payeeName", remitTo.payeeName());
+        copy.put("addressLine1", remitTo.addressLine1());
+        copy.put("addressLine2", remitTo.addressLine2());
+        copy.put("city", remitTo.city());
+        copy.put("region", remitTo.region());
+        copy.put("postalCode", remitTo.postalCode());
+        copy.put("countryCode", remitTo.countryCode());
+        copy.put("remittanceEmail", remitTo.remittanceEmail());
+        return copy;
+    }
+
+    private static Map<String, String> registration(SupplierVendorUpdatedV1.TaxRegistration registration) {
+        Map<String, String> copy = new LinkedHashMap<>();
+        copy.put("scheme", registration.scheme());
+        copy.put("region", registration.region());
+        copy.put("last4", registration.last4());
+        return copy;
+    }
+
+    private static String constraintName(DataIntegrityViolationException e) {
+        Throwable cause = e;
+        while (cause != null) {
+            if (cause instanceof org.hibernate.exception.ConstraintViolationException violation
+                    && violation.getConstraintName() != null) {
+                return "constraint " + violation.getConstraintName();
+            }
+            cause = cause.getCause();
+        }
+        return "a constraint violation";
+    }
+
+    /** One {@code accounting.supplier_vendor.skipped} increment, tagged with the event type and schema version only. */
+    private void countSkippedVendorFact(int schemaVersion) {
+        if (meterRegistry == null) {
+            return;
+        }
+        Counter.builder("accounting.supplier_vendor.skipped")
+                .description("supplier.vendor.updated facts below schemaVersion 2, marked and never applied")
+                .tag("eventType", SupplierVendorUpdatedV1.EVENT_TYPE)
+                .tag("schemaVersion", Integer.toString(schemaVersion))
+                .register(meterRegistry)
+                .increment();
+    }
+
+    /**
+     * Releases the vendor's {@code VENDOR_NOT_IN_COPY} holds once it is copied (rule 3), oldest first, each through the
+     * same bill creation in a transaction of its own, with its ingestion record. A release that fails leaves its hold
+     * {@code HELD} for {@link SupplierInvoiceHoldSweep} or the vendor's next fact to retry; the vendor fact is already
+     * marked.
+     */
+    void releaseHolds(@NonNull UUID vendorId) {
+        List<UUID> open = handlerTransaction.execute(_ -> holds
+                .findByVendorIdAndReasonAndReleasedAtIsNullOrderByReceivedAtAscHoldIdAsc(
+                        vendorId, SupplierInvoiceHold.Reason.VENDOR_NOT_IN_COPY)
+                .stream()
+                .map(SupplierInvoiceHold::getHoldId)
+                .toList());
+        if (open == null) {
+            return;
+        }
+        for (UUID holdId : open) {
+            try {
+                release(holdId, true);
+            } catch (RuntimeException e) {
+                log.warn(
+                        "Releasing held supplier invoice holdId={} of vendor {} failed; it stays held and is retried",
+                        holdId,
+                        vendorId,
+                        e);
+            }
+        }
+    }
+
+    private void release(UUID holdId, boolean mayRunOnceMore) {
+        try {
+            handlerTransaction.executeWithoutResult(_ -> {
+                SupplierInvoiceHold hold = holds.findById(holdId).orElse(null);
+                if (hold == null || hold.getReleasedAt() != null) {
+                    return;
+                }
+                JsonNode envelope = objectMapper.readTree(hold.getPayload());
+                UUID billId = applyInvoice(envelope, hold.getEventId().toString(), false);
+                if (billId == null) {
+                    return;
+                }
+                hold.setReleasedAt(Instant.now(clock));
+                hold.setReleasedBillId(billId);
+                holds.save(hold);
+                countHoldReleased();
+                log.info(
+                        "Released held supplier invoice {} eventId={} as bill {}",
+                        hold.getSupplierInvoiceRef(),
+                        hold.getEventId(),
+                        billId);
+            });
+        } catch (IngestionRecordFailure e) {
+            throw e.getCause();
+        } catch (DuplicateRuleCollision e) {
+            if (!mayRunOnceMore) {
+                throw e.getCause();
+            }
+            duplicateGuard.record(
+                    VendorBillDuplicateGuard.Channel.EDI,
+                    VendorBillDuplicateGuard.Outcome.RETRIED,
+                    e.vendorId,
+                    e.billNumber,
+                    e.billDate,
+                    null);
+            release(holdId, false);
+        }
+    }
+
+    private void countHoldReleased() {
+        if (meterRegistry != null) {
+            meterRegistry.counter("accounting.supplier_invoice.hold_released").increment();
+        }
+    }
+
+    // ---- the invoice (CAP-321; S24's vendor key) -----------------------------------------------------------------
+
+    /**
+     * Turns an invoice fact into a bill, a flagged duplicate (S0) or, when {@code holdIfUnready}, a hold.
+     *
+     * @param holdIfUnready false on a release: a fact whose vendor is still not copied stays held, unchanged
+     * @return the bill created or flagged against; null when the fact was held (or, on a release, is not ready)
+     */
+    private @Nullable UUID applyInvoice(JsonNode envelope, String eventId, boolean holdIfUnready) {
         SupplierInvoiceReceivedV1 fact =
                 objectMapper.treeToValue(envelope.path("payload"), SupplierInvoiceReceivedV1.class);
 
-        UUID vendorId = fact.vendorProfileId();
+        // S24: the vendor is the fact's pos-supplier vendorId, never its vendorProfileId.
+        UUID vendorId = fact.vendorId();
+        if (vendorId == null) {
+            if (holdIfUnready) {
+                hold(envelope, eventId, fact, null, SupplierInvoiceHold.Reason.VENDOR_ID_MISSING);
+            }
+            return null;
+        }
+        ExtSupplierVendor vendor = vendorCopy.findById(vendorId).orElse(null);
+        if (vendor == null) {
+            if (holdIfUnready) {
+                hold(envelope, eventId, fact, vendorId, SupplierInvoiceHold.Reason.VENDOR_NOT_IN_COPY);
+            }
+            return null;
+        }
         String billNumber = fact.vendorInvoiceNumber();
         LocalDateTime billDate = fact.invoiceDate().atStartOfDay();
 
@@ -276,14 +557,12 @@ public class SupplierInvoiceEventsListener {
                     existing.get(),
                     fact,
                     flagged ? FactPostingOutcome.nothingToPost() : new FactPostingOutcome.AlreadyPosted(null, null));
-            return;
+            return existing.get().getVendorBillId();
         }
-
-        ensureVendorDirectoryEntry(vendorId, fact.supplierRef());
 
         VendorBill bill = new VendorBill();
         bill.setVendorId(vendorId);
-        bill.setVendorName(fact.supplierRef());
+        bill.setVendorName(vendor.getDisplayName());
         // The vendor's own number, not one we mint. It is what an AP clerk quotes back to the
         // vendor, and a number of our own would be meaningless in that conversation.
         bill.setBillNumber(billNumber);
@@ -328,6 +607,13 @@ public class SupplierInvoiceEventsListener {
                 bill.setStatus(VendorBillStatus.MATCH_EXCEPTION);
                 bill.setRejectionReason(totals.explanation());
             });
+            // S24 (ruling 3): an inactive vendor's invoice is recorded, the debt being real, for a person to decide; if
+            // its totals don't add up either, TOTALS_ADD_UP still reports FAIL and the difference is still required.
+            if (!vendor.isActive()) {
+                bill.setStatus(VendorBillStatus.MATCH_EXCEPTION);
+                bill.setRejectionReason(
+                        inactive(vendor) + (bill.getRejectionReason() == null ? "" : ". " + bill.getRejectionReason()));
+            }
         }
         bill.setOriginEventId(UUID.fromString(eventId));
         bill.setOriginEventType(ORIGIN_EVENT_TYPE);
@@ -348,11 +634,67 @@ public class SupplierInvoiceEventsListener {
         }
         record(eventId, bill, fact, FactPostingOutcome.nothingToPost());
         log.info(
-                "Created vendor bill from supplier invoice {} ({} {}) for vendor {}",
+                "Created vendor bill from supplier invoice {} ({} {}) for vendor {} status={}",
                 billNumber,
                 fact.totalGrossAmount(),
                 fact.currency(),
-                fact.supplierRef());
+                vendor.getVendorNumber(),
+                bill.getStatus());
+        return bill.getVendorBillId();
+    }
+
+    private static String inactive(ExtSupplierVendor vendor) {
+        return "Vendor " + vendor.getVendorNumber() + " is inactive";
+    }
+
+    /**
+     * Holds the fact (rule 3): its whole envelope, its event id and the reason, written in the handler transaction with
+     * the processed mark, so the fact is never dropped. No ingestion record is written: the release writes it with the
+     * bill.
+     */
+    private void hold(
+            JsonNode envelope,
+            String eventId,
+            SupplierInvoiceReceivedV1 fact,
+            @Nullable UUID vendorId,
+            SupplierInvoiceHold.Reason reason) {
+        SupplierInvoiceHold hold = new SupplierInvoiceHold();
+        hold.setEventId(UUID.fromString(eventId));
+        String ref = fact.vendorInvoiceNumber();
+        hold.setSupplierInvoiceRef(ref.length() > HOLD_REF_LENGTH ? ref.substring(0, HOLD_REF_LENGTH) : ref);
+        hold.setVendorId(vendorId);
+        hold.setReason(reason);
+        hold.setPayload(objectMapper.writeValueAsString(envelope));
+        hold.setReceivedAt(Instant.now(clock));
+        holds.save(hold);
+        log.info(
+                "Held supplier invoice {} eventId={} reason={} vendorId={}",
+                hold.getSupplierInvoiceRef(),
+                eventId,
+                reason,
+                vendorId);
+    }
+
+    /** {@code supplier_invoice_hold.supplier_invoice_ref} is {@code varchar(100)}. */
+    private static final int HOLD_REF_LENGTH = 100;
+
+    /**
+     * A vendor-copy write refused by a constraint, its message stripped of the failing row (ADR-0072). Carried out of
+     * the handler transaction past the malformed-payload catch, so {@link #handle} rethrows it unmarked.
+     */
+    private static final class VendorCopyWriteFailure extends RuntimeException {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        VendorCopyWriteFailure(@NonNull DataIntegrityViolationException cause) {
+            super(cause.getMessage(), cause);
+        }
+
+        @Override
+        public synchronized @NonNull DataIntegrityViolationException getCause() {
+            return (DataIntegrityViolationException) super.getCause();
+        }
     }
 
     private void record(String eventId, VendorBill bill, SupplierInvoiceReceivedV1 fact, FactPostingOutcome outcome) {
@@ -530,17 +872,5 @@ public class SupplierInvoiceEventsListener {
     private static BigDecimal signed(SupplierInvoiceReceivedV1 fact, BigDecimal amount) {
         BigDecimal magnitude = amount == null ? BigDecimal.ZERO : amount.abs();
         return fact.isPayable() ? magnitude : magnitude.negate();
-    }
-
-    /**
-     * Makes sure the AP vendor typeahead can resolve this vendor.
-     *
-     * <p>Created rather than required: an invoice arriving for a vendor the directory has never seen
-     * is an ordinary first invoice, and refusing it would make the directory a gate on being paid.
-     */
-    private void ensureVendorDirectoryEntry(UUID vendorId, String name) {
-        if (!vendorRepository.existsById(vendorId)) {
-            vendorRepository.save(new Vendor(vendorId, name));
-        }
     }
 }

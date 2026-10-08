@@ -1163,12 +1163,13 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
         return tenant;
     }
 
+    /** A goods receipt of the vendor, put in the bound tenant's vendor copy first (S24). */
     private static GoodsReceivedEvent receipt(UUID vendor, UUID product, LocalDate received) {
         return GoodsReceivedEvent.builder()
                 .eventId(UUIDv7Generator.generate())
                 .organizationId(UUIDv7Generator.generate())
                 .purchaseOrderId(UUIDv7Generator.generate())
-                .vendorId(vendor)
+                .vendorId(copiedVendor(vendor))
                 .vendorName("Acme Parts Co")
                 .receivedDate(received.atTime(9, 30))
                 .lineItems(List.of(GoodsReceivedEvent.ReceivedLineItem.builder()
