@@ -12265,7 +12265,7 @@ paths:
 
         Emits an ACCOUNTING_VENDOR_BILL_STAGE_LIST audit event; no state changes.
 
-        Returns 200 with a page of rows, and 400 VALIDATION_ERROR for an unknown stage.
+        Returns 200 with a page of rows, 400 VALIDATION_ERROR for an unknown stage, 401 without a valid token, and 403 FORBIDDEN without accounting:ap:view.
 
         '
       operationId: listVendorBillsByStage
@@ -12313,6 +12313,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: 'VALIDATION_ERROR: unknown stage'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'Not authenticated: no valid bearer token'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: FORBIDDEN
       security:
       - bearerAuth:
         - accounting:ap:view
@@ -12369,9 +12381,9 @@ paths:
       - accounting:ap:view
   /v1/accounting/vendor-bills/match:
     post:
-      description: 'Runs the three-way match of a received vendor invoice against pending goods-received bills: a HIGH match (score 70 or more) within tolerance sends the bill to AWAITING_APPROVAL with submittedBy SYSTEM and never approves it, a MEDIUM score or a discrepancy parks it in MATCH_EXCEPTION, and an AMBIGUOUS match keeps the scored candidates for a person to select one; nothing is posted.
+      description: 'Runs the three-way match of a received vendor invoice against pending goods-received bills (never an EDI bill): a HIGH match (score 70 or more) within tolerance sends the bill to AWAITING_APPROVAL with submittedBy SYSTEM and never approves it, a MEDIUM score or a discrepancy parks it in MATCH_EXCEPTION, and an AMBIGUOUS match keeps the scored candidates for a person to select one; nothing is posted.
 
-        Every routed match keeps what the vendor billed (the billed total and each line''s billed quantity and price) and an append-only evidence record with the score, the points per criterion (amount 40, products 30, date 20, purchase order 5) and the line comparison.
+        Every routed single match takes the invoice''s number and its invoiceDate as the bill date (AW45) and keeps what the vendor billed (the billed total and each line''s billed quantity and price) and an append-only evidence record with the receipt date, the score, the points per criterion (amount 40 against the received total, products 30, date 20, purchase order 5) and the line comparison.
 
         Use this tool when a vendor invoice arrives; do not use createVendorBillFromGoodsReceived, which records the receipt, and use resolveVendorBillMatchException or selectVendorBillMatchCandidate to clear exceptions.
 
@@ -12381,7 +12393,7 @@ paths:
 
         Emits an ACCOUNTING_VENDOR_BILL_MATCH event and writes a VENDOR_BILL_MATCH_ROUTED audit row; the returned bill''s status conveys the outcome.
 
-        Returns 400 when no pending receipt matches the invoice or the payload fails validation, and 409 AP_BILL_DUPLICATE when another live bill (any status except VOIDED or REJECTED) of the vendor already holds the invoiceReference on the same bill date, compared ignoring case, spacing, punctuation and leading zeros (referenceId names it), or the generic 409 DUPLICATE_RESOURCE, with no referenceId, when a concurrent writer takes the number between the check and the commit.
+        Returns 400 when no pending receipt matches the invoice or the payload fails validation (a missing invoiceDate included), 409 AP_BILL_DUPLICATE when another live bill (any status except VOIDED or REJECTED) of the vendor already holds the invoiceReference on the invoiceDate, compared ignoring case, spacing, punctuation and leading zeros (referenceId names it, and the receipt bill is left untouched), the generic 409 DUPLICATE_RESOURCE when a concurrent writer takes the number between the check and the commit, and 409 OPTIMISTIC_LOCK when the matched bill was decided meanwhile (send the invoice again).
 
         '
       operationId: matchVendorInvoice
@@ -12425,7 +12437,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'AP_BILL_DUPLICATE: another live bill of this vendor already holds this invoice reference on the same bill date; referenceId is that bill''s vendorBillId. DUPLICATE_RESOURCE, with no referenceId, when a concurrent writer takes the number between the check and the commit'
+          description: 'AP_BILL_DUPLICATE: another live bill of this vendor already holds this invoice reference on the invoice date; referenceId is that bill''s vendorBillId. DUPLICATE_RESOURCE, with no referenceId, when a concurrent writer takes the number between the check and the commit. OPTIMISTIC_LOCK when the matched bill was decided meanwhile'
       security:
       - bearerAuth:
         - accounting:ap:pay
@@ -12436,17 +12448,19 @@ paths:
       - accounting:ap:pay
   /v1/accounting/vendor-bills/match-candidates/{candidateId}/select:
     post:
-      description: 'Picks one candidate bill of an ambiguous invoice match and resolves the candidate set. Selection is matching only: the chosen bill keeps what the vendor billed (lines, total, the invoice number and due date), gets its match evidence and moves to AWAITING_APPROVAL with the caller as submittedBy; nothing approves it and nothing is posted.
+      description: 'Picks one candidate bill of an ambiguous invoice match and resolves the candidate set.
 
-        Use this tool after reviewing listVendorBillMatchCandidates; do not use resolveVendorBillMatchException, which handles discrepancy exceptions on a single bill.
+        Selection is matching only: the chosen bill keeps what the vendor billed (lines, total, the invoice number, the invoice date as its bill date and the due date, AW45), gets its match evidence with the receipt date and moves to AWAITING_APPROVAL with the caller as submittedBy, while a bill the match had held in MATCH_EXCEPTION for this invoice returns to PENDING_RECEIPT_MATCH; nothing approves it and nothing is posted.
 
-        Preconditions: the candidate exists and its set is unresolved; the chosen bill is PENDING_RECEIPT_MATCH or MATCH_EXCEPTION.
+        Use this tool after reviewing listVendorBillMatchCandidates or a bill read''s openCandidates; do not use resolveVendorBillMatchException, which handles discrepancy exceptions on a single bill.
+
+        Preconditions: the candidate exists and its set is unresolved, the chosen bill is PENDING_RECEIPT_MATCH or MATCH_EXCEPTION, and the candidate kept its invoice (one scored before #2509 is refused; match the invoice again instead).
 
         Required inputs: candidateId (UUID) as a path parameter; there is no request body.
 
-        Emits ACCOUNTING_VENDOR_BILL_MATCH_CANDIDATE_SELECT and writes a VENDOR_BILL_MATCH_CANDIDATE_SELECT audit row.
+        Emits ACCOUNTING_VENDOR_BILL_MATCH_CANDIDATE_SELECT and writes a VENDOR_BILL_MATCH_CANDIDATE_SELECT audit row, plus a VENDOR_BILL_MATCH_CANDIDATE_RELEASE row for a bill released; a replay is answered 409 AP_MATCH_CANDIDATE_ALREADY_RESOLVED.
 
-        Returns 200 with the bill read, 403 FORBIDDEN without accounting:ap:approve or accounting:ap:approve_over_limit, 404 AP_MATCH_CANDIDATE_NOT_FOUND, 409 AP_MATCH_CANDIDATE_ALREADY_RESOLVED when someone else resolved the set, 409 AP_BILL_NOT_APPROVABLE naming the chosen bill''s status, and 409 AP_BILL_DUPLICATE when another live bill already holds the invoice number.
+        Returns 200 with the bill read, 401 without a valid token, 403 FORBIDDEN without accounting:ap:approve or accounting:ap:approve_over_limit, 404 AP_MATCH_CANDIDATE_NOT_FOUND, 409 AP_MATCH_CANDIDATE_ALREADY_RESOLVED when someone else resolved the set, 409 AP_BILL_NOT_APPROVABLE naming the chosen bill''s status, 409 AP_BILL_AWAITING_INVOICE for a candidate that kept no invoice, and 409 AP_BILL_DUPLICATE when another live bill already holds the invoice number on the invoice date.
 
         '
       operationId: selectVendorBillMatchCandidate
@@ -12466,6 +12480,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/VendorBillResponse'
           description: Candidate selected; the bill awaits approval
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'Not authenticated: no valid bearer token'
         '403':
           content:
             application/json:
@@ -12483,7 +12503,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: AP_MATCH_CANDIDATE_ALREADY_RESOLVED, AP_BILL_NOT_APPROVABLE or AP_BILL_DUPLICATE
+          description: AP_MATCH_CANDIDATE_ALREADY_RESOLVED (a replay included), AP_BILL_NOT_APPROVABLE, AP_BILL_AWAITING_INVOICE or AP_BILL_DUPLICATE
       security:
       - bearerAuth:
         - accounting:ap:approve
@@ -12548,7 +12568,7 @@ paths:
 
         Emits an ACCOUNTING_VENDOR_BILL_STAGES_VIEW audit event; no state changes.
 
-        Returns 200 with the four counts and asOf.
+        Returns 200 with the four counts and asOf, 401 without a valid token, and 403 FORBIDDEN without accounting:ap:view.
 
         '
       operationId: getVendorBillStageCounts
@@ -12559,6 +12579,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/VendorBillStageCounts'
           description: Stage counts
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'Not authenticated: no valid bearer token'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: FORBIDDEN
       security:
       - bearerAuth:
         - accounting:ap:view
@@ -12569,7 +12601,7 @@ paths:
       - accounting:ap:view
   /v1/accounting/vendor-bills/{billId}:
     get:
-      description: 'Returns one vendor bill as the review screen reads it: status, amounts and open amount, channel, the submission and (once approved) the approval, the rejection, the status explanation, the latest match evidence with any open candidates, the received lines with what was billed, the checks MATCHED_TO_DELIVERY and WITHIN_PRICE_TOLERANCE, the decisions the caller may take now (availableActions) and the posting (journalEntryReference, postingDate, postingDateRule, reversalReference).
+      description: 'Returns one vendor bill as the review screen reads it: status, amounts (with the vendor''s net and tax) and open amount, channel, the submission and (once approved) the approval, the rejection, the status explanation, the latest match evidence, the open candidates of an ambiguous match (each with candidateId and invoiceEventId), re-issues held against it, the received lines with what was billed, the checks (MATCHED_TO_DELIVERY, WITHIN_PRICE_TOLERANCE, TOTALS_ADD_UP and, on an EDI bill classified GOODS, OPEN_DELIVERIES_FROM_VENDOR), the decisions the caller may take now (availableActions) and the posting (journalEntryReference, postingDate, postingDateRule, roundingAdjustment, difference, reversalReference).
 
         Use this tool when the bill id is already known; use getVendorBillByOriginEventId instead when only the goods-received event id is available, or listVendorBillsByStage to browse a stage.
 
@@ -12579,7 +12611,7 @@ paths:
 
         Emits an ACCOUNTING_VENDOR_BILL_GET audit event; no state changes.
 
-        Returns 404 VENDOR_BILL_NOT_FOUND when no vendor bill exists for the supplied id.
+        Returns 404 VENDOR_BILL_NOT_FOUND when no vendor bill exists for the supplied id, 401 without a valid token, and 403 FORBIDDEN without accounting:ap:view.
 
         '
       operationId: getVendorBillById
@@ -12615,19 +12647,19 @@ paths:
       - accounting:ap:view
   /v1/accounting/vendor-bills/{billId}/approve:
     post:
-      description: 'Approves a vendor bill in AWAITING_APPROVAL and posts it in the same transaction, so a bill is approved if and only if it posted (AW37): the entry credits accounts payable for the billed gross and debits through the VENDOR_BILL posting category by class (receipt-matched lines 2100 at the received price with the difference in 5050, unmatched goods 2100, expenses the chosen EXPENSE_<CODE> key, US tax into the cost).
+      description: 'Approves a vendor bill in AWAITING_APPROVAL and posts it in the same transaction, so a bill is approved if and only if it posted (AW37): accounts payable is credited the billed gross and the debits follow the VENDOR_BILL posting category by class (receipt-matched lines 2100 at the received price with the difference in 5050, unmatched goods 2100 at the stated net with the tax in 5050, expenses the chosen EXPENSE_<CODE> key with the tax).
 
-        The entry is dated on the bill date when that is on or before today and its period is open, otherwise today, and the read serves postingDate and postingDateRule.
+        The vendor''s gross - (net + tax) within 0.01 per stated line, at most 0.05, goes on the largest debit as roundingAdjustment and a larger one where difference says (FREIGHT 5060, GOODS 2100, EXPENSE its key, PRICE_DIFFERENCE 5050); the entry is dated on the bill date when that is on or before today and its period is open, otherwise today.
 
         Use this tool for the approver''s decision on a bill sent for approval; do not use submitVendorBillForApproval, which only sends it, or resolveVendorBillMatchException with ACCEPT, which approves a bill still in MATCH_EXCEPTION.
 
-        Preconditions: the bill is AWAITING_APPROVAL (CURRENCY_HOLD bills never are), and until approval limits exist every bill needs accounting:ap:approve_over_limit.
+        Preconditions: the bill is AWAITING_APPROVAL (CURRENCY_HOLD bills never are), a goods-receipt bill has its invoice matched, and until approval limits exist every bill needs accounting:ap:approve_over_limit.
 
-        Required inputs: billId (UUID) as a path parameter; justification (at least 10 characters), classification {debitClass GOODS|EXPENSE, expenseMappingKey} (required for a bill without receipt-matched lines and for non-stock lines, else the one proposed at submission) and overrideJustification (at least 10 characters, with accounting:period:override, to post into a CLOSED period) are optional.
+        Required inputs: billId (UUID) as a path parameter; justification (at least 10 characters), classification {debitClass GOODS|EXPENSE, expenseMappingKey} (each field given wins over the one proposed at submission), difference (as submitVendorBillForApproval takes it) and overrideJustification (with accounting:period:override, to post into a CLOSED period) are optional.
 
-        Emits ACCOUNTING_VENDOR_BILL_APPROVE and writes a VENDOR_BILL_APPROVE audit row; a refused posting writes one VENDOR_BILL_APPROVE_REFUSED row and changes nothing else.
+        Emits ACCOUNTING_VENDOR_BILL_APPROVE and writes a VENDOR_BILL_APPROVE audit row; a refused posting writes one VENDOR_BILL_APPROVE_REFUSED row and changes nothing else, and a replayed approve finds the bill APPROVED and is answered 409 AP_BILL_NOT_APPROVABLE.
 
-        Returns 200 with the bill read, its posting included; 400 JUSTIFICATION_REQUIRED or VALIDATION_ERROR; 403 FORBIDDEN; 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE naming the status, a second approve included; 422 AP_BILL_UNCLASSIFIED, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED, each leaving the bill as it was.
+        Returns 200 with the bill read, its posting included; 400 JUSTIFICATION_REQUIRED, VALIDATION_ERROR or ARGUMENT_NOT_VALID; 401 without a valid token; 403 FORBIDDEN; 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE or AP_BILL_AWAITING_INVOICE; 422 AP_BILL_UNCLASSIFIED, AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED (guided: referenceId CATEGORY/KEY and nextAction), each leaving the bill as it was.
 
         '
       operationId: approveVendorBill
@@ -12667,7 +12699,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: JUSTIFICATION_REQUIRED or VALIDATION_ERROR
+          description: JUSTIFICATION_REQUIRED, VALIDATION_ERROR or ARGUMENT_NOT_VALID
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'Not authenticated: no valid bearer token'
         '403':
           content:
             application/json:
@@ -12685,13 +12723,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: AP_BILL_NOT_APPROVABLE
+          description: AP_BILL_NOT_APPROVABLE (a replay included) or AP_BILL_AWAITING_INVOICE
         '422':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: AP_BILL_UNCLASSIFIED, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED; the approval is rolled back
+          description: AP_BILL_UNCLASSIFIED, AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED; the approval is rolled back
       security:
       - bearerAuth:
         - accounting:ap:approve_over_limit
@@ -12702,17 +12740,19 @@ paths:
       - accounting:ap:approve_over_limit
   /v1/accounting/vendor-bills/{billId}/reject:
     post:
-      description: 'Rejects a vendor bill in AWAITING_APPROVAL: it moves to REJECTED, terminal, with the caller as rejectedBy and the reason recorded. Nothing was posted, so nothing is reversed.
+      description: 'Rejects a vendor bill in AWAITING_APPROVAL: it moves to REJECTED, terminal, with the caller as rejectedBy and the reason recorded.
 
-        Use this tool when the approver refuses a bill; do not use voidApprovedVendorBill, which voids a bill already approved, or resolveVendorBillMatchException with VOID, which voids a bill still in MATCH_EXCEPTION.
+        Nothing was posted, so nothing is reversed.
+
+        Use this tool when the approver refuses a bill; do not use voidVendorBill, which voids a bill already approved or a receipt placeholder, or resolveVendorBillMatchException with VOID, which voids a bill still in MATCH_EXCEPTION.
 
         Preconditions: the bill is AWAITING_APPROVAL.
 
         Required inputs: billId (UUID) as a path parameter and reason (at least 10 characters).
 
-        Emits ACCOUNTING_VENDOR_BILL_REJECT and writes a VENDOR_BILL_REJECT audit row.
+        Emits ACCOUNTING_VENDOR_BILL_REJECT and writes a VENDOR_BILL_REJECT audit row; a replay finds the bill REJECTED and is answered 409 AP_BILL_NOT_APPROVABLE.
 
-        Returns 200 with the bill read, 400 JUSTIFICATION_REQUIRED for a missing or short reason, 403 FORBIDDEN without accounting:ap:reject, 404 VENDOR_BILL_NOT_FOUND, and 409 AP_BILL_NOT_APPROVABLE naming the bill''s status.
+        Returns 200 with the bill read, 400 JUSTIFICATION_REQUIRED for a missing or short reason or ARGUMENT_NOT_VALID for one over 1000 characters, 401 without a valid token, 403 FORBIDDEN without accounting:ap:reject, 404 VENDOR_BILL_NOT_FOUND, and 409 AP_BILL_NOT_APPROVABLE naming the bill''s status.
 
         '
       operationId: rejectVendorBill
@@ -12749,7 +12789,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: JUSTIFICATION_REQUIRED
+          description: JUSTIFICATION_REQUIRED or ARGUMENT_NOT_VALID
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'Not authenticated: no valid bearer token'
         '403':
           content:
             application/json:
@@ -12767,7 +12813,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: AP_BILL_NOT_APPROVABLE
+          description: AP_BILL_NOT_APPROVABLE, a replay included
       security:
       - bearerAuth:
         - accounting:ap:reject
@@ -12778,17 +12824,17 @@ paths:
       - accounting:ap:reject
   /v1/accounting/vendor-bills/{billId}/resolve-exception:
     post:
-      description: 'Resolves a vendor bill in MATCH_EXCEPTION: ACCEPT is an approval and posts the bill exactly as approveVendorBill does, CORRECT sends it back to PENDING_RECEIPT_MATCH writing no approval or rejection field, and VOID voids it with the caller as rejectedBy (nothing was posted, so nothing is reversed).
+      description: 'Resolves a vendor bill in MATCH_EXCEPTION: ACCEPT is an approval and posts the bill exactly as approveVendorBill does, CORRECT sends it back to PENDING_RECEIPT_MATCH as received (the billed lines and total undone, the bill date the receipt date again, anything proposed cleared) writing no approval or rejection field, and VOID voids it with the caller as rejectedBy (nothing was posted, so nothing is reversed).
 
-        Use this tool for a quantity, price or medium-confidence exception on one bill; do not use selectVendorBillMatchCandidate, which resolves an ambiguous match among several bills, or submitVendorBillForApproval, which sends the bill to another person''s approval.
+        Use this tool for a quantity, price, medium-confidence or totals exception on one bill; do not use selectVendorBillMatchCandidate, which resolves an ambiguous match among several bills, or submitVendorBillForApproval, which sends the bill to another person''s approval.
 
-        Preconditions: the bill is MATCH_EXCEPTION, and each action needs its own permission: ACCEPT accounting:ap:approve_over_limit, CORRECT accounting:ap:approve or accounting:ap:approve_over_limit, VOID accounting:ap:reject.
+        Preconditions: the bill is MATCH_EXCEPTION, and each action needs its own permission: ACCEPT accounting:ap:approve_over_limit, CORRECT accounting:ap:approve or accounting:ap:approve_over_limit, VOID accounting:ap:reject; ACCEPT also needs what approveVendorBill needs (no open ambiguous match, a matched invoice for a goods-receipt bill, the vendor''s totals reconciled or a difference).
 
-        Required inputs: billId (UUID) as a path parameter, resolutionAction (ACCEPT, CORRECT or VOID) and reason (at least 10 characters); ACCEPT also takes classification and overrideJustification as approveVendorBill does, and an operatorId in the body is ignored because the actor is the caller.
+        Required inputs: billId (UUID) as a path parameter, resolutionAction (ACCEPT, CORRECT or VOID) and reason (at least 10 characters); ACCEPT also takes classification, difference and overrideJustification as approveVendorBill does, and an operatorId in the body is ignored because the actor is the caller.
 
-        Emits ACCOUNTING_VENDOR_BILL_MATCH_EXCEPTION_RESOLVE and writes a VENDOR_BILL_MATCH_EXCEPTION_RESOLVE audit row.
+        Emits ACCOUNTING_VENDOR_BILL_MATCH_EXCEPTION_RESOLVE and writes a VENDOR_BILL_MATCH_EXCEPTION_RESOLVE audit row; a replay finds the bill moved on and is answered 409 AP_BILL_NOT_APPROVABLE.
 
-        Returns 200 with the bill read; 400 VALIDATION_ERROR for an unknown action or JUSTIFICATION_REQUIRED for a missing or short reason; 403 FORBIDDEN without the action''s permission; 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE naming the status; for ACCEPT, 422 AP_BILL_UNCLASSIFIED, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED, leaving the bill as it was.
+        Returns 200 with the bill read; 400 VALIDATION_ERROR for an unknown action, JUSTIFICATION_REQUIRED for a missing or short reason, or ARGUMENT_NOT_VALID; 401 without a valid token; 403 FORBIDDEN without the action''s permission; 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE or, for ACCEPT, AP_BILL_AWAITING_INVOICE; for ACCEPT, 422 AP_BILL_UNCLASSIFIED, AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED, leaving the bill as it was.
 
         '
       operationId: resolveVendorBillMatchException
@@ -12826,7 +12872,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: VALIDATION_ERROR or JUSTIFICATION_REQUIRED
+          description: VALIDATION_ERROR, JUSTIFICATION_REQUIRED or ARGUMENT_NOT_VALID
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'Not authenticated: no valid bearer token'
         '403':
           content:
             application/json:
@@ -12844,13 +12896,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: AP_BILL_NOT_APPROVABLE
+          description: AP_BILL_NOT_APPROVABLE (a replay included) or, for ACCEPT, AP_BILL_AWAITING_INVOICE
         '422':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'ACCEPT only: AP_BILL_UNCLASSIFIED, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED; the approval is rolled back'
+          description: 'ACCEPT only: AP_BILL_UNCLASSIFIED, AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED; the approval is rolled back'
       security:
       - bearerAuth:
         - accounting:ap:approve
@@ -12865,17 +12917,19 @@ paths:
       - accounting:ap:reject
   /v1/accounting/vendor-bills/{billId}/submit-for-approval:
     post:
-      description: 'Sends a vendor bill in PENDING_RECEIPT_MATCH or MATCH_EXCEPTION for approval: it moves to AWAITING_APPROVAL with the caller as submittedBy. From PENDING_RECEIPT_MATCH this is "send without a delivery match" (service bills, shop supplies, EDI bills that will never have a receipt); from MATCH_EXCEPTION it resolves the exception for a person to approve.
+      description: 'Sends a vendor bill in PENDING_RECEIPT_MATCH or MATCH_EXCEPTION for approval: it moves to AWAITING_APPROVAL with the caller as submittedBy, and nothing is posted.
+
+        From PENDING_RECEIPT_MATCH this is "send without a delivery match", for EDI bills only (a goods-receipt bill needs its vendor invoice matched first, AW44); from MATCH_EXCEPTION it resolves the exception for a person to approve.
 
         Use this tool when a clerk has checked a bill and wants it approved; do not use approveVendorBill, which is the approver''s decision, or resolveVendorBillMatchException, which accepts, corrects or voids an exception directly.
 
-        Preconditions: the bill is PENDING_RECEIPT_MATCH or MATCH_EXCEPTION; CURRENCY_HOLD and every other status are refused. Nothing is posted.
+        Preconditions: the bill is PENDING_RECEIPT_MATCH or MATCH_EXCEPTION (never CURRENCY_HOLD), no ambiguous match naming it is open, a goods-receipt bill has its invoice matched, its total is not 0.00, and the vendor''s gross equals net + tax within 0.01 per stated line (at most 0.05) unless a difference is given (AW46).
 
-        Required inputs: billId (UUID) as a path parameter and justification (at least 10 characters); classification {debitClass, expenseMappingKey} is an optional proposal the approver may keep.
+        Required inputs: billId (UUID) as a path parameter and justification (at least 10 characters); classification {debitClass, expenseMappingKey} is an optional proposal the approver may keep, and difference {class FREIGHT|GOODS|EXPENSE|PRICE_DIFFERENCE, expenseMappingKey, justification} says where an unreconciled gap posts.
 
-        Emits ACCOUNTING_VENDOR_BILL_SUBMIT and writes a VENDOR_BILL_SUBMIT audit row.
+        Emits ACCOUNTING_VENDOR_BILL_SUBMIT and writes a VENDOR_BILL_SUBMIT audit row; the command takes no idempotency key, so a replay finds the bill AWAITING_APPROVAL and is answered 409 AP_BILL_NOT_APPROVABLE.
 
-        Returns 200 with the bill read, 400 JUSTIFICATION_REQUIRED for a missing or short justification, 400 VALIDATION_ERROR for a malformed classification, 403 FORBIDDEN without accounting:ap:approve or accounting:ap:approve_over_limit, 404 VENDOR_BILL_NOT_FOUND, and 409 AP_BILL_NOT_APPROVABLE naming the bill''s status.
+        Returns 200 with the bill read; 400 JUSTIFICATION_REQUIRED, VALIDATION_ERROR or ARGUMENT_NOT_VALID; 401 without a valid token; 403 FORBIDDEN without accounting:ap:approve or accounting:ap:approve_over_limit; 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE naming the status or an open ambiguous match, or AP_BILL_AWAITING_INVOICE; 422 AP_BILL_ZERO_TOTAL or AP_BILL_TOTALS_UNRECONCILED, writing nothing.
 
         '
       operationId: submitVendorBillForApproval
@@ -12915,7 +12969,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: JUSTIFICATION_REQUIRED or VALIDATION_ERROR
+          description: JUSTIFICATION_REQUIRED, VALIDATION_ERROR or ARGUMENT_NOT_VALID
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'Not authenticated: no valid bearer token'
         '403':
           content:
             application/json:
@@ -12933,7 +12993,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'AP_BILL_NOT_APPROVABLE: the bill''s status does not allow it'
+          description: AP_BILL_NOT_APPROVABLE (the bill's status, or an open ambiguous match) or AP_BILL_AWAITING_INVOICE (a goods-receipt bill without its matched invoice); a replay is refused this way too
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: AP_BILL_ZERO_TOTAL or AP_BILL_TOTALS_UNRECONCILED; nothing is written
       security:
       - bearerAuth:
         - accounting:ap:approve
@@ -12946,20 +13012,20 @@ paths:
       - accounting:ap:approve_over_limit
   /v1/accounting/vendor-bills/{billId}/void:
     post:
-      description: 'Voids an APPROVED vendor bill while nothing is allocated to it: it moves to VOIDED and its entry is reversed through the journal-entry reversal (linked both ways), dated today in today''s period, never back in the original period (AW42); 2100 is accrued again.
+      description: 'Voids a vendor bill: an APPROVED bill with nothing allocated moves to VOIDED and its entry is reversed through the journal-entry reversal (linked both ways), dated today in today''s period and never back in the original period (AW42), so 2100 is accrued again; a goods-receipt bill in PENDING_RECEIPT_MATCH that no vendor invoice will match moves to VOIDED and nothing is posted (AW44), its receipt accrual staying in 2100 until the vendor''s EDI bill classified GOODS clears it.
 
-        Use this tool to undo an approval that should not stand; do not use rejectVendorBill, which refuses a bill not yet approved, or resolveVendorBillMatchException with VOID, which voids a bill still in MATCH_EXCEPTION. A bill with payments allocated is corrected with a vendor credit note instead.
+        Use this tool to undo an approval that should not stand or to close a receipt placeholder; do not use rejectVendorBill, which refuses a bill not yet approved, or resolveVendorBillMatchException with VOID, which voids a bill still in MATCH_EXCEPTION, and correct a bill with payments allocated with a vendor credit note instead.
 
-        Preconditions: the bill is APPROVED with no allocation. Needs accounting:ap:reject plus the approval tier, accounting:ap:approve_over_limit until approval limits exist.
+        Preconditions: every void needs accounting:ap:reject and an approved bill''s also the approval tier, accounting:ap:approve_over_limit until approval limits exist; only this void reverses a bill''s entry (the journal-entry reversal refuses one with 409 AP_BILL_ENTRY_NOT_REVERSIBLE).
 
-        Required inputs: billId (UUID) as a path parameter and reason (at least 10 characters); overrideJustification (at least 10 characters) reverses into a CLOSED period with accounting:period:override.
+        Required inputs: billId (UUID) as a path parameter and reason (at least 10 characters); overrideJustification (at least 10 characters) reverses an approved bill into a CLOSED period with accounting:period:override.
 
-        Emits ACCOUNTING_VENDOR_BILL_VOID and writes a VENDOR_BILL_VOID audit row.
+        Emits ACCOUNTING_VENDOR_BILL_VOID and writes a VENDOR_BILL_VOID audit row naming the action (VOID_APPROVED or VOID_UNMATCHED); a replay finds the bill VOIDED and is answered 409 AP_BILL_NOT_VOIDABLE.
 
-        Returns 200 with the bill read, its posting''s reversalReference included; 400 JUSTIFICATION_REQUIRED; 403 FORBIDDEN; 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_VOIDABLE when the bill is not APPROVED or has an allocation; 422 PERIOD_CLOSED or PERIOD_HARD_LOCKED for today''s period, leaving the bill as it was.
+        Returns 200 with the bill read, an approved bill''s posting with its reversalReference; 400 JUSTIFICATION_REQUIRED or ARGUMENT_NOT_VALID; 401 without a valid token; 403 FORBIDDEN without accounting:ap:reject, or without the approval tier for an approved bill; 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_VOIDABLE for any other status or an allocated bill; 422 PERIOD_CLOSED or PERIOD_HARD_LOCKED for today''s period, leaving the bill as it was.
 
         '
-      operationId: voidApprovedVendorBill
+      operationId: voidVendorBill
       parameters:
       - description: Vendor bill identifier
         example: 550e8400-e29b-41d4-a716-446655440001
@@ -12979,7 +13045,7 @@ paths:
                   reason: Billed twice, the vendor confirmed
             schema:
               $ref: '#/components/schemas/VendorBillVoidRequest'
-        description: The reason the approved bill is voided (at least 10 characters) and an optional override justification for a CLOSED period.
+        description: The reason the bill is voided (at least 10 characters) and, for an approved bill, an optional override justification for a CLOSED period.
         required: true
       responses:
         '200':
@@ -12987,13 +13053,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VendorBillResponse'
-          description: Voided; the entry is reversed
+          description: Voided; an approved bill's entry is reversed, a receipt placeholder posts nothing
         '400':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: JUSTIFICATION_REQUIRED
+          description: JUSTIFICATION_REQUIRED or ARGUMENT_NOT_VALID
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'Not authenticated: no valid bearer token'
         '403':
           content:
             application/json:
@@ -13011,7 +13083,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: AP_BILL_NOT_VOIDABLE
+          description: 'AP_BILL_NOT_VOIDABLE: not APPROVED nor a goods-receipt bill in PENDING_RECEIPT_MATCH, allocated, or a replay'
         '422':
           content:
             application/json:
@@ -13021,14 +13093,11 @@ paths:
       security:
       - bearerAuth:
         - accounting:ap:reject
-        - accounting:ap:approve_over_limit
-      summary: Void Approved Vendor Bill
+      summary: Void Vendor Bill
       tags:
       - Vendor Bill API
       x-required-permissions:
       - accounting:ap:reject
-      - accounting:ap:approve
-      - accounting:ap:approve_over_limit
   /v1/accounting/vendors:
     get:
       description: 'Searches the AP vendor directory with a case-insensitive name-contains match, returning vendors ordered by name for typeahead use.
@@ -23766,6 +23835,8 @@ components:
           type: string
         proposedClassification:
           $ref: '#/components/schemas/VendorBillClassification'
+        proposedDifference:
+          $ref: '#/components/schemas/VendorBillDifference'
         requiredTier:
           description: The tier the approval needs
           enum:
@@ -23792,6 +23863,8 @@ components:
       properties:
         classification:
           $ref: '#/components/schemas/VendorBillClassification'
+        difference:
+          $ref: '#/components/schemas/VendorBillDifference'
         justification:
           description: The approver's justification; optional, at least 10 characters when given
           example: Checked against the delivery note
@@ -23819,6 +23892,7 @@ components:
           - VOID_EXCEPTION
           - SELECT_CANDIDATE
           - VOID_APPROVED
+          - VOID_UNMATCHED
           example: APPROVE
           type: string
         allowed:
@@ -23844,7 +23918,7 @@ components:
           description: Values the message is built from
           type: object
         code:
-          description: MATCHED_TO_DELIVERY or WITHIN_PRICE_TOLERANCE
+          description: MATCHED_TO_DELIVERY, WITHIN_PRICE_TOLERANCE, TOTALS_ADD_UP or OPEN_DELIVERIES_FROM_VENDOR
           example: MATCHED_TO_DELIVERY
           type: string
         outcome:
@@ -23877,11 +23951,37 @@ components:
           example: EXPENSE_SHOP_SUPPLIES
           type: string
       type: object
+    VendorBillDifference:
+      description: Where the gap between the vendor's gross and its net + tax posts (AW46)
+      properties:
+        class:
+          description: FREIGHT (5060), GOODS (2100), EXPENSE (the expenseMappingKey given) or PRICE_DIFFERENCE (5050); a negative difference is a credit
+          enum:
+          - FREIGHT
+          - GOODS
+          - EXPENSE
+          - PRICE_DIFFERENCE
+          example: FREIGHT
+          type: string
+        expenseMappingKey:
+          description: 'The VENDOR_BILL expense key, EXPENSE_<CODE>: required with class EXPENSE'
+          example: EXPENSE_SHOP_SUPPLIES
+          type: string
+        justification:
+          description: Why the difference posts there (at least 10 characters)
+          example: Freight on the invoice, not stated separately
+          type: string
+      required:
+      - class
+      - justification
+      type: object
     VendorBillExceptionResolutionRequest:
       description: Resolve a bill in MATCH_EXCEPTION
       properties:
         classification:
           $ref: '#/components/schemas/VendorBillClassification'
+        difference:
+          $ref: '#/components/schemas/VendorBillDifference'
         overrideJustification:
           description: 'ACCEPT only: to post into a CLOSED period, with accounting:period:override'
           maxLength: 1000
@@ -24005,17 +24105,12 @@ components:
       - vendorId
       type: object
     VendorBillMatch:
-      description: The bill's latest match evidence and the open candidates
+      description: The bill's latest match evidence
       properties:
         billedTotal:
           description: What the vendor billed
           example: 412.0
           type: number
-        candidates:
-          description: Unresolved candidates of an ambiguous match naming this bill
-          items:
-            $ref: '#/components/schemas/VendorBillMatchCandidateSummary'
-          type: array
         confidence:
           description: Confidence of the match
           enum:
@@ -24034,7 +24129,7 @@ components:
           format: uuid
           type: string
         invoiceDate:
-          description: The invoice date
+          description: The invoice date, the matched bill's date (AW45)
           format: date-time
           type: string
         invoiceReference:
@@ -24043,6 +24138,10 @@ components:
           type: string
         points:
           $ref: '#/components/schemas/VendorBillMatchPoints'
+        receivedDate:
+          description: The receipt date, the bill's date before the match (AW45)
+          format: date-time
+          type: string
         receivedTotal:
           description: What the receipt put on the bill
           example: 400.0
@@ -24065,13 +24164,13 @@ components:
           type: boolean
       required:
       - billedTotal
-      - candidates
       - confidence
       - currencyCode
       - evidenceId
       - invoiceDate
       - invoiceReference
       - points
+      - receivedDate
       - receivedTotal
       - recordedAt
       - score
@@ -24155,6 +24254,10 @@ components:
           description: ISO 4217 code of billTotal
           example: USD
           type: string
+        invoiceEventId:
+          description: The invoice the candidates were scored against
+          format: uuid
+          type: string
         points:
           $ref: '#/components/schemas/VendorBillMatchPoints'
         score:
@@ -24169,6 +24272,7 @@ components:
       required:
       - candidateId
       - currencyCode
+      - invoiceEventId
       - score
       - vendorBillId
       type: object
@@ -24205,8 +24309,21 @@ components:
       description: The bill's entry at approval and, after a void, its reversal
       properties:
         currencyCode:
-          description: ISO 4217 code of grossAmount
+          description: ISO 4217 code of the amounts
           example: USD
+          type: string
+        differenceAmount:
+          description: The unreconciled difference posted, gross - (net + tax); null when none
+          example: 15.0
+          type: number
+        differenceClass:
+          description: Where an unreconciled difference posted (AW46); null when the totals added up
+          enum:
+          - FREIGHT
+          - GOODS
+          - EXPENSE
+          - PRICE_DIFFERENCE
+          example: FREIGHT
           type: string
         grossAmount:
           description: The billed gross credited to accounts payable
@@ -24240,12 +24357,62 @@ components:
           description: The reversal entry's number after a void
           example: JE-202610-000140
           type: string
+        roundingAdjustment:
+          description: The rounding plug put on the largest debit, within 0.01 per stated line and 0.05 per bill (AW46); 0.00 when the legs added up
+          example: 0.01
+          type: number
       required:
       - currencyCode
       - grossAmount
       - journalEntryId
       - postingDate
       - postingDateRule
+      - roundingAdjustment
+      type: object
+    VendorBillReissue:
+      description: A re-issue of an approved bill under its number, with both amounts
+      properties:
+        heldAmount:
+          description: The approved bill's amount
+          example: 412.0
+          type: number
+        heldCurrencyCode:
+          description: ISO 4217 code of heldAmount
+          example: USD
+          type: string
+        incomingAmount:
+          description: The re-issued amount
+          example: 430.0
+          type: number
+        incomingBillDate:
+          description: The re-issue's date
+          format: date
+          type: string
+        incomingBillNumber:
+          description: The number the vendor re-issued under
+          example: INV-88421
+          type: string
+        incomingCurrencyCode:
+          description: ISO 4217 code of incomingAmount
+          example: USD
+          type: string
+        receivedAt:
+          description: When it arrived
+          format: date-time
+          type: string
+        reissueId:
+          description: Exception item id
+          format: uuid
+          type: string
+      required:
+      - heldAmount
+      - heldCurrencyCode
+      - incomingAmount
+      - incomingBillDate
+      - incomingBillNumber
+      - incomingCurrencyCode
+      - receivedAt
+      - reissueId
       type: object
     VendorBillRejectRequest:
       description: Reject a bill awaiting approval
@@ -24305,7 +24472,7 @@ components:
           example: SUPPLIER_CONNECTION
           type: string
         checks:
-          description: MATCHED_TO_DELIVERY and WITHIN_PRICE_TOLERANCE
+          description: MATCHED_TO_DELIVERY, WITHIN_PRICE_TOLERANCE, TOTALS_ADD_UP and, on an EDI bill classified GOODS, OPEN_DELIVERIES_FROM_VENDOR
           items:
             $ref: '#/components/schemas/VendorBillCheck'
           type: array
@@ -24341,10 +24508,19 @@ components:
           type: array
         match:
           $ref: '#/components/schemas/VendorBillMatch'
+        netAmount:
+          description: The net the vendor's document states (AW46); null on a bill without header totals
+          example: 1000.0
+          type: number
         openAmount:
           description: Total less allocated payments
           example: 412.0
           type: number
+        openCandidates:
+          description: Unresolved candidates of every ambiguous match naming this bill, each with its invoiceEventId; pick one with the select command before sending or accepting the bill
+          items:
+            $ref: '#/components/schemas/VendorBillMatchCandidateSummary'
+          type: array
         originEventId:
           description: Origin event ID (for traceability)
           example: 01936e5c-1234-7a3d-8b6e-123456789012
@@ -24361,6 +24537,11 @@ components:
           type: string
         posting:
           $ref: '#/components/schemas/VendorBillPosting'
+        reissues:
+          description: Re-issues of this approved bill under its number, held as exception items
+          items:
+            $ref: '#/components/schemas/VendorBillReissue'
+          type: array
         rejection:
           $ref: '#/components/schemas/VendorBillRejection'
         status:
@@ -24380,6 +24561,10 @@ components:
           description: 'Why the bill is held: the MATCH_EXCEPTION or CURRENCY_HOLD explanation; null in any other status'
           example: Quantity or price mismatch detected during three-way match
           type: string
+        taxAmount:
+          description: The tax the vendor's document states, never recalculated (AW39, AW46)
+          example: 70.0
+          type: number
         totalAmount:
           description: Total bill amount
           example: 1200.0
@@ -24405,6 +24590,8 @@ components:
       - createdAt
       - lines
       - openAmount
+      - openCandidates
+      - reissues
       - status
       - totalAmount
       - vendorBillId
@@ -24516,6 +24703,8 @@ components:
       properties:
         classification:
           $ref: '#/components/schemas/VendorBillClassification'
+        difference:
+          $ref: '#/components/schemas/VendorBillDifference'
         justification:
           description: 'Why it goes to approval (at least 10 characters): from PENDING_RECEIPT_MATCH, why it is sent without a delivery match; from MATCH_EXCEPTION, why the exception is resolved'
           example: Service bill, no delivery to match
@@ -24585,10 +24774,10 @@ components:
       - vendorId
       type: object
     VendorBillVoidRequest:
-      description: Void an approved bill while nothing is allocated to it
+      description: Void an approved bill while nothing is allocated to it, or a goods-receipt bill no invoice will match
       properties:
         overrideJustification:
-          description: 'To reverse into a CLOSED period: at least 10 characters, with accounting:period:override'
+          description: 'An approved bill only: to reverse into a CLOSED period, at least 10 characters, with accounting:period:override'
           maxLength: 1000
           minLength: 0
           type: string
