@@ -329,6 +329,8 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1unpaid-walk-in-sales
   /v1/accounting/vendor-bills:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1vendor-bills
+  /v1/accounting/vendor-bills/by-stage:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1vendor-bills~1by-stage
   /v1/accounting/vendor-bills/event/{eventId}:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1vendor-bills~1event~1{eventId}
   /v1/accounting/vendor-bills/match:
@@ -337,10 +339,20 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1vendor-bills~1match-candidates~1{candidateId}~1select
   /v1/accounting/vendor-bills/match-candidates/{invoiceEventId}:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1vendor-bills~1match-candidates~1{invoiceEventId}
+  /v1/accounting/vendor-bills/stages:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1vendor-bills~1stages
   /v1/accounting/vendor-bills/{billId}:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1vendor-bills~1{billId}
+  /v1/accounting/vendor-bills/{billId}/approve:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1vendor-bills~1{billId}~1approve
+  /v1/accounting/vendor-bills/{billId}/reject:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1vendor-bills~1{billId}~1reject
   /v1/accounting/vendor-bills/{billId}/resolve-exception:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1vendor-bills~1{billId}~1resolve-exception
+  /v1/accounting/vendor-bills/{billId}/submit-for-approval:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1vendor-bills~1{billId}~1submit-for-approval
+  /v1/accounting/vendor-bills/{billId}/void:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1vendor-bills~1{billId}~1void
   /v1/accounting/vendors:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1vendors
   /v1/accounting/vendors/{vendorId}:
