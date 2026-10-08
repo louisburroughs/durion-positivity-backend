@@ -91,7 +91,7 @@ public class APPaymentPreGatewayChecks {
      * slot 5a refuses.
      */
     public @NonNull Optional<LocalDate> businessDate() {
-        return zoneResolver.find().map(zone -> LocalDate.now(clock.withZone(zone)));
+        return zoneResolver.find().map(zone -> LocalDate.ofInstant(clock.instant(), zone));
     }
 
     /**
@@ -126,7 +126,7 @@ public class APPaymentPreGatewayChecks {
                     + " cannot be booked: the ledger books " + ledgerCurrency.code() + " only (ADR-0067 PC-9)");
         }
         // 1c. The bank account.
-        LocalDate date = businessDate.orElseGet(() -> LocalDate.now(clock.withZone(ZoneOffset.UTC)));
+        LocalDate date = businessDate.orElseGet(() -> LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC));
         UUID supplied = request.getBankAccountId();
         if (supplied != null) {
             if (!isEligible(supplied, date)) {

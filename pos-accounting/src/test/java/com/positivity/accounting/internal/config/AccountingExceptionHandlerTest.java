@@ -323,6 +323,8 @@ class AccountingExceptionHandlerTest {
                             request)),
                     Named.of("handleOptimisticLock", (HandlerInvocation) request -> handler.handleOptimisticLock(
                             new ObjectOptimisticLockingFailureException(Object.class, "id"), request)),
+                    Named.of("handleLockTimeout", (HandlerInvocation) request -> handler.handleLockTimeout(
+                            new org.springframework.dao.CannotAcquireLockException("lock timeout"), request)),
                     Named.of("handleResponseStatus", (HandlerInvocation) request -> handler.handleResponseStatus(
                             new ResponseStatusException(HttpStatus.BAD_GATEWAY, "bad gateway"), request)));
         }
@@ -610,5 +612,26 @@ class AccountingExceptionHandlerTest {
         assertThat(plain.getBody()).isNotNull();
         assertThat(plain.getBody().referenceId()).isNull();
         assertThat(plain.getBody().nextAction()).isNull();
+    }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName(
+            "#2627: a lock wait beyond lock_timeout is 409 LOCK_TIMEOUT, whichever layer raised it")
+    void lockTimeoutIs409() {
+        AccountingExceptionHandler lockHandler = new AccountingExceptionHandler(java.time.Clock.systemUTC());
+        for (Exception timeout : java.util.List.<Exception>of(
+                new org.springframework.dao.CannotAcquireLockException("canceling statement due to lock timeout"),
+                new org.springframework.dao.PessimisticLockingFailureException("lock"),
+                new jakarta.persistence.LockTimeoutException("lock"),
+                new jakarta.persistence.PessimisticLockException("lock"))) {
+            org.springframework.http.ResponseEntity<com.positivity.shared.error.ApiError> response =
+                    lockHandler.handleLockTimeout(timeout, null);
+            org.assertj.core.api.Assertions.assertThat(response.getStatusCode().value())
+                    .isEqualTo(409);
+            org.assertj.core.api.Assertions.assertThat(response.getBody().code())
+                    .isEqualTo("LOCK_TIMEOUT");
+            org.assertj.core.api.Assertions.assertThat(response.getBody().message())
+                    .isEqualTo("Another request is working on these bills; retry");
+        }
     }
 }
