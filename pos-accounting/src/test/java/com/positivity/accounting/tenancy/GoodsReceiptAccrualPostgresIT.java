@@ -248,12 +248,21 @@ class GoodsReceiptAccrualPostgresIT extends PostgresTenancyTestBase {
                 .isTrue();
         assertThat(asTenant(other, () -> idempotencyService.isKeyProcessed(postingKey)))
                 .isFalse();
+        // processed_events is deliberately global (@TenantGlobal, db/tenancy-global-tables.txt): an eventId is
+        // deduplicated across tenants and the tenant it was applied under is kept as data. So the same envelope
+        // delivered to the other tenant is dropped, while the same receipt under its own eventId posts its own entry:
+        // the posting key, the entry and the ingestion row are tenant-scoped.
         assertThat(asTenant(other, () -> processedEventRepository.existsById(eventId)))
-                .isFalse();
-
-        // The same envelope (the same eventId) delivered to the other tenant posts its own entry: processed_events
-        // and the posting key are tenant-scoped.
+                .isTrue();
+        assertThat(new JdbcTemplate(ownerDataSource())
+                        .queryForObject(
+                                "SELECT tenant_id FROM processed_events WHERE event_id = ?", UUID.class, eventId))
+                .isEqualTo(tenant);
         asTenant(other, () -> listener.onInventoryEvent(envelope(eventId, fact)));
+        assertThat(entryCount(other)).isZero();
+        asTenant(
+                other,
+                () -> listener.onInventoryEvent(envelope(UUID.randomUUID().toString(), fact)));
         assertThat(lines(other)).containsExactlyInAnyOrder("1300 D400.0000", "2100 C400.0000");
         assertThat(asTenant(other, () -> journalEntryRepository.findBySourceEvent(sourceEventId)))
                 .hasSize(1);
