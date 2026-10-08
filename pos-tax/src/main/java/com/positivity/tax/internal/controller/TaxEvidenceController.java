@@ -115,9 +115,11 @@ public class TaxEvidenceController {
                     echoed, logged or stored, and source is always STUB.
                     Each stated amount must be below receiptTotal, as must their sum, and at most receiptTotal times r
                     over one plus r rounded up to the minor unit plus a configured tolerance, where r is the regime's
-                    rate in the region; RATE_UNAVAILABLE means the region has no rate row and only the total applied.
-                    Returns 400 VALIDATION_ERROR for a missing or malformed field, a negative amount or a repeated
-                    regime; 422 TAX_JURISDICTION_NOT_CONFIGURED for a country without a tax profile,
+                    row rate in the region, or 0 when the regime does not cover the region; a regime that covers the
+                    region but has no row there is unrated, gets no rate bound, and makes the outcome RATE_UNAVAILABLE
+                    when its amount is above zero.
+                    Refusals come in this order, the first failing step answering with all its field errors: 400
+                    VALIDATION_ERROR for a missing or malformed field, a negative amount or a repeated regime; 422 TAX_JURISDICTION_NOT_CONFIGURED for a country without a tax profile,
                     CURRENCY_NOT_SUPPORTED for another currency than the profile's, AMOUNT_PRECISION_EXCEEDS_CURRENCY
                     for an amount finer than the currency's minor unit, TAX_REGIME_NOT_DECLARED for a regime the country
                     does not declare, and TAX_AMOUNT_IMPLAUSIBLE with each offending amount's maximum, every 422 naming

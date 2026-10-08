@@ -31,7 +31,8 @@ import org.springframework.beans.factory.support.StaticListableBeanFactory;
  * CAP:550 S32b ACs 3, 4 and 5: the stated-tax plausibility stub, against fixture rates (not tax law).
  * <p>
  * Fixture: region {@code ON} levies one {@code GST_HST} row at {@code r = 0.044} and no {@code QST} row;
- * region {@code AB} has no row at all. With {@code T = 113.00} the bound is
+ * region {@code AB} has no row at all ({@code GST_HST} covers every region, so it is unrated there; {@code QST}
+ * covers only {@code QC}, so it is not levied there). With {@code T = 113.00} the bound is
  * {@code ceil(113.00 × 0.044 / 1.044) = 4.77}, plus 5 minor units: {@code 4.82}.
  */
 @DisplayName("TaxPlausibilityService (CAP:550 S32b)")
@@ -177,10 +178,12 @@ class TaxPlausibilityServiceTest {
         void sumReachingTheTotal() {
             TaxPlausibilityService service = service();
 
+            // GST_HST is unrated at AB (no row, covers every region): only the total bounds it. QST does not
+            // cover AB, so it is not levied there (r = 0) and its 0.40 is also above the 0.05 tolerance.
             assertThat(implausible(() -> service.check(request(
                             "AB", new BigDecimal("1.00"), List.of(tax("GST_HST", "0.60"), tax("QST", "0.40")), null))))
-                    .singleElement()
-                    .satisfies(error -> assertThat(error.field()).isEqualTo("statedTaxes"));
+                    .extracting(ApiError.FieldError::field)
+                    .containsExactly("statedTaxes", "statedTaxes[1].amount");
         }
 
         @Test
@@ -208,11 +211,67 @@ class TaxPlausibilityServiceTest {
         }
 
         @Test
+        @DisplayName("[M] partial rates: a regime covering the region with no row there is unrated, not r = 0")
+        void coveringRegimeWithoutRowIsUnrated() {
+            // QST made to cover the whole country: ON has an HST row but no QST row, so QST is unrated at ON.
+            TaxPlausibilityService service = service(
+                    p -> p.remove("pos.tax.countries.CA.regimes[1].regions[0]"),
+                    TaxProfileFixtures.FIRST_COUNTRY,
+                    TaxProfileFixtures.FIRST_COUNTRY_STUBS);
+
+            PlausibilityCheckResponse response =
+                    service.check(request("ON", T, List.of(tax("GST_HST", "4.82"), tax("QST", "1.00")), null));
+
+            assertThat(response.outcome()).isEqualTo("RATE_UNAVAILABLE");
+            assertThat(response.ratesUsed()).extracting(r -> r.regime()).containsExactly("GST_HST");
+            assertThat(response.maximums()).extracting(m -> m.regime()).containsExactly("GST_HST");
+        }
+
+        @Test
+        @DisplayName("an unrated regime is still bounded by the receipt total")
+        void unratedRegimeIsBoundedByTheTotal() {
+            TaxPlausibilityService service = service(
+                    p -> p.remove("pos.tax.countries.CA.regimes[1].regions[0]"),
+                    TaxProfileFixtures.FIRST_COUNTRY,
+                    TaxProfileFixtures.FIRST_COUNTRY_STUBS);
+
+            assertThat(implausible(() -> service.check(request("ON", T, List.of(tax("QST", "113.00")), null))))
+                    .extracting(ApiError.FieldError::field)
+                    .containsExactly("statedTaxes[0].amount");
+        }
+
+        @Test
+        @DisplayName("an unrated amount of zero, or no stated amount, leaves the outcome PLAUSIBLE")
+        void unratedZeroIsPlausible() {
+            TaxPlausibilityService service = service();
+
+            PlausibilityCheckResponse zero = service.check(request("AB", T, List.of(tax("GST_HST", "0")), null));
+            PlausibilityCheckResponse none = service.check(request("AB", T, List.of(), null));
+
+            assertThat(zero.outcome()).isEqualTo("PLAUSIBLE");
+            assertThat(zero.maximums()).isEmpty();
+            assertThat(none.outcome()).isEqualTo("PLAUSIBLE");
+        }
+
+        @Test
+        @DisplayName("a not-levied regime in a region with no row at all still gets r = 0")
+        void notLeviedInARegionWithoutRows() {
+            TaxPlausibilityService service = service();
+
+            PlausibilityCheckResponse response = service.check(request("AB", T, List.of(tax("QST", "0.05")), null));
+
+            assertThat(response.outcome()).isEqualTo("PLAUSIBLE");
+            assertThat(response.maximums())
+                    .singleElement()
+                    .satisfies(m -> assertThat(m.maximum()).isEqualByComparingTo("0.05"));
+        }
+
+        @Test
         @DisplayName("the counter is tagged by outcome only")
         void counterTaggedByOutcome() {
             TaxPlausibilityService service = service();
             service.check(request("ON", T, List.of(), "000000000RT0001"));
-            service.check(request("AB", T, List.of(), null));
+            service.check(request("AB", T, List.of(tax("GST_HST", "10.00")), null));
             implausible(() -> service.check(request("ON", T, List.of(tax("GST_HST", "5.00")), null)));
 
             assertThat(registry.get("pos.tax.plausibility.outcome")
@@ -325,6 +384,60 @@ class TaxPlausibilityServiceTest {
                             ex -> assertThat(ex.getFieldErrors())
                                     .extracting(ApiError.FieldError::field)
                                     .containsExactly("statedTaxes[1].regime"));
+        }
+
+        @Test
+        @DisplayName("refusal order: shape, jurisdiction, currency, precision, regime, then plausibility")
+        void refusalOrder() {
+            TaxPlausibilityService service = service();
+            BigDecimal fine = new BigDecimal("113.001");
+            List<StatedTax> everythingWrong = List.of(tax("NO_SUCH", "200.001"), tax("GST_HST", "500.00"));
+
+            // 1. Shape first: a repeated regime wins over every configuration refusal.
+            assertThatThrownBy(() -> service.check(new PlausibilityCheckRequest(
+                            "US",
+                            "NY",
+                            "1",
+                            null,
+                            AS_OF,
+                            "EUR",
+                            fine,
+                            List.of(tax("A", "1.001"), tax("A", "1")),
+                            null)))
+                    .isInstanceOf(TaxRequestInvalidException.class);
+            // 2. No profile wins over currency, precision, regime and plausibility.
+            assertThat(unprocessable(new PlausibilityCheckRequest(
+                                    "US", "NY", "1", null, AS_OF, "EUR", fine, everythingWrong, null))
+                            .getCode())
+                    .isEqualTo("TAX_JURISDICTION_NOT_CONFIGURED");
+            // 3. Currency wins over precision, regime and plausibility.
+            assertThat(unprocessable(new PlausibilityCheckRequest(
+                                    "CA", "ON", "1", null, AS_OF, "EUR", fine, everythingWrong, null))
+                            .getCode())
+                    .isEqualTo("CURRENCY_NOT_SUPPORTED");
+            // 4. Precision wins over regime and plausibility, and lists every offending amount.
+            TaxRequestUnprocessableException precision = unprocessable(
+                    new PlausibilityCheckRequest("CA", "ON", "1", null, AS_OF, "CAD", fine, everythingWrong, null));
+            assertThat(precision.getCode()).isEqualTo("AMOUNT_PRECISION_EXCEEDS_CURRENCY");
+            assertThat(precision.getFieldErrors())
+                    .extracting(ApiError.FieldError::field)
+                    .containsExactly("receiptTotal", "statedTaxes[0].amount");
+            // 5. An undeclared regime wins over plausibility.
+            assertThat(unprocessable(new PlausibilityCheckRequest(
+                                    "CA",
+                                    "ON",
+                                    "1",
+                                    null,
+                                    AS_OF,
+                                    "CAD",
+                                    T,
+                                    List.of(tax("NO_SUCH", "200.00"), tax("GST_HST", "500.00")),
+                                    null))
+                            .getCode())
+                    .isEqualTo("TAX_REGIME_NOT_DECLARED");
+            // 6. Only then is the amount judged.
+            assertThat(implausible(() -> service.check(request("ON", T, List.of(tax("GST_HST", "500.00")), null))))
+                    .isNotEmpty();
         }
     }
 

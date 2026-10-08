@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -94,7 +95,6 @@ public class TaxPlausibilityServiceImpl implements TaxPlausibilityService {
         BigDecimal total = request.receiptTotal();
         LocalDate asOf = request.asOf() == null ? LocalDate.now(clock) : request.asOf();
         List<ConfiguredRate> rows = profile.ratesInEffect(request.regionCode(), asOf);
-        boolean rateAvailable = !rows.isEmpty();
 
         Map<String, String> implausible = new LinkedHashMap<>();
         BigDecimal sum = BigDecimal.ZERO;
@@ -111,22 +111,32 @@ public class TaxPlausibilityServiceImpl implements TaxPlausibilityService {
                     "the stated amounts together must be less than the receipt total " + total.toPlainString());
         }
 
+        // Per regime (Accounting ruling on #2637, comment 6071110619): RATED when a row of the regime is in
+        // effect in the region; NOT LEVIED (r = 0) when there is no row and the regime does not cover the
+        // region; UNRATED when there is no row but the regime covers the region, so no rate bound applies.
         List<RateUsed> ratesUsed = new ArrayList<>();
         List<RegimeMaximum> maximums = new ArrayList<>();
-        if (rateAvailable) {
-            for (int i = 0; i < stated.size(); i++) {
-                StatedTax tax = stated.get(i);
-                Optional<ConfiguredRate> row = rows.stream()
-                        .filter(rate -> tax.regime().equals(rate.regime()))
-                        .findFirst();
-                BigDecimal rate = row.map(ConfiguredRate::rate).orElse(BigDecimal.ZERO);
-                row.ifPresent(r -> ratesUsed.add(new RateUsed(tax.regime(), r.taxType(), r.rate())));
-                BigDecimal maximum = maximum(total, rate, profile.currencyExponent());
-                maximums.add(new RegimeMaximum(tax.regime(), maximum));
-                if (tax.amount().compareTo(maximum) > 0) {
-                    // Overwrites the total check's message: with a rate, every refused amount carries its maximum.
-                    implausible.put(amountField(i), "must not exceed the plausible maximum " + maximum.toPlainString());
-                }
+        boolean unratedAmount = false;
+        for (int i = 0; i < stated.size(); i++) {
+            StatedTax tax = stated.get(i);
+            Optional<ConfiguredRate> row = rows.stream()
+                    .filter(rate -> tax.regime().equals(rate.regime()))
+                    .findFirst();
+            BigDecimal rate;
+            if (row.isPresent()) {
+                rate = row.get().rate();
+                ratesUsed.add(new RateUsed(tax.regime(), row.get().taxType(), rate));
+            } else if (covers(profile, tax.regime(), request.regionCode())) {
+                unratedAmount |= tax.amount().signum() > 0;
+                continue;
+            } else {
+                rate = BigDecimal.ZERO;
+            }
+            BigDecimal maximum = maximum(total, rate, profile.currencyExponent());
+            maximums.add(new RegimeMaximum(tax.regime(), maximum));
+            if (tax.amount().compareTo(maximum) > 0) {
+                // Overwrites the total check's message: with a bound, every refused amount carries its maximum.
+                implausible.put(amountField(i), "must not exceed the plausible maximum " + maximum.toPlainString());
             }
         }
 
@@ -137,7 +147,7 @@ public class TaxPlausibilityServiceImpl implements TaxPlausibilityService {
                     .toList());
         }
 
-        String outcome = rateAvailable ? PLAUSIBLE : RATE_UNAVAILABLE;
+        String outcome = unratedAmount ? RATE_UNAVAILABLE : PLAUSIBLE;
         count(outcome);
         log.debug("Plausibility check answered: country={} outcome={}", profile.countryCode(), outcome);
         return new PlausibilityCheckResponse(
@@ -163,6 +173,18 @@ public class TaxPlausibilityServiceImpl implements TaxPlausibilityService {
     private BigDecimal maximum(@NonNull BigDecimal total, @NonNull BigDecimal rate, int exponent) {
         BigDecimal included = total.multiply(rate).divide(BigDecimal.ONE.add(rate), exponent, RoundingMode.CEILING);
         return included.add(BigDecimal.valueOf(toleranceMinorUnits).movePointLeft(exponent));
+    }
+
+    /**
+     * Whether {@code regime} covers {@code regionCode}: its configured regions are empty (the whole country) or
+     * contain the region.
+     */
+    private static boolean covers(
+            @NonNull CountryTaxProfile profile, @NonNull String regime, @NonNull String regionCode) {
+        String region = regionCode.trim().toUpperCase(Locale.ROOT);
+        return profile.regimes().stream()
+                .filter(entry -> entry.regime().equals(regime))
+                .anyMatch(entry -> entry.regions().isEmpty() || entry.regions().contains(region));
     }
 
     @Nullable

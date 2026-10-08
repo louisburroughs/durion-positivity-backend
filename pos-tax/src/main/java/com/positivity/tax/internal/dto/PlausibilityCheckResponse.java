@@ -11,11 +11,12 @@ import org.jspecify.annotations.Nullable;
  * Response of the stated-tax plausibility check ({@code POST /v1/tax/plausibility-checks}, CAP:550 S32b,
  * AW55). It never carries the supplier's registration number, only whether it is well formed.
  *
- * @param outcome                             {@code PLAUSIBLE}, or {@code RATE_UNAVAILABLE} when the region has
- *                                            no rate row on {@code asOf}
- * @param ratesUsed                           the rate row behind each stated regime the region levies
- * @param maximums                            each stated regime's plausible maximum; empty when no rate is
- *                                            available
+ * @param outcome                             {@code RATE_UNAVAILABLE} when a stated amount above zero is
+ *                                            unrated (its regime covers the region but has no row on
+ *                                            {@code asOf}), otherwise {@code PLAUSIBLE}
+ * @param ratesUsed                           the rate row behind each rated stated regime
+ * @param maximums                            each rated or not-levied stated regime's plausible maximum; an
+ *                                            unrated regime has none
  * @param supplierRegistrationRequired        whether the receipt total reaches an evidence rule requiring the
  *                                            supplier's number on a drawer receipt
  * @param supplierRegistrationNumberWellFormed whether the number matches the country's supplier regime shape;
@@ -27,20 +28,23 @@ import org.jspecify.annotations.Nullable;
 @Schema(name = "TaxPlausibilityCheckResponse", description = "Whether a receipt's stated tax is plausible")
 public record PlausibilityCheckResponse(
         @Schema(
-                description = "PLAUSIBLE, or RATE_UNAVAILABLE when the region has no rate row on asOf; a caller"
-                        + " never reads RATE_UNAVAILABLE as plausible for recovery",
+                description = "RATE_UNAVAILABLE when a stated amount above zero is unrated (its regime covers the"
+                        + " region but has no rate row on asOf), otherwise PLAUSIBLE; a caller never reads"
+                        + " RATE_UNAVAILABLE as plausible for recovery",
                 example = "PLAUSIBLE",
                 allowableValues = {"PLAUSIBLE", "RATE_UNAVAILABLE"},
                 requiredMode = Schema.RequiredMode.REQUIRED)
         String outcome,
 
         @Schema(
-                description = "Rate row behind each stated regime the region levies; empty when no rate is available",
+                description = "Rate row behind each rated stated regime (a row of the regime is in effect in the"
+                        + " region on asOf); an unrated or not-levied regime has none",
                 requiredMode = Schema.RequiredMode.REQUIRED)
         List<RateUsed> ratesUsed,
 
         @Schema(
-                description = "Each stated regime's plausible maximum; empty when no rate is available",
+                description = "Plausible maximum of each rated or not-levied stated regime (a not-levied regime has"
+                        + " r = 0, so its maximum is the tolerance); an unrated regime has none",
                 requiredMode = Schema.RequiredMode.REQUIRED)
         List<RegimeMaximum> maximums,
 

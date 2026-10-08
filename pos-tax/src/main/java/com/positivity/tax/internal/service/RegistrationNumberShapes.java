@@ -26,12 +26,14 @@ import org.springframework.boot.context.properties.source.ConfigurationPropertyS
 import org.springframework.boot.context.properties.source.IterableConfigurationPropertySource;
 import org.springframework.boot.env.RandomValuePropertySource;
 import org.springframework.boot.origin.Origin;
+import org.springframework.boot.origin.OriginTrackedResource;
 import org.springframework.boot.origin.PropertySourceOrigin;
 import org.springframework.boot.origin.TextResourceOrigin;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.PropertySource;
 import org.springframework.core.env.PropertySource.StubPropertySource;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
 
 /**
@@ -249,7 +251,12 @@ public class RegistrationNumberShapes {
                 continue;
             }
             if (current instanceof TextResourceOrigin text) {
-                if (!(text.getResource() instanceof ClassPathResource resource)) {
+                Resource loaded = text.getResource();
+                // Boot's config-data loader wraps the file it read in an OriginTrackedResource.
+                if (loaded instanceof OriginTrackedResource tracked) {
+                    loaded = tracked.getResource();
+                }
+                if (!(loaded instanceof ClassPathResource resource)) {
                     return false;
                 }
                 try {

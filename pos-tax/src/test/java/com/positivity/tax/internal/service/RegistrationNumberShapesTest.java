@@ -26,6 +26,7 @@ import org.springframework.boot.context.properties.bind.PropertySourcesPlacehold
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources;
 import org.springframework.boot.env.RandomValuePropertySource;
 import org.springframework.boot.env.YamlPropertySourceLoader;
+import org.springframework.boot.origin.OriginTrackedResource;
 import org.springframework.core.env.PropertySource;
 import org.springframework.core.env.StandardEnvironment;
 import org.springframework.core.env.SystemEnvironmentPropertySource;
@@ -230,10 +231,11 @@ class RegistrationNumberShapesTest {
     /** The classpath root of the test resources, standing in for the service's own code source. */
     private static final String TEST_ROOT = RegistrationNumberShapes.codeSourceRoot(RegistrationNumberShapesTest.class);
 
+    /** Loads a classpath YAML file the way Boot's config-data loader does: wrapped in an OriginTrackedResource. */
     private static StandardEnvironment environmentWith(String resource) throws Exception {
         StandardEnvironment environment = new StandardEnvironment();
-        for (PropertySource<?> source :
-                new YamlPropertySourceLoader().load(resource, new ClassPathResource(resource))) {
+        for (PropertySource<?> source : new YamlPropertySourceLoader()
+                .load(resource, OriginTrackedResource.of(new ClassPathResource(resource), null))) {
             environment.getPropertySources().addLast(source);
         }
         return environment;
