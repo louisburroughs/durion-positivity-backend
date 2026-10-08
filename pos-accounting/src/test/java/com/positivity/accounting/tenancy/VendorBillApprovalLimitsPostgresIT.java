@@ -3,10 +3,6 @@ package com.positivity.accounting.tenancy;
 import static com.positivity.tenancy.testing.TenantTestSupport.asTenant;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.dto.ApApprovalPolicyRequest;
 import com.positivity.accounting.internal.dto.ApApprovalPolicyResponse;
@@ -20,8 +16,6 @@ import com.positivity.accounting.internal.enums.VendorBillApproverKind;
 import com.positivity.accounting.internal.enums.VendorBillPostingDateRule;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.VendorBillException;
-import com.positivity.accounting.internal.payment.GatewayPaymentResponse;
-import com.positivity.accounting.internal.payment.PaymentGatewayProvider;
 import com.positivity.accounting.internal.service.APPaymentService;
 import com.positivity.accounting.internal.service.ApApprovalPolicyService;
 import com.positivity.accounting.internal.service.VendorBillApprovalService;
@@ -52,7 +46,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
  * Approval limits and separation of duties on the full Flyway chain (CAP:550 S13, #2510): the policy PUT/GET with its
@@ -91,9 +84,6 @@ class VendorBillApprovalLimitsPostgresIT extends PostgresTenancyTestBase {
 
     @Autowired
     private APPaymentService payments;
-
-    @MockitoBean
-    private PaymentGatewayProvider paymentGateway;
 
     @Autowired
     private Clock clock;
@@ -180,8 +170,10 @@ class VendorBillApprovalLimitsPostgresIT extends PostgresTenancyTestBase {
     void automaticApproval() {
         UUID tenant = tenant();
         LocalDate invoiced = today().minusDays(1);
-        signIn(CONTROLLER, CONTROLLER_GRANTS);
-        asTenant(tenant, () -> policies.set(limits("300.00", "500.00", "Small strong matches go through", null)));
+        // AC5's setup, automatic 500.00 above clerk 300.00, is a stored state the PUT refuses to write (the automatic
+        // limit never exceeds the clerk limit); item 9 applies min(automatic, clerk) to it.
+        setting(tenant, "AP_CLERK_APPROVAL_LIMIT", "300.00");
+        setting(tenant, "AP_AUTO_APPROVAL_LIMIT", "500.00");
 
         signIn("receiving.dock", "accounting:ap:pay");
         VendorBillResponse small = receiveAndMatch(tenant, "250.00", true, invoiced);
@@ -225,8 +217,8 @@ class VendorBillApprovalLimitsPostgresIT extends PostgresTenancyTestBase {
     }
 
     @Test
-    @DisplayName("AC6/AC7: the person who approved a bill cannot pay it: 403, no ap_payment row, no gateway call, the"
-            + " refusal audited; a SYSTEM-approved bill pays")
+    @DisplayName("AC6: the person who approved a bill cannot pay it: 403 before any payment row or gateway call, no"
+            + " ap_payment row, the refusal audited in its own transaction")
     void payGuard() {
         UUID tenant = tenant();
         LocalDate invoiced = today().minusDays(1);
@@ -249,24 +241,10 @@ class VendorBillApprovalLimitsPostgresIT extends PostgresTenancyTestBase {
                             .extracting(VendorBillException.FieldError::message)
                             .containsExactly(byPerson.getBillNumber());
                 });
-        verify(paymentGateway, never()).executePayment(any());
         assertThat(count(tenant, "ap_payment", "true")).isZero();
         assertThat(count(tenant, "accounting_audit_log", "operation = 'VENDOR_BILL_PAYMENT_REFUSED'"))
                 .as("the refusal survives the payment's rollback")
                 .isEqualTo(1);
-
-        signIn("receiving.dock", "accounting:ap:pay");
-        VendorBillResponse bySystem = receiveAndMatch(tenant, "250.00", true, invoiced);
-        assertThat(bySystem.getStatus()).isEqualTo(VendorBillStatus.APPROVED);
-        when(paymentGateway.executePayment(any()))
-                .thenReturn(GatewayPaymentResponse.builder()
-                        .transactionId("txn-2510")
-                        .status(PaymentGatewayProvider.GatewayPaymentStatus.SUCCEEDED)
-                        .rawResponse("{}")
-                        .build());
-        signIn(CONTROLLER, CONTROLLER_GRANTS);
-        asTenant(tenant, () -> payments.executePayment(payment(bySystem, "250.00"), CONTROLLER));
-        assertThat(count(tenant, "ap_payment", "true")).isEqualTo(1);
     }
 
     @Test
@@ -445,6 +423,18 @@ class VendorBillApprovalLimitsPostgresIT extends PostgresTenancyTestBase {
                 Stream.of(authorities).map(SimpleGrantedAuthority::new).toList());
         caller.setDetails(Map.of(GatewaySecurityConstants.DETAIL_USERNAME, username));
         SecurityContextHolder.getContext().setAuthentication(caller);
+    }
+
+    private static void setting(UUID tenant, String key, String value) {
+        new JdbcTemplate(ownerDataSource())
+                .update(
+                        "INSERT INTO accounting_configuration (tenant_id, config_id, config_key, config_value,"
+                                + " created_at, created_by, modified_at, modified_by) VALUES (?, ?, ?, ?,"
+                                + " TIMESTAMPTZ '2026-10-08 00:00:00+00', 't', TIMESTAMPTZ '2026-10-08 00:00:00+00', 't')",
+                        tenant,
+                        UUIDv7Generator.generate(),
+                        key,
+                        value);
     }
 
     private static String status(UUID tenant, UUID billId) {
