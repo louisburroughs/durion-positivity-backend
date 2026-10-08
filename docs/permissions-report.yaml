@@ -1,9 +1,9 @@
-generatedAt: "2026-10-08T17:13:08.656727+00:00"
+generatedAt: "2026-10-08T17:37:52.448202+00:00"
 root: "."
 summary:
   manifestCount: 24
-  permissionCount: 526
-  uniquePermissionCount: 526
+  permissionCount: 527
+  uniquePermissionCount: 527
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -941,7 +941,7 @@ manifests:
     domain: "supplier"
     serviceName: "pos-supplier"
     version: "1.0"
-    permissionCount: 18
+    permissionCount: 19
     permissions:
       - name: "supplier:audit:read"
         description: "Read supplier exchange audit records"
@@ -979,6 +979,8 @@ manifests:
         description: "Approve or reject a vendor remit-to change requested by someone else"
       - name: "supplier:fact:replay"
         description: "Re-emit the tenant's supplier.vendor.updated facts to seed or repair a replica"
+      - name: "supplier:vendor_tax_id:reveal"
+        description: "Reveal a vendor's full tax-registration number, with a reason, in an audited call (every other read is masked)"
   - module: "pos-tax"
     path: "pos-tax/src/main/resources/permissions.yaml"
     domain: "tax"
@@ -3816,6 +3818,12 @@ permissions:
     source: "pos-supplier/src/main/resources/permissions.yaml"
   - name: "supplier:vendor_remit:approve"
     description: "Approve or reject a vendor remit-to change requested by someone else"
+    domain: "supplier"
+    serviceName: "pos-supplier"
+    module: "pos-supplier"
+    source: "pos-supplier/src/main/resources/permissions.yaml"
+  - name: "supplier:vendor_tax_id:reveal"
+    description: "Reveal a vendor's full tax-registration number, with a reason, in an audited call (every other read is masked)"
     domain: "supplier"
     serviceName: "pos-supplier"
     module: "pos-supplier"

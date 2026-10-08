@@ -1,10 +1,14 @@
 package com.positivity.supplier;
 
+import com.positivity.supplier.internal.config.SupplierEncryptionKeySeparation;
+import com.positivity.supplier.internal.entity.VendorTaxIdCipher;
+import com.positivity.supplier.internal.migration.VendorTaxRegistrationEncryptionMigration;
 import com.positivity.tenancy.testing.TenantTestSupport;
 import java.util.UUID;
 import org.junit.jupiter.api.parallel.ResourceLock;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -31,10 +35,17 @@ import org.springframework.test.context.TestExecutionListeners;
  *       pos.tenancy.default-tenant-id} is unset — so without a binding row-level security makes
  *       every insert fail and every read empty. Binding it centrally mirrors production, where the
  *       edge binds the tenant and application code never does.
+ *
+ *   <li>the {@code V4} Java migration and its cipher (#2621). Every context in this JVM migrates the same
+ *       shared database, and Flyway only sees a Java migration that is a bean of the migrating context: a slice
+ *       without it would apply {@code V5} and skip {@code V4}, and the next context that has it would then
+ *       refuse to start ("resolved migration not applied"). Imported here so no slice can forget it.
  * </ul>
  *
  * <p>Requires Docker.
  */
+@Import({VendorTaxIdCipher.class, SupplierEncryptionKeySeparation.class, VendorTaxRegistrationEncryptionMigration.class
+})
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("pg")

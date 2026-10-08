@@ -77,6 +77,11 @@ class DiscoveryAuditWriteExclusionRealSpecsTest {
      * The in-scope surfaces of #2370, stated independently of the configured patterns so the test
      * checks the configuration rather than restating it. Paths are routing-prefixed.
      */
+    /** #2621: the reveal path, stated independently of the configured pattern. Routing-prefixed. */
+    private static final Predicate<String> REVEAL = path -> path.startsWith("/supplier/v1/supplier/vendors/")
+            && path.endsWith("/reveal")
+            && path.contains("/tax-registrations/");
+
     private static final Predicate<String> IN_SCOPE = path -> (path.startsWith("/security-service/v1/audit/")
                     && !path.equals("/security-service/v1/audit/exports")
                     && !path.startsWith("/security-service/v1/audit/exports/"))
@@ -87,7 +92,9 @@ class DiscoveryAuditWriteExclusionRealSpecsTest {
             || path.equals("/event-receiver/v1/eventTypes")
             || path.startsWith("/event-receiver/v1/eventTypes/")
             || path.startsWith("/mcp-server/v1/mcp/audit")
-            || path.startsWith("/mcp-server/v1/nlt/audit");
+            || path.startsWith("/mcp-server/v1/nlt/audit")
+            // #2621: the vendor tax-registration reveal returns a RESTRICTED number.
+            || REVEAL.test(path);
 
     /** Write operations the specs carry today under the in-scope paths; each must be gone. */
     private static final Set<String> KNOWN_EXCLUDED_WRITES = Set.of(
@@ -204,6 +211,68 @@ class DiscoveryAuditWriteExclusionRealSpecsTest {
         assertThat(allOperations.keySet())
                 .as("the specs still declare the writes this test expects to see excluded (rename here if they moved)")
                 .containsAll(KNOWN_EXCLUDED_WRITES);
+    }
+
+    /**
+     * #2621 (security review of #2624): the reveal of a vendor's full tax-registration number is never an
+     * agent tool, so a RESTRICTED number can never reach the prompt, the model, the re-ranker, chat history,
+     * eval traces or logs. Its audit read, metadata only, stays a tool for holders of supplier:audit:read.
+     */
+    /**
+     * CHK-010 (ADR-0072 Decision 4): over every module's real spec, no discovered tool has a path ending in
+     * {@code /reveal} or a {@code …:reveal} permission, on any method.
+     */
+    @Test
+    @DisplayName("CHK-010: no discovered tool has a /reveal path or a …:reveal permission")
+    void noDiscoveredToolRevealsARestrictedValue() {
+        assertThat(discovered.values())
+                .as("discovered tools with a /reveal path")
+                .noneMatch(coordinates -> OpenApiToolMapper.hasRevealPath(pathOf(coordinates)));
+        assertThat(discoveredPermissions.values())
+                .as("discovered tools requiring a …:reveal permission")
+                .noneMatch(permissions -> permissions.stream().anyMatch(code -> code.matches("^[^:]+:[^:]+:reveal$")));
+    }
+
+    /**
+     * CHK-010: the two markers travel together. An operation with a {@code …:reveal} permission must end in
+     * {@code /reveal}, and one ending in {@code /reveal} must require a {@code …:reveal} permission; a mismatch
+     * means the reserved action or the path convention drifted and needs a Security ruling.
+     */
+    @Test
+    @DisplayName("CHK-010: every operation carries both reveal markers or neither")
+    void revealMarkersTravelTogether() {
+        List<String> mismatched = new ArrayList<>();
+        moduleSpecs.forEach((prefix, spec) -> spec.getPaths()
+                .forEach((path, item) -> methods(item).forEach((method, operation) -> {
+                    boolean byPath = OpenApiToolMapper.hasRevealPath(path);
+                    boolean byPermission = OpenApiToolMapper.hasRevealPermission(operation);
+                    if (byPath != byPermission) {
+                        mismatched.add(
+                                method + " " + prefix + path + " path=" + byPath + " permission=" + byPermission);
+                    }
+                })));
+
+        assertThat(mismatched)
+                .as("operations with one reveal marker but not the other")
+                .isEmpty();
+        assertThat(allOperations.values())
+                .as("at least one real reveal operation exists, so the checks are not vacuous")
+                .anyMatch(coordinates -> OpenApiToolMapper.hasRevealPath(pathOf(coordinates)));
+    }
+
+    @Test
+    @DisplayName("#2621: the vendor tax-registration reveal is never discovered as a tool; its audit read is")
+    void vendorTaxIdRevealIsNeverATool() {
+        assertThat(allOperations.values())
+                .as("the supplier spec declares the reveal, so this test is not vacuous")
+                .anyMatch(coordinates -> coordinates.startsWith("POST ") && REVEAL.test(pathOf(coordinates)));
+        assertThat(discovered.values())
+                .as("no discovered operation reveals a registration number")
+                .noneMatch(coordinates -> REVEAL.test(pathOf(coordinates)));
+        assertThat(discovered.values())
+                .as("the reveal audit read (metadata only) stays a tool")
+                .anyMatch(coordinates ->
+                        coordinates.startsWith("GET ") && pathOf(coordinates).endsWith("/tax-id-reveals"));
     }
 
     @Test

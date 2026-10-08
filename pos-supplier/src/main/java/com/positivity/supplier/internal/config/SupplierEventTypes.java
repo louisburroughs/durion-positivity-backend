@@ -193,6 +193,15 @@ public final class SupplierEventTypes {
                                 "SUPPLIER_VENDOR_REMIT_CHANGE_APPROVE", "Approve a vendor remit-to change")
                         .build(),
                 EventTypeRegistration.approval("SUPPLIER_VENDOR_REMIT_CHANGE_REJECT", "Reject a vendor remit-to change")
+                        .build(),
+                // Tax-registration reveal (#2621). A write budget, as SUPPLIER_AUDIT_PAYLOAD_READ: serving the
+                // number also inserts its audit row in the same transaction, so the latency is a write's.
+                EventTypeRegistration.write(
+                                "SUPPLIER_VENDOR_TAX_ID_REVEAL",
+                                "Reveal a vendor tax-registration number; writes a reveal audit row")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "SUPPLIER_VENDOR_TAX_ID_REVEAL_LIST", "List a vendor's tax-registration reveals")
                         .build());
     }
 }

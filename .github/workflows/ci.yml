@@ -240,6 +240,12 @@ jobs:
         # The self-test drives the reclaim against a stubbed Docker and df.
         run: bash scripts/tests/deploy-backend-disk-reclaim-selftest.sh
 
+      - name: Verify the deploy's pos-supplier key guard
+        # Both pos-supplier keys are resolved on the box: persisted when supplied, never silently
+        # rotated, required when missing, and never equal to each other (#2621). A refused pair must
+        # not reach the env file, where the rotation guard would then hold it in place.
+        run: bash scripts/tests/deploy-backend-supplier-keys-selftest.sh
+
       - name: Verify the CloudWatch agent installer
         # The installer is the only thing standing between alpha and a repeat of #1862, and its
         # contract is that every condition leaving the box unwatched fails the run. Those paths

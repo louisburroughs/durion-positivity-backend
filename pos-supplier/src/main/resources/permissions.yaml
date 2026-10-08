@@ -54,3 +54,8 @@ permissions:
     description: "Re-emit the tenant's supplier.vendor.updated facts to seed or repair a replica"
     grantTo:
       - ADMIN
+  - name: "supplier:vendor_tax_id:reveal"
+    description: "Reveal a vendor's full tax-registration number, with a reason, in an audited call (every other read is masked)"
+    grantTo:
+      - ADMIN
+      - CONTROLLER

@@ -1637,6 +1637,10 @@ paths:
     $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1vendors~1{vendorId}~1remit-to-changes~1{changeId}~1approval
   /v1/supplier/vendors/{vendorId}/remit-to-changes/{changeId}/rejection:
     $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1vendors~1{vendorId}~1remit-to-changes~1{changeId}~1rejection
+  /v1/supplier/vendors/{vendorId}/tax-id-reveals:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1vendors~1{vendorId}~1tax-id-reveals
+  /v1/supplier/vendors/{vendorId}/tax-registrations/{registrationId}/reveal:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1vendors~1{vendorId}~1tax-registrations~1{registrationId}~1reveal
   /v1/tax/calculate:
     $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1calculate
   /v1/tax/exemption-certificates:

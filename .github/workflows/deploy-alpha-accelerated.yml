@@ -219,6 +219,9 @@ jobs:
         env:
           SECURITY_SEED_ADMIN_PASSWORD_HASH: ${{ secrets.SECURITY_SEED_ADMIN_PASSWORD_HASH }}
           SUPPLIER_AUDIT_ENC_KEY: ${{ secrets.SUPPLIER_AUDIT_ENC_KEY }}
+          # pos-supplier's vendor tax-registration number key (#2621): same rules as the audit key,
+          # and a different key. deploy-backend.sh persists it on first use and refuses a change.
+          SUPPLIER_VENDOR_TAXID_ENC_KEY: ${{ secrets.SUPPLIER_VENDOR_TAXID_ENC_KEY }}
         run: |
           # See build-push-ecr.yml for why these two are handled this way: a newline in the
           # base64 breaks the --parameters JSON, and an empty export on the host shadows the
@@ -227,6 +230,10 @@ jobs:
           SUPPLIER_KEY_ASSIGNMENT=""
           if [[ -n "${SUPPLIER_AUDIT_ENC_KEY}" ]]; then
             SUPPLIER_KEY_ASSIGNMENT="SUPPLIER_AUDIT_ENC_KEY='${SUPPLIER_AUDIT_ENC_KEY}' "
+          fi
+          SUPPLIER_VENDOR_TAXID_ENC_KEY="$(printf '%s' "${SUPPLIER_VENDOR_TAXID_ENC_KEY}" | tr -d '[:space:]')"
+          if [[ -n "${SUPPLIER_VENDOR_TAXID_ENC_KEY}" ]]; then
+            SUPPLIER_KEY_ASSIGNMENT+="SUPPLIER_VENDOR_TAXID_ENC_KEY='${SUPPLIER_VENDOR_TAXID_ENC_KEY}' "
           fi
           # deploy-backend.sh re-checks the anchors before it touches the host: their shape, a
           # gap of at least one day, and the scale. It also writes them into the

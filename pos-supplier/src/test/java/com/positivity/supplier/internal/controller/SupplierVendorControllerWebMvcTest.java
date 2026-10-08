@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -19,6 +20,10 @@ import com.positivity.supplier.internal.exception.SupplierNotFoundException;
 import com.positivity.supplier.internal.security.SupplierPermissions;
 import com.positivity.supplier.internal.service.model.PagedResponse;
 import com.positivity.supplier.internal.vendor.service.SupplierVendorService;
+import com.positivity.supplier.internal.vendor.service.VendorTaxIdRevealService;
+import com.positivity.supplier.internal.vendor.service.model.TaxIdRevealResult;
+import com.positivity.supplier.internal.vendor.service.model.TaxIdRevealView;
+import com.positivity.supplier.internal.vendor.service.model.TaxRegistrationView;
 import com.positivity.supplier.internal.vendor.service.model.VendorCreateRequest;
 import com.positivity.supplier.internal.vendor.service.model.VendorFactReplayResult;
 import com.positivity.supplier.internal.vendor.service.model.VendorStatus;
@@ -29,6 +34,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -76,6 +82,11 @@ class SupplierVendorControllerWebMvcTest {
     private static final String BASE = "/v1/supplier/vendors";
     private static final UUID VENDOR_ID = UUID.fromString("018f0000-0000-7000-8000-000000000601");
     private static final UUID CHANGE_ID = UUID.fromString("018f0000-0000-7000-8000-000000000602");
+    private static final UUID REGISTRATION_ID = UUID.fromString("018f0000-0000-7000-8000-000000000603");
+    private static final String FAKE_NUMBER = "000-00-1234";
+    private static final String REVEAL = """
+            {"reason":"Verifying W-9 received 2026-10-08"}
+            """;
 
     private static final String CREATE = """
             {"legalName":"Michelin North America, Inc.","displayName":"Michelin",
@@ -105,6 +116,16 @@ class SupplierVendorControllerWebMvcTest {
 
     @MockitoBean
     private SupplierVendorService vendorService;
+
+    @MockitoBean
+    private VendorTaxIdRevealService taxIdRevealService;
+
+    /** A reveal that reaches the controller answers REVEALED unless a test says otherwise. */
+    @org.junit.jupiter.api.BeforeEach
+    void revealAnswersByDefault() {
+        when(taxIdRevealService.reveal(any(), any(), any()))
+                .thenReturn(TaxIdRevealResult.revealed(new TaxIdRevealView(REGISTRATION_ID, "SSN", null, FAKE_NUMBER)));
+    }
 
     private static MockHttpServletRequestBuilder authed(MockHttpServletRequestBuilder builder, String... authorities) {
         return builder.header("X-User", "web-mvc-tester").header("X-Authorities", String.join(",", authorities));
@@ -148,7 +169,13 @@ class SupplierVendorControllerWebMvcTest {
                 Arguments.of("POST", vendor + "/remit-to-changes", REMIT_CHANGE, SupplierPermissions.VENDOR_WRITE),
                 Arguments.of("POST", change + "/approval", APPROVAL, SupplierPermissions.VENDOR_REMIT_APPROVE),
                 Arguments.of("POST", change + "/rejection", REJECTION, SupplierPermissions.VENDOR_REMIT_APPROVE),
-                Arguments.of("POST", BASE + "/facts/replay", null, SupplierPermissions.FACT_REPLAY));
+                Arguments.of("POST", BASE + "/facts/replay", null, SupplierPermissions.FACT_REPLAY),
+                Arguments.of(
+                        "POST",
+                        vendor + "/tax-registrations/" + REGISTRATION_ID + "/reveal",
+                        REVEAL,
+                        SupplierPermissions.VENDOR_TAX_ID_REVEAL),
+                Arguments.of("GET", vendor + "/tax-id-reveals", null, SupplierPermissions.AUDIT_READ));
     }
 
     private static MockHttpServletRequestBuilder request(String method, String path, String body) {
@@ -173,6 +200,7 @@ class SupplierVendorControllerWebMvcTest {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("FORBIDDEN"));
         verifyNoInteractions(vendorService);
+        verifyNoInteractions(taxIdRevealService);
     }
 
     @ParameterizedTest(name = "{0} {1} passes with {3}")
@@ -316,5 +344,164 @@ class SupplierVendorControllerWebMvcTest {
                 .andExpect(jsonPath("$.emitted").value(50))
                 .andExpect(jsonPath("$.complete").value(false))
                 .andExpect(jsonPath("$.nextAfterVendorId").value(CHANGE_ID.toString()));
+    }
+
+    // ── #2621: masked reads and the reveal ──────────────────────────────────────────────
+
+    @Test
+    @DisplayName("#2621 AC 8: a vendor's registrations serialise as {registrationId, scheme, region, last4}")
+    void viewIsMasked() throws Exception {
+        VendorView base = view();
+        VendorView masked = new VendorView(
+                base.vendorId(),
+                base.vendorNumber(),
+                base.legalName(),
+                base.displayName(),
+                List.of(new TaxRegistrationView(REGISTRATION_ID, "SSN", null, "1234")),
+                null,
+                0,
+                null,
+                null,
+                null,
+                "NET30",
+                "USD",
+                VendorStatus.ACTIVE,
+                null,
+                null,
+                base.createdAt(),
+                base.createdBy(),
+                base.updatedAt(),
+                base.updatedBy(),
+                0L);
+        when(vendorService.getVendor(VENDOR_ID)).thenReturn(masked);
+
+        mockMvc.perform(authed(get(BASE + "/" + VENDOR_ID), SupplierPermissions.VENDOR_READ))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.taxRegistrations[0].registrationId").value(REGISTRATION_ID.toString()))
+                .andExpect(jsonPath("$.taxRegistrations[0].last4").value("1234"))
+                .andExpect(jsonPath("$.taxRegistrations[0].number").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("#2621 AC 11: the reveal answers 200 with the number and Cache-Control: no-store")
+    void revealIsNoStore() throws Exception {
+        when(taxIdRevealService.reveal(eq(VENDOR_ID), eq(REGISTRATION_ID), any()))
+                .thenReturn(TaxIdRevealResult.revealed(new TaxIdRevealView(REGISTRATION_ID, "SSN", null, FAKE_NUMBER)));
+
+        mockMvc.perform(authed(
+                        post(BASE + "/" + VENDOR_ID + "/tax-registrations/" + REGISTRATION_ID + "/reveal")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(REVEAL),
+                        SupplierPermissions.VENDOR_TAX_ID_REVEAL))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", org.hamcrest.Matchers.containsString("no-store")))
+                .andExpect(jsonPath("$.number").value(FAKE_NUMBER));
+    }
+
+    @Test
+    @DisplayName("#2621 AC 12: a 9-character reason is 400 JUSTIFICATION_REQUIRED and the service is never called")
+    void shortReasonIsJustificationRequired() throws Exception {
+        mockMvc.perform(authed(
+                        post(BASE + "/" + VENDOR_ID + "/tax-registrations/" + REGISTRATION_ID + "/reveal")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"reason\":\"too short\"}"),
+                        SupplierPermissions.VENDOR_TAX_ID_REVEAL))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("JUSTIFICATION_REQUIRED"));
+        verifyNoInteractions(taxIdRevealService);
+    }
+
+    @Test
+    @DisplayName("#2621: an unknown registration is 404, an unreadable number 500, neither carries a number")
+    void revealErrorCodes() throws Exception {
+        UUID unknown = UUID.fromString("018f0000-0000-7000-8000-000000000604");
+        when(taxIdRevealService.reveal(eq(VENDOR_ID), eq(unknown), any()))
+                .thenThrow(new SupplierNotFoundException(
+                        SupplierNotFoundException.VENDOR_TAX_REGISTRATION_NOT_FOUND, "missing"));
+        when(taxIdRevealService.reveal(eq(VENDOR_ID), eq(REGISTRATION_ID), any()))
+                .thenReturn(TaxIdRevealResult.unreadable("AUTHENTICATION_FAILED", "k1"));
+
+        mockMvc.perform(authed(
+                        post(BASE + "/" + VENDOR_ID + "/tax-registrations/" + unknown + "/reveal")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(REVEAL),
+                        SupplierPermissions.VENDOR_TAX_ID_REVEAL))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("SUPPLIER_VENDOR_TAX_REGISTRATION_NOT_FOUND"));
+        mockMvc.perform(authed(
+                        post(BASE + "/" + VENDOR_ID + "/tax-registrations/" + REGISTRATION_ID + "/reveal")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(REVEAL),
+                        SupplierPermissions.VENDOR_TAX_ID_REVEAL))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("SUPPLIER_VENDOR_TAX_ID_UNREADABLE"))
+                .andExpect(jsonPath("$.number").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("#2621 AC 10: a 65-character number is 400 and the response body does not echo it")
+    void overlongNumberIsNotEchoed() throws Exception {
+        String overlong = "FAKE" + "7".repeat(61);
+        String body = mockMvc.perform(authed(
+                        post(BASE).contentType(MediaType.APPLICATION_JSON).content("""
+                                        {"legalName":"L","displayName":"D","defaultPaymentTerms":"NET30",
+                                         "defaultCurrency":"USD","taxRegistrations":[{"scheme":"EIN","number":"%s"}]}
+                                        """.formatted(overlong)),
+                        SupplierPermissions.VENDOR_WRITE))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        assertThat(body.contains("FAKE7777"))
+                .as("number absent from the error body")
+                .isFalse();
+        verifyNoInteractions(vendorService);
+    }
+
+    @Test
+    @DisplayName("#2621 AC 20: a misshapen scheme is 400 VALIDATION_ERROR on its field and the body does not echo it")
+    void misshapenSchemeIsNotEchoed() throws Exception {
+        when(vendorService.createVendor(any()))
+                .thenThrow(new com.positivity.supplier.internal.exception.SupplierValidationException(
+                        "VALIDATION_ERROR",
+                        "Tax registration refused: taxRegistrations[0].scheme must be letters",
+                        List.of(new com.positivity.shared.error.ApiError.FieldError(
+                                "taxRegistrations[0].scheme", "must be letters"))));
+        String body = mockMvc.perform(authed(
+                        post(BASE).contentType(MediaType.APPLICATION_JSON).content("""
+                                        {"legalName":"L","displayName":"D","defaultPaymentTerms":"NET30",
+                                         "defaultCurrency":"USD",
+                                         "taxRegistrations":[{"scheme":"EIN123","number":"000-00-1234"}]}
+                                        """),
+                        SupplierPermissions.VENDOR_WRITE))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("taxRegistrations[0].scheme"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        assertThat(body.contains("EIN123") || body.contains("000-00-1234"))
+                .as("submitted value absent from the error body")
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName("#2621 AC 11: a committed REASON_REJECTED outcome is mapped to 400 VALIDATION_ERROR with no number")
+    void reasonRejectedOutcomeIs400() throws Exception {
+        when(taxIdRevealService.reveal(eq(VENDOR_ID), eq(REGISTRATION_ID), any()))
+                .thenReturn(TaxIdRevealResult.reasonRejected());
+
+        String body = mockMvc.perform(authed(
+                        post(BASE + "/" + VENDOR_ID + "/tax-registrations/" + REGISTRATION_ID + "/reveal")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"reason\":\"checking 000-00-1234 per W-9\"}"),
+                        SupplierPermissions.VENDOR_TAX_ID_REVEAL))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("reason"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        assertThat(body.contains("000-00-1234")).as("reason and number absent").isFalse();
     }
 }

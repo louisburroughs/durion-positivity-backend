@@ -15,7 +15,7 @@ import org.jspecify.annotations.Nullable;
  * @param vendorNumber the number people quote; never changes
  * @param legalName legal name
  * @param displayName name screens show
- * @param taxRegistrations tax registrations
+ * @param taxRegistrations tax registrations, masked (#2621): scheme, region and last4, never the number
  * @param remitTo approved remit-to; {@code null} while there is none
  * @param remitToVersion 0 with no remit-to, 1 when given at creation, +1 per approved change
  * @param remitToChangedAt when the current remit-to took effect
@@ -47,7 +47,8 @@ public record VendorView(
         @Schema(description = "Name screens show.", example = "Michelin") @NonNull
         String displayName,
 
-        @Schema(description = "Tax registrations.") @NonNull List<TaxRegistrationDto> taxRegistrations,
+        @Schema(description = "Tax registrations, masked: never a number.") @NonNull
+        List<TaxRegistrationView> taxRegistrations,
 
         @Schema(description = "Approved remit-to; null while there is none.") @Nullable
         RemitToDto remitTo,

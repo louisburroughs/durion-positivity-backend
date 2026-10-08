@@ -32,7 +32,7 @@ S2S operation) would be a new capability with its own spec, not a revival of thi
 
 The vendor master is under `/v1/supplier/vendors`; connection configuration is under `/v1/supplier/admin`.
 
-### Vendor master (#2516, ADR-0070 Decision 2) — `supplier:vendor:read` / `supplier:vendor:write` / `supplier:vendor_remit:approve` / `supplier:fact:replay`
+### Vendor master (#2516, ADR-0070 Decision 2) — `supplier:vendor:read` / `supplier:vendor:write` / `supplier:vendor_remit:approve` / `supplier:fact:replay` / `supplier:vendor_tax_id:reveal`
 
 One vendor for every party the shop buys from or pays, with or without a supplier connection. Every
 connection profile belongs to exactly one vendor. No endpoint deletes a vendor.
@@ -49,6 +49,8 @@ connection profile belongs to exactly one vendor. No endpoint deletes a vendor.
 | POST | `…/remit-to-changes/{changeId}/approval` `{verificationNote}` | `supplier:vendor_remit:approve` | 200, 400, 403 `SUPPLIER_VENDOR_REMIT_SELF_APPROVAL`, 409 `SUPPLIER_VENDOR_REMIT_CHANGE_NOT_PENDING` |
 | POST | `…/remit-to-changes/{changeId}/rejection` `{note}` | `supplier:vendor_remit:approve` | 200, 400, 409 `SUPPLIER_VENDOR_REMIT_CHANGE_NOT_PENDING` |
 | POST | `/v1/supplier/vendors/facts/replay?afterVendorId=&limit=` | `supplier:fact:replay` | 200 (`emitted`, `nextAfterVendorId`, `complete`) |
+| POST | `…/{vendorId}/tax-registrations/{registrationId}/reveal` `{reason}` | `supplier:vendor_tax_id:reveal` | 200 (`Cache-Control: no-store`), 400 `JUSTIFICATION_REQUIRED` / `VALIDATION_ERROR`, 404 `SUPPLIER_VENDOR_NOT_FOUND` / `SUPPLIER_VENDOR_TAX_REGISTRATION_NOT_FOUND`, 500 `SUPPLIER_VENDOR_TAX_ID_UNREADABLE` |
+| GET | `…/{vendorId}/tax-id-reveals?page=&size=` | `supplier:audit:read` | 200 (newest first, default size 20, max 200), 404 |
 
 - **`vendorNumber`** is optional on create: give one (`^[A-Z0-9][A-Z0-9-]{0,29}$`, unique in the tenant)
   or get `V-000001`, `V-000002`, … from a per-tenant counter. It never changes afterwards: YAML profiles
@@ -62,9 +64,49 @@ connection profile belongs to exactly one vendor. No endpoint deletes a vendor.
 - **Status** is `ACTIVE ⇄ INACTIVE` with a reason. Deactivation does not disable the vendor's profiles:
   its EDI documents still arrive, and accounting records them as exceptions.
 - **No bank details** — not on the record, not on Kafka (OI-14).
-- **`supplier.vendor.updated` v1** (`SupplierVendorUpdatedV1`) on `supplier.events.v1`, key `vendorId`,
-  `aggregateVersion` = the vendor's `@Version`: queued through the outbox in the transaction of every
-  create, update, status change and remit-to approval. It carries every vendor field plus
+- **Tax registrations are RESTRICTED, encrypted and masked (#2621, Security ruling on #2617).** Every
+  number, whatever its scheme, is sealed with AES-256-GCM under `SUPPLIER_VENDOR_TAXID_ENC_KEY` (its own
+  key, never the exchange-audit one; same envelope and fail-closed key policy, see "Encryption" below),
+  with the tenant, vendor and registration ids bound as AAD so a ciphertext copied into another row fails.
+  Each stored element is `{registrationId, scheme, region, last4, numberCiphertext}`. Every read, and every
+  create, update, status and remit-to response, returns `taxRegistrations[]` as
+  `{registrationId, scheme, region, last4}` and never decrypts. `last4` is the last four alphanumerics
+  once separators are removed, `null` under 8 (shown as "on file").
+  - **Update rule.** Send a stored registration's `registrationId` without `number` to keep it (its
+    `scheme` and `region` must be unchanged, or 400 `VALIDATION_ERROR` with
+    `fieldErrors[taxRegistrations[i].number]` "re-enter the number to change its scheme or region"); with
+    `number` to replace its number; and a new registration without `registrationId` and with its `number`
+    (1–64 characters). An id the vendor does not hold is 400; a stored registration left out is removed. A
+    PUT that keeps every registration unchanged publishes nothing. No message or log echoes a number.
+  - **Shapes (ADR-0072 Decision 2).** `scheme` and `region` are trimmed and upper-cased (`gst_hst` → `GST_HST`,
+    `qc` → `QC`). On every entry that carries a `number`, `scheme` must match `^[A-Z][A-Z _/-]{0,15}$` and
+    `region` `^[A-Z]{2}(-[A-Z]{1,3})?$` — no digits, so neither can hold part of a number — or 400
+    `VALIDATION_ERROR` on `taxRegistrations[i].scheme` / `.region`, never echoing the value. `V4` and `V5`
+    refuse to run (counts only) if a stored or queued registration breaks them.
+  - **Reveal.** Only `supplier:vendor_tax_id:reveal` (ADMIN, CONTROLLER) sees a number, with a reason of
+    10–500 characters. The `supplier_vendor_tax_id_reveal` audit row (actor, roles, reason, correlation id,
+    outcome `REVEALED` | `UNREADABLE` | `REASON_REJECTED`; never the number or `last4`) is written in the same
+    transaction before the number is returned: if it cannot be written, nothing is revealed. A reason that
+    contains the number itself (separators and case ignored) is 400 `VALIDATION_ERROR`, reveals nothing, and
+    records `REASON_REJECTED` with a null reason; the reason is never logged. An `UNREADABLE` row keeps no
+    reason either (it could not be checked against a number that could not be read); a CHECK constraint holds
+    `reason` NULL exactly on those two outcomes. Every outcome's row commits: the service returns the outcome and
+    only after commit does the controller answer 200, 400 or 500 (ADR-0072 Decision 4); a number is released
+    only after commit, and a failed insert or commit releases nothing.
+  - **A supplied number is always a change** (ADR-0072 Decision 4, CHK-011): re-sent under the same id, scheme
+    and region it is re-sealed, its `last4` recomputed and the masked fact published. "Unchanged" is decided on
+    ids and stored attributes only, never on ciphertext or `last4`. The rows are read through `supplier:audit:read`, so a
+    controller's reveals are reviewed by someone else. A 403 or 404 writes nothing.
+  - **Never an agent tool** (ADR-0072 Decision 4, CHK-010). pos-mcp-server's discovery drops, in code and on
+    every method, any operation whose path ends in `/reveal` or whose `x-required-permissions` holds a
+    `…:reveal` permission. No configuration re-includes it: an agent cannot reveal a number even for a user who
+    holds the permission; the person uses the reveal dialog. The audit read (metadata only) stays a tool.
+- **`supplier.vendor.updated` schema version 2** (`SupplierVendorUpdatedV1`) on `supplier.events.v1`, key
+  `vendorId`, `aggregateVersion` = the vendor's `@Version`: queued through the outbox in the transaction of
+  every create, update, status change and remit-to approval. Version 2 (#2621) carries tax registrations as
+  `{scheme, region, last4}` only; version 1 carried the number, and `V5` rewrote every queued vendor fact
+  in `supplier_event_outbox` to version 2 so no replay can publish one again. Consumers apply only version
+  2 or later. It carries every vendor field plus
   `remitToChangedAt`, `remitToRequestedBy`, `remitToApprovedBy` (security-context principal names),
   `createdBy`, `createdAt`, `occurredAt`. Consumers apply it under `ReplicaVersionGuard`: skip only when they hold a newer version; an equal version (a replay) re-applies. A no-op update publishes nothing.
 - **Replay (ADR-0044 §4).** `POST /v1/supplier/vendors/facts/replay` re-emits one page (limit clamped to
@@ -623,6 +665,44 @@ suspected tampering — for data the deployment destroyed itself.
 | `SUPPLIER_AUDIT_ENC_KEY` | Active key, 32 bytes base64. **Provision before first deploy.** |
 | `SUPPLIER_AUDIT_ENC_KEY_ID` | Key id recorded in each envelope (default `k1`) |
 | `SUPPLIER_AUDIT_ENC_PREVIOUS_KEYS` | Decrypt-only keys, `keyId:base64` comma-separated |
+| `SUPPLIER_VENDOR_TAXID_ENC_KEY` | Vendor tax-registration number key (#2621), 32 bytes base64. A **different** key, same rules: `deploy-backend.sh` and startup (`SupplierEncryptionKeySeparation`) both refuse one key for both purposes. **Provision before first deploy**, from the secret store. |
+| `SUPPLIER_VENDOR_TAXID_ENC_KEY_ID` | Its key id (default `k1`) |
+| `SUPPLIER_VENDOR_TAXID_ENC_PREVIOUS_KEYS` | Its decrypt-only keys; a retired key must stay while any number it sealed is stored |
+
+The envelope and key policy are shared by both ciphers (`AesGcmEnvelopeCipher`); the vendor tax-id cipher
+additionally binds `tenantId`, `vendorId` and `registrationId` into the AAD. `V4` (a Flyway **Java**
+migration, a Spring bean with the cipher injected, because SQL cannot hold the key) encrypted every
+number stored before #2621; it logs counts only.
+
+#### Deploying V4–V6: stop-the-world only
+
+- **V4 is a Java migration** (`internal.migration.VendorTaxRegistrationEncryptionMigration`, version `4`). Never
+  add a `V4__*.sql`; `VendorTaxRegistrationMigrationHygieneTest` fails if anyone does.
+- **Stop-the-world deploy only.** Stop pos-supplier, migrate, then start it: no old instance may write a clear
+  number after V4 has run, and none may publish a v1 fact after V5.
+- **Hard gate before the deploy: the counts** (ADR-0072 Decision 9). Run the read-only counts in PR #2624 through
+  SSM as `pos_user`: registrations grouped by **validated** scheme (a misshapen scheme counts as `UNVALIDATED`, never
+  printed), split by **verified fixture provenance** versus **unknown provenance**, vendors holding one, and the two
+  shape-break counts. Counts only, never values. `VERIFIED_FIXTURE` needs **both** an evidenced fixture creator
+  (`created_by` on the evidenced list) **and** a fake-value shape checked inside the query (the separator-free
+  number starts with `000` or contains `FAKE`, ADR-0072 Decision 10); everything else is `UNKNOWN`. For alpha, the
+  platform owner's confirmation that alpha holds no real vendor data (on #2617 and PR #2624) is the provenance
+  evidence. Unknown provenance otherwise counts as potentially real and stops the rollout as a data incident; any
+  non-zero shape-break count stops the deploy.
+- **Order and purge:** follow `docs/OPERATIONS_RUNBOOK.md`, "Withdrawing a RESTRICTED field in place": consumers
+  first, stop every old writer, V4–V6, fixed per-partition cutoffs on `supplier.events.v1` and its DLQ, consumer
+  progress, DLQ inventory and recovery, then `kafka-delete-records.sh` up to the cutoffs.
+- **If V4 or V5 refuses** ("N stored vendor tax registration(s) …" or "N supplier.vendor.updated outbox
+  registration(s) …"): nothing was written; the migration rolled back and the schema is still at V3. The old
+  instance is already stopped (stop-the-world), so **restart the previous image**, which runs on V3 unchanged.
+  Never `SELECT` the offending values.
+  - A stored registration: correct it through the vendor form on that restarted (pre-#2621) release, re-entering
+    it with a conforming scheme and region.
+  - A queued outbox row: it is a v1 copy of a fact and is never needed again. Delete exactly those rows with the
+    shape-break predicate of the count (`DELETE FROM supplier_event_outbox o USING … WHERE <same predicate>`),
+    never by listing them, and re-emit the vendor's facts (`POST /v1/supplier/vendors/facts/replay`) after the
+    deploy.
+  - Re-run the counts until both are zero, then stop the previous image again and deploy.
 
 To rotate: move the current key into `previous-keys`, set a new `key` and a new `key-id`. **A retired
 key must stay in `previous-keys` for the whole retention window** — remove it and every payload it

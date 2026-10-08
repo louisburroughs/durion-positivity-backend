@@ -1,0 +1,11 @@
+package com.positivity.supplier.internal.enums;
+
+/** What a vendor tax-registration reveal produced, as stored on its audit row (#2621). */
+public enum TaxIdRevealOutcome {
+    /** The number was decrypted and returned. */
+    REVEALED,
+    /** The stored ciphertext could not be decrypted; nothing was returned. */
+    UNREADABLE,
+    /** The reason contained the number itself; nothing was returned and the reason is not stored. */
+    REASON_REJECTED
+}

@@ -52,7 +52,17 @@ class McpServerPropertiesDefaultsTest {
                                     "^/accounting/v1/accounting/events$",
                                     "^/event-receiver/v1/events(/|$)",
                                     "^/event-receiver/v1/eventTypes(/|$)",
-                                    "^/mcp-server/v1/(mcp|nlt)/audit(/|$)");
+                                    "^/mcp-server/v1/(mcp|nlt)/audit(/|$)",
+                                    "/v1/supplier/vendors/[^/]+/tax-registrations/[^/]+/reveal$");
+                    // #2621: the vendor tax-registration reveal, with or without the routing prefix
+                    assertThat(props.excludesWrite(
+                                    "/supplier/v1/supplier/vendors/v1/tax-registrations/r1/reveal", HttpMethod.POST))
+                            .isTrue();
+                    assertThat(props.excludesWrite(
+                                    "/v1/supplier/vendors/v1/tax-registrations/r1/reveal", HttpMethod.POST))
+                            .isTrue();
+                    assertThat(props.excludesWrite("/supplier/v1/supplier/vendors/v1/tax-id-reveals", HttpMethod.GET))
+                            .isFalse();
                     // writes on the surfaces
                     assertThat(props.excludesWrite("/security-service/v1/audit/events", HttpMethod.POST))
                             .isTrue();
@@ -117,7 +127,7 @@ class McpServerPropertiesDefaultsTest {
                 .withUserConfiguration(Config.class)
                 .run(ctx -> {
                     McpServerProperties props = ctx.getBean(McpServerProperties.class);
-                    assertThat(props.excludedWritePathPatterns()).hasSize(6);
+                    assertThat(props.excludedWritePathPatterns()).hasSize(7);
                     assertThat(props.excludesWrite("/security-service/v1/audit/events", HttpMethod.POST))
                             .isTrue();
                 });

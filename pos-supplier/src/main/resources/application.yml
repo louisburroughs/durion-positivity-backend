@@ -106,6 +106,21 @@ pos:
       # Payload content expires; the metadata trail is kept permanently.
       retention: ${SUPPLIER_AUDIT_RETENTION:P400D}
       purge-cron: ${SUPPLIER_AUDIT_PURGE_CRON:0 30 3 * * *}
+    # ── Vendor tax-registration number encryption (#2621; Security ruling on #2617, ruling 3) ──
+    #
+    # NOT optional plumbing, and NOT the exchange-audit key. VendorTaxIdCipher fails startup without a key
+    # unless every active profile is dev or test, and its failure message names SUPPLIER_VENDOR_TAXID_ENC_KEY,
+    # so that variable must reach the property. A separate key because a number lives as long as its vendor
+    # while audit payloads expire after 400 days. Provision it from the secret store, never a committed file.
+    vendor-tax-id:
+      encryption:
+        # 32 bytes, base64. Provision before first deploy.
+        key: ${SUPPLIER_VENDOR_TAXID_ENC_KEY:}
+        # Recorded in every envelope so rotation stays possible.
+        key-id: ${SUPPLIER_VENDOR_TAXID_ENC_KEY_ID:k1}
+        # Decrypt-only keys, keyId:base64 comma-separated. A retired key MUST stay here while any number
+        # sealed under it is stored, or that number becomes unreadable.
+        previous-keys: ${SUPPLIER_VENDOR_TAXID_ENC_PREVIOUS_KEYS:}
     # ── OAuth2 token leg (ADR-0050 §4) ──────────────────────────────────────────────────
     #
     # The token endpoint gets its OWN budgets, not the profile's and not the platform builder's 2s/5s

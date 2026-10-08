@@ -1,9 +1,12 @@
 package com.positivity.supplier.internal.vendor.service;
 
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.error.ApiError;
+import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.supplier.internal.entity.SupplierVendorEntity;
 import com.positivity.supplier.internal.entity.SupplierVendorRemitChangeEntity;
 import com.positivity.supplier.internal.entity.VendorRemitTo;
+import com.positivity.supplier.internal.entity.VendorTaxIdCipher;
 import com.positivity.supplier.internal.entity.VendorTaxRegistration;
 import com.positivity.supplier.internal.exception.SupplierConflictException;
 import com.positivity.supplier.internal.exception.SupplierForbiddenException;
@@ -12,6 +15,7 @@ import com.positivity.supplier.internal.exception.SupplierValidationException;
 import com.positivity.supplier.internal.repository.SupplierVendorRemitChangeRepository;
 import com.positivity.supplier.internal.repository.SupplierVendorRepository;
 import com.positivity.supplier.internal.service.model.PagedResponse;
+import com.positivity.supplier.internal.vendor.VendorTaxRegistrationShapes;
 import com.positivity.supplier.internal.vendor.service.model.RemitApprovalRequest;
 import com.positivity.supplier.internal.vendor.service.model.RemitChangeRequest;
 import com.positivity.supplier.internal.vendor.service.model.RemitChangeStatus;
@@ -19,18 +23,24 @@ import com.positivity.supplier.internal.vendor.service.model.RemitChangeView;
 import com.positivity.supplier.internal.vendor.service.model.RemitRejectionRequest;
 import com.positivity.supplier.internal.vendor.service.model.RemitToDto;
 import com.positivity.supplier.internal.vendor.service.model.TaxRegistrationDto;
+import com.positivity.supplier.internal.vendor.service.model.TaxRegistrationView;
 import com.positivity.supplier.internal.vendor.service.model.VendorCreateRequest;
 import com.positivity.supplier.internal.vendor.service.model.VendorFactReplayResult;
 import com.positivity.supplier.internal.vendor.service.model.VendorStatus;
 import com.positivity.supplier.internal.vendor.service.model.VendorStatusChangeRequest;
 import com.positivity.supplier.internal.vendor.service.model.VendorUpdateRequest;
 import com.positivity.supplier.internal.vendor.service.model.VendorView;
+import com.positivity.tenancy.TenantContext;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -59,6 +69,14 @@ import org.springframework.transaction.annotation.Transactional;
  * Every committed create, update, status change and approval queues {@code supplier.vendor.updated}
  * in the same transaction ({@link VendorFactPublisher}); the vendor is flushed first so the fact
  * carries the version the change produced.
+ *
+ * <h2>Tax registrations are sealed and masked (#2621)</h2>
+ *
+ * Every registration number is RESTRICTED (Security ruling on #2617, ruling 1). A number is sealed by
+ * {@link VendorTaxIdCipher} for its tenant, vendor and registration the moment it arrives, next to its
+ * {@code last4}; reads return {@link TaxRegistrationView} and never decrypt. An update keeps a stored
+ * registration by its {@code registrationId} without the number, and compares ids and stored values, never
+ * ciphertext. No message, field error or log line here ever holds a submitted number.
  */
 @Slf4j
 @Service
@@ -78,6 +96,7 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
     private final SupplierVendorRemitChangeRepository remitChangeRepository;
     private final VendorNumberAllocator numberAllocator;
     private final VendorFactPublisher factPublisher;
+    private final VendorTaxIdCipher taxIdCipher;
     private final Clock clock;
 
     // ── Reads ───────────────────────────────────────────────────────────────────────
@@ -142,11 +161,17 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
             throw numberTaken(vendorNumber);
         }
 
+        // The id is minted here, not at flush, because each registration number is sealed for its vendor
+        // (the AAD binds tenant, vendor and registration). UUIDv7HibernateGenerator keeps an assigned id.
+        UUID vendorId = UUIDv7Generator.generate();
+        List<VendorTaxRegistration> registrations =
+                resolveTaxRegistrations(TenantContext.require(), vendorId, List.of(), request.taxRegistrations());
         SupplierVendorEntity vendor = SupplierVendorEntity.builder()
+                .vendorId(vendorId)
                 .vendorNumber(vendorNumber)
                 .legalName(request.legalName())
                 .displayName(request.displayName())
-                .taxRegistrations(toEntity(request.taxRegistrations()))
+                .taxRegistrations(new ArrayList<>(registrations))
                 .defaultPaymentTerms(request.defaultPaymentTerms())
                 .defaultCurrency(request.defaultCurrency())
                 .status(com.positivity.supplier.internal.enums.VendorStatus.ACTIVE)
@@ -186,9 +211,14 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
                             + vendor.getVersion() + ", request carried " + request.version()
                             + "). Reload it and try again.");
         }
+        // Resolved before anything is set: a refused registration writes nothing.
+        UUID tenantId = vendor.getTenantId() != null ? vendor.getTenantId() : TenantContext.require();
+        List<VendorTaxRegistration> registrations = resolveTaxRegistrations(
+                tenantId, vendor.getVendorId(), vendor.getTaxRegistrations(), request.taxRegistrations());
         vendor.setLegalName(request.legalName());
         vendor.setDisplayName(request.displayName());
-        replaceTaxRegistrations(vendor, toEntity(request.taxRegistrations()));
+        boolean valueSupplied = request.taxRegistrations().stream().anyMatch(entry -> entry.number() != null);
+        replaceTaxRegistrations(vendor, registrations, valueSupplied);
         vendor.setDefaultPaymentTerms(request.defaultPaymentTerms());
         vendor.setDefaultCurrency(request.defaultCurrency());
         Long versionBefore = vendor.getVersion();
@@ -429,19 +459,122 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
         return new SupplierValidationException(SupplierValidationException.VALIDATION_ERROR, message);
     }
 
-    /** In place: Hibernate tracks the managed list instance. */
+    /**
+     * Replaces the stored registrations when the request changes them (ADR-0072 Decision 4, IC-004). A supplied number
+     * is always a change, even under an unchanged id, scheme and region: it was re-sealed and its {@code last4}
+     * recomputed, and the masked fact is published. Otherwise the decision compares registration ids and their
+     * stored attributes (scheme, region) only, never ciphertext or {@code last4}. In place: Hibernate tracks the
+     * managed list instance.
+     */
     private static void replaceTaxRegistrations(
-            SupplierVendorEntity vendor, List<VendorTaxRegistration> registrations) {
-        if (!registrations.equals(vendor.getTaxRegistrations())) {
+            SupplierVendorEntity vendor, List<VendorTaxRegistration> registrations, boolean valueSupplied) {
+        if (valueSupplied || !sameIdsAndAttributes(vendor.getTaxRegistrations(), registrations)) {
             vendor.setTaxRegistrations(new ArrayList<>(registrations));
         }
     }
 
-    private static List<VendorTaxRegistration> toEntity(List<TaxRegistrationDto> registrations) {
-        return new ArrayList<>(registrations.stream()
-                .map(registration ->
-                        new VendorTaxRegistration(registration.scheme(), registration.number(), registration.region()))
-                .toList());
+    private static boolean sameIdsAndAttributes(List<VendorTaxRegistration> stored, List<VendorTaxRegistration> next) {
+        if (stored.size() != next.size()) {
+            return false;
+        }
+        for (int i = 0; i < stored.size(); i++) {
+            VendorTaxRegistration before = stored.get(i);
+            VendorTaxRegistration after = next.get(i);
+            if (!before.registrationId().equals(after.registrationId())
+                    || !before.scheme().equals(after.scheme())
+                    || !Objects.equals(before.region(), after.region())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * The stored registrations a create or update produces (Security ruling on #2617, ruling 4):
+     *
+     * <ul>
+     *   <li>{@code registrationId} without a number keeps the stored element as it is; its scheme and region
+     *       must equal the stored ones, because a changed scheme or region on an unseen number would relabel it;
+     *   <li>{@code registrationId} with a number re-seals that registration under the same id;
+     *   <li>no {@code registrationId} is a new registration under a new UUIDv7 and needs its number;
+     *   <li>an id this vendor does not hold, or one sent twice, is refused; a stored id left out is removed.
+     * </ul>
+     *
+     * <p>Every entry that carries a number has its (already upper-cased) scheme and region checked against
+     * {@link VendorTaxRegistrationShapes} (ADR-0072 Decision 2).
+     *
+     * <p>Every refusal is a 400 {@code VALIDATION_ERROR} naming {@code taxRegistrations[i].<field>} and never
+     * carries the number, the scheme or the region.
+     */
+    private List<VendorTaxRegistration> resolveTaxRegistrations(
+            UUID tenantId, UUID vendorId, List<VendorTaxRegistration> stored, List<TaxRegistrationDto> requested) {
+        Map<UUID, VendorTaxRegistration> storedById = new LinkedHashMap<>();
+        for (VendorTaxRegistration registration : stored) {
+            storedById.put(registration.registrationId(), registration);
+        }
+        Set<UUID> seen = new HashSet<>();
+        List<VendorTaxRegistration> resolved = new ArrayList<>();
+        for (int i = 0; i < requested.size(); i++) {
+            TaxRegistrationDto entry = requested.get(i);
+            String field = "taxRegistrations[" + i + "].";
+            if (entry.number() != null) {
+                requireShapes(entry, field);
+            }
+            UUID registrationId = entry.registrationId();
+            if (registrationId == null) {
+                if (entry.number() == null) {
+                    throw fieldInvalid(field + "number", "a new registration needs its number");
+                }
+                resolved.add(seal(tenantId, vendorId, UUIDv7Generator.generate(), entry));
+                continue;
+            }
+            VendorTaxRegistration existing = storedById.get(registrationId);
+            if (existing == null) {
+                throw fieldInvalid(field + "registrationId", "is not a registration of this vendor");
+            }
+            if (!seen.add(registrationId)) {
+                throw fieldInvalid(field + "registrationId", "is sent more than once");
+            }
+            if (entry.number() == null) {
+                if (!existing.scheme().equals(entry.scheme()) || !Objects.equals(existing.region(), entry.region())) {
+                    throw fieldInvalid(field + "number", "re-enter the number to change its scheme or region");
+                }
+                resolved.add(existing);
+            } else {
+                resolved.add(seal(tenantId, vendorId, registrationId, entry));
+            }
+        }
+        return resolved;
+    }
+
+    /** The value is never echoed: the message names the rule only. */
+    private static void requireShapes(TaxRegistrationDto entry, String field) {
+        if (!VendorTaxRegistrationShapes.SCHEME.matcher(entry.scheme()).matches()) {
+            throw fieldInvalid(
+                    field + "scheme",
+                    "must be letters, spaces, _, / or -, start with a letter, at most 16 characters, and no digit");
+        }
+        if (entry.region() != null
+                && !VendorTaxRegistrationShapes.REGION.matcher(entry.region()).matches()) {
+            throw fieldInvalid(field + "region", "must be two letters, optionally - and one to three letters");
+        }
+    }
+
+    private VendorTaxRegistration seal(UUID tenantId, UUID vendorId, UUID registrationId, TaxRegistrationDto entry) {
+        String number = Objects.requireNonNull(entry.number(), "number");
+        return new VendorTaxRegistration(
+                registrationId,
+                entry.scheme(),
+                entry.region(),
+                VendorTaxRegistration.last4Of(number),
+                taxIdCipher.seal(tenantId, vendorId, registrationId, number));
+    }
+
+    private static SupplierValidationException fieldInvalid(String field, String message) {
+        return new SupplierValidationException(
+                SupplierValidationException.VALIDATION_ERROR,
+                "Tax registration refused: " + field + " " + message,
+                List.of(new ApiError.FieldError(field, message)));
     }
 
     private static VendorRemitTo toEntity(RemitToDto remitTo) {
@@ -478,8 +611,11 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
                 vendor.getLegalName(),
                 vendor.getDisplayName(),
                 vendor.getTaxRegistrations().stream()
-                        .map(registration -> new TaxRegistrationDto(
-                                registration.scheme(), registration.number(), registration.region()))
+                        .map(registration -> new TaxRegistrationView(
+                                registration.registrationId(),
+                                registration.scheme(),
+                                registration.region(),
+                                registration.last4()))
                         .toList(),
                 toDto(vendor.getRemitTo()),
                 vendor.getRemitToVersion(),

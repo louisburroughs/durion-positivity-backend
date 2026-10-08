@@ -170,5 +170,17 @@ public final class SupplierPermissions {
      */
     public static final String FACT_REPLAY = "supplier:fact:replay";
 
+    /**
+     * Revealing a vendor's full tax-registration number (#2621; Security ruling on #2617, ruling 4). Every
+     * other read is masked to scheme, region and last4. Each reveal needs a reason and writes an append-only
+     * audit row before the number is returned, and those rows are read through {@link #AUDIT_READ}, so a
+     * controller's reveals are reviewed by someone else.
+     *
+     * <p>Granted to ADMIN and CONTROLLER only. The resource is the data class ({@code people:employee_pii:view}
+     * precedent) and the action is {@code reveal}, not {@code view}, so SUPPORT's read-only ceiling keeps it
+     * off structurally. A wider grant (1099 / T4A filing) is that story's to ask for.
+     */
+    public static final String VENDOR_TAX_ID_REVEAL = "supplier:vendor_tax_id:reveal";
+
     private SupplierPermissions() {}
 }

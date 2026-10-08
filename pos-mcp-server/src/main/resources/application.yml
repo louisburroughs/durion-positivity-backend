@@ -122,6 +122,12 @@ mcp:
       - ^/event-receiver/v1/events(/|$)        # POST /v1/events (emit)
       - ^/event-receiver/v1/eventTypes(/|$)    # POST /v1/eventTypes, PUT/DELETE /v1/eventTypes/{id}
       - ^/mcp-server/v1/(mcp|nlt)/audit(/|$)   # this module's own audit surface, should it gain writes
+      # #2621: the vendor tax-registration reveal returns a full, RESTRICTED registration number (Security
+      # ruling on #2617, ruling 1). As a tool it would carry that number into the prompt, the external
+      # model, the ToolResultRanker re-prompt, chat history, eval traces and logs. Unanchored (find()),
+      # so it matches with or without the routing prefix. GET .../tax-id-reveals stays: it is metadata only
+      # (actor, roles, reason, correlation id, outcome), never the number or last4.
+      - /v1/supplier/vendors/[^/]+/tax-registrations/[^/]+/reveal$
   sitemap:
     # Origin of the frontend SSR server (NOT the API gateway). The SSR server defaults to port 4000.
     base-url: ${FRONTEND_BASE_URL:http://localhost:4000}
