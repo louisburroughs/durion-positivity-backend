@@ -348,6 +348,27 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
                 .containsEntry("idempotency_outcome", "DUPLICATE_IGNORED");
     }
 
+    @Test
+    @DisplayName("AC14 (#2509): an APPROVED bill re-issued at another amount stays APPROVED; one exception item, its"
+            + " created_at stamped by auditing (ADR-0024)")
+    void reissueOfAnApprovedBillIsRecordedWithItsCreatedAt() {
+        UUID original = insertBill(TENANT_A, vendor, "INV-1", OCT_1_MORNING, "APPROVED");
+
+        deliver(TENANT_A, "inv-1", "2026-10-01", "120.00");
+
+        assertThat(status(original)).isEqualTo("APPROVED");
+        assertThat(billCount(vendor)).isEqualTo(1);
+        List<Map<String, Object>> items = owner.queryForList(
+                "SELECT vendor_bill_id, incoming_amount, held_amount, created_at FROM vendor_bill_reissue"
+                        + " WHERE vendor_bill_id = ?",
+                original);
+        assertThat(items).singleElement().satisfies(item -> {
+            assertThat((BigDecimal) item.get("incoming_amount")).isEqualByComparingTo("120.00");
+            assertThat((BigDecimal) item.get("held_amount")).isEqualByComparingTo("100.00");
+            assertThat(item.get("created_at")).isNotNull();
+        });
+    }
+
     @ParameterizedTest(name = "original {0}")
     @EnumSource(
             value = VendorBillStatus.class,

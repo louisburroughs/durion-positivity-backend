@@ -4,6 +4,7 @@ import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
@@ -18,6 +19,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 import org.hibernate.annotations.Immutable;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * A vendor's re-issue, under the same number, of a bill already {@code APPROVED} (#2509; SPEC-accounting-workspace
@@ -32,6 +35,7 @@ import org.hibernate.annotations.Immutable;
 @ToString
 @Entity
 @Immutable
+@EntityListeners(AuditingEntityListener.class)
 @Table(
         name = "vendor_bill_reissue",
         uniqueConstraints =
@@ -75,6 +79,7 @@ public class VendorBillReissue extends TenantScopedEntity {
     @Column(name = "source_event_id", nullable = false, updatable = false)
     private UUID sourceEventId;
 
+    @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 }

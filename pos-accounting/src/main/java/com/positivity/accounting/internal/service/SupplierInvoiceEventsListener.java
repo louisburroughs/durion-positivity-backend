@@ -467,7 +467,6 @@ public class SupplierInvoiceEventsListener {
                 item.setHeldAmount(bill.getTotalAmount() == null ? BigDecimal.ZERO : bill.getTotalAmount());
                 item.setHeldCurrencyCode(effectiveCurrency(bill.getCurrency()));
                 item.setSourceEventId(sourceEventId);
-                item.setCreatedAt(Instant.now(clock));
                 reissues.save(item);
             }
             log.info(

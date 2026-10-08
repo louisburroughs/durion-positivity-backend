@@ -626,7 +626,9 @@ class SupplierInvoiceEventsListenerTest {
             assertThat(item.getValue().getHeldAmount()).isEqualByComparingTo("100.00");
             assertThat(item.getValue().getHeldCurrencyCode()).isEqualTo("USD");
             assertThat(item.getValue().getSourceEventId()).isEqualTo(UUID.fromString(EVENT_1));
-            assertThat(item.getValue().getCreatedAt()).isEqualTo(NOW);
+            assertThat(item.getValue().getCreatedAt())
+                    .as("ADR-0024: auditing stamps createdAt on insert (VendorBillDuplicateRulePostgresIT)")
+                    .isNull();
         }
 
         @Test
