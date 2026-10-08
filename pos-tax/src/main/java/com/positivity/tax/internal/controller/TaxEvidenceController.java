@@ -9,6 +9,7 @@ import com.positivity.tax.internal.service.TaxEvidenceRules;
 import com.positivity.tax.internal.service.TaxPlausibilityService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -133,7 +134,21 @@ public class TaxEvidenceController {
             name = "bearerAuth",
             scopes = {"tax:rates:view"})
     public ResponseEntity<PlausibilityCheckResponse> checkPlausibility(
-            @Valid @RequestBody PlausibilityCheckRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            required = true,
+                            description = "A receipt's address, total and stated tax amounts, with the supplier's"
+                                    + " registration number when one is printed",
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Receipt with one stated amount",
+                                                            value =
+                                                                    "{\"countryCode\":\"ZZ\",\"regionCode\":\"Z1\",\"postalCode\":\"Z1Z 1Z1\",\"asOf\":\"2026-10-08\",\"currencyCode\":\"EUR\",\"receiptTotal\":150.00,\"statedTaxes\":[{\"regime\":\"REGIME_1\",\"amount\":19.50}]}")))
+                    @Valid
+                    @RequestBody
+                    PlausibilityCheckRequest request) {
         return ResponseEntity.ok(plausibilityService.check(request));
     }
 }
