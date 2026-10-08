@@ -245,7 +245,19 @@ public class TaxProviderLifecycleService {
         if (REPOINTABLE.contains(tx.getStatus())
                 && !providerName.equals(tx.getProvider())
                 && (pricedByPlugin || rowNamesPlugin)) {
+            // Durable re-point history belongs to the ADR-0071 §3 log (#2629); until then the log line
+            // keeps who held the document before. The previous provider's document id means nothing
+            // to the new provider, so it is cleared.
+            log.info(
+                    "Tax document re-pointed: referenceId={} fromProvider={} toProvider={} status={}"
+                            + " priorExternalTransactionId={}",
+                    referenceId,
+                    tx.getProvider(),
+                    providerName,
+                    tx.getStatus(),
+                    tx.getExternalTransactionId());
             tx.setProvider(providerName);
+            tx.setExternalTransactionId(null);
             repository.save(tx);
         }
     }

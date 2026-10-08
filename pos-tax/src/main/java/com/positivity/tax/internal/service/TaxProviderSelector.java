@@ -38,6 +38,10 @@ public class TaxProviderSelector {
     private final TaxCountryProfiles profiles;
     private final Map<String, SelfHostedTaxPlugin> plugins;
 
+    /** The ids the deployment-wide switch logs; every other logged id is a self-hosted plug-in. */
+    private static final java.util.Set<String> SWITCH_PROVIDER_IDS = java.util.Set.of(
+            TestModeTaxProvider.PROVIDER_NAME, ExternalTaxProvider.PROVIDER_NAME, AvalaraTaxProvider.PROVIDER_NAME);
+
     public TaxProviderSelector(
             TaxProperties properties,
             TestModeTaxProvider testModeProvider,
@@ -111,18 +115,20 @@ public class TaxProviderSelector {
     }
 
     /**
-     * Whether a provider label names a self-hosted plug-in ({@code <country>_SELF}), configured or not.
+     * Whether a provider label names a self-hosted plug-in, configured or not: any logged id that is
+     * not one of the deployment-wide switch providers ({@code TEST_MODE}, {@code EXTERNAL},
+     * {@code AVALARA}).
      *
      * @param providerName a provider label from the transaction log; may be {@code null}
      * @return {@code true} for a self-hosted plug-in id
      */
     public boolean isSelfHosted(@Nullable String providerName) {
-        // Suffix, not registry: a document logged under a self-hosted plug-in whose profile was later
-        // removed must still reach a no-op lifecycle (RetiredSelfHostedPlugin), so the id cannot be
-        // looked up in the live registry. Hazard for ADR-0071 step 1 (#2629): a non-self-hosted
-        // provider must never be given an id ending in _SELF (e.g. renaming the test-mode calculator to
-        // US_SELF), or its logged documents would route here; see the comment on #2629.
-        return providerName != null && providerName.endsWith(TaxCountryProfiles.SELF_PLUGIN_SUFFIX);
+        // Classified against the known switch providers, not by a name suffix and not by the live
+        // registry: a document logged under a self-hosted plug-in whose profile was later removed must
+        // still reach a no-op lifecycle (RetiredSelfHostedPlugin), and renaming a switch provider
+        // (e.g. ADR-0071 step 1, #2629) follows its PROVIDER_NAME constant automatically.
+        return providerName != null
+                && (plugins.containsKey(providerName) || !SWITCH_PROVIDER_IDS.contains(providerName));
     }
 
     /**

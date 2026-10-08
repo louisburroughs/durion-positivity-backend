@@ -22,10 +22,13 @@ import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.PlatformTransactionManager;
 
@@ -54,6 +57,7 @@ import org.springframework.transaction.PlatformTransactionManager;
         })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
+@ExtendWith(OutputCaptureExtension.class)
 class TaxProviderLifecycleServiceTest {
 
     @Autowired
@@ -290,15 +294,24 @@ class TaxProviderLifecycleServiceTest {
 
     @Test
     @DisplayName("S32a: a VOIDED document (no live provider document) re-priced by a plug-in is re-pointed")
-    void voidedDocumentIsRepointed() {
+    void voidedDocumentIsRepointed(CapturedOutput output) {
         UUID ref = UUID.randomUUID();
         service.commit(ref, "INVOICE");
         service.voidTransaction(ref);
+        assertThat(repository.findByReferenceId(ref).orElseThrow().getExternalTransactionId())
+                .isEqualTo("ext-123");
 
         service.recordPricing(ref, "INVOICE", PLUGIN);
 
-        assertThat(repository.findByReferenceId(ref).orElseThrow().getProvider())
-                .isEqualTo(PLUGIN);
+        TaxProviderTransaction row = repository.findByReferenceId(ref).orElseThrow();
+        assertThat(row.getProvider()).isEqualTo(PLUGIN);
+        // The previous provider's document id means nothing to the plug-in: cleared.
+        assertThat(row.getExternalTransactionId()).isNull();
+        // The re-point is recorded in a structured INFO line (durable history is #2629's).
+        assertThat(output.getOut())
+                .contains("Tax document re-pointed: referenceId=" + ref)
+                .contains("fromProvider=FAKE toProvider=" + PLUGIN + " status=VOIDED")
+                .contains("priorExternalTransactionId=ext-123");
     }
 
     @Test

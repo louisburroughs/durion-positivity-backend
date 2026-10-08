@@ -188,7 +188,10 @@ unbracketed map key, so a code would be silently mangled. Country codes stay map
 - **Lifecycle log.** A committable calculation priced by a plug-in records an `ESTIMATED` row in `tax_provider_transaction`
   naming the plug-in (`provider`), so its commit and void reach the same plug-in as logged no-ops; the re-commit job ignores
   `ESTIMATED` rows. A re-price by another provider re-points only a row with no live provider document (`ESTIMATED`,
-  `VOIDED`); a `PENDING_COMMIT`, `FAILED` or `COMMITTED` row always stays with the provider that owns its document. A logged `<country>_SELF` keeps its documents even if its profile is later removed (its no-op commit
+  `VOIDED`); a `PENDING_COMMIT`, `FAILED` or `COMMITTED` row always stays with the provider that owns its document. A re-point
+  clears the previous provider's `external_transaction_id` and is logged at INFO (`Tax document re-pointed: referenceId=…
+  fromProvider=… toProvider=… status=… priorExternalTransactionId=…`); durable history is ADR-0071 §3's log (#2629). Any
+  logged provider id other than the switch's `TEST_MODE`, `EXTERNAL` and `AVALARA` is treated as a self-hosted plug-in. A logged `<country>_SELF` keeps its documents even if its profile is later removed (its no-op commit
   and void need no profile); only rows priced by the switch fall back to it. No new column was needed: `provider` already names the provider that owns each document.
 - **Callers (ADR-0021 §3).** pos-order, pos-invoice and pos-accounting call computation and the tax-types read directly with the
   service authority; there is no gateway route.

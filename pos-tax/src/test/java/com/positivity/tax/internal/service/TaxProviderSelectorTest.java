@@ -84,6 +84,11 @@ class TaxProviderSelectorTest {
                 .isInstanceOf(IllegalStateException.class);
         assertThat(selector.isSelfHosted("ZZ_SELF")).isTrue();
         assertThat(selector.isSelfHosted("TEST_MODE")).isFalse();
+        assertThat(selector.isSelfHosted("EXTERNAL")).isFalse();
+        assertThat(selector.isSelfHosted("AVALARA")).isFalse();
+        // Any other logged id is a (possibly retired) self-hosted plug-in, whatever its spelling.
+        assertThat(selector.isSelfHosted("ZZ_LOCAL_PLUGIN")).isTrue();
+        assertThat(selector.lifecycleProviderFor("AVALARA")).isSameAs(testMode);
         assertThat(selector.isSelfHosted(null)).isFalse();
     }
 }
