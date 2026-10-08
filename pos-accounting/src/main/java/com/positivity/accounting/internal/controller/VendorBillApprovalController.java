@@ -104,7 +104,8 @@ public class VendorBillApprovalController {
     public ResponseEntity<VendorBillResponse> submitForApproval(
             @Parameter(description = BILL_ID, example = BILL_ID_EXAMPLE) @NonNull @PathVariable UUID billId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description = "The justification (at least 10 characters) and an optional classification proposed to the approver.",
+                            description =
+                                    "The justification (at least 10 characters) and an optional classification proposed to the approver.",
                             required = true,
                             content =
                                     @Content(
@@ -186,7 +187,8 @@ public class VendorBillApprovalController {
     public ResponseEntity<VendorBillResponse> approve(
             @Parameter(description = BILL_ID, example = BILL_ID_EXAMPLE) @NonNull @PathVariable UUID billId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description = "The approver's optional justification, the classification the bill posts under, and an optional override justification for a CLOSED period.",
+                            description =
+                                    "The approver's optional justification, the classification the bill posts under, and an optional override justification for a CLOSED period.",
                             required = true,
                             content =
                                     @Content(
@@ -327,7 +329,8 @@ public class VendorBillApprovalController {
     public ResponseEntity<VendorBillResponse> resolveMatchException(
             @Parameter(description = BILL_ID, example = BILL_ID_EXAMPLE) @NonNull @PathVariable UUID billId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description = "The resolution action (ACCEPT, CORRECT or VOID) and its reason; ACCEPT may add a classification and an override justification.",
+                            description =
+                                    "The resolution action (ACCEPT, CORRECT or VOID) and its reason; ACCEPT may add a classification and an override justification.",
                             required = true,
                             content =
                                     @Content(
@@ -452,7 +455,8 @@ public class VendorBillApprovalController {
     public ResponseEntity<VendorBillResponse> voidApproved(
             @Parameter(description = BILL_ID, example = BILL_ID_EXAMPLE) @NonNull @PathVariable UUID billId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description = "The reason the approved bill is voided (at least 10 characters) and an optional override justification for a CLOSED period.",
+                            description =
+                                    "The reason the approved bill is voided (at least 10 characters) and an optional override justification for a CLOSED period.",
                             required = true,
                             content =
                                     @Content(
