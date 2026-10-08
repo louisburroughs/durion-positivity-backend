@@ -53,7 +53,8 @@ below replaces both switches.
   and refund use it after a binding change.
 - **Accounts.** One platform-held account per provider; its credential lives in the secret store, never per tenant.
   `providerProfile` is the tenant's non-secret company or profile code on that account.
-- **Capabilities.** A capability the bound plug-in lacks answers 501 naming it (today `TAX_RATE_LOOKUP_UNSUPPORTED`).
+- **Capabilities.** A capability the bound plug-in lacks is refused with 422 `TAX_CAPABILITY_UNSUPPORTED` naming it; `501` stays
+  for documented stub endpoints (ADR-0017), so today's 501 `TAX_RATE_LOOKUP_UNSUPPORTED` moves to that code when the binding lands.
 - **Front doors.** People reach pos-tax only through a domain module that checks their permission and forwards the actor:
   registrations through pos-accounting, exemption certificates through pos-customer, provider bindings through pos-tenant. Each
   write endpoint accepts only its front door, authenticated by a per-caller shared secret. Computation (calculate, refund,
