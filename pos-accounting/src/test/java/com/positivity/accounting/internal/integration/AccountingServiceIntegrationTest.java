@@ -51,6 +51,9 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private StatementLineMappingRepository statementLineMappingRepository;
 
+    @Autowired
+    private com.positivity.accounting.internal.repository.ExtSupplierVendorRepository vendorCopy;
+
     private static final UUID ORG_ID = UUID.fromString("00000000-0000-4000-a000-000000000010");
     private static final String BASE_URL = "/v1/accounting";
 
@@ -623,6 +626,19 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         UUID vendorId = VENDOR_ID;
         UUID purchaseOrderId = nextUuid();
         UUID productId = nextUuid();
+        // S24: a goods-receipt bill names an active vendor of the pos-supplier vendor copy.
+        if (vendorCopy.findById(vendorId).isEmpty()) {
+            com.positivity.accounting.internal.entity.ExtSupplierVendor vendor =
+                    new com.positivity.accounting.internal.entity.ExtSupplierVendor();
+            vendor.setVendorId(vendorId);
+            vendor.setVendorNumber("V-000005");
+            vendor.setDisplayName("Test Vendor Corp");
+            vendor.setStatus(com.positivity.accounting.internal.entity.ExtSupplierVendor.ACTIVE);
+            vendor.setCreatedBy("integration.test");
+            vendor.setAggregateVersion(1);
+            vendor.setUpdatedAt(Instant.parse("2025-01-01T00:00:00Z"));
+            vendorCopy.save(vendor);
+        }
 
         // Step 1: POST GoodsReceivedEvent → create bill in PENDING_RECEIPT_MATCH
         String goodsReceivedPayload = """
