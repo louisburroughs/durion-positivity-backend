@@ -84,7 +84,10 @@ class EventIngestionGoodsReceiptReprocessTest {
         event.setTransactionDate(LocalDateTime.ofInstant(NOW, ZoneOffset.UTC));
         event.setReceivedAt(NOW);
         when(accountingEventRepository.findById(EVENT_ID)).thenReturn(Optional.of(event));
-        when(accountingEventRepository.save(any(AccountingEvent.class))).thenAnswer(inv -> inv.getArgument(0));
+        // Lenient: the concurrency case re-stubs save to throw.
+        org.mockito.Mockito.lenient()
+                .when(accountingEventRepository.save(any(AccountingEvent.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
     }
 
     @Test
@@ -162,9 +165,10 @@ class EventIngestionGoodsReceiptReprocessTest {
         when(goodsReceiptReprocessor.reprocess(payload))
                 .thenReturn(new GoodsReceiptReprocessor.Result(
                         AccountingEventStatus.SUSPENDED, "CURRENCY_NOT_SUPPORTED", "states no currency", null, null));
-        when(accountingEventRepository.save(any(AccountingEvent.class)))
-                .thenThrow(new org.springframework.orm.ObjectOptimisticLockingFailureException(
-                        AccountingEvent.class, EVENT_ID));
+        org.mockito.Mockito.doThrow(new org.springframework.orm.ObjectOptimisticLockingFailureException(
+                        AccountingEvent.class, EVENT_ID))
+                .when(accountingEventRepository)
+                .save(any(AccountingEvent.class));
 
         org.assertj.core.api.Assertions.assertThatThrownBy(this::reprocess)
                 .isExactlyInstanceOf(IllegalStateException.class)
