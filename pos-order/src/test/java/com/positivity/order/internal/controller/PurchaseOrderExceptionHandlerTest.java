@@ -8,6 +8,7 @@ import com.positivity.order.internal.exception.PurchaseOrderNotFoundException;
 import com.positivity.order.internal.exception.PurchaseOrderNotTransmittableException;
 import com.positivity.order.internal.exception.PurchaseOrderRequestValidationException;
 import com.positivity.order.internal.exception.PurchaseOrderStateConflictException;
+import com.positivity.order.internal.exception.PurchaseOrderVendorException;
 import com.positivity.order.internal.exception.UomConversionUndefinedException;
 import com.positivity.shared.error.ApiError;
 import jakarta.servlet.http.HttpServletRequest;
@@ -93,6 +94,19 @@ class PurchaseOrderExceptionHandlerTest {
     }
 
     @Test
+    @DisplayName("maps a vendor outside the copy or inactive to 422 VENDOR_NOT_FOUND / VENDOR_INACTIVE (S24)")
+    void vendorRefusals() {
+        assertEnvelope(
+                sut.handleVendor(PurchaseOrderVendorException.notFound(), request),
+                HttpStatus.UNPROCESSABLE_ENTITY,
+                "VENDOR_NOT_FOUND");
+        assertEnvelope(
+                sut.handleVendor(PurchaseOrderVendorException.inactive("V-000123"), request),
+                HttpStatus.UNPROCESSABLE_ENTITY,
+                "VENDOR_INACTIVE");
+    }
+
+    @Test
     @DisplayName("maps an undefined UoM conversion to 422 UOM_CONVERSION_UNDEFINED")
     void uomConversionUndefined() {
         assertEnvelope(
@@ -159,6 +173,8 @@ class PurchaseOrderExceptionHandlerTest {
                             request -> handler.handleNotFound(new PurchaseOrderNotFoundException(PO_ID), request)),
                     Named.of("handleNotTransmittable", (HandlerInvocation) request -> handler.handleNotTransmittable(
                             PurchaseOrderNotTransmittableException.noSupplierRef(), request)),
+                    Named.of("handleVendor", (HandlerInvocation)
+                            request -> handler.handleVendor(PurchaseOrderVendorException.notFound(), request)),
                     Named.of("handleUomConversionUndefined", (HandlerInvocation)
                             request -> handler.handleUomConversionUndefined(
                                     UomConversionUndefinedException.unknownProduct(PO_ID, "EA"), request)),
