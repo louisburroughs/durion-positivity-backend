@@ -317,7 +317,8 @@ per country in pos-tax; there is no enum, so a new code needs no code change or 
 - **Rollup.** The `invoice_tax_summary` key is `jurisdictionType|jurisdictionCode|taxType`, so two tax types sharing a
   jurisdiction are never merged.
 - **DRAFT only, no backfill.** The column is written only by the DRAFT re-price path, which rebuilds the rows wholesale; a
-  finalized invoice's rows are frozen (BILL-DEC-004). Existing rows stay null permanently (all are US, where null is correct).
+  finalized invoice is never re-priced (the existing finalized-state guard), so its rows are frozen. Existing rows stay
+  null permanently (all are US, where null is correct).
 - **Event.** `InvoiceUpdatedV1.taxBreakdown[].taxType` (`TaxBreakdownLine.taxType`, nullable String, last component) carries the
   stored code; additive within schema version 1, same topic, no dual-publish (ADR-0044 §3). A US invoice's rows carry null.
 - **No read contract change.** No invoice or receipt endpoint, DTO or SDK exposes the breakdown or the type.
