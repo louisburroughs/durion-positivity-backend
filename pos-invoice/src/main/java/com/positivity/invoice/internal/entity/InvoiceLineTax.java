@@ -74,8 +74,9 @@ public class InvoiceLineTax extends TenantScopedEntity {
     private String exemptionReasonCode;
 
     /**
-     * The row's tax-type code ({@code TaxType.name()}), copied exactly as pos-tax sent it and never
-     * inferred (CAP:550 S32a); {@code null} for an untyped row. Written only by the DRAFT re-price
+     * The row's tax-type code (a configuration-only vocabulary declared by the pos-tax country
+     * profile), copied exactly as pos-tax sent it and never inferred (CAP:550 S32a); {@code null} for
+     * an untyped or malformed value. Written only by the DRAFT re-price
      * path, so it freezes with the rest of the row at finalization.
      */
     @Column(name = "tax_type", length = 32)

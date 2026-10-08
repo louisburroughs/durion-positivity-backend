@@ -32,10 +32,10 @@ import org.jspecify.annotations.Nullable;
  * @param exempt              whether this is a reportable zero-rate exempt row (story T3)
  * @param exemptionReasonCode the exemption reason echoed onto an exempt (or exemption-denied)
  *                            row; {@code null} for a normal taxed row
- * @param taxType             the row's tax-type code (pos-tax-common {@code TaxType}, e.g.
- *                            {@code GST}), copied as pos-tax sent it and never inferred; {@code null}
- *                            for an untyped row (every US row, and a row whose code the producer did
- *                            not know). Added additively within schema version 1 (CAP:550 S32a,
+ * @param taxType             the row's tax-type code (e.g. {@code GST}), a configuration-only
+ *                            vocabulary declared per country in pos-tax, copied as pos-tax sent it
+ *                            and never inferred; {@code null} for an untyped row (every US row, and
+ *                            a malformed value). Added additively within schema version 1 (CAP:550 S32a,
  *                            ADR-0044 §3); a consumer built before the field ignores it.
  */
 public record TaxBreakdownLine(

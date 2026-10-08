@@ -21,7 +21,6 @@ import com.positivity.tax.common.enums.ExemptionReasonCode;
 import com.positivity.tax.common.enums.TaxCalculationType;
 import com.positivity.tax.common.enums.TaxJurisdictionType;
 import com.positivity.tax.common.enums.TaxReferenceType;
-import com.positivity.tax.common.enums.TaxType;
 import com.positivity.tax.internal.config.TaxProperties;
 import com.positivity.tax.internal.exception.TaxJurisdictionNotConfiguredException;
 import java.math.BigDecimal;
@@ -125,9 +124,9 @@ class PerCountryTaxProviderTest {
                 .build();
     }
 
-    private static JurisdictionTax cell(LineItemTax line, TaxType type) {
+    private static JurisdictionTax cell(LineItemTax line, String type) {
         return line.getJurisdictions().stream()
-                .filter(j -> j.getTaxType() == type)
+                .filter(j -> type.equals(j.getTaxType()))
                 .findFirst()
                 .orElseThrow();
     }
@@ -147,10 +146,8 @@ class PerCountryTaxProviderTest {
             assertThat(response.source()).isEqualTo("STUB");
             assertThat(response.components())
                     .containsExactlyInAnyOrder(
-                            new TaxRateComponent(
-                                    TaxJurisdictionType.COUNTRY, new BigDecimal("0.012"), TaxType.GST, true),
-                            new TaxRateComponent(
-                                    TaxJurisdictionType.PROVINCE, new BigDecimal("0.022"), TaxType.PST, false));
+                            new TaxRateComponent(TaxJurisdictionType.COUNTRY, new BigDecimal("0.012"), "GST", true),
+                            new TaxRateComponent(TaxJurisdictionType.PROVINCE, new BigDecimal("0.022"), "PST", false));
             assertThat(response.combinedRate()).isEqualByComparingTo("0.034");
             verifyNoInteractions(avalara, externalClient);
         }
@@ -166,7 +163,7 @@ class PerCountryTaxProviderTest {
                     .doesNotContain(TaxJurisdictionType.STATE);
             assertThat(response.components())
                     .extracting(TaxRateComponent::taxType)
-                    .containsExactlyInAnyOrder(TaxType.GST, TaxType.QST);
+                    .containsExactlyInAnyOrder("GST", "QST");
             assertThat(response.source()).isEqualTo("STUB");
         }
 
@@ -214,16 +211,16 @@ class PerCountryTaxProviderTest {
                     s.calc().calculateTax(request("CA", "BC", "2026-08-27", line("1", "100.00"), line("2", "33.33")));
 
             LineItemTax first = response.getLineItemTaxes().get(0);
-            assertThat(cell(first, TaxType.GST).getAmount()).isEqualByComparingTo("1.20");
-            assertThat(cell(first, TaxType.GST).getCode()).isEqualTo("CA");
-            assertThat(cell(first, TaxType.GST).getInputTaxRecoverable()).isTrue();
-            assertThat(cell(first, TaxType.PST).getAmount()).isEqualByComparingTo("2.20");
-            assertThat(cell(first, TaxType.PST).getCode()).isEqualTo("BC");
-            assertThat(cell(first, TaxType.PST).getInputTaxRecoverable()).isFalse();
+            assertThat(cell(first, "GST").getAmount()).isEqualByComparingTo("1.20");
+            assertThat(cell(first, "GST").getCode()).isEqualTo("CA");
+            assertThat(cell(first, "GST").getInputTaxRecoverable()).isTrue();
+            assertThat(cell(first, "PST").getAmount()).isEqualByComparingTo("2.20");
+            assertThat(cell(first, "PST").getCode()).isEqualTo("BC");
+            assertThat(cell(first, "PST").getInputTaxRecoverable()).isFalse();
             // HALF_UP at the currency exponent, per row: 33.33 x 0.012 = 0.39996 -> 0.40; x 0.022 = 0.73326 -> 0.73.
             LineItemTax second = response.getLineItemTaxes().get(1);
-            assertThat(cell(second, TaxType.GST).getAmount()).isEqualByComparingTo("0.40");
-            assertThat(cell(second, TaxType.PST).getAmount()).isEqualByComparingTo("0.73");
+            assertThat(cell(second, "GST").getAmount()).isEqualByComparingTo("0.40");
+            assertThat(cell(second, "PST").getAmount()).isEqualByComparingTo("0.73");
             assertThat(second.getTaxAmount()).isEqualByComparingTo("1.13");
             // Totals are sums of the rounded rows.
             assertThat(response.getTotalTax()).isEqualByComparingTo("4.53");
@@ -265,7 +262,7 @@ class PerCountryTaxProviderTest {
 
             assertThat(response.getCalculationType()).isEqualTo(TaxCalculationType.REFUND);
             assertThat(response.getOriginalReferenceId()).isEqualTo(refund.getOriginalReferenceId());
-            assertThat(cell(response.getLineItemTaxes().get(0), TaxType.GST).getAmount())
+            assertThat(cell(response.getLineItemTaxes().get(0), "GST").getAmount())
                     .isEqualByComparingTo("1.10");
         }
 
@@ -289,7 +286,7 @@ class PerCountryTaxProviderTest {
             assertThat(exemptLine.getTaxAmount()).isEqualByComparingTo("0.00");
             assertThat(exemptLine.getJurisdictions()).singleElement().satisfies(j -> {
                 assertThat(j.isExempt()).isTrue();
-                assertThat(j.getTaxType()).isEqualTo(TaxType.HST);
+                assertThat(j.getTaxType()).isEqualTo("HST");
             });
             assertThat(response.getEffectiveTaxRate()).isEqualByComparingTo("4.40");
         }
@@ -333,7 +330,7 @@ class PerCountryTaxProviderTest {
             TaxRateLookupResponse rates = s.rates().lookupRates("ZZ", "Z1", null, "00000", AS_OF);
             assertThat(rates.components())
                     .containsExactly(new TaxRateComponent(
-                            TaxJurisdictionType.COUNTRY, new BigDecimal("0.07"), TaxType.GST, false));
+                            TaxJurisdictionType.COUNTRY, new BigDecimal("0.07"), "ZZ_LEVY", false));
             assertThat(s.selector().selectFor("ZZ").providerName()).isEqualTo("ZZ_SELF");
 
             // The zero-decimal fixture currency rounds every row to whole units: 1234 x 0.07 = 86.38 -> 86.
@@ -341,7 +338,7 @@ class PerCountryTaxProviderTest {
                     s.calc().calculateTax(request("ZZ", "Z1", "2026-08-27", line("1", "1234")));
             assertThat(response.getTotalTax()).isEqualByComparingTo("86");
             assertThat(response.getTotalTax().scale()).isZero();
-            assertThat(cell(response.getLineItemTaxes().get(0), TaxType.GST).getCode())
+            assertThat(cell(response.getLineItemTaxes().get(0), "ZZ_LEVY").getCode())
                     .isEqualTo("ZZ");
             verifyNoInteractions(avalara);
         }
@@ -395,12 +392,10 @@ class PerCountryTaxProviderTest {
             assertThat(response.source()).isEqualTo("STUB");
             assertThat(response.taxTypes())
                     .containsExactlyInAnyOrder(
-                            new TaxTypesResponse.TaxTypeEntry(
-                                    TaxType.GST, "GST_HST", TaxJurisdictionType.COUNTRY, true),
-                            new TaxTypesResponse.TaxTypeEntry(
-                                    TaxType.HST, "GST_HST", TaxJurisdictionType.PROVINCE, true),
-                            new TaxTypesResponse.TaxTypeEntry(TaxType.QST, "QST", TaxJurisdictionType.PROVINCE, true),
-                            new TaxTypesResponse.TaxTypeEntry(TaxType.PST, null, TaxJurisdictionType.PROVINCE, false));
+                            new TaxTypesResponse.TaxTypeEntry("GST", "GST_HST", TaxJurisdictionType.COUNTRY, true),
+                            new TaxTypesResponse.TaxTypeEntry("HST", "GST_HST", TaxJurisdictionType.PROVINCE, true),
+                            new TaxTypesResponse.TaxTypeEntry("QST", "QST", TaxJurisdictionType.PROVINCE, true),
+                            new TaxTypesResponse.TaxTypeEntry("PST", null, TaxJurisdictionType.PROVINCE, false));
             assertThat(response.regimes())
                     .containsExactlyInAnyOrder(
                             new TaxTypesResponse.RegimeEntry("GST_HST", List.of()),

@@ -99,7 +99,11 @@ public class TaxProperties {
         /** ISO 4217 currency of the country's tax amounts; its exponent sets the rounding scale. */
         private String currency;
 
-        /** Declared tax types keyed by {@code TaxType} code. Never {@code null}. */
+        /**
+         * Declared tax types keyed by tax-type code (1-32 upper-case letters, digits or underscores; a
+         * key with "_" needs Spring's "[...]" map-key notation). The vocabulary is configuration only.
+         * Never {@code null}.
+         */
         private Map<String, TaxTypeProfile> taxTypes = new LinkedHashMap<>();
 
         /**

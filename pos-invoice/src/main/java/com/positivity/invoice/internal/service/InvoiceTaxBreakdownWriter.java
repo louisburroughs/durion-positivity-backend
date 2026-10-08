@@ -7,6 +7,7 @@ import com.positivity.invoice.internal.repository.InvoiceTaxSummaryRepository;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
 import com.positivity.tax.common.dto.TaxCalculationResponse.JurisdictionTax;
 import com.positivity.tax.common.dto.TaxCalculationResponse.LineItemTax;
+import com.positivity.tax.common.validation.TaxTypeCodes;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
@@ -108,9 +109,9 @@ public class InvoiceTaxBreakdownWriter {
         String reason = j.getExemptionReasonCode() == null
                 ? null
                 : j.getExemptionReasonCode().name();
-        // CAP:550 S32a: copy the tax type exactly as pos-tax sent it, never infer one. An absent or
-        // unknown value (read as null) is stored null and the row is still written.
-        String taxType = j.getTaxType() == null ? null : j.getTaxType().name();
+        // CAP:550 S32a: copy the tax-type code exactly as pos-tax sent it, never infer one. An absent
+        // or malformed value is stored null and the row is still written.
+        String taxType = TaxTypeCodes.wellFormedOrNull(j.getTaxType());
         BigDecimal amount = scale(j.getAmount());
         lineRows.add(InvoiceLineTax.builder()
                 .invoiceId(invoiceId)

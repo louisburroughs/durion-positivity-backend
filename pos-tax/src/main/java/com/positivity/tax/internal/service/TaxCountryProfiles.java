@@ -3,7 +3,7 @@ package com.positivity.tax.internal.service;
 import com.positivity.tax.common.dto.TaxTypesResponse.RegimeEntry;
 import com.positivity.tax.common.dto.TaxTypesResponse.TaxTypeEntry;
 import com.positivity.tax.common.enums.TaxJurisdictionType;
-import com.positivity.tax.common.enums.TaxType;
+import com.positivity.tax.common.validation.TaxTypeCodes;
 import com.positivity.tax.internal.config.TaxProperties;
 import com.positivity.tax.internal.config.TaxProperties.CountryProfile;
 import com.positivity.tax.internal.config.TaxProperties.RateRow;
@@ -140,7 +140,7 @@ public class TaxCountryProfiles {
         });
 
         List<ConfiguredRate> rates = validateRates(prefix, source.getRates(), taxTypes);
-        rejectOverlaps(prefix, rates, rate -> rate.taxType().name(), "tax type");
+        rejectOverlaps(prefix, rates, ConfiguredRate::taxType, "tax type");
         rejectOverlaps(prefix, rates, ConfiguredRate::regime, "regime");
 
         return new CountryTaxProfile(
@@ -167,10 +167,12 @@ public class TaxCountryProfiles {
         Map<String, TaxTypeEntry> entries = new LinkedHashMap<>();
         source.getTaxTypes().forEach((code, profile) -> {
             String property = prefix + ".tax-types." + code;
-            TaxType taxType = TaxType.fromValue(code);
-            if (taxType == null || !taxType.name().equals(code)) {
-                throw invalid(property, code + " is not a TaxType value " + Arrays.toString(TaxType.values()));
+            if (!TaxTypeCodes.isWellFormed(code)) {
+                throw invalid(
+                        property,
+                        "'" + code + "' is not a tax-type code of 1 to 32 upper-case letters, digits or underscores");
             }
+            String taxType = code;
             TaxTypeProfile typeProfile = profile == null ? new TaxTypeProfile() : profile;
             TaxJurisdictionType jurisdictionType = jurisdictionType(property, typeProfile.getJurisdictionType());
             if (typeProfile.getInputTaxRecoverable() == null) {
@@ -367,7 +369,7 @@ public class TaxCountryProfiles {
     public record ConfiguredRate(
             int index,
             @NonNull String regionCode,
-            @NonNull TaxType taxType,
+            @NonNull String taxType,
             @Nullable String regime,
             @NonNull TaxTypeEntry definition,
             @NonNull BigDecimal rate,
@@ -426,7 +428,7 @@ public class TaxCountryProfiles {
             List<ConfiguredRate> inEffect = new ArrayList<>();
             for (TaxTypeEntry type : taxTypes) {
                 rates.stream()
-                        .filter(rate -> rate.taxType() == type.taxType()
+                        .filter(rate -> rate.taxType().equals(type.taxType())
                                 && rate.regionCode().equals(region)
                                 && rate.inEffectOn(date))
                         .findFirst()

@@ -12,7 +12,6 @@ import com.positivity.tax.common.dto.TaxRateComponent;
 import com.positivity.tax.common.dto.TaxRateLookupResponse;
 import com.positivity.tax.common.dto.TaxTypesResponse;
 import com.positivity.tax.common.enums.TaxJurisdictionType;
-import com.positivity.tax.common.enums.TaxType;
 import com.positivity.tax.internal.config.SecurityConfig;
 import com.positivity.tax.internal.exception.TaxJurisdictionNotConfiguredException;
 import com.positivity.tax.internal.exception.TaxRateLookupUnsupportedException;
@@ -208,8 +207,7 @@ class TaxControllerRatesTest {
                 null,
                 "A1A1A1",
                 LocalDate.parse("2026-08-27"),
-                List.of(new TaxRateComponent(
-                        TaxJurisdictionType.PROVINCE, new BigDecimal("0.022"), TaxType.PST, false)),
+                List.of(new TaxRateComponent(TaxJurisdictionType.PROVINCE, new BigDecimal("0.022"), "PST", false)),
                 new BigDecimal("0.022"),
                 "STUB");
         when(taxRateLookupService.lookupRates(eq("CA"), eq("BC"), isNull(), eq("A1A1A1"), isNull()))
@@ -233,8 +231,7 @@ class TaxControllerRatesTest {
                 .thenReturn(new TaxTypesResponse(
                         "CA",
                         "CAD",
-                        List.of(new TaxTypesResponse.TaxTypeEntry(
-                                TaxType.GST, "R1", TaxJurisdictionType.COUNTRY, true)),
+                        List.of(new TaxTypesResponse.TaxTypeEntry("GST", "R1", TaxJurisdictionType.COUNTRY, true)),
                         List.of(new TaxTypesResponse.RegimeEntry("R1", List.of())),
                         "STUB"));
 

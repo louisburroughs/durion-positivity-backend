@@ -308,11 +308,11 @@ hold null until a party-fact replay at the same version fills them.
 ### Tax type on the tax rows (V4, CAP:550 S32a, #2636)
 
 `invoice_line_tax.tax_type` and `invoice_tax_summary.tax_type` (`varchar(32) NULL`, no default, no CHECK) hold the tax-type
-code pos-tax priced each row with (`TaxCalculationResponse.LineItemTax.jurisdictions[].taxType`, the pos-tax-common `TaxType`
-code, e.g. `GST`). pos-tax-common owns the value set, so a new value needs no migration here.
+code pos-tax priced each row with (`TaxCalculationResponse.LineItemTax.jurisdictions[].taxType`, e.g. `GST`). The vocabulary is configuration only, declared
+per country in pos-tax; there is no enum, so a new code needs no code change or migration here.
 
-- **Copy, never infer.** `InvoiceTaxBreakdownWriter` copies the value exactly as received. An absent value, or one this build
-  does not know (it deserializes as null), is stored null and the row is **still written**, so the invoice tax still equals
+- **Copy, never infer.** `InvoiceTaxBreakdownWriter` copies a well-formed code exactly as received
+  (`TaxTypeCodes.wellFormedOrNull`). An absent or malformed value is stored null and the row is **still written**, so the invoice tax still equals
   the sum of its rows. pos-invoice never derives a type from the jurisdiction type, code, rate or country.
 - **Rollup.** The `invoice_tax_summary` key is `jurisdictionType|jurisdictionCode|taxType`, so two tax types sharing a
   jurisdiction are never merged.

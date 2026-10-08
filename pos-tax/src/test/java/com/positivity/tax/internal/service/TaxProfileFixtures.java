@@ -77,11 +77,13 @@ final class TaxProfileFixtures {
         p.put("pos.tax.default-providers.ZZ", "ZZ_SELF");
         String c = "pos.tax.countries.ZZ.";
         p.put(c + "currency", "JPY");
-        p.put(c + "tax-types.GST.regime", "R1");
-        p.put(c + "tax-types.GST.jurisdiction-type", "COUNTRY");
-        p.put(c + "tax-types.GST.input-tax-recoverable", "false");
+        // A tax-type code no other fixture uses: the vocabulary is configuration, not code. A key
+        // with "_" uses Spring's "[...]" map-key notation, exactly as application.yml must.
+        p.put(c + "tax-types[ZZ_LEVY].regime", "R1");
+        p.put(c + "tax-types[ZZ_LEVY].jurisdiction-type", "COUNTRY");
+        p.put(c + "tax-types[ZZ_LEVY].input-tax-recoverable", "false");
         p.put(c + "regimes.R1.regions", "");
-        row(p, c, 0, "Z1", "GST", "0.07", "2020-01-01", null);
+        row(p, c, 0, "Z1", "ZZ_LEVY", "0.07", "2020-01-01", null);
         return Map.copyOf(p);
     }
 

@@ -14,7 +14,6 @@ import com.positivity.tax.common.dto.TaxCalculationResponse.JurisdictionTax;
 import com.positivity.tax.common.dto.TaxCalculationResponse.LineItemTax;
 import com.positivity.tax.common.enums.ExemptionReasonCode;
 import com.positivity.tax.common.enums.TaxJurisdictionType;
-import com.positivity.tax.common.enums.TaxType;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -277,7 +276,7 @@ class InvoiceTaxBreakdownWriterTest {
     // ---------------------------------------------------------------------------------------
 
     private static JurisdictionTax typed(
-            TaxJurisdictionType type, String code, String rate, String amount, TaxType taxType) {
+            TaxJurisdictionType type, String code, String rate, String amount, String taxType) {
         return JurisdictionTax.builder()
                 .jurisdictionType(type)
                 .code(code)
@@ -310,8 +309,8 @@ class InvoiceTaxBreakdownWriterTest {
                 .taxAmount(new BigDecimal("3.30"))
                 .total(new BigDecimal("103.30"))
                 .jurisdictions(List.of(
-                        typed(TaxJurisdictionType.COUNTRY, "ZZ", "0.011", "1.10", TaxType.GST),
-                        typed(TaxJurisdictionType.PROVINCE, "Z1", "0.022", "2.20", TaxType.PST)))
+                        typed(TaxJurisdictionType.COUNTRY, "ZZ", "0.011", "1.10", "GST"),
+                        typed(TaxJurisdictionType.PROVINCE, "Z1", "0.022", "2.20", "PST")))
                 .build();
         LineItemTax usLine = LineItemTax.builder()
                 .lineItemId("2")
@@ -355,8 +354,8 @@ class InvoiceTaxBreakdownWriterTest {
                 .taxAmount(new BigDecimal("5.50"))
                 .total(new BigDecimal("105.50"))
                 .jurisdictions(List.of(
-                        typed(TaxJurisdictionType.PROVINCE, "Z1", "0.022", "2.20", TaxType.PST),
-                        typed(TaxJurisdictionType.PROVINCE, "Z1", "0.033", "3.30", TaxType.QST)))
+                        typed(TaxJurisdictionType.PROVINCE, "Z1", "0.022", "2.20", "PST"),
+                        typed(TaxJurisdictionType.PROVINCE, "Z1", "0.033", "3.30", "QST")))
                 .build();
 
         writer.replace(INVOICE_ID, response(List.of(line, line)));
@@ -377,15 +376,15 @@ class InvoiceTaxBreakdownWriterTest {
     }
 
     @Test
-    @DisplayName("S32a AC 8: an unknown taxType from pos-tax reads as null and the invoice still prices")
-    void unknownTaxTypeReadsAsNull() throws Exception {
+    @DisplayName("S32a AC 8: a malformed taxType from pos-tax is stored null and the invoice still prices")
+    void malformedTaxTypeReadsAsNull() throws Exception {
         String fromPosTax = """
                 {"subtotal":100.00,"totalTax":1.10,"total":101.10,"effectiveTaxRate":1.10,"jurisdictions":[],
                  "testMode":true,"calculatedAt":"2026-07-20T00:00:00Z",
                  "lineItemTaxes":[{"lineItemId":"1","subtotal":100.00,"taxAmount":1.10,"total":101.10,
                    "taxExempt":false,"exemptionDenied":false,
                    "jurisdictions":[{"jurisdictionType":"COUNTRY","code":"ZZ","rate":0.011,"amount":1.10,"exempt":false,
-                                     "taxType":"A_TYPE_FROM_A_LATER_BUILD","inputTaxRecoverable":true}]}]}
+                                     "taxType":"a type, not a code","inputTaxRecoverable":true}]}]}
                 """;
 
         TaxCalculationResponse read = tools.jackson.databind.json.JsonMapper.builder()
@@ -393,11 +392,27 @@ class InvoiceTaxBreakdownWriterTest {
                 .readValue(fromPosTax, TaxCalculationResponse.class);
         writer.replace(INVOICE_ID, read);
 
-        assertThat(read.getLineItemTaxes().get(0).getJurisdictions().get(0).getTaxType())
-                .isNull();
         assertThat(savedLineRows()).singleElement().satisfies(row -> {
             assertThat(row.getTaxType()).isNull();
             assertThat(row.getTaxAmount()).isEqualByComparingTo("1.10");
         });
+    }
+
+    @Test
+    @DisplayName("S32a: a well-formed code no build has seen is copied as received (the vocabulary is configuration)")
+    void newWellFormedCodeIsCopiedAsReceived() {
+        LineItemTax line = LineItemTax.builder()
+                .lineItemId("1")
+                .subtotal(new BigDecimal("100.00"))
+                .taxAmount(new BigDecimal("1.10"))
+                .total(new BigDecimal("101.10"))
+                .jurisdictions(List.of(typed(TaxJurisdictionType.COUNTRY, "ZZ", "0.011", "1.10", "ZZ_LEVY_2")))
+                .build();
+
+        writer.replace(INVOICE_ID, response(List.of(line)));
+
+        assertThat(savedLineRows())
+                .singleElement()
+                .satisfies(row -> assertThat(row.getTaxType()).isEqualTo("ZZ_LEVY_2"));
     }
 }

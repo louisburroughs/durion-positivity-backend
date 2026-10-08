@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.tax.common.enums.TaxJurisdictionType;
-import com.positivity.tax.common.enums.TaxType;
 import com.positivity.tax.internal.config.TaxProperties;
 import com.positivity.tax.internal.service.TaxCountryProfiles.CountryTaxProfile;
 import java.time.LocalDate;
@@ -49,12 +48,12 @@ class TaxCountryProfilesTest {
                 Arguments.of("currency not ISO 4217", fixtureWith(p -> p.put(CA + "currency", "CAX")), CA + "currency"),
                 Arguments.of("currency missing", fixtureWith(p -> p.remove(CA + "currency")), CA + "currency"),
                 Arguments.of(
-                        "tax-type key not a TaxType value",
+                        "tax-type key not a well-formed code (1-32 upper-case letters, digits or underscores)",
                         fixtureWith(p -> {
-                            p.put(CA + "tax-types.ZZT.jurisdiction-type", "PROVINCE");
-                            p.put(CA + "tax-types.ZZT.input-tax-recoverable", "true");
+                            p.put(CA + "tax-types.vat.jurisdiction-type", "PROVINCE");
+                            p.put(CA + "tax-types.vat.input-tax-recoverable", "true");
                         }),
-                        CA + "tax-types.ZZT"),
+                        CA + "tax-types.vat"),
                 Arguments.of(
                         "tax type names an undeclared regime",
                         fixtureWith(p -> p.put(CA + "tax-types.PST.regime", "NO_SUCH_REGIME")),
@@ -129,9 +128,9 @@ class TaxCountryProfilesTest {
         assertThat(profile.currencyExponent()).isEqualTo(2);
         assertThat(profile.taxTypes())
                 .extracting(t -> t.taxType())
-                .containsExactlyInAnyOrder(TaxType.GST, TaxType.HST, TaxType.QST, TaxType.PST);
+                .containsExactlyInAnyOrder("GST", "HST", "QST", "PST");
         assertThat(profile.taxTypes())
-                .filteredOn(t -> t.taxType() == TaxType.PST)
+                .filteredOn(t -> "PST".equals(t.taxType()))
                 .singleElement()
                 .satisfies(t -> assertThat(t.regime()).isNull());
         assertThat(profile.regimes()).extracting(r -> r.regime()).containsExactlyInAnyOrder("GST_HST", "QST");
@@ -162,6 +161,10 @@ class TaxCountryProfilesTest {
         assertThat(profile.currencyExponent()).isZero();
         assertThat(profile.taxTypes().get(0).jurisdictionType()).isEqualTo(TaxJurisdictionType.COUNTRY);
         assertThat(profiles.defaultProvider("ZZ")).contains("ZZ_SELF");
+        // The "[...]" map-key notation keeps the "_" in a configured code.
+        assertThat(profile.taxTypes())
+                .singleElement()
+                .satisfies(t -> assertThat(t.taxType()).isEqualTo("ZZ_LEVY"));
     }
 
     @Test

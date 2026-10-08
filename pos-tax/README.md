@@ -149,8 +149,9 @@ pos:
 ### Per-country profiles and default providers (CAP:550 S32a)
 
 Every value here is a **placeholder held for expert advice** (AW48, OI-4), never tax law. Code names no country, regime or tax
-type: adding a country is a configuration block, a `default-providers` entry and, where needed, new `TaxType` values in
-pos-tax-common (the platform's tax-type vocabulary; consumers store the code as a string, so a new value needs no migration).
+type: adding a country is a configuration block and a `default-providers` entry. Tax-type codes are a configuration-only
+vocabulary (no enum; `TaxTypeCodes` in pos-tax-common only fixes their shape, 1–32 upper-case letters, digits or underscores);
+consumers store the code as a string, so a new code needs no code change or migration anywhere.
 
 ```yaml
 pos.tax:
@@ -159,7 +160,7 @@ pos.tax:
   countries:
     XX:
       currency: EUR             # ISO 4217; its minor-unit exponent is the rounding scale
-      tax-types:                # keys are TaxType codes
+      tax-types:                # keys are tax-type codes; a key with "_" needs "[...]"
         GST: { regime: R_1, jurisdiction-type: COUNTRY, input-tax-recoverable: true }
         PST: { jurisdiction-type: PROVINCE, input-tax-recoverable: false }   # no regime
       regimes:                  # what a tenant registers under and recovery is keyed by
@@ -176,7 +177,7 @@ pos.tax:
   profile's currency (rows round at its exponent and are never converted), otherwise 422 `CURRENCY_NOT_SUPPORTED`.
 - **Startup check** (`TaxCountryProfiles`). Startup fails, naming the property, when a country code is not ISO 3166-1 alpha-2
   (assigned or user-assigned, so a fixture may use `ZZ`); a currency is missing or not ISO 4217; a `tax-types` key is not a
-  `TaxType`; a tax type names an undeclared regime, lacks `jurisdiction-type` or `input-tax-recoverable`; a region code is not 1–3
+  well-formed code (1–32 upper-case letters, digits or underscores); a tax type names an undeclared regime, lacks `jurisdiction-type` or `input-tax-recoverable`; a region code is not 1–3
   letters or digits; a rate row names an undeclared tax type, has a rate outside [0, 1), lacks `effective-from` or ends before it
   starts; two rows of one region and tax type, or of one region and regime, are in effect on the same date (one rate per regime);
   or a `default-providers` entry names a plug-in other than its own country's `<country>_SELF`.

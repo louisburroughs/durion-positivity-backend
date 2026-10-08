@@ -1,7 +1,6 @@
 package com.positivity.tax.common.dto;
 
 import com.positivity.tax.common.enums.TaxJurisdictionType;
-import com.positivity.tax.common.enums.TaxType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
@@ -57,15 +56,20 @@ public record TaxTypesResponse(
     /**
      * One declared tax type.
      *
-     * @param taxType             the tax type code
+     * @param taxType             the configured tax-type code
      * @param regime              the regime it is registered and recovered under; {@code null} for none
      * @param jurisdictionType    the jurisdiction level it is levied at
      * @param inputTaxRecoverable the placeholder recoverability held for expert advice
      */
     @Schema(name = "TaxTypeEntry", description = "One tax type a country declares, with its regime and level")
     public record TaxTypeEntry(
-            @Schema(description = "Tax type code", example = "GST", requiredMode = Schema.RequiredMode.REQUIRED)
-            TaxType taxType,
+            @Schema(
+                    description = "Tax-type code as the country profile declares it (1-32 upper-case letters, digits"
+                            + " or underscores); the vocabulary is configuration only",
+                    example = "GST",
+                    pattern = "^[A-Z0-9_]{1,32}$",
+                    requiredMode = Schema.RequiredMode.REQUIRED)
+            String taxType,
 
             @Schema(
                     description = "Regime the tax type is registered and recovered under; null when it has none",

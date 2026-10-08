@@ -1,7 +1,6 @@
 package com.positivity.tax.common.dto;
 
 import com.positivity.tax.common.enums.TaxJurisdictionType;
-import com.positivity.tax.common.enums.TaxType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import org.jspecify.annotations.Nullable;
@@ -21,7 +20,8 @@ import org.jspecify.annotations.Nullable;
  * @param jurisdictionType    the level of government the rate applies at
  * @param rate                the tax rate as a decimal fraction
  * @param taxType             the configured tax type of this component; {@code null} when the
- *                            country has no tax-type profile or the code is unknown to this build
+ *                            country has no tax-type profile; a configuration-only code
+ *                            (see {@code TaxTypeCodes})
  * @param inputTaxRecoverable the configured placeholder recoverability of this tax type;
  *                            {@code null} when the country has no tax-type profile
  */
@@ -37,13 +37,14 @@ public record TaxRateComponent(
         BigDecimal rate,
 
         @Schema(
-                description = "Configured tax type of this component; null for a country without a tax-type"
-                        + " profile, and null when the value is unknown to the reader's build",
+                description = "Tax-type code of this component as the country profile configures it (1-32"
+                        + " upper-case letters, digits or underscores); null for a country without a tax-type profile",
                 example = "GST",
+                pattern = "^[A-Z0-9_]{1,32}$",
                 nullable = true,
                 requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         @Nullable
-        TaxType taxType,
+        String taxType,
 
         @Schema(
                 description = "Configured placeholder recoverability of this tax type (held for expert advice);"

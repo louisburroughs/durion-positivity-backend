@@ -14,7 +14,7 @@ import com.positivity.tax.common.enums.ExemptionReasonCode;
 import com.positivity.tax.common.enums.TaxJurisdictionType;
 import com.positivity.tax.common.enums.TaxProviderTransactionStatus;
 import com.positivity.tax.common.enums.TaxReferenceType;
-import com.positivity.tax.common.enums.TaxType;
+import com.positivity.tax.common.validation.TaxTypeCodes;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.lang.reflect.Field;
 import java.lang.reflect.RecordComponent;
@@ -375,32 +375,22 @@ class TaxCommonContractTest {
     class TypedComponents {
 
         @ParameterizedTest
-        @EnumSource(TaxType.class)
-        @DisplayName("every TaxType resolves back from the code it serializes as, in any case")
-        void taxTypeRoundTrips(TaxType value) {
-            assertThat(value.code()).isEqualTo(value.name());
-            assertThat(TaxType.fromValue(value.code())).isEqualTo(value);
-            assertThat(TaxType.fromValue(value.code().toLowerCase(java.util.Locale.ROOT)))
-                    .isEqualTo(value);
+        @ValueSource(strings = {"GST", "ZZ_LEVY", "VAT2", "A", "ABCDEFGHIJKLMNOPQRSTUVWXYZ012345"})
+        @DisplayName("a well-formed tax-type code is copied as received: the vocabulary is configuration only")
+        void wellFormedCodesAreKept(String code) {
+            // No enum: a code a later pos-tax configuration declares is still read and copied, never
+            // mapped onto a list compiled into this library.
+            assertThat(TaxTypeCodes.isWellFormed(code)).isTrue();
+            assertThat(TaxTypeCodes.wellFormedOrNull(code)).isSameAs(code);
         }
 
         @ParameterizedTest
-        @ValueSource(strings = {"NOT_A_TAX_TYPE", "VAT_FROM_A_LATER_BUILD", " ", ""})
-        @DisplayName("an unknown or blank tax type reads as null instead of failing to deserialize")
-        void unknownTaxTypeReadsAsNull(String code) {
-            // Invoicing & Payments sign-off (d): a pos-tax deploy that adds a value must not break a
-            // reader built before it. The reader then treats null as untyped and never infers.
-            assertThat(TaxType.fromValue(code)).isNull();
-            assertThat(TaxType.fromValue(null)).isNull();
-        }
-
-        @Test
-        @DisplayName("the code is the serialized form and fromValue is the deserializer")
-        void taxTypeSerializationHooksArePresent() throws Exception {
-            assertThat(TaxType.class.getMethod("code").isAnnotationPresent(JsonValue.class))
-                    .isTrue();
-            assertThat(TaxType.class.getMethod("fromValue", String.class).isAnnotationPresent(JsonCreator.class))
-                    .isTrue();
+        @ValueSource(strings = {"gst", "VAT-2", "A B", " ", "", "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456"})
+        @DisplayName("a malformed tax-type code reads as null (untyped), never normalized or inferred")
+        void malformedCodesReadAsNull(String code) {
+            assertThat(TaxTypeCodes.isWellFormed(code)).isFalse();
+            assertThat(TaxTypeCodes.wellFormedOrNull(code)).isNull();
+            assertThat(TaxTypeCodes.wellFormedOrNull(null)).isNull();
         }
 
         @Test
@@ -417,14 +407,14 @@ class TaxCommonContractTest {
                     .code("ZZ")
                     .rate(new BigDecimal("0.011"))
                     .amount(new BigDecimal("1.10"))
-                    .taxType(TaxType.GST)
+                    .taxType("GST")
                     .inputTaxRecoverable(true)
                     .build();
 
             // A country without a tax-type profile (the US) leaves both null.
             assertThat(untyped.getTaxType()).isNull();
             assertThat(untyped.getInputTaxRecoverable()).isNull();
-            assertThat(typed.getTaxType()).isEqualTo(TaxType.GST);
+            assertThat(typed.getTaxType()).isEqualTo("GST");
             assertThat(typed.getInputTaxRecoverable()).isTrue();
         }
 
@@ -434,11 +424,11 @@ class TaxCommonContractTest {
             TaxRateComponent untyped =
                     new TaxRateComponent(TaxJurisdictionType.STATE, new BigDecimal("0.0725"), null, null);
             TaxRateComponent typed =
-                    new TaxRateComponent(TaxJurisdictionType.PROVINCE, new BigDecimal("0.022"), TaxType.PST, false);
+                    new TaxRateComponent(TaxJurisdictionType.PROVINCE, new BigDecimal("0.022"), "PST", false);
 
             assertThat(untyped.taxType()).isNull();
             assertThat(untyped.inputTaxRecoverable()).isNull();
-            assertThat(typed.taxType()).isEqualTo(TaxType.PST);
+            assertThat(typed.taxType()).isEqualTo("PST");
             assertThat(typed.inputTaxRecoverable()).isFalse();
         }
     }

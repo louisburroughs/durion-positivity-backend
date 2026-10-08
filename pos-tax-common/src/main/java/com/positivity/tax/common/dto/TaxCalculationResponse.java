@@ -4,7 +4,6 @@ import com.positivity.tax.common.enums.ExemptionReasonCode;
 import com.positivity.tax.common.enums.TaxCalculationType;
 import com.positivity.tax.common.enums.TaxJurisdictionType;
 import com.positivity.tax.common.enums.TaxReferenceType;
-import com.positivity.tax.common.enums.TaxType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -317,17 +316,19 @@ public class TaxCalculationResponse {
         private ExemptionReasonCode exemptionReasonCode;
 
         /**
-         * Configured tax type of this row (CAP:550 S32a); {@code null} for a country without a
-         * tax-type profile (the United States today) and for a code unknown to the reader's build.
-         * Readers copy it as received and never infer it.
+         * Tax-type code of this row (CAP:550 S32a), a configuration-only vocabulary declared by the
+         * country profile (see {@code TaxTypeCodes}); {@code null} for a country without a tax-type
+         * profile (the United States today). Readers copy a well-formed code as received and never
+         * infer one.
          */
         @Schema(
-                description = "Configured tax type of this row; null for a country without a tax-type profile,"
-                        + " and null when the value is unknown to the reader's build",
+                description = "Tax-type code of this row as the country profile configures it (1-32 upper-case"
+                        + " letters, digits or underscores); null for a country without a tax-type profile",
                 example = "GST",
+                pattern = "^[A-Z0-9_]{1,32}$",
                 nullable = true,
                 requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-        private TaxType taxType;
+        private String taxType;
 
         /**
          * Configured placeholder recoverability of this row's tax type (CAP:550 S32a, held for
