@@ -22,6 +22,7 @@ import com.positivity.accounting.internal.enums.VendorBillPostingDateRule;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.event.LedgerReversalApplied;
 import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
+import com.positivity.accounting.internal.exception.GLAccountNotActiveException;
 import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
 import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.accounting.internal.repository.VendorBillGlPostingRepository;
@@ -295,7 +296,7 @@ class VendorBillPostingServiceTest {
             new VendorBillPostingService.Classification(VendorBillDebitClass.GOODS, null);
 
     @Nested
-    @DisplayName("The vendor's own totals: gross vs net + tax (AW46)")
+    @DisplayName("The vendor's own totals: gross vs net + tax (AW47)")
     class Totals {
 
         @Test
@@ -434,6 +435,7 @@ class VendorBillPostingServiceTest {
     class Posting {
 
         private final GLMappingResolver resolver = mock();
+        private final GLAccountService accounts = mock();
         private final JournalEntryService journalEntries = mock();
         private final VendorBillGlPostingRepository postings = mock();
         private final VendorBillLineRepository lines = mock();
@@ -447,6 +449,7 @@ class VendorBillPostingServiceTest {
             service = new VendorBillPostingService(
                     CLOCK,
                     resolver,
+                    accounts,
                     journalEntries,
                     postings,
                     lines,
@@ -501,7 +504,7 @@ class VendorBillPostingServiceTest {
         }
 
         @Test
-        @DisplayName("AW46: the difference decided on the bill posts and is recorded with its amount and justification")
+        @DisplayName("AW47: the difference decided on the bill posts and is recorded with its amount and justification")
         void recordsTheDifference() {
             when(lines.findByVendorBill_VendorBillIdOrderByLineNumber(BILL_ID)).thenReturn(List.of());
             VendorBill edi = ediBill("1085.00", "1000.00", "70.00", 1);
@@ -533,7 +536,27 @@ class VendorBillPostingServiceTest {
                         assertThat(e.getReferenceId()).isEqualTo("VENDOR_BILL/PURCHASE_PRICE_DIFFERENCE");
                         assertThat(e.getNextAction())
                                 .contains("Map VENDOR_BILL / PURCHASE_PRICE_DIFFERENCE", "2026-10-01");
-                        assertThat(e.getMessage()).contains("Bill INV-1 cannot post on 2026-10-01");
+                        assertThat(e.getMessage())
+                                .contains("No active VENDOR_BILL mapping for key PURCHASE_PRICE_DIFFERENCE on"
+                                        + " 2026-10-01");
+                    });
+            verify(journalEntries, never()).createJournalEntry(any());
+        }
+
+        @Test
+        @DisplayName("#2601: a mapping whose account is not active on the posting date is the same 422"
+                + " GL_MAPPING_NOT_CONFIGURED, naming category, key and date; nothing is created")
+        void inactiveMappedAccountIsTheSameRefusal() {
+            UUID inactive = UUID.nameUUIDFromBytes("GOODS_RECEIVED_NOT_BILLED".getBytes());
+            org.mockito.Mockito.doThrow(new GLAccountNotActiveException("Account 2100 is inactive as of 2026-10-01"))
+                    .when(accounts)
+                    .validateAccountForPosting(eq(inactive), any(LocalDateTime.class));
+
+            assertThatThrownBy(() -> service.post(bill("412.00"), null, null, "controller.cfo"))
+                    .isInstanceOfSatisfying(GLMappingNotConfiguredException.class, e -> {
+                        assertThat(e.getReferenceId()).isEqualTo("VENDOR_BILL/GOODS_RECEIVED_NOT_BILLED");
+                        assertThat(e.getMessage())
+                                .contains("VENDOR_BILL", "GOODS_RECEIVED_NOT_BILLED", "2026-10-01", "inactive");
                     });
             verify(journalEntries, never()).createJournalEntry(any());
         }

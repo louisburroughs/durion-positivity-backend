@@ -309,7 +309,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
                 voidApproved(bill, actor, reason, override);
             } else if (bill.getStatus() == VendorBillStatus.PENDING_RECEIPT_MATCH
                     && VendorBillReader.channelOf(bill) == VendorBillReview.Channel.GOODS_RECEIPT) {
-                // AW44: the receipt's placeholder closed. Nothing posts: the receipt's accrual stays in 2100 until the
+                // AW45: the receipt's placeholder closed. Nothing posts: the receipt's accrual stays in 2100 until the
                 // vendor's EDI bill, classified GOODS, clears it at its approval.
                 markVoided(bill, actor, reason);
                 audit(bill, AUDIT_VOID, actor, reason, "action=VOID_UNMATCHED;posted=none");
@@ -470,7 +470,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
     }
 
     /**
-     * What every send, approval and acceptance needs first (#2509 review; AW44, AW46), refused before anything is
+     * What every send, approval and acceptance needs first (#2509 review; AW45, AW47), refused before anything is
      * written: no open ambiguous match naming the bill, a matched invoice for a goods-receipt bill, a total that is
      * not 0.00, and the vendor's totals adding up or a {@code difference} decided.
      */
@@ -568,7 +568,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
     // ---- candidate selection --------------------------------------------------------------------------------
 
     /**
-     * Candidate selection keeps what the vendor billed, as {@code /match} does (AW39, AW45): the billed lines and
+     * Candidate selection keeps what the vendor billed, as {@code /match} does (AW39, AW46): the billed lines and
      * total, the vendor's invoice number, its date as the bill date and its due date, and the evidence with the
      * receipt date. The duplicate rule is checked first on the invoice's number and date, so a refusal changes
      * nothing. A candidate scored before #2509 kept no invoice: it cannot be selected (409 {@code
@@ -676,7 +676,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
     }
 
     /**
-     * The request's difference decision (AW46), its shape checked: a class (400 VALIDATION_ERROR), an expense key for
+     * The request's difference decision (AW47), its shape checked: a class (400 VALIDATION_ERROR), an expense key for
      * EXPENSE, and a justification of at least 10 characters (400 JUSTIFICATION_REQUIRED). Null when none is given.
      */
     static @Nullable DifferenceDecision difference(VendorBillReview.@Nullable Difference given) {
@@ -716,7 +716,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
         return key;
     }
 
-    /** A decided difference (AW46) with its justification, stored on the bill until it posts. */
+    /** A decided difference (AW47) with its justification, stored on the bill until it posts. */
     record DifferenceDecision(
             VendorBillPostingService.@NonNull Difference difference,
             @NonNull String justification) {

@@ -157,16 +157,16 @@ public class VendorBill extends TenantScopedEntity {
 
     /**
      * The tax the vendor's document states, never recalculated (AW39); with only the net stated, gross - net; with
-     * neither, zero (AW46). Null on a bill whose source states no header amounts.
+     * neither, zero (AW47). Null on a bill whose source states no header amounts.
      */
     @Column(name = "tax_amount", precision = 19, scale = 4)
     private BigDecimal taxAmount;
 
-    /** Lines the vendor's document states (EDI), at least 1: the rounding tolerance's base (AW46). */
+    /** Lines the vendor's document states (EDI), at least 1: the rounding tolerance's base (AW47). */
     @Column(name = "stated_line_count")
     private Integer statedLineCount;
 
-    /** How an unreconciled gross - (net + tax) posts, as proposed at submission (AW46). */
+    /** How an unreconciled gross - (net + tax) posts, as proposed at submission (AW47). */
     @Enumerated(EnumType.STRING)
     @Column(name = "difference_class", length = 30)
     private VendorBillDifferenceClass differenceClass;

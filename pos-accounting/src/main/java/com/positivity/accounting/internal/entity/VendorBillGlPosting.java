@@ -91,11 +91,11 @@ public class VendorBillGlPosting extends TenantScopedEntity {
     @Column(name = "currency_code", length = 3, nullable = false, updatable = false)
     private String currencyCode;
 
-    /** The rounding plug put on the largest debit, within the tolerance (AW46); zero when the legs added up. */
+    /** The rounding plug put on the largest debit, within the tolerance (AW47); zero when the legs added up. */
     @Column(name = "rounding_adjustment", precision = 19, scale = 4, nullable = false, updatable = false)
     private BigDecimal roundingAdjustment;
 
-    /** How an unreconciled gross - (net + tax) posted (AW46); null when the vendor's totals added up. */
+    /** How an unreconciled gross - (net + tax) posted (AW47); null when the vendor's totals added up. */
     @Enumerated(EnumType.STRING)
     @Column(name = "difference_class", length = 30, updatable = false)
     private VendorBillDifferenceClass differenceClass;

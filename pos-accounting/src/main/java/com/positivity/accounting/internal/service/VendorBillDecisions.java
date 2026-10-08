@@ -16,7 +16,7 @@ import org.springframework.security.access.AccessDeniedException;
  * <p>Until S13 adds the clerk limit (default 0) every bill is over it, so approving, and {@code ACCEPT} with it,
  * needs {@code accounting:ap:approve_over_limit}; S13 widens approval to {@code accounting:ap:approve} within the
  * limit. Voiding an approved bill needs {@code accounting:ap:reject} plus that same approval tier (AW42); voiding a
- * goods-receipt bill no invoice will match needs {@code accounting:ap:reject} alone (AW44).
+ * goods-receipt bill no invoice will match needs {@code accounting:ap:reject} alone (AW45).
  *
  * <p><b>For S13.</b> The tier is {@code OVER_LIMIT} for every bill here and in the read's {@code requiredTier}, and
  * the audit records the limit as 0: S13 replaces {@link #mayTake} for {@code APPROVE}, {@code ACCEPT_EXCEPTION} and

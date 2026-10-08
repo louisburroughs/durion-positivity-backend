@@ -63,10 +63,10 @@ public final class VendorBillReview {
             @Nullable
             String expenseMappingKey) {}
 
-    /** How a vendor's unreconciled gross - (net + tax) posts (AW46), with who decided it and why. */
+    /** How a vendor's unreconciled gross - (net + tax) posts (AW47), with who decided it and why. */
     @Schema(
             name = "VendorBillDifference",
-            description = "Where the gap between the vendor's gross and its net + tax posts (AW46)")
+            description = "Where the gap between the vendor's gross and its net + tax posts (AW47)")
     public record Difference(
             @Schema(
                     description = "FREIGHT (5060), GOODS (2100), EXPENSE (the expenseMappingKey given) or"
@@ -115,7 +115,7 @@ public final class VendorBillReview {
             Classification proposedClassification,
 
             @Schema(
-                    description = "Where the vendor's unreconciled difference posts, as proposed (AW46)",
+                    description = "Where the vendor's unreconciled difference posts, as proposed (AW47)",
                     requiredMode = NOT_REQUIRED)
             @Nullable
             Difference proposedDifference,
@@ -210,10 +210,10 @@ public final class VendorBillReview {
             @Schema(description = "The vendor's invoice number", example = "INV-88421", requiredMode = REQUIRED)
             String invoiceReference,
 
-            @Schema(description = "The invoice date, the matched bill's date (AW45)", requiredMode = REQUIRED)
+            @Schema(description = "The invoice date, the matched bill's date (AW46)", requiredMode = REQUIRED)
             LocalDateTime invoiceDate,
 
-            @Schema(description = "The receipt date, the bill's date before the match (AW45)", requiredMode = REQUIRED)
+            @Schema(description = "The receipt date, the bill's date before the match (AW46)", requiredMode = REQUIRED)
             LocalDateTime receivedDate,
 
             @Schema(description = "What the receipt put on the bill", example = "400.00", requiredMode = REQUIRED)
@@ -329,13 +329,13 @@ public final class VendorBillReview {
 
             @Schema(
                     description = "The rounding plug put on the largest debit, within 0.01 per stated line and 0.05"
-                            + " per bill (AW46); 0.00 when the legs added up",
+                            + " per bill (AW47); 0.00 when the legs added up",
                     example = "0.01",
                     requiredMode = REQUIRED)
             BigDecimal roundingAdjustment,
 
             @Schema(
-                    description = "Where an unreconciled difference posted (AW46); null when the totals added up",
+                    description = "Where an unreconciled difference posted (AW47); null when the totals added up",
                     example = "FREIGHT",
                     requiredMode = NOT_REQUIRED)
             @Nullable

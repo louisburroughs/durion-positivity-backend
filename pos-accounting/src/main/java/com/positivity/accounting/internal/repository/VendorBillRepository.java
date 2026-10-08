@@ -283,7 +283,7 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
             @Param("vendorId") UUID vendorId, @Param("status") VendorBillStatus status);
 
     /**
-     * A vendor's bills of one origin in any of {@code statuses}, oldest first (AW44: the goods-receipt bills still open
+     * A vendor's bills of one origin in any of {@code statuses}, oldest first (AW45: the goods-receipt bills still open
      * when its EDI bill is read).
      */
     List<VendorBill> findByVendorIdAndOriginEventTypeAndStatusInOrderByCreatedAtAscVendorBillIdAsc(

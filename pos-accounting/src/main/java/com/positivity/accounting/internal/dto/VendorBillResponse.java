@@ -166,7 +166,7 @@ public class VendorBillResponse {
 
     @Nullable
     @Schema(
-            description = "The net the vendor's document states (AW46); null on a bill without header totals",
+            description = "The net the vendor's document states (AW47); null on a bill without header totals",
             example = "1000.00",
             requiredMode = NOT_REQUIRED)
     @JsonProperty("netAmount")
@@ -174,7 +174,7 @@ public class VendorBillResponse {
 
     @Nullable
     @Schema(
-            description = "The tax the vendor's document states, never recalculated (AW39, AW46)",
+            description = "The tax the vendor's document states, never recalculated (AW39, AW47)",
             example = "70.00",
             requiredMode = NOT_REQUIRED)
     @JsonProperty("taxAmount")

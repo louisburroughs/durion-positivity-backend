@@ -39,12 +39,12 @@ COMMENT ON COLUMN public.vendor_bill.net_amount IS
     'no header amounts (a goods-receipt bill posts from its lines).';
 COMMENT ON COLUMN public.vendor_bill.tax_amount IS
     'The tax the vendor''s document states, never recalculated (AW39), signed like total_amount. US tax is part of '
-    'the cost when the bill posts. With only the net stated it is gross - net; with neither, 0 (AW46).';
+    'the cost when the bill posts. With only the net stated it is gross - net; with neither, 0 (AW47).';
 COMMENT ON COLUMN public.vendor_bill.stated_line_count IS
     'Lines the vendor''s document states (EDI), at least 1: the rounding tolerance of gross vs net + tax is 0.01 per '
-    'stated line, at most 0.05 per bill (AW46).';
+    'stated line, at most 0.05 per bill (AW47).';
 COMMENT ON COLUMN public.vendor_bill.difference_class IS
-    'How an unreconciled gross - (net + tax) posts, proposed at submission (AW46): FREIGHT, GOODS, EXPENSE or '
+    'How an unreconciled gross - (net + tax) posts, proposed at submission (AW47): FREIGHT, GOODS, EXPENSE or '
     'PRICE_DIFFERENCE.';
 
 ALTER TABLE public.vendor_bill DROP CONSTRAINT vendor_bill_status_check;

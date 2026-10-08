@@ -33,7 +33,7 @@ public final class VendorBillCommands {
             VendorBillReview.@Nullable Classification classification,
 
             @Schema(
-                    description = "Where the vendor's unreconciled difference posts (AW46); required while"
+                    description = "Where the vendor's unreconciled difference posts (AW47); required while"
                             + " gross - (net + tax) exceeds the rounding tolerance",
                     requiredMode = NOT_REQUIRED)
             @Valid
@@ -66,7 +66,7 @@ public final class VendorBillCommands {
             String overrideJustification,
 
             @Schema(
-                    description = "Where the vendor's unreconciled difference posts (AW46); required while"
+                    description = "Where the vendor's unreconciled difference posts (AW47); required while"
                             + " gross - (net + tax) exceeds the rounding tolerance",
                     requiredMode = NOT_REQUIRED)
             @Valid
@@ -134,7 +134,7 @@ public final class VendorBillCommands {
             String overrideJustification,
 
             @Schema(
-                    description = "Where the vendor's unreconciled difference posts (AW46), ACCEPT only; required while"
+                    description = "Where the vendor's unreconciled difference posts (AW47), ACCEPT only; required while"
                             + " gross - (net + tax) exceeds the rounding tolerance",
                     requiredMode = NOT_REQUIRED)
             @Valid

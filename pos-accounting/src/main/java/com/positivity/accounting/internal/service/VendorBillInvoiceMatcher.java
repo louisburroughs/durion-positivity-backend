@@ -173,7 +173,7 @@ public class VendorBillInvoiceMatcher {
                 .setScale(2, RoundingMode.HALF_UP);
     }
 
-    /** Whether a match kept what an invoice billed on the bill's lines (AW44): a billed quantity on any line. */
+    /** Whether a match kept what an invoice billed on the bill's lines (AW45): a billed quantity on any line. */
     static boolean billed(@NonNull List<VendorBillLine> stored) {
         return stored.stream().anyMatch(line -> line.getBilledQuantity() != null);
     }

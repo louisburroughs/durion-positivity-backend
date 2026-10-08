@@ -135,7 +135,7 @@ class VendorBillControllerDuplicateRuleTest extends BaseControllerSliceTest {
     }
 
     @Test
-    @DisplayName("AW45(c): POST /vendor-bills/match without invoiceDate is 400; the service is never called")
+    @DisplayName("AW46(c): POST /vendor-bills/match without invoiceDate is 400; the service is never called")
     void matchWithoutInvoiceDateIsRefused() throws Exception {
         mockMvc.perform(withAuth(post("/v1/accounting/vendor-bills/match"), "accounting:ap:pay")
                         .contentType(MediaType.APPLICATION_JSON)

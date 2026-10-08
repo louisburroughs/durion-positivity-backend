@@ -172,7 +172,7 @@ public class VendorBillController {
                 with submittedBy SYSTEM and never approves it, a MEDIUM score or a discrepancy parks it in \
                 MATCH_EXCEPTION, and an AMBIGUOUS match keeps the scored candidates for a person to select one; \
                 nothing is posted.
-                Every routed single match takes the invoice's number and its invoiceDate as the bill date (AW45) \
+                Every routed single match takes the invoice's number and its invoiceDate as the bill date (AW46) \
                 and keeps what the vendor billed (the billed total and each line's billed quantity and price) and \
                 an append-only evidence record with the receipt date, the score, the points per criterion (amount \
                 40 against the received total, products 30, date 20, purchase order 5) and the line comparison.

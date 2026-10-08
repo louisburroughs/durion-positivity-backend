@@ -33,7 +33,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * The vendor-bill approval lifecycle (CAP:550 S12, #2509; SPEC-accounting-workspace §4.3, §5.2, §7.1; AW8, AW37-AW46):
+ * The vendor-bill approval lifecycle (CAP:550 S12, #2509; SPEC-accounting-workspace §4.3, §5.2, §7.1; AW8, AW37-AW47):
  * submit, approve, reject, resolve a match exception, select a match candidate, void an approved bill or a receipt
  * placeholder, and the stage reads of Bills to pay. The actor of every command is the caller (ADR-0018); no body
  * carries one. The commands take no idempotency key: a replay finds the bill moved on and is answered 409.
@@ -66,7 +66,7 @@ public class VendorBillApprovalController {
                 Sends a vendor bill in PENDING_RECEIPT_MATCH or MATCH_EXCEPTION for approval: it moves to \
                 AWAITING_APPROVAL with the caller as submittedBy, and nothing is posted.
                 From PENDING_RECEIPT_MATCH this is "send without a delivery match", for EDI bills only (a \
-                goods-receipt bill needs its vendor invoice matched first, AW44); from MATCH_EXCEPTION it resolves \
+                goods-receipt bill needs its vendor invoice matched first, AW45); from MATCH_EXCEPTION it resolves \
                 the exception for a person to approve.
                 Use this tool when a clerk has checked a bill and wants it approved; do not use approveVendorBill, \
                 which is the approver's decision, or resolveVendorBillMatchException, which accepts, corrects or \
@@ -74,7 +74,7 @@ public class VendorBillApprovalController {
                 Preconditions: the bill is PENDING_RECEIPT_MATCH or MATCH_EXCEPTION (never CURRENCY_HOLD), no \
                 ambiguous match naming it is open, a goods-receipt bill has its invoice matched, its total is not \
                 0.00, and the vendor's gross equals net + tax within 0.01 per stated line (at most 0.05) unless a \
-                difference is given (AW46).
+                difference is given (AW47).
                 Required inputs: billId (UUID) as a path parameter and justification (at least 10 characters); \
                 classification {debitClass, expenseMappingKey} is an optional proposal the approver may keep, and \
                 difference {class FREIGHT|GOODS|EXPENSE|PRICE_DIFFERENCE, expenseMappingKey, justification} says \
@@ -402,7 +402,7 @@ public class VendorBillApprovalController {
             description = """
                 Picks one candidate bill of an ambiguous invoice match and resolves the candidate set.
                 Selection is matching only: the chosen bill keeps what the vendor billed (lines, total, the invoice \
-                number, the invoice date as its bill date and the due date, AW45), gets its match evidence with the \
+                number, the invoice date as its bill date and the due date, AW46), gets its match evidence with the \
                 receipt date and moves to AWAITING_APPROVAL with the caller as submittedBy, while a bill the match \
                 had held in MATCH_EXCEPTION for this invoice returns to PENDING_RECEIPT_MATCH; nothing approves it \
                 and nothing is posted.
@@ -458,7 +458,7 @@ public class VendorBillApprovalController {
             name = "bearerAuth",
             scopes = {"accounting:ap:reject"})
     // Every void needs accounting:ap:reject; an approved bill's also needs the approval tier, which the service
-    // checks once it knows the bill's status (AW42, AW44).
+    // checks once it knows the bill's status (AW42, AW45).
     @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_REJECT + "')")
     @Operation(
             operationId = "voidVendorBill",
@@ -468,7 +468,7 @@ public class VendorBillApprovalController {
                 reversed through the journal-entry reversal (linked both ways), dated today in today's period and \
                 never back in the original period (AW42), so 2100 is accrued again; a goods-receipt bill in \
                 PENDING_RECEIPT_MATCH that no vendor invoice will match moves to VOIDED and nothing is posted \
-                (AW44), its receipt accrual staying in 2100 until the vendor's EDI bill classified GOODS clears it.
+                (AW45), its receipt accrual staying in 2100 until the vendor's EDI bill classified GOODS clears it.
                 Use this tool to undo an approval that should not stand or to close a receipt placeholder; do not \
                 use rejectVendorBill, which refuses a bill not yet approved, or resolveVendorBillMatchException with \
                 VOID, which voids a bill still in MATCH_EXCEPTION, and correct a bill with payments allocated with a \

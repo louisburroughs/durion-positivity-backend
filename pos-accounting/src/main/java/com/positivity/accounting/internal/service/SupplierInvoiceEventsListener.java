@@ -290,7 +290,7 @@ public class SupplierInvoiceEventsListener {
         bill.setBillDate(billDate);
         bill.setTotalAmount(signedTotal(fact));
         if (fact.totalGrossAmount() != null) {
-            // The net and tax as stated (AW39), signed like the total (AW46): no net stated, net = gross - tax;
+            // The net and tax as stated (AW39), signed like the total (AW47): no net stated, net = gross - tax;
             // a net and no tax, tax = gross - net; neither, net = gross and tax 0. Only a document stating all
             // three can disagree with itself.
             BigDecimal gross = bill.getTotalAmount();
@@ -324,7 +324,7 @@ public class SupplierInvoiceEventsListener {
                     fact.totalGrossAmount() == null
                             ? VendorBillStatus.MATCH_EXCEPTION
                             : VendorBillStatus.PENDING_RECEIPT_MATCH);
-            // AW46: a document whose gross is not its net + tax, beyond the rounding tolerance, waits for a person
+            // AW47: a document whose gross is not its net + tax, beyond the rounding tolerance, waits for a person
             // to say where the gap posts, to correct it or to void it.
             VendorBillTotals.of(bill).filter(totals -> !totals.reconciled()).ifPresent(totals -> {
                 bill.setStatus(VendorBillStatus.MATCH_EXCEPTION);

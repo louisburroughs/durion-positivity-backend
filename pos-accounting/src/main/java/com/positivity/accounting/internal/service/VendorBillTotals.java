@@ -8,7 +8,7 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Whether a vendor's own header totals add up: gross = net + tax (CAP:550 S12, #2509; AW46). Accounts payable is
+ * Whether a vendor's own header totals add up: gross = net + tax (CAP:550 S12, #2509; AW47). Accounts payable is
  * always credited the gross; a gap within the rounding tolerance, 0.01 per stated line and at most 0.05 per bill (a
  * header-only bill counts as one line), is put on the largest debit and kept as {@code roundingAdjustment}. A larger
  * gap holds the bill in {@code MATCH_EXCEPTION} until a person says where it posts ({@code difference}), corrects or

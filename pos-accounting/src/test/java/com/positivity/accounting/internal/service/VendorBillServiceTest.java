@@ -320,7 +320,7 @@ class VendorBillServiceTest {
     class Review {
 
         @Test
-        @DisplayName("AW45(a): a matched bill takes the invoice date; the evidence keeps the receipt date")
+        @DisplayName("AW46(a): a matched bill takes the invoice date; the evidence keeps the receipt date")
         void matchedBillTakesTheInvoiceDate() {
             VendorBill bill = buildBill(
                     testBillId, VendorBillStatus.PENDING_RECEIPT_MATCH, new BigDecimal("1300.00"), BILL_DATE_CLOSE);
@@ -816,7 +816,7 @@ class VendorBillServiceTest {
         void matchOntoALiveBillsNumberIsRefused() {
             VendorBill goodsReceiptBill = matchableGoodsReceiptBill();
             VendorBill live = original("INV-77", INVOICE_DATE.withHour(8), VendorBillStatus.PENDING_RECEIPT_MATCH);
-            // Same vendor, same key, the invoice's date (AW45: the bill is about to take it), the goods-receipt
+            // Same vendor, same key, the invoice's date (AW46: the bill is about to take it), the goods-receipt
             // bill excluded.
             when(billRepository.findLiveDuplicate(
                             testVendorId,
@@ -838,7 +838,7 @@ class VendorBillServiceTest {
             assertThat(goodsReceiptBill.getApprovalJustification()).isNull();
             assertThat(goodsReceiptBill.getRejectionReason()).isNull();
             assertThat(goodsReceiptBill.getDueDate()).isNull();
-            assertThat(goodsReceiptBill.getBillDate()).as("AW45(b): untouched").isEqualTo(BILL_DATE_CLOSE);
+            assertThat(goodsReceiptBill.getBillDate()).as("AW46(b): untouched").isEqualTo(BILL_DATE_CLOSE);
             verify(billRepository, never()).save(any());
             verify(matchCandidateRepository, never()).save(any());
             verify(evidenceRepository, never()).save(any());

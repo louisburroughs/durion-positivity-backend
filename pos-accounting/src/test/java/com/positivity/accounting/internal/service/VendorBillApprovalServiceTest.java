@@ -713,7 +713,7 @@ class VendorBillApprovalServiceTest {
     class ReadyToDecide {
 
         @Test
-        @DisplayName("AW44(a): an unmatched goods-receipt bill is 409 AP_BILL_AWAITING_INVOICE on submit, approve and"
+        @DisplayName("AW45(a): an unmatched goods-receipt bill is 409 AP_BILL_AWAITING_INVOICE on submit, approve and"
                 + " ACCEPT; nothing is written")
         void unmatchedGoodsReceiptAwaitsItsInvoice() {
             signIn("controller.cfo", APPROVE, OVER_LIMIT);
@@ -738,7 +738,7 @@ class VendorBillApprovalServiceTest {
         }
 
         @Test
-        @DisplayName("AW44: a goods-receipt bill with its invoice matched is sent as before")
+        @DisplayName("AW45: a goods-receipt bill with its invoice matched is sent as before")
         void matchedGoodsReceiptIsSent() {
             signIn("clerk.ana", APPROVE);
             goodsReceipt(VendorBillStatus.MATCH_EXCEPTION);
@@ -750,7 +750,7 @@ class VendorBillApprovalServiceTest {
         }
 
         @Test
-        @DisplayName("AW44(d): an EDI bill is still sent without a delivery match, with a justification")
+        @DisplayName("AW45(d): an EDI bill is still sent without a delivery match, with a justification")
         void ediBillIsSentWithoutMatch() {
             signIn("clerk.ana", APPROVE);
             edi(VendorBillStatus.PENDING_RECEIPT_MATCH, "1070.00", "1000.00", "70.00");
@@ -797,7 +797,7 @@ class VendorBillApprovalServiceTest {
         }
 
         @Test
-        @DisplayName("AW46(a): totals 15.00 apart: approve without a difference is 422 AP_BILL_TOTALS_UNRECONCILED and"
+        @DisplayName("AW47(a): totals 15.00 apart: approve without a difference is 422 AP_BILL_TOTALS_UNRECONCILED and"
                 + " writes nothing")
         void unreconciledTotalsNeedADifference() {
             signIn("controller.cfo", OVER_LIMIT);
@@ -815,7 +815,7 @@ class VendorBillApprovalServiceTest {
         }
 
         @Test
-        @DisplayName("AW46(b): with difference FREIGHT the approval posts and the decision is kept and audited")
+        @DisplayName("AW47(b): with difference FREIGHT the approval posts and the decision is kept and audited")
         void differenceIsKeptAndPosted() {
             signIn("controller.cfo", OVER_LIMIT);
             edi(VendorBillStatus.AWAITING_APPROVAL, "1085.00", "1000.00", "70.00");
@@ -836,7 +836,7 @@ class VendorBillApprovalServiceTest {
         }
 
         @Test
-        @DisplayName("AW46: a difference proposed at submission is kept on the bill for the approval")
+        @DisplayName("AW47: a difference proposed at submission is kept on the bill for the approval")
         void differenceProposedAtSubmission() {
             signIn("clerk.ana", APPROVE);
             edi(VendorBillStatus.MATCH_EXCEPTION, "1085.00", "1000.00", "70.00");
@@ -848,7 +848,7 @@ class VendorBillApprovalServiceTest {
         }
 
         @Test
-        @DisplayName("AW46: a difference without its class or key is 400 VALIDATION_ERROR, a short justification 400"
+        @DisplayName("AW47: a difference without its class or key is 400 VALIDATION_ERROR, a short justification 400"
                 + " JUSTIFICATION_REQUIRED")
         void malformedDifference() {
             signIn("controller.cfo", OVER_LIMIT);
@@ -911,7 +911,7 @@ class VendorBillApprovalServiceTest {
     }
 
     @Nested
-    @DisplayName("Correct, release and the receipt's void (#2509 review; AW44, AW45)")
+    @DisplayName("Correct, release and the receipt's void (#2509 review; AW45, AW46)")
     class ReceiptBaseline {
 
         private final UUID invoiceEventId = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a30");
@@ -948,7 +948,7 @@ class VendorBillApprovalServiceTest {
         }
 
         @Test
-        @DisplayName("AW44(b): an ap:reject holder voids an unmatched receipt with a 12-character reason: VOIDED, no"
+        @DisplayName("AW45(b): an ap:reject holder voids an unmatched receipt with a 12-character reason: VOIDED, no"
                 + " entry")
         void voidsAnUnmatchedReceipt() {
             signIn("clerk.ana", REJECT);
@@ -964,7 +964,7 @@ class VendorBillApprovalServiceTest {
         }
 
         @Test
-        @DisplayName("AW44(b): without ap:reject the receipt's void is 403; an EDI bill in PENDING_RECEIPT_MATCH is"
+        @DisplayName("AW45(b): without ap:reject the receipt's void is 403; an EDI bill in PENDING_RECEIPT_MATCH is"
                 + " not voided this way")
         void receiptVoidNeedsRejectAndAReceipt() {
             signIn("clerk.ana", APPROVE, OVER_LIMIT);
@@ -994,7 +994,7 @@ class VendorBillApprovalServiceTest {
         }
 
         @Test
-        @DisplayName("AW45 + AB-ambig: the selected bill takes the invoice date; the top bill the match held returns"
+        @DisplayName("AW46 + AB-ambig: the selected bill takes the invoice date; the top bill the match held returns"
                 + " to PENDING_RECEIPT_MATCH")
         void selectionTakesTheInvoiceDateAndReleasesTheTopBill() {
             signIn("clerk.ana", APPROVE);

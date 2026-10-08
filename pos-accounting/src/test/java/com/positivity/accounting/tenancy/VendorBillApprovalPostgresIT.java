@@ -62,7 +62,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * AW37-AW43): the template's VENDOR_BILL mappings, the entries of AC13 (a)-(e), the refusal that rolls the approval
  * back, the void dated on the void date, the once-only posting, the row lock between two deciders, the match
  * evidence under row-level security across two tenants, aged payables and the stage reads; and the review round
- * (AW44-AW46, A1, A4, A7, B-MAJ2, B-MAJ3): the receipt's void, the invoice date, the vendor's totals, the reversal
+ * (AW45-AW47, A1, A4, A7, B-MAJ2, B-MAJ3): the receipt's void, the invoice date, the vendor's totals, the reversal
  * guard, the guided mapping refusal, the void mirror, the override, the credit note, two approvers and two writers.
  *
  * <p>Requires Docker.
@@ -515,7 +515,7 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
                 });
     }
 
-    // ---- #2509 review round: AW44-AW46, A1, A4, A7, B-MAJ2, B-MAJ3 -----------------------------------------
+    // ---- #2509 review round: AW45-AW47, A1, A4, A7, B-MAJ2, B-MAJ3 -----------------------------------------
 
     private UUID approvedMatchedBill(UUID tenant, UUID vendor, UUID product) {
         signIn("receiving.dock", "accounting:ap:pay");
@@ -763,6 +763,39 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
     }
 
     @Test
+    @DisplayName("#2601: a mapping whose account is deactivated is the same 422 GL_MAPPING_NOT_CONFIGURED naming"
+            + " category, key and posting date; the bill is unchanged")
+    void inactiveMappedAccountRefusesTheApproval() {
+        UUID tenant = tenant();
+        new JdbcTemplate(ownerDataSource())
+                .update(
+                        "UPDATE gl_account SET deactivation_date = TIMESTAMP '2000-01-01 00:00:00' WHERE tenant_id = ?"
+                                + " AND account_code = '6340'",
+                        tenant);
+        UUID billId = ediBill(tenant, "INV-955", today(), "214.00", "200.00", "14.00");
+        signIn(CONTROLLER, CONTROLLER_GRANTS);
+        asTenant(
+                tenant,
+                () -> approvals.submitForApproval(
+                        billId,
+                        new VendorBillCommands.Submit(
+                                "Shop supplies bill",
+                                new VendorBillReview.Classification(
+                                        VendorBillDebitClass.EXPENSE, "EXPENSE_SHOP_SUPPLIES"),
+                                null)));
+
+        assertThatThrownBy(() -> asTenant(
+                        tenant,
+                        () -> approvals.approve(billId, new VendorBillCommands.Approve(null, null, null, null))))
+                .isInstanceOfSatisfying(GLMappingNotConfiguredException.class, e -> {
+                    assertThat(e.getReferenceId()).isEqualTo("VENDOR_BILL/EXPENSE_SHOP_SUPPLIES");
+                    assertThat(e.getMessage()).contains("EXPENSE_SHOP_SUPPLIES", today().toString());
+                });
+        assertThat(status(tenant, billId)).isEqualTo("AWAITING_APPROVAL");
+        assertThat(count(tenant, "journal_entry")).isZero();
+    }
+
+    @Test
     @DisplayName("B-MAJ2: a discrepancy CORRECTed goes back to its receipt; the next match compares with what was"
             + " received and goes to approval at 412.00")
     void correctThenRematch() {
@@ -795,7 +828,7 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
         });
         assertThat(corrected.getAvailableActions())
                 .extracting(VendorBillReview.AvailableAction::action)
-                .as("AW44: back to waiting for its invoice")
+                .as("AW45: back to waiting for its invoice")
                 .containsExactly(VendorBillAction.VOID_UNMATCHED);
 
         signIn("receiving.dock", "accounting:ap:pay");
@@ -810,7 +843,7 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
     }
 
     @Test
-    @DisplayName("AW44(a)/(b): an unmatched goods-receipt bill is 409 AP_BILL_AWAITING_INVOICE on submit; an ap:reject"
+    @DisplayName("AW45(a)/(b): an unmatched goods-receipt bill is 409 AP_BILL_AWAITING_INVOICE on submit; an ap:reject"
             + " holder voids it with a 12-character reason, posting nothing; without the permission it is 403")
     void unmatchedReceiptAwaitsItsInvoiceOrIsVoided() {
         UUID tenant = tenant();
@@ -847,7 +880,7 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
     }
 
     @Test
-    @DisplayName("AW44(c): an EDI GOODS bill of a vendor with one open goods-receipt bill shows"
+    @DisplayName("AW45(c): an EDI GOODS bill of a vendor with one open goods-receipt bill shows"
             + " OPEN_DELIVERIES_FROM_VENDOR FAIL with count 1; its approval still succeeds")
     void openDeliveriesFromVendorIsInformational() {
         UUID tenant = tenant();
@@ -893,7 +926,7 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
     }
 
     @Test
-    @DisplayName("AW45(a): a receipt matched to an invoice dated later takes the invoice date; the evidence keeps"
+    @DisplayName("AW46(a): a receipt matched to an invoice dated later takes the invoice date; the evidence keeps"
             + " the receipt date; it posts on the invoice date")
     void matchedBillTakesTheInvoiceDate() {
         UUID tenant = tenant();
@@ -919,7 +952,7 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
     }
 
     @Test
-    @DisplayName("AW45(b): /match onto an EDI bill's number and invoice date is 409 AP_BILL_DUPLICATE; the receipt"
+    @DisplayName("AW46(b): /match onto an EDI bill's number and invoice date is 409 AP_BILL_DUPLICATE; the receipt"
             + " bill is untouched")
     void matchOntoAnEdiBillsNumberIsRefused() {
         UUID tenant = tenant();
@@ -957,7 +990,7 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
     }
 
     @Test
-    @DisplayName("AW46(a)/(b): totals 15.00 apart: approve without a difference is 422 AP_BILL_TOTALS_UNRECONCILED;"
+    @DisplayName("AW47(a)/(b): totals 15.00 apart: approve without a difference is 422 AP_BILL_TOTALS_UNRECONCILED;"
             + " with FREIGHT it posts Dr 2100 1,000.00 / Dr 5050 70.00 / Dr 5060 15.00 / Cr 2000 1,085.00")
     void unreconciledTotalsPostWithTheirDifference() {
         UUID tenant = tenant();
@@ -1015,7 +1048,7 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
     }
 
     @Test
-    @DisplayName("AW46(c)/(d): gross 1,070.01 posts Dr 2100 1,000.01 with roundingAdjustment 0.01; gross 1,060.00"
+    @DisplayName("AW47(c)/(d): gross 1,070.01 posts Dr 2100 1,000.01 with roundingAdjustment 0.01; gross 1,060.00"
             + " with PRICE_DIFFERENCE posts Dr 5050 60.00")
     void roundingAndNegativeDifference() {
         UUID tenant = tenant();

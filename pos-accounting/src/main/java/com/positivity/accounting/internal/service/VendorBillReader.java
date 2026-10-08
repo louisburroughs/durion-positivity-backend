@@ -78,7 +78,7 @@ public class VendorBillReader {
     static final String REASON_INVOICE_NOT_MATCHED = "INVOICE_NOT_MATCHED";
     static final String REASON_NO_DELIVERY_RECORDED = "NO_DELIVERY_RECORDED";
 
-    /** Statuses in which a goods-receipt bill is still open for {@code OPEN_DELIVERIES_FROM_VENDOR} (AW44). */
+    /** Statuses in which a goods-receipt bill is still open for {@code OPEN_DELIVERIES_FROM_VENDOR} (AW45). */
     static final Set<VendorBillStatus> OPEN_DELIVERY_STATUSES = EnumSet.of(
             VendorBillStatus.PENDING_RECEIPT_MATCH,
             VendorBillStatus.MATCH_EXCEPTION,
@@ -167,7 +167,7 @@ public class VendorBillReader {
     }
 
     /**
-     * Whether a vendor invoice was matched to the bill (AW44): its latest evidence is a match or a selection, not the
+     * Whether a vendor invoice was matched to the bill (AW45): its latest evidence is a match or a selection, not the
      * scoring of an ambiguous match, and its lines carry what the invoice billed (a {@code CORRECT} clears them).
      */
     static boolean invoiceMatched(@Nullable VendorBillMatchEvidence latest, @NonNull List<VendorBillLine> stored) {
@@ -183,7 +183,7 @@ public class VendorBillReader {
                 billLines.findByVendorBill_VendorBillIdOrderByLineNumber(bill.getVendorBillId()));
     }
 
-    /** Whether a goods-receipt bill still waits for its vendor invoice (AW44); never for an EDI bill. */
+    /** Whether a goods-receipt bill still waits for its vendor invoice (AW45); never for an EDI bill. */
     static boolean awaitsInvoice(VendorBillReview.@Nullable Channel channel, boolean matched) {
         return channel == VendorBillReview.Channel.GOODS_RECEIPT && !matched;
     }
@@ -434,7 +434,7 @@ public class VendorBillReader {
         return lines;
     }
 
-    /** The goods-receipt bills of an EDI GOODS bill's vendor still open (AW44); null when the check does not apply. */
+    /** The goods-receipt bills of an EDI GOODS bill's vendor still open (AW45); null when the check does not apply. */
     private @Nullable List<VendorBill> openDeliveries(
             VendorBill bill, VendorBillReview.@Nullable Channel channel, @Nullable VendorBillGlPosting posting) {
         VendorBillDebitClass debitClass = posting != null ? posting.getDebitClass() : bill.getProposedDebitClass();
@@ -448,7 +448,7 @@ public class VendorBillReader {
     }
 
     /**
-     * The checks of the review (§5.2; AW44, AW46):
+     * The checks of the review (§5.2; AW45, AW47):
      *
      * <ul>
      *   <li>{@code MATCHED_TO_DELIVERY}: PASS once an invoice is matched (a HIGH or MEDIUM match, or a selection;
@@ -535,7 +535,7 @@ public class VendorBillReader {
      * <ul>
      *   <li>While an ambiguous match's candidates are open, the bill is picked first: no send or accept (#2509
      *       review).
-     *   <li>A goods-receipt bill no invoice is matched to is never sent, approved or accepted (AW44); in {@code
+     *   <li>A goods-receipt bill no invoice is matched to is never sent, approved or accepted (AW45); in {@code
      *       PENDING_RECEIPT_MATCH} it can be voided ({@code VOID_UNMATCHED}).
      *   <li>An approved bill is voidable only with its posting and no allocation.
      * </ul>

@@ -105,7 +105,7 @@ class VendorBillReaderTest {
     }
 
     @Test
-    @DisplayName("AW44: a goods-receipt bill without its invoice is never sent, approved or accepted; it can be voided"
+    @DisplayName("AW45: a goods-receipt bill without its invoice is never sent, approved or accepted; it can be voided"
             + " from PENDING_RECEIPT_MATCH with ap:reject")
     void goodsReceiptAwaitingItsInvoice() {
         signIn(CONTROLLER);
@@ -281,7 +281,7 @@ class VendorBillReaderTest {
     }
 
     @Test
-    @DisplayName("AW46: TOTALS_ADD_UP fails with the difference beyond the tolerance and passes within it")
+    @DisplayName("AW47: TOTALS_ADD_UP fails with the difference beyond the tolerance and passes within it")
     void totalsAddUp() {
         VendorBillTotals apart =
                 VendorBillTotals.of(ediBill("1085.00", "1000.00", "70.00")).orElseThrow();
@@ -305,7 +305,7 @@ class VendorBillReaderTest {
     }
 
     @Test
-    @DisplayName("AW44(c): OPEN_DELIVERIES_FROM_VENDOR fails with the count and numbers of the vendor's open receipts;"
+    @DisplayName("AW45(c): OPEN_DELIVERIES_FROM_VENDOR fails with the count and numbers of the vendor's open receipts;"
             + " none open passes")
     void openDeliveriesFromVendor() {
         VendorBill open = new VendorBill(UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a05"));
@@ -325,7 +325,7 @@ class VendorBillReaderTest {
     }
 
     @Test
-    @DisplayName("AW44: an invoice is matched once a match or selection kept billed lines; an ambiguous match's"
+    @DisplayName("AW45: an invoice is matched once a match or selection kept billed lines; an ambiguous match's"
             + " scoring or a CORRECT is no match")
     void invoiceMatched() {
         VendorBillLine billed = new VendorBillLine();

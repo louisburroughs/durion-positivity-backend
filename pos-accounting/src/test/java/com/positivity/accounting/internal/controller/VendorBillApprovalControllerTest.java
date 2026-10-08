@@ -106,7 +106,7 @@ class VendorBillApprovalControllerTest extends BaseControllerSliceTest {
                 Arguments.of(
                         "void",
                         json(post(BASE + "/" + BILL_ID + "/void"), "{\"reason\":\"Billed twice by mistake\"}"),
-                        // AW44: every void needs ap:reject alone at the gate; an approved bill's approval tier is
+                        // AW45: every void needs ap:reject alone at the gate; an approved bill's approval tier is
                         // the service's check, once it knows the status.
                         List.of(REJECT, REJECT + "," + OVER_LIMIT)));
     }
@@ -215,7 +215,7 @@ class VendorBillApprovalControllerTest extends BaseControllerSliceTest {
     }
 
     @Test
-    @DisplayName("AW46: difference binds from JSON with its key \"class\"")
+    @DisplayName("AW47: difference binds from JSON with its key \"class\"")
     void differenceBindsItsClass() throws Exception {
         when(approvalService.submitForApproval(eq(BILL_ID), any())).thenReturn(awaiting());
 

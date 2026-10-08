@@ -908,7 +908,7 @@ on an inbound fact means the ledger currency until producers stamp one (E-3).
   and `accounting.float.changed` (schema version 3, additive) carry it, from every go-live, change,
   relocation, reversal and start-up republish; a relocation request carries no amount and so no code.
 
-## Vendor-bill approval and posting at approval (CAP:550 S12, #2509; AW8, AW37-AW46)
+## Vendor-bill approval and posting at approval (CAP:550 S12, #2509; AW8, AW37-AW47)
 
 Every vendor bill passes an explicit approval. The actor of every decision is the caller in the security
 context (ADR-0018), and it must be a named caller (403 otherwise); no body carries one (`operatorId` is gone
@@ -926,7 +926,7 @@ MATCH_EXCEPTION ───────submit─►         │             └─
 MATCH_EXCEPTION ─ACCEPT (posts)─► APPROVED   ─VOID─► VOIDED   ─CORRECT─► PENDING_RECEIPT_MATCH (as received)
 PENDING_RECEIPT_MATCH ─/match HIGH─► AWAITING_APPROVAL (submittedBy SYSTEM) ─/match MEDIUM or discrepancy─► MATCH_EXCEPTION
 ambiguous match ─select candidate─► AWAITING_APPROVAL      CURRENCY_HOLD: never submitted, approved or posted (AW43)
-PENDING_RECEIPT_MATCH (goods receipt) ─void, posts nothing (AW44)─► VOIDED
+PENDING_RECEIPT_MATCH (goods receipt) ─void, posts nothing (AW45)─► VOIDED
 ```
 
 | Endpoint (`/v1/accounting/vendor-bills`) | Permission | Refusals |
@@ -947,15 +947,15 @@ justification and reason needs at least 10 characters (400 `JUSTIFICATION_REQUIR
 
 - no ambiguous match naming it may be open: 409 `AP_BILL_NOT_APPROVABLE`, pick the match first (select a
   candidate); while candidates are open the read offers only the selection, `CORRECT` and the voids;
-- a goods-receipt bill needs a vendor invoice matched to it (AW44): its latest evidence is a match or a selection
+- a goods-receipt bill needs a vendor invoice matched to it (AW45): its latest evidence is a match or a selection
   (not an ambiguous match's scoring) and its lines carry what was billed, else 409 `AP_BILL_AWAITING_INVOICE`.
   "Send without match" stays for EDI bills only. A receipt no invoice will match is closed by
   `POST /{billId}/void` from `PENDING_RECEIPT_MATCH` (`VOID_UNMATCHED`, `ap:reject`, reason): nothing posts, the
   receipt's accrual stays in 2100 until the vendor's EDI bill classified `GOODS` clears it at its approval;
 - a bill of 0.00 has nothing to post: 422 `AP_BILL_ZERO_TOTAL`;
-- the vendor's totals add up (AW46), or the command says where the gap posts (below).
+- the vendor's totals add up (AW47), or the command says where the gap posts (below).
 
-**Posting at approval (AW37-AW42, AW46).** Approve, `ACCEPT` (and S13's system approval) post the bill in the same
+**Posting at approval (AW37-AW42, AW47).** Approve, `ACCEPT` (and S13's system approval) post the bill in the same
 transaction through `VendorBillPostingService`: a bill is approved if and only if it posted, and creation, match,
 selection, submit and reject post nothing. Accounts resolve through the `VENDOR_BILL` posting category:
 
@@ -971,7 +971,7 @@ The credit is `ACCOUNTS_PAYABLE` (2000), always the billed gross; a credit note 
 field (each field the approver gives wins; the vendor default arrives with S24), else 422 `AP_BILL_UNCLASSIFIED`.
 A header tax on a bill with lines is prorated by line net, the residual cent on the largest line.
 
-**The vendor's own totals (AW46).** An EDI bill keeps the vendor's `net_amount` and `tax_amount` as stated, signed
+**The vendor's own totals (AW47).** An EDI bill keeps the vendor's `net_amount` and `tax_amount` as stated, signed
 like the gross: no net stated, net = gross - tax; a net and no tax, tax = gross - net; neither, net = gross and tax
 0, so only a document stating all three can disagree with itself. A gap `gross - (net + tax)` within 0.01 per
 stated line, at most 0.05 per bill (a header-only bill counts as one line), goes on the largest debit and is kept
@@ -988,8 +988,9 @@ The entry is dated on the bill date when it is on or before today and its period
 (BILL_DATE | APPROVAL_DATE_BILL_PERIOD_NOT_OPEN | APPROVAL_DATE_BILL_DATE_FUTURE), roundingAdjustment,
 differenceClass, differenceAmount, reversalReference}`. The period gate then applies (CLOSED: 422 `PERIOD_CLOSED`
 unless `accounting:period:override` and `overrideJustification`, audited `PERIOD_OVERRIDE_POST`; HARD_LOCKED: 422
-`PERIOD_HARD_LOCKED`). A key with no active mapping on that date is 422 `GL_MAPPING_NOT_CONFIGURED`, guided:
-`referenceId` `VENDOR_BILL/<KEY>` and a `nextAction` naming the mapping to set up (#2601). Any refusal rolls the
+`PERIOD_HARD_LOCKED`). A key with no mapping effective on that date, or one whose account is not active then, is
+one refusal (#2601): 422 `GL_MAPPING_NOT_CONFIGURED`, its message naming the category, the key and the posting date,
+guided with `referenceId` `VENDOR_BILL/<KEY>` and a `nextAction` naming the mapping to set up. Any refusal rolls the
 approval back (no approval field, no entry) and writes one `VENDOR_BILL_APPROVE_REFUSED` (or
 `..._MATCH_EXCEPTION_RESOLVE_REFUSED`) audit row in a transaction of its own. One `vendor_bill_gl_posting` row per
 bill holds the entry and the durable keys `VENDOR_BILL:<billId>` and `VENDOR_BILL_VOID:<billId>`; the entry's
@@ -1006,7 +1007,7 @@ and a payment of the same bill never both succeed.
 such event not already `PROCESSED` as `SKIPPED / RETIRED_EVENT_TYPE`, which no retry selects, and
 `POST /v1/accounting/events` refuses the type with 400 `VALIDATION_ERROR`.
 
-**Matching keeps what was billed (AW39, AW45).** `/match` considers goods-receipt bills only (never an EDI bill) and
+**Matching keeps what was billed (AW39, AW46).** `/match` considers goods-receipt bills only (never an EDI bill) and
 compares the invoice with what was received: the lines with a received quantity above 0 and the sum of their line
 totals, for the tolerance check and the amount points alike. A single match (HIGH, MEDIUM or a discrepancy) and a
 candidate selection set the bill's number to the invoice reference, its date to the `invoiceDate` (required on
@@ -1142,12 +1143,12 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `VENDOR_BILL_NOT_FOUND` | 404 | No vendor bill with that id is visible to the caller (#2509) |
 | `AP_MATCH_CANDIDATE_NOT_FOUND` | 404 | No match candidate with that id is visible to the caller (#2509) |
 | `AP_BILL_NOT_APPROVABLE` | 409 | The bill's own status does not allow the decision (the message names it), a replayed command, an open ambiguous match naming the bill (pick the match first), or a `CURRENCY_HOLD` bill (#2509) |
-| `AP_BILL_NOT_VOIDABLE` | 409 | Void of a bill that is neither `APPROVED` nor a goods-receipt bill in `PENDING_RECEIPT_MATCH`, or has an allocation; correct it with a vendor credit note (AW42, AW44, #2509) |
-| `AP_BILL_AWAITING_INVOICE` | 409 | A goods-receipt bill no vendor invoice has been matched to is sent, approved or accepted, or a candidate that kept no invoice is selected; match the invoice, select a candidate, or void the bill (AW44, #2509) |
+| `AP_BILL_NOT_VOIDABLE` | 409 | Void of a bill that is neither `APPROVED` nor a goods-receipt bill in `PENDING_RECEIPT_MATCH`, or has an allocation; correct it with a vendor credit note (AW42, AW45, #2509) |
+| `AP_BILL_AWAITING_INVOICE` | 409 | A goods-receipt bill no vendor invoice has been matched to is sent, approved or accepted, or a candidate that kept no invoice is selected; match the invoice, select a candidate, or void the bill (AW45, #2509) |
 | `AP_BILL_ENTRY_NOT_REVERSIBLE` | 409 | A vendor bill's entry, or its void's reversal, reversed through the journal-entry endpoint; void the bill instead (AW42, #2509) |
 | `AP_MATCH_CANDIDATE_ALREADY_RESOLVED` | 409 | Someone else already resolved the ambiguous match (#2509) |
 | `AP_BILL_UNCLASSIFIED` | 422 | The bill (or a non-stock line) has no class and its vendor no default; the approval needs a `classification` (AW39, #2509) |
-| `AP_BILL_TOTALS_UNRECONCILED` | 422 | The vendor's gross differs from its net + tax beyond the rounding tolerance and the send, approval or acceptance gives no `difference`; nothing is written (AW46, #2509) |
+| `AP_BILL_TOTALS_UNRECONCILED` | 422 | The vendor's gross differs from its net + tax beyond the rounding tolerance and the send, approval or acceptance gives no `difference`; nothing is written (AW47, #2509) |
 | `AP_BILL_ZERO_TOTAL` | 422 | A bill totalling 0.00 is sent, approved or accepted; correct it or void it (#2509) |
 | `UNAUTHENTICATED` | 401 | No usable authentication on the request |
 | `FORBIDDEN` | 403 | Caller lacks the required permission |

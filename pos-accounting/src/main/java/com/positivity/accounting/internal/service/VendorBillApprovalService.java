@@ -21,8 +21,8 @@ import org.springframework.data.domain.Page;
  *
  * <p><b>Before a bill is sent, approved or accepted</b> (409 or 422, nothing written): no ambiguous match naming it
  * may be open ({@code AP_BILL_NOT_APPROVABLE}: pick the match first); a goods-receipt bill needs its vendor invoice
- * matched ({@code AP_BILL_AWAITING_INVOICE}, AW44); a bill of 0.00 has nothing to post ({@code AP_BILL_ZERO_TOTAL});
- * and the vendor's totals must add up or come with a {@code difference} ({@code AP_BILL_TOTALS_UNRECONCILED}, AW46).
+ * matched ({@code AP_BILL_AWAITING_INVOICE}, AW45); a bill of 0.00 has nothing to post ({@code AP_BILL_ZERO_TOTAL});
+ * and the vendor's totals must add up or come with a {@code difference} ({@code AP_BILL_TOTALS_UNRECONCILED}, AW47).
  *
  * <p><b>Replays.</b> The commands take no idempotency key: a transition is its own guard. Sent again after it
  * succeeded, a command finds the bill already moved on and is refused with 409 naming the status found ({@code
@@ -58,7 +58,7 @@ public interface VendorBillApprovalService {
     /**
      * Voids a bill: {@code APPROVED -> VOIDED} while nothing is allocated, reversing the entry on the void date
      * (AW42); or {@code PENDING_RECEIPT_MATCH -> VOIDED} for a goods-receipt bill no invoice will match, posting
-     * nothing (AW44).
+     * nothing (AW45).
      */
     @NonNull
     VendorBillResponse voidBill(@NonNull UUID billId, VendorBillCommands.@NonNull VoidBill command);

@@ -9,6 +9,8 @@ import com.positivity.accounting.internal.entity.VendorBillLine;
 import com.positivity.accounting.internal.enums.VendorBillDebitClass;
 import com.positivity.accounting.internal.enums.VendorBillDifferenceClass;
 import com.positivity.accounting.internal.enums.VendorBillPostingDateRule;
+import com.positivity.accounting.internal.exception.GLAccountNotActiveException;
+import com.positivity.accounting.internal.exception.GLAccountNotFoundException;
 import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
 import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.accounting.internal.repository.VendorBillGlPostingRepository;
@@ -61,7 +63,7 @@ import org.springframework.transaction.annotation.Transactional;
  * A credit note posts the mirror: Dr {@code ACCOUNTS_PAYABLE} / Cr its {@code EXPENSE_<CODE>} key ({@code EXPENSE})
  * or {@code PURCHASE_PRICE_DIFFERENCE} ({@code PRICE_ALLOWANCE}). A bill never debits 1300 (ADR-0048 §1).
  *
- * <p><b>The vendor's own totals (AW46).</b> A bill with the vendor's header totals (EDI) debits its class at the
+ * <p><b>The vendor's own totals (AW47).</b> A bill with the vendor's header totals (EDI) debits its class at the
  * stated net, and the stated tax as above: GOODS is Dr 2100 net / Dr 5050 tax, EXPENSE is Dr {@code EXPENSE_<CODE>}
  * net + tax. Accounts payable is always the gross. A gap {@code gross - (net + tax)} within the rounding tolerance
  * ({@link VendorBillTotals}) goes on the largest debit and is kept as {@code roundingAdjustment}; a larger one posts
@@ -79,8 +81,9 @@ import org.springframework.transaction.annotation.Transactional;
  * dated on the void date in that date's period, never back in the original period. Only the void reverses it: the
  * journal-entry endpoint refuses a bill's entry and its void's ({@link VendorBillReversalReaction}).
  *
- * <p><b>Mappings (#2601).</b> A key with no active mapping on the posting date is 422 {@code
- * GL_MAPPING_NOT_CONFIGURED}, naming the category and key and what to do next; the approval rolls back.
+ * <p><b>Mappings (#2601).</b> A key with no mapping effective on the posting date, or one whose account is not
+ * active then, is one refusal, 422 {@code GL_MAPPING_NOT_CONFIGURED}, naming the category, the key and the posting
+ * date and what to do next; the approval rolls back.
  */
 @Slf4j
 @Component
@@ -108,6 +111,7 @@ public class VendorBillPostingService {
 
     private final Clock clock;
     private final GLMappingResolver glMappingResolver;
+    private final GLAccountService glAccountService;
     private final JournalEntryService journalEntryService;
     private final VendorBillGlPostingRepository postings;
     private final VendorBillLineRepository billLines;
@@ -127,7 +131,7 @@ public class VendorBillPostingService {
     /** One debit (positive) or credit (negative) of the entry, by {@code VENDOR_BILL} mapping key. */
     record Leg(@NonNull String mappingKey, @NonNull BigDecimal signedAmount) {}
 
-    /** Where a vendor's unreconciled difference posts (AW46): the class, its expense key for EXPENSE. */
+    /** Where a vendor's unreconciled difference posts (AW47): the class, its expense key for EXPENSE. */
     public record Difference(
             @NonNull VendorBillDifferenceClass differenceClass,
             @Nullable String expenseMappingKey) {}
@@ -294,7 +298,7 @@ public class VendorBillPostingService {
     /**
      * The entry's legs by mapping key, summed per key, the credit last. Debits are positive, credits negative; they
      * net to zero, the billed gross on {@code ACCOUNTS_PAYABLE}. A residual within the rounding tolerance goes to the
-     * largest debit and is returned as the rounding adjustment (AW46).
+     * largest debit and is returned as the rounding adjustment (AW47).
      *
      * @param difference where an unreconciled difference of the vendor's totals posts; null when none was decided
      * @throws VendorBillException 422 {@code AP_BILL_ZERO_TOTAL} for a bill of 0.00; 422 {@code
@@ -356,7 +360,7 @@ public class VendorBillPostingService {
     }
 
     /**
-     * Refuses a bill whose vendor totals need a decision nobody has made (AW46): 422 {@code
+     * Refuses a bill whose vendor totals need a decision nobody has made (AW47): 422 {@code
      * AP_BILL_TOTALS_UNRECONCILED}. The approval service asks before writing anything; the posting asks again.
      */
     static void requireReconciled(@NonNull VendorBill bill, @Nullable Difference difference) {
@@ -381,7 +385,7 @@ public class VendorBillPostingService {
                         + " PRICE_DIFFERENCE, with a justification), correct the bill or void it");
     }
 
-    /** A bill stored before AW46 without its net: net = gross - tax, the tax as stated. */
+    /** A bill stored before AW47 without its net: net = gross - tax, the tax as stated. */
     private static VendorBillTotals legacyTotals(VendorBill bill, BigDecimal gross) {
         BigDecimal tax = scaled(bill.getTaxAmount());
         if (gross.signum() < 0 && tax.signum() > 0) {
@@ -404,7 +408,7 @@ public class VendorBillPostingService {
         }
     }
 
-    /** A bill whose lines are not stored (AW39, AW46): one class for the whole bill, at the stated net and tax. */
+    /** A bill whose lines are not stored (AW39, AW47): one class for the whole bill, at the stated net and tax. */
     private static void headerOnly(
             VendorBill bill, VendorBillTotals stated, Classification classification, Map<String, BigDecimal> debits) {
         VendorBillDebitClass debitClass = requireClass(bill, classification);
@@ -529,40 +533,26 @@ public class VendorBillPostingService {
         return residual;
     }
 
-    /** The account of {@code key} on {@code date}; a missing mapping names itself and what to do (#2601). */
+    /**
+     * The account of {@code key} on {@code date} (#2601): a missing mapping, one not effective on the date, or one
+     * whose account is not active then, is one refusal, 422 {@code GL_MAPPING_NOT_CONFIGURED}, naming the category,
+     * the key and the posting date, and what to do next.
+     */
     private UUID resolve(VendorBill bill, String key, LocalDate date) {
+        UUID account;
         try {
-            return glMappingResolver.resolveGLAccount(POSTING_CATEGORY, key, date.atStartOfDay());
-        } catch (GLMappingNotConfiguredException missing) {
+            account = glMappingResolver.resolveGLAccount(POSTING_CATEGORY, key, date.atStartOfDay());
+            glAccountService.validateAccountForPosting(account, date.atStartOfDay());
+        } catch (GLMappingNotConfiguredException | GLAccountNotActiveException | GLAccountNotFoundException missing) {
             throw new GLMappingNotConfiguredException(
-                    "Bill " + bill.getBillNumber() + " cannot post on " + date + ": " + missing.getMessage(),
+                    "No active " + POSTING_CATEGORY + " mapping for key " + key + " on " + date + "; bill "
+                            + bill.getBillNumber() + " cannot post (" + missing.getMessage() + ")",
                     POSTING_CATEGORY,
                     key,
                     "Map " + POSTING_CATEGORY + " / " + key + " to an active account effective on " + date
                             + " in GL mappings, then approve the bill again");
         }
-    }
-
-    private static VendorBillDebitClass requireClass(VendorBill bill, Classification classification) {
-        if (classification.debitClass() == null) {
-            throw unclassified(bill);
-        }
-        return classification.debitClass();
-    }
-
-    private static String expenseKey(VendorBill bill, Classification classification) {
-        String key = classification.expenseMappingKey();
-        if (key == null || key.isBlank()) {
-            throw unclassified(bill);
-        }
-        return key.trim();
-    }
-
-    private static VendorBillException unclassified(VendorBill bill) {
-        return new VendorBillException(
-                VendorBillException.Code.AP_BILL_UNCLASSIFIED,
-                "Bill " + bill.getBillNumber() + " has no class and its vendor no default; give the approval a"
-                        + " classification (debitClass, and expenseMappingKey for expenses)");
+        return account;
     }
 
     private static void add(Map<String, BigDecimal> debits, String key, BigDecimal amount) {

@@ -12383,7 +12383,7 @@ paths:
     post:
       description: 'Runs the three-way match of a received vendor invoice against pending goods-received bills (never an EDI bill): a HIGH match (score 70 or more) within tolerance sends the bill to AWAITING_APPROVAL with submittedBy SYSTEM and never approves it, a MEDIUM score or a discrepancy parks it in MATCH_EXCEPTION, and an AMBIGUOUS match keeps the scored candidates for a person to select one; nothing is posted.
 
-        Every routed single match takes the invoice''s number and its invoiceDate as the bill date (AW45) and keeps what the vendor billed (the billed total and each line''s billed quantity and price) and an append-only evidence record with the receipt date, the score, the points per criterion (amount 40 against the received total, products 30, date 20, purchase order 5) and the line comparison.
+        Every routed single match takes the invoice''s number and its invoiceDate as the bill date (AW46) and keeps what the vendor billed (the billed total and each line''s billed quantity and price) and an append-only evidence record with the receipt date, the score, the points per criterion (amount 40 against the received total, products 30, date 20, purchase order 5) and the line comparison.
 
         Use this tool when a vendor invoice arrives; do not use createVendorBillFromGoodsReceived, which records the receipt, and use resolveVendorBillMatchException or selectVendorBillMatchCandidate to clear exceptions.
 
@@ -12450,7 +12450,7 @@ paths:
     post:
       description: 'Picks one candidate bill of an ambiguous invoice match and resolves the candidate set.
 
-        Selection is matching only: the chosen bill keeps what the vendor billed (lines, total, the invoice number, the invoice date as its bill date and the due date, AW45), gets its match evidence with the receipt date and moves to AWAITING_APPROVAL with the caller as submittedBy, while a bill the match had held in MATCH_EXCEPTION for this invoice returns to PENDING_RECEIPT_MATCH; nothing approves it and nothing is posted.
+        Selection is matching only: the chosen bill keeps what the vendor billed (lines, total, the invoice number, the invoice date as its bill date and the due date, AW46), gets its match evidence with the receipt date and moves to AWAITING_APPROVAL with the caller as submittedBy, while a bill the match had held in MATCH_EXCEPTION for this invoice returns to PENDING_RECEIPT_MATCH; nothing approves it and nothing is posted.
 
         Use this tool after reviewing listVendorBillMatchCandidates or a bill read''s openCandidates; do not use resolveVendorBillMatchException, which handles discrepancy exceptions on a single bill.
 
@@ -12919,11 +12919,11 @@ paths:
     post:
       description: 'Sends a vendor bill in PENDING_RECEIPT_MATCH or MATCH_EXCEPTION for approval: it moves to AWAITING_APPROVAL with the caller as submittedBy, and nothing is posted.
 
-        From PENDING_RECEIPT_MATCH this is "send without a delivery match", for EDI bills only (a goods-receipt bill needs its vendor invoice matched first, AW44); from MATCH_EXCEPTION it resolves the exception for a person to approve.
+        From PENDING_RECEIPT_MATCH this is "send without a delivery match", for EDI bills only (a goods-receipt bill needs its vendor invoice matched first, AW45); from MATCH_EXCEPTION it resolves the exception for a person to approve.
 
         Use this tool when a clerk has checked a bill and wants it approved; do not use approveVendorBill, which is the approver''s decision, or resolveVendorBillMatchException, which accepts, corrects or voids an exception directly.
 
-        Preconditions: the bill is PENDING_RECEIPT_MATCH or MATCH_EXCEPTION (never CURRENCY_HOLD), no ambiguous match naming it is open, a goods-receipt bill has its invoice matched, its total is not 0.00, and the vendor''s gross equals net + tax within 0.01 per stated line (at most 0.05) unless a difference is given (AW46).
+        Preconditions: the bill is PENDING_RECEIPT_MATCH or MATCH_EXCEPTION (never CURRENCY_HOLD), no ambiguous match naming it is open, a goods-receipt bill has its invoice matched, its total is not 0.00, and the vendor''s gross equals net + tax within 0.01 per stated line (at most 0.05) unless a difference is given (AW47).
 
         Required inputs: billId (UUID) as a path parameter and justification (at least 10 characters); classification {debitClass, expenseMappingKey} is an optional proposal the approver may keep, and difference {class FREIGHT|GOODS|EXPENSE|PRICE_DIFFERENCE, expenseMappingKey, justification} says where an unreconciled gap posts.
 
@@ -13012,7 +13012,7 @@ paths:
       - accounting:ap:approve_over_limit
   /v1/accounting/vendor-bills/{billId}/void:
     post:
-      description: 'Voids a vendor bill: an APPROVED bill with nothing allocated moves to VOIDED and its entry is reversed through the journal-entry reversal (linked both ways), dated today in today''s period and never back in the original period (AW42), so 2100 is accrued again; a goods-receipt bill in PENDING_RECEIPT_MATCH that no vendor invoice will match moves to VOIDED and nothing is posted (AW44), its receipt accrual staying in 2100 until the vendor''s EDI bill classified GOODS clears it.
+      description: 'Voids a vendor bill: an APPROVED bill with nothing allocated moves to VOIDED and its entry is reversed through the journal-entry reversal (linked both ways), dated today in today''s period and never back in the original period (AW42), so 2100 is accrued again; a goods-receipt bill in PENDING_RECEIPT_MATCH that no vendor invoice will match moves to VOIDED and nothing is posted (AW45), its receipt accrual staying in 2100 until the vendor''s EDI bill classified GOODS clears it.
 
         Use this tool to undo an approval that should not stand or to close a receipt placeholder; do not use rejectVendorBill, which refuses a bill not yet approved, or resolveVendorBillMatchException with VOID, which voids a bill still in MATCH_EXCEPTION, and correct a bill with payments allocated with a vendor credit note instead.
 
@@ -23952,7 +23952,7 @@ components:
           type: string
       type: object
     VendorBillDifference:
-      description: Where the gap between the vendor's gross and its net + tax posts (AW46)
+      description: Where the gap between the vendor's gross and its net + tax posts (AW47)
       properties:
         class:
           description: FREIGHT (5060), GOODS (2100), EXPENSE (the expenseMappingKey given) or PRICE_DIFFERENCE (5050); a negative difference is a credit
@@ -24129,7 +24129,7 @@ components:
           format: uuid
           type: string
         invoiceDate:
-          description: The invoice date, the matched bill's date (AW45)
+          description: The invoice date, the matched bill's date (AW46)
           format: date-time
           type: string
         invoiceReference:
@@ -24139,7 +24139,7 @@ components:
         points:
           $ref: '#/components/schemas/VendorBillMatchPoints'
         receivedDate:
-          description: The receipt date, the bill's date before the match (AW45)
+          description: The receipt date, the bill's date before the match (AW46)
           format: date-time
           type: string
         receivedTotal:
@@ -24317,7 +24317,7 @@ components:
           example: 15.0
           type: number
         differenceClass:
-          description: Where an unreconciled difference posted (AW46); null when the totals added up
+          description: Where an unreconciled difference posted (AW47); null when the totals added up
           enum:
           - FREIGHT
           - GOODS
@@ -24358,7 +24358,7 @@ components:
           example: JE-202610-000140
           type: string
         roundingAdjustment:
-          description: The rounding plug put on the largest debit, within 0.01 per stated line and 0.05 per bill (AW46); 0.00 when the legs added up
+          description: The rounding plug put on the largest debit, within 0.01 per stated line and 0.05 per bill (AW47); 0.00 when the legs added up
           example: 0.01
           type: number
       required:
@@ -24509,7 +24509,7 @@ components:
         match:
           $ref: '#/components/schemas/VendorBillMatch'
         netAmount:
-          description: The net the vendor's document states (AW46); null on a bill without header totals
+          description: The net the vendor's document states (AW47); null on a bill without header totals
           example: 1000.0
           type: number
         openAmount:
@@ -24562,7 +24562,7 @@ components:
           example: Quantity or price mismatch detected during three-way match
           type: string
         taxAmount:
-          description: The tax the vendor's document states, never recalculated (AW39, AW46)
+          description: The tax the vendor's document states, never recalculated (AW39, AW47)
           example: 70.0
           type: number
         totalAmount:

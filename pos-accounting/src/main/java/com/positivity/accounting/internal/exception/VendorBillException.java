@@ -25,7 +25,7 @@ public class VendorBillException extends RuntimeException {
         /** An approved bill with an allocation cannot be voided; a vendor credit note corrects it (AW42). */
         AP_BILL_NOT_VOIDABLE(HttpStatus.CONFLICT),
         /**
-         * A goods-receipt bill no vendor invoice has been matched to yet cannot be sent, approved or accepted (AW44):
+         * A goods-receipt bill no vendor invoice has been matched to yet cannot be sent, approved or accepted (AW45):
          * match the invoice, select a candidate, or void the bill.
          */
         AP_BILL_AWAITING_INVOICE(HttpStatus.CONFLICT),
@@ -40,7 +40,7 @@ public class VendorBillException extends RuntimeException {
         AP_BILL_UNCLASSIFIED(HttpStatus.UNPROCESSABLE_CONTENT),
         /**
          * The vendor's gross differs from its net + tax beyond the rounding tolerance and the command says nowhere
-         * the difference posts (AW46); nothing is written.
+         * the difference posts (AW47); nothing is written.
          */
         AP_BILL_TOTALS_UNRECONCILED(HttpStatus.UNPROCESSABLE_CONTENT),
         /** A bill totalling 0.00 has nothing to send, approve or post: correct it or void it. */

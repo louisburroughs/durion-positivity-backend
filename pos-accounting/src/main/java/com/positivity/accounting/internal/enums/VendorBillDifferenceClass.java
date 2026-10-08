@@ -1,7 +1,7 @@
 package com.positivity.accounting.internal.enums;
 
 /**
- * Where a vendor's unreconciled difference between the gross and net + tax posts (AW46): the person sending, approving
+ * Where a vendor's unreconciled difference between the gross and net + tax posts (AW47): the person sending, approving
  * or accepting the bill decides, with a justification. A negative difference is a credit.
  */
 public enum VendorBillDifferenceClass {

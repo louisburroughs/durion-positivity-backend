@@ -128,7 +128,7 @@ class SupplierInvoiceEventsListenerTest {
         return event(eventId, number, type, total, currency, "2026-08-14");
     }
 
-    /** An invoice whose totals add up (AW46): tax 48.00 and the net the rest of the gross. */
+    /** An invoice whose totals add up (AW47): tax 48.00 and the net the rest of the gross. */
     private static String event(
             String eventId, String number, String type, String total, String currency, String invoiceDate) {
         String net = new BigDecimal(total).subtract(new BigDecimal("48.00")).toPlainString();
@@ -280,7 +280,7 @@ class SupplierInvoiceEventsListenerTest {
     }
 
     @Nested
-    @DisplayName("the vendor's own totals: gross vs net + tax (AW46)")
+    @DisplayName("the vendor's own totals: gross vs net + tax (AW47)")
     class Totals {
 
         private VendorBill created(String gross, String net, String tax, String lines) {

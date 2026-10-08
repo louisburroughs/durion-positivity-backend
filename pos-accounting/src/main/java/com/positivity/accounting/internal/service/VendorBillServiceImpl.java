@@ -400,7 +400,7 @@ public class VendorBillServiceImpl implements VendorBillService {
         LocalDateTime receivedDate = bill.getBillDate();
 
         // The bill is about to take the vendor's invoice reference as its number and the invoice date as its date
-        // (AW45), whatever the routing: the duplicate rule (#2501) is checked first on that number and date, the
+        // (AW46), whatever the routing: the duplicate rule (#2501) is checked first on that number and date, the
         // bill itself excluded, so a refusal leaves it untouched.
         duplicateGuard.refuseIfDuplicate(
                 VendorBillDuplicateGuard.Channel.MATCH,
@@ -436,7 +436,7 @@ public class VendorBillServiceImpl implements VendorBillService {
                     "Medium confidence match - requires review (score=" + matchResult.getBestScore() + ")");
             outcome = "MEDIUM";
         }
-        // AW45: the vendor's number and date; the receipt date stays in the evidence.
+        // AW46: the vendor's number and date; the receipt date stays in the evidence.
         bill.setBillNumber(event.getInvoiceReference());
         bill.setBillDate(event.getInvoiceDate());
         if (event.getDueDate() != null) {
