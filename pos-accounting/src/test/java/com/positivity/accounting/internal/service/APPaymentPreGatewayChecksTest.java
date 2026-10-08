@@ -124,7 +124,10 @@ class APPaymentPreGatewayChecksTest {
     private void eligibleOnToday(UUID... ids) {
         List<GLAccount> active = java.util.Arrays.stream(ids).map(accounts::get).toList();
         lenient()
-                .when(glAccounts.findBySubtypeActiveOn(AccountSubtype.BANK_CASH, TODAY.atStartOfDay()))
+                .when(glAccounts.findBySubtypeActiveOnDay(
+                        AccountSubtype.BANK_CASH,
+                        TODAY.atStartOfDay(),
+                        TODAY.plusDays(1).atStartOfDay()))
                 .thenReturn(active);
     }
 
@@ -185,7 +188,7 @@ class APPaymentPreGatewayChecksTest {
                     .extracting(APPaymentPreGatewayChecksTest::code)
                     .isEqualTo(VendorBillException.Code.AP_PAYMENT_METHOD_NOT_SUPPORTED);
             verify(glAccounts, never()).findById(any());
-            verify(glAccounts, never()).findBySubtypeActiveOn(any(), any());
+            verify(glAccounts, never()).findBySubtypeActiveOnDay(any(), any(), any());
         }
 
         @Test

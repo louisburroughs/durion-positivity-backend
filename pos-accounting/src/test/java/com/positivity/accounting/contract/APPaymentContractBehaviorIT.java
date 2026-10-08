@@ -91,6 +91,9 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
     @Autowired
     private GLMappingRepository glMappingRepository;
 
+    @Autowired
+    private com.positivity.accounting.internal.repository.EventOutboxRepository outboxRepository;
+
     /** The BANK_CASH account every payment here is made from (CAP:550 S42, #2603). */
     private UUID bankAccountId;
 
@@ -149,11 +152,31 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
 
     @AfterEach
     void tearDown() {
-        // Clean up test data after each test
+        // Clean up test data after each test; the payments' outbox rows first, so no poll posts them meanwhile.
+        outboxRepository.findAll().stream()
+                .filter(row -> "APPayment".equals(row.getAggregateType()))
+                .forEach(outboxRepository::delete);
         allocationRepository.deleteAll();
         apPaymentRepository.deleteAll();
         journalEntryRepository.deleteAll();
         vendorBillRepository.deleteAll();
+        // S42: the AP_PAYMENT ledger this class added, so classes sharing the H2 context can clear the chart.
+        postingCategoryRepository.findByCategoryName("AP_PAYMENT").ifPresent(category -> {
+            glMappingRepository.findAll().stream()
+                    .filter(mapping -> mapping.getPostingCategory() != null
+                            && category.getPostingCategoryId()
+                                    .equals(mapping.getPostingCategory().getPostingCategoryId()))
+                    .forEach(glMappingRepository::delete);
+            mappingKeyRepository.findAll().stream()
+                    .filter(key -> key.getPostingCategory() != null
+                            && category.getPostingCategoryId()
+                                    .equals(key.getPostingCategory().getPostingCategoryId()))
+                    .forEach(mappingKeyRepository::delete);
+            postingCategoryRepository.delete(category);
+        });
+        for (String code : List.of("1000-CT", "2000-CT", "6030-CT")) {
+            glAccountRepository.findByAccountCode(code).ifPresent(glAccountRepository::delete);
+        }
     }
 
     // ===============================================

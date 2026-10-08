@@ -86,6 +86,6 @@ public interface APPaymentAllocationRepository extends JpaRepository<APPaymentAl
     interface VendorBillLastPayment {
         UUID getVendorBillId();
 
-        java.time.LocalDateTime getLastPaymentDate();
+        java.time.LocalDate getLastPaymentDate();
     }
 }

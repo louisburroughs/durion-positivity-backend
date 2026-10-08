@@ -49,7 +49,8 @@ import org.springframework.transaction.annotation.Transactional;
  *       ({@code ACCOUNTS_PAYABLE} always, {@code PAYMENT_FEES} when the fee is above zero).
  * </ul>
  *
- * <p><b>Eligible bank account</b>: a {@code BANK_CASH} GL account active on the execution date and not in a foreign
+ * <p><b>Eligible bank account</b>: a {@code BANK_CASH} GL account active on the execution date (activated before the
+ * day ends, not deactivated by its start) and not in a foreign
  * currency ({@link BankAccountCurrencies}, {@link LedgerCurrency}). {@code bankAccountId} may be omitted only when
  * exactly one eligible account exists; inactive and foreign-currency accounts are not counted.
  *
@@ -209,7 +210,12 @@ public class APPaymentPreGatewayChecks {
     }
 
     private List<UUID> eligibleBankAccounts(LocalDate date) {
-        return glAccounts.findBySubtypeActiveOn(AccountSubtype.BANK_CASH, date.atStartOfDay()).stream()
+        return glAccounts
+                .findBySubtypeActiveOnDay(
+                        AccountSubtype.BANK_CASH,
+                        date.atStartOfDay(),
+                        date.plusDays(1).atStartOfDay())
+                .stream()
                 .filter(account -> !isForeign(account))
                 .map(GLAccount::getGlAccountId)
                 .toList();
@@ -219,11 +225,13 @@ public class APPaymentPreGatewayChecks {
         if (account.getAccountSubtype() != AccountSubtype.BANK_CASH) {
             return false;
         }
-        LocalDateTime at = date.atStartOfDay();
+        // Active on the date: activated before it ends, not deactivated by its start (as findBySubtypeActiveOnDay).
+        LocalDateTime dayStart = date.atStartOfDay();
+        LocalDateTime dayEnd = date.plusDays(1).atStartOfDay();
         boolean active = (account.getActivationDate() == null
-                        || !account.getActivationDate().isAfter(at))
+                        || account.getActivationDate().isBefore(dayEnd))
                 && (account.getDeactivationDate() == null
-                        || account.getDeactivationDate().isAfter(at));
+                        || account.getDeactivationDate().isAfter(dayStart));
         return active && !isForeign(account);
     }
 

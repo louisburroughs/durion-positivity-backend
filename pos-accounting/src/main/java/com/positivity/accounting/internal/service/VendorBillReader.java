@@ -26,7 +26,7 @@ import com.positivity.accounting.internal.repository.VendorBillRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -274,13 +274,14 @@ public class VendorBillReader {
     /** The DONE stage: paid in full, the last payment dated in the current month of the tenant's calendar. */
     private List<VendorBill> done() {
         YearMonth month = zoneResolver.currentMonth();
-        LocalDateTime from = month.atDay(1).atStartOfDay();
-        LocalDateTime to = month.plusMonths(1).atDay(1).atStartOfDay();
+        // ap_payment.payment_date is the payment's business date (CAP:550 S42, #2603).
+        LocalDate from = month.atDay(1);
+        LocalDate to = month.plusMonths(1).atDay(1);
         List<VendorBill> paid = bills.findApprovedPaidInFullWithLastPaymentBetween(from, to);
         if (paid.isEmpty()) {
             return paid;
         }
-        Map<UUID, LocalDateTime> lastPayment =
+        Map<UUID, LocalDate> lastPayment =
                 allocations
                         .findLastPaymentDateByVendorBillIdIn(
                                 paid.stream().map(VendorBill::getVendorBillId).toList())
@@ -290,7 +291,7 @@ public class VendorBillReader {
                                 APPaymentAllocationRepository.VendorBillLastPayment::getLastPaymentDate));
         return paid.stream()
                 .sorted(Comparator.comparing(
-                                (VendorBill b) -> lastPayment.getOrDefault(b.getVendorBillId(), LocalDateTime.MIN))
+                                (VendorBill b) -> lastPayment.getOrDefault(b.getVendorBillId(), LocalDate.MIN))
                         .reversed()
                         .thenComparing(VendorBill::getVendorBillId))
                 .toList();

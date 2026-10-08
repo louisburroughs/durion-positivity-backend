@@ -466,6 +466,7 @@ class APPaymentPostingPostgresIT extends PostgresTenancyTestBase {
         assertThat(billStatus(tenant, awaiting.getVendorBillId())).isEqualTo("AWAITING_APPROVAL");
 
         // Once the holder is gone, the payment goes through.
+        gatewaySucceeds();
         APPaymentResponse payment = pay(tenant, request(held, "150.00", null, "150.00"));
         assertThat(payment.getStatus()).isEqualTo(APPaymentStatus.GL_POST_PENDING);
     }
