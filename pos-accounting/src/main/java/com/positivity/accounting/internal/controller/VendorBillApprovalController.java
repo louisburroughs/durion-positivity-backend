@@ -168,7 +168,7 @@ public class VendorBillApprovalController {
                 Use this tool for the approver's decision on a bill sent for approval; do not use \
                 submitVendorBillForApproval, which only sends it, or resolveVendorBillMatchException with ACCEPT, \
                 which approves a bill still in MATCH_EXCEPTION.
-                Preconditions, checked in this order: the bill is AWAITING_APPROVAL (CURRENCY_HOLD bills never \
+                Preconditions: in this order, the bill is AWAITING_APPROVAL (CURRENCY_HOLD bills never \
                 are) and a goods-receipt bill has its invoice matched; a bill whose absolute total is over the \
                 clerk limit (requiredTier OVER_LIMIT) needs accounting:ap:approve_over_limit, one within it \
                 accounting:ap:approve; the caller did not create the bill unless the AP approval policy allows it \

@@ -12797,7 +12797,7 @@ paths:
 
         Use this tool for the approver''s decision on a bill sent for approval; do not use submitVendorBillForApproval, which only sends it, or resolveVendorBillMatchException with ACCEPT, which approves a bill still in MATCH_EXCEPTION.
 
-        Preconditions, checked in this order: the bill is AWAITING_APPROVAL (CURRENCY_HOLD bills never are) and a goods-receipt bill has its invoice matched; a bill whose absolute total is over the clerk limit (requiredTier OVER_LIMIT) needs accounting:ap:approve_over_limit, one within it accounting:ap:approve; the caller did not create the bill unless the AP approval policy allows it with a justification; then the content checks and the posting.
+        Preconditions: in this order, the bill is AWAITING_APPROVAL (CURRENCY_HOLD bills never are) and a goods-receipt bill has its invoice matched; a bill whose absolute total is over the clerk limit (requiredTier OVER_LIMIT) needs accounting:ap:approve_over_limit, one within it accounting:ap:approve; the caller did not create the bill unless the AP approval policy allows it with a justification; then the content checks and the posting.
 
         Required inputs: billId (UUID) as a path parameter; justification (at least 10 characters), classification {debitClass GOODS|EXPENSE, expenseMappingKey} (each field given wins over the one proposed at submission), difference (as submitVendorBillForApproval takes it) and overrideJustification (with accounting:period:override, to post into a CLOSED period) are optional.
 
