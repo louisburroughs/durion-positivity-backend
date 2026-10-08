@@ -20,7 +20,7 @@ public interface ExtSupplierVendorRepository extends JpaRepository<ExtSupplierVe
      * status is {@code status} (null: either), ordered by name: the vendor typeahead.
      */
     @Query("select v from ExtSupplierVendor v"
-            + " where (:name is null or lower(v.displayName) like lower(concat('%', :name, '%')))"
+            + " where (:name is null or lower(v.displayName) like lower(concat('%', :name, '%')) escape '\\')"
             + " and (:status is null or v.status = :status)"
             + " order by v.displayName, v.vendorId")
     @NonNull

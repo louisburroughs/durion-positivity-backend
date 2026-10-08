@@ -102,7 +102,8 @@ public class APPaymentServiceImpl implements APPaymentService {
         //        1b. currency: not the functional currency -> 422 CURRENCY_NOT_SUPPORTED (S42, ADR-0067 PC-9 (a));
         //        1c. bank account: missing and not exactly one eligible, or not eligible -> 400 VALIDATION_ERROR
         //            fieldErrors[bankAccountId] (S42, AW41);
-        //        1d. the vendor: not in the copy -> 422 VENDOR_NOT_FOUND, INACTIVE -> 422 VENDOR_INACTIVE (S24, AW23;
+        //        1d. the vendor: not in the copy -> 503 VENDOR_REPLICATION_PENDING, INACTIVE -> 422 VENDOR_INACTIVE
+        // (S24, AW23;
         //            an inactive vendor's existing bills are not paid either, ruling 3 of #2517);
         //   2. the allocation plan, its bills locked in id order (explicit, or oldest due first; S13);
         //   3. the pay guard, approver is not payer -> 403 AP_PAYMENT_SELF_APPROVED_BILL (S13);

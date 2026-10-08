@@ -18,6 +18,7 @@ import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -75,9 +76,10 @@ public class PurchaseOrderController {
                     documentUom/documentQuantity pair; tax is derived from the configured default rate.
                     Emits an ORDER_PURCHASE_ORDER_CREATE event; no stock, ledger or vendor-side state is \
                     touched.
-                    Returns 400 when a line's quantity is missing without the document-UoM pair, and 422 with \
-                    VENDOR_NOT_FOUND or VENDOR_INACTIVE when the vendor is not in the copy or inactive, or when a \
-                    documentUom has no conversion path to the product's base UoM.
+                    Returns 400 when a line's quantity is missing without the document-UoM pair, 422 with \
+                    VENDOR_INACTIVE when the vendor is inactive or when a documentUom has no conversion path to the \
+                    product's base UoM, and 503 VENDOR_REPLICATION_PENDING with Retry-After when the vendor has not \
+                    reached the copy yet.
                     """,
             tags = {"Purchase Orders"})
     @ApiResponse(
@@ -97,7 +99,17 @@ public class PurchaseOrderController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description = "VENDOR_NOT_FOUND or VENDOR_INACTIVE, or a document UoM without a conversion",
+            description = "VENDOR_INACTIVE, or a document UoM without a conversion",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "VENDOR_REPLICATION_PENDING: the vendor has not reached pos-order's copy of the pos-supplier"
+                    + " vendor master yet. Not-yet, not no: retry after the Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<PurchaseOrderResponse> createPurchaseOrder(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -267,8 +279,9 @@ public class PurchaseOrderController {
                     so an empty object is acceptable.
                     Emits an ORDER_PURCHASE_ORDER_APPROVE event; the order becomes eligible for ASNs, goods \
                     receipts and receiving sessions.
-                    Returns 404 when the purchase order does not exist, 409 when it is not in DRAFT status, and 422 \
-                    VENDOR_NOT_FOUND or VENDOR_INACTIVE when its vendor is not in the copy or inactive.
+                    Returns 404 when the purchase order does not exist, 409 when it is not in DRAFT status, 422 \
+                    VENDOR_INACTIVE when its vendor is inactive, and 503 VENDOR_REPLICATION_PENDING with Retry-After \
+                    when its vendor has not reached the copy yet.
                     """,
             tags = {"Purchase Orders"})
     @ApiResponse(
@@ -296,7 +309,17 @@ public class PurchaseOrderController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description = "VENDOR_NOT_FOUND or VENDOR_INACTIVE: the order's vendor cannot take new business",
+            description = "VENDOR_INACTIVE: the order's vendor cannot take new business",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "VENDOR_REPLICATION_PENDING: the vendor has not reached pos-order's copy of the pos-supplier"
+                    + " vendor master yet. Not-yet, not no: retry after the Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<PurchaseOrderResponse> approvePurchaseOrder(
             @Parameter(description = "Purchase order identifier", required = true) @PathVariable UUID poId,
@@ -351,8 +374,9 @@ public class PurchaseOrderController {
                     Emits an ORDER_PURCHASE_ORDER_REVISE event carrying the field-level delta and the \
                     revision reason.
                     Returns 404 when the purchase order does not exist, 409 when vendorId changes the vendor of an \
-                    order past DRAFT, and 422 VENDOR_NOT_FOUND or VENDOR_INACTIVE for a new vendor outside the copy \
-                    or inactive, or when a line's documentUom has no conversion path to the product's base UoM.
+                    order past DRAFT, 422 VENDOR_INACTIVE for an inactive new vendor or when a line's documentUom \
+                    has no conversion path to the product's base UoM, and 503 VENDOR_REPLICATION_PENDING with \
+                    Retry-After when the new vendor has not reached the copy yet.
                     """,
             tags = {"Purchase Orders"})
     @ApiResponse(
@@ -380,7 +404,17 @@ public class PurchaseOrderController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description = "VENDOR_NOT_FOUND or VENDOR_INACTIVE, or a document UoM without a conversion",
+            description = "VENDOR_INACTIVE, or a document UoM without a conversion",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "VENDOR_REPLICATION_PENDING: the vendor has not reached pos-order's copy of the pos-supplier"
+                    + " vendor master yet. Not-yet, not no: retry after the Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<PurchaseOrderResponse> revisePurchaseOrder(
             @Parameter(description = "Purchase order identifier", required = true) @PathVariable UUID poId,
@@ -480,10 +514,11 @@ public class PurchaseOrderController {
                     is the order as it stands.
                     Emits an ORDER_PURCHASE_ORDER_TRANSMIT event and queues a supplier order command; the vendor's \
                     answer arrives later and appears on the order's transmission state and timeline.
-                    Returns 404 when the purchase order does not exist, and 422 with a code naming the obstacle \
-                    when the order cannot be sent: SUPPLIER_REF_MISSING, PURCHASE_ORDER_NOT_APPROVED, \
-                    TRANSMISSION_IN_FLIGHT, TRANSMISSION_AWAITING_REVIEW, VENDOR_NOT_FOUND, VENDOR_INACTIVE, \
-                    ARTICLE_NOT_IDENTIFIABLE or FRACTIONAL_QUANTITY.
+                    Returns 404 when the purchase order does not exist, 422 with a code naming the obstacle when \
+                    the order cannot be sent (SUPPLIER_REF_MISSING, PURCHASE_ORDER_NOT_APPROVED, \
+                    TRANSMISSION_IN_FLIGHT, TRANSMISSION_AWAITING_REVIEW, VENDOR_INACTIVE, ARTICLE_NOT_IDENTIFIABLE \
+                    or FRACTIONAL_QUANTITY), and 503 VENDOR_REPLICATION_PENDING with Retry-After when the order's \
+                    vendor has not reached the copy yet.
                     """,
             tags = {"Purchase Orders"})
     @ApiResponse(responseCode = "202", description = "Transmission requested")
@@ -494,6 +529,16 @@ public class PurchaseOrderController {
     @ApiResponse(
             responseCode = "422",
             description = "The order cannot be transmitted as it stands",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "VENDOR_REPLICATION_PENDING: the vendor has not reached pos-order's copy of the pos-supplier"
+                    + " vendor master yet. Not-yet, not no: retry after the Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Void> transmitPurchaseOrder(
             @Parameter(description = "Purchase order id (UUIDv7)", required = true) @PathVariable UUID poId) {

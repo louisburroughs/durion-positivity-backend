@@ -36,7 +36,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Setter
 @NoArgsConstructor
 @EqualsAndHashCode(onlyExplicitlyIncluded = true, callSuper = false)
-@ToString(exclude = {"taxRegistrations", "remitTo"})
+@ToString(exclude = "taxRegistrations")
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "ext_supplier_vendor")
@@ -65,11 +65,6 @@ public class ExtSupplierVendor extends TenantScopedEntity {
     @Column(name = "status_changed_at")
     private Instant statusChangedAt;
 
-    /** The approved remit-to address as the fact carries it; null while the vendor has none. Never bank details. */
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "remit_to")
-    private Map<String, Object> remitTo;
-
     /** 0 with no remit-to, then +1 per approved change; what payment compares with the bill's approved version. */
     @Column(name = "remit_to_version", nullable = false)
     private int remitToVersion;
@@ -77,11 +72,9 @@ public class ExtSupplierVendor extends TenantScopedEntity {
     @Column(name = "remit_to_changed_at")
     private Instant remitToChangedAt;
 
+    /** Who requested the current remit-to in pos-supplier: may not confirm it here (ruling on PR #2648). */
     @Column(name = "remit_to_requested_by", length = 255)
     private String remitToRequestedBy;
-
-    @Column(name = "remit_to_approved_by", length = 255)
-    private String remitToApprovedBy;
 
     @Column(name = "default_payment_terms", length = 20)
     private String defaultPaymentTerms;

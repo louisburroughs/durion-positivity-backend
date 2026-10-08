@@ -379,7 +379,8 @@ class SupplierEventsVendorCopyTest {
             when(holds.findByVendorIdAndReasonAndReleasedAtIsNullOrderByReceivedAtAscHoldIdAsc(
                             VENDOR, SupplierInvoiceHold.Reason.VENDOR_NOT_IN_COPY))
                     .thenReturn(List.of(hold));
-            when(holds.findById(holdId)).thenReturn(Optional.of(hold));
+            // Released under the hold's row lock (only lockByHoldId is stubbed: an unlocked read finds nothing).
+            when(holds.lockByHoldId(holdId)).thenReturn(Optional.of(hold));
             when(copy.findById(VENDOR)).thenReturn(Optional.empty(), Optional.of(vendor("ACTIVE")));
             listener.onSupplierEvent(v2Fact(5, "ACTIVE"));
 
@@ -428,6 +429,84 @@ class SupplierEventsVendorCopyTest {
             assertThat(bill.getRejectionReason()).startsWith("Vendor V-000123 is inactive. ");
             assertThat(VendorBillTotals.of(bill))
                     .hasValueSatisfying(t -> assertThat(t.reconciled()).isFalse());
+        }
+
+        @Test
+        @DisplayName(
+                "an inactive vendor's invoice in a foreign currency is held for its currency, naming the vendor first")
+        void inactiveForeignCurrencyNamesTheVendor() {
+            when(copy.findById(VENDOR)).thenReturn(Optional.of(vendor("INACTIVE")));
+
+            listener.onSupplierEvent(invoiceFor(VENDOR).replace("\"currency\":\"USD\"", "\"currency\":\"EUR\""));
+
+            VendorBill bill = createdBill();
+            assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.CURRENCY_HOLD);
+            assertThat(bill.getRejectionReason()).startsWith("Vendor V-000123 is inactive. Currency EUR");
+        }
+    }
+
+    @Nested
+    @DisplayName("hold release (S24 review items 5)")
+    class HoldRelease {
+
+        private SupplierInvoiceHold heldInvoice(String holdId, String eventId, String number) {
+            SupplierInvoiceHold hold = new SupplierInvoiceHold();
+            hold.setHoldId(UUID.fromString(holdId));
+            hold.setEventId(UUID.fromString(eventId));
+            hold.setVendorId(VENDOR);
+            hold.setReason(SupplierInvoiceHold.Reason.VENDOR_NOT_IN_COPY);
+            hold.setSupplierInvoiceRef(number);
+            hold.setPayload(invoice(eventId, ",\"vendorId\":\"" + VENDOR + "\"", "288.00", "240.00", "48.00")
+                    .replace("INV-77", number));
+            when(holds.lockByHoldId(hold.getHoldId())).thenReturn(Optional.of(hold));
+            return hold;
+        }
+
+        @Test
+        @DisplayName("a hold found released under its lock creates no second bill")
+        void alreadyReleasedUnderTheLock() {
+            when(copy.findById(VENDOR)).thenReturn(Optional.of(vendor("ACTIVE")));
+            SupplierInvoiceHold hold = heldInvoice(
+                    "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f9d11", "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f9b11", "INV-81");
+            hold.setReleasedAt(NOW.minusSeconds(60));
+            when(holds.findByVendorIdAndReasonAndReleasedAtIsNullOrderByReceivedAtAscHoldIdAsc(
+                            VENDOR, SupplierInvoiceHold.Reason.VENDOR_NOT_IN_COPY))
+                    .thenReturn(List.of(hold));
+
+            listener.releaseHolds(VENDOR);
+
+            verify(bills, never()).saveAndFlush(any());
+            verify(holds, never()).save(any());
+            verify(ingestion, never()).record(any(), any(), any(), any(), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("a failed release keeps its hold HELD, and the next hold is still released")
+        void failedReleaseKeepsTheHoldAndGoesOn() {
+            when(copy.findById(VENDOR)).thenReturn(Optional.of(vendor("ACTIVE")));
+            SupplierInvoiceHold first = heldInvoice(
+                    "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f9d21", "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f9b21", "INV-91");
+            SupplierInvoiceHold second = heldInvoice(
+                    "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f9d22", "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f9b22", "INV-92");
+            when(holds.findByVendorIdAndReasonAndReleasedAtIsNullOrderByReceivedAtAscHoldIdAsc(
+                            VENDOR, SupplierInvoiceHold.Reason.VENDOR_NOT_IN_COPY))
+                    .thenReturn(List.of(first, second));
+            when(bills.saveAndFlush(any()))
+                    .thenThrow(new DataAccessResourceFailureException("connection lost"))
+                    .thenAnswer(inv -> {
+                        VendorBill bill = inv.getArgument(0);
+                        bill.setVendorBillId(UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f9c22"));
+                        return bill;
+                    });
+
+            listener.releaseHolds(VENDOR);
+
+            assertThat(first.getReleasedAt()).isNull();
+            assertThat(first.getReleasedBillId()).isNull();
+            assertThat(second.getReleasedAt()).isEqualTo(NOW);
+            assertThat(second.getReleasedBillId()).isEqualTo(UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f9c22"));
+            verify(holds).save(second);
+            verify(holds, never()).save(first);
         }
     }
 }

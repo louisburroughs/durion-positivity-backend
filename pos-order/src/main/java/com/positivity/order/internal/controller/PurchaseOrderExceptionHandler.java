@@ -62,9 +62,10 @@ public class PurchaseOrderExceptionHandler {
     }
 
     /**
-     * The order names a vendor outside pos-order's vendor copy, or an inactive one (CAP:550 S24, #2517): 422 with
-     * {@code VENDOR_NOT_FOUND} or {@code VENDOR_INACTIVE}, on create, approve, a vendor-changing revision and
-     * transmit.
+     * The order names an inactive vendor of pos-order's vendor copy (CAP:550 S24, #2517): 422 {@code VENDOR_INACTIVE},
+     * on create, approve, a vendor-changing revision and transmit. A vendor the copy does not hold yet is 503 {@code
+     * VENDOR_REPLICATION_PENDING} with {@code Retry-After}, rendered by the platform {@code GlobalApiExceptionHandler}
+     * ({@code ReplicationPendingException}; this advice declares no catch-all, so it reaches it).
      */
     @ExceptionHandler(PurchaseOrderVendorException.class)
     public ResponseEntity<ApiError> handleVendor(PurchaseOrderVendorException ex, HttpServletRequest request) {

@@ -119,15 +119,16 @@ class PurchaseOrderTransmissionServiceTest {
     }
 
     @Test
-    @DisplayName("an approved order whose vendor is missing from the copy is not sent (VENDOR_NOT_FOUND, S24)")
+    @DisplayName(
+            "an approved order whose vendor is not in the copy yet is not sent (503 VENDOR_REPLICATION_PENDING, S24)")
     void vendorMissingFromCopyIsNotSent() {
         PurchaseOrderEntity po = order(PurchaseOrderStatus.APPROVED, TransmissionState.NOT_TRANSMITTED);
         when(vendorRepository.findById(po.getVendorId())).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.requestTransmission(PO_ID, ACTOR))
                 .isInstanceOfSatisfying(
-                        PurchaseOrderVendorException.class,
-                        e -> assertThat(e.getCode()).isEqualTo(PurchaseOrderVendorException.Code.VENDOR_NOT_FOUND));
+                        com.positivity.web.common.ReplicationPendingException.class,
+                        e -> assertThat(e.getCode()).isEqualTo("VENDOR_REPLICATION_PENDING"));
         verify(outboxEventWriter, never()).publish(any(), any());
         assertThat(po.getTransmissionState()).isEqualTo(TransmissionState.NOT_TRANSMITTED);
     }

@@ -114,11 +114,25 @@ class SupplierManifestListenerTest {
     }
 
     @Test
-    @DisplayName("an unparseable manifest is dropped")
+    @DisplayName("an unparseable manifest is dropped, logged by exception class only, never its text")
     void unparseableDropped() {
-        listener.onManifest("not json");
+        ch.qos.logback.classic.Logger logger =
+                (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(SupplierManifestListener.class);
+        ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> logs =
+                new ch.qos.logback.core.read.ListAppender<>();
+        logs.start();
+        logger.addAppender(logs);
+        try {
+            listener.onManifest("not json CANARY-7731");
+        } finally {
+            logger.detachAppender(logs);
+        }
 
         verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
+        assertThat(logs.list).isNotEmpty().allSatisfy(event -> {
+            assertThat(event.getFormattedMessage()).doesNotContain("CANARY-7731");
+            assertThat(event.getThrowableProxy()).isNull();
+        });
     }
 
     @Test

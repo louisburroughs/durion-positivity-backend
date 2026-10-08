@@ -106,4 +106,65 @@ class VendorDefaultClassificationTest {
                         null, credit, new VendorBillPostingService.Classification(VendorBillDebitClass.GOODS, null)))
                 .isNull();
     }
+
+    /** V's header-only credit note: -288.00 = -240.00 + -48.00 (a credit note is negative). */
+    private static VendorBill creditNote() {
+        VendorBill credit = headerOnly();
+        credit.setTotalAmount(new BigDecimal("-288.00"));
+        credit.setNetAmount(new BigDecimal("-240.00"));
+        credit.setTaxAmount(new BigDecimal("-48.00"));
+        return credit;
+    }
+
+    @Test
+    @DisplayName("ruling on PR #2648: an EXPENSE + key default classes a credit note: Dr ACCOUNTS_PAYABLE / Cr the key")
+    void expenseDefaultClassesACreditNote() {
+        VendorBill credit = creditNote();
+
+        VendorBillPostingService.Classification effective =
+                VendorBillApprovalServiceImpl.merge(null, credit, SHOP_SUPPLIES);
+
+        assertThat(effective).isEqualTo(SHOP_SUPPLIES);
+        Map<String, BigDecimal> legs = legs(credit, effective);
+        assertThat(legs.get("ACCOUNTS_PAYABLE")).isEqualByComparingTo("288.00");
+        assertThat(legs.get("EXPENSE_SHOP_SUPPLIES")).isEqualByComparingTo("-288.00");
+    }
+
+    @Test
+    @DisplayName("ruling on PR #2648: a GOODS + key default never classes a credit note: 422 AP_BILL_UNCLASSIFIED")
+    void goodsDefaultWithKeyLeavesACreditNoteUnclassified() {
+        VendorBill credit = creditNote();
+
+        VendorBillPostingService.Classification effective = VendorBillApprovalServiceImpl.merge(
+                null,
+                credit,
+                new VendorBillPostingService.Classification(VendorBillDebitClass.GOODS, "EXPENSE_SHOP_SUPPLIES"));
+
+        // Allowance or return is chosen per document: the class is not defaulted, the key alone does not class it.
+        assertThat(effective.debitClass()).isNull();
+        assertThat(effective.expenseMappingKey()).isEqualTo("EXPENSE_SHOP_SUPPLIES");
+        assertThatThrownBy(() -> legs(credit, effective))
+                .isInstanceOfSatisfying(
+                        VendorBillException.class,
+                        e -> assertThat(e.getCode()).isEqualTo(VendorBillException.Code.AP_BILL_UNCLASSIFIED));
+    }
+
+    @Test
+    @DisplayName("the key too: the given key beats the proposed one, which beats the vendor default")
+    void keyPrecedence() {
+        VendorBill bill = headerOnly();
+        bill.setProposedExpenseMappingKey("EXPENSE_PROPOSED");
+
+        assertThat(VendorBillApprovalServiceImpl.merge(
+                                new VendorBillPostingService.Classification(null, "EXPENSE_GIVEN"), bill, SHOP_SUPPLIES)
+                        .expenseMappingKey())
+                .isEqualTo("EXPENSE_GIVEN");
+        assertThat(VendorBillApprovalServiceImpl.merge(null, bill, SHOP_SUPPLIES)
+                        .expenseMappingKey())
+                .isEqualTo("EXPENSE_PROPOSED");
+        bill.setProposedExpenseMappingKey(null);
+        assertThat(VendorBillApprovalServiceImpl.merge(null, bill, SHOP_SUPPLIES)
+                        .expenseMappingKey())
+                .isEqualTo("EXPENSE_SHOP_SUPPLIES");
+    }
 }

@@ -4,6 +4,7 @@ import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
@@ -18,6 +19,9 @@ import lombok.Setter;
 import lombok.ToString;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * An EDI invoice fact that cannot become a bill yet (CAP:550 S24, #2517; SPEC-accounting-workspace §9.2 "stored
@@ -31,6 +35,7 @@ import org.hibernate.type.SqlTypes;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true, callSuper = false)
 @ToString(exclude = "payload")
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "supplier_invoice_hold")
 public class SupplierInvoiceHold extends TenantScopedEntity {
 
@@ -78,4 +83,14 @@ public class SupplierInvoiceHold extends TenantScopedEntity {
     /** The bill the release created, or the original it was flagged against (S0). */
     @Column(name = "released_bill_id")
     private UUID releasedBillId;
+
+    /** ADR-0024: when the row was written first. */
+    @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    /** ADR-0024: when the row last changed. */
+    @LastModifiedDate
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
 }

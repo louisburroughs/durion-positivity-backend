@@ -872,7 +872,8 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
             VendorBillPostingService.@Nullable Classification given,
             @NonNull VendorBill bill,
             VendorBillPostingService.@Nullable Classification vendorDefault) {
-        // A credit note posts as EXPENSE or PRICE_ALLOWANCE (AW39): a vendor default of GOODS never classes one.
+        // A credit note is an allowance or a return, and which one is decided per document (AW39; Accounting ruling on
+        // PR #2648): a GOODS default never classes one. An EXPENSE default (with its key) still does.
         VendorBillDebitClass defaultClass = vendorDefault == null
                         || (vendorDefault.debitClass() == VendorBillDebitClass.GOODS
                                 && bill.getTotalAmount() != null
@@ -1069,7 +1070,8 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
                                     VENDOR_CREATOR_FIRST_BILL + ": you created the vendor of bill "
                                             + bill.getBillNumber() + " and no bill of that vendor has been approved"
                                             + " yet; another person approves its first bill",
-                                    List.of(),
+                                    // Machine-readable: blockedReason stays AP_BILL_SELF_APPROVAL (ruling 2).
+                                    List.of(new VendorBillException.FieldError("reason", VENDOR_CREATOR_FIRST_BILL)),
                                     "Ask another approver to decide this bill"),
                     billCreator
                             ? "createdBy=" + bill.getCreatedBy()

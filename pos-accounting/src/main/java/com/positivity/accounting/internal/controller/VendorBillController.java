@@ -13,6 +13,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -96,7 +97,8 @@ public class VendorBillController {
                 Emits an ACCOUNTING_VENDOR_BILL_CREATE event and posts nothing (a bill posts once, at \
                 approval).
                 Returns 201 with the created (or already-existing) bill, 400 when the payload fails \
-                validation, and 422 VENDOR_NOT_FOUND (the vendor is not in the copy) or VENDOR_INACTIVE.
+                validation, 422 VENDOR_INACTIVE, and 503 VENDOR_REPLICATION_PENDING with Retry-After when \
+                the vendor is not in the copy yet.
                 Returns 409 AP_BILL_DUPLICATE when a live bill (any status except VOIDED or REJECTED) \
                 already holds the same vendor, bill date and bill number, compared ignoring case, \
                 spacing, punctuation and leading zeros; referenceId is the existing bill's vendorBillId \
@@ -113,8 +115,18 @@ public class VendorBillController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description = "VENDOR_NOT_FOUND: the vendor is not in the pos-supplier vendor copy; VENDOR_INACTIVE: the"
-                    + " vendor is inactive and takes no new bill",
+            description = "VENDOR_INACTIVE: the vendor is inactive and takes no new bill",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description =
+                    "VENDOR_REPLICATION_PENDING: the vendor is not in accounting's copy of the pos-supplier vendor"
+                            + " master yet. Not-yet, not no: retry after the Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",

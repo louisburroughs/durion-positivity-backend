@@ -188,18 +188,25 @@ pos-supplier (ADR-0044 R1): it reads its own copy of the vendor master.
 - **Schema version (Security ruling on #2617, ADR-0072).** The envelope's `schemaVersion` is read before the payload
   is mapped. A fact below version 2 is marked processed (owner `supplier`), counted as
   `order.supplier_vendor.skipped{eventType, schemaVersion}` (those two tags only) and skipped; its payload is never
-  logged, and an unreadable vendor fact is logged with its exception class only. Every database failure of the copy
-  propagates for retry without a mark.
+  logged, and an unreadable vendor fact (or any unparsable supplier event or manifest) is logged with its exception
+  class only. Every database failure of the copy propagates for retry without a mark; a constraint refusal propagates
+  as a `DataIntegrityViolationException` naming only the vendor number, the event and the constraint, with no cause.
+- **Driver detail off (ADR-0072).** `spring.datasource.hikari.data-source-properties.logServerErrorDetail: false`
+  (`application.yml`, and the `pg` test profile): pgjdbc otherwise appends the server's `DETAIL` ("Failing row contains
+  (...)") to every `SQLException` message, which Hibernate logs at ERROR before Spring translates it, so a refused row's
+  column values would reach the log. Proven by `SupplierVendorCopyIT#aRefusedCopyRowLeaksNoColumnValue`.
 - **Seeding.** On first deployment the operator calls pos-supplier's `POST /v1/supplier/vendors/facts/replay` per
-  tenant until it reports `complete`. Until then, purchase orders for unseeded vendors are refused as below.
-- **Guard.** `POST /v1/orders/purchase-orders`, `POST /{poId}/approve` and `POST /{poId}/transmit` refuse a vendor that
-  is not in the copy (**422 `VENDOR_NOT_FOUND`**) or is `INACTIVE` (**422 `VENDOR_INACTIVE`**).
+  tenant until it reports `complete`. Until then, purchase orders for unseeded vendors answer 503 as below.
+- **Guard.** `POST /v1/orders/purchase-orders`, `POST /{poId}/approve` and `POST /{poId}/transmit` refuse an `INACTIVE`
+  vendor (**422 `VENDOR_INACTIVE`**). A vendor id the copy does not hold may only not have replicated yet, so it is
+  never answered as absent (ADR-0017 §1): **503 `VENDOR_REPLICATION_PENDING`** with `Retry-After` (5 s), the platform
+  `ReplicationPendingException` (#1994), rendered by `GlobalApiExceptionHandler`.
   `POST /{poId}/revisions` takes an optional `vendorId`: it changes the vendor of a `DRAFT` order only (another
   vendor on an order past `DRAFT` is 409 `PURCHASE_ORDER_INVALID_STATE`), passes the same guard, and an absent
   `vendorId` keeps the vendor.
 - **Requested orders.** An order requested on `order.commands.v1` (pos-inventory's purchase suggestions) is placed in
   `DRAFT` whatever vendor it names, since a suggestion may still name a manufacturer or distributor feed id (S36);
-  approval answers 422 `VENDOR_NOT_FOUND` until the buyer revises the vendor.
+  approval answers 503 `VENDOR_REPLICATION_PENDING` until the buyer revises the vendor to one in the copy.
 - **Reconciliation.** `SupplierManifestListener` compares each per-tenant `supplier.manifest.v1` manifest with the
   `processed_events` rows of owner `supplier`, which `SupplierOrderResultListener` stamps on every event it sees,
   handled or ignored. On drift it counts `replica.drift{owner="supplier"}` and sends
@@ -304,7 +311,6 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `RETURN_WALK_IN_NOT_ALLOWED` | 422 | A return against a walk-in sale asked for `STORE_CREDIT` or `ON_ACCOUNT_CREDIT`; only `ORIGINAL_TENDER` is allowed |
 | `RETURN_UNPROCESSABLE` | 422 | A structurally valid return that a domain rule refuses: a refund method needing a customer the return lacks, no invoice to refund against, or insufficient settled original tender |
 | `UOM_CONVERSION_UNDEFINED` | 422 | A purchase-order line names a `uomCode` with no conversion row for the product |
-| `VENDOR_NOT_FOUND` | 422 | The purchase order's vendor is not in pos-order's copy of the pos-supplier vendor master (create, approve, a vendor-changing revision, transmit) |
 | `VENDOR_INACTIVE` | 422 | The purchase order's vendor is inactive and takes no new purchase order (create, approve, a vendor-changing revision, transmit) |
 | `SUPPLIER_REF_MISSING` | 422 | The purchase order cannot be transmitted: no supplier reference |
 | `PURCHASE_ORDER_NOT_APPROVED` | 422 | The purchase order cannot be transmitted: not approved |
@@ -314,6 +320,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `FRACTIONAL_QUANTITY` | 422 | A purchase-order line's quantity is not a whole number |
 | `TRANSMISSION_UNAVAILABLE` | 422 | The deployment has no event publishing wired, so nothing can reach the vendor |
 | `ORDER_CANCEL_REVIEW_REQUIRED` | 500 | The cancellation retry failed again and the order is parked at `CANCEL_REQUIRES_MANUAL_REVIEW`; `nextAction` carries the recovery |
+| `VENDOR_REPLICATION_PENDING` | 503 | The purchase order's vendor is not in pos-order's copy of the pos-supplier vendor master yet (create, approve, a vendor-changing revision, transmit); `Retry-After` is set, retry or seed the copy (ADR-0017 §1, #1994) |
 | `ORDER_TAX_UNAVAILABLE` | 503 | pos-tax could not be reached to price the order |
 | `ORDER_INVOICING_UNAVAILABLE` | 503 | pos-invoice could not be reached to complete the order |
 | `CASH_MOVEMENT_APPROVAL_UNAVAILABLE` | 503 | pos-security-service's step-up check could not be made (unreachable, timed out, or answered anything but a result or `STEP_UP_DENIED`) |

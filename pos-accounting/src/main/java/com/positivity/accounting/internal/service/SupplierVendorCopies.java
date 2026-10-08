@@ -7,6 +7,7 @@ import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.accounting.internal.repository.ApVendorSettingsRepository;
 import com.positivity.accounting.internal.repository.ExtSupplierVendorRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
+import com.positivity.web.common.ReplicationPendingException;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -24,7 +25,8 @@ import org.springframework.stereotype.Component;
  *
  * <ul>
  *   <li>New business ({@link #requireForNewBusiness}): a goods-receipt bill or an AP payment names a vendor in the copy
- *       (422 {@code VENDOR_NOT_FOUND}) that is {@code ACTIVE} (422 {@code VENDOR_INACTIVE}).
+ *       (503 {@code VENDOR_REPLICATION_PENDING} with {@code Retry-After} while it is not) that is {@code ACTIVE} (422
+ *       {@code VENDOR_INACTIVE}).
  *   <li>The remit-to stamp ({@link #remitToVersion}): the copy's current version when a bill is approved.
  *   <li>The remit-to check at payment ({@link #requireRemitToUnchanged}, rule 6).
  *   <li>The vendor creator's first bill ({@link #isCreatorsFirstBill}, rule 9).
@@ -36,6 +38,9 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class SupplierVendorCopies {
 
+    /** 503: the vendor is not in the copy yet (ADR-0017 §1). */
+    public static final String VENDOR_REPLICATION_PENDING = "VENDOR_REPLICATION_PENDING";
+
     private final ExtSupplierVendorRepository vendors;
     private final ApVendorSettingsRepository settings;
     private final VendorBillRepository bills;
@@ -46,18 +51,15 @@ public class SupplierVendorCopies {
     }
 
     /**
-     * The vendor a new goods-receipt bill or AP payment names: in the copy, else 422 {@code VENDOR_NOT_FOUND}, and
+     * The vendor a new goods-receipt bill or AP payment names: in the copy, else 503 {@code VENDOR_REPLICATION_PENDING}, and
      * {@code ACTIVE}, else 422 {@code VENDOR_INACTIVE} (AW23; ruling 3: an inactive vendor's existing bills are not paid
      * either).
      *
      * @param what what is refused, in business words ("A bill", "A payment")
      */
     public @NonNull ExtSupplierVendor requireForNewBusiness(@NonNull UUID vendorId, @NonNull String what) {
-        ExtSupplierVendor vendor = vendors.findById(vendorId)
-                .orElseThrow(() -> new VendorBillException(
-                        VendorBillException.Code.VENDOR_NOT_FOUND,
-                        what + " cannot name vendor " + vendorId + ": it is not in the vendor copy. Set the vendor up"
-                                + " in pos-supplier (or wait for its copy to arrive), then try again"));
+        // Absent from an event-fed copy is "not yet", never "no" (ADR-0017 §1): 503 with Retry-After (#1994 precedent).
+        ExtSupplierVendor vendor = vendors.findById(vendorId).orElseThrow(() -> replicationPending(vendorId));
         if (!vendor.isActive()) {
             throw new VendorBillException(
                     VendorBillException.Code.VENDOR_INACTIVE,
@@ -65,6 +67,19 @@ public class SupplierVendorCopies {
                             + " new bills or payments until pos-supplier reactivates it");
         }
         return vendor;
+    }
+
+    /**
+     * 503 {@code VENDOR_REPLICATION_PENDING} with {@code Retry-After} (ADR-0017 §1; pos-catalog's {@code
+     * SKILL_REPLICATION_PENDING}, #1994): a vendor id the copy does not hold may only not have been copied yet, so its
+     * absence is never answered as "no such vendor".
+     */
+    public static @NonNull ReplicationPendingException replicationPending(@NonNull UUID vendorId) {
+        return new ReplicationPendingException(
+                VENDOR_REPLICATION_PENDING,
+                "The vendor is not in accounting's copy of the pos-supplier vendor master yet; set it up in pos-supplier"
+                        + " or wait for its copy, then retry",
+                vendorId);
     }
 
     /**

@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -105,13 +106,35 @@ public class SupplierVendorReplica {
         row.setStatusChangedAt(fact.statusChangedAt());
         row.setAggregateVersion(aggregateVersion);
         row.setUpdatedAt(Instant.now(clock));
-        vendors.save(row);
+        try {
+            // Flushed here, inside the handler transaction, so a refusal surfaces as this exception and not at commit.
+            vendors.saveAndFlush(row);
+        } catch (DataIntegrityViolationException e) {
+            // ADR-0072: the driver's DETAIL ("Failing row contains (...)") quotes every column of the refused row. The
+            // exception that propagates (and that a DLQ record carries) names the vendor number, the event and the
+            // constraint only, with no cause. logServerErrorDetail=false keeps the detail out of the driver's own
+            // message, which Hibernate logs before Spring translates it.
+            throw new DataIntegrityViolationException("The vendor copy refused vendor " + fact.vendorNumber()
+                    + " (eventId " + eventId + "): " + constraintName(e));
+        }
         log.info(
                 "Copied supplier vendor vendorId={} vendorNumber={} status={} version={}",
                 fact.vendorId(),
                 fact.vendorNumber(),
                 row.getStatus(),
                 aggregateVersion);
+    }
+
+    private static String constraintName(DataIntegrityViolationException e) {
+        Throwable cause = e;
+        while (cause != null) {
+            if (cause instanceof org.hibernate.exception.ConstraintViolationException violation
+                    && violation.getConstraintName() != null) {
+                return "constraint " + violation.getConstraintName();
+            }
+            cause = cause.getCause();
+        }
+        return "a constraint violation";
     }
 
     private void countSkipped(long schemaVersion) {

@@ -11,6 +11,9 @@ spring:
       # generously configured server; these tests need one connection at a time.
       maximum-pool-size: 8
       minimum-idle: 1
+      # As production (ADR-0072, S24): no "Failing row contains" detail in driver messages.
+      data-source-properties:
+        logServerErrorDetail: false
   autoconfigure:
     exclude: org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration
   jpa:

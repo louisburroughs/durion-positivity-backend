@@ -123,7 +123,9 @@ public class SupplierOrderResultListener {
         try {
             envelope = objectMapper.readTree(message);
         } catch (Exception e) {
-            log.warn("Skipping unparsable supplier event", e);
+            // Never the parser's message: it can quote the record, and a vendor fact's payload is never logged
+            // (ADR-0072).
+            log.warn("Skipping unparsable supplier event error={}", e.getClass().getSimpleName());
             return;
         }
         String eventType = envelope.path("eventType").stringValue(null);

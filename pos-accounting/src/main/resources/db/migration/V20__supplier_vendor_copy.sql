@@ -2,7 +2,8 @@
 -- ADR-0072; Security ruling #2617): one vendor key. Bills and AP payments name the pos-supplier vendor id, read from
 -- a local copy of the vendor master that only the supplier.vendor.updated consumer writes.
 --
--- 1. ext_supplier_vendor: the copy. Every vendor, in either status. tax_registrations holds the fact's
+-- 1. ext_supplier_vendor: the copy. Every vendor, in either status, at the ADR-0044 R3 minimum S24's rules and reads
+--    use (no remit-to address or approver: payment compares only the version). tax_registrations holds the fact's
 --    [{scheme, region, last4}] exactly as the schemaVersion 2 fact carries them; no column holds a full
 --    registration number (ADR-0072, Security ruling #2617). Version 1 vendor facts are never applied.
 -- 2. ap_vendor_settings: what stays accounting's (AW23): the remit-to confirmation and the vendor's AP defaults (AW39).
@@ -21,11 +22,9 @@ CREATE TABLE public.ext_supplier_vendor (
     display_name character varying(200) NOT NULL,
     status character varying(20) NOT NULL,
     status_changed_at timestamp(6) with time zone,
-    remit_to jsonb,
     remit_to_version integer NOT NULL,
     remit_to_changed_at timestamp(6) with time zone,
     remit_to_requested_by character varying(255),
-    remit_to_approved_by character varying(255),
     default_payment_terms character varying(20),
     default_currency character varying(3),
     tax_registrations jsonb NOT NULL,
@@ -67,6 +66,8 @@ CREATE TABLE public.ap_vendor_settings (
     default_debit_class character varying(20),
     default_expense_mapping_key character varying(100),
     version bigint NOT NULL,
+    created_at timestamp(6) with time zone NOT NULL,
+    updated_at timestamp(6) with time zone NOT NULL,
     CONSTRAINT ap_vendor_settings_debit_class_check CHECK (default_debit_class IN ('GOODS', 'EXPENSE'))
 );
 
@@ -99,6 +100,8 @@ CREATE TABLE public.supplier_invoice_hold (
     received_at timestamp(6) with time zone NOT NULL,
     released_at timestamp(6) with time zone,
     released_bill_id uuid,
+    created_at timestamp(6) with time zone NOT NULL,
+    updated_at timestamp(6) with time zone NOT NULL,
     CONSTRAINT supplier_invoice_hold_reason_check CHECK (reason IN ('VENDOR_ID_MISSING', 'VENDOR_NOT_IN_COPY'))
 );
 

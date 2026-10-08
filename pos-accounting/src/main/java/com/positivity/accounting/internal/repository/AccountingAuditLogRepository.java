@@ -50,4 +50,8 @@ public interface AccountingAuditLogRepository extends JpaRepository<AccountingAu
      * request id its marker row carries as entity id (CAP:550 S13, #2510).
      */
     boolean existsByOperationAndEntityId(@NonNull String operation, @NonNull UUID entityId);
+
+    /** The row of {@code operation} recorded for {@code entityId}, e.g. a request marker found by its request id. */
+    java.util.@NonNull Optional<AccountingAuditLog> findFirstByOperationAndEntityId(
+            @NonNull String operation, @NonNull UUID entityId);
 }

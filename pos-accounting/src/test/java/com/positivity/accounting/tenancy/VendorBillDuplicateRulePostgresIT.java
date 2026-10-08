@@ -17,7 +17,6 @@ import com.positivity.accounting.internal.entity.VendorBillNumbers;
 import com.positivity.accounting.internal.entity.VendorBillNumbersTest;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.VendorBillDuplicateException;
-import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.ExtSupplierVendorRepository;
@@ -758,17 +757,16 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
     }
 
     @Test
-    @DisplayName(
-            "S24: another tenant's copy of a vendor is not this tenant's: the create is refused VENDOR_NOT_FOUND and"
-                    + " writes nothing")
+    @DisplayName("S24: another tenant's copy of a vendor is not this tenant's: the create is 503"
+            + " VENDOR_REPLICATION_PENDING (not yet, never no; ADR-0017 §1) and writes nothing")
     void vendorInAnotherTenantsCopyIsNotThisTenants() {
         VendorBillService service = committingService();
 
         // The vendor is in tenant A's copy only; row-level security hides it from tenant B.
         assertThatThrownBy(() -> create(service, TENANT_B, vendor))
                 .isInstanceOfSatisfying(
-                        VendorBillException.class,
-                        refused -> assertThat(refused.getCode()).isEqualTo(VendorBillException.Code.VENDOR_NOT_FOUND));
+                        com.positivity.web.common.ReplicationPendingException.class,
+                        pending -> assertThat(pending.getCode()).isEqualTo("VENDOR_REPLICATION_PENDING"));
 
         assertThat(owner.queryForList("SELECT tenant_id FROM vendor_bill WHERE vendor_id = ?", UUID.class, vendor))
                 .isEmpty();

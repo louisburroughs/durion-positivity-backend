@@ -10,8 +10,8 @@ import com.positivity.accounting.internal.entity.ExtSupplierVendor;
 import com.positivity.accounting.internal.entity.MappingKey;
 import com.positivity.accounting.internal.enums.VendorBillDebitClass;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
+import com.positivity.accounting.internal.exception.IdempotencyConflictException;
 import com.positivity.accounting.internal.exception.VendorBillException;
-import com.positivity.accounting.internal.exception.VendorNotFoundException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.ApVendorSettingsRepository;
 import com.positivity.accounting.internal.repository.ExtSupplierVendorRepository;
@@ -75,7 +75,10 @@ public class VendorDirectoryServiceImpl implements VendorDirectoryService {
     @Transactional(readOnly = true)
     public @NonNull List<VendorResponse> searchVendors(@Nullable String name, @Nullable String status, int limit) {
         int capped = limit > 0 ? Math.min(limit, MAX_RESULTS) : DEFAULT_LIMIT;
-        String term = name == null || name.isBlank() ? null : name.trim();
+        // LIKE wildcards in the term are literal (escaped with '\\' in the query).
+        String term = name == null || name.isBlank()
+                ? null
+                : name.trim().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
         String wanted =
                 status == null || status.isBlank() ? null : status.trim().toUpperCase(Locale.ROOT);
         if (wanted != null && !STATUSES.contains(wanted)) {
@@ -95,7 +98,8 @@ public class VendorDirectoryServiceImpl implements VendorDirectoryService {
     @Override
     @Transactional(readOnly = true)
     public @NonNull VendorResponse getVendorById(@NonNull UUID vendorId) {
-        ExtSupplierVendor vendor = vendors.findById(vendorId).orElseThrow(() -> new VendorNotFoundException(vendorId));
+        ExtSupplierVendor vendor =
+                vendors.findById(vendorId).orElseThrow(() -> SupplierVendorCopies.replicationPending(vendorId));
         return read(vendor);
     }
 
@@ -113,7 +117,17 @@ public class VendorDirectoryServiceImpl implements VendorDirectoryService {
         }
         String justification = VendorBillDecisions.required(request.justification(), "justification");
         ExtSupplierVendor vendor =
-                vendors.lockByVendorId(vendorId).orElseThrow(() -> new VendorNotFoundException(vendorId));
+                vendors.lockByVendorId(vendorId).orElseThrow(() -> SupplierVendorCopies.replicationPending(vendorId));
+        // Separation of duties (Accounting ruling on PR #2648): whoever requested the remit-to in pos-supplier may not
+        // also confirm it. Compared as rule 9 compares createdBy: the principal name the approval fields record.
+        if (vendor.getRemitToRequestedBy() != null && actor.equals(vendor.getRemitToRequestedBy())) {
+            throw new VendorBillException(
+                    VendorBillException.Code.VENDOR_REMIT_TO_SELF_CONFIRMATION,
+                    "You requested vendor " + vendor.getVendorNumber() + "'s current remit-to; another approver"
+                            + " confirms it",
+                    List.of(),
+                    "Ask another holder of accounting:ap:approve to confirm the remit-to");
+        }
         if (request.remitToVersion() != vendor.getRemitToVersion()) {
             throw new VendorBillException(
                     VendorBillException.Code.VENDOR_PAYMENT_DETAILS_CHANGED,
@@ -160,9 +174,16 @@ public class VendorDirectoryServiceImpl implements VendorDirectoryService {
         String key = expenseKey(request, errors);
         refuse(errors);
         ExtSupplierVendor vendor =
-                vendors.lockByVendorId(vendorId).orElseThrow(() -> new VendorNotFoundException(vendorId));
+                vendors.lockByVendorId(vendorId).orElseThrow(() -> SupplierVendorCopies.replicationPending(vendorId));
         UUID requestId = Objects.requireNonNull(request.getRequestId());
-        if (auditLogs.existsByOperationAndEntityId(AUDIT_SETTINGS_REQUEST, requestId)) {
+        String fingerprint = fingerprint(vendorId, request, debitClass, key);
+        java.util.Optional<AccountingAuditLog> recorded =
+                auditLogs.findFirstByOperationAndEntityId(AUDIT_SETTINGS_REQUEST, requestId);
+        if (recorded.isPresent()) {
+            if (!fingerprint.equals(fingerprintOf(recorded.get().getNewValue()))) {
+                throw new IdempotencyConflictException("requestId " + requestId + " was already used for another vendor"
+                        + " AP settings change; generate a new requestId for a new change");
+            }
             log.info("Vendor AP settings PUT {} replayed; nothing written", requestId);
             return read(vendor);
         }
@@ -200,12 +221,7 @@ public class VendorDirectoryServiceImpl implements VendorDirectoryService {
             settings.save(row);
         }
         auditLogs.save(audit(
-                requestId,
-                AUDIT_SETTINGS_REQUEST,
-                actor,
-                justification,
-                null,
-                "vendorId=" + vendorId + ";changed=" + changed));
+                requestId, AUDIT_SETTINGS_REQUEST, actor, justification, null, fingerprint + ";changed=" + changed));
         log.info(
                 "Vendor {} AP settings set by {}: {} change(s) (requestId {})",
                 vendor.getVendorNumber(),
@@ -255,6 +271,30 @@ public class VendorDirectoryServiceImpl implements VendorDirectoryService {
             return null;
         }
         return key;
+    }
+
+    /**
+     * What a settings PUT asked for, normalised: the vendor and each field as absent ({@code ~}), null ({@code -}) or
+     * its value. Recorded on the request row so a reused requestId with another body is 409, not a silent replay.
+     */
+    private static String fingerprint(
+            UUID vendorId,
+            VendorApSettingsRequest request,
+            @Nullable VendorBillDebitClass debitClass,
+            @Nullable String key) {
+        return "vendorId=" + vendorId + ";defaultDebitClass="
+                + (!request.hasDefaultDebitClass() ? "~" : debitClass == null ? "-" : debitClass.name())
+                + ";defaultExpenseMappingKey="
+                + (!request.hasDefaultExpenseMappingKey() ? "~" : key == null ? "-" : key);
+    }
+
+    /** The fingerprint part of a request row's new value (everything before {@code ;changed=}). */
+    private static String fingerprintOf(@Nullable String newValue) {
+        if (newValue == null) {
+            return "";
+        }
+        int changed = newValue.indexOf(";changed=");
+        return changed < 0 ? newValue : newValue.substring(0, changed);
     }
 
     private static void refuse(List<VendorBillException.FieldError> errors) {

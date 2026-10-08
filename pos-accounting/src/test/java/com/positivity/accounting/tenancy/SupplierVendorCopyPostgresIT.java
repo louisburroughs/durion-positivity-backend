@@ -139,7 +139,12 @@ class SupplierVendorCopyPostgresIT extends PostgresTenancyTestBase {
         TenantContext.clear();
         JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
         for (UUID tenant : tenants) {
-            for (String table : List.of("supplier_invoice_hold", "ap_vendor_settings", "ext_supplier_vendor")) {
+            for (String table : List.of(
+                    "accounting_event",
+                    "supplier_invoice_hold",
+                    "vendor_bill",
+                    "ap_vendor_settings",
+                    "ext_supplier_vendor")) {
                 owner.update("DELETE FROM " + table + " WHERE tenant_id = ?", tenant);
             }
         }
@@ -259,6 +264,202 @@ class SupplierVendorCopyPostgresIT extends PostgresTenancyTestBase {
         assertThat(row.get("has_number")).isEqualTo(false);
         assertThat(row.get("status")).isEqualTo("ACTIVE");
         assertThat(logLinesCarrying(LAST4)).as("log lines carrying last4").isZero();
+
+        // Positive control of AC 15's scan: it reads the copy's registrations column and finds a value stored there,
+        // so its zero for the full number means something.
+        assertThat(textColumns())
+                .anySatisfy(column -> assertThat(column).containsExactly("ext_supplier_vendor", "tax_registrations"));
+        assertThat(rowsCarrying(LAST4)).as("the scan finds the stored last4").isPositive();
+    }
+
+    // ---- item 1: nothing reaches a log line or an exception through the JDBC error path -------------------------
+
+    private static final String PAYEE_MARKER = "PAYEE-MARKER-7Q";
+
+    /** Every message of an exception's cause chain. */
+    private static List<String> chainOf(Throwable thrown) {
+        List<String> messages = new ArrayList<>();
+        for (Throwable cause = thrown; cause != null; cause = cause.getCause()) {
+            messages.add(String.valueOf(cause.getMessage()));
+            for (Throwable suppressed : cause.getSuppressed()) {
+                messages.add(String.valueOf(suppressed.getMessage()));
+            }
+        }
+        return messages;
+    }
+
+    /** Every formatted line and every message of every logged throwable's cause chain, from ROOT. */
+    private static long rootLinesCarrying(ListAppender<ILoggingEvent> captured, String... values) {
+        return captured.list.stream()
+                .flatMap(event -> {
+                    List<String> lines = new ArrayList<>();
+                    lines.add(event.getFormattedMessage());
+                    for (ch.qos.logback.classic.spi.IThrowableProxy proxy = event.getThrowableProxy();
+                            proxy != null;
+                            proxy = proxy.getCause()) {
+                        lines.add(String.valueOf(proxy.getMessage()));
+                    }
+                    return lines.stream();
+                })
+                .filter(line -> List.of(values).stream().anyMatch(line::contains))
+                .count();
+    }
+
+    private ListAppender<ILoggingEvent> captureRoot(List<Runnable> restore) {
+        Logger root = (Logger) LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
+        Level before = root.getLevel();
+        ListAppender<ILoggingEvent> captured = new ListAppender<>();
+        captured.start();
+        root.addAppender(captured);
+        root.setLevel(Level.DEBUG);
+        restore.add(() -> {
+            root.detachAppender(captured);
+            root.setLevel(before);
+        });
+        return captured;
+    }
+
+    @Test
+    @DisplayName("item 1: a v2 fact without a displayName leaks neither last4 nor the remit-to into a log or exception")
+    void unreadableVendorFactLeaksNothing() {
+        UUID tenant = tenant();
+        UUID vendorId = UUIDv7Generator.generate();
+        String fact = vendorFact(
+                        UUIDv7Generator.generate().toString(),
+                        vendorId,
+                        2,
+                        "{\"scheme\":\"EIN\",\"region\":null,\"last4\":\"" + LAST4 + "\"}")
+                .replace("\"displayName\":\"Acme Parts\"", "\"displayName\":null")
+                .replace(
+                        "\"remitTo\":null",
+                        "\"remitTo\":{\"payeeName\":\"" + PAYEE_MARKER + "\",\"addressLine1\":\"1 Main St\","
+                                + "\"city\":\"Springfield\",\"region\":\"ST\",\"postalCode\":\"00001\","
+                                + "\"countryCode\":\"US\"}");
+        List<Runnable> restore = new ArrayList<>();
+        ListAppender<ILoggingEvent> root = captureRoot(restore);
+        Throwable thrown = null;
+        try {
+            asTenant(tenant, () -> listener.onSupplierEvent(fact));
+        } catch (RuntimeException e) {
+            thrown = e;
+        } finally {
+            restore.forEach(Runnable::run);
+        }
+
+        assertThat(count("SELECT count(*) FROM ext_supplier_vendor WHERE vendor_id = ?", vendorId))
+                .isZero();
+        assertThat(rootLinesCarrying(root, LAST4, PAYEE_MARKER))
+                .as("ROOT lines carrying either")
+                .isZero();
+        if (thrown != null) {
+            assertThat(chainOf(thrown)).noneMatch(m -> m.contains(LAST4) || m.contains(PAYEE_MARKER));
+        }
+    }
+
+    @Test
+    @DisplayName("item 1: a copy row the database refuses (status CHECK) carries no row detail into logs or exceptions"
+            + " (pgjdbc logServerErrorDetail=false)")
+    void refusedCopyRowLeaksNoFailingRow() {
+        UUID tenant = tenant();
+        com.positivity.accounting.internal.entity.ExtSupplierVendor row =
+                new com.positivity.accounting.internal.entity.ExtSupplierVendor();
+        row.setVendorId(UUIDv7Generator.generate());
+        row.setVendorNumber("V-LEAK-1");
+        row.setDisplayName(PAYEE_MARKER);
+        // Refused by ext_supplier_vendor_status_check: Postgres would quote the whole failing row in its DETAIL.
+        row.setStatus("BOGUS");
+        row.setCreatedBy("u.creator");
+        row.setAggregateVersion(1);
+        row.setTaxRegistrations(List.of(new java.util.LinkedHashMap<>(Map.of("scheme", "EIN", "last4", LAST4))));
+        List<Runnable> restore = new ArrayList<>();
+        ListAppender<ILoggingEvent> root = captureRoot(restore);
+        Throwable thrown;
+        try {
+            thrown = org.assertj.core.api.Assertions.catchThrowable(
+                    () -> asTenant(tenant, () -> vendorCopy.saveAndFlush(row)));
+        } finally {
+            restore.forEach(Runnable::run);
+        }
+
+        assertThat(thrown).isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+        assertThat(chainOf(thrown)).noneMatch(m -> m.contains(LAST4) || m.contains(PAYEE_MARKER));
+        assertThat(rootLinesCarrying(root, LAST4, PAYEE_MARKER))
+                .as("ROOT lines carrying either")
+                .isZero();
+    }
+
+    // ---- item 6: AC 4 on Postgres --------------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("AC 4: an invoice held before its vendor is copied becomes one bill when the vendor arrives, the hold"
+            + " RELEASED with the bill, one ingestion record")
+    void heldInvoiceIsReleasedWhenTheVendorArrives() {
+        UUID tenant = tenant();
+        UUID vendorId = UUIDv7Generator.generate();
+        UUID invoiceEvent = UUIDv7Generator.generate();
+        asTenant(
+                tenant,
+                () -> listener.onSupplierEvent("""
+                {"eventId":"%s","eventType":"supplier.invoice.received","payload":{
+                  "vendorProfileId":"%s","supplierRef":"acme","vendorInvoiceNumber":"INV-AC4","invoiceDate":"2026-10-06",
+                  "type":"INVOICE","currency":"USD","totalNetAmount":100.00,"totalTaxAmount":0,
+                  "totalGrossAmount":100.00,"occurredAt":"2026-10-08T08:00:00Z","lines":[],"vendorId":"%s"}}
+                """.formatted(invoiceEvent, UUIDv7Generator.generate(), vendorId)));
+        assertThat(count("SELECT count(*) FROM vendor_bill WHERE vendor_id = ?", vendorId))
+                .isZero();
+        assertThat(count(
+                        "SELECT count(*) FROM supplier_invoice_hold WHERE event_id = ? AND reason = 'VENDOR_NOT_IN_COPY'"
+                                + " AND released_at IS NULL",
+                        invoiceEvent))
+                .isEqualTo(1);
+
+        asTenant(
+                tenant,
+                () -> listener.onSupplierEvent(
+                        vendorFact(UUIDv7Generator.generate().toString(), vendorId, 2, "")));
+
+        JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
+        List<UUID> billIds = owner.queryForList(
+                "SELECT vendor_bill_id FROM vendor_bill WHERE vendor_id = ? AND tenant_id = ?",
+                UUID.class,
+                vendorId,
+                tenant);
+        assertThat(billIds).hasSize(1);
+        Map<String, Object> hold = owner.queryForMap(
+                "SELECT released_at, released_bill_id FROM supplier_invoice_hold WHERE event_id = ?", invoiceEvent);
+        assertThat(hold.get("released_at")).isNotNull();
+        assertThat(hold.get("released_bill_id")).isEqualTo(billIds.getFirst());
+        assertThat(count("SELECT count(*) FROM accounting_event WHERE ingestion_id = ?", invoiceEvent))
+                .isEqualTo(1);
+    }
+
+    // ---- LOW: the vendor search's LIKE wildcards are literal -----------------------------------------------------
+
+    @Autowired
+    private com.positivity.accounting.internal.service.VendorDirectoryService directory;
+
+    @Test
+    @DisplayName("the vendor search matches % and _ literally")
+    void searchWildcardsAreLiteral() {
+        UUID tenant = tenant();
+        JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
+        for (String name : List.of("100% Parts", "100X Parts", "1_0 Tools", "1X0 Tools")) {
+            owner.update(
+                    "INSERT INTO ext_supplier_vendor (tenant_id, vendor_id, vendor_number, display_name, status,"
+                            + " remit_to_version, tax_registrations, created_by, aggregate_version, updated_at)"
+                            + " VALUES (?, ?, ?, ?, 'ACTIVE', 0, '[]'::jsonb, 'it', 1, now())",
+                    tenant,
+                    UUIDv7Generator.generate(),
+                    "V-" + name.replace(" ", ""),
+                    name);
+        }
+
+        assertThat(asTenant(tenant, () -> directory.searchVendors("100%", null, 20)))
+                .extracting(com.positivity.accounting.internal.dto.VendorResponse::getName)
+                .containsExactly("100% Parts");
+        assertThat(asTenant(tenant, () -> directory.searchVendors("1_0", null, 20)))
+                .extracting(com.positivity.accounting.internal.dto.VendorResponse::getName)
+                .containsExactly("1_0 Tools");
     }
 
     @Test

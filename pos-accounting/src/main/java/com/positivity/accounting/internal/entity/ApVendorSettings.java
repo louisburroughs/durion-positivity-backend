@@ -5,6 +5,7 @@ import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
@@ -19,6 +20,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * What stays accounting's about a pos-supplier vendor (CAP:550 S24, #2517; SPEC-accounting-workspace §4.9 "What stays
@@ -31,6 +35,7 @@ import lombok.ToString;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true, callSuper = false)
 @ToString
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(
         name = "ap_vendor_settings",
         uniqueConstraints =
@@ -75,4 +80,14 @@ public class ApVendorSettings extends TenantScopedEntity {
     @Version
     @Column(name = "version", nullable = false)
     private long version;
+
+    /** ADR-0024: when the row was written first. */
+    @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    /** ADR-0024: when the row last changed. */
+    @LastModifiedDate
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
 }

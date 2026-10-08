@@ -56,7 +56,6 @@ import com.positivity.accounting.internal.exception.TaxSnapshotPeriodNotClosedEx
 import com.positivity.accounting.internal.exception.UnbalancedRulesException;
 import com.positivity.accounting.internal.exception.VendorBillDuplicateException;
 import com.positivity.accounting.internal.exception.VendorBillException;
-import com.positivity.accounting.internal.exception.VendorNotFoundException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.EntityNotFoundException;
@@ -242,12 +241,6 @@ public class AccountingExceptionHandler {
     public ResponseEntity<ApiError> handleAccountNotInactive(
             AccountNotInactiveException ex, HttpServletRequest request) {
         return build(HttpStatus.CONFLICT, "ACCOUNT_NOT_INACTIVE", ex.getMessage(), request);
-    }
-
-    /** A vendor read or command naming a vendor not in the copy (CAP:550 S24, #2517): 404 {@code VENDOR_NOT_FOUND}. */
-    @ExceptionHandler(VendorNotFoundException.class)
-    public ResponseEntity<ApiError> handleVendorNotFound(VendorNotFoundException ex, HttpServletRequest request) {
-        return build(HttpStatus.NOT_FOUND, VendorNotFoundException.CODE, ex.getMessage(), request);
     }
 
     /**

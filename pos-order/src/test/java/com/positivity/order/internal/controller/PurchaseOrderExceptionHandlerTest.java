@@ -94,12 +94,8 @@ class PurchaseOrderExceptionHandlerTest {
     }
 
     @Test
-    @DisplayName("maps a vendor outside the copy or inactive to 422 VENDOR_NOT_FOUND / VENDOR_INACTIVE (S24)")
+    @DisplayName("maps an inactive vendor to 422 VENDOR_INACTIVE (S24); a vendor not in the copy is the platform 503")
     void vendorRefusals() {
-        assertEnvelope(
-                sut.handleVendor(PurchaseOrderVendorException.notFound(), request),
-                HttpStatus.UNPROCESSABLE_ENTITY,
-                "VENDOR_NOT_FOUND");
         assertEnvelope(
                 sut.handleVendor(PurchaseOrderVendorException.inactive("V-000123"), request),
                 HttpStatus.UNPROCESSABLE_ENTITY,
@@ -173,8 +169,8 @@ class PurchaseOrderExceptionHandlerTest {
                             request -> handler.handleNotFound(new PurchaseOrderNotFoundException(PO_ID), request)),
                     Named.of("handleNotTransmittable", (HandlerInvocation) request -> handler.handleNotTransmittable(
                             PurchaseOrderNotTransmittableException.noSupplierRef(), request)),
-                    Named.of("handleVendor", (HandlerInvocation)
-                            request -> handler.handleVendor(PurchaseOrderVendorException.notFound(), request)),
+                    Named.of("handleVendor", (HandlerInvocation) request ->
+                            handler.handleVendor(PurchaseOrderVendorException.inactive("V-000123"), request)),
                     Named.of("handleUomConversionUndefined", (HandlerInvocation)
                             request -> handler.handleUomConversionUndefined(
                                     UomConversionUndefinedException.unknownProduct(PO_ID, "EA"), request)),

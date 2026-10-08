@@ -18,14 +18,15 @@ import com.positivity.accounting.internal.entity.ExtSupplierVendor;
 import com.positivity.accounting.internal.entity.MappingKey;
 import com.positivity.accounting.internal.entity.PostingCategory;
 import com.positivity.accounting.internal.enums.VendorBillDebitClass;
+import com.positivity.accounting.internal.exception.IdempotencyConflictException;
 import com.positivity.accounting.internal.exception.VendorBillException;
-import com.positivity.accounting.internal.exception.VendorNotFoundException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.ApVendorSettingsRepository;
 import com.positivity.accounting.internal.repository.ExtSupplierVendorRepository;
 import com.positivity.accounting.internal.repository.MappingKeyRepository;
 import com.positivity.accounting.internal.repository.PostingCategoryRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
+import com.positivity.web.common.ReplicationPendingException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -169,12 +170,21 @@ class VendorDirectoryServiceImplTest {
     }
 
     @Test
-    @DisplayName("a vendor not in the copy is 404 VENDOR_NOT_FOUND")
-    void notFound() {
+    @DisplayName("a vendor not in the copy is 503 VENDOR_REPLICATION_PENDING, never 'no such vendor' (ADR-0017 §1)")
+    void notInTheCopyYet() {
         UUID unknown = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f5a09");
-        assertThatThrownBy(() -> service.getVendorById(unknown)).isInstanceOf(VendorNotFoundException.class);
+        assertThatThrownBy(() -> service.getVendorById(unknown))
+                .isInstanceOfSatisfying(ReplicationPendingException.class, e -> {
+                    assertThat(e.getCode()).isEqualTo("VENDOR_REPLICATION_PENDING");
+                    assertThat(e.getReferenceId()).isEqualTo(unknown);
+                });
         assertThatThrownBy(() -> service.setApSettings(unknown, put("GOODS", null)))
-                .isInstanceOf(VendorNotFoundException.class);
+                .isInstanceOf(ReplicationPendingException.class);
+        assertThatThrownBy(() -> service.confirmRemitTo(
+                        unknown, new VendorRemitToConfirmationRequest(1, "Called the vendor; verified")))
+                .isInstanceOf(ReplicationPendingException.class);
+        verify(settings, never()).save(any());
+        verify(auditLogs, never()).save(any());
     }
 
     @Nested
@@ -198,6 +208,51 @@ class VendorDirectoryServiceImplTest {
                 assertThat(row.getUserId()).isEqualTo("q.controller");
                 assertThat(row.getNewValue()).contains("confirmedRemitToVersion=3");
             });
+        }
+
+        private void requestedBy(String requester) {
+            ExtSupplierVendor vendor = vendor("ACTIVE", 3);
+            vendor.setRemitToRequestedBy(requester);
+            when(vendors.lockByVendorId(VENDOR)).thenReturn(Optional.of(vendor));
+        }
+
+        @Test
+        @DisplayName("ruling on PR #2648: the remit-to's requester may not confirm it: 403, nothing written")
+        void requesterIsRefused() {
+            requestedBy("q.controller");
+
+            assertThatThrownBy(() -> service.confirmRemitTo(
+                            VENDOR, new VendorRemitToConfirmationRequest(3, "Called the vendor; new address verified")))
+                    .isInstanceOfSatisfying(VendorBillException.class, e -> {
+                        assertThat(e.getCode()).isEqualTo(VendorBillException.Code.VENDOR_REMIT_TO_SELF_CONFIRMATION);
+                        assertThat(e.getCode().status().value()).isEqualTo(403);
+                    });
+            verify(settings, never()).save(any());
+            verify(auditLogs, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("the requester is refused before the stale-version check")
+        void requesterRefusedBeforeStaleCheck() {
+            requestedBy("q.controller");
+
+            assertThatThrownBy(() -> service.confirmRemitTo(
+                            VENDOR, new VendorRemitToConfirmationRequest(2, "Called the vendor; new address verified")))
+                    .isInstanceOfSatisfying(
+                            VendorBillException.class,
+                            e -> assertThat(e.getCode())
+                                    .isEqualTo(VendorBillException.Code.VENDOR_REMIT_TO_SELF_CONFIRMATION));
+        }
+
+        @Test
+        @DisplayName("anyone else may confirm: pos-supplier's approver, a third approver; no requester refuses nobody")
+        void othersMayConfirm() {
+            for (String requester : new String[] {"s.requester", "p.supplier.approver", null}) {
+                requestedBy(requester);
+                service.confirmRemitTo(
+                        VENDOR, new VendorRemitToConfirmationRequest(3, "Called the vendor; new address verified"));
+            }
+            verify(settings, org.mockito.Mockito.times(3)).save(any());
         }
 
         @Test
@@ -314,15 +369,67 @@ class VendorDirectoryServiceImplTest {
         }
 
         @Test
-        @DisplayName("idempotent on requestId: a replay writes nothing")
+        @DisplayName("idempotent on requestId: a replay of the same body writes nothing")
         void replay() {
-            when(auditLogs.existsByOperationAndEntityId("AP_VENDOR_SETTINGS_REQUEST", REQUEST))
-                    .thenReturn(true);
+            AccountingAuditLog marker = recordedMarker(put("GOODS", null));
+            when(auditLogs.findFirstByOperationAndEntityId("AP_VENDOR_SETTINGS_REQUEST", REQUEST))
+                    .thenReturn(Optional.of(marker));
 
             service.setApSettings(VENDOR, put("GOODS", null));
 
             verify(settings, never()).save(any());
             verify(auditLogs, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("item 8: the same requestId with another body is 409 IDEMPOTENCY_CONFLICT; nothing written")
+        void reusedRequestIdWithAnotherBody() {
+            AccountingAuditLog marker = recordedMarker(put("GOODS", null));
+            when(auditLogs.findFirstByOperationAndEntityId("AP_VENDOR_SETTINGS_REQUEST", REQUEST))
+                    .thenReturn(Optional.of(marker));
+
+            assertThatThrownBy(() -> service.setApSettings(VENDOR, put("EXPENSE", "EXPENSE_SHOP_SUPPLIES")))
+                    .isInstanceOf(IdempotencyConflictException.class);
+            VendorApSettingsRequest keyLeftOut = new VendorApSettingsRequest();
+            keyLeftOut.setDefaultDebitClass("GOODS");
+            keyLeftOut.setJustification("Shop supplies vendor by default");
+            keyLeftOut.setRequestId(REQUEST);
+            assertThatThrownBy(() -> service.setApSettings(VENDOR, keyLeftOut))
+                    .as("a field left out is not the same body as a field sent as null")
+                    .isInstanceOf(IdempotencyConflictException.class);
+            verify(settings, never()).save(any());
+            verify(auditLogs, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("item 8: the same requestId on another vendor is 409 IDEMPOTENCY_CONFLICT")
+        void reusedRequestIdOnAnotherVendor() {
+            AccountingAuditLog marker = recordedMarker(put("GOODS", null));
+            UUID other = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f5a0b");
+            ExtSupplierVendor otherVendor = vendor("ACTIVE", 1);
+            otherVendor.setVendorId(other);
+            when(vendors.lockByVendorId(other)).thenReturn(Optional.of(otherVendor));
+            when(auditLogs.findFirstByOperationAndEntityId("AP_VENDOR_SETTINGS_REQUEST", REQUEST))
+                    .thenReturn(Optional.of(marker));
+
+            assertThatThrownBy(() -> service.setApSettings(other, put("GOODS", null)))
+                    .isInstanceOf(IdempotencyConflictException.class);
+            verify(settings, never()).save(any());
+        }
+
+        /**
+         * The request marker a first PUT of {@code body} on VENDOR records, captured from a real call, then forgotten so
+         * the test starts from it.
+         */
+        private AccountingAuditLog recordedMarker(VendorApSettingsRequest body) {
+            service.setApSettings(VENDOR, body);
+            AccountingAuditLog marker = audits().stream()
+                    .filter(row -> row.getOperation().equals("AP_VENDOR_SETTINGS_REQUEST"))
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(marker.getEntityId()).isEqualTo(REQUEST);
+            org.mockito.Mockito.clearInvocations(settings, auditLogs);
+            return marker;
         }
 
         @Test

@@ -2,23 +2,31 @@ package com.positivity.order.internal.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.order.BaseControllerSliceTest;
 import com.positivity.order.internal.exception.PurchaseOrderRequestValidationException;
+import com.positivity.order.internal.exception.PurchaseOrderVendorException;
 import com.positivity.order.internal.service.ProcurementAvailabilityService;
 import com.positivity.order.internal.service.PurchaseOrderService;
 import com.positivity.order.internal.service.PurchaseOrderTransmissionService;
+import com.positivity.order.internal.service.SupplierVendorGuard;
 import com.positivity.security.common.GatewaySecurityConfig;
+import com.positivity.web.common.ReplicationPendingException;
 import com.positivity.web.common.WebCommonErrorAutoConfiguration;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
@@ -81,5 +89,42 @@ class PurchaseOrderControllerErrorHandlingTest extends BaseControllerSliceTest {
                 .getContentAsString();
 
         assertThat(body).doesNotContain(leakCanary).doesNotContain("UnknownPathException");
+    }
+
+    @Test
+    @DisplayName("S24: a vendor not in the copy yet answers 503 VENDOR_REPLICATION_PENDING with Retry-After, never a"
+            + " not-found (ADR-0017 §1)")
+    void vendorNotReplicatedYetAnswers503WithRetryAfter() throws Exception {
+        UUID vendorId = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4b06");
+        when(purchaseOrderService.approvePurchaseOrder(eq(PO_ID), any(), anyString()))
+                .thenThrow(new ReplicationPendingException(
+                        SupplierVendorGuard.VENDOR_REPLICATION_PENDING,
+                        "The vendor has not reached this shop's copy of the vendor master yet; retry shortly.",
+                        vendorId));
+
+        mockMvc.perform(withGatewayAuth(
+                        post("/v1/orders/purchase-orders/{poId}/approve", PO_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{}"),
+                        "order:purchase_order:approve"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(header().string("Retry-After", "5"))
+                .andExpect(jsonPath("$.code").value("VENDOR_REPLICATION_PENDING"))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("S24: an inactive vendor answers 422 VENDOR_INACTIVE")
+    void inactiveVendorAnswers422() throws Exception {
+        when(purchaseOrderService.approvePurchaseOrder(eq(PO_ID), any(), anyString()))
+                .thenThrow(PurchaseOrderVendorException.inactive("V-000123"));
+
+        mockMvc.perform(withGatewayAuth(
+                        post("/v1/orders/purchase-orders/{poId}/approve", PO_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{}"),
+                        "order:purchase_order:approve"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("VENDOR_INACTIVE"));
     }
 }

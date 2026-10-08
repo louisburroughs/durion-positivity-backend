@@ -11,6 +11,7 @@ import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -100,9 +101,10 @@ public class APPaymentController {
                 Returns 400 VALIDATION_ERROR for a malformed body, an unknown currency code, a refused allocation \
                 or fieldErrors[bankAccountId], 403 AP_PAYMENT_SELF_APPROVED_BILL, 409 IDEMPOTENCY_CONFLICT, \
                 LOCK_TIMEOUT or VENDOR_PAYMENT_DETAILS_CHANGED (naming each bill and the vendor number), 422 \
-                AP_PAYMENT_METHOD_NOT_SUPPORTED, CURRENCY_NOT_SUPPORTED, VENDOR_NOT_FOUND, VENDOR_INACTIVE, \
+                AP_PAYMENT_METHOD_NOT_SUPPORTED, CURRENCY_NOT_SUPPORTED, VENDOR_INACTIVE, \
                 ACCOUNTING_TIME_ZONE_UNSET, PERIOD_HARD_LOCKED, PERIOD_CLOSED or GL_MAPPING_NOT_CONFIGURED, and 500 \
-                PAYMENT_GATEWAY_FAILURE when the gateway fails or times out.
+                PAYMENT_GATEWAY_FAILURE when the gateway fails or times out, and 503 VENDOR_REPLICATION_PENDING \
+                (Retry-After) when the vendor is not in the copy yet.
                 """,
             tags = {"AP Payments"})
     @ApiResponse(responseCode = "200", description = "Idempotent replay: existing payment returned")
@@ -129,11 +131,22 @@ public class APPaymentController {
     @ApiResponse(
             responseCode = "422",
             description = "Refused before the gateway, in this order: AP_PAYMENT_METHOD_NOT_SUPPORTED (CREDIT_CARD,"
-                    + " OTHER), CURRENCY_NOT_SUPPORTED (not the functional currency), VENDOR_NOT_FOUND (not in the"
-                    + " pos-supplier vendor copy), VENDOR_INACTIVE, ACCOUNTING_TIME_ZONE_UNSET,"
+                    + " OTHER), CURRENCY_NOT_SUPPORTED (not the functional currency), VENDOR_INACTIVE,"
+                    + " ACCOUNTING_TIME_ZONE_UNSET,"
                     + " PERIOD_HARD_LOCKED, PERIOD_CLOSED (no overrideJustification with accounting:period:override),"
                     + " GL_MAPPING_NOT_CONFIGURED (AP_PAYMENT/ACCOUNTS_PAYABLE, or PAYMENT_FEES with a fee); nothing"
                     + " is charged or persisted",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description =
+                    "VENDOR_REPLICATION_PENDING: the vendor is not in accounting's copy of the pos-supplier vendor"
+                            + " master yet. Not-yet, not no: retry after the Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "500",

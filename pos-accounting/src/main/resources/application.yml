@@ -14,6 +14,12 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME:}
     password: ${SPRING_DATASOURCE_PASSWORD:}
     driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:org.postgresql.Driver}
+    hikari:
+      data-source-properties:
+        # ADR-0072 (CAP:550 S24): pgjdbc otherwise appends the server's DETAIL ("Failing row contains (...)") to
+        # every SQLException message, which Hibernate logs at ERROR before Spring translates it: a refused vendor
+        # copy row would put its tax registrations (last4) in a log line.
+        logServerErrorDetail: false
   jpa:
     hibernate:
       ddl-auto: validate
@@ -166,6 +172,9 @@ stripe:
 logging:
   level:
     root: INFO
+    # ADR-0072 (CAP:550 S24): at DEBUG Hibernate's EntityPrinter lists every flushed entity's property values, the
+    # vendor copy's tax registrations (last4) included. Pinned to INFO whatever the root level.
+    org.hibernate.internal.util.EntityPrinter: INFO
     com:
       positivity:
         accounting: INFO

@@ -211,7 +211,8 @@ public class SupplierEventsListener {
         try {
             envelope = objectMapper.readTree(message);
         } catch (Exception e) {
-            log.warn("Skipping unparsable supplier event", e);
+            // The parser's message may quote the record: its class only (ADR-0072).
+            log.warn("Skipping unparsable supplier event ({})", e.getClass().getSimpleName());
             return;
         }
         String eventType = envelope.path("eventType").stringValue(null);
@@ -355,11 +356,9 @@ public class SupplierEventsListener {
         copy.setDisplayName(fact.displayName());
         copy.setStatus(fact.status().name());
         copy.setStatusChangedAt(fact.statusChangedAt());
-        copy.setRemitTo(remitTo(fact.remitTo()));
         copy.setRemitToVersion(fact.remitToVersion());
         copy.setRemitToChangedAt(fact.remitToChangedAt());
         copy.setRemitToRequestedBy(fact.remitToRequestedBy());
-        copy.setRemitToApprovedBy(fact.remitToApprovedBy());
         copy.setDefaultPaymentTerms(fact.defaultPaymentTerms());
         copy.setDefaultCurrency(fact.defaultCurrency());
         // As the fact carries them, {scheme, region, last4}; never validated, never read by a rule here (AW48).
@@ -368,7 +367,7 @@ public class SupplierEventsListener {
                 .toList());
         copy.setCreatedBy(fact.createdBy());
         copy.setAggregateVersion(aggregateVersion);
-        copy.setUpdatedAt(Instant.now(clock));
+        // updated_at is the auditing listener's (@LastModifiedDate), its single source.
         try {
             vendorCopy.saveAndFlush(copy);
         } catch (DataIntegrityViolationException e) {
@@ -385,22 +384,6 @@ public class SupplierEventsListener {
                 fact.status(),
                 fact.remitToVersion());
         return fact.vendorId();
-    }
-
-    private static @Nullable Map<String, Object> remitTo(SupplierVendorUpdatedV1.@Nullable RemitTo remitTo) {
-        if (remitTo == null) {
-            return null;
-        }
-        Map<String, Object> copy = new LinkedHashMap<>();
-        copy.put("payeeName", remitTo.payeeName());
-        copy.put("addressLine1", remitTo.addressLine1());
-        copy.put("addressLine2", remitTo.addressLine2());
-        copy.put("city", remitTo.city());
-        copy.put("region", remitTo.region());
-        copy.put("postalCode", remitTo.postalCode());
-        copy.put("countryCode", remitTo.countryCode());
-        copy.put("remittanceEmail", remitTo.remittanceEmail());
-        return copy;
     }
 
     private static Map<String, String> registration(SupplierVendorUpdatedV1.TaxRegistration registration) {
@@ -474,7 +457,9 @@ public class SupplierEventsListener {
     private void release(UUID holdId, boolean mayRunOnceMore) {
         try {
             handlerTransaction.executeWithoutResult(_ -> {
-                SupplierInvoiceHold hold = holds.findById(holdId).orElse(null);
+                // Locked, and released_at re-read under the lock: a sweep and a vendor fact releasing the same hold at
+                // once serialise here, and the second finds it released.
+                SupplierInvoiceHold hold = holds.lockByHoldId(holdId).orElse(null);
                 if (hold == null || hold.getReleasedAt() != null) {
                     return;
                 }
@@ -596,7 +581,8 @@ public class SupplierEventsListener {
             // Never booked at par (ADR-0067 PC-9, PC-13): a bill in another currency is held where an
             // operator sees why, out of matching, approval, payment and ledger-currency totals.
             bill.setStatus(VendorBillStatus.CURRENCY_HOLD);
-            bill.setRejectionReason(currencyHoldReason(fact.currency()));
+            bill.setRejectionReason(
+                    (vendor.isActive() ? "" : inactive(vendor) + ". ") + currencyHoldReason(fact.currency()));
         } else {
             // An invoice whose amount could not be read is not a nil invoice. The codec deliberately
             // records an unreadable figure as absent rather than zero so the two stay

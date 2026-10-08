@@ -368,14 +368,15 @@ class PurchaseOrderServiceImplTest {
         private final UUID otherVendor = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a09");
 
         @Test
-        @DisplayName("create refuses a vendor missing from the copy with VENDOR_NOT_FOUND and saves nothing")
+        @DisplayName(
+                "create answers 503 VENDOR_REPLICATION_PENDING for a vendor not in the copy yet, and saves nothing")
         void createRefusesUnknownVendor() {
             when(vendorRepository.findById(VENDOR_ID)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.createPurchaseOrder(createRequest(), ACTOR))
                     .isInstanceOfSatisfying(
-                            PurchaseOrderVendorException.class,
-                            e -> assertThat(e.getCode()).isEqualTo(PurchaseOrderVendorException.Code.VENDOR_NOT_FOUND));
+                            com.positivity.web.common.ReplicationPendingException.class,
+                            e -> assertThat(e.getCode()).isEqualTo("VENDOR_REPLICATION_PENDING"));
             verify(purchaseOrderRepository, never()).save(any());
             verify(purchaseOrderFactPublisher, never()).publish(any(), any());
         }
@@ -395,7 +396,8 @@ class PurchaseOrderServiceImplTest {
         }
 
         @Test
-        @DisplayName("approve refuses a draft whose vendor is missing from the copy, and the order stays a draft")
+        @DisplayName(
+                "approve of a draft whose vendor is not in the copy yet answers 503 VENDOR_REPLICATION_PENDING; the order stays a draft")
         void approveRefusesUnknownVendor() {
             PurchaseOrderEntity draft = existingOrder(PurchaseOrderStatus.DRAFT);
             when(purchaseOrderRepository.findById(PO_ID)).thenReturn(Optional.of(draft));
@@ -403,8 +405,8 @@ class PurchaseOrderServiceImplTest {
 
             assertThatThrownBy(() -> service.approvePurchaseOrder(PO_ID, new ApprovePurchaseOrderRequest(), ACTOR))
                     .isInstanceOfSatisfying(
-                            PurchaseOrderVendorException.class,
-                            e -> assertThat(e.getCode()).isEqualTo(PurchaseOrderVendorException.Code.VENDOR_NOT_FOUND));
+                            com.positivity.web.common.ReplicationPendingException.class,
+                            e -> assertThat(e.getCode()).isEqualTo("VENDOR_REPLICATION_PENDING"));
             assertThat(draft.getStatus()).isEqualTo(PurchaseOrderStatus.DRAFT);
             verify(purchaseOrderFactPublisher, never()).publish(any(), any());
         }
@@ -455,8 +457,8 @@ class PurchaseOrderServiceImplTest {
             when(vendorRepository.findById(otherVendor)).thenReturn(Optional.empty());
             assertThatThrownBy(() -> service.revisePurchaseOrder(PO_ID, request, ACTOR))
                     .isInstanceOfSatisfying(
-                            PurchaseOrderVendorException.class,
-                            e -> assertThat(e.getCode()).isEqualTo(PurchaseOrderVendorException.Code.VENDOR_NOT_FOUND));
+                            com.positivity.web.common.ReplicationPendingException.class,
+                            e -> assertThat(e.getCode()).isEqualTo("VENDOR_REPLICATION_PENDING"));
 
             when(vendorRepository.findById(otherVendor))
                     .thenReturn(Optional.of(vendor(otherVendor, ExtSupplierVendor.Status.INACTIVE)));
@@ -500,8 +502,8 @@ class PurchaseOrderServiceImplTest {
             assertThatThrownBy(
                             () -> service.approvePurchaseOrder(requestedId, new ApprovePurchaseOrderRequest(), ACTOR))
                     .isInstanceOfSatisfying(
-                            PurchaseOrderVendorException.class,
-                            e -> assertThat(e.getCode()).isEqualTo(PurchaseOrderVendorException.Code.VENDOR_NOT_FOUND));
+                            com.positivity.web.common.ReplicationPendingException.class,
+                            e -> assertThat(e.getCode()).isEqualTo("VENDOR_REPLICATION_PENDING"));
             assertThat(persisted.getValue().getStatus()).isEqualTo(PurchaseOrderStatus.DRAFT);
         }
     }

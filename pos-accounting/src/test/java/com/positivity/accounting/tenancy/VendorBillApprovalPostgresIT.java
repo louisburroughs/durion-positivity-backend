@@ -932,6 +932,23 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
                     assertThat(check.outcome()).isEqualTo(VendorBillCheckOutcome.FAIL);
                     assertThat(check.args()).containsEntry("count", "1").containsEntry("billNumbers", receiptNumber);
                 });
+        // S24: both channels key on the pos-supplier vendor id: the vendor is in the copy, and both bills name it.
+        JdbcTemplate keyed = new JdbcTemplate(ownerDataSource());
+        assertThat(keyed.queryForObject(
+                        "SELECT count(*) FROM ext_supplier_vendor WHERE vendor_id = ? AND tenant_id = ?",
+                        Long.class,
+                        vendor,
+                        tenant))
+                .isEqualTo(1L);
+        assertThat(keyed.queryForList(
+                        "SELECT DISTINCT vendor_id FROM vendor_bill WHERE tenant_id = ? AND vendor_bill_id IN"
+                                + " (?, (SELECT vendor_bill_id FROM vendor_bill WHERE tenant_id = ? AND bill_number = ?))",
+                        UUID.class,
+                        tenant,
+                        edi,
+                        tenant,
+                        receiptNumber))
+                .containsExactly(vendor);
 
         signIn(CONTROLLER, CONTROLLER_GRANTS);
         VendorBillResponse approved =

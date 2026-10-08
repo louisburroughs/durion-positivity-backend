@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -76,6 +77,7 @@ class VendorBillApprovalLimitsTest {
     private final VendorBillReader reader = mock();
     private final ApApprovalPolicy policy = mock();
     private final com.positivity.accounting.internal.repository.ExtSupplierVendorRepository vendorCopy = mock();
+    private final com.positivity.accounting.internal.repository.ApVendorSettingsRepository apSettings = mock();
     private SupplierVendorCopies vendorCopies;
     private VendorBillApprovalServiceImpl service;
     private VendorBill bill;
@@ -83,10 +85,7 @@ class VendorBillApprovalLimitsTest {
     @BeforeEach
     void wire() {
         // The real vendor rules over mocked repositories (S24): the copy, the vendor's settings and the bills.
-        vendorCopies = new SupplierVendorCopies(
-                vendorCopy,
-                mock(com.positivity.accounting.internal.repository.ApVendorSettingsRepository.class),
-                bills);
+        vendorCopies = new SupplierVendorCopies(vendorCopy, apSettings, bills);
         service = new VendorBillApprovalServiceImpl(
                 CLOCK,
                 bills,
@@ -450,6 +449,51 @@ class VendorBillApprovalLimitsTest {
             assertThat(auditRows())
                     .extracting(AccountingAuditLog::getOperation)
                     .containsExactly("VENDOR_BILL_APPROVE", "VENDOR_BILL_SOD_EXCEPTION");
+        }
+
+        @Test
+        @DisplayName("item 7: with no classification given or proposed, approve and ACCEPT post with the vendor's"
+                + " AP defaults (EXPENSE / EXPENSE_SHOP_SUPPLIES)")
+        void vendorDefaultsReachThePosting() {
+            com.positivity.accounting.internal.entity.ApVendorSettings defaults =
+                    new com.positivity.accounting.internal.entity.ApVendorSettings();
+            defaults.setVendorId(bill.getVendorId());
+            defaults.setDefaultDebitClass(VendorBillDebitClass.EXPENSE);
+            defaults.setDefaultExpenseMappingKey("EXPENSE_SHOP_SUPPLIES");
+            when(apSettings.findByVendorId(bill.getVendorId())).thenReturn(Optional.of(defaults));
+            bill.setProposedDebitClass(null);
+            VendorBillPostingService.Classification expected =
+                    new VendorBillPostingService.Classification(VendorBillDebitClass.EXPENSE, "EXPENSE_SHOP_SUPPLIES");
+            signIn(GM, APPROVE, OVER_LIMIT, REJECT);
+
+            awaiting("100.00");
+            service.approve(BILL_ID, approve(null));
+            verify(postingService).post(eq(bill), eq(expected), any(), anyString());
+
+            org.mockito.Mockito.clearInvocations(postingService);
+            bill.setStatus(VendorBillStatus.MATCH_EXCEPTION);
+            service.resolveException(
+                    BILL_ID,
+                    new VendorBillCommands.ResolveException(
+                            "ACCEPT", "Shop supplies as agreed with the vendor", null, null, null));
+            verify(postingService).post(eq(bill), eq(expected), any(), anyString());
+        }
+
+        @Test
+        @DisplayName("the vendor creator's refusal carries a machine-readable reason field")
+        void vendorCreatorReasonIsMachineReadable() {
+            vendorCreatedBy(CREATOR, 1);
+            when(bills.existsByVendorIdAndApprovedAtIsNotNull(bill.getVendorId()))
+                    .thenReturn(false);
+            signIn(CREATOR, APPROVE, REJECT);
+            awaiting("100.00");
+
+            assertThatThrownBy(() -> service.approve(BILL_ID, approve("Checked against the delivery")))
+                    .isInstanceOfSatisfying(
+                            VendorBillException.class,
+                            e -> assertThat(e.getFieldErrors())
+                                    .containsExactly(
+                                            new VendorBillException.FieldError("reason", "VENDOR_CREATOR_FIRST_BILL")));
         }
 
         @Test

@@ -81,13 +81,16 @@ class SupplierVendorCopiesTest {
     }
 
     @Test
-    @DisplayName("AC 5: a vendor missing from the copy is 422 VENDOR_NOT_FOUND; an inactive one 422 VENDOR_INACTIVE")
+    @DisplayName("AC 5: a vendor missing from the copy is 503 VENDOR_REPLICATION_PENDING (not yet, ADR-0017 §1); an"
+            + " inactive one 422 VENDOR_INACTIVE")
     void newBusinessNeedsAnActiveCopiedVendor() {
         when(vendors.findById(VENDOR)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> copies.requireForNewBusiness(VENDOR, "A payment"))
-                .isInstanceOfSatisfying(
-                        VendorBillException.class,
-                        e -> assertThat(e.getCode()).isEqualTo(VendorBillException.Code.VENDOR_NOT_FOUND));
+                .isInstanceOfSatisfying(com.positivity.web.common.ReplicationPendingException.class, e -> {
+                    assertThat(e.getCode()).isEqualTo(SupplierVendorCopies.VENDOR_REPLICATION_PENDING);
+                    assertThat(e.getReferenceId()).isEqualTo(VENDOR);
+                    assertThat(e.getRetryAfter()).isPositive();
+                });
 
         when(vendors.findById(VENDOR)).thenReturn(Optional.of(vendor("INACTIVE", 1)));
         assertThatThrownBy(() -> copies.requireForNewBusiness(VENDOR, "A payment"))

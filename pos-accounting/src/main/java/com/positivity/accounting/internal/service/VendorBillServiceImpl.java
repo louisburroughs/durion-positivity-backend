@@ -235,7 +235,8 @@ public class VendorBillServiceImpl implements VendorBillService {
             return reader.read(existingBill.get());
         }
 
-        // Step 1b: The vendor (CAP:550 S24, #2517): a pos-supplier vendor in the copy (422 VENDOR_NOT_FOUND) that is
+        // Step 1b: The vendor (CAP:550 S24, #2517): a pos-supplier vendor in the copy (503 VENDOR_REPLICATION_PENDING)
+        // that is
         // ACTIVE (422 VENDOR_INACTIVE). The bill keeps the copy's display name, never the caller's.
         ExtSupplierVendor vendor = vendorCopies.requireForNewBusiness(event.getVendorId(), "A bill");
 

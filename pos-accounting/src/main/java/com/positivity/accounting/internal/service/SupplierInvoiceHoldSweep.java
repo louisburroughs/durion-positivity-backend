@@ -27,6 +27,14 @@ import org.springframework.transaction.support.TransactionTemplate;
  * refreshes the {@code accounting.supplier_invoice.held{reason}} gauge of open holds (every tenant's, summed), and once
  * a day WARN-logs the holds older than 24 hours, by event id, reason and age only. One tenant's failure does not stop
  * the others.
+ *
+ * <p><b>The hold/copy race.</b> An invoice fact and its vendor's fact travel on different partitions, so the invoice
+ * may arrive first: it is held, and the vendor fact releases it once the copy is written. A release that fails then
+ * (the vendor fact is already marked) stays {@code HELD} and this sweep retries it.
+ *
+ * <p><b>Unlocked.</b> The sweep runs on every instance with no ShedLock; concurrent releases of one hold serialise on
+ * the hold's row lock ({@code SupplierInvoiceHoldRepository#lockByHoldId}) and the second finds it released, so a
+ * double run creates no second bill. The gauge is per instance.
  */
 @Slf4j
 @Component

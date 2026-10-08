@@ -148,7 +148,7 @@ class SupplierVendorCopyTest {
 
     private ExtSupplierVendor saved() {
         ArgumentCaptor<ExtSupplierVendor> captor = ArgumentCaptor.forClass(ExtSupplierVendor.class);
-        verify(vendorRepository).save(captor.capture());
+        verify(vendorRepository).saveAndFlush(captor.capture());
         return captor.getValue();
     }
 
@@ -198,7 +198,7 @@ class SupplierVendorCopyTest {
 
         listener.onSupplierEvent(v2Fact("018f0a1b-0000-7000-8000-000000000003", 4L, "INACTIVE"));
 
-        verify(vendorRepository, never()).save(any());
+        verify(vendorRepository, never()).saveAndFlush(any());
         assertThat(mark().getOwner()).isEqualTo("supplier");
     }
 
@@ -223,7 +223,7 @@ class SupplierVendorCopyTest {
         listener.onSupplierEvent(v1Fact("018f0a1b-0000-7000-8000-000000000005"));
 
         verify(vendorRepository, never()).findById(any());
-        verify(vendorRepository, never()).save(any());
+        verify(vendorRepository, never()).saveAndFlush(any());
         assertThat(mark().getOwner()).isEqualTo("supplier");
         Counter skipped = meterRegistry
                 .find(SupplierVendorReplica.SKIPPED_METRIC)
@@ -245,7 +245,7 @@ class SupplierVendorCopyTest {
     @Test
     @DisplayName("a database failure of the copy propagates for retry and writes no mark")
     void transientDatabaseFailurePropagatesUnmarked() {
-        when(vendorRepository.save(any())).thenThrow(new DataAccessResourceFailureException("connection lost"));
+        when(vendorRepository.saveAndFlush(any())).thenThrow(new DataAccessResourceFailureException("connection lost"));
 
         assertThatThrownBy(() -> listener.onSupplierEvent(v2Fact("018f0a1b-0000-7000-8000-000000000006", 4L, "ACTIVE")))
                 .isInstanceOf(DataAccessResourceFailureException.class);
@@ -255,10 +255,16 @@ class SupplierVendorCopyTest {
     @Test
     @DisplayName("a non-transient database failure of the copy propagates too: a mark would lose the vendor")
     void nonTransientDatabaseFailurePropagatesUnmarked() {
-        when(vendorRepository.save(any())).thenThrow(new DataIntegrityViolationException("value too long"));
+        when(vendorRepository.saveAndFlush(any()))
+                .thenThrow(new DataIntegrityViolationException("Failing row contains (Acme Parts Ltd, ...)"));
 
         assertThatThrownBy(() -> listener.onSupplierEvent(v2Fact("018f0a1b-0000-7000-8000-000000000007", 4L, "ACTIVE")))
-                .isInstanceOf(DataIntegrityViolationException.class);
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .satisfies(e -> {
+                    // ADR-0072: the propagated exception never quotes the refused row and carries no cause that does.
+                    assertThat(e.getMessage()).doesNotContain("Acme Parts Ltd").doesNotContain("Failing row");
+                    assertThat(e.getCause()).isNull();
+                });
         verify(processedEventRepository, never()).save(any());
     }
 
@@ -270,7 +276,7 @@ class SupplierVendorCopyTest {
 
         listener.onSupplierEvent(broken);
 
-        verify(vendorRepository, never()).save(any());
+        verify(vendorRepository, never()).saveAndFlush(any());
         assertThat(mark().getOwner()).isEqualTo("supplier");
         assertThat(anyLogContains(LAST4)).isFalse();
         assertThat(anyLogContains("Acme Parts Ltd")).isFalse();

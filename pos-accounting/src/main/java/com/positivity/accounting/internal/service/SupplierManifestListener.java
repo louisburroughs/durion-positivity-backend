@@ -74,7 +74,9 @@ public class SupplierManifestListener {
             manifest = objectMapper.treeToValue(envelope.path("payload"), ReconciliationManifestV1.class);
         } catch (Exception e) {
             // Malformed manifests are dropped, not retried: the next window repeats the check.
-            log.warn("Ignoring unparseable reconciliation manifest: {}", message, e);
+            log.warn(
+                    "Ignoring unparseable reconciliation manifest ({})",
+                    e.getClass().getSimpleName());
             return;
         }
 

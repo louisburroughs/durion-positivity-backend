@@ -325,6 +325,22 @@ class VendorBillReaderTest {
     }
 
     @Test
+    @DisplayName("S24 rule 9: the vendor's creator on its first bill is blocked like the bill's creator; the switch"
+            + " turns it into a justification; the tier still wins")
+    void blocksTheVendorCreator() {
+        signIn(CLERK);
+        assertThat(VendorBillReader.blocks(billOf("100.00", "other"), policy("2500.00", "0", false), true))
+                .isEqualTo(new VendorBillReader.Blocks("AP_BILL_SELF_APPROVAL", null, false));
+        assertThat(VendorBillReader.blocks(billOf("100.00", "other"), policy("2500.00", "0", true), true))
+                .isEqualTo(new VendorBillReader.Blocks(null, null, true));
+        assertThat(VendorBillReader.blocks(billOf("3000.00", "other"), policy("2500.00", "0", false), true))
+                .isEqualTo(
+                        new VendorBillReader.Blocks("AP_APPROVAL_LIMIT_EXCEEDED", "AP_APPROVAL_LIMIT_EXCEEDED", false));
+        assertThat(VendorBillReader.blocks(billOf("100.00", "other"), policy("2500.00", "0", false), false))
+                .isEqualTo(VendorBillReader.Blocks.NONE);
+    }
+
+    @Test
     @DisplayName("S13: WITHIN_CLERK_LIMIT passes within the limit and fails over it in review; not applicable outside")
     void withinClerkLimit() {
         VendorBillReview.Check within = VendorBillReader.withinClerkLimit(

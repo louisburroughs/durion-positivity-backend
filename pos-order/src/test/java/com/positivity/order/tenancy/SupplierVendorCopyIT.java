@@ -8,7 +8,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.order.internal.entity.ExtSupplierVendor;
 import com.positivity.order.internal.entity.ProcessedEvent;
-import com.positivity.order.internal.exception.PurchaseOrderVendorException;
 import com.positivity.order.internal.repository.ExtSupplierVendorRepository;
 import com.positivity.order.internal.repository.ProcessedEventRepository;
 import com.positivity.order.internal.repository.PurchaseOrderRepository;
@@ -127,8 +126,8 @@ class SupplierVendorCopyIT extends PostgresTenancyTestBase {
             assertThatThrownBy(() -> vendorGuard.requireActive(vendorId))
                     .as("another tenant's vendor is not in this tenant's copy")
                     .isInstanceOfSatisfying(
-                            PurchaseOrderVendorException.class,
-                            e -> assertThat(e.getCode()).isEqualTo(PurchaseOrderVendorException.Code.VENDOR_NOT_FOUND));
+                            com.positivity.web.common.ReplicationPendingException.class,
+                            e -> assertThat(e.getCode()).isEqualTo("VENDOR_REPLICATION_PENDING"));
         });
 
         assertThat(count(jdbc, vendorId))
@@ -155,6 +154,71 @@ class SupplierVendorCopyIT extends PostgresTenancyTestBase {
                             .getOwner())
                     .isEqualTo("supplier");
         });
+    }
+
+    /**
+     * ADR-0072 and the driver flag ({@code logServerErrorDetail=false}): a copy row the database refuses must not put
+     * its column values in any log line or in the propagated exception. A temporary CHECK refuses one display name
+     * (Postgres would quote the whole failing row in the error's DETAIL); ROOT is captured at DEBUG. Hibernate's own
+     * DEBUG entity listing stays at INFO, as in every deployed profile: the path under test is the driver's message,
+     * which Hibernate logs at ERROR before Spring translates it.
+     */
+    @Test
+    @DisplayName("a refused copy row leaves its values in no log line and no exception (driver detail off, ADR-0072)")
+    void aRefusedCopyRowLeaksNoColumnValue() {
+        String marker = "REFUSE-ME-" + UUID.randomUUID().toString().substring(0, 8);
+        String constraint = "s24_it_refuse_" + marker.substring(10).replace('-', '_');
+        JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
+        owner.execute("ALTER TABLE public.ext_supplier_vendor ADD CONSTRAINT " + constraint
+                + " CHECK (display_name NOT LIKE '%REFUSE-ME-%')");
+        ch.qos.logback.classic.Logger root =
+                (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
+        ch.qos.logback.classic.Logger hibernate =
+                (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger("org.hibernate");
+        ch.qos.logback.classic.Level rootLevel = root.getLevel();
+        ch.qos.logback.classic.Level hibernateLevel = hibernate.getLevel();
+        ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> logs =
+                new ch.qos.logback.core.read.ListAppender<>();
+        logs.start();
+        root.addAppender(logs);
+        root.setLevel(ch.qos.logback.classic.Level.DEBUG);
+        hibernate.setLevel(ch.qos.logback.classic.Level.INFO);
+        Throwable thrown;
+        try {
+            UUID vendorId = UUID.randomUUID();
+            String fact = vendorFact(UUID.randomUUID(), vendorId, 2, "")
+                    .replace("\"displayName\":\"Copy Test\"", "\"displayName\":\"" + marker + "\"");
+            thrown = org.assertj.core.api.Assertions.catchThrowable(
+                    () -> asTenant(TENANT_A, () -> listener.onSupplierEvent(fact)));
+        } finally {
+            root.detachAppender(logs);
+            root.setLevel(rootLevel);
+            hibernate.setLevel(hibernateLevel);
+            owner.execute("ALTER TABLE public.ext_supplier_vendor DROP CONSTRAINT IF EXISTS " + constraint);
+        }
+
+        assertThat(thrown)
+                .as("the refusal propagates for retry, unmarked")
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+        for (Throwable cause = thrown; cause != null; cause = cause.getCause()) {
+            assertThat(String.valueOf(cause.getMessage()))
+                    .as("exception cause chain")
+                    .doesNotContain(marker)
+                    .doesNotContain("Failing row");
+        }
+        assertThat(logs.list)
+                .as("an ERROR line from the refused insert is captured")
+                .anyMatch(event -> event.getLevel() == ch.qos.logback.classic.Level.ERROR);
+        long leaking = logs.list.stream()
+                .filter(event -> (event.getFormattedMessage()
+                                + (event.getThrowableProxy() == null
+                                        ? ""
+                                        : event.getThrowableProxy().getMessage()))
+                        .contains(marker))
+                .count();
+        assertThat(leaking)
+                .as("log lines carrying the refused row's display name")
+                .isZero();
     }
 
     private static int count(JdbcTemplate jdbc, UUID vendorId) {

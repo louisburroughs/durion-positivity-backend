@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.dto;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
+import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -16,7 +17,7 @@ import org.jspecify.annotations.Nullable;
  * sent as JSON {@code null} clears it. The actor is the caller (ADR-0018); no body field names one. S43 adds {@code
  * acceptTaxOnResaleGoods} here.
  */
-@JsonIgnoreProperties(ignoreUnknown = true)
+@JsonIgnoreProperties(ignoreUnknown = false)
 @Schema(
         description = "The vendor's AP defaults to change, the justification and the request id. A field left out is"
                 + " unchanged; a field sent as null clears it.")
@@ -63,6 +64,16 @@ public class VendorApSettingsRequest {
     @JsonCreator
     public VendorApSettingsRequest() {
         // Bound through the setters, so a key's presence is seen.
+    }
+
+    /**
+     * Refuses any other key (400): {@code ignoreUnknown = false} only defers to the mapper, which Spring configures not
+     * to fail on unknown properties, so a misspelt or not-yet-supported field (e.g. S43's) would otherwise be dropped
+     * silently.
+     */
+    @JsonAnySetter
+    void refuseUnknown(String name, Object value) {
+        throw new IllegalArgumentException("Unknown property '" + name + "' in a vendor AP settings request");
     }
 
     public @Nullable String getDefaultDebitClass() {

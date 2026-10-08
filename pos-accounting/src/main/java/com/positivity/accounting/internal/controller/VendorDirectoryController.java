@@ -9,6 +9,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -95,18 +96,16 @@ public class VendorDirectoryController {
                     @Nullable
                     @RequestParam(required = false)
                     String name,
+            @Parameter(description = "Maximum results to return (server caps at 100)", example = "20")
+                    @RequestParam(required = false, defaultValue = "20")
+                    int limit,
+            // Declared after limit so the generated SDK keeps searchVendors(name?, limit?, status?) (S24).
             @Parameter(description = "ACTIVE or INACTIVE; absent returns both", example = "ACTIVE")
                     @Nullable
                     @RequestParam(required = false)
-                    String status,
-            @Parameter(description = "Maximum results to return (server caps at 100)", example = "20")
-                    @RequestParam(required = false, defaultValue = "20")
-                    int limit) {
-        log.info(
-                "Received vendor search request | termLength={} | status={} | limit={}",
-                name == null ? 0 : name.length(),
-                status,
-                limit);
+                    String status) {
+        // The status is logged only by the service, once validated.
+        log.info("Received vendor search request | termLength={} | limit={}", name == null ? 0 : name.length(), limit);
         return ResponseEntity.ok(vendorDirectoryService.searchVendors(name, status, limit));
     }
 
@@ -130,7 +129,7 @@ public class VendorDirectoryController {
                     Required inputs: vendorId (the pos-supplier vendor UUID) as a path parameter; there is no \
                     request body.
                     Emits an ACCOUNTING_VENDOR_GET audit event; no state changes.
-                    Returns 404 VENDOR_NOT_FOUND when the vendor is not in the copy.
+                    Returns 503 VENDOR_REPLICATION_PENDING with Retry-After when the vendor is not in the copy yet.
                     """,
             tags = {TAG})
     @ApiResponse(
@@ -138,8 +137,15 @@ public class VendorDirectoryController {
             description = "Vendor found",
             content = @Content(schema = @Schema(implementation = VendorResponse.class)))
     @ApiResponse(
-            responseCode = "404",
-            description = "VENDOR_NOT_FOUND: the vendor is not in the copy",
+            responseCode = "503",
+            description =
+                    "VENDOR_REPLICATION_PENDING: the vendor is not in accounting's copy of the pos-supplier vendor"
+                            + " master yet. Not-yet, not no: retry after the Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<VendorResponse> getVendorById(
             @Parameter(description = "pos-supplier vendor id", example = "550e8400-e29b-41d4-a716-446655440001")
@@ -170,8 +176,10 @@ public class VendorDirectoryController {
                     Required inputs: remitToVersion (the vendor's current version) and justification (at least 10 \
                     characters).
                     Emits ACCOUNTING_VENDOR_REMIT_TO_CONFIRM and writes a REMIT_TO_CONFIRM audit row.
-                    Returns 200 with the vendor read; 400 VALIDATION_ERROR or JUSTIFICATION_REQUIRED; 404 \
-                    VENDOR_NOT_FOUND; 409 VENDOR_PAYMENT_DETAILS_CHANGED when the version is not the current one.
+                    Returns 200 with the vendor read; 400 VALIDATION_ERROR or JUSTIFICATION_REQUIRED; 403 \
+                    VENDOR_REMIT_TO_SELF_CONFIRMATION when the caller requested this remit-to in pos-supplier; 409 \
+                    VENDOR_PAYMENT_DETAILS_CHANGED when the version is not the current one; 503 \
+                    VENDOR_REPLICATION_PENDING (Retry-After) when the vendor is not in the copy yet.
                     """,
             tags = {TAG})
     @ApiResponse(
@@ -184,11 +192,19 @@ public class VendorDirectoryController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
-            description = "FORBIDDEN without accounting:ap:approve",
+            description = "FORBIDDEN without accounting:ap:approve; VENDOR_REMIT_TO_SELF_CONFIRMATION when the caller"
+                    + " requested the vendor's current remit-to in pos-supplier (another approver confirms it)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
-            responseCode = "404",
-            description = "VENDOR_NOT_FOUND: the vendor is not in the copy",
+            responseCode = "503",
+            description =
+                    "VENDOR_REPLICATION_PENDING: the vendor is not in accounting's copy of the pos-supplier vendor"
+                            + " master yet. Not-yet, not no: retry after the Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
@@ -241,7 +257,8 @@ public class VendorDirectoryController {
                     Emits ACCOUNTING_VENDOR_AP_SETTINGS_SET; the call is idempotent on requestId: a replay writes \
                     nothing and returns the vendor as it is.
                     Returns 200 with the vendor read; 400 VALIDATION_ERROR with fieldErrors or \
-                    JUSTIFICATION_REQUIRED; 403 FORBIDDEN; 404 VENDOR_NOT_FOUND; nothing is written on a refusal.
+                    JUSTIFICATION_REQUIRED; 403 FORBIDDEN; 409 IDEMPOTENCY_CONFLICT for a requestId already used \
+                    with another body; 503 VENDOR_REPLICATION_PENDING (Retry-After); nothing is written on a refusal.
                     """,
             tags = {TAG})
     @ApiResponse(
@@ -259,8 +276,19 @@ public class VendorDirectoryController {
             description = "FORBIDDEN without accounting:ap_approval_policy:manage",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
-            responseCode = "404",
-            description = "VENDOR_NOT_FOUND: the vendor is not in the copy",
+            responseCode = "409",
+            description = "IDEMPOTENCY_CONFLICT: the requestId was already used for another vendor AP settings change",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description =
+                    "VENDOR_REPLICATION_PENDING: the vendor is not in accounting's copy of the pos-supplier vendor"
+                            + " master yet. Not-yet, not no: retry after the Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<VendorResponse> setVendorApSettings(
             @Parameter(description = "pos-supplier vendor id", example = "550e8400-e29b-41d4-a716-446655440001")
