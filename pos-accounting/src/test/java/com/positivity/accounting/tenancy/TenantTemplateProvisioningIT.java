@@ -555,13 +555,14 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
         provision(t3, withStaffMeals);
 
         assertThat(accountRow(t3, tireDisposal)).as("T3's 6295 is unchanged").isEqualTo(ownAccountBefore);
+        // Two mappings post to 6295 since #2509: the petty expense and the VENDOR_BILL expense key, both withheld.
         assertThat(count(t3, "gl_mapping"))
-                .as("every mapping but the withheld one")
-                .isEqualTo(count(withStaffMeals.only(templateReader::owns), AccountingTemplate.GlMapping.class) - 1);
+                .as("every mapping but the two withheld ones")
+                .isEqualTo(count(withStaffMeals.only(templateReader::owns), AccountingTemplate.GlMapping.class) - 2);
         TenantTemplateStatusResponse status = status(t3);
         assertThat(status.state()).isEqualTo(TenantTemplateState.NEEDS_ATTENTION);
         assertThat(status.counts().conflict()).isEqualTo(1);
-        assertThat(status.counts().withheld()).isEqualTo(2);
+        assertThat(status.counts().withheld()).isEqualTo(3);
         assertThat(status.attention())
                 .extracting(
                         TenantTemplateStatusResponse.AttentionItem::entryKey,
@@ -578,6 +579,11 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
                                 "GL_MAPPING:REGISTER_CASH_MOVEMENT/PETTY_EXPENSE_STAFF_MEALS",
                                 TemplateEntryReason.DEPENDS_ON_CONFLICT,
                                 "REGISTER_CASH_MOVEMENT / PETTY_EXPENSE_STAFF_MEALS posts to account 6295",
+                                "6295 Tire disposal, expense"),
+                        tuple(
+                                "GL_MAPPING:VENDOR_BILL/EXPENSE_STAFF_MEALS",
+                                TemplateEntryReason.DEPENDS_ON_CONFLICT,
+                                "VENDOR_BILL / EXPENSE_STAFF_MEALS posts to account 6295",
                                 "6295 Tire disposal, expense"),
                         tuple(
                                 "PETTY_EXPENSE_CATEGORY:STAFF_MEALS",
