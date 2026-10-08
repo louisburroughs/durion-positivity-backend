@@ -17,11 +17,11 @@ import com.positivity.supplier.internal.config.SecurityConfig;
 import com.positivity.supplier.internal.exception.SupplierConflictException;
 import com.positivity.supplier.internal.exception.SupplierForbiddenException;
 import com.positivity.supplier.internal.exception.SupplierNotFoundException;
-import com.positivity.supplier.internal.exception.VendorTaxIdUnreadableException;
 import com.positivity.supplier.internal.security.SupplierPermissions;
 import com.positivity.supplier.internal.service.model.PagedResponse;
 import com.positivity.supplier.internal.vendor.service.SupplierVendorService;
 import com.positivity.supplier.internal.vendor.service.VendorTaxIdRevealService;
+import com.positivity.supplier.internal.vendor.service.model.TaxIdRevealResult;
 import com.positivity.supplier.internal.vendor.service.model.TaxIdRevealView;
 import com.positivity.supplier.internal.vendor.service.model.TaxRegistrationView;
 import com.positivity.supplier.internal.vendor.service.model.VendorCreateRequest;
@@ -379,7 +379,7 @@ class SupplierVendorControllerWebMvcTest {
     @DisplayName("#2621 AC 11: the reveal answers 200 with the number and Cache-Control: no-store")
     void revealIsNoStore() throws Exception {
         when(taxIdRevealService.reveal(eq(VENDOR_ID), eq(REGISTRATION_ID), any()))
-                .thenReturn(new TaxIdRevealView(REGISTRATION_ID, "SSN", null, FAKE_NUMBER));
+                .thenReturn(TaxIdRevealResult.revealed(new TaxIdRevealView(REGISTRATION_ID, "SSN", null, FAKE_NUMBER)));
 
         mockMvc.perform(authed(
                         post(BASE + "/" + VENDOR_ID + "/tax-registrations/" + REGISTRATION_ID + "/reveal")
@@ -412,8 +412,7 @@ class SupplierVendorControllerWebMvcTest {
                 .thenThrow(new SupplierNotFoundException(
                         SupplierNotFoundException.VENDOR_TAX_REGISTRATION_NOT_FOUND, "missing"));
         when(taxIdRevealService.reveal(eq(VENDOR_ID), eq(REGISTRATION_ID), any()))
-                .thenThrow(new VendorTaxIdUnreadableException(
-                        "AUTHENTICATION_FAILED", "k1", "Vendor tax-registration number failed authentication", null));
+                .thenReturn(TaxIdRevealResult.unreadable("AUTHENTICATION_FAILED", "k1"));
 
         mockMvc.perform(authed(
                         post(BASE + "/" + VENDOR_ID + "/tax-registrations/" + unknown + "/reveal")
@@ -477,5 +476,25 @@ class SupplierVendorControllerWebMvcTest {
         assertThat(body.contains("EIN123") || body.contains("000-00-1234"))
                 .as("submitted value absent from the error body")
                 .isFalse();
+    }
+
+    @Test
+    @DisplayName("#2621 AC 11: a committed REASON_REJECTED outcome is mapped to 400 VALIDATION_ERROR with no number")
+    void reasonRejectedOutcomeIs400() throws Exception {
+        when(taxIdRevealService.reveal(eq(VENDOR_ID), eq(REGISTRATION_ID), any()))
+                .thenReturn(TaxIdRevealResult.reasonRejected());
+
+        String body = mockMvc.perform(authed(
+                        post(BASE + "/" + VENDOR_ID + "/tax-registrations/" + REGISTRATION_ID + "/reveal")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"reason\":\"checking 000-00-1234 per W-9\"}"),
+                        SupplierPermissions.VENDOR_TAX_ID_REVEAL))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("reason"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        assertThat(body.contains("000-00-1234")).as("reason and number absent").isFalse();
     }
 }

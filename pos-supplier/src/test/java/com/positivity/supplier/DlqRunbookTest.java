@@ -14,7 +14,8 @@ import org.junit.jupiter.api.Test;
 /**
  * #2621 AC 18 (Security ruling on #2617, ruling 7): the runbook inspects DLQs by metadata only. A DLQ
  * record holds the whole original value, which may be CONFIDENTIAL or RESTRICTED, so no command reads
- * from the beginning with values printed, and a value is printed for one record only.
+ * from the beginning with values or headers printed (dead-letter headers carry exception text, ADR-0072
+ * Decision 5), and a value or headers are printed for one record only.
  */
 @DisplayName("OPERATIONS_RUNBOOK DLQ inspection is metadata-only (#2621 AC 18)")
 class DlqRunbookTest {
@@ -34,7 +35,16 @@ class DlqRunbookTest {
     }
 
     @Test
-    @DisplayName("no --from-beginning command prints values; a single-record command exists")
+    @DisplayName("the runbook names the permitted terminal arrangements for single-record inspection (CHK-006)")
+    void permittedTerminals() throws Exception {
+        String runbook = Files.readString(Path.of("../docs/OPERATIONS_RUNBOOK.md"));
+        assertThat(runbook)
+                .contains("Permitted terminal arrangements for single-record inspection")
+                .contains("Session Manager");
+    }
+
+    @Test
+    @DisplayName("no --from-beginning command prints values or headers; a single-record command exists")
     void metadataOnly() throws Exception {
         List<String> commands = consumerCommands();
 
@@ -44,8 +54,9 @@ class DlqRunbookTest {
                 .isNotEmpty()
                 .allSatisfy(command -> assertThat(command)
                         .contains("--property print.value=false")
+                        .contains("--property print.headers=false")
                         .contains("--property print.key=true")
-                        .contains("--property print.headers=true")
+                        .doesNotContain("print.headers=true")
                         .contains("--property print.partition=true")
                         .contains("--property print.offset=true")
                         .contains("--property print.timestamp=true"));

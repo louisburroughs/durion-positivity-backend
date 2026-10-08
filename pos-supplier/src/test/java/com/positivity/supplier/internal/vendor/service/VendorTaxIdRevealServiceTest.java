@@ -16,7 +16,6 @@ import com.positivity.supplier.TestClockConfig;
 import com.positivity.supplier.internal.config.JpaConfig;
 import com.positivity.supplier.internal.exception.SupplierNotFoundException;
 import com.positivity.supplier.internal.exception.SupplierValidationException;
-import com.positivity.supplier.internal.exception.VendorTaxIdUnreadableException;
 import com.positivity.supplier.internal.repository.SupplierOutboxEventRepository;
 import com.positivity.supplier.internal.service.SupplierOutboxEventWriter;
 import com.positivity.supplier.internal.service.SupplierOutboxPublisher;
@@ -24,6 +23,7 @@ import com.positivity.supplier.internal.service.SupplierOutboxReplayService;
 import com.positivity.supplier.internal.vendor.service.model.TaxIdRevealOutcome;
 import com.positivity.supplier.internal.vendor.service.model.TaxIdRevealRecordView;
 import com.positivity.supplier.internal.vendor.service.model.TaxIdRevealRequest;
+import com.positivity.supplier.internal.vendor.service.model.TaxIdRevealResult;
 import com.positivity.supplier.internal.vendor.service.model.TaxIdRevealView;
 import com.positivity.supplier.internal.vendor.service.model.TaxRegistrationDto;
 import com.positivity.supplier.internal.vendor.service.model.VendorCreateRequest;
@@ -178,7 +178,8 @@ class VendorTaxIdRevealServiceTest extends PostgresSliceTestBase {
         UUID registrationId = vendor.taxRegistrations().getFirst().registrationId();
 
         TaxIdRevealView revealed = asController(
-                () -> revealService.reveal(vendor.vendorId(), registrationId, new TaxIdRevealRequest(REASON)));
+                        () -> revealService.reveal(vendor.vendorId(), registrationId, new TaxIdRevealRequest(REASON)))
+                .view();
 
         assertThat(revealed.number()).isEqualTo(SSN);
         assertThat(revealed.toString()).as("toString never prints the number").doesNotContain(SSN);
@@ -209,21 +210,21 @@ class VendorTaxIdRevealServiceTest extends PostgresSliceTestBase {
         VendorView vendor = vendorWith("Sole Reasoned", SSN);
         UUID registrationId = vendor.taxRegistrations().getFirst().registrationId();
 
-        assertThatThrownBy(() -> asController(() -> revealService.reveal(
-                        vendor.vendorId(), registrationId, new TaxIdRevealRequest("checking 000-00-1234 per W-9"))))
-                .isInstanceOfSatisfying(SupplierValidationException.class, refused -> {
-                    assertThat(refused.getCode()).isEqualTo(SupplierValidationException.VALIDATION_ERROR);
-                    assertThat(refused.getMessage()).as("number absent").doesNotContain(SSN);
-                });
+        // Returned, not thrown, so the REASON_REJECTED row commits (ADR-0072 Decision 4, IC-003).
+        TaxIdRevealResult refused = asController(() -> revealService.reveal(
+                vendor.vendorId(), registrationId, new TaxIdRevealRequest("checking 000-00-1234 per W-9")));
+        assertThat(refused.outcome()).isEqualTo(TaxIdRevealOutcome.REASON_REJECTED);
+        assertThat(refused.view()).as("nothing revealed").isNull();
         assertThat(revealRows(vendor.vendorId())).singleElement().satisfies(row -> {
             assertThat(row.get("outcome")).isEqualTo("REASON_REJECTED");
             assertThat(row.get("reason")).isNull();
         });
 
         // Separators and case do not hide it: the bare digits in a reason match the stored "000-00-1234".
-        assertThatThrownBy(() -> asController(() -> revealService.reveal(
-                        vendor.vendorId(), registrationId, new TaxIdRevealRequest("W-9 lists 000001234 again"))))
-                .isInstanceOf(SupplierValidationException.class);
+        assertThat(asController(() -> revealService.reveal(
+                                vendor.vendorId(), registrationId, new TaxIdRevealRequest("W-9 lists 000001234 again")))
+                        .outcome())
+                .isEqualTo(TaxIdRevealOutcome.REASON_REJECTED);
         assertThat(revealRows(vendor.vendorId()))
                 .extracting(row -> row.get("outcome"))
                 .containsOnly("REASON_REJECTED")
@@ -310,12 +311,11 @@ class VendorTaxIdRevealServiceTest extends PostgresSliceTestBase {
         entityManager.clear();
         UUID targetRegistration = target.taxRegistrations().getFirst().registrationId();
 
-        assertThatThrownBy(() -> asController(() ->
-                        revealService.reveal(target.vendorId(), targetRegistration, new TaxIdRevealRequest(REASON))))
-                .isInstanceOfSatisfying(VendorTaxIdUnreadableException.class, failure -> {
-                    assertThat(failure.getCode()).isEqualTo("SUPPLIER_VENDOR_TAX_ID_UNREADABLE");
-                    assertThat(failure.getMessage()).as("number absent").doesNotContain(SSN);
-                });
+        TaxIdRevealResult unreadable = asController(
+                () -> revealService.reveal(target.vendorId(), targetRegistration, new TaxIdRevealRequest(REASON)));
+        assertThat(unreadable.outcome()).isEqualTo(TaxIdRevealOutcome.UNREADABLE);
+        assertThat(unreadable.view()).as("nothing revealed").isNull();
+        assertThat(unreadable.failure()).isEqualTo("AUTHENTICATION_FAILED");
         assertThat(revealRows(target.vendorId())).singleElement().satisfies(row -> {
             assertThat(row.get("outcome")).isEqualTo("UNREADABLE");
             assertThat(row.get("reason"))
@@ -357,7 +357,7 @@ class VendorTaxIdRevealServiceTest extends PostgresSliceTestBase {
         VendorView vendor = vendorWith("Sole Closed", SSN);
         UUID registrationId = vendor.taxRegistrations().getFirst().registrationId();
         entityManager.flush();
-        java.util.concurrent.atomic.AtomicReference<TaxIdRevealView> returned =
+        java.util.concurrent.atomic.AtomicReference<TaxIdRevealResult> returned =
                 new java.util.concurrent.atomic.AtomicReference<>();
         grant("REVOKE");
         try {
@@ -454,9 +454,10 @@ class VendorTaxIdRevealServiceTest extends PostgresSliceTestBase {
                                     vendor.version())));
             asController(
                     () -> revealService.reveal(updated.vendorId(), registrationId, new TaxIdRevealRequest(REASON)));
-            assertThatThrownBy(() -> asController(() -> revealService.reveal(
-                            updated.vendorId(), registrationId, new TaxIdRevealRequest("per W-9 " + SSN))))
-                    .isInstanceOf(SupplierValidationException.class);
+            assertThat(asController(() -> revealService.reveal(
+                                    updated.vendorId(), registrationId, new TaxIdRevealRequest("per W-9 " + SSN)))
+                            .outcome())
+                    .isEqualTo(TaxIdRevealOutcome.REASON_REJECTED);
             assertThatThrownBy(() -> as(
                             "clerk.a",
                             List.of(),

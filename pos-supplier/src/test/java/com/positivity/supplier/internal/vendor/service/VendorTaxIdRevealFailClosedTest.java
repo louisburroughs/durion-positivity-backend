@@ -16,6 +16,7 @@ import com.positivity.supplier.internal.enums.TaxIdRevealOutcome;
 import com.positivity.supplier.internal.repository.SupplierVendorRepository;
 import com.positivity.supplier.internal.repository.SupplierVendorTaxIdRevealRepository;
 import com.positivity.supplier.internal.vendor.service.model.TaxIdRevealRequest;
+import com.positivity.supplier.internal.vendor.service.model.TaxIdRevealResult;
 import com.positivity.supplier.internal.vendor.service.model.TaxIdRevealView;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -71,7 +72,7 @@ class VendorTaxIdRevealFailClosedTest {
         doThrow(new DataIntegrityViolationException("audit insert refused"))
                 .when(recorder)
                 .record(eq(VENDOR), eq(registration), eq(REASON), any());
-        AtomicReference<TaxIdRevealView> returned = new AtomicReference<>();
+        AtomicReference<TaxIdRevealResult> returned = new AtomicReference<>();
 
         assertThatThrownBy(() -> returned.set(service.reveal(VENDOR, REGISTRATION, new TaxIdRevealRequest(REASON))))
                 .isInstanceOf(DataIntegrityViolationException.class)
@@ -84,7 +85,8 @@ class VendorTaxIdRevealFailClosedTest {
     void recordsBeforeReturning() {
         VendorTaxRegistration registration = registration();
 
-        TaxIdRevealView view = service.reveal(VENDOR, REGISTRATION, new TaxIdRevealRequest(REASON));
+        TaxIdRevealView view = service.reveal(VENDOR, REGISTRATION, new TaxIdRevealRequest(REASON))
+                .view();
 
         assertThat(view.number()).isEqualTo(NUMBER);
         InOrder order = inOrder(cipher, recorder);
@@ -97,7 +99,8 @@ class VendorTaxIdRevealFailClosedTest {
      * commit the row on its own, so a reveal could roll back with its row kept, or the reverse.
      */
     @Test
-    @DisplayName("the recorder is MANDATORY, never REQUIRES_NEW; the reveal keeps its row on UNREADABLE only")
+    @DisplayName("the recorder is MANDATORY, never REQUIRES_NEW; the reveal rolls back on any exception and so never"
+            + " throws after a row (ADR-0072 Decision 4)")
     void transactionShape() throws NoSuchMethodException {
         Method record = VendorTaxIdRevealRecorder.class.getMethod(
                 "record", UUID.class, VendorTaxRegistration.class, String.class, TaxIdRevealOutcome.class);
@@ -108,9 +111,9 @@ class VendorTaxIdRevealFailClosedTest {
         Transactional revealTransaction = reveal.getAnnotation(Transactional.class);
         assertThat(revealTransaction.propagation()).isEqualTo(Propagation.REQUIRED);
         assertThat(revealTransaction.noRollbackFor())
-                .containsExactlyInAnyOrder(
-                        com.positivity.supplier.internal.exception.VendorTaxIdUnreadableException.class,
-                        com.positivity.supplier.internal.exception.TaxIdRevealReasonRejectedException.class);
+                .as("no exception is allowed to commit: refused and unreadable are returned outcomes")
+                .isEmpty();
+        assertThat(reveal.getReturnType()).isEqualTo(TaxIdRevealResult.class);
     }
 
     @Test

@@ -3,7 +3,7 @@ package com.positivity.supplier.internal.vendor.service;
 import com.positivity.supplier.internal.service.model.PagedResponse;
 import com.positivity.supplier.internal.vendor.service.model.TaxIdRevealRecordView;
 import com.positivity.supplier.internal.vendor.service.model.TaxIdRevealRequest;
-import com.positivity.supplier.internal.vendor.service.model.TaxIdRevealView;
+import com.positivity.supplier.internal.vendor.service.model.TaxIdRevealResult;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 
@@ -14,15 +14,15 @@ import org.jspecify.annotations.NonNull;
 public interface VendorTaxIdRevealService {
 
     /**
-     * Decrypts one registration's number and returns it, after writing its audit row in the same transaction.
+     * Writes the reveal's audit row and returns its outcome, in one transaction that commits on return (ADR-0072
+     * Decision 4): {@code REVEALED} with the number, or {@code REASON_REJECTED} / {@code UNREADABLE} with nothing.
+     * It never throws after writing the row, so every audited outcome commits.
      *
      * @throws com.positivity.supplier.internal.exception.SupplierNotFoundException
-     *     {@code SUPPLIER_VENDOR_NOT_FOUND} or {@code SUPPLIER_VENDOR_TAX_REGISTRATION_NOT_FOUND}
-     * @throws com.positivity.supplier.internal.exception.VendorTaxIdUnreadableException when the stored
-     *     ciphertext cannot be decrypted; the audit row is kept with outcome {@code UNREADABLE}
+     *     {@code SUPPLIER_VENDOR_NOT_FOUND} or {@code SUPPLIER_VENDOR_TAX_REGISTRATION_NOT_FOUND}; no row is written
      */
     @NonNull
-    TaxIdRevealView reveal(@NonNull UUID vendorId, @NonNull UUID registrationId, @NonNull TaxIdRevealRequest request);
+    TaxIdRevealResult reveal(@NonNull UUID vendorId, @NonNull UUID registrationId, @NonNull TaxIdRevealRequest request);
 
     /** A vendor's reveals, newest first. Never the number or {@code last4}. */
     @NonNull

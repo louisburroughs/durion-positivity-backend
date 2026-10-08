@@ -262,7 +262,7 @@ public class SupplierExceptionHandler {
      * A vendor's stored tax-registration number cannot be decrypted (#2621). 500 with a generic message:
      * the caller can do nothing about it. The reveal service has already logged the vendor, the
      * registration and the key id, and its audit row records the attempt as {@code UNREADABLE}
-     * ({@code noRollbackFor}). Nothing here can carry the number: the exception never held it.
+     * (committed before the controller threw this). Nothing here can carry the number: the exception never held it.
      */
     @ExceptionHandler(VendorTaxIdUnreadableException.class)
     public ResponseEntity<ApiError> handleVendorTaxIdUnreadable(

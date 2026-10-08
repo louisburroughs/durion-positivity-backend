@@ -90,7 +90,12 @@ connection profile belongs to exactly one vendor. No endpoint deletes a vendor.
     contains the number itself (separators and case ignored) is 400 `VALIDATION_ERROR`, reveals nothing, and
     records `REASON_REJECTED` with a null reason; the reason is never logged. An `UNREADABLE` row keeps no
     reason either (it could not be checked against a number that could not be read); a CHECK constraint holds
-    `reason` NULL exactly on those two outcomes. The rows are read through `supplier:audit:read`, so a
+    `reason` NULL exactly on those two outcomes. Every outcome's row commits: the service returns the outcome and
+    only after commit does the controller answer 200, 400 or 500 (ADR-0072 Decision 4); a number is released
+    only after commit, and a failed insert or commit releases nothing.
+  - **A supplied number is always a change** (ADR-0072 Decision 4, CHK-011): re-sent under the same id, scheme
+    and region it is re-sealed, its `last4` recomputed and the masked fact published. "Unchanged" is decided on
+    ids and stored attributes only, never on ciphertext or `last4`. The rows are read through `supplier:audit:read`, so a
     controller's reveals are reviewed by someone else. A 403 or 404 writes nothing.
   - **Never an agent tool** (ADR-0072 Decision 4, CHK-010). pos-mcp-server's discovery drops, in code and on
     every method, any operation whose path ends in `/reveal` or whose `x-required-permissions` holds a
@@ -675,9 +680,14 @@ number stored before #2621; it logs counts only.
   add a `V4__*.sql`; `VendorTaxRegistrationMigrationHygieneTest` fails if anyone does.
 - **Stop-the-world deploy only.** Stop pos-supplier, migrate, then start it: no old instance may write a clear
   number after V4 has run, and none may publish a v1 fact after V5.
-- **Hard gate before the deploy: the counts.** Run the read-only counts (registrations per scheme, vendors with a
-  registration, and the two shape-break counts in PR #2624) through SSM as `pos_user`. Counts only, never values.
-  Any non-zero shape-break count stops the deploy.
+- **Hard gate before the deploy: the counts** (ADR-0072 Decision 9). Run the read-only counts in PR #2624 through
+  SSM as `pos_user`: registrations grouped by **validated** scheme (a misshapen scheme counts as `UNVALIDATED`, never
+  printed), split by **verified fixture provenance** versus **unknown provenance**, vendors holding one, and the two
+  shape-break counts. Counts only, never values. Unknown provenance counts as potentially real and stops the
+  rollout as a data incident; any non-zero shape-break count stops the deploy.
+- **Order and purge:** follow `docs/OPERATIONS_RUNBOOK.md`, "Withdrawing a RESTRICTED field in place": consumers
+  first, stop every old writer, V4–V6, fixed per-partition cutoffs on `supplier.events.v1` and its DLQ, consumer
+  progress, DLQ inventory and recovery, then `kafka-delete-records.sh` up to the cutoffs.
 - **If V4 or V5 refuses** ("N stored vendor tax registration(s) …" or "N supplier.vendor.updated outbox
   registration(s) …"): nothing was written; the migration rolled back and the previous release keeps running.
   Never `SELECT` the offending values.

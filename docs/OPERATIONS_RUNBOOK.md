@@ -1258,34 +1258,92 @@ Consumers retry failed records with exponential backoff, then dead-letter to `{t
 (e.g. `workorder.events.v1.dlq`). Redelivery is safe: consumers deduplicate by `eventId`
 (unique-keyed processing log).
 
-**A DLQ record holds the whole original value**, which may carry CONFIDENTIAL or RESTRICTED data
-(Security ruling on #2617, ruling 7). Inspect a DLQ by its **metadata only**: key, headers,
-partition, offset and timestamp, never values:
+**A DLQ record holds the whole original value**, which may carry CONFIDENTIAL or RESTRICTED data, and
+**its headers are not safe either**: `DeadLetterPublishingRecoverer` writes the exception message and stack
+trace into dead-letter headers, and a legacy record's exception can hold payload text (ADR-0072 Decision 5,
+IC-005; Security ruling on #2617, ruling 7). Inspect a DLQ by an **allowlist of safe metadata only**: key,
+partition, offset and timestamp. Never values, never headers:
 
 ```bash
 docker exec kafka-positivity /opt/kafka/bin/kafka-console-consumer.sh \
   --bootstrap-server localhost:9092 --topic workorder.events.v1.dlq --from-beginning --max-messages 10 \
-  --property print.value=false --property print.key=true --property print.headers=true \
+  --property print.value=false --property print.headers=false --property print.key=true \
   --property print.partition=true --property print.offset=true --property print.timestamp=true
 ```
 
-When the cause needs one record's value, print **that one record only**, by its partition and offset
-from the metadata listing:
+When the cause needs one record's value or headers, print **that one named record only**, by its partition
+and offset from the metadata listing, and only from a permitted terminal (below):
 
 ```bash
 docker exec kafka-positivity /opt/kafka/bin/kafka-console-consumer.sh \
   --bootstrap-server localhost:9092 --topic workorder.events.v1.dlq \
-  --partition N --offset M --max-messages 1
+  --partition N --offset M --max-messages 1 --property print.headers=true
 ```
+
+**Permitted terminal arrangements for single-record inspection.** `docker exec` on the broker host does not
+keep the output there: whatever terminal shows it can carry or keep it.
+
+- **Allowed:** an interactive AWS SSM Session Manager session to the alpha host (the alpha access path; SSH is
+  blocked) opened from the operator's own workstation terminal, **provided the session is not logged**: the
+  Session Manager preferences in use must not stream or store session output to S3 or CloudWatch Logs. Check
+  this before inspecting a value; if session logging is on, do not inspect values in that session.
+- **On the workstation:** a local terminal emulator only. No `tmux`/`screen` logging, no `script`/`asciinema`
+  or other session recording, no screen sharing or screen recording while the value is on screen. Clear the
+  scrollback when done (`clear && printf '\e[3J'`).
+- **Not allowed:** CI jobs, workflow logs, shared or pair-programming sessions, browser-based terminals that
+  keep transcripts, an AI assistant's or agent's shell (its transcript is stored), and any redirect to a file.
 
 Rules:
 
-- Never run `--from-beginning` (or any multi-record read) with values printed.
-- The output stays in your terminal. Never paste it into an issue, PR, ticket or chat, and never
-  redirect it to a file.
+- Never run `--from-beginning` (or any multi-record read) with values or headers printed, on a DLQ or any other
+  topic.
+- The output stays in your terminal. Never paste it into an issue, PR, ticket or chat, and never redirect it
+  to a file.
 
 To reprocess a DLQ'd record after fixing the cause, re-emit it from the owner's outbox (below) —
 do not hand-copy messages between topics.
+
+### Withdrawing a RESTRICTED field in place: rollout and purge (ADR-0072 Decision 7)
+
+First application: `supplier.vendor.updated` schema version 2 (#2621), which withdrew the full
+tax-registration number. No old publisher or writer may recreate a clear payload after the scrub. Run these
+steps in order and put the evidence on the pull request (CHK-007):
+
+1. **Incident check first** (ADR-0072 Decision 9, IC-001): the read-only, counts-only check, through SSM as
+   `pos_user`. Group only by **validated** attributes: a scheme outside its shape counts in the fixed bucket
+   `UNVALIDATED`, and its raw content is never printed. Count entries of **verified fixture provenance**
+   apart from **unknown provenance**, and put the provenance evidence beside the counts. Unknown provenance
+   counts as potentially real: any such entry stops the rollout as a data incident for the Platform Owner.
+   The queries for #2621 are on PR #2624.
+2. **Consumers first:** every consumer that applies the event type accepts the new `schemaVersion`, and skips
+   (counts, never logs) the old one, before anything publishes it.
+3. **Stop every old writer and publisher** of the event type (for #2621: stop pos-supplier entirely).
+4. **Backfill and scrub** (for #2621: Flyway V4 encrypts, V5 scrubs the outbox, V6 adds the reveal audit), then
+   start the new publisher. Stop-the-world only: no old instance runs alongside.
+5. **Fixed cutoffs:** record, per partition, the end offset of the topic **and** of its DLQ, taken after the
+   last possible old-format publication (the moment the old publisher stopped). A moving high-water mark is
+   never the deletion boundary.
+
+   ```bash
+   docker exec kafka-positivity /opt/kafka/bin/kafka-get-offsets.sh --bootstrap-server localhost:9092 \
+     --topic supplier.events.v1 --time -1
+   docker exec kafka-positivity /opt/kafka/bin/kafka-get-offsets.sh --bootstrap-server localhost:9092 \
+     --topic supplier.events.v1.dlq --time -1
+   ```
+6. **Consumer progress:** every consumer group of the topic has committed past the cutoffs
+   (`kafka-consumer-groups.sh --describe --all-groups`, metadata only).
+7. **DLQ inventory, separately:** zero lag on the topic says nothing about the DLQ. List the event type's DLQ
+   records up to the cutoff with the metadata-only command above, and record for each its recovery (a
+   sanitised replay from the owner's current state, e.g. `POST /v1/supplier/vendors/facts/replay`) or its
+   approved disposition.
+8. **Delete up to the cutoffs** on every partition of the topic and its DLQ, from an offsets file holding the
+   recorded cutoffs (never "latest"):
+
+   ```bash
+   docker exec kafka-positivity /opt/kafka/bin/kafka-delete-records.sh --bootstrap-server localhost:9092 \
+     --offset-json-file /tmp/supplier-cutoffs.json
+   ```
+   Other event types in the range stay replayable from the outbox.
 
 ### Replica seeding and drift repair (replay)
 

@@ -217,7 +217,8 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
                 tenantId, vendor.getVendorId(), vendor.getTaxRegistrations(), request.taxRegistrations());
         vendor.setLegalName(request.legalName());
         vendor.setDisplayName(request.displayName());
-        replaceTaxRegistrations(vendor, registrations);
+        boolean valueSupplied = request.taxRegistrations().stream().anyMatch(entry -> entry.number() != null);
+        replaceTaxRegistrations(vendor, registrations, valueSupplied);
         vendor.setDefaultPaymentTerms(request.defaultPaymentTerms());
         vendor.setDefaultCurrency(request.defaultCurrency());
         Long versionBefore = vendor.getVersion();
@@ -458,12 +459,34 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
         return new SupplierValidationException(SupplierValidationException.VALIDATION_ERROR, message);
     }
 
-    /** In place: Hibernate tracks the managed list instance. */
+    /**
+     * Replaces the stored registrations when the request changes them (ADR-0072 Decision 4, IC-004). A supplied number
+     * is always a change, even under an unchanged id, scheme and region: it was re-sealed and its {@code last4}
+     * recomputed, and the masked fact is published. Otherwise the decision compares registration ids and their
+     * stored attributes (scheme, region) only, never ciphertext or {@code last4}. In place: Hibernate tracks the
+     * managed list instance.
+     */
     private static void replaceTaxRegistrations(
-            SupplierVendorEntity vendor, List<VendorTaxRegistration> registrations) {
-        if (!registrations.equals(vendor.getTaxRegistrations())) {
+            SupplierVendorEntity vendor, List<VendorTaxRegistration> registrations, boolean valueSupplied) {
+        if (valueSupplied || !sameIdsAndAttributes(vendor.getTaxRegistrations(), registrations)) {
             vendor.setTaxRegistrations(new ArrayList<>(registrations));
         }
+    }
+
+    private static boolean sameIdsAndAttributes(List<VendorTaxRegistration> stored, List<VendorTaxRegistration> next) {
+        if (stored.size() != next.size()) {
+            return false;
+        }
+        for (int i = 0; i < stored.size(); i++) {
+            VendorTaxRegistration before = stored.get(i);
+            VendorTaxRegistration after = next.get(i);
+            if (!before.registrationId().equals(after.registrationId())
+                    || !before.scheme().equals(after.scheme())
+                    || !Objects.equals(before.region(), after.region())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**

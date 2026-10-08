@@ -7,13 +7,13 @@ import com.positivity.supplier.internal.entity.VendorTaxRegistration;
 import com.positivity.supplier.internal.enums.TaxIdRevealOutcome;
 import com.positivity.supplier.internal.exception.SupplierNotFoundException;
 import com.positivity.supplier.internal.exception.SupplierValidationException;
-import com.positivity.supplier.internal.exception.TaxIdRevealReasonRejectedException;
 import com.positivity.supplier.internal.exception.VendorTaxIdUnreadableException;
 import com.positivity.supplier.internal.repository.SupplierVendorRepository;
 import com.positivity.supplier.internal.repository.SupplierVendorTaxIdRevealRepository;
 import com.positivity.supplier.internal.service.model.PagedResponse;
 import com.positivity.supplier.internal.vendor.service.model.TaxIdRevealRecordView;
 import com.positivity.supplier.internal.vendor.service.model.TaxIdRevealRequest;
+import com.positivity.supplier.internal.vendor.service.model.TaxIdRevealResult;
 import com.positivity.supplier.internal.vendor.service.model.TaxIdRevealView;
 import com.positivity.tenancy.TenantContext;
 import java.util.Arrays;
@@ -38,20 +38,21 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>Load the vendor and the registration (404 otherwise). Nothing has been decrypted.
  *   <li>Decrypt, catching only the unreadable case. A failure is a reveal that happened and produced nothing.
  *   <li>Refuse a reason that contains the number itself (Security confirmation on louisburroughs/durion#571):
- *       separators removed from both, compared case-insensitively. The refusal is 400 {@code VALIDATION_ERROR},
- *       reveals nothing, and records {@code REASON_REJECTED} with no reason, because that reason held the
- *       number. The reason is never logged.
+ *       separators removed from both, compared case-insensitively. It reveals nothing and records
+ *       {@code REASON_REJECTED} with no reason, because that reason held the number. The reason is never logged.
  *   <li>Write the audit row through {@link VendorTaxIdRevealRecorder}, in this transaction, with no catch. If
- *       it fails, the exception propagates, the transaction rolls back, and the number never leaves this
- *       method.
- *   <li>Only then return the number, or rethrow the unreadable failure.
+ *       it fails, the exception propagates, the transaction rolls back, and nothing is revealed.
+ *   <li>Return an explicit {@link TaxIdRevealResult}. Nothing is thrown after a row is written.
  * </ol>
  *
- * <p>{@code noRollbackFor} the unreadable and reason-rejected exceptions: each is a reveal that happened and
- * returned nothing, and its row must survive. An unreadable number is the attempt most worth
- * recording (a ciphertext copied between rows, a key retired without being carried into
- * {@code previous-keys}), and rolling back would delete that evidence. It is logged with the vendor,
- * registration and key id only.
+ * <h2>Every audited outcome commits (ADR-0072 Decision 4, IC-003)</h2>
+ *
+ * Throwing an unchecked exception after writing the row would roll the row back under Spring's default rollback rule,
+ * deleting the record of a refused or unreadable attempt, the evidence most worth keeping. So this method returns the
+ * outcome, the transaction commits on return, and only then does the controller map {@code REASON_REJECTED} to 400
+ * and {@code UNREADABLE} to 500. A {@code REVEALED} number likewise reaches the controller only after commit: if the
+ * insert or the commit fails, the call fails and reveals nothing. {@code VendorTaxIdUnreadableException} is caught
+ * here and never escapes; an unreadable number is logged with the vendor, registration and key id only.
  */
 @Slf4j
 @Service
@@ -68,8 +69,8 @@ public class VendorTaxIdRevealServiceImpl implements VendorTaxIdRevealService {
 
     @Override
     @NonNull
-    @Transactional(noRollbackFor = {VendorTaxIdUnreadableException.class, TaxIdRevealReasonRejectedException.class})
-    public TaxIdRevealView reveal(
+    @Transactional
+    public TaxIdRevealResult reveal(
             @NonNull UUID vendorId, @NonNull UUID registrationId, @NonNull TaxIdRevealRequest request) {
         Objects.requireNonNull(registrationId, "registrationId must not be null");
         Objects.requireNonNull(request, "request must not be null");
@@ -91,10 +92,9 @@ public class VendorTaxIdRevealServiceImpl implements VendorTaxIdRevealService {
         }
 
         if (number != null && reasonCarries(request.reason(), number)) {
-            number = null;
-            // The row first, with no reason: that reason holds the number. Then the refusal, which keeps the row.
+            // The row with no reason: that reason holds the number. Returned, not thrown, so the row commits.
             recorder.record(vendorId, registration, null, TaxIdRevealOutcome.REASON_REJECTED);
-            throw new TaxIdRevealReasonRejectedException();
+            return TaxIdRevealResult.reasonRejected();
         }
 
         // Before anything is returned, in this transaction, with no catch. An UNREADABLE row keeps no reason: it could
@@ -119,11 +119,12 @@ public class VendorTaxIdRevealServiceImpl implements VendorTaxIdRevealService {
                     vendorId,
                     registrationId,
                     failure.getKeyId());
-            throw failure;
+            // Returned, not thrown, so the UNREADABLE row commits; the controller answers 500 after commit.
+            return TaxIdRevealResult.unreadable(failure.getFailure(), failure.getKeyId());
         }
         log.info("Vendor tax registration {} of vendor {} revealed", registrationId, vendorId);
-        return new TaxIdRevealView(
-                registrationId, registration.scheme(), registration.region(), Objects.requireNonNull(number));
+        return TaxIdRevealResult.revealed(new TaxIdRevealView(
+                registrationId, registration.scheme(), registration.region(), Objects.requireNonNull(number)));
     }
 
     @Override

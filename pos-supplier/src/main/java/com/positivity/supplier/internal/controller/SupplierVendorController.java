@@ -2,6 +2,8 @@ package com.positivity.supplier.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
+import com.positivity.supplier.internal.exception.TaxIdRevealReasonRejectedException;
+import com.positivity.supplier.internal.exception.VendorTaxIdUnreadableException;
 import com.positivity.supplier.internal.security.SupplierPermissions;
 import com.positivity.supplier.internal.service.model.PagedResponse;
 import com.positivity.supplier.internal.vendor.service.SupplierVendorService;
@@ -13,6 +15,7 @@ import com.positivity.supplier.internal.vendor.service.model.RemitChangeView;
 import com.positivity.supplier.internal.vendor.service.model.RemitRejectionRequest;
 import com.positivity.supplier.internal.vendor.service.model.TaxIdRevealRecordView;
 import com.positivity.supplier.internal.vendor.service.model.TaxIdRevealRequest;
+import com.positivity.supplier.internal.vendor.service.model.TaxIdRevealResult;
 import com.positivity.supplier.internal.vendor.service.model.TaxIdRevealView;
 import com.positivity.supplier.internal.vendor.service.model.VendorCreateRequest;
 import com.positivity.supplier.internal.vendor.service.model.VendorFactReplayResult;
@@ -31,6 +34,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -775,9 +779,20 @@ public class SupplierVendorController {
                     @NotNull
                     @RequestBody
                     TaxIdRevealRequest request) {
-        return ResponseEntity.ok()
-                .cacheControl(CacheControl.noStore())
-                .body(taxIdRevealService.reveal(vendorId, registrationId, request));
+        // The service's transaction has committed by the time it returns: every outcome's audit row is durable, and
+        // only now is the outcome mapped to a status (ADR-0072 Decision 4, IC-003).
+        TaxIdRevealResult result = taxIdRevealService.reveal(vendorId, registrationId, request);
+        return switch (result.outcome()) {
+            case REVEALED ->
+                ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(result.view());
+            case REASON_REJECTED -> throw new TaxIdRevealReasonRejectedException();
+            case UNREADABLE ->
+                throw new VendorTaxIdUnreadableException(
+                        Objects.requireNonNull(result.failure()),
+                        result.keyId(),
+                        "Vendor tax-registration number is unreadable",
+                        null);
+        };
     }
 
     @Operation(

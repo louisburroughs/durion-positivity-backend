@@ -653,6 +653,65 @@ class SupplierVendorServiceImplTest extends PostgresSliceTestBase {
             assertThat(service.getVendor(vendor.vendorId()).version()).isEqualTo(vendor.version());
         }
 
+        /**
+         * CHK-011 / IC-004 (ADR-0072 Decision 4): a supplied number is always a change, even under the same id, scheme
+         * and region, whether its last4 is the same or not. Nothing decides "unchanged" on ciphertext or last4.
+         */
+        @Test
+        @DisplayName("CHK-011: a replacement number under an unchanged id is always a change: new ciphertext, last4"
+                + " stored, fact published, with the same last4 and with a different one")
+        void replacementValueIsAlwaysAChange() {
+            VendorView vendor = createWith(new TaxRegistrationDto(null, "SSN", SSN, null));
+            UUID id = vendor.taxRegistrations().getFirst().registrationId();
+            String firstCiphertext =
+                    stored(vendor.vendorId()).get(0).path("numberCiphertext").stringValue();
+            int factsBefore = vendorFacts(vendor.vendorId()).size();
+
+            // The same number again: same id, scheme, region and last4.
+            VendorView same = as(
+                    "clerk.a",
+                    () -> service.updateVendor(
+                            vendor.vendorId(), update(vendor, new TaxRegistrationDto(id, "SSN", SSN, null))));
+            String secondCiphertext =
+                    stored(vendor.vendorId()).get(0).path("numberCiphertext").stringValue();
+            assertThat(secondCiphertext).as("re-sealed").isNotEqualTo(firstCiphertext);
+            assertThat(same.taxRegistrations().getFirst().last4()).isEqualTo("1234");
+            assertThat(same.version()).isGreaterThan(vendor.version());
+            assertThat(vendorFacts(vendor.vendorId())).hasSize(factsBefore + 1);
+
+            // A different number with the same last4, then one with a different last4.
+            VendorView sameLast4 = as(
+                    "clerk.a",
+                    () -> service.updateVendor(
+                            vendor.vendorId(), update(same, new TaxRegistrationDto(id, "SSN", "000-99-1234", null))));
+            assertThat(sameLast4.version()).isGreaterThan(same.version());
+            assertThat(sameLast4.taxRegistrations().getFirst().last4()).isEqualTo("1234");
+            VendorView otherLast4 = as(
+                    "clerk.a",
+                    () -> service.updateVendor(
+                            vendor.vendorId(),
+                            update(sameLast4, new TaxRegistrationDto(id, "SSN", "000-00-4321", null))));
+            assertThat(otherLast4.version()).isGreaterThan(sameLast4.version());
+            assertThat(otherLast4.taxRegistrations().getFirst().last4()).isEqualTo("4321");
+            assertThat(vendorFacts(vendor.vendorId())).hasSize(factsBefore + 3);
+            assertThat(envelope(vendorFacts(vendor.vendorId()).getLast())
+                            .path("payload")
+                            .path("taxRegistrations")
+                            .get(0)
+                            .path("last4")
+                            .stringValue())
+                    .isEqualTo("4321");
+            assertThat(taxIdCipher.open(
+                            TENANT,
+                            vendor.vendorId(),
+                            id,
+                            stored(vendor.vendorId())
+                                    .get(0)
+                                    .path("numberCiphertext")
+                                    .stringValue()))
+                    .isEqualTo("000-00-4321");
+        }
+
         @Test
         @DisplayName("a re-entered number re-seals the registration under the same id; an omitted one is removed")
         void reEnteredNumberKeepsTheIdAndOmittedIsRemoved() {
