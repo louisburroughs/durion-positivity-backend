@@ -363,6 +363,10 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1vendors
   /v1/accounting/vendors/{vendorId}:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1vendors~1{vendorId}
+  /v1/accounting/vendors/{vendorId}/ap-settings:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1vendors~1{vendorId}~1ap-settings
+  /v1/accounting/vendors/{vendorId}/remit-to-confirmation:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1vendors~1{vendorId}~1remit-to-confirmation
   /v1/bulk-jobs:
     $ref: ../../pos-bulk-loader/openapi.yaml#/paths/~1v1~1bulk-jobs
   /v1/bulk-jobs/{jobId}:
