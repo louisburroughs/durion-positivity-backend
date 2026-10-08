@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Named;
@@ -47,6 +48,25 @@ class TaxExceptionHandlerTest {
         HttpServletRequest request = mock(HttpServletRequest.class);
         when(request.getHeader("X-Correlation-Id")).thenReturn("   ");
         return request;
+    }
+
+    @Test
+    @DisplayName("CAP:550 S32b: 400 VALIDATION_ERROR and 422 TAX_AMOUNT_IMPLAUSIBLE carry their field errors")
+    void s32bHandlersCarryFieldErrors() {
+        TaxExceptionHandler handler = new TaxExceptionHandler(TEST_CLOCK);
+        List<ApiError.FieldError> errors = List.of(new ApiError.FieldError("statedTaxes[0].amount", "max 4.82"));
+
+        ResponseEntity<ApiError> invalid =
+                handler.handleRequestInvalid(new TaxRequestInvalidException(errors), requestWithoutHeader());
+        ResponseEntity<ApiError> implausible =
+                handler.handleAmountImplausible(new TaxAmountImplausibleException(errors), requestWithoutHeader());
+
+        assertThat(invalid.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(invalid.getBody().code()).isEqualTo("VALIDATION_ERROR");
+        assertThat(invalid.getBody().fieldErrors()).isEqualTo(errors);
+        assertThat(implausible.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(implausible.getBody().code()).isEqualTo("TAX_AMOUNT_IMPLAUSIBLE");
+        assertThat(implausible.getBody().fieldErrors()).isEqualTo(errors);
     }
 
     @Nested
@@ -152,6 +172,14 @@ class TaxExceptionHandlerTest {
                     Named.of("handleJurisdictionNotConfigured", (HandlerInvocation)
                             request -> handler.handleJurisdictionNotConfigured(
                                     new TaxJurisdictionNotConfiguredException("No tax rate is configured"), request)),
+                    Named.of("handleRequestInvalid", (HandlerInvocation) request -> handler.handleRequestInvalid(
+                            new TaxRequestInvalidException(
+                                    List.of(new ApiError.FieldError("currencyCode", "must be CAD"))),
+                            request)),
+                    Named.of("handleAmountImplausible", (HandlerInvocation) request -> handler.handleAmountImplausible(
+                            new TaxAmountImplausibleException(List.of(new ApiError.FieldError(
+                                    "statedTaxes[0].amount", "must not exceed the plausible maximum 4.82"))),
+                            request)),
                     Named.of("handleConstraintViolation", (HandlerInvocation)
                             request -> handler.handleConstraintViolation(
                                     new ConstraintViolationException("bad countryCode", Collections.emptySet()),
