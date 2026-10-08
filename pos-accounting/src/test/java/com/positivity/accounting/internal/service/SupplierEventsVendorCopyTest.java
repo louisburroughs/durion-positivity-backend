@@ -491,13 +491,15 @@ class SupplierEventsVendorCopyTest {
             when(holds.findByVendorIdAndReasonAndReleasedAtIsNullOrderByReceivedAtAscHoldIdAsc(
                             VENDOR, SupplierInvoiceHold.Reason.VENDOR_NOT_IN_COPY))
                     .thenReturn(List.of(first, second));
-            when(bills.saveAndFlush(any()))
-                    .thenThrow(new DataAccessResourceFailureException("connection lost"))
-                    .thenAnswer(inv -> {
+            // doThrow/doAnswer: when(...) would call setUp's answer with a null argument while stubbing.
+            org.mockito.Mockito.doThrow(new DataAccessResourceFailureException("connection lost"))
+                    .doAnswer(inv -> {
                         VendorBill bill = inv.getArgument(0);
                         bill.setVendorBillId(UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f9c22"));
                         return bill;
-                    });
+                    })
+                    .when(bills)
+                    .saveAndFlush(any());
 
             listener.releaseHolds(VENDOR);
 

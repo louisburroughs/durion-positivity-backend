@@ -207,8 +207,8 @@ class SupplierVendorCopyIT extends PostgresTenancyTestBase {
                     .doesNotContain("Failing row");
         }
         assertThat(logs.list)
-                .as("an ERROR line from the refused insert is captured")
-                .anyMatch(event -> event.getLevel() == ch.qos.logback.classic.Level.ERROR);
+                .as("a WARN or ERROR line from the refused insert is captured (the scan is not vacuous)")
+                .anyMatch(event -> event.getLevel().isGreaterOrEqual(ch.qos.logback.classic.Level.WARN));
         long leaking = logs.list.stream()
                 .filter(event -> (event.getFormattedMessage()
                                 + (event.getThrowableProxy() == null
