@@ -1203,8 +1203,8 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
         new JdbcTemplate(ownerDataSource())
                 .update(
                         "INSERT INTO accounting_configuration (tenant_id, config_id, config_key, config_value,"
-                            + " created_at, created_by, modified_at, modified_by) VALUES (?, ?, 'HARD_LOCK_DATE', ?,"
-                            + " TIMESTAMPTZ '2026-09-01 00:00:00+00', 't', TIMESTAMPTZ '2026-09-01 00:00:00+00', 't')",
+                                + " created_at, created_by, modified_at, modified_by) VALUES (?, ?, 'HARD_LOCK_DATE', ?,"
+                                + " TIMESTAMPTZ '2026-09-01 00:00:00+00', 't', TIMESTAMPTZ '2026-09-01 00:00:00+00', 't')",
                         tenant,
                         UUIDv7Generator.generate(),
                         lockDate.toString());
@@ -1215,9 +1215,9 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
         new JdbcTemplate(ownerDataSource())
                 .update(
                         "INSERT INTO accounting_period (tenant_id, period_id, period_code, start_date, end_date,"
-                            + " status, created_at, created_by, modified_at, modified_by, version) VALUES (?, ?, ?, ?,"
-                            + " ?, 'CLOSED', TIMESTAMPTZ '2026-09-01 00:00:00+00', 't', TIMESTAMPTZ '2026-09-01"
-                            + " 00:00:00+00', 't', 0)",
+                                + " status, created_at, created_by, modified_at, modified_by, version) VALUES (?, ?, ?, ?,"
+                                + " ?, 'CLOSED', TIMESTAMPTZ '2026-09-01 00:00:00+00', 't', TIMESTAMPTZ '2026-09-01"
+                                + " 00:00:00+00', 't', 0)",
                         tenant,
                         UUIDv7Generator.generate(),
                         start.toString().substring(0, 7),
