@@ -1185,7 +1185,9 @@ gateway is called and persists nothing, so the same `paymentRef` may be sent aga
 | 5c | 422 | `PERIOD_CLOSED` | its period is closed, without an `overrideJustification` and `accounting:period:override` |
 | 5d | 422 | `GL_MAPPING_NOT_CONFIGURED` | no `AP_PAYMENT/ACCOUNTS_PAYABLE` mapping on the date, or no `PAYMENT_FEES` with a fee above 0 |
 
-S24 adds its vendor check at the end of slot 1 and its remit-to check in slot 4.
+S24 adds its vendor check at the end of slot 1 and its remit-to check in slot 4. Slot 5c reads the period row under a
+share lock (`FOR SHARE`) to the end of the transaction: a `closePeriod` waits for the payment, while payments of the
+same month do not wait for each other across their gateway calls.
 
 **Execution date.** The tenant's business date (accounting time zone) is read once and fixed in slot 5 on
 `ap_payment.payment_date` (`DATE`): the date the period check used, the date the entry posts on and the date a retry

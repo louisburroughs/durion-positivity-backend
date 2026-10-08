@@ -124,10 +124,16 @@ Clearing an exception:
 
 - `GET /v1/accounting/ap/bills` lists `APPROVED` bills, oldest due date first, optionally for one `vendorId`.
 - `POST /v1/accounting/ap/payments` (`accounting:ap:pay`) pays **one vendor** through the payment gateway:
-  `vendorId`, `grossAmount`, `currency`, `paymentRef` (idempotency key) and `paymentMethod` (`ACH`, `CHECK`, `WIRE`,
-  `CREDIT_CARD`, `OTHER`). Explicit allocations must name `APPROVED` bills of that vendor and may not exceed the
-  gross; without them the payment is spread over the vendor's approved bills, oldest due date first, partially paying
-  the last one. Anything left is `unappliedAmount`.
+  `vendorId`, `grossAmount`, optional `feeAmount`, `currency` (the ledger's currency only), `paymentRef` (idempotency
+  key), `paymentMethod` (`ACH`, `CHECK` or `WIRE`; `CREDIT_CARD` and `OTHER` are refused) and `bankAccountId`, the
+  `BANK_CASH` account it is paid from (it may be left out only when exactly one active account in the ledger's currency
+  exists). Explicit allocations must name `APPROVED` bills of that vendor and may not exceed the gross; without them
+  the payment is spread over the vendor's approved bills, oldest due date first, partially paying the last one.
+  Anything left is `unappliedAmount`. A closed period needs `overrideJustification` and `accounting:period:override`;
+  a hard-locked date or a missing `AP_PAYMENT` mapping refuses the payment before anything is charged.
+- The payment posts on its own date: Dr 2000 the gross, Dr 6030 the fee, Cr the bank account. A posting refused after
+  the payment executed leaves it `GL_POST_FAILED` with the reason in `glPostError`; once fixed,
+  `POST .../ap/payments/{paymentId}/gl-posting-retry` (`accounting:je:post`) posts it.
 - `APPaymentStatus`: `INITIATED`, `GATEWAY_PENDING`, `GATEWAY_FAILED`, `GATEWAY_SUCCEEDED`, `GL_POST_PENDING`,
   `GL_POSTED`, `GL_POST_FAILED`. Read with `GET .../ap/payments/{paymentId}` or `.../payments/by-ref/{paymentRef}`.
 - A paid bill keeps status `APPROVED`; what remains open is its total minus its allocations.

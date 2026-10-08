@@ -81,6 +81,7 @@ class APPaymentPreGatewayChecksTest {
         checks = checks(TestZoneResolvers.utc(CLOCK));
         lenient().when(configuration.getHardLockDate()).thenReturn(Optional.empty());
         lenient().when(periods.findWithLockByPeriodCode(anyString())).thenReturn(Optional.empty());
+        lenient().when(periods.findWithShareLockByPeriodCode(anyString())).thenReturn(Optional.empty());
         lenient().when(bankAccountCurrencies.currencyOf(any())).thenReturn(Optional.empty());
         lenient().when(bankAccountCurrencies.currencyOf(CAD_BANK)).thenReturn(Optional.of("CAD"));
         lenient()
@@ -152,7 +153,8 @@ class APPaymentPreGatewayChecksTest {
     private void closed(String periodCode) {
         AccountingPeriod period = new AccountingPeriod();
         period.setStatus(AccountingPeriodStatus.CLOSED);
-        when(periods.findWithLockByPeriodCode(periodCode)).thenReturn(Optional.of(period));
+        // Slot 5 reads the period under a share lock: payments of one month never wait for each other.
+        when(periods.findWithShareLockByPeriodCode(periodCode)).thenReturn(Optional.of(period));
     }
 
     private static VendorBillException.Code code(Throwable refusal) {

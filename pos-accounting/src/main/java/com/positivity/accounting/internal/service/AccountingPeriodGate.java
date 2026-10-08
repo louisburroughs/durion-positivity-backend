@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.entity.AccountingAuditLog;
+import com.positivity.accounting.internal.entity.AccountingPeriod;
 import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
@@ -12,6 +13,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -98,7 +100,7 @@ public class AccountingPeriodGate {
     @Transactional(propagation = Propagation.MANDATORY)
     public void assertPostingAllowed(
             @NonNull LocalDate transactionDate, @NonNull UUID journalEntryId, @Nullable String overrideJustification) {
-        Optional<String> closed = closedPeriodOf(transactionDate);
+        Optional<String> closed = closedPeriodOf(transactionDate, periodRepository::findWithLockByPeriodCode);
         if (closed.isEmpty()) {
             return;
         }
@@ -109,8 +111,10 @@ public class AccountingPeriodGate {
     /**
      * The AP pay command's period check, before any journal entry exists (CAP:550 S42, #2603; slot 5 of its pre-gateway
      * block): the same rules as {@link #assertPostingAllowed}, in the same order (time zone, hard lock, closed period),
-     * with the period row locked to the end of the transaction. Nothing is written: the accepted override is stored on
-     * the payment and audited when its entry posts ({@link #assertPostingAllowedWithRecordedOverride}).
+     * with the period row share-locked to the end of the transaction: a {@code closePeriod} waits for the payment, while
+     * payments of the same month do not wait for each other across their gateway calls. Nothing is written: the accepted
+     * override is stored on the payment and audited when its entry posts ({@link
+     * #assertPostingAllowedWithRecordedOverride}).
      *
      * @param date                  the payment's execution date
      * @param overrideJustification the caller's justification, honoured only with {@link
@@ -119,7 +123,7 @@ public class AccountingPeriodGate {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean assertPaymentDateAllowed(@NonNull LocalDate date, @Nullable String overrideJustification) {
-        Optional<String> closed = closedPeriodOf(date);
+        Optional<String> closed = closedPeriodOf(date, periodRepository::findWithShareLockByPeriodCode);
         if (closed.isEmpty()) {
             return false;
         }
@@ -144,7 +148,7 @@ public class AccountingPeriodGate {
             @NonNull UUID journalEntryId,
             @Nullable String justification,
             @NonNull String actor) {
-        Optional<String> closed = closedPeriodOf(transactionDate);
+        Optional<String> closed = closedPeriodOf(transactionDate, periodRepository::findWithLockByPeriodCode);
         if (closed.isEmpty()) {
             return;
         }
@@ -155,10 +159,10 @@ public class AccountingPeriodGate {
     }
 
     /**
-     * The time zone and hard-lock checks, then the period, read under a row lock: the code of the CLOSED period of
-     * {@code date}, or empty when it is open (a missing row counts as open).
+     * The time zone and hard-lock checks, then the period, read under a row lock through {@code lockedRead}: the code of
+     * the CLOSED period of {@code date}, or empty when it is open (a missing row counts as open).
      */
-    private Optional<String> closedPeriodOf(LocalDate date) {
+    private Optional<String> closedPeriodOf(LocalDate date, Function<String, Optional<AccountingPeriod>> lockedRead) {
         // Fail closed (#2558 ruling): the gate refuses every posting while the tenant has no accounting time zone,
         // whether or not its date was derived through the resolver (an explicit date, an open original period).
         zoneResolver.zone();
@@ -171,8 +175,8 @@ public class AccountingPeriodGate {
         // closePeriod updates this row and must wait for the in-flight
         // posting (or, having committed first, is seen here as CLOSED). A
         // missing row counts as OPEN; there is nothing to lock.
-        boolean periodOpen = periodRepository
-                .findWithLockByPeriodCode(periodCode)
+        boolean periodOpen = lockedRead
+                .apply(periodCode)
                 .map(period -> period.getStatus() == AccountingPeriodStatus.OPEN)
                 .orElse(true);
         return periodOpen ? Optional.empty() : Optional.of(periodCode);

@@ -52,6 +52,7 @@ class AccountingPeriodGateRecordedOverrideTest {
         SecurityContextHolder.clearContext(); // the outbox thread has no caller
         when(configuration.getHardLockDate()).thenReturn(Optional.empty());
         when(periods.findWithLockByPeriodCode(anyString())).thenReturn(Optional.empty());
+        when(periods.findWithShareLockByPeriodCode(anyString())).thenReturn(Optional.empty());
         gate = new AccountingPeriodGate(
                 mock(AccountingPeriodService.class), periods, configuration, auditLogs, TestZoneResolvers.utc(CLOCK));
     }
@@ -65,6 +66,7 @@ class AccountingPeriodGateRecordedOverrideTest {
         AccountingPeriod period = new AccountingPeriod();
         period.setStatus(AccountingPeriodStatus.CLOSED);
         when(periods.findWithLockByPeriodCode("2026-09")).thenReturn(Optional.of(period));
+        when(periods.findWithShareLockByPeriodCode("2026-09")).thenReturn(Optional.of(period));
     }
 
     @Test

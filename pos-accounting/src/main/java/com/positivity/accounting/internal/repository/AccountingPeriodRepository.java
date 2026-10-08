@@ -39,6 +39,15 @@ public interface AccountingPeriodRepository extends JpaRepository<AccountingPeri
     Optional<AccountingPeriod> findWithLockByPeriodCode(String periodCode);
 
     /**
+     * Share-locked variant ({@code SELECT ... FOR SHARE}) for the AP pay command's period check before the gateway
+     * (CAP:550 S42, #2603): a {@code closePeriod} waits for the payment as it waits for a posting, while payments of the
+     * same month, which only read the row, do not wait for each other across their gateway calls. Must run inside an
+     * active transaction.
+     */
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    Optional<AccountingPeriod> findWithShareLockByPeriodCode(String periodCode);
+
+    /**
      * List all periods, most recent first (period codes sort lexicographically
      * in chronological order).
      */
