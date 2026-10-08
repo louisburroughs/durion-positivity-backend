@@ -459,9 +459,10 @@ holder sets are:
 | `accounting:ap:view` | `ACCOUNTING_CLERK`, `ADMIN`, `CONTROLLER`, `GENERAL_MANAGER`, `SUPPORT` |
 | `accounting:reconciliation:adjust` | `ACCOUNTING_CLERK`, `ADMIN`, `CONTROLLER` (the preparer; `CONTROLLER` alone approves) |
 | `accounting:payment:assign-customer` | no role yet |
-| `accounting:ap:approve` | `ACCOUNTING_CLERK`, `ADMIN`, `CONTROLLER`, `GENERAL_MANAGER` — send a bill for approval, correct a match exception, select a candidate (S12, #2509; reinstated, bit 262) |
+| `accounting:ap:approve` | `ACCOUNTING_CLERK`, `ADMIN`, `CONTROLLER`, `GENERAL_MANAGER` — send a bill for approval, correct a match exception, select a candidate, enter the real due date, and approve or `ACCEPT` a bill within the clerk limit (S12, #2509; S13, #2510; reinstated, bit 262) |
 | `accounting:ap:reject` | `ACCOUNTING_CLERK`, `ADMIN`, `CONTROLLER`, `GENERAL_MANAGER` — reject, void a match exception; with the approval tier, void an approved bill (S12; reinstated, bit 263) |
-| `accounting:ap:approve_over_limit` | `ADMIN`, `CONTROLLER`, `GENERAL_MANAGER` — approve, `ACCEPT`; until S13's clerk limit (default 0) every bill needs it (S12, catalog v102, bit 558) |
+| `accounting:ap:approve_over_limit` | `ADMIN`, `CONTROLLER`, `GENERAL_MANAGER` — approve, `ACCEPT` or void an approved bill over the clerk limit (default 0: every bill) (S12, catalog v102, bit 558) |
+| `accounting:ap_approval_policy:manage` | `ADMIN`, `CONTROLLER`, `GENERAL_MANAGER` — read and change the AP approval policy (S13, #2510; catalog v103, bit 559) |
 
 `accounting:payment:assign-customer` (catalog v97, bit 548; `AccountingPermissions.PAYMENT_ASSIGN_CUSTOMER`)
 is registered ahead of its endpoint — assigning a customer, once and with a justification, to a payment
@@ -932,11 +933,12 @@ PENDING_RECEIPT_MATCH (goods receipt) ─void, posts nothing (AW45)─► VOIDED
 | Endpoint (`/v1/accounting/vendor-bills`) | Permission | Refusals |
 | --- | --- | --- |
 | `POST /{billId}/submit-for-approval` `{justification, classification?, difference?}` | `ap:approve` or `ap:approve_over_limit` | 400 `JUSTIFICATION_REQUIRED`, `VALIDATION_ERROR`, `ARGUMENT_NOT_VALID`; 404 `VENDOR_BILL_NOT_FOUND`; 409 `AP_BILL_NOT_APPROVABLE`, `AP_BILL_AWAITING_INVOICE`; 422 `AP_BILL_ZERO_TOTAL`, `AP_BILL_TOTALS_UNRECONCILED` |
-| `POST /{billId}/approve` `{justification?, classification?, difference?, overrideJustification?}` | `ap:approve_over_limit` (S13 widens) | 409 `AP_BILL_NOT_APPROVABLE`, `AP_BILL_AWAITING_INVOICE`; 422 `AP_BILL_UNCLASSIFIED`, `AP_BILL_TOTALS_UNRECONCILED`, `AP_BILL_ZERO_TOTAL`, `PERIOD_CLOSED`, `PERIOD_HARD_LOCKED`, `GL_MAPPING_NOT_CONFIGURED` |
+| `POST /{billId}/approve` `{justification?, classification?, difference?, overrideJustification?}` | `ap:approve` or `ap:approve_over_limit`, then the tier (S13) | 403 `AP_APPROVAL_LIMIT_EXCEEDED`, `AP_BILL_SELF_APPROVAL`; 400 `JUSTIFICATION_REQUIRED` (a creator's exception use without one); 409 `AP_BILL_NOT_APPROVABLE`, `AP_BILL_AWAITING_INVOICE`; 422 `AP_BILL_UNCLASSIFIED`, `AP_BILL_TOTALS_UNRECONCILED`, `AP_BILL_ZERO_TOTAL`, `PERIOD_CLOSED`, `PERIOD_HARD_LOCKED`, `GL_MAPPING_NOT_CONFIGURED` |
 | `POST /{billId}/reject` `{reason}` | `ap:reject` | 400 `JUSTIFICATION_REQUIRED`, 409 `AP_BILL_NOT_APPROVABLE` |
-| `POST /{billId}/resolve-exception` `{resolutionAction, reason, classification?, difference?, overrideJustification?}` | any of the three; per action: `ACCEPT` `ap:approve_over_limit`, `CORRECT` `ap:approve` or `ap:approve_over_limit`, `VOID` `ap:reject` | 400 `VALIDATION_ERROR` (unknown action), `JUSTIFICATION_REQUIRED`; 409; `ACCEPT` as approve |
+| `POST /{billId}/resolve-exception` `{resolutionAction, reason, classification?, difference?, overrideJustification?}` | any of the three; per action: `ACCEPT` and `CORRECT` `ap:approve` or `ap:approve_over_limit` (`ACCEPT` then the tier, S13), `VOID` `ap:reject` | 400 `VALIDATION_ERROR` (unknown action), `JUSTIFICATION_REQUIRED`; 409; `ACCEPT` as approve |
 | `POST /match-candidates/{candidateId}/select` (no body) | `ap:approve` or `ap:approve_over_limit` | 404 `AP_MATCH_CANDIDATE_NOT_FOUND`, 409 `AP_MATCH_CANDIDATE_ALREADY_RESOLVED`, `AP_BILL_NOT_APPROVABLE`, `AP_BILL_AWAITING_INVOICE` (a candidate that kept no invoice), `AP_BILL_DUPLICATE` |
-| `POST /{billId}/void` `{reason, overrideJustification?}` (`voidVendorBill`) | `ap:reject`; an `APPROVED` bill's also the approval tier (`ap:approve_over_limit`), checked by the service | 403; 409 `AP_BILL_NOT_VOIDABLE` (neither `APPROVED` nor a goods-receipt bill in `PENDING_RECEIPT_MATCH`, or anything allocated); 422 `PERIOD_CLOSED`, `PERIOD_HARD_LOCKED` |
+| `POST /{billId}/void` `{reason, overrideJustification?}` (`voidVendorBill`) | `ap:reject`; an `APPROVED` bill's also either approve permission and its tier against the current clerk limit (S13), checked by the service | 403 (`FORBIDDEN`, `AP_APPROVAL_LIMIT_EXCEEDED`); 409 `AP_BILL_NOT_VOIDABLE` (neither `APPROVED` nor a goods-receipt bill in `PENDING_RECEIPT_MATCH`, or anything allocated); 422 `PERIOD_CLOSED`, `PERIOD_HARD_LOCKED` |
+| `PUT /{billId}/due-date` `{dueDate, justification?}` (S13) | `ap:approve` | 400 `VALIDATION_ERROR`, `JUSTIFICATION_REQUIRED`; 404; 409 `AP_BILL_NOT_APPROVABLE` outside review |
 | `GET /{billId}` · `GET /stages` · `GET /by-stage?stage=&page=&size=` | `ap:view` | 404; 400 (unknown stage) |
 
 Every command also answers 401 without a valid token and 403 `FORBIDDEN` without the permission. Every
@@ -1029,17 +1031,20 @@ A re-issue of an `APPROVED` or `PAID` bill never reopens it: the bill keeps its 
 or rejected meanwhile retries the event, which then becomes a bill of its own.
 
 **Reads.** `GET /{billId}` adds `channel`, `netAmount`, `taxAmount`, `approval` (submission, `requiredTier`
-`OVER_LIMIT` until S13, the proposed classification and difference, and the approval only once approved),
+from the current clerk limit (S13), `clerkLimit` and its `currencyCode`, the proposed classification and difference,
+and the approval only once approved, with `approvedByKind` `PERSON` | `SYSTEM`),
 `rejection` (`REJECTED`, `VOIDED`), `statusExplanation` (`MATCH_EXCEPTION`, `CURRENCY_HOLD`), `openAmount`, `match`
 (latest evidence), `openCandidates[]` (each with `candidateId` and `invoiceEventId`), `reissues[]`, `lines[]`,
-`checks[]`, `availableActions[]` (only the decisions valid now whose permission the caller holds; `VOID_APPROVED`
-only with a posting and no allocation) and `posting`. The checks:
+`checks[]`, `availableActions[]` (the decisions valid now whose permission the caller holds; `VOID_APPROVED`
+only with a posting and no allocation; one the tier or the creator rule blocks is listed with `allowed = false` and
+its `blockedReason`, S13) and `posting`. The checks:
 
 | Code | Outcome |
 | --- | --- |
 | `MATCHED_TO_DELIVERY` | PASS once an invoice is matched (HIGH, MEDIUM, a selection; MEDIUM passes, its confidence in `args.confidence`); FAIL `reason` `PICK_A_MATCH` (open candidates), `INVOICE_NOT_MATCHED` (goods receipt) or `NO_DELIVERY_RECORDED` (EDI) |
 | `WITHIN_PRICE_TOLERANCE` | the matched invoice against the receipt; NOT_APPLICABLE before a match |
 | `TOTALS_ADD_UP` | bills with the vendor's header totals only; FAIL with `difference`, `netAmount`, `taxAmount`, `totalAmount`, `tolerance` |
+| `WITHIN_CLERK_LIMIT` | S13: in `PENDING_RECEIPT_MATCH`, `MATCH_EXCEPTION`, `AWAITING_APPROVAL`, PASS when the absolute total is within the clerk limit (above 0), else FAIL, with `totalAmount`, `clerkLimit`, `currencyCode`; NOT_APPLICABLE otherwise |
 | `OPEN_DELIVERIES_FROM_VENDOR` | EDI bills classified `GOODS` only; FAIL with `count` and `billNumbers` (up to 10) while the vendor has goods-receipt bills in `PENDING_RECEIPT_MATCH`, `MATCH_EXCEPTION` or `AWAITING_APPROVAL`; informational, blocks nothing |
 
 `GET /stages` counts `CHECK` (`PENDING_RECEIPT_MATCH`, `MATCH_EXCEPTION`, `CURRENCY_HOLD`), `APPROVE`
@@ -1049,10 +1054,82 @@ payables report `AWAITING_APPROVAL` bills under `unapproved`, never aged.
 
 **Audit and events.** One `accounting_audit_log` row per decision (entity `VENDOR_BILL`; `VENDOR_BILL_SUBMIT`,
 `_APPROVE`, `_REJECT`, `_VOID` (`action=VOID_APPROVED` or `VOID_UNMATCHED`), `_MATCH_EXCEPTION_RESOLVE`,
-`_MATCH_CANDIDATE_SELECT`, `_MATCH_CANDIDATE_RELEASE`, `_MATCH_ROUTED` by `SYSTEM`) with the tier, the limit (0),
-the total, currency, match score and evidence id, and on an approval the rounding adjustment and any difference.
+`_MATCH_CANDIDATE_SELECT`, `_MATCH_CANDIDATE_RELEASE`, `_MATCH_ROUTED` by `SYSTEM`) with the tier, the clerk
+(`limit`) and automatic (`autoLimit`) limits in force, `exception` (`CREATOR_APPROVAL` | `NONE`), the total,
+currency, match score and evidence id, and on an approval the rounding adjustment and any difference.
 `@EmitEvent` ids `ACCOUNTING_VENDOR_BILL_SUBMIT`, `_APPROVE`, `_REJECT`, `_VOID` (approval), `_STAGES_VIEW` (fast
 read), `_STAGE_LIST` (search).
+
+## Approval limits and separation of duties (CAP:550 S13, #2510; AW4-AW7, AW33, AW45-AW47)
+
+**The AP approval policy.** Five `accounting_configuration` keys, read in one snapshot by `ApApprovalPolicy`; an
+absent key reads as its default and an unreadable value as the stricter default, with a warning:
+
+| Key | Default | Value |
+| --- | --- | --- |
+| `AP_CLERK_APPROVAL_LIMIT` | 0 (no clerk approves) | amount >= 0, functional currency |
+| `AP_AUTO_APPROVAL_LIMIT` | 0 (off) | amount >= 0, never above the clerk limit |
+| `AP_ALLOW_CREATOR_APPROVAL` | false | boolean |
+| `AP_ALLOW_APPROVER_PAYMENT` | false | boolean |
+| `AP_DEFAULT_TERMS` | `NET30` | `DUE_ON_RECEIPT` or `NET1`..`NET120` (`CashAndPayablesSettings.parseTerms` reads the same vocabulary) |
+
+`GET /v1/accounting/ap-approval-policy?historyPage=&historySize=` returns the five effective values,
+`currencyCode`, `asOf` and `history[]` newest first (default page 20, at most 100): `changedAt`, `changedBy`,
+`changedByRoles`, `setting`, `oldValue`, `newValue`, `justification`. `PUT` takes any of the five (missing =
+unchanged), `currencyCode` (required with a limit, the functional currency: 422 `CURRENCY_NOT_SUPPORTED` otherwise;
+a limit finer than the minor unit is 422 `AMOUNT_PRECISION_EXCEEDS_CURRENCY`), `justification` (>= 10 characters,
+400 `JUSTIFICATION_REQUIRED`) and `requestId` (UUID). A negative limit, an automatic limit above the clerk limit,
+terms outside the vocabulary or a missing `requestId` is 400 `VALIDATION_ERROR` with `fieldErrors`. Only a changed
+setting is written, with one `AP_APPROVAL_POLICY_SET` audit row (entity `ACCOUNTING_CONFIGURATION`, `old_value`, and
+`new_value` `setting=<KEY>;value=<NEW>;roles=<ROLES>;requestId=<UUID>`); a `requestId` already recorded writes
+nothing and returns the current policy. Both need `accounting:ap_approval_policy:manage`; events
+`ACCOUNTING_AP_APPROVAL_POLICY_VIEW` (fast read) and `_SET` (approval).
+
+**The tier.** A bill is `CLERK`-tier when the clerk limit is above 0 and the absolute value of its stored
+`totalAmount` (the billed gross: an EDI bill's stated gross, a goods-receipt bill's billed total after `/match`) is at
+most the limit; else `OVER_LIMIT`, which needs `accounting:ap:approve_over_limit`. A `difference` never changes it.
+It is derived on every read and decision, never stored, so a changed limit re-routes waiting bills at once. A
+decision reads the policy rows share-locked (in key order, as the PUT locks them), so a racing PUT applies wholly
+before or after it.
+
+**Guard order** on approve, `ACCEPT` and the void of an approved bill; the first failure answers and nothing is
+written: (1) the endpoint gate (403 `FORBIDDEN`); (2) the bill's state: status and open candidates (409
+`AP_BILL_NOT_APPROVABLE`), a goods-receipt bill's matched invoice (409 `AP_BILL_AWAITING_INVOICE`), a void's
+allocation (409 `AP_BILL_NOT_VOIDABLE`); (3) the tier (403 `AP_APPROVAL_LIMIT_EXCEEDED`, `nextAction` naming
+`accounting:ap:approve_over_limit`); (4) creator is not approver, approve and `ACCEPT` only (403
+`AP_BILL_SELF_APPROVAL`; under `AP_ALLOW_CREATOR_APPROVAL` it goes through with approve's `justification` or
+`ACCEPT`'s `reason`, audited `VENDOR_BILL_SOD_EXCEPTION`); (5) the content: 422 `AP_BILL_ZERO_TOTAL`,
+`AP_BILL_TOTALS_UNRECONCILED` (S43 adds `AP_BILL_TAX_ON_RESALE_GOODS` here); (6) the posting. Each 403 of (3) and (4)
+is audited as `<operation>_REFUSED` with `code=` in a transaction of its own. Submit runs (2) and (5) only.
+
+**Automatic approval.** Only on `/match`, a HIGH match within tolerance, and only when the automatic limit is above 0
+and the absolute total is at most min(automatic, clerk) limit: the system submits, approves (`approvedBy` and
+`submittedBy` `SYSTEM`, `approvedByKind` `SYSTEM`) and posts through `VendorBillPostingService` in the match
+transaction, with the lines' own classes and no override, dated on the invoice date when its period is open, else
+today (AW42). Whatever would need a person, or would refuse the posting (`AP_BILL_ZERO_TOTAL`,
+`AP_BILL_UNCLASSIFIED`, `PERIOD_CLOSED`, `PERIOD_HARD_LOCKED`, `GL_MAPPING_NOT_CONFIGURED`), leaves the bill
+`AWAITING_APPROVAL` with one `VENDOR_BILL_AUTO_APPROVE_SKIPPED` row naming the code; the match is kept. The posting is
+`MANDATORY` and the JPA dialect has no savepoints, so every refusal is asked first without writing (the legs in
+memory, then the period and the mappings in a transaction of its own); a period closed between the pre-check and the
+posting fails the whole match, which is sent again.
+
+**Approver is not payer.** `POST /v1/accounting/ap/payments` builds its allocation plan (explicit, or oldest due
+first), locks its bills and validates it before the payment row is saved and before the gateway is called; then the
+pay guard refuses the whole payment when the payer (the security context's username) approved a bill of the plan
+(`approvedByKind` `PERSON`): 403 `AP_PAYMENT_SELF_APPROVED_BILL`, `fieldErrors[selfApprovedBillNumbers]` naming each,
+one `VENDOR_BILL_PAYMENT_REFUSED` row per bill surviving the rollback. Under `AP_ALLOW_APPROVER_PAYMENT` it pays and
+audits each as `VENDOR_BILL_SOD_EXCEPTION`. A system approval never blocks. The pre-gateway block in
+`APPaymentServiceImpl.executePayment` is ordered and commented: S42 adds its request and period checks, S24 its vendor
+and remit-to checks, at the numbered places.
+
+**The real due date.** `PUT /v1/accounting/vendor-bills/{billId}/due-date` `{dueDate, justification?}`
+(`ap:approve`; event `ACCOUNTING_VENDOR_BILL_DUE_DATE_SET`) in `PENDING_RECEIPT_MATCH`, `MATCH_EXCEPTION` or
+`AWAITING_APPROVAL` only (409 `AP_BILL_NOT_APPROVABLE` otherwise), stored at the start of the day and audited
+`VENDOR_BILL_DUE_DATE_SET` old to new. A later `/match` or selection whose invoice states a due date replaces it,
+recorded as `dueDate=OLD->NEW` on the match's audit row; one set after the match stays.
+
+**Data.** V18 adds `vendor_bill.approved_by_kind` (`PERSON` | `SYSTEM`, checked), backfilled `SYSTEM` where
+`approved_by = 'SYSTEM'` and `PERSON` for any other approver. No pos-tax function is used (AW48).
 
 ## Vendor bill duplicate rule (#2501, ADR-0070 Decision 4)
 
@@ -1150,6 +1227,9 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `AP_BILL_UNCLASSIFIED` | 422 | The bill (or a non-stock line) has no class and its vendor no default; the approval needs a `classification` (AW39, #2509) |
 | `AP_BILL_TOTALS_UNRECONCILED` | 422 | The vendor's gross differs from its net + tax beyond the rounding tolerance and the send, approval or acceptance gives no `difference`; nothing is written (AW47, #2509) |
 | `AP_BILL_ZERO_TOTAL` | 422 | A bill totalling 0.00 is sent, approved or accepted; correct it or void it (#2509) |
+| `AP_APPROVAL_LIMIT_EXCEEDED` | 403 | The bill's absolute total is over the clerk limit and the caller lacks `accounting:ap:approve_over_limit` (approve, `ACCEPT`, void of an approved bill); `nextAction` names the permission (#2510) |
+| `AP_BILL_SELF_APPROVAL` | 403 | The caller created the bill and the policy does not allow a creator to approve it (approve, `ACCEPT`) (#2510) |
+| `AP_PAYMENT_SELF_APPROVED_BILL` | 403 | The payer approved a bill the payment would pay; `fieldErrors[selfApprovedBillNumbers]` name them; nothing is paid (#2510) |
 | `UNAUTHENTICATED` | 401 | No usable authentication on the request |
 | `FORBIDDEN` | 403 | Caller lacks the required permission |
 | `AUTHORIZATION_DENIED` | 403 | Audit-trail event creation refused because the caller may not record that event |

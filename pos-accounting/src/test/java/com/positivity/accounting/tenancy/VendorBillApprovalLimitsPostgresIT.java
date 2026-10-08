@@ -428,9 +428,9 @@ class VendorBillApprovalLimitsPostgresIT extends PostgresTenancyTestBase {
         new JdbcTemplate(ownerDataSource())
                 .update(
                         "INSERT INTO accounting_period (tenant_id, period_id, period_code, start_date, end_date,"
-                            + " status, created_at, created_by, modified_at, modified_by, version) VALUES (?, ?, ?, ?,"
-                            + " ?, 'CLOSED', TIMESTAMPTZ '2026-09-01 00:00:00+00', 't', TIMESTAMPTZ '2026-09-01"
-                            + " 00:00:00+00', 't', 0)",
+                                + " status, created_at, created_by, modified_at, modified_by, version) VALUES (?, ?, ?, ?,"
+                                + " ?, 'CLOSED', TIMESTAMPTZ '2026-09-01 00:00:00+00', 't', TIMESTAMPTZ '2026-09-01"
+                                + " 00:00:00+00', 't', 0)",
                         tenant,
                         UUIDv7Generator.generate(),
                         start.toString().substring(0, 7),
