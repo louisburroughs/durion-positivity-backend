@@ -68,13 +68,14 @@ class TaxEvidenceControllerTest {
 
     @TestConfiguration
     static class StubConfig {
-        @Bean
-        Clock clock() {
-            return Clock.fixed(Instant.parse("2026-08-27T12:00:00Z"), ZoneOffset.UTC);
-        }
+        /**
+         * The fixture properties. Deliberately not a bean: a {@code TaxProperties} bean would be re-bound
+         * from the environment (the shipped {@code application.yml}) by the configuration-properties
+         * post-processor, replacing the fixture lists.
+         */
+        private static final TaxProperties PROPERTIES = fixtureProperties();
 
-        @Bean
-        TaxProperties taxProperties() {
+        private static TaxProperties fixtureProperties() {
             Map<String, String> properties = new LinkedHashMap<>();
             properties.putAll(TaxProfileFixtures.FIRST_COUNTRY);
             properties.putAll(TaxProfileFixtures.FIRST_COUNTRY_STUBS);
@@ -89,18 +90,23 @@ class TaxEvidenceControllerTest {
         }
 
         @Bean
-        TaxCountryProfiles taxCountryProfiles(TaxProperties properties) {
-            return new TaxCountryProfiles(properties);
+        Clock clock() {
+            return Clock.fixed(Instant.parse("2026-08-27T12:00:00Z"), ZoneOffset.UTC);
         }
 
         @Bean
-        RegistrationNumberShapes registrationNumberShapes(TaxProperties properties, TaxCountryProfiles profiles) {
-            return new RegistrationNumberShapes(properties, profiles, new StandardEnvironment());
+        TaxCountryProfiles taxCountryProfiles() {
+            return new TaxCountryProfiles(PROPERTIES);
         }
 
         @Bean
-        TaxEvidenceRules taxEvidenceRules(TaxProperties properties, TaxCountryProfiles profiles, Clock clock) {
-            return new TaxEvidenceRules(properties, profiles, clock);
+        RegistrationNumberShapes registrationNumberShapes(TaxCountryProfiles profiles) {
+            return new RegistrationNumberShapes(PROPERTIES, profiles, new StandardEnvironment());
+        }
+
+        @Bean
+        TaxEvidenceRules taxEvidenceRules(TaxCountryProfiles profiles, Clock clock) {
+            return new TaxEvidenceRules(PROPERTIES, profiles, clock);
         }
 
         @Bean
@@ -110,13 +116,12 @@ class TaxEvidenceControllerTest {
 
         @Bean
         TaxPlausibilityService taxPlausibilityService(
-                TaxProperties properties,
                 TaxCountryProfiles profiles,
                 RegistrationNumberShapes shapes,
                 TaxEvidenceRules rules,
                 Clock clock,
                 ObjectProvider<MeterRegistry> meterRegistry) {
-            return new TaxPlausibilityService(properties, profiles, shapes, rules, clock, meterRegistry);
+            return new TaxPlausibilityService(PROPERTIES, profiles, shapes, rules, clock, meterRegistry);
         }
 
         /** Same as {@code TaxControllerRatesTest}: run the gateway filter only inside the security chain. */

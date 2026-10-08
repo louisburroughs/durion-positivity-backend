@@ -235,12 +235,12 @@ class RegistrationNumberShapesTest {
         environment
                 .getPropertySources()
                 .addFirst(new SystemEnvironmentPropertySource(
-                        "systemEnvironment-test", Map.of("POS_TAX_REGISTRATION_FORMATS_0_SHAPE", "A#########")));
+                        "test-systemEnvironment", Map.of("POS_TAX_REGISTRATION_FORMATS_0_SHAPE", "A#########")));
 
         assertThatThrownBy(() -> new RegistrationNumberShapes(bound, new TaxCountryProfiles(bound), environment))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageStartingWith("Invalid tax configuration pos.tax.registration:")
-                .hasMessageContaining("systemEnvironment-test");
+                .hasMessageContaining("test-systemEnvironment");
     }
 
     @Test
