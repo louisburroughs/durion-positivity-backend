@@ -5,15 +5,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.accounting.internal.dto.GoodsReceivedEvent;
+import com.positivity.accounting.internal.dto.ReprocessEventRequest;
 import com.positivity.accounting.internal.dto.VendorBillCommands;
 import com.positivity.accounting.internal.dto.VendorBillResponse;
 import com.positivity.accounting.internal.dto.VendorInvoiceReceivedEvent;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
+import com.positivity.accounting.internal.repository.AccountingEventRepository;
+import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.accounting.internal.service.AccountingCalendarZoneResolver;
+import com.positivity.accounting.internal.service.EventIngestionService;
 import com.positivity.accounting.internal.service.FinancialReportingService;
 import com.positivity.accounting.internal.service.GoodsReceiptAccrualPostingService;
+import com.positivity.accounting.internal.service.IdempotencyService;
 import com.positivity.accounting.internal.service.InventoryAdjustmentPostingService;
 import com.positivity.accounting.internal.service.InventoryEventsListener;
 import com.positivity.accounting.internal.service.InventoryRevaluationPostingService;
@@ -116,6 +121,18 @@ class GoodsReceiptAccrualPostgresIT extends PostgresTenancyTestBase {
     @Autowired
     private VendorBillApprovalService approvals;
 
+    @Autowired
+    private EventIngestionService eventIngestionService;
+
+    @Autowired
+    private JournalEntryRepository journalEntryRepository;
+
+    @Autowired
+    private AccountingEventRepository accountingEventRepository;
+
+    @Autowired
+    private IdempotencyService idempotencyService;
+
     private final List<UUID> tenants = new ArrayList<>();
 
     private InventoryEventsListener listener;
@@ -212,6 +229,36 @@ class GoodsReceiptAccrualPostgresIT extends PostgresTenancyTestBase {
                 .extracting(record -> record.get("idempotency_outcome"))
                 .containsExactlyInAnyOrder("NEW", "DUPLICATE_IGNORED");
 
+        // ADR-0062, read through the application pool under row-level security: the other tenant's entry lookup,
+        // ingestion records and posting key all come back empty for this receipt.
+        UUID other = tenant();
+        UUID sourceEventId = GoodsReceiptAccrualPostingService.toSourceEventId(fact.receiptId());
+        String postingKey = GoodsReceiptAccrualPostingService.postingKey(fact.receiptId());
+        assertThat(asTenant(tenant, () -> journalEntryRepository.findBySourceEvent(sourceEventId)))
+                .hasSize(1);
+        assertThat(asTenant(other, () -> journalEntryRepository.findBySourceEvent(sourceEventId)))
+                .isEmpty();
+        assertThat(asTenant(
+                        other,
+                        () -> accountingEventRepository.findAll().stream()
+                                .filter(row -> fact.receiptId().toString().equals(row.getDomainKeyId()))
+                                .toList()))
+                .isEmpty();
+        assertThat(asTenant(tenant, () -> idempotencyService.isKeyProcessed(postingKey)))
+                .isTrue();
+        assertThat(asTenant(other, () -> idempotencyService.isKeyProcessed(postingKey)))
+                .isFalse();
+        assertThat(asTenant(other, () -> processedEventRepository.existsById(eventId)))
+                .isFalse();
+
+        // The same envelope (the same eventId) delivered to the other tenant posts its own entry: processed_events
+        // and the posting key are tenant-scoped.
+        asTenant(other, () -> listener.onInventoryEvent(envelope(eventId, fact)));
+        assertThat(lines(other)).containsExactlyInAnyOrder("1300 D400.0000", "2100 C400.0000");
+        assertThat(asTenant(other, () -> journalEntryRepository.findBySourceEvent(sourceEventId)))
+                .hasSize(1);
+        assertThat(entryCount(tenant)).isEqualTo(1);
+
         // Past the posting key's 24 hours, the entry's deterministic source event is the backstop.
         new JdbcTemplate(ownerDataSource())
                 .update(
@@ -221,16 +268,63 @@ class GoodsReceiptAccrualPostgresIT extends PostgresTenancyTestBase {
                 tenant,
                 () -> listener.onInventoryEvent(envelope(UUID.randomUUID().toString(), fact)));
         assertThat(entryCount(tenant)).isEqualTo(1);
+    }
 
-        // ADR-0062: another tenant sees none of it, and the same receipt delivered to it posts its own entry.
-        UUID other = tenant();
-        assertThat(entryCount(other)).isZero();
-        assertThat(records(other, fact.receiptId())).isEmpty();
+    @Test
+    @DisplayName("Ruling 4: reprocessing a held receipt re-runs its own path: a currency-less one and a malformed one"
+            + " stay held with their reasons; one whose data is now valid posts once; a second held row of the"
+            + " posted receipt closes DUPLICATE_IGNORED")
+    void reprocessRoutesThroughTheReceiptsOwnPath() {
+        UUID tenant = tenant();
+        GoodsReceiptRecordedV1 noCurrency = fact(null, 40_000L, line("4", 40_000L, 40_000L, "AVERAGE"));
+        GoodsReceiptRecordedV1 malformed = fact("USD", 40_001L, line("4", 40_000L, 40_000L, "AVERAGE"));
         asTenant(
-                other,
-                () -> listener.onInventoryEvent(envelope(UUID.randomUUID().toString(), fact)));
-        assertThat(lines(other)).containsExactlyInAnyOrder("1300 D400.0000", "2100 C400.0000");
+                tenant,
+                () -> listener.onInventoryEvent(envelope(UUID.randomUUID().toString(), noCurrency)));
+        asTenant(
+                tenant,
+                () -> listener.onInventoryEvent(envelope(UUID.randomUUID().toString(), malformed)));
+
+        reprocess(tenant, heldRow(tenant, noCurrency.receiptId()));
+        reprocess(tenant, heldRow(tenant, malformed.receiptId()));
+
+        assertThat(records(tenant, noCurrency.receiptId())).singleElement().satisfies(record -> {
+            assertThat(record.get("status")).isEqualTo("SUSPENDED");
+            assertThat(record.get("failure_reason_code")).isEqualTo("CURRENCY_NOT_SUPPORTED");
+        });
+        assertThat(records(tenant, malformed.receiptId())).singleElement().satisfies(record -> {
+            assertThat(record.get("status")).isEqualTo("SUSPENDED");
+            assertThat(record.get("failure_reason_code")).isEqualTo("VALIDATION_ERROR");
+            assertThat((String) record.get("error_message")).contains("not totalAccruedAmountMinor 40001");
+        });
+        assertThat(entryCount(tenant)).isZero();
+
+        // The held row's data made valid (the stored fact now states USD): the reprocess posts it once.
+        UUID first = heldRow(tenant, noCurrency.receiptId());
+        statePayloadCurrency(tenant, first, "USD");
+        reprocess(tenant, first);
         assertThat(entryCount(tenant)).isEqualTo(1);
+        assertThat(lines(tenant)).containsExactlyInAnyOrder("1300 D400.0000", "2100 C400.0000");
+        assertThat(records(tenant, noCurrency.receiptId())).singleElement().satisfies(record -> {
+            assertThat(record.get("status")).isEqualTo("PROCESSED");
+            assertThat(record.get("idempotency_outcome")).isEqualTo("NEW");
+            assertThat(record.get("failure_reason_code")).isNull();
+            assertThat(record.get("journal_entry_id"))
+                    .isEqualTo(onlyEntry(tenant).get("journal_entry_id"));
+        });
+
+        // The same receipt held again under a new eventId, then made valid: the key already posted, so nothing posts.
+        asTenant(
+                tenant,
+                () -> listener.onInventoryEvent(envelope(UUID.randomUUID().toString(), noCurrency)));
+        UUID second = heldRow(tenant, noCurrency.receiptId());
+        statePayloadCurrency(tenant, second, "USD");
+        reprocess(tenant, second);
+        assertThat(entryCount(tenant)).isEqualTo(1);
+        assertThat(records(tenant, noCurrency.receiptId()))
+                .extracting(record -> record.get("idempotency_outcome"))
+                .containsExactlyInAnyOrder("NEW", "DUPLICATE_IGNORED");
+        assertThat(count(tenant, "reprocessing_attempt_history")).isEqualTo(4);
     }
 
     @Test
@@ -389,6 +483,35 @@ class GoodsReceiptAccrualPostgresIT extends PostgresTenancyTestBase {
     }
 
     // ---- fixtures -------------------------------------------------------------------------------------------------
+
+    /** The receipt's one held (SUSPENDED) ingestion row. */
+    private static UUID heldRow(UUID tenant, UUID receiptId) {
+        return new JdbcTemplate(ownerDataSource())
+                .queryForObject(
+                        "SELECT event_id FROM accounting_event WHERE tenant_id = ? AND event_type = ? AND"
+                                + " domain_key_id = ? AND status = 'SUSPENDED'",
+                        UUID.class,
+                        tenant,
+                        EVENT_TYPE,
+                        receiptId.toString());
+    }
+
+    /** Stands in for a corrected source: the held row's stored fact now states {@code currency}. */
+    private static void statePayloadCurrency(UUID tenant, UUID eventId, String currency) {
+        new JdbcTemplate(ownerDataSource())
+                .update(
+                        "UPDATE accounting_event SET payload = jsonb_set(payload, '{currencyCode}', to_jsonb(?::text))"
+                                + " WHERE tenant_id = ? AND event_id = ?",
+                        currency,
+                        tenant,
+                        eventId);
+    }
+
+    private void reprocess(UUID tenant, UUID eventId) {
+        asTenant(
+                tenant,
+                () -> eventIngestionService.reprocessEvent(eventId, new ReprocessEventRequest(), "ops.controller"));
+    }
 
     private static GoodsReceiptLine line(String quantity, long accruedMinor, Long valueMinor, String costSource) {
         return new GoodsReceiptLine(

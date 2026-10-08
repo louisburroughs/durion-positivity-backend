@@ -39,9 +39,11 @@ import tools.jackson.databind.ObjectMapper;
  * or {@link AccountingEventStatus#SKIPPED} (deliberately not posted, with a {@code failureReasonCode}).
  * The only non-terminal rows are a currency hold ({@code SUSPENDED}, below), a settled payment its
  * automatic application could not complete yet ({@link #recordSuspended}: {@code SUSPENDED} or {@code
- * FAILED}, #2503), whose reprocess is routed back to that path, and a malformed goods receipt ({@link
- * #recordSuspended}: {@code SUSPENDED / VALIDATION_ERROR}, CAP:550 S41 #2602), which the auto-retry loop
- * skips because its payload never changes. Any other path must not write {@code
+ * FAILED}, #2503), whose reprocess is routed back to that path, and a goods receipt held for its currency or
+ * as malformed ({@link #recordCurrencyHeld}, or {@link #recordSuspended} with {@code VALIDATION_ERROR},
+ * CAP:550 S41 #2602). The auto-retry loop skips both receipt reasons; a manual reprocess re-runs the
+ * receipt's own assessment and posting ({@code GoodsReceiptReprocessor}, routed from {@code
+ * EventIngestionServiceImpl#rerunPosting}), never the posting engine. Any other path must not write {@code
  * SUSPENDED} or {@code FAILED}: the retry scheduler and {@code retryAccountingEvent} select those
  * statuses and would run the fact through posting rule sets that do not exist. Failures that propagate
  * (closed period, missing mapping, transient) roll this row back with the handler and are visible on

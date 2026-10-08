@@ -14,8 +14,10 @@ import lombok.NoArgsConstructor;
  * status the pipeline can report, and the two distinct lifecycles a status sequence can follow:
  * a REST-submitted event moves through non-terminal states before landing on a terminal one,
  * while a Kafka-consumed posting fact writes a single row directly: terminal (PROCESSED or SKIPPED),
- * except a currency hold, which is SUSPENDED / CURRENCY_NOT_SUPPORTED and released only through the
- * audited reprocess endpoint (ADR-0067 PC-9, issue #2334).
+ * except a hold: a currency hold (SUSPENDED / CURRENCY_NOT_SUPPORTED, ADR-0067 PC-9, #2334), a malformed
+ * goods receipt (SUSPENDED / VALIDATION_ERROR, #2602) or a settled payment its automatic application
+ * could not complete (SUSPENDED or FAILED, #2503). A manual reprocess routes a goods receipt or a settled
+ * payment back to its own path.
  */
 @Data
 @Builder
@@ -38,10 +40,12 @@ public class ProcessingStatusesContract {
 
     @Schema(
             description = "Status sequence for a Kafka-consumed posting fact: exactly one row is written "
-                    + "per consumed fact, never RECEIVED, PROCESSING or FAILED. It is terminal (PROCESSED or "
-                    + "SKIPPED), except a fact held for its currency, which is SUSPENDED with "
-                    + "failureReasonCode CURRENCY_NOT_SUPPORTED: never auto-retried, released only through "
-                    + "the audited reprocess endpoint",
+                    + "per consumed fact, never RECEIVED or PROCESSING. It is terminal (PROCESSED or SKIPPED), "
+                    + "except a hold. A fact held for its currency is SUSPENDED with failureReasonCode "
+                    + "CURRENCY_NOT_SUPPORTED, and a malformed goods receipt is SUSPENDED with VALIDATION_ERROR; "
+                    + "neither is auto-retried. A settled payment its automatic application could not complete is "
+                    + "SUSPENDED or FAILED with its own reason. A manual reprocess re-runs a goods receipt's or a "
+                    + "settled payment's own path from the stored fact, never the posting rules",
             example = "[\"PROCESSED|SKIPPED|SUSPENDED\"]",
             requiredMode = REQUIRED)
     private List<String> kafkaFactLifecycle;

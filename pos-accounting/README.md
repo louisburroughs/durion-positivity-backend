@@ -1317,11 +1317,12 @@ ignored without recording its eventId.
 - **Date** — the fact's `occurredAt` (business time); the period gate applies.
 - **Goods receipts (AW38)** — the currency is checked first: no `currencyCode`, or one other than the ledger's,
   is never booked at par and is held `SUSPENDED / CURRENCY_NOT_SUPPORTED` (ADR-0067 PC-9). Then the line rules,
-  over lines with a quantity (a zero-quantity line with no amount is ignored); Accounting never fills in a value
-  Inventory did not state. A line without `receiptLineId`, a null `inventoryValueMinor` beside a non-zero accrual,
-  an amount on a zero-quantity line, or line
-  accruals that do not sum to `totalAccruedAmountMinor` hold the whole fact `SUSPENDED / VALIDATION_ERROR`
-  (excluded from auto-retry, recorded once per receipt, never a partial posting). A line with no value and no
+  over lines with a quantity: lines with zero quantity and no amount are ignored (the sum check still counts
+  them); a zero-quantity line that carries an amount is malformed. Accounting never fills in a value Inventory did
+  not state. A line without `receiptLineId`, a null `inventoryValueMinor` beside a non-zero accrual, an amount on a
+  zero-quantity line, a negative quantity (a receipt only adds stock; returns and corrections arrive as
+  `vendorreturn.recorded`), or line accruals that do not sum to `totalAccruedAmountMinor` hold the whole fact
+  `SUSPENDED / VALIDATION_ERROR` (excluded from auto-retry, recorded once per receipt, never a partial posting). A line with no value and no
   accrual is uncosted and contributes nothing; when every line is, the fact is `SKIPPED / UNCOSTED_FACT`.
   Nothing accrued and nothing valued is `PROCESSED` with no entry. Amounts convert from minor units by the
   currency's exponent only, never rounded (PC-5 (a)). `costSource` and `ledgerEntryId` are description only:
@@ -1348,7 +1349,8 @@ ignored without recording its eventId.
   no uncosted case (`totalValueDelta` is always computed); a zero delta simply posts no journal entry and is
   recorded `PROCESSED`, not `SKIPPED`.
 - **Metrics** — `accounting.inventory.fact.posted{eventType}` (a journal entry was posted) and
-  `accounting.inventory.fact.skipped{eventType, reason=UNCOSTED}` (scrap and adjustment only).
+  `accounting.inventory.fact.skipped{eventType, reason=UNCOSTED}` (scrap, adjustment and goods receipt), and
+  `accounting.inventory.fact.held{eventType, reason=CURRENCY|VALIDATION}` (a goods receipt held, not posted).
 - **Ingestion records** (AD-007, #2186 D5) — each consumed fact writes one `AccountingEvent` row, terminal except a currency hold (below):
   `eventType` = the fact type, `sourceSystem = pos-inventory`, `domainKeyId` = `adjustmentId` / `scrapId` /
   `revaluationId`, `ingestionId` = envelope `eventId`, `transactionDate` = business date, `payload` = the fact,
@@ -1360,8 +1362,16 @@ ignored without recording its eventId.
   **Kafka facts are not REST-retryable**: they never end `FAILED` or `SUSPENDED`, which are the only statuses
   the retry scheduler and `retryAccountingEvent` select; a failed fact is replayed from the DLQ instead. The
   exceptions are a fact held for its currency (see Ledger currency above): `SUSPENDED / CURRENCY_NOT_SUPPORTED`,
-  skipped by the retry scheduler and released only through the audited reprocess; and a malformed goods receipt,
-  `SUSPENDED / VALIDATION_ERROR`, also skipped by the retry scheduler (its payload never changes).
+  skipped by the retry scheduler and released only through the audited reprocess; a malformed goods receipt,
+  `SUSPENDED / VALIDATION_ERROR`, also skipped by the retry scheduler (its payload never changes); and a settled
+  payment's automatic-application holds (#2503). A manual reprocess (`POST /v1/accounting/events/{id}/reprocess`)
+  of a held goods receipt never reaches the posting engine: `GoodsReceiptReprocessor` re-runs the receipt's own
+  assessment on the stored payload, currency first (a missing currency stays held as `CURRENCY_NOT_SUPPORTED`).
+  A fact still invalid keeps its hold and reason. One that now passes posts under
+  `GOODS_RECEIPT_ACCRUAL:<receiptId>` (`PROCESSED / NEW`), or closes `PROCESSED / DUPLICATE_IGNORED` when that key
+  already posted. A refusal is labelled as the engine labels one (`SUSPENDED / PERIOD_CLOSED`,
+  `ACCOUNTING_TIME_ZONE_UNSET`, or `UNMAPPED_EVENT_TYPE` for a missing `GOODS_RECEIPT` mapping), and every attempt
+  writes its history row.
 - **Event envelope contract** (`GET /v1/accounting/events/contract`, issue #2207) — `version`/`fields`/`examples`
   describe the submission envelope as before; four additive optional sections document the rest of the
   ingestion surface, each sourced from the real rules rather than a hand-typed list that could drift:

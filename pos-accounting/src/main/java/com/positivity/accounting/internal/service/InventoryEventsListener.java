@@ -103,6 +103,9 @@ public class InventoryEventsListener {
     static final String POSTED_METRIC = "accounting.inventory.fact.posted";
     static final String SKIPPED_METRIC = "accounting.inventory.fact.skipped";
     static final String SKIP_REASON_UNCOSTED = "UNCOSTED";
+    static final String HELD_METRIC = "accounting.inventory.fact.held";
+    static final String HOLD_REASON_CURRENCY = "CURRENCY";
+    static final String HOLD_REASON_VALIDATION = "VALIDATION";
 
     private final Clock clock;
     private final ObjectMapper objectMapper;
@@ -296,27 +299,29 @@ public class InventoryEventsListener {
         switch (goodsReceiptPostingService.assess(fact)) {
             case GoodsReceiptAccrualPostingService.Assessment.CurrencyNotSupported held -> {
                 log.warn("Goods receipt held for its currency | eventId={} | {}", eventId, held.detail());
-                handlerTransaction.executeWithoutResult(_ -> {
-                    ingestionRecorder.recordCurrencyHeld(
-                            SOURCE_SYSTEM, eventType, eventId, receiptId, transactionDate, fact, held.detail());
-                    markProcessed(eventId);
-                });
+                hold(
+                        eventType,
+                        eventId,
+                        HOLD_REASON_CURRENCY,
+                        () -> ingestionRecorder.recordCurrencyHeld(
+                                SOURCE_SYSTEM, eventType, eventId, receiptId, transactionDate, fact, held.detail()));
             }
             case GoodsReceiptAccrualPostingService.Assessment.Malformed malformed -> {
                 log.error("Goods receipt held as malformed | eventId={} | {}", eventId, malformed.detail());
-                handlerTransaction.executeWithoutResult(_ -> {
-                    ingestionRecorder.recordSuspended(
-                            SOURCE_SYSTEM,
-                            eventType,
-                            eventId,
-                            receiptId,
-                            transactionDate,
-                            fact,
-                            AccountingEventStatus.SUSPENDED,
-                            PostingFailureReason.VALIDATION_ERROR.name(),
-                            malformed.detail());
-                    markProcessed(eventId);
-                });
+                hold(
+                        eventType,
+                        eventId,
+                        HOLD_REASON_VALIDATION,
+                        () -> ingestionRecorder.recordSuspended(
+                                SOURCE_SYSTEM,
+                                eventType,
+                                eventId,
+                                receiptId,
+                                transactionDate,
+                                fact,
+                                AccountingEventStatus.SUSPENDED,
+                                PostingFailureReason.VALIDATION_ERROR.name(),
+                                malformed.detail()));
             }
             case GoodsReceiptAccrualPostingService.Assessment.Uncosted uncosted -> {
                 log.warn("Skipping uncosted goods receipt | eventId={} | {}", eventId, uncosted.detail());
@@ -324,11 +329,15 @@ public class InventoryEventsListener {
             }
             case GoodsReceiptAccrualPostingService.Assessment.NothingToPost _ -> {
                 log.info("Goods receipt accrues and values nothing | eventId={} | receiptId={}", eventId, receiptId);
-                handlerTransaction.executeWithoutResult(_ -> {
-                    ingestionRecorder.recordNothingToPost(
-                            SOURCE_SYSTEM, eventType, eventId, receiptId, transactionDate, fact);
-                    markProcessed(eventId);
-                });
+                try {
+                    handlerTransaction.executeWithoutResult(_ -> {
+                        ingestionRecorder.recordNothingToPost(
+                                SOURCE_SYSTEM, eventType, eventId, receiptId, transactionDate, fact);
+                        markProcessed(eventId);
+                    });
+                } catch (DatabindException e) {
+                    reject(eventType, eventId, e);
+                }
             }
             case GoodsReceiptAccrualPostingService.Assessment.Postable _ ->
                 post(
@@ -429,6 +438,31 @@ public class InventoryEventsListener {
                     .description("Inventory posting facts consumed but deliberately not posted")
                     .tag("eventType", eventType)
                     .tag("reason", SKIP_REASON_UNCOSTED)
+                    .register(meterRegistry)
+                    .increment();
+        }
+    }
+
+    /**
+     * Held, not posted (a goods receipt's currency or malformed hold): the held record and the mark commit together,
+     * and {@code accounting.inventory.fact.held{eventType, reason}}++. A payload the record cannot store is rejected
+     * like any other.
+     */
+    private void hold(String eventType, String eventId, String reason, Runnable record) {
+        try {
+            handlerTransaction.executeWithoutResult(_ -> {
+                record.run();
+                markProcessed(eventId);
+            });
+        } catch (DatabindException e) {
+            reject(eventType, eventId, e);
+            return;
+        }
+        if (meterRegistry != null) {
+            Counter.builder(HELD_METRIC)
+                    .description("Inventory posting facts consumed and held, not posted")
+                    .tag("eventType", eventType)
+                    .tag("reason", reason)
                     .register(meterRegistry)
                     .increment();
         }

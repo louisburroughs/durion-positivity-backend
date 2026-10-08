@@ -52,10 +52,13 @@ import org.springframework.transaction.annotation.Transactional;
  *       (ADR-0067 PC-9 (a), PC-13 (a)): held {@code SUSPENDED / CURRENCY_NOT_SUPPORTED};
  *   <li>malformed, the whole fact held {@code SUSPENDED / VALIDATION_ERROR}, never a partial posting: a received line
  *       without {@code receiptLineId}, a null value beside a non-zero accrual, an amount on a line with no quantity,
- *       or line accruals that do not sum to {@code totalAccruedAmountMinor};
+ *       a negative quantity, or line accruals that do not sum to {@code totalAccruedAmountMinor}. A receipt only
+ *       ever adds stock: a return or a correction arrives as {@code vendorreturn.recorded}, never as a negative
+ *       receipt line, so Accounting never books one (#2602 review, ruling 1 of #2602);
  *   <li>a line with no value and no accrual is uncosted and contributes nothing; when every received line is, the
  *       fact is {@code SKIPPED / UNCOSTED_FACT}, terminal like an uncosted scrap or adjustment;
- *   <li>nothing accrued and nothing valued posts nothing ({@code PROCESSED}); lines with zero quantity and no amount are ignored.
+ *   <li>nothing accrued and nothing valued posts nothing ({@code PROCESSED}); lines with zero quantity and no amount
+ *       are ignored, while the sum check still counts them.
  * </ol>
  *
  * <p><b>Amounts</b> convert from minor units by the currency's exponent only; Accounting never rounds a receipt amount
@@ -143,6 +146,10 @@ public class GoodsReceiptAccrualPostingService {
                             + " on a line with no quantity (" + lineLabel(line) + ")");
                 }
                 continue;
+            }
+            if (line.quantityReceived().signum() < 0) {
+                problems.add("a negative quantity " + line.quantityReceived().toPlainString() + " (" + lineLabel(line)
+                        + "); a return or correction arrives as vendorreturn.recorded");
             }
             received.add(line);
             if (line.receiptLineId() == null) {

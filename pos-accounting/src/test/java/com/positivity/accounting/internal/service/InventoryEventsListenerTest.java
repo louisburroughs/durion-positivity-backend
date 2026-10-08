@@ -777,4 +777,49 @@ class InventoryEventsListenerTest {
 
         verify(processedEvents, never()).save(any());
     }
+
+    @Test
+    @DisplayName("S41: each hold counts accounting.inventory.fact.held{eventType, reason}")
+    @SuppressWarnings("unchecked")
+    void goodsReceiptHoldsAreCounted() {
+        io.micrometer.core.instrument.simple.SimpleMeterRegistry registry =
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        ObjectProvider<io.micrometer.core.instrument.MeterRegistry> provider = mock(ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(registry);
+        InventoryEventsListener counted = new InventoryEventsListener(
+                TEST_CLOCK,
+                new ObjectMapper(),
+                processedEvents,
+                postingService,
+                adjustmentPostingService,
+                revaluationPostingService,
+                goodsReceiptPostingService,
+                ingestionRecorder,
+                provider,
+                mock(PlatformTransactionManager.class),
+                com.positivity.accounting.internal.service.TestZoneResolvers.utc(java.time.Clock.systemUTC()));
+        when(goodsReceiptPostingService.assess(any()))
+                .thenReturn(new GoodsReceiptAccrualPostingService.Assessment.CurrencyNotSupported("no currency"))
+                .thenReturn(new GoodsReceiptAccrualPostingService.Assessment.Malformed("lines do not sum"));
+
+        counted.onInventoryEvent(goodsReceipt("g-9"));
+        counted.onInventoryEvent(goodsReceipt("g-10"));
+
+        assertThat(registry.counter(
+                                InventoryEventsListener.HELD_METRIC,
+                                "eventType",
+                                "goodsreceipt.recorded",
+                                "reason",
+                                InventoryEventsListener.HOLD_REASON_CURRENCY)
+                        .count())
+                .isEqualTo(1.0);
+        assertThat(registry.counter(
+                                InventoryEventsListener.HELD_METRIC,
+                                "eventType",
+                                "goodsreceipt.recorded",
+                                "reason",
+                                InventoryEventsListener.HOLD_REASON_VALIDATION)
+                        .count())
+                .isEqualTo(1.0);
+    }
 }

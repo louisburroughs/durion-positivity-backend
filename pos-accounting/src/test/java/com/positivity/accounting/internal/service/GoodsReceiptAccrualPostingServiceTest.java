@@ -274,6 +274,45 @@ class GoodsReceiptAccrualPostingServiceTest {
         }
 
         @Test
+        @DisplayName("a zero-quantity line valued above 0 with no accrual is held, not ignored (ruling 1)")
+        void valueWithoutQuantity() {
+            GoodsReceiptLine noQuantity = new GoodsReceiptLine(
+                    UUID.randomUUID(), "SKU-3", BigDecimal.ZERO, 0L, UUID.randomUUID(), null, 500L, "AVERAGE", null);
+
+            assertThat(service.assess(fact("USD", 0L, noQuantity)))
+                    .isInstanceOfSatisfying(
+                            Assessment.Malformed.class,
+                            held -> assertThat(held.detail()).contains("a value of 500"));
+        }
+
+        @Test
+        @DisplayName("no lines but a non-zero total is held: the lines do not sum to it")
+        void noLinesButATotal() {
+            assertThat(service.assess(fact("USD", 100L)))
+                    .isInstanceOfSatisfying(
+                            Assessment.Malformed.class,
+                            held -> assertThat(held.detail()).contains("sum to 0, not totalAccruedAmountMinor 100"));
+        }
+
+        @Test
+        @DisplayName("a negative quantity is held: a receipt only adds stock (returns come as vendorreturn.recorded)")
+        void negativeQuantity() {
+            assertThat(service.assess(fact("USD", -10_000L, line("-1", -10_000L, -10_000L, "AVERAGE"))))
+                    .isInstanceOfSatisfying(
+                            Assessment.Malformed.class,
+                            held -> assertThat(held.detail())
+                                    .contains("a negative quantity -1")
+                                    .contains("vendorreturn.recorded"));
+        }
+
+        @Test
+        @DisplayName("a costed line at zero beside an uncosted one is NothingToPost, not Uncosted")
+        void costedZeroBesideUncosted() {
+            assertThat(service.assess(fact("USD", 0L, line("2", 0L, 0L, "AVERAGE"), line("3", 0L, null, "NONE"))))
+                    .isInstanceOf(Assessment.NothingToPost.class);
+        }
+
+        @Test
         @DisplayName("AC11: every received line uncosted is UNCOSTED")
         void everyLineUncosted() {
             assertThat(service.assess(fact("USD", 0L, line("4", 0L, null, "NONE"), line("2", 0L, null, "NONE"))))
