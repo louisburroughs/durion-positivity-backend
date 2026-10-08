@@ -3838,7 +3838,7 @@ paths:
 
         Use this tool when the cash of one or more closed drawers reached the bank; do not use createJournalEntry, and never add a balancing line yourself: a deposit that does not balance is refused. To correct a deposit, reverse it and record it again.
 
-        Preconditions: caller holds accounting:deposit:create and reaches every session''s location (403 LOCATION_SCOPE_DENIED); currencyCode is the functional currency (422 CURRENCY_NOT_SUPPORTED); bankGlAccountId is an active, reconcilable BANK_CASH account in functional currency (422 DEPOSIT_BANK_ACCOUNT_NOT_ELIGIBLE); every sessionId names a closed session waiting to be deposited (400 VALIDATION_ERROR when unknown, 409 DEPOSIT_SESSION_ALREADY_DEPOSITED when a deposit already took it); the selection holds bank drops (400 otherwise) and its drops equal its expected cash plus its clearing net (422 DEPOSIT_UNBALANCED naming the difference; list the sessions first to see it); no amount finer than the currency''s minor unit (422 AMOUNT_PRECISION_EXCEEDS_CURRENCY); depositDate is in an OPEN period, or in a CLOSED one with accounting:period:override and overrideJustification (422 PERIOD_CLOSED otherwise), never before the hard-lock date (422 PERIOD_HARD_LOCKED). Idempotent on requestId: a replay returns the first result with 200 and replayed true, another body with the same requestId is 409 IDEMPOTENCY_CONFLICT.
+        Preconditions: caller holds accounting:deposit:create and reaches every session''s location (403 LOCATION_SCOPE_DENIED); currencyCode is the functional currency (422 CURRENCY_NOT_SUPPORTED); bankGlAccountId is an active, reconcilable BANK_CASH account in functional currency (422 DEPOSIT_BANK_ACCOUNT_NOT_ELIGIBLE); every sessionId names a closed session waiting to be deposited (400 VALIDATION_ERROR when unknown, 409 DEPOSIT_SESSION_ALREADY_DEPOSITED when a deposit already took it); the selection''s drops equal its expected cash plus its clearing net (422 DEPOSIT_UNBALANCED naming the difference; list the sessions first to see it) and are more than zero (400 otherwise); no amount finer than the currency''s minor unit (422 AMOUNT_PRECISION_EXCEEDS_CURRENCY); depositDate is in an OPEN period, or in a CLOSED one with accounting:period:override and overrideJustification (422 PERIOD_CLOSED otherwise), never before the hard-lock date (422 PERIOD_HARD_LOCKED). Idempotent on requestId: a replay returns the first result with 200 and replayed true, another body with the same requestId is 409 IDEMPOTENCY_CONFLICT.
 
         Required inputs: bankGlAccountId, depositDate, currencyCode (ISO 4217, ADR-0067), sessionIds (1 to 200, distinct), requestId; optional depositSlipReference and overrideJustification.
 
@@ -5806,7 +5806,7 @@ paths:
 
         Emits an ACCOUNTING_JOURNAL_ENTRY_REVERSE event and returns the posted reversal entry.
 
-        Returns 400 when the reason is blank, 404 JOURNAL_ENTRY_NOT_FOUND when the entry does not exist, 409 JE_ALREADY_REVERSED when the entry was already reversed (including a lost concurrent-reversal race), 409 JE_NOT_POSTED when it is DRAFT or PENDING, and 422 PERIOD_CLOSED or PERIOD_HARD_LOCKED for period-gate failures. A register float relocation entry is never reversed (409 FLOAT_RELOCATION_NOT_REVERSIBLE: move the register again), and a register float go-live or change entry of a register that has moved may not be reversed before its latest move (422 FLOAT_REVERSAL_BEFORE_RELOCATION, or 422 GL_MAPPING_NOT_CONFIGURED when its follow-up reclass finds no mapping).
+        Returns 400 when the reason is blank, 404 JOURNAL_ENTRY_NOT_FOUND when the entry does not exist, 409 JE_ALREADY_REVERSED when the entry was already reversed (including a lost concurrent-reversal race), 409 JE_NOT_POSTED when it is DRAFT or PENDING, and 422 PERIOD_CLOSED or PERIOD_HARD_LOCKED for period-gate failures. A register float relocation entry is never reversed (409 FLOAT_RELOCATION_NOT_REVERSIBLE: move the register again), nor is the reversal entry of a bank deposit (409 DEPOSIT_REVERSAL_NOT_REVERSIBLE: record the deposit again), and a register float go-live or change entry of a register that has moved may not be reversed before its latest move (422 FLOAT_REVERSAL_BEFORE_RELOCATION, or 422 GL_MAPPING_NOT_CONFIGURED when its follow-up reclass finds no mapping).
 
         '
       operationId: reverseJournalEntry
@@ -5861,7 +5861,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Entry is already reversed (JE_ALREADY_REVERSED), not yet posted (JE_NOT_POSTED), or a register float relocation entry (FLOAT_RELOCATION_NOT_REVERSIBLE)
+          description: Entry is already reversed (JE_ALREADY_REVERSED), not yet posted (JE_NOT_POSTED), a register float relocation entry (FLOAT_RELOCATION_NOT_REVERSIBLE) or a bank deposit's reversal entry (DEPOSIT_REVERSAL_NOT_REVERSIBLE)
         '422':
           content:
             application/json:
@@ -11998,7 +11998,7 @@ paths:
 
         Use this tool to see what is waiting to be deposited and what a deposit of chosen sessions makes; do not use it for card, on-account or check amounts, which are never in a deposit.
 
-        Preconditions: caller holds accounting:deposit:create; a session outside the caller''s location reach is not listed; a sessionId that names no listed session is 400 VALIDATION_ERROR; bankGlAccountId, when given, names a GL account (400 otherwise).
+        Preconditions: caller holds accounting:deposit:create; a session outside the caller''s location reach is not listed; a sessionId that names no listed session is 400 VALIDATION_ERROR; bankGlAccountId, when given, is an active, reconcilable BANK_CASH account in functional currency (422 DEPOSIT_BANK_ACCOUNT_NOT_ELIGIBLE); the tenant''s accounting time zone is set (422 ACCOUNTING_TIME_ZONE_UNSET) and, for a selection, BANK_DEPOSIT is mapped (422 GL_MAPPING_NOT_CONFIGURED).
 
         Required inputs: none; optional sessionId (repeatable) and bankGlAccountId, the account the preview''s bank line names.
 
@@ -12035,13 +12035,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: A sessionId that names no undeposited session the caller may see, or an unknown bankGlAccountId (VALIDATION_ERROR)
+          description: A sessionId that names no undeposited session the caller may see (VALIDATION_ERROR)
         '403':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Caller lacks accounting:deposit:create
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: DEPOSIT_BANK_ACCOUNT_NOT_ELIGIBLE (the preview's bankGlAccountId), ACCOUNTING_TIME_ZONE_UNSET or GL_MAPPING_NOT_CONFIGURED (the BANK_DEPOSIT keys of a selection)
       security:
       - bearerAuth:
         - accounting:deposit:create
