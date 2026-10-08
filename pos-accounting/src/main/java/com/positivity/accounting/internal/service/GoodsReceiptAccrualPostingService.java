@@ -51,11 +51,11 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>currency first: a fact with no {@code currencyCode}, or one other than the ledger's, is never booked at par
  *       (ADR-0067 PC-9 (a), PC-13 (a)): held {@code SUSPENDED / CURRENCY_NOT_SUPPORTED};
  *   <li>malformed, the whole fact held {@code SUSPENDED / VALIDATION_ERROR}, never a partial posting: a received line
- *       without {@code receiptLineId}, a null value beside a non-zero accrual, or line accruals that do not sum to
- *       {@code totalAccruedAmountMinor};
+ *       without {@code receiptLineId}, a null value beside a non-zero accrual, an amount on a line with no quantity,
+ *       or line accruals that do not sum to {@code totalAccruedAmountMinor};
  *   <li>a line with no value and no accrual is uncosted and contributes nothing; when every received line is, the
  *       fact is {@code SKIPPED / UNCOSTED_FACT}, terminal like an uncosted scrap or adjustment;
- *   <li>nothing accrued and nothing valued posts nothing ({@code PROCESSED}); lines with zero quantity are ignored.
+ *   <li>nothing accrued and nothing valued posts nothing ({@code PROCESSED}); lines with zero quantity and no amount are ignored.
  * </ol>
  *
  * <p><b>Amounts</b> convert from minor units by the currency's exponent only; Accounting never rounds a receipt amount
@@ -135,6 +135,13 @@ public class GoodsReceiptAccrualPostingService {
         for (GoodsReceiptLine line : fact.lines()) {
             accruedSum += line.accruedAmountMinor();
             if (line.quantityReceived().signum() == 0) {
+                // Ignored only when it carries no amount: an amount with no quantity would otherwise be dropped
+                // without a trace, so it holds the fact like any other inconsistency.
+                long value = line.inventoryValueMinor() == null ? 0L : line.inventoryValueMinor();
+                if (line.accruedAmountMinor() != 0L || value != 0L) {
+                    problems.add("an accrual of " + line.accruedAmountMinor() + " and a value of " + value
+                            + " on a line with no quantity (" + lineLabel(line) + ")");
+                }
                 continue;
             }
             received.add(line);

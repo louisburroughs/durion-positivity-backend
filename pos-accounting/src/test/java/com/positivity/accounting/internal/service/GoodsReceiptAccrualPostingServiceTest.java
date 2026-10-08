@@ -262,6 +262,18 @@ class GoodsReceiptAccrualPostingServiceTest {
         }
 
         @Test
+        @DisplayName("an amount on a zero-quantity line is never dropped: the whole fact is held")
+        void amountWithoutQuantity() {
+            GoodsReceiptLine noQuantity = new GoodsReceiptLine(
+                    UUID.randomUUID(), "SKU-3", BigDecimal.ZERO, 100L, UUID.randomUUID(), null, 100L, "AVERAGE", null);
+
+            assertThat(service.assess(fact("USD", 100L, noQuantity)))
+                    .isInstanceOfSatisfying(
+                            Assessment.Malformed.class,
+                            held -> assertThat(held.detail()).contains("on a line with no quantity"));
+        }
+
+        @Test
         @DisplayName("AC11: every received line uncosted is UNCOSTED")
         void everyLineUncosted() {
             assertThat(service.assess(fact("USD", 0L, line("4", 0L, null, "NONE"), line("2", 0L, null, "NONE"))))

@@ -51,7 +51,7 @@ class GoodsReceiptFactPublisherTest {
         ObjectProvider<OutboxEventWriter> provider = mock(ObjectProvider.class);
         when(provider.getIfAvailable()).thenReturn(writer);
         methods = mock(CostingMethodResolver.class);
-        when(methods.resolve(any())).thenReturn(CostingMethod.AVERAGE);
+        stubMethod(CostingMethod.AVERAGE);
         publisher = new GoodsReceiptFactPublisher(
                 provider, Clock.fixed(NOW, ZoneOffset.UTC), methods, new ReceiptCostCurrencyPolicy("USD"));
     }
@@ -79,7 +79,7 @@ class GoodsReceiptFactPublisherTest {
     @Test
     @DisplayName("STANDARD: the value is the standard cost the row carries, not the accrual; the method is named")
     void standardCostValueDiffersFromTheAccrual() {
-        when(methods.resolve(PRODUCT.toString())).thenReturn(CostingMethod.STANDARD);
+        stubMethod(CostingMethod.STANDARD);
 
         GoodsReceiptRecordedV1 fact =
                 publish("USD", fact(UUID.randomUUID(), "4", 40_000L, row(UUID.randomUUID(), "95.0000")));
@@ -133,9 +133,18 @@ class GoodsReceiptFactPublisherTest {
                         .mapToLong(GoodsReceiptLine::accruedAmountMinor)
                         .sum())
                 .isEqualTo(40_253L);
+        verify(methods, org.mockito.Mockito.times(1)).resolveAll(any());
         assertThat(fact.lines().get(2).inventoryValueMinor())
                 .as("an unpriced line is valued at the row's cost, accrual 0")
                 .isEqualTo(15_000L);
+    }
+
+    /** Every SKU the receipt resolves takes {@code method}; resolved once per receipt, never per line. */
+    @SuppressWarnings("unchecked")
+    private void stubMethod(CostingMethod method) {
+        when(methods.resolveAll(any()))
+                .thenAnswer(invocation -> ((java.util.Set<String>) invocation.getArgument(0))
+                        .stream().collect(java.util.stream.Collectors.toMap(sku -> sku, sku -> method)));
     }
 
     private GoodsReceiptRecordedV1 publish(String currency, GoodsReceiptFactPublisher.GoodsReceiptLineFact... lines) {

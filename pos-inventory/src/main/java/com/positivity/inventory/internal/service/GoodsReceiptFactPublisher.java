@@ -7,12 +7,15 @@ import com.positivity.domainevents.inventory.GoodsReceiptRecordedV1;
 import com.positivity.inventory.internal.config.OutboxEventWriter;
 import com.positivity.inventory.internal.entity.GoodsReceiptEntity;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
+import com.positivity.inventory.internal.enums.CostingMethod;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -92,8 +95,19 @@ public class GoodsReceiptFactPublisher {
             return;
         }
 
-        List<GoodsReceiptLine> factLines =
-                lines.stream().map(line -> toFactLine(line, currencyCode)).toList();
+        // One resolution for the receipt's SKUs, not one per line.
+        Map<String, CostingMethod> methods = costingMethodResolver.resolveAll(lines.stream()
+                .map(GoodsReceiptLineFact::receiptRow)
+                .filter(row -> row != null && row.getUnitCost() != null)
+                .map(InventoryLedgerEntry::getStockItemId)
+                .collect(Collectors.toSet()));
+        // An order outside the functional currency lends its rows no document cost (ADR-0067 DF-6), so
+        // whatever the engine stamped is not a value in the fact's currency: none is stated.
+        boolean valueInFactCurrency =
+                receiptCostCurrencyPolicy.awaitingCostReason(currencyCode).isEmpty();
+        List<GoodsReceiptLine> factLines = lines.stream()
+                .map(line -> toFactLine(line, currencyCode, valueInFactCurrency, methods))
+                .toList();
         GoodsReceiptRecordedV1 payload = new GoodsReceiptRecordedV1(
                 receipt.getReceiptId(),
                 receipt.getReceiptNumber(),
@@ -140,16 +154,15 @@ public class GoodsReceiptFactPublisher {
     }
 
     /** One fact line: the caller's quantity and accrual, and what the posted ledger row booked. */
-    private GoodsReceiptLine toFactLine(@NonNull GoodsReceiptLineFact line, @Nullable String currencyCode) {
+    private static GoodsReceiptLine toFactLine(
+            @NonNull GoodsReceiptLineFact line,
+            @Nullable String currencyCode,
+            boolean valueInFactCurrency,
+            @NonNull Map<String, CostingMethod> methods) {
         InventoryLedgerEntry row = line.receiptRow();
         BigDecimal unitCost = row == null ? null : row.getUnitCost();
-        String costSource = unitCost == null
-                ? UNCOSTED
-                : costingMethodResolver.resolve(row.getStockItemId()).name();
-        // An order outside the functional currency lends its rows no document cost (ADR-0067 DF-6), so
-        // whatever the engine stamped is not a value in the fact's currency: none is stated.
-        boolean valueInFactCurrency =
-                receiptCostCurrencyPolicy.awaitingCostReason(currencyCode).isEmpty();
+        String costSource =
+                unitCost == null ? UNCOSTED : methods.get(row.getStockItemId()).name();
         Long inventoryValueMinor = unitCost == null || !valueInFactCurrency
                 ? null
                 : ReceiptUnitCosts.toMinorUnits(line.quantityReceived().multiply(unitCost), currencyCode);

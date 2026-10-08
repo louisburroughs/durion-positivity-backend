@@ -43,7 +43,8 @@ import org.jspecify.annotations.Nullable;
  * <p>{@code currencyCode} and the per-line cost fields were added within v1 (ADR-0044 §3): they are
  * boxed, so a fact published before they existed reads them as null.
  *
- * @param receiptId               identity of the goods receipt; the event aggregate id
+ * @param receiptId               identity of the goods receipt; not the envelope aggregate id, which is
+ *                                {@code purchaseOrderId} so every receipt of one order is applied in order
  * @param receiptNumber           human-readable receipt number
  * @param purchaseOrderId         the order received against
  * @param locationId              where the goods were received

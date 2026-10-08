@@ -1317,8 +1317,9 @@ ignored without recording its eventId.
 - **Date** — the fact's `occurredAt` (business time); the period gate applies.
 - **Goods receipts (AW38)** — the currency is checked first: no `currencyCode`, or one other than the ledger's,
   is never booked at par and is held `SUSPENDED / CURRENCY_NOT_SUPPORTED` (ADR-0067 PC-9). Then the line rules,
-  over lines with a quantity (zero-quantity lines are ignored); Accounting never fills in a value Inventory did
-  not state. A line without `receiptLineId`, a null `inventoryValueMinor` beside a non-zero accrual, or line
+  over lines with a quantity (a zero-quantity line with no amount is ignored); Accounting never fills in a value
+  Inventory did not state. A line without `receiptLineId`, a null `inventoryValueMinor` beside a non-zero accrual,
+  an amount on a zero-quantity line, or line
   accruals that do not sum to `totalAccruedAmountMinor` hold the whole fact `SUSPENDED / VALIDATION_ERROR`
   (excluded from auto-retry, recorded once per receipt, never a partial posting). A line with no value and no
   accrual is uncosted and contributes nothing; when every line is, the fact is `SKIPPED / UNCOSTED_FACT`.
