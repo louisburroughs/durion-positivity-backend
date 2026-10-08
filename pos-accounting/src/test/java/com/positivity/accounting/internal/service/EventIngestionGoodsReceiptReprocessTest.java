@@ -147,6 +147,31 @@ class EventIngestionGoodsReceiptReprocessTest {
         verify(postingEngineOrchestrator, never()).processEvent(any(), any(), any(), anyBoolean());
     }
 
+    @Test
+    @DisplayName("two reprocesses at once: the loser's unique-key or version conflict is the deterministic 409 message")
+    void concurrentReprocessIsAConflict() {
+        when(goodsReceiptReprocessor.reprocess(payload))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("idempotency_keys_key_value"));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(this::reprocess)
+                .isExactlyInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Concurrent reprocessing detected for event " + EVENT_ID)
+                .hasCauseInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+
+        org.mockito.Mockito.reset(goodsReceiptReprocessor);
+        when(goodsReceiptReprocessor.reprocess(payload))
+                .thenReturn(new GoodsReceiptReprocessor.Result(
+                        AccountingEventStatus.SUSPENDED, "CURRENCY_NOT_SUPPORTED", "states no currency", null, null));
+        when(accountingEventRepository.save(any(AccountingEvent.class)))
+                .thenThrow(new org.springframework.orm.ObjectOptimisticLockingFailureException(
+                        AccountingEvent.class, EVENT_ID));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(this::reprocess)
+                .isExactlyInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Concurrent reprocessing detected");
+        verify(postingEngineOrchestrator, never()).processEvent(any(), any(), any(), anyBoolean());
+    }
+
     private AccountingEventResponse reprocess() {
         return service.reprocessEvent(EVENT_ID, new ReprocessEventRequest(), "ops-user");
     }

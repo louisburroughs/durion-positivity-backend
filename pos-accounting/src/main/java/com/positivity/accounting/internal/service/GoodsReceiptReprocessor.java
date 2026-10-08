@@ -40,8 +40,8 @@ import tools.jackson.databind.ObjectMapper;
  *
  * The payload never changes, so in v1 a held fact stays held until Inventory sends a corrected fact or the ledger's
  * currency changes. The posting runs in a transaction of its own, so a refusal is labelled the way the engine labels a
- * reprocess refusal, without poisoning the caller's transaction: a closed or hard-locked period {@code SUSPENDED /
- * PERIOD_CLOSED}, an unset accounting time zone {@code SUSPENDED / ACCOUNTING_TIME_ZONE_UNSET}, a missing mapping
+ * reprocess refusal, without poisoning the caller's transaction: a closed period {@code SUSPENDED / PERIOD_CLOSED}
+ * (reprocess once it is reopened), a hard-locked one the same, worded as permanently blocked, an unset accounting time zone {@code SUSPENDED / ACCOUNTING_TIME_ZONE_UNSET}, a missing mapping
  * {@code SUSPENDED / UNMAPPED_EVENT_TYPE}. Anything unexpected propagates and the row is left as it was.
  */
 @Slf4j
@@ -127,10 +127,19 @@ public class GoodsReceiptReprocessor {
         UUID posted;
         try {
             posted = postingTransaction.execute(_ -> postingService.postAccrual(fact));
-        } catch (AccountingPeriodClosedException | AccountingPeriodHardLockedException e) {
+        } catch (AccountingPeriodClosedException e) {
             return held(
                     PostingFailureReason.PERIOD_CLOSED,
-                    "Posting blocked by the period gate: " + e.getMessage() + "; reprocess after the period is open");
+                    "Posting blocked by the period gate: " + e.getMessage()
+                            + "; event suspended — reprocess after the period is reopened");
+        } catch (AccountingPeriodHardLockedException e) {
+            // The engine's wording: a hard lock only moves forward and is never reopened, so there is no
+            // reopen-then-reprocess remedy to point at.
+            return held(
+                    PostingFailureReason.PERIOD_CLOSED,
+                    "Posting blocked by the period gate: " + e.getMessage()
+                            + "; event suspended — posting is permanently blocked and cannot be"
+                            + " reprocessed (the hard lock is never reopened)");
         } catch (AccountingTimeZoneUnsetException e) {
             return held(
                     PostingFailureReason.ACCOUNTING_TIME_ZONE_UNSET,

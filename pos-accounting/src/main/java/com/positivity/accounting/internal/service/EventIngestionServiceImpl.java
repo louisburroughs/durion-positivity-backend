@@ -53,6 +53,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -381,7 +382,16 @@ public class EventIngestionServiceImpl implements EventIngestionService {
         // never the posting engine: no rule set exists for it, and the engine would neither check its currency first
         // nor post under the receipt's key.
         if (GoodsReceiptRecordedV1.EVENT_TYPE.equals(event.getEventType())) {
-            return reprocessGoodsReceipt(event, triggeredByUserId);
+            try {
+                return reprocessGoodsReceipt(event, triggeredByUserId);
+            } catch (DataIntegrityViolationException | OptimisticLockingFailureException e) {
+                // Two reprocesses of the same receipt at once: the loser trips the posting key's unique constraint or
+                // the row's version. The same deterministic 409 as the engine branch below (ADR-0017).
+                String msg = "Concurrent reprocessing detected for event " + eventId
+                        + ". Another transaction has modified this event. Please retry.";
+                log.warn(msg, e);
+                throw new IllegalStateException(msg, e);
+            }
         }
 
         // Increment attempt count

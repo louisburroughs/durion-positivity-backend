@@ -120,7 +120,21 @@ class GoodsReceiptReprocessorTest {
         GoodsReceiptRecordedV1 fact = fact("USD", 40_000L, line("4", 40_000L, 40_000L, "AVERAGE"));
         when(postingService.postAccrual(any()))
                 .thenThrow(new AccountingPeriodClosedException("2026-10", "period 2026-10 is CLOSED"));
-        assertThat(reprocessor.reprocess(stored(fact)).reason()).isEqualTo("PERIOD_CLOSED");
+        GoodsReceiptReprocessor.Result closed = reprocessor.reprocess(stored(fact));
+        assertThat(closed.reason()).isEqualTo("PERIOD_CLOSED");
+        assertThat(closed.detail()).contains("reprocess after the period is reopened");
+
+        // A hard lock is never reopened: the engine's wording, permanent, never "reprocess after it is open".
+        org.mockito.Mockito.doThrow(new com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException(
+                        java.time.LocalDate.of(2026, 10, 31), "2026-10-08 is on or before the hard lock 2026-10-31"))
+                .when(postingService)
+                .postAccrual(any());
+        GoodsReceiptReprocessor.Result locked = reprocessor.reprocess(stored(fact));
+        assertThat(locked.status()).isEqualTo(AccountingEventStatus.SUSPENDED);
+        assertThat(locked.reason()).isEqualTo("PERIOD_CLOSED");
+        assertThat(locked.detail())
+                .contains("permanently blocked and cannot be reprocessed")
+                .doesNotContain("reprocess after");
 
         org.mockito.Mockito.doThrow(new GLMappingNotConfiguredException("no GOODS_RECEIPT map"))
                 .when(postingService)

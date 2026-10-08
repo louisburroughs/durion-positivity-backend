@@ -1359,7 +1359,8 @@ ignored without recording its eventId.
   entry; an uncosted scrap or adjustment fact is `SKIPPED` with `failureReasonCode = UNCOSTED_FACT`. Look one up
   with `GET /v1/accounting/events?eventType=inventory.adjustment.posted&domainKeyId=<adjustmentId>` (or
   `eventType=inventory.product-value.changed&domainKeyId=<revaluationId>`).
-  **Kafka facts are not REST-retryable**: they never end `FAILED` or `SUSPENDED`, which are the only statuses
+  **Kafka facts are not REST-retryable**: as recorded by their listener they never end `FAILED` or `SUSPENDED`,
+  which are the only statuses
   the retry scheduler and `retryAccountingEvent` select; a failed fact is replayed from the DLQ instead. The
   exceptions are a fact held for its currency (see Ledger currency above): `SUSPENDED / CURRENCY_NOT_SUPPORTED`,
   skipped by the retry scheduler and released only through the audited reprocess; a malformed goods receipt,
@@ -1370,8 +1371,11 @@ ignored without recording its eventId.
   A fact still invalid keeps its hold and reason. One that now passes posts under
   `GOODS_RECEIPT_ACCRUAL:<receiptId>` (`PROCESSED / NEW`), or closes `PROCESSED / DUPLICATE_IGNORED` when that key
   already posted. A refusal is labelled as the engine labels one (`SUSPENDED / PERIOD_CLOSED`,
-  `ACCOUNTING_TIME_ZONE_UNSET`, or `UNMAPPED_EVENT_TYPE` for a missing `GOODS_RECEIPT` mapping), and every attempt
-  writes its history row.
+  `ACCOUNTING_TIME_ZONE_UNSET`, or `UNMAPPED_EVENT_TYPE` for a missing `GOODS_RECEIPT` mapping; a hard-locked
+  period is worded as permanently blocked), and every attempt writes its history row. A held goods receipt can end
+  `FAILED` in one case: when an attempt by the retry job throws something unexpected, its `recordFailure` leaves the
+  row `FAILED / INTERNAL_ERROR`, until the job's next attempt routes it back through the reprocessor. Two
+  reprocesses of one receipt at once answer the loser with the engine's "Concurrent reprocessing detected" conflict.
 - **Event envelope contract** (`GET /v1/accounting/events/contract`, issue #2207) — `version`/`fields`/`examples`
   describe the submission envelope as before; four additive optional sections document the rest of the
   ingestion surface, each sourced from the real rules rather than a hand-typed list that could drift:
