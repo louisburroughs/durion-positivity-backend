@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.config;
 
+import com.positivity.domainevents.inventory.GoodsReceiptRecordedV1;
 import com.positivity.domainevents.inventory.InventoryAdjustedV1;
 import com.positivity.domainevents.inventory.ProductValueChangedV1;
 import com.positivity.domainevents.inventory.ScrapPostedV1;
@@ -103,6 +104,12 @@ public final class AccountingEventTypeRegistry {
             new Entry(
                     ProductValueChangedV1.EVENT_TYPE,
                     "Inventory product value changed (revaluation)",
+                    DOMAIN_INVENTORY,
+                    Ingestion.KAFKA,
+                    true),
+            new Entry(
+                    GoodsReceiptRecordedV1.EVENT_TYPE,
+                    "Goods receipt recorded (accrual to goods received not yet billed)",
                     DOMAIN_INVENTORY,
                     Ingestion.KAFKA,
                     true),

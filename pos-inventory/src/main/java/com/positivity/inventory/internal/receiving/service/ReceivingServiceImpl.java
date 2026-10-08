@@ -306,7 +306,7 @@ public class ReceivingServiceImpl implements ReceivingService {
         int cmp = cumulativeQty.compareTo(expectedQty);
         line.setStatus(statusFor(cmp));
 
-        createGoodsReceiptLedgerEntry(
+        InventoryLedgerEntry receiptRow = createGoodsReceiptLedgerEntry(
                 stagingLocationId,
                 sessionId,
                 line.getLineId(),
@@ -321,7 +321,8 @@ public class ReceivingServiceImpl implements ReceivingService {
         if (cmp != 0) {
             variances.add(recordVariance(session, line, expectedQty, cumulativeQty, cmp, actorUserId));
         }
-        return new SessionReceiptRecorder.ReceivedLine(line, receivedQty, conversion, lineReq.getLotNumber());
+        return new SessionReceiptRecorder.ReceivedLine(
+                line, receivedQty, conversion, lineReq.getLotNumber(), receiptRow);
     }
 
     /** Received exactly what was expected, less, or more. */
@@ -400,7 +401,7 @@ public class ReceivingServiceImpl implements ReceivingService {
         UUID crossDockLocationId = resolveCrossDockLocationId();
         CrossDockLot lot = resolveCrossDockLot(session, line, request);
 
-        List<String> ledgerEntryIds = postCrossDockLedgerEntries(
+        CrossDockPosting crossDockPosting = postCrossDockLedgerEntries(
                 sessionId,
                 workorderId,
                 request.getWorkorderLineId(),
@@ -435,7 +436,7 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .unitOfMeasure(line.getDocumentUom())
                 .sessionStatus(session.getStatus().name())
                 .lineStatus(line.getStatus().name())
-                .ledgerEntryIds(ledgerEntryIds)
+                .ledgerEntryIds(crossDockPosting.ledgerEntryIds())
                 .build();
         // Cross-docked goods skip the shelf, not the order: they arrived against it all the same.
         sessionReceiptRecorder.record(
@@ -444,8 +445,10 @@ public class ReceivingServiceImpl implements ReceivingService {
                 idempotencyKey,
                 fingerprint,
                 crossDockLocationId,
+                // The receipt half only: the fact's ledger row is the GOODS_RECEIPT, never the paired
+                // GOODS_ISSUE (CAP:550 S41 #2602).
                 List.of(new SessionReceiptRecorder.ReceivedLine(
-                        line, quantities.quantityDelta(), null, lot.lotNumber())),
+                        line, quantities.quantityDelta(), null, lot.lotNumber(), crossDockPosting.receiptRow())),
                 actorUserId,
                 response);
         return response;
@@ -562,10 +565,11 @@ public class ReceivingServiceImpl implements ReceivingService {
      * Posts the paired GOODS_RECEIPT/GOODS_ISSUE at the cross-dock location — BOTH entries carry
      * the same lot id, so the per-lot row nets to zero and the funnel's status reconciler marks
      * the lot CONSUMED once stock has gone straight to the workorder. Returns the posted entries'
-     * ids for the response, skipping any entry a stub posting service returned without one.
+     * ids for the response, skipping any entry a stub posting service returned without one, and the
+     * posted GOODS_RECEIPT row for {@code goodsreceipt.recorded}.
      */
     @NonNull
-    private List<String> postCrossDockLedgerEntries(
+    private CrossDockPosting postCrossDockLedgerEntries(
             @NonNull UUID sessionId,
             @NonNull String workorderId,
             @Nullable String workorderLineId,
@@ -625,8 +629,12 @@ public class ReceivingServiceImpl implements ReceivingService {
         if (savedIssueEntry != null && savedIssueEntry.getLedgerEntryId() != null) {
             ledgerEntryIds.add(savedIssueEntry.getLedgerEntryId().toString());
         }
-        return ledgerEntryIds;
+        return new CrossDockPosting(ledgerEntryIds, savedReceiptEntry);
     }
+
+    /** The paired cross-dock posting: both entries' ids for the response, and the GOODS_RECEIPT row. */
+    private record CrossDockPosting(
+            @NonNull List<String> ledgerEntryIds, @Nullable InventoryLedgerEntry receiptRow) {}
 
     /** Stamps the cross-docked quantity, workorder linkage, lot, and settlement status onto the line. */
     private void applyCrossDockLineOutcome(
@@ -718,7 +726,8 @@ public class ReceivingServiceImpl implements ReceivingService {
         throw new ReceivingSessionNotFoundException("Receiving session not found: " + sessionId);
     }
 
-    private void createGoodsReceiptLedgerEntry(
+    /** Posts one session line's GOODS_RECEIPT row and returns it, cost stamped by the posting. */
+    private InventoryLedgerEntry createGoodsReceiptLedgerEntry(
             UUID stagingLocationId,
             UUID sessionId,
             UUID lineId,
@@ -749,6 +758,7 @@ public class ReceivingServiceImpl implements ReceivingService {
 
         ledgerPostingService.post(entry);
         inventoryFactPublisher.markEntry(entry);
+        return entry;
     }
 
     /**

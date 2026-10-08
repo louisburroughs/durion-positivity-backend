@@ -4,6 +4,7 @@ import com.positivity.inventory.internal.dto.receiving.CrossDockRequest;
 import com.positivity.inventory.internal.dto.receiving.ReceiveItemsRequest;
 import com.positivity.inventory.internal.entity.GoodsReceiptEntity;
 import com.positivity.inventory.internal.entity.GoodsReceiptLineEntity;
+import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.entity.ReceivingLine;
 import com.positivity.inventory.internal.entity.ReceivingSession;
 import com.positivity.inventory.internal.exception.IdempotencyConflictException;
@@ -80,12 +81,14 @@ public class SessionReceiptRecorder {
      * @param quantity   base quantity this call received
      * @param conversion the document-UoM conversion applied, when one was keyed
      * @param lotNumber  the lot keyed on the request, when any
+     * @param receiptRow the GOODS_RECEIPT ledger row it posted, cost stamped (CAP:550 S41 #2602)
      */
     public record ReceivedLine(
             @NonNull ReceivingLine line,
             @NonNull BigDecimal quantity,
             DocumentQuantityConverter.@Nullable DocumentConversion conversion,
-            @Nullable String lotNumber) {}
+            @Nullable String lotNumber,
+            @Nullable InventoryLedgerEntry receiptRow) {}
 
     /**
      * The response a prior call with this key returned, when the call has run before.
@@ -157,7 +160,7 @@ public class SessionReceiptRecorder {
                 .build();
 
         List<GoodsReceiptLineEntity> lineEntities = new ArrayList<>();
-        List<GoodsReceiptFactPublisher.GoodsReceiptLineFact> facts = new ArrayList<>();
+        List<SourceDocumentResolver.ReceiptLineValue> values = new ArrayList<>();
         long total = 0L;
         for (ReceivedLine receivedLine : received) {
             ReceivingLine line = receivedLine.line();
@@ -177,15 +180,45 @@ public class SessionReceiptRecorder {
                     .conversionFactor(conversion == null ? null : conversion.conversionFactor())
                     .receivingLineId(line.getLineId())
                     .build());
-            facts.add(new GoodsReceiptFactPublisher.GoodsReceiptLineFact(
-                    value.poLineId(), line.getProductId(), receivedLine.quantity(), value.accruedAmountMinor()));
+            values.add(value);
             total += value.accruedAmountMinor();
         }
         receipt.setLines(lineEntities);
         receipt.setTotalAccruedAmountMinor(total);
 
         GoodsReceiptEntity saved = goodsReceiptRepository.save(receipt);
-        goodsReceiptFactPublisher.publish(saved, facts, eventId);
+        // Built from the saved lines, so each fact line names its receipt line (CAP:550 S41 #2602).
+        List<GoodsReceiptFactPublisher.GoodsReceiptLineFact> facts = new ArrayList<>(received.size());
+        for (int i = 0; i < received.size(); i++) {
+            ReceivedLine receivedLine = received.get(i);
+            SourceDocumentResolver.ReceiptLineValue value = values.get(i);
+            facts.add(new GoodsReceiptFactPublisher.GoodsReceiptLineFact(
+                    value.poLineId(),
+                    receivedLine.line().getProductId(),
+                    receivedLine.quantity(),
+                    value.accruedAmountMinor(),
+                    lineEntities.get(i).getReceiptLineId(),
+                    parseUuid(receivedLine.line().getProductId()),
+                    receivedLine.receiptRow()));
+        }
+        goodsReceiptFactPublisher.publish(
+                saved,
+                sourceDocumentResolver
+                        .purchaseOrderCurrency(purchaseOrderId.get())
+                        .orElse(null),
+                facts,
+                eventId);
+    }
+
+    private static @Nullable UUID parseUuid(@Nullable String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value.trim());
+        } catch (IllegalArgumentException notAUuid) {
+            return null;
+        }
     }
 
     private static long unitCostMinor(long accruedMinor, @NonNull BigDecimal quantity) {
