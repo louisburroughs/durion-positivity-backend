@@ -123,7 +123,9 @@ connection profile belongs to exactly one vendor. No endpoint deletes a vendor.
   zero-count when it published nothing. pos-accounting's and pos-order's `SupplierManifestListener` compare it with
   their `processed_events` rows of owner `supplier` and send `supplier.outbox.replay-requested` on drift. Metrics:
   `supplier.manifest.published`, `supplier.manifest.publish.failures`. A row whose payload cannot be read is
-  excluded and logged with the exception class only, never the payload.
+  excluded and logged with the exception class only, never the payload. The window read (and the replay's
+  re-queue) uses the partial index `idx_supplier_event_outbox_published_window` on `(topic, created_at)` over
+  published rows (`V7`).
 
 ### Vendor profile administration — `supplier:profile:read` / `supplier:profile:write`
 
