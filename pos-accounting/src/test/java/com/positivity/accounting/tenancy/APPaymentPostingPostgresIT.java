@@ -248,10 +248,31 @@ class APPaymentPostingPostgresIT extends PostgresTenancyTestBase {
         bankAccount(tenant, "1010", true);
         UUID cad = bankAccount(tenant, "1020", false);
         bankProfile(tenant, cad, "CAD");
+        // Ruling of 2026-10-08 (#2603): closed a minute before the pay command, so it cannot fund it (JPQL boundary).
+        UUID closedJustNow = bankAccount(
+                tenant,
+                "1040",
+                java.time.LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC)
+                        .minusMinutes(1));
         VendorBillResponse bill = approvedBill(tenant, "50.00");
 
         APPaymentResponse payment = pay(tenant, request(bill, "50.00", null, "50.00"));
-        assertThat(payment.getBankAccountId()).isEqualTo(provisionedAccountId(tenant, "1000"));
+        assertThat(payment.getBankAccountId())
+                .as("1040, closed a minute ago, is not counted")
+                .isEqualTo(provisionedAccountId(tenant, "1000"));
+
+        VendorBillResponse viaClosed = approvedBill(tenant, "40.00");
+        ExecuteAPPaymentRequest named = request(viaClosed, "40.00", null, "40.00");
+        named.setBankAccountId(closedJustNow);
+        reset(gateway);
+        assertThatThrownBy(() -> pay(tenant, named))
+                .isInstanceOfSatisfying(
+                        VendorBillException.class,
+                        refusal -> assertThat(refusal.getFieldErrors())
+                                .extracting(VendorBillException.FieldError::field)
+                                .containsExactly("bankAccountId"));
+        verify(gateway, never()).executePayment(any());
+        gatewaySucceeds();
 
         bankAccount(tenant, "1030", false);
         VendorBillResponse second = approvedBill(tenant, "60.00");
@@ -722,6 +743,11 @@ class APPaymentPostingPostgresIT extends PostgresTenancyTestBase {
 
     /** A BANK_CASH account of the tenant; {@code deactivated} gives it a deactivation date in the past. */
     private static UUID bankAccount(UUID tenant, String code, boolean deactivated) {
+        return bankAccount(tenant, code, deactivated ? java.time.LocalDateTime.of(2026, 1, 1, 0, 0) : null);
+    }
+
+    /** A BANK_CASH account of the tenant, deactivated at {@code deactivatedAt} (wall time, the tenant's UTC zone). */
+    private static UUID bankAccount(UUID tenant, String code, java.time.LocalDateTime deactivatedAt) {
         UUID id = UUIDv7Generator.generate();
         owner().update(
                         "INSERT INTO gl_account (tenant_id, gl_account_id, account_code, account_name, account_type,"
@@ -733,7 +759,7 @@ class APPaymentPostingPostgresIT extends PostgresTenancyTestBase {
                         id,
                         code,
                         "Bank " + code,
-                        deactivated ? java.sql.Timestamp.valueOf("2026-01-01 00:00:00") : null);
+                        deactivatedAt == null ? null : java.sql.Timestamp.valueOf(deactivatedAt));
         return id;
     }
 

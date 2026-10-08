@@ -132,15 +132,16 @@ public class APPaymentPreGatewayChecks {
         }
         // 1c. The bank account.
         LocalDate date = businessDate.orElseGet(() -> LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC));
+        LocalDateTime fundingCutoff = fundingCutoff(date);
         UUID supplied = request.getBankAccountId();
         if (supplied != null) {
-            if (!isEligible(supplied, date)) {
+            if (!isEligible(supplied, date, fundingCutoff)) {
                 throw bankAccountRefused("bankAccountId is not an active " + ledgerCurrency.code()
                         + " bank account (BANK_CASH) on " + date);
             }
             return supplied;
         }
-        List<UUID> eligible = eligibleBankAccounts(date);
+        List<UUID> eligible = eligibleBankAccounts(date, fundingCutoff);
         if (eligible.size() != 1) {
             throw bankAccountRefused(
                     eligible.isEmpty()
@@ -180,11 +181,12 @@ public class APPaymentPreGatewayChecks {
     }
 
     /**
-     * The one eligible bank account on {@code date}, or empty when there is none or more than one: what an omitted
-     * {@code bankAccountId} resolves to.
+     * The one bank account active at the start of {@code date}, or empty when there is none or more than one: what an
+     * omitted {@code bankAccountId} of an idempotent replay resolves to. A replay funds nothing (the payment executed
+     * already), so the pay command's "not deactivated by now" condition does not apply to it.
      */
     public @NonNull Optional<UUID> defaultBankAccount(@NonNull LocalDate date) {
-        List<UUID> eligible = eligibleBankAccounts(date);
+        List<UUID> eligible = eligibleBankAccounts(date, date.atStartOfDay());
         return eligible.size() == 1 ? Optional.of(eligible.getFirst()) : Optional.empty();
     }
 
@@ -213,29 +215,46 @@ public class APPaymentPreGatewayChecks {
         resolve(mappingKey, date.atStartOfDay());
     }
 
-    private boolean isEligible(UUID glAccountId, LocalDate date) {
-        return glAccounts.findById(glAccountId).filter(a -> isEligible(a, date)).isPresent();
+    /**
+     * The instant a funding account must not be deactivated by: the later of the start of {@code date} and the pay
+     * command's own moment in the tenant's calendar, the clock and zone {@code deactivateGLAccount} stamps with
+     * (Accounting ruling of 2026-10-08, #2603 comment 6068272860). An account deactivated at any point up to the pay
+     * command cannot fund it; the entry still posts at the start of the day. Without a zone, UTC (slot 5a refuses).
+     */
+    private LocalDateTime fundingCutoff(LocalDate date) {
+        LocalDateTime now =
+                LocalDateTime.ofInstant(clock.instant(), zoneResolver.find().orElse(ZoneOffset.UTC));
+        LocalDateTime startOfDay = date.atStartOfDay();
+        return now.isAfter(startOfDay) ? now : startOfDay;
     }
 
-    private List<UUID> eligibleBankAccounts(LocalDate date) {
-        return glAccounts.findBySubtypeActiveAt(AccountSubtype.BANK_CASH, date.atStartOfDay()).stream()
+    private boolean isEligible(UUID glAccountId, LocalDate date, LocalDateTime fundingCutoff) {
+        return glAccounts
+                .findById(glAccountId)
+                .filter(a -> isEligible(a, date, fundingCutoff))
+                .isPresent();
+    }
+
+    private List<UUID> eligibleBankAccounts(LocalDate date, LocalDateTime fundingCutoff) {
+        return glAccounts.findBySubtypeActiveAt(AccountSubtype.BANK_CASH, date.atStartOfDay(), fundingCutoff).stream()
                 .filter(account -> !isForeign(account))
                 .map(GLAccount::getGlAccountId)
                 .toList();
     }
 
-    private boolean isEligible(GLAccount account, LocalDate date) {
+    private boolean isEligible(GLAccount account, LocalDate date, LocalDateTime fundingCutoff) {
         if (account.getAccountSubtype() != AccountSubtype.BANK_CASH) {
             return false;
         }
         // Active at the start of the execution day, the instant the entry posts at (APPaymentPostingService), by the
         // posting's own rule (GLAccountService.validateAccountForPosting): an account activated later that day cannot
         // take the entry, so it is not eligible that day (#2641 review, MAJOR 2).
+        // And not deactivated by the pay command's own moment (fundingCutoff, never before the start of the day).
         LocalDateTime at = date.atStartOfDay();
         boolean active = (account.getActivationDate() == null
                         || !account.getActivationDate().isAfter(at))
                 && (account.getDeactivationDate() == null
-                        || account.getDeactivationDate().isAfter(at));
+                        || account.getDeactivationDate().isAfter(fundingCutoff));
         return active && !isForeign(account);
     }
 

@@ -129,12 +129,25 @@ class APPaymentPreGatewayChecksTest {
         lenient().when(glAccounts.findById(id)).thenReturn(Optional.of(account));
     }
 
-    /** What the active-on-date query returns: the inactive account is the query's to drop. */
+    /**
+     * The BANK_CASH accounts the query sees; it answers with the query's own conditions applied to the arguments it is
+     * given (activation by {@code at}, not deactivated by {@code notDeactivatedBy}), so a test proves what the checks
+     * ask for.
+     */
     private void eligibleOnToday(UUID... ids) {
-        List<GLAccount> active = java.util.Arrays.stream(ids).map(accounts::get).toList();
+        List<GLAccount> listed = java.util.Arrays.stream(ids).map(accounts::get).toList();
         lenient()
-                .when(glAccounts.findBySubtypeActiveAt(AccountSubtype.BANK_CASH, TODAY.atStartOfDay()))
-                .thenReturn(active);
+                .when(glAccounts.findBySubtypeActiveAt(eq(AccountSubtype.BANK_CASH), any(), any()))
+                .thenAnswer(invocation -> {
+                    LocalDateTime at = invocation.getArgument(1);
+                    LocalDateTime notDeactivatedBy = invocation.getArgument(2);
+                    return listed.stream()
+                            .filter(a -> a.getActivationDate() == null
+                                    || !a.getActivationDate().isAfter(at))
+                            .filter(a -> a.getDeactivationDate() == null
+                                    || a.getDeactivationDate().isAfter(notDeactivatedBy))
+                            .toList();
+                });
     }
 
     private static ExecuteAPPaymentRequest request(PaymentMethod method, String currency, UUID bankAccountId) {
@@ -194,7 +207,7 @@ class APPaymentPreGatewayChecksTest {
                     .extracting(APPaymentPreGatewayChecksTest::code)
                     .isEqualTo(VendorBillException.Code.AP_PAYMENT_METHOD_NOT_SUPPORTED);
             verify(glAccounts, never()).findById(any());
-            verify(glAccounts, never()).findBySubtypeActiveAt(any(), any());
+            verify(glAccounts, never()).findBySubtypeActiveAt(any(), any(), any());
         }
 
         @Test
@@ -300,6 +313,41 @@ class APPaymentPreGatewayChecksTest {
             assertThat(checks.checkRequest(request(PaymentMethod.ACH, "USD", morning), Optional.of(TODAY.plusDays(1))))
                     .as("the next day it is eligible")
                     .isEqualTo(morning);
+        }
+
+        @Test
+        @DisplayName(
+                "Ruling of 2026-10-08 (#2603): an account deactivated earlier the same day cannot fund the payment:"
+                        + " refused when named, left out of the default; one deactivated later today still funds it")
+        void deactivatedEarlierToday() {
+            UUID closedAtNine = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f1060");
+            UUID closingTonight = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f1070");
+            // The clock is 15:00 in the tenant's calendar (UTC).
+            account(closedAtNine, AccountSubtype.BANK_CASH, TODAY.atTime(9, 0));
+            account(closingTonight, AccountSubtype.BANK_CASH, TODAY.atTime(23, 0));
+
+            assertThatThrownBy(() ->
+                            checks.checkRequest(request(PaymentMethod.ACH, "USD", closedAtNine), Optional.of(TODAY)))
+                    .isInstanceOfSatisfying(
+                            VendorBillException.class,
+                            refusal -> assertThat(refusal.getFieldErrors())
+                                    .extracting(VendorBillException.FieldError::field)
+                                    .containsExactly("bankAccountId"));
+            assertThat(checks.checkRequest(request(PaymentMethod.ACH, "USD", closingTonight), Optional.of(TODAY)))
+                    .isEqualTo(closingTonight);
+
+            eligibleOnToday(USD_BANK, closedAtNine, CAD_BANK);
+            assertThat(checks.checkRequest(request(PaymentMethod.ACH, "USD", null), Optional.of(TODAY)))
+                    .as("the account closed at 09:00 is not counted: the other one is the default")
+                    .isEqualTo(USD_BANK);
+            eligibleOnToday(closedAtNine, CAD_BANK);
+            assertThatThrownBy(() -> checks.checkRequest(request(PaymentMethod.ACH, "USD", null), Optional.of(TODAY)))
+                    .isInstanceOfSatisfying(
+                            VendorBillException.class,
+                            refusal ->
+                                    assertThat(refusal.getMessage()).contains("there is no active USD bank account"));
+            verify(glAccounts, org.mockito.Mockito.atLeastOnce())
+                    .findBySubtypeActiveAt(AccountSubtype.BANK_CASH, TODAY.atStartOfDay(), TODAY.atTime(15, 0));
         }
 
         @Test

@@ -1164,11 +1164,14 @@ SKIPPED / `RETIRED_EVENT_TYPE`, and `POST /v1/accounting/events` refuses it).
 
 **The pay command.** `POST /v1/accounting/ap/payments` takes `bankAccountId` (the GL account id of an eligible
 `BANK_CASH` account: active at the start of the execution date, the instant its entry posts at, and not in a foreign
-currency per its bank profile; an account activated later that day is eligible from the next day) and an optional
+currency per its bank profile; an account activated later that day is eligible from the next day, and an account
+deactivated at any point up to the pay command cannot fund it, even though the entry posts at the start of the day:
+Accounting ruling of 2026-10-08, #2603 comment 6068272860) and an optional
 `overrideJustification` (10-1000 characters). `bankAccountId` may be omitted only when exactly one eligible account
 exists; inactive and foreign-currency accounts are not counted. `netAmount` is gone from the request, the response, the
 outbox event, the entity and the table: the bank pays gross + fee. An idempotent replay compares the resolved bank
-account (an omitted one resolves to the one eligible account on the stored date). The response adds `bankAccountId`
+account (an omitted one resolves to the one account active at the start of the stored date; a replay funds nothing,
+so a deactivation since does not change it). The response adds `bankAccountId`
 and `paymentDate`.
 
 **Guard order** (`APPaymentServiceImpl.executePayment`, `APPaymentPreGatewayChecks`). Every refusal comes before the
