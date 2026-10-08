@@ -122,7 +122,9 @@ class GoodsReceiptReprocessorTest {
                 .thenThrow(new AccountingPeriodClosedException("2026-10", "period 2026-10 is CLOSED"));
         assertThat(reprocessor.reprocess(stored(fact)).reason()).isEqualTo("PERIOD_CLOSED");
 
-        when(postingService.postAccrual(any())).thenThrow(new GLMappingNotConfiguredException("no GOODS_RECEIPT map"));
+        org.mockito.Mockito.doThrow(new GLMappingNotConfiguredException("no GOODS_RECEIPT map"))
+                .when(postingService)
+                .postAccrual(any());
         GoodsReceiptReprocessor.Result unmapped = reprocessor.reprocess(stored(fact));
         assertThat(unmapped.status()).isEqualTo(AccountingEventStatus.SUSPENDED);
         assertThat(unmapped.reason()).isEqualTo("UNMAPPED_EVENT_TYPE");
