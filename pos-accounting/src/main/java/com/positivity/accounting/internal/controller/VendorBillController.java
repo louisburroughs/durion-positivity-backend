@@ -92,8 +92,8 @@ public class VendorBillController {
                 Required inputs: eventId, organizationId, purchaseOrderId and vendorId (UUIDs), \
                 receivedDate, and lineItems each with productId, description, quantity and unitPrice; \
                 vendorName and dimensions are optional.
-                Emits an ACCOUNTING_VENDOR_BILL_CREATE event; a vendor-directory sync failure is logged \
-                and never fails bill creation. Nothing is posted: a bill posts once, at approval.
+                Emits an ACCOUNTING_VENDOR_BILL_CREATE event and posts nothing (a bill posts once, at \
+                approval); a vendor-directory sync failure is logged and never fails bill creation.
                 Returns 201 with the created (or already-existing) bill, and 400 when the payload fails \
                 validation.
                 Returns 409 AP_BILL_DUPLICATE when a live bill (any status except VOIDED or REJECTED) \
@@ -167,32 +167,27 @@ public class VendorBillController {
             operationId = "matchVendorInvoice",
             summary = "Match Vendor Invoice",
             description = """
-                Runs the three-way match of a received vendor invoice against pending goods-received \
-                bills. A HIGH match (score 70 or more) with consistent quantities and prices sends the bill \
-                to AWAITING_APPROVAL with submittedBy SYSTEM; it never approves it. A MEDIUM score or a \
-                discrepancy parks it in MATCH_EXCEPTION; an AMBIGUOUS match keeps the scored candidates for \
-                a person to select one. No outcome writes an approval field, and nothing is posted.
-                Every routed match keeps what the vendor billed: the bill's total becomes the billed total, \
-                each received line keeps the billed quantity and price, and an append-only evidence record \
-                keeps the score, the points per criterion (amount 40, products 30, date 20, purchase \
-                order 5) and the line comparison.
-                Use this tool when a vendor invoice arrives; do not use \
-                createVendorBillFromGoodsReceived, which records the receipt, and use \
-                resolveVendorBillMatchException or selectVendorBillMatchCandidate to clear exceptions.
+                Runs the three-way match of a received vendor invoice against pending goods-received bills: a \
+                HIGH match (score 70 or more) within tolerance sends the bill to AWAITING_APPROVAL with \
+                submittedBy SYSTEM and never approves it, a MEDIUM score or a discrepancy parks it in \
+                MATCH_EXCEPTION, and an AMBIGUOUS match keeps the scored candidates for a person to select one; \
+                nothing is posted.
+                Every routed match keeps what the vendor billed (the billed total and each line's billed \
+                quantity and price) and an append-only evidence record with the score, the points per criterion \
+                (amount 40, products 30, date 20, purchase order 5) and the line comparison.
+                Use this tool when a vendor invoice arrives; do not use createVendorBillFromGoodsReceived, which \
+                records the receipt, and use resolveVendorBillMatchException or selectVendorBillMatchCandidate \
+                to clear exceptions.
                 Preconditions: a bill in PENDING_RECEIPT_MATCH must exist for the vendor.
-                Required inputs: eventId, organizationId and vendorId (UUIDs), invoiceReference, \
-                invoiceDate and lineItems; dueDate is optional.
-                Emits an ACCOUNTING_VENDOR_BILL_MATCH event and writes a VENDOR_BILL_MATCH_ROUTED audit \
-                row; the returned bill's status conveys the outcome (AWAITING_APPROVAL or \
-                MATCH_EXCEPTION).
-                Returns 400 when no pending receipt matches the invoice or the payload fails validation.
-                Returns 409 AP_BILL_DUPLICATE when the matched bill would take an invoiceReference that \
-                another live bill (any status except VOIDED or REJECTED) of the same vendor already \
-                holds on the same bill date, compared ignoring case, spacing, punctuation and leading \
-                zeros; referenceId is that bill's vendorBillId and the match changes nothing.
-                A match that loses a concurrent race for the same number between that check and its \
-                commit answers the generic 409 DUPLICATE_RESOURCE instead, with no referenceId; the \
-                match is rolled back and no second bill holds the number.
+                Required inputs: eventId, organizationId and vendorId (UUIDs), invoiceReference, invoiceDate and \
+                lineItems; dueDate is optional.
+                Emits an ACCOUNTING_VENDOR_BILL_MATCH event and writes a VENDOR_BILL_MATCH_ROUTED audit row; the \
+                returned bill's status conveys the outcome.
+                Returns 400 when no pending receipt matches the invoice or the payload fails validation, and 409 \
+                AP_BILL_DUPLICATE when another live bill (any status except VOIDED or REJECTED) of the vendor \
+                already holds the invoiceReference on the same bill date, compared ignoring case, spacing, \
+                punctuation and leading zeros (referenceId names it), or the generic 409 DUPLICATE_RESOURCE, \
+                with no referenceId, when a concurrent writer takes the number between the check and the commit.
                 """,
             tags = {"Vendor Bill API"})
     @ApiResponse(

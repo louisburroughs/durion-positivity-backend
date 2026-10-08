@@ -104,6 +104,7 @@ public class VendorBillApprovalController {
     public ResponseEntity<VendorBillResponse> submitForApproval(
             @Parameter(description = BILL_ID, example = BILL_ID_EXAMPLE) @NonNull @PathVariable UUID billId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The justification (at least 10 characters) and an optional classification proposed to the approver.",
                             required = true,
                             content =
                                     @Content(
@@ -132,30 +133,30 @@ public class VendorBillApprovalController {
             operationId = "approveVendorBill",
             summary = "Approve Vendor Bill",
             description = """
-                Approves a vendor bill in AWAITING_APPROVAL and posts it in the same transaction: a bill is \
-                approved if and only if it posted (AW37). The entry credits accounts payable for the billed \
-                gross and debits by class through the VENDOR_BILL posting category: receipt-matched lines \
-                2100 at the received price with the price difference in 5050, unmatched goods 2100, \
-                expenses the chosen EXPENSE_<CODE> key, US tax into the cost. It is dated on the bill date \
-                when that is on or before today and its period is open, otherwise today; the read serves \
-                postingDate and postingDateRule.
-                Use this tool for the approver's decision on a bill sent for approval; do not use \
-                submitVendorBillForApproval, which only sends it, or resolveVendorBillMatchException with \
-                ACCEPT, which approves a bill still in MATCH_EXCEPTION.
-                Preconditions: the bill is AWAITING_APPROVAL (CURRENCY_HOLD bills never are). Until approval \
-                limits exist every bill needs accounting:ap:approve_over_limit.
-                Required inputs: billId (UUID) as a path parameter. Optional: justification (at least 10 \
-                characters), classification {debitClass GOODS|EXPENSE, expenseMappingKey} (required for a \
-                bill without receipt-matched lines and for non-stock lines, else the one proposed at \
-                submission), overrideJustification (at least 10 characters) to post into a CLOSED period \
-                with accounting:period:override.
-                Emits ACCOUNTING_VENDOR_BILL_APPROVE and writes a VENDOR_BILL_APPROVE audit row; a refused \
-                posting writes one VENDOR_BILL_APPROVE_REFUSED row instead and changes nothing else.
-                Returns 200 with the bill read, its posting included; 400 JUSTIFICATION_REQUIRED or \
-                VALIDATION_ERROR; 403 FORBIDDEN; 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE naming \
-                the status (a second approve included, which posts nothing); 422 AP_BILL_UNCLASSIFIED, \
-                PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED, each leaving the bill as it was.
-                """,
+                    Approves a vendor bill in AWAITING_APPROVAL and posts it in the same transaction, so a bill is \
+                    approved if and only if it posted (AW37): the entry credits accounts payable for the billed \
+                    gross and debits through the VENDOR_BILL posting category by class (receipt-matched lines 2100 \
+                    at the received price with the difference in 5050, unmatched goods 2100, expenses the chosen \
+                    EXPENSE_<CODE> key, US tax into the cost).
+                    The entry is dated on the bill date when that is on or before today and its period is open, \
+                    otherwise today, and the read serves postingDate and postingDateRule.
+                    Use this tool for the approver's decision on a bill sent for approval; do not use \
+                    submitVendorBillForApproval, which only sends it, or resolveVendorBillMatchException with \
+                    ACCEPT, which approves a bill still in MATCH_EXCEPTION.
+                    Preconditions: the bill is AWAITING_APPROVAL (CURRENCY_HOLD bills never are), and until approval \
+                    limits exist every bill needs accounting:ap:approve_over_limit.
+                    Required inputs: billId (UUID) as a path parameter; justification (at least 10 characters), \
+                    classification {debitClass GOODS|EXPENSE, expenseMappingKey} (required for a bill without \
+                    receipt-matched lines and for non-stock lines, else the one proposed at submission) and \
+                    overrideJustification (at least 10 characters, with accounting:period:override, to post into a \
+                    CLOSED period) are optional.
+                    Emits ACCOUNTING_VENDOR_BILL_APPROVE and writes a VENDOR_BILL_APPROVE audit row; a refused \
+                    posting writes one VENDOR_BILL_APPROVE_REFUSED row and changes nothing else.
+                    Returns 200 with the bill read, its posting included; 400 JUSTIFICATION_REQUIRED or \
+                    VALIDATION_ERROR; 403 FORBIDDEN; 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE naming \
+                    the status, a second approve included; 422 AP_BILL_UNCLASSIFIED, PERIOD_CLOSED, \
+                    PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED, each leaving the bill as it was.
+                    """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
             responseCode = "200",
@@ -185,6 +186,7 @@ public class VendorBillApprovalController {
     public ResponseEntity<VendorBillResponse> approve(
             @Parameter(description = BILL_ID, example = BILL_ID_EXAMPLE) @NonNull @PathVariable UUID billId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The approver's optional justification, the classification the bill posts under, and an optional override justification for a CLOSED period.",
                             required = true,
                             content =
                                     @Content(
@@ -247,6 +249,7 @@ public class VendorBillApprovalController {
     public ResponseEntity<VendorBillResponse> reject(
             @Parameter(description = BILL_ID, example = BILL_ID_EXAMPLE) @NonNull @PathVariable UUID billId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The reason the bill is rejected, at least 10 characters.",
                             required = true,
                             content =
                                     @Content(
@@ -273,29 +276,28 @@ public class VendorBillApprovalController {
             operationId = "resolveVendorBillMatchException",
             summary = "Resolve Vendor Bill Match Exception",
             description = """
-                Resolves a vendor bill in MATCH_EXCEPTION: ACCEPT is an approval and posts the bill, exactly \
-                as approveVendorBill does; CORRECT sends it back to PENDING_RECEIPT_MATCH and writes no \
-                approval or rejection field; VOID voids it, recording the caller as rejectedBy (nothing was \
-                posted, so nothing is reversed).
-                Use this tool for a quantity, price or medium-confidence exception on one bill; do not use \
-                selectVendorBillMatchCandidate, which resolves an ambiguous match by picking among several \
-                bills, or submitVendorBillForApproval, which sends the bill to another person's approval.
-                Preconditions: the bill is MATCH_EXCEPTION. Each action needs its own permission: ACCEPT \
-                accounting:ap:approve_over_limit (every bill is over the default limit until approval limits \
-                exist), CORRECT accounting:ap:approve or accounting:ap:approve_over_limit, VOID \
-                accounting:ap:reject.
-                Required inputs: billId (UUID) as a path parameter, resolutionAction (ACCEPT, CORRECT or \
-                VOID) and reason (at least 10 characters). ACCEPT also takes classification and \
-                overrideJustification as approveVendorBill does. The actor is the caller; an operatorId in \
-                the body is ignored.
-                Emits ACCOUNTING_VENDOR_BILL_MATCH_EXCEPTION_RESOLVE and writes a \
-                VENDOR_BILL_MATCH_EXCEPTION_RESOLVE audit row.
-                Returns 200 with the bill read; 400 VALIDATION_ERROR for an unknown action, 400 \
-                JUSTIFICATION_REQUIRED for a missing or short reason; 403 FORBIDDEN without the action's \
-                permission; 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE naming the status; for \
-                ACCEPT, 422 AP_BILL_UNCLASSIFIED, PERIOD_CLOSED, PERIOD_HARD_LOCKED or \
-                GL_MAPPING_NOT_CONFIGURED, leaving the bill as it was.
-                """,
+                    Resolves a vendor bill in MATCH_EXCEPTION: ACCEPT is an approval and posts the bill exactly as \
+                    approveVendorBill does, CORRECT sends it back to PENDING_RECEIPT_MATCH writing no approval or \
+                    rejection field, and VOID voids it with the caller as rejectedBy (nothing was posted, so nothing \
+                    is reversed).
+                    Use this tool for a quantity, price or medium-confidence exception on one bill; do not use \
+                    selectVendorBillMatchCandidate, which resolves an ambiguous match among several bills, or \
+                    submitVendorBillForApproval, which sends the bill to another person's approval.
+                    Preconditions: the bill is MATCH_EXCEPTION, and each action needs its own permission: ACCEPT \
+                    accounting:ap:approve_over_limit, CORRECT accounting:ap:approve or \
+                    accounting:ap:approve_over_limit, VOID accounting:ap:reject.
+                    Required inputs: billId (UUID) as a path parameter, resolutionAction (ACCEPT, CORRECT or VOID) \
+                    and reason (at least 10 characters); ACCEPT also takes classification and overrideJustification \
+                    as approveVendorBill does, and an operatorId in the body is ignored because the actor is the \
+                    caller.
+                    Emits ACCOUNTING_VENDOR_BILL_MATCH_EXCEPTION_RESOLVE and writes a \
+                    VENDOR_BILL_MATCH_EXCEPTION_RESOLVE audit row.
+                    Returns 200 with the bill read; 400 VALIDATION_ERROR for an unknown action or \
+                    JUSTIFICATION_REQUIRED for a missing or short reason; 403 FORBIDDEN without the action's \
+                    permission; 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE naming the status; for ACCEPT, \
+                    422 AP_BILL_UNCLASSIFIED, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED, \
+                    leaving the bill as it was.
+                    """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
             responseCode = "200",
@@ -325,6 +327,7 @@ public class VendorBillApprovalController {
     public ResponseEntity<VendorBillResponse> resolveMatchException(
             @Parameter(description = BILL_ID, example = BILL_ID_EXAMPLE) @NonNull @PathVariable UUID billId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The resolution action (ACCEPT, CORRECT or VOID) and its reason; ACCEPT may add a classification and an override justification.",
                             required = true,
                             content =
                                     @Content(
@@ -449,6 +452,7 @@ public class VendorBillApprovalController {
     public ResponseEntity<VendorBillResponse> voidApproved(
             @Parameter(description = BILL_ID, example = BILL_ID_EXAMPLE) @NonNull @PathVariable UUID billId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The reason the approved bill is voided (at least 10 characters) and an optional override justification for a CLOSED period.",
                             required = true,
                             content =
                                     @Content(
