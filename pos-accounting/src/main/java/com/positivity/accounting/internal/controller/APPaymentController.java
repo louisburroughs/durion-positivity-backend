@@ -82,7 +82,7 @@ public class APPaymentController {
                 gross, Dr 6030 the fee and Cr the bank account on the payment's business date (AP_PAYMENT category).
                 Use this tool to pay a vendor; do not use applyPayment, which is the AR-side application of customer \
                 payments to invoices, and use listApBills first to find APPROVED bills to allocate against.
-                Preconditions, checked in this order before the gateway is called and persisting nothing: the method \
+                Preconditions: checked in this order before the gateway is called and persisting nothing, the method \
                 is ACH, CHECK or WIRE, the currency is the functional currency, the bank account is eligible (active \
                 on the business date, not in a foreign currency), every allocated bill exists, is APPROVED, belongs \
                 to the vendor and fits the gross amount, the payer approved none of the bills paid (unless the AP \
