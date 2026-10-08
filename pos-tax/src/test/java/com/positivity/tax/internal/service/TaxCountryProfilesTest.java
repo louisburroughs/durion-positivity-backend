@@ -19,6 +19,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.boot.context.properties.bind.Binder;
+import org.springframework.boot.context.properties.bind.PropertySourcesPlaceholdersResolver;
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources;
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.core.env.PropertySource;
@@ -168,7 +169,8 @@ class TaxCountryProfilesTest {
     void shippedConfigurationShipsNoRate() throws Exception {
         List<PropertySource<?>> yaml =
                 new YamlPropertySourceLoader().load("application", new ClassPathResource("application.yml"));
-        TaxProperties shipped = new Binder(ConfigurationPropertySources.from(yaml))
+        TaxProperties shipped = new Binder(
+                        ConfigurationPropertySources.from(yaml), new PropertySourcesPlaceholdersResolver(yaml))
                 .bind("pos.tax", TaxProperties.class)
                 .get();
 
