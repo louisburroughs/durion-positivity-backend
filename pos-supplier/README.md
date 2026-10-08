@@ -654,7 +654,7 @@ suspected tampering — for data the deployment destroyed itself.
 | `SUPPLIER_AUDIT_ENC_KEY` | Active key, 32 bytes base64. **Provision before first deploy.** |
 | `SUPPLIER_AUDIT_ENC_KEY_ID` | Key id recorded in each envelope (default `k1`) |
 | `SUPPLIER_AUDIT_ENC_PREVIOUS_KEYS` | Decrypt-only keys, `keyId:base64` comma-separated |
-| `SUPPLIER_VENDOR_TAXID_ENC_KEY` | Vendor tax-registration number key (#2621), 32 bytes base64. A **different** key, same rules. **Provision before first deploy**, from the secret store. |
+| `SUPPLIER_VENDOR_TAXID_ENC_KEY` | Vendor tax-registration number key (#2621), 32 bytes base64. A **different** key, same rules: `deploy-backend.sh` and startup (`SupplierEncryptionKeySeparation`) both refuse one key for both purposes. **Provision before first deploy**, from the secret store. |
 | `SUPPLIER_VENDOR_TAXID_ENC_KEY_ID` | Its key id (default `k1`) |
 | `SUPPLIER_VENDOR_TAXID_ENC_PREVIOUS_KEYS` | Its decrypt-only keys; a retired key must stay while any number it sealed is stored |
 

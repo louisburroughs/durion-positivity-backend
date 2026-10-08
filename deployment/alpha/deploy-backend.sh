@@ -210,8 +210,39 @@ require_supplier_key() {
 
 # Both pos-supplier keys. Kept under the original name: every deploy path already calls it.
 require_supplier_audit_key() {
+  require_distinct_supplier_keys
   require_supplier_key SUPPLIER_AUDIT_ENC_KEY "exchange-audit payload"
   require_supplier_key SUPPLIER_VENDOR_TAXID_ENC_KEY "vendor tax-registration number"
+}
+
+# The key a deploy would leave in force: the supplied value when there is one, otherwise the one
+# persisted in the env file; quotes and whitespace removed.
+effective_supplier_key() {
+  local v
+  v="$(trim_space "${!1:-}")"
+  if [[ -z "${v}" ]]; then
+    v="$(grep -E "^$1=" "${ENV_FILE}" | head -n1 | cut -d= -f2- || true)"
+    v="${v%\'}"
+    v="${v#\'}"
+    v="$(trim_space "${v}")"
+  fi
+  printf '%s' "${v}"
+}
+
+# The two keys protect data with different lifetimes and rotate on different clocks (#2621,
+# Security ruling on #2617, ruling 3): one value in both would couple their compromise and their
+# rotation. Compared unpadded, as the rotation guard compares them, so `…=` and `…` are one key.
+# Runs BEFORE either key is persisted, so a refused pair never lands in the env file (where the
+# rotation guard would then hold the bad value in place).
+require_distinct_supplier_keys() {
+  local audit taxid
+  audit="$(effective_supplier_key SUPPLIER_AUDIT_ENC_KEY)"
+  taxid="$(effective_supplier_key SUPPLIER_VENDOR_TAXID_ENC_KEY)"
+  if [[ -n "${audit}" && "${audit%=}" == "${taxid%=}" ]]; then
+    echo "ERROR: SUPPLIER_VENDOR_TAXID_ENC_KEY must not equal SUPPLIER_AUDIT_ENC_KEY." >&2
+    echo "Each pos-supplier purpose needs its own key (openssl rand -base64 32)." >&2
+    exit 1
+  fi
 }
 
 # Compose ranks the shell environment ABOVE --env-file, so an exported
