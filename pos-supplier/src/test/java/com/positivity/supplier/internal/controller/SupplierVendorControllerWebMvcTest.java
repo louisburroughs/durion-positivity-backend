@@ -120,6 +120,13 @@ class SupplierVendorControllerWebMvcTest {
     @MockitoBean
     private VendorTaxIdRevealService taxIdRevealService;
 
+    /** A reveal that reaches the controller answers REVEALED unless a test says otherwise. */
+    @org.junit.jupiter.api.BeforeEach
+    void revealAnswersByDefault() {
+        when(taxIdRevealService.reveal(any(), any(), any()))
+                .thenReturn(TaxIdRevealResult.revealed(new TaxIdRevealView(REGISTRATION_ID, "SSN", null, FAKE_NUMBER)));
+    }
+
     private static MockHttpServletRequestBuilder authed(MockHttpServletRequestBuilder builder, String... authorities) {
         return builder.header("X-User", "web-mvc-tester").header("X-Authorities", String.join(",", authorities));
     }
