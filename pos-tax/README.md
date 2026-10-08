@@ -6,6 +6,9 @@
 > When accounting needs a new tax function, it is stubbed here and added to the [stub register](#stub-register).
 > The platform owner set this rule on 2026-10-08 (durion `domains/accounting/SPEC-accounting-workspace.md`, AW48;
 > louisburroughs/durion#553).
+>
+> **One tax port, pluggable providers (ADR-0071).** pos-tax picks a [provider plug-in](#provider-plug-ins) per tenant and
+> country. People never call it: they reach it through front-door domain modules. Services call its computation directly.
 
 Tax calculation service for the Durion Positivity ETSMS platform. Supports two operating modes: test mode with configurable flat rates per jurisdiction type, and production mode that proxies calls to an external tax API with retry and exponential backoff.
 
@@ -31,6 +34,34 @@ Tax calculation service for the Durion Positivity ETSMS platform. Supports two o
 - `POST /v1/tax/calculate` — calculate tax for a set of line items
 - `GET /v1/tax/mode` — returns current operating mode (`test` or `production`)
 
+## Provider plug-ins
+
+ADR-0071 (durion `docs/adr/0071-tax-per-tenant-pluggable-providers.adr.md`; spec AW58, AW59) decides how pos-tax is reached and
+which engine answers. Today one provider serves the whole deployment (`TAX_TEST_MODE`, `pos.tax.provider`); the plug-in binding
+below replaces both switches.
+
+| Plug-in | What it is | Status |
+| --- | --- | --- |
+| `US_SELF` | The test-mode calculator: configured placeholder rates (stubs) | Exists, as test mode |
+| `CA_SELF` | The Canadian stubs of AW57: typed rates, registration status, number shape, evidence rule, plausibility | Planned (#2522) |
+| `AVALARA` | The AvaTax adapter (`AvalaraTaxProvider`) | Exists; no environment enables it |
+
+- **Binding.** A tenant-scoped `tax_provider_binding` names the plug-in per tenant and country (`countryCode`, `providerId`,
+  `providerProfile`, effective dates). It resolves from the country of `destinationAddress` as of the transaction date; with no
+  binding, `pos.tax.default-providers.<country>` applies (`US` → `US_SELF`, `CA` → `CA_SELF`), and with neither, 422
+  `TAX_JURISDICTION_NOT_CONFIGURED`. The provider transaction log keeps the plug-in that priced each document, so commit, void
+  and refund use it after a binding change.
+- **Accounts.** One platform-held account per provider; its credential lives in the secret store, never per tenant.
+  `providerProfile` is the tenant's non-secret company or profile code on that account.
+- **Capabilities.** A capability the bound plug-in lacks answers 501 naming it (today `TAX_RATE_LOOKUP_UNSUPPORTED`).
+- **Front doors.** People reach pos-tax only through a domain module that checks their permission and forwards the actor:
+  registrations through pos-accounting, exemption certificates through pos-customer, provider bindings through pos-tenant. Each
+  write endpoint accepts only its front door, authenticated by a per-caller shared secret. Computation (calculate, refund,
+  commit, void, rate lookup, plausibility) stays a direct call from pos-order, pos-workorder, pos-invoice, pos-mcp-server and
+  pos-accounting.
+- **Facts.** Registrations are published as `tax.registration.changed` v1 on `tax.events.v1` through an outbox, with the
+  per-tenant manifest `tax.manifest.v1` (AW58).
+
 ## Stub register
 
 pos-tax is a collection of stubs (status note above). This register lists every tax function that callers rely on,
@@ -54,10 +85,10 @@ what the stub answers today, and which questions wait for expert advice.
 | Refund calculation | `/calculate` with `calculationType = REFUND` | Positive amounts at the same test-mode rates, as of the `transactionDate` the caller sends (for a refund, the original sale date; it defaults to today). A finalized invoice's credit reverses its stored tax and never calls this | none in code | As above |
 | Rate lookup | `GET /v1/tax/rates` (`tax:rates:view`) | Test mode answers from the configured rates. Any other provider answers 501 `TAX_RATE_LOOKUP_UNSUPPORTED` | none in code | Real rates |
 | Provider document lifecycle | `POST /v1/tax/transactions/{referenceId}/commit` and `/void` (`tax:commit`) | Test mode: a no-op that always succeeds, logged in `tax_provider_transaction`. The AvaTax adapter exists, but no environment enables it | pos-invoice | Filing and the provider choice |
-| Exemption certificates | `/v1/tax/exemption-certificates` (`tax:exemption:view`, `tax:exemption:manage`) | A tenant registry. A claim without an active certificate is taxed and flagged, never refused | none outside pos-tax | Which exemptions are valid, and what evidence they need |
+| Exemption certificates | `/v1/tax/exemption-certificates` (`tax:exemption:view`, `tax:exemption:manage`) | A tenant registry. A claim without an active certificate is taxed and flagged, never refused | none outside pos-tax; pos-customer becomes its front door (ADR-0071, no story yet) | Which exemptions are valid, and what evidence they need |
 | Use tax (planned) | `/calculate` with `calculationType = USE` (AW44; louisburroughs/durion-positivity-backend#2604) | Priced exactly like `SALE`; test mode always answers | pos-accounting | Which purchases owe use tax, per-state rules, filing (louisburroughs/durion-positivity-backend#2599) |
 | Canadian rates (planned) | `GET /v1/tax/rates?countryCode=CA`; `/calculate` rows gain `taxType` and `inputTaxRecoverable` (AW57; louisburroughs/durion-positivity-backend#2522) | A configured rate per province and tax type, in every provider mode, `source = STUB`; every row typed; placeholder recoverability GST, HST and QST yes, PST no. A country facet stops the US defaults from pricing a Canadian address (today they do) | pos-accounting, pos-invoice (the `taxType` hand-off) | Rates, which supplies are taxable, what is recoverable |
-| Tax registration status (planned) | A tenant's registration per regime (`GST_HST`, `QST`) as of a date (AW49, AW57) | Operator-set and effective-dated; transport and entry path wait for the Chief Architect (durion spec OI-22) | pos-accounting, pos-order | Registration rules |
+| Tax registration status (planned) | A tenant's registration per regime (`GST_HST`, `QST`) as of a date (AW49, AW57) | Effective-dated, overlap refused; written only by pos-accounting, the front door (AW59); published as `tax.registration.changed` by outbox (AW58) | pos-accounting, pos-order (replicas) | Registration rules |
 | Registration-number shape (planned) | `wellFormed` for a supplier's number (AW53, AW57) | A configurable pattern; by default any non-blank value is well formed | pos-accounting | Number formats |
 | Evidence rule (planned) | `GET /v1/tax/evidence-rules?countryCode=CA&asOf=` (AW53, AW57) | One configured row: from 100.00 CAD, `appliesTo` drawer receipts and vendor bills | pos-accounting, pos-order | The threshold, the $500 tier, what is compared, whether bills are in scope |
 | Receipt-tax plausibility (planned) | `POST /v1/tax/plausibility-checks` (AW55, AW57) | Per tax: maximum `T × r / (1 + r)` rounded up to the minor unit, plus a tolerance (default 5 minor units, configurable), `r` from the Canadian rates stub; no combined bound. A bookkeeping control against typing errors, not a tax rule | pos-order (drawer entry) | How taxes stack on one receipt |
@@ -141,7 +172,8 @@ non-whitelisted table has `tenant_id`, RLS enabled and forced, and the `tenant_i
 
 ## Deployment Modes
 
-`pos-tax` is primarily consumed as a library dependency by `pos-workorder`, `pos-invoice`, and similar services. When used this way it requires no separate deployment. It can also be deployed as a standalone internal microservice (Eureka registration disabled by default) but must not be added to the API gateway routes.
+`pos-tax` is one internal service (ADR-0071): callers reach it at a fixed base URL (`POS_TAX_BASE_URL`, `invoice.tax.base-url`; Eureka registration
+disabled), and it must never be added to the API gateway routes or given an SDK package (ADR-0021).
 
 ## Development
 
