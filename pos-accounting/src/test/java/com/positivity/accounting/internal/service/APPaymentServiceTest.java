@@ -32,6 +32,7 @@ import com.positivity.accounting.internal.repository.VendorBillRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
@@ -63,6 +64,8 @@ class APPaymentServiceTest {
 
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
     private static final UUID TEST_PAYMENT_ID = UUID.fromString("00000000-0000-0000-0000-000000000099");
+    private static final UUID BANK_ID = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f1000");
+    private static final LocalDate BUSINESS_DATE = LocalDate.of(2024, 1, 1);
 
     @Spy
     Clock clock = TEST_CLOCK;
@@ -91,6 +94,15 @@ class APPaymentServiceTest {
     @Mock
     private VendorBillPayGuard payGuard;
 
+    @Mock
+    private APPaymentPreGatewayChecks preGatewayChecks;
+
+    @Mock
+    private APPaymentPostingService postingService;
+
+    @Mock
+    private ApLockTimeout lockTimeout;
+
     @InjectMocks
     private APPaymentServiceImpl service;
 
@@ -112,6 +124,12 @@ class APPaymentServiceTest {
         // Default: the locked APPROVED bills of the vendor are none (#2509 review, A3)
         when(billRepository.lockByVendorIdAndStatus(any(UUID.class), any(VendorBillStatus.class)))
                 .thenReturn(List.of());
+        // S42 (#2603): slot 1 passes with the one eligible bank account, slot 5 fixes the business date.
+        when(preGatewayChecks.businessDate()).thenReturn(Optional.of(BUSINESS_DATE));
+        when(preGatewayChecks.checkRequest(any(), any())).thenReturn(BANK_ID);
+        when(preGatewayChecks.checkPeriodAndMapping(any(), any(), any()))
+                .thenReturn(new APPaymentPreGatewayChecks.Execution(BUSINESS_DATE, false));
+        when(preGatewayChecks.defaultBankAccount(any())).thenReturn(Optional.of(BANK_ID));
     }
 
     // ========================================
@@ -541,6 +559,272 @@ class APPaymentServiceTest {
     }
 
     // ========================================
+    // S42 (#2603, #2627): the slots of the pre-gateway block, the stored execution, the retry
+    // ========================================
+
+    private void savesAssignId() {
+        when(paymentRepository.save(any(APPayment.class))).thenAnswer(inv -> {
+            APPayment p = inv.getArgument(0);
+            if (p.getPaymentId() == null) {
+                p.setPaymentId(TEST_PAYMENT_ID);
+            }
+            return p;
+        });
+    }
+
+    private void gatewaySucceeds() {
+        when(paymentGateway.executePayment(any()))
+                .thenReturn(GatewayPaymentResponse.builder()
+                        .transactionId("txn-s42")
+                        .status(PaymentGatewayProvider.GatewayPaymentStatus.SUCCEEDED)
+                        .rawResponse("{}")
+                        .build());
+    }
+
+    @Test
+    @DisplayName("S42 guard order: lock timeout, slot 1, slot 2 (bill locks), slot 3 (pay guard), slot 5, then the"
+            + " payment row and the gateway")
+    void slotsRunInTheirOrderBeforeTheGateway() {
+        VendorBill bill = approvedBill("INV-S", "412.00", "bob");
+        ExecuteAPPaymentRequest request =
+                buildRequest(testPaymentRef, testVendorId, new BigDecimal("412.00"), PaymentMethod.ACH);
+        request.setFeeAmount(new BigDecimal("1.50"));
+        request.setAllocations(List.of(
+                new ExecuteAPPaymentRequest.AllocationLineRequest(bill.getVendorBillId(), new BigDecimal("412.00"))));
+        when(paymentRepository.findByPaymentRef(testPaymentRef)).thenReturn(Optional.empty());
+        when(billRepository.lockByVendorBillIdIn(any())).thenReturn(List.of(bill));
+        savesAssignId();
+        gatewaySucceeds();
+
+        APPaymentResponse result = service.executePayment(request, "ana");
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(
+                lockTimeout, preGatewayChecks, billRepository, payGuard, paymentRepository, paymentGateway);
+        order.verify(lockTimeout).apply();
+        order.verify(preGatewayChecks).checkRequest(request, Optional.of(BUSINESS_DATE));
+        order.verify(billRepository).lockByVendorBillIdIn(any());
+        order.verify(payGuard).check(List.of(bill), "ana", testPaymentRef);
+        order.verify(preGatewayChecks).checkPeriodAndMapping(Optional.of(BUSINESS_DATE), new BigDecimal("1.50"), null);
+        order.verify(paymentRepository).save(any(APPayment.class));
+        order.verify(paymentGateway).executePayment(any());
+        assertThat(result.getBankAccountId()).isEqualTo(BANK_ID);
+        assertThat(result.getPaymentDate()).isEqualTo(BUSINESS_DATE);
+        assertThat(result.getStatus()).isEqualTo(APPaymentStatus.GL_POST_PENDING);
+        org.mockito.ArgumentCaptor<Object> event = org.mockito.ArgumentCaptor.forClass(Object.class);
+        verify(outboxService).saveToOutbox(any(), eq("APPayment"), eq(TEST_PAYMENT_ID), anyString(), event.capture());
+        assertThat(event.getValue())
+                .isInstanceOfSatisfying(
+                        com.positivity.accounting.internal.dto.APPaymentGLPostingEvent.class,
+                        e -> assertThat(e.getPaymentId()).isEqualTo(TEST_PAYMENT_ID));
+    }
+
+    @Test
+    @DisplayName("S42 slot 1: a refusal there comes before any bill is locked, the pay guard, slot 5, the payment row"
+            + " and the gateway")
+    void slotOneRefusalComesFirst() {
+        ExecuteAPPaymentRequest request =
+                buildRequest(testPaymentRef, testVendorId, new BigDecimal("400.00"), PaymentMethod.CREDIT_CARD);
+        when(paymentRepository.findByPaymentRef(testPaymentRef)).thenReturn(Optional.empty());
+        when(preGatewayChecks.checkRequest(any(), any()))
+                .thenThrow(new VendorBillException(
+                        VendorBillException.Code.AP_PAYMENT_METHOD_NOT_SUPPORTED, "card payments are not booked yet"));
+
+        assertThatThrownBy(() -> service.executePayment(request, "ana"))
+                .isInstanceOfSatisfying(
+                        VendorBillException.class,
+                        e -> assertThat(e.getCode())
+                                .isEqualTo(VendorBillException.Code.AP_PAYMENT_METHOD_NOT_SUPPORTED));
+        verify(billRepository, never()).lockByVendorIdAndStatus(any(), any());
+        verify(billRepository, never()).lockByVendorBillIdIn(any());
+        verify(payGuard, never()).check(any(), any(), any());
+        verify(preGatewayChecks, never()).checkPeriodAndMapping(any(), any(), any());
+        verify(paymentRepository, never()).save(any(APPayment.class));
+        verify(paymentGateway, never()).executePayment(any());
+    }
+
+    @Test
+    @DisplayName("S42 AC4: a self-approved bill in a closed period answers the pay guard's 403; slot 5 never runs")
+    void payGuardComesBeforeThePeriod() {
+        VendorBill bill = approvedBill("INV-P", "400.00", "ana");
+        ExecuteAPPaymentRequest request =
+                buildRequest(testPaymentRef, testVendorId, new BigDecimal("400.00"), PaymentMethod.ACH);
+        request.setAllocations(List.of(
+                new ExecuteAPPaymentRequest.AllocationLineRequest(bill.getVendorBillId(), new BigDecimal("400.00"))));
+        when(paymentRepository.findByPaymentRef(testPaymentRef)).thenReturn(Optional.empty());
+        when(billRepository.lockByVendorBillIdIn(any())).thenReturn(List.of(bill));
+        org.mockito.Mockito.doThrow(selfApproved("INV-P")).when(payGuard).check(any(), eq("ana"), any());
+        when(preGatewayChecks.checkPeriodAndMapping(any(), any(), any()))
+                .thenThrow(new com.positivity.accounting.internal.exception.AccountingPeriodClosedException(
+                        "2024-01", "closed"));
+
+        assertThatThrownBy(() -> service.executePayment(request, "ana"))
+                .isInstanceOfSatisfying(
+                        VendorBillException.class,
+                        e -> assertThat(e.getCode()).isEqualTo(VendorBillException.Code.AP_PAYMENT_SELF_APPROVED_BILL));
+        verify(preGatewayChecks, never()).checkPeriodAndMapping(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("S42 slot 5: a closed period, a hard lock or a missing mapping refuses after the guard, before the"
+            + " payment row and the gateway")
+    void slotFiveRefusalPersistsNothing() {
+        ExecuteAPPaymentRequest request =
+                buildRequest(testPaymentRef, testVendorId, new BigDecimal("400.00"), PaymentMethod.ACH);
+        when(paymentRepository.findByPaymentRef(testPaymentRef)).thenReturn(Optional.empty());
+        when(preGatewayChecks.checkPeriodAndMapping(any(), any(), any()))
+                .thenThrow(new com.positivity.accounting.internal.exception.GLMappingNotConfiguredException(
+                        "No active AP_PAYMENT/ACCOUNTS_PAYABLE mapping",
+                        "AP_PAYMENT",
+                        "ACCOUNTS_PAYABLE",
+                        "Set it up"));
+
+        assertThatThrownBy(() -> service.executePayment(request, "ana"))
+                .isInstanceOf(com.positivity.accounting.internal.exception.GLMappingNotConfiguredException.class);
+        verify(payGuard).check(List.of(), "ana", testPaymentRef);
+        verify(paymentRepository, never()).save(any(APPayment.class));
+        verify(paymentGateway, never()).executePayment(any());
+        verify(outboxService, never()).saveToOutbox(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("S42 AC5: an accepted closed-period override is stored with the payment, naming the payer")
+    void acceptedOverrideTravelsWithThePayment() {
+        ExecuteAPPaymentRequest request =
+                buildRequest(testPaymentRef, testVendorId, new BigDecimal("400.00"), PaymentMethod.ACH);
+        request.setOverrideJustification("Paid on the agreed date; period closed early");
+        when(paymentRepository.findByPaymentRef(testPaymentRef)).thenReturn(Optional.empty());
+        when(preGatewayChecks.checkPeriodAndMapping(any(), any(), any()))
+                .thenReturn(new APPaymentPreGatewayChecks.Execution(BUSINESS_DATE, true));
+        org.mockito.ArgumentCaptor<APPayment> saved = org.mockito.ArgumentCaptor.forClass(APPayment.class);
+        savesAssignId();
+        gatewaySucceeds();
+
+        service.executePayment(request, "ana");
+
+        verify(paymentRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
+        APPayment payment = saved.getAllValues().getFirst();
+        assertThat(payment.getPeriodOverrideJustification()).isEqualTo("Paid on the agreed date; period closed early");
+        assertThat(payment.getPeriodOverrideBy()).isEqualTo("ana");
+        assertThat(payment.getPaymentDate()).isEqualTo(BUSINESS_DATE);
+    }
+
+    @Test
+    @DisplayName("S42: an override the open period did not need is not stored")
+    void overrideOfAnOpenPeriodIsNotStored() {
+        ExecuteAPPaymentRequest request =
+                buildRequest(testPaymentRef, testVendorId, new BigDecimal("400.00"), PaymentMethod.ACH);
+        request.setOverrideJustification("Paid on the agreed date; period closed early");
+        when(paymentRepository.findByPaymentRef(testPaymentRef)).thenReturn(Optional.empty());
+        org.mockito.ArgumentCaptor<APPayment> saved = org.mockito.ArgumentCaptor.forClass(APPayment.class);
+        savesAssignId();
+        gatewaySucceeds();
+
+        service.executePayment(request, "ana");
+
+        verify(paymentRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
+        assertThat(saved.getAllValues().getFirst().getPeriodOverrideJustification())
+                .isNull();
+        assertThat(saved.getAllValues().getFirst().getPeriodOverrideBy()).isNull();
+    }
+
+    @Test
+    @DisplayName("S42: a replay compares the resolved bank account; an omitted one resolves to the stored default")
+    void replayComparesTheResolvedBankAccount() {
+        ExecuteAPPaymentRequest omitted =
+                buildRequest(testPaymentRef, testVendorId, new BigDecimal("1500.00"), PaymentMethod.ACH);
+        APPayment existing = buildExistingPayment(
+                TEST_PAYMENT_ID, testPaymentRef, testVendorId, new BigDecimal("1500.00"), PaymentMethod.ACH);
+        when(paymentRepository.findByPaymentRef(testPaymentRef)).thenReturn(Optional.of(existing));
+
+        assertThat(service.executePayment(omitted, "ana").getPaymentId()).isEqualTo(TEST_PAYMENT_ID);
+        verify(preGatewayChecks).defaultBankAccount(BUSINESS_DATE);
+
+        ExecuteAPPaymentRequest other =
+                buildRequest(testPaymentRef, testVendorId, new BigDecimal("1500.00"), PaymentMethod.ACH);
+        other.setBankAccountId(UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f1010"));
+        assertThatThrownBy(() -> service.executePayment(other, "ana"))
+                .isInstanceOf(IdempotencyConflictException.class)
+                .hasMessageContaining("bankAccountId");
+        verify(paymentGateway, never()).executePayment(any());
+    }
+
+    @Test
+    @DisplayName("S42 AC12 (#2627): a gateway timeout leaves no allocation and no posting; the resend of the same"
+            + " paymentRef whose gateway replay succeeds books the payment once")
+    void gatewayTimeoutLeavesNothingAndTheResendBooksOnce() {
+        VendorBill bill = approvedBill("INV-T", "400.00", "bob");
+        ExecuteAPPaymentRequest request =
+                buildRequest(testPaymentRef, testVendorId, new BigDecimal("400.00"), PaymentMethod.ACH);
+        request.setAllocations(List.of(
+                new ExecuteAPPaymentRequest.AllocationLineRequest(bill.getVendorBillId(), new BigDecimal("400.00"))));
+        when(paymentRepository.findByPaymentRef(testPaymentRef)).thenReturn(Optional.empty());
+        when(billRepository.lockByVendorBillIdIn(any())).thenReturn(List.of(bill));
+        savesAssignId();
+        when(paymentGateway.executePayment(any()))
+                .thenThrow(new com.positivity.accounting.internal.payment.PaymentGatewayException(
+                        "Read timed out", new java.net.SocketTimeoutException("Read timed out")))
+                .thenReturn(GatewayPaymentResponse.builder()
+                        .transactionId("ch_replayed")
+                        .status(PaymentGatewayProvider.GatewayPaymentStatus.SUCCEEDED)
+                        .rawResponse("{}")
+                        .build());
+
+        assertThatThrownBy(() -> service.executePayment(request, "ana")).isInstanceOf(PaymentGatewayException.class);
+        verify(allocationRepository, never()).saveAll(any());
+        verify(outboxService, never()).saveToOutbox(any(), any(), any(), any(), any());
+
+        APPaymentResponse booked = service.executePayment(request, "ana");
+
+        assertThat(booked.getGatewayTransactionId()).isEqualTo("ch_replayed");
+        org.mockito.ArgumentCaptor<com.positivity.accounting.internal.payment.GatewayPaymentRequest> sent =
+                org.mockito.ArgumentCaptor.forClass(
+                        com.positivity.accounting.internal.payment.GatewayPaymentRequest.class);
+        verify(paymentGateway, org.mockito.Mockito.times(2)).executePayment(sent.capture());
+        assertThat(sent.getAllValues())
+                .extracting(com.positivity.accounting.internal.payment.GatewayPaymentRequest::getIdempotencyKey)
+                .containsOnly(testPaymentRef);
+        verify(allocationRepository).saveAll(any());
+        verify(outboxService).saveToOutbox(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("S42 retry: a refusal is recorded on the payment in its own transaction and answered unwrapped")
+    void retryRefusalIsRecordedAndRethrown() {
+        com.positivity.accounting.internal.exception.GLMappingNotConfiguredException refusal =
+                new com.positivity.accounting.internal.exception.GLMappingNotConfiguredException("missing");
+        when(postingService.retry(TEST_PAYMENT_ID, null)).thenThrow(refusal);
+
+        assertThatThrownBy(() -> service.retryGLPosting(TEST_PAYMENT_ID, null)).isSameAs(refusal);
+        verify(paymentFailurePersistenceService).persistGLPostRefusal(TEST_PAYMENT_ID, "GL_MAPPING_NOT_CONFIGURED");
+    }
+
+    @Test
+    @DisplayName("S42 retry: AP_PAYMENT_NOT_RETRYABLE and other failures record nothing on the payment")
+    void retryNonRefusalRecordsNothing() {
+        VendorBillException notRetryable =
+                new VendorBillException(VendorBillException.Code.AP_PAYMENT_NOT_RETRYABLE, "already posted");
+        when(postingService.retry(TEST_PAYMENT_ID, "Reopened for the audit")).thenThrow(notRetryable);
+
+        assertThatThrownBy(() -> service.retryGLPosting(TEST_PAYMENT_ID, "Reopened for the audit"))
+                .isSameAs(notRetryable);
+        verify(paymentFailurePersistenceService, never()).persistGLPostRefusal(any(), any());
+    }
+
+    @Test
+    @DisplayName("S42 retry: a posted retry answers the payment, GL_POSTED")
+    void retryAnswersThePostedPayment() {
+        APPayment posted = buildExistingPayment(
+                TEST_PAYMENT_ID, testPaymentRef, testVendorId, new BigDecimal("412.00"), PaymentMethod.ACH);
+        posted.setStatus(APPaymentStatus.GL_POSTED);
+        when(paymentRepository.findById(TEST_PAYMENT_ID)).thenReturn(Optional.of(posted));
+
+        APPaymentResponse result = service.retryGLPosting(TEST_PAYMENT_ID, null);
+
+        verify(postingService).retry(TEST_PAYMENT_ID, null);
+        assertThat(result.getStatus()).isEqualTo(APPaymentStatus.GL_POSTED);
+    }
+
+    // ========================================
     // Helper Methods
     // ========================================
 
@@ -565,6 +849,8 @@ class APPaymentServiceTest {
         payment.setCurrency("USD");
         payment.setPaymentMethod(method);
         payment.setStatus(APPaymentStatus.GATEWAY_SUCCEEDED);
+        payment.setBankAccountId(BANK_ID);
+        payment.setPaymentDate(BUSINESS_DATE);
         payment.setCreatedAt(Instant.now(TEST_CLOCK));
         return payment;
     }

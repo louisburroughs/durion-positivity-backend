@@ -5,6 +5,7 @@ import com.positivity.accounting.internal.enums.APPaymentStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -57,11 +58,6 @@ public class APPaymentResponse {
     private BigDecimal feeAmount;
 
     @Nullable
-    @Schema(description = "Net amount", example = "1485.00")
-    @JsonProperty("netAmount")
-    private BigDecimal netAmount;
-
-    @Nullable
     @Schema(description = "Unapplied amount (credit to vendor)", example = "0.00")
     @JsonProperty("unappliedAmount")
     private BigDecimal unappliedAmount;
@@ -69,6 +65,21 @@ public class APPaymentResponse {
     @Schema(description = "Currency code", example = "USD")
     @JsonProperty("currency")
     private String currency;
+
+    @Nullable
+    @Schema(
+            description = "GL account id of the BANK_CASH account the payment was made from (CAP:550 S42)",
+            example = "01936e5c-1111-7a3d-8b6e-2b3456789012")
+    @JsonProperty("bankAccountId")
+    private UUID bankAccountId;
+
+    @Nullable
+    @Schema(
+            description =
+                    "The tenant business date the payment executed on; its entry posts on this date (CAP:550 S42)",
+            example = "2026-10-08")
+    @JsonProperty("paymentDate")
+    private LocalDate paymentDate;
 
     @Schema(description = "Payment status", example = "GATEWAY_SUCCEEDED")
     @JsonProperty("status")
@@ -95,7 +106,12 @@ public class APPaymentResponse {
     private Instant glPostedAt;
 
     @Nullable
-    @Schema(description = "GL posting error message (if failed)", example = "Account 2000 not found")
+    @Schema(
+            description = "Why the posting was refused, as its code (GL_MAPPING_NOT_CONFIGURED, PERIOD_CLOSED,"
+                    + " PERIOD_HARD_LOCKED, ACCOUNTING_TIME_ZONE_UNSET, GL_ACCOUNT_NOT_ACTIVE) or GL_POST_RETRIES_EXHAUSTED"
+                    + " (the outbox gave up on a transient failure) while the payment is GL_POST_FAILED; in every case"
+                    + " gl-posting-retry is the remedy once the cause is fixed",
+            example = "GL_MAPPING_NOT_CONFIGURED")
     @JsonProperty("glPostError")
     private String glPostError;
 

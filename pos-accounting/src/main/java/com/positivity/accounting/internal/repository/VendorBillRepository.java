@@ -4,6 +4,7 @@ import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import jakarta.persistence.LockModeType;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
@@ -324,5 +325,5 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
                WHERE p.vendorBill.vendorBillId = vb.vendorBillId) < :to
         """)
     List<VendorBill> findApprovedPaidInFullWithLastPaymentBetween(
-            @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+            @Param("from") LocalDate from, @Param("to") LocalDate to);
 }

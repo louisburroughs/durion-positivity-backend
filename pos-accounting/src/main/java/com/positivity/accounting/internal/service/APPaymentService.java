@@ -115,4 +115,22 @@ public interface APPaymentService {
      * @param errorMessage GL posting error
      */
     void recordGLPostFailure(@NonNull UUID paymentId, @NonNull String errorMessage);
+
+    /**
+     * Posts again a payment whose posting was refused (CAP:550 S42, #2603): only a {@code GL_POST_FAILED} payment, on
+     * its stored {@code payment_date}, with the payment row locked.
+     *
+     * @param paymentId             the payment
+     * @param overrideJustification the caller's closed-period justification (with the caller's {@code
+     *                              accounting:period:override}); the override stored by the pay command never applies
+     * @return the payment, {@code GL_POSTED} with its journal entry id
+     * @throws jakarta.persistence.EntityNotFoundException when no such payment is visible (404 {@code NOT_FOUND})
+     * @throws com.positivity.accounting.internal.exception.VendorBillException {@code AP_PAYMENT_NOT_RETRYABLE} (409)
+     *     when the payment is not {@code GL_POST_FAILED}
+     * @throws RuntimeException a refusal (422 {@code GL_MAPPING_NOT_CONFIGURED}, {@code PERIOD_CLOSED}, {@code
+     *     PERIOD_HARD_LOCKED}, {@code ACCOUNTING_TIME_ZONE_UNSET}); the payment stays {@code GL_POST_FAILED} with the
+     *     new reason in {@code glPostError}
+     */
+    @NonNull
+    APPaymentResponse retryGLPosting(@NonNull UUID paymentId, @Nullable String overrideJustification);
 }

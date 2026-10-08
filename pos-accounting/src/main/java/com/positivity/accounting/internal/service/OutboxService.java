@@ -42,8 +42,9 @@ public interface OutboxService {
      * @param outboxId   the outbox entry ID
      * @param errorMsg   error message from publication attempt
      * @param maxRetries maximum number of retries before marking as FAILED
+     * @return true when this failure was the last one and the row is now FAILED (never polled again)
      */
-    void markAsFailed(UUID outboxId, String errorMsg, int maxRetries);
+    boolean markAsFailed(UUID outboxId, String errorMsg, int maxRetries);
 
     /**
      * Cleanup old published events (for scheduled archival).

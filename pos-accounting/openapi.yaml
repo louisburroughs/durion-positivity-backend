@@ -513,17 +513,17 @@ paths:
       - accounting:ap:view
   /v1/accounting/ap/payments:
     post:
-      description: 'Executes an AP vendor payment through the payment gateway, optionally allocating it across approved vendor bills, and posts the corresponding GL entries.
+      description: 'Executes an AP vendor payment through the payment gateway from a functional-currency BANK_CASH account, optionally allocating it across approved vendor bills; the outbox then posts Dr 2000 the gross, Dr 6030 the fee and Cr the bank account on the payment''s business date (AP_PAYMENT category).
 
         Use this tool to pay a vendor; do not use applyPayment, which is the AR-side application of customer payments to invoices, and use listApBills first to find APPROVED bills to allocate against.
 
-        Preconditions: every allocated bill must exist, be APPROVED and belong to the vendor, the allocation total must not exceed the gross amount, and the payer must not be the person who approved any bill the payment allocates to, explicit or oldest due first (separation of duties, unless the tenant''s AP approval policy allows it; a system approval never blocks).
+        Preconditions: checked in this order before the gateway is called, charging nothing, the method is ACH, CHECK or WIRE, the currency is the functional currency, the bank account is eligible (active from the start of the business date, not deactivated before the payment, not in a foreign currency), every allocated bill exists, is APPROVED, belongs to the vendor and fits the gross amount, the payer approved none of the bills paid (unless the AP approval policy allows it), the business date is not hard-locked, its period is open or overridden, and the AP_PAYMENT mappings ACCOUNTS_PAYABLE (and PAYMENT_FEES when a fee is charged) are set up.
 
-        Required inputs: vendorId (UUID), grossAmount (min 0.01), currency (3-char ISO code), paymentRef (max 100 chars, the idempotency key) and paymentMethod (e.g. ACH, CHECK); feeAmount, netAmount, paymentSource, memo and explicit allocations are optional.
+        Required inputs: vendorId (UUID), grossAmount (min 0.01), currency (ISO 4217), paymentRef (max 100 chars, the idempotency key) and paymentMethod; bankAccountId may be omitted only when exactly one eligible account exists, and feeAmount, overrideJustification (10-1000 chars, honoured with accounting:period:override), paymentSource, memo and explicit allocations are optional.
 
-        Emits an AP_PAYMENT_EXECUTE event; the call is idempotent on paymentRef, replaying the same ref with the same payload as a 200 instead of paying twice.
+        Emits an AP_PAYMENT_EXECUTE event; the call is idempotent on paymentRef, replaying the same ref with the same payload (the bank account compared as resolved) as a 200 instead of paying twice, and a gateway failure or timeout leaves no payment behind, so the same paymentRef is simply sent again.
 
-        Returns 200 on an idempotent replay, 409 IDEMPOTENCY_CONFLICT when the paymentRef exists with a different payload, 400 when a bill is missing, unapproved or over-allocated (allocation is refused before the gateway; nothing is charged), 403 AP_PAYMENT_SELF_APPROVED_BILL (fieldErrors name the bills by number) before any payment row is saved or the gateway is called, and 500 PAYMENT_GATEWAY_FAILURE when the gateway cannot be reached.
+        Returns 400 VALIDATION_ERROR for a malformed body, an unknown currency code, a refused allocation or fieldErrors[bankAccountId], 403 AP_PAYMENT_SELF_APPROVED_BILL, 409 IDEMPOTENCY_CONFLICT or LOCK_TIMEOUT, 422 AP_PAYMENT_METHOD_NOT_SUPPORTED, CURRENCY_NOT_SUPPORTED, ACCOUNTING_TIME_ZONE_UNSET, PERIOD_HARD_LOCKED, PERIOD_CLOSED or GL_MAPPING_NOT_CONFIGURED, and 500 PAYMENT_GATEWAY_FAILURE when the gateway fails or times out.
 
         '
       operationId: executeApPayment
@@ -537,7 +537,9 @@ paths:
                   allocations:
                   - appliedAmount: 250.0
                     vendorBillId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                  bankAccountId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a60
                   currency: USD
+                  feeAmount: 1.5
                   grossAmount: 250.0
                   paymentMethod: ACH
                   paymentRef: ap-pay-2026-08-13-007
@@ -564,7 +566,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'Validation error: negative amounts, invalid bills, etc.'
+          description: 'VALIDATION_ERROR: a malformed body, a currency that is not ISO 4217, a bill missing, unapproved, another vendor''s or over-allocated, or fieldErrors[bankAccountId] when the bank account is missing and not exactly one is eligible, or the one supplied is not eligible; nothing is charged'
         '403':
           content:
             application/json:
@@ -576,13 +578,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'Conflict: paymentRef exists with different payload'
+          description: 'IDEMPOTENCY_CONFLICT: paymentRef exists with a different payload; LOCK_TIMEOUT: another request held these bills beyond accounting.ap.lock-timeout, the payment was not saved, retry'
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'Refused before the gateway, in this order: AP_PAYMENT_METHOD_NOT_SUPPORTED (CREDIT_CARD, OTHER), CURRENCY_NOT_SUPPORTED (not the functional currency), ACCOUNTING_TIME_ZONE_UNSET, PERIOD_HARD_LOCKED, PERIOD_CLOSED (no overrideJustification with accounting:period:override), GL_MAPPING_NOT_CONFIGURED (AP_PAYMENT/ACCOUNTS_PAYABLE, or PAYMENT_FEES with a fee); nothing is charged or persisted'
         '500':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Payment gateway failure
+          description: 'PAYMENT_GATEWAY_FAILURE: the gateway failed or timed out; the outcome is unknown, nothing was persisted, and the same paymentRef is sent again (its idempotency key replays the outcome)'
       security:
       - bearerAuth:
         - accounting:ap:pay
@@ -685,6 +693,87 @@ paths:
       - AP Payments
       x-required-permissions:
       - accounting:ap:view
+  /v1/accounting/ap/payments/{paymentId}/gl-posting-retry:
+    post:
+      description: 'Posts again the ledger entry of an executed AP payment whose posting was refused, on the payment''s own stored date: Dr 2000 the gross, Dr 6030 the fee, Cr the bank account it was paid from.
+
+        Use this tool once the reason in glPostError is fixed (a GL mapping set up, a period reopened, or with an override); do not use executeApPayment again, which would pay the vendor twice, and do not use the journal-entry endpoints instead, which would post the payment outside its own record.
+
+        Preconditions: the payment exists and is GL_POST_FAILED; the payment row is locked for the retry, and the entry is never re-dated, so a payment whose date is now hard-locked stays GL_POST_FAILED.
+
+        Required inputs: paymentId (UUID) as a path parameter and an optional body with overrideJustification (10-1000 chars, honoured with the caller''s accounting:period:override and audited under the caller); a retry never reuses the override the payer gave on the pay command.
+
+        Emits ACCOUNTING_AP_PAYMENT_GL_POSTING_RETRY; on success the payment is GL_POSTED with its journal entry id, and a refused retry leaves it GL_POST_FAILED with the new reason in glPostError.
+
+        Returns 404 NOT_FOUND when no such payment exists, 409 AP_PAYMENT_NOT_RETRYABLE when it is not GL_POST_FAILED (already posted, pending, or a gateway state), 409 LOCK_TIMEOUT when another request holds it, and 422 GL_MAPPING_NOT_CONFIGURED, GL_ACCOUNT_NOT_ACTIVE, PERIOD_CLOSED, PERIOD_HARD_LOCKED or ACCOUNTING_TIME_ZONE_UNSET when the posting is still refused.
+
+        '
+      operationId: retryApPaymentGlPosting
+      parameters:
+      - description: Payment UUID
+        example: 01936e5c-7890-7a3d-8b6e-2b3456789012
+        in: path
+        name: paymentId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Retry with an override:
+                description: Retry with an override
+                value:
+                  overrideJustification: June reopened for audit; posting the vendor payment
+            schema:
+              $ref: '#/components/schemas/APPaymentGLPostingRetryRequest'
+        description: Optional closed-period override of the caller; may be omitted.
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APPaymentResponse'
+          description: 'Posted: the payment is GL_POSTED with its journal entry id'
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VALIDATION_ERROR: overrideJustification under 10 or over 1000 characters'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: FORBIDDEN without accounting:je:post
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'NOT_FOUND: no such AP payment'
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'AP_PAYMENT_NOT_RETRYABLE: the payment is not GL_POST_FAILED; LOCK_TIMEOUT: another request held the payment or the period row (posting''s period gate) beyond accounting.ap.lock-timeout'
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'The posting is still refused: GL_MAPPING_NOT_CONFIGURED, GL_ACCOUNT_NOT_ACTIVE, PERIOD_CLOSED (no overrideJustification of the caller''s own), PERIOD_HARD_LOCKED or ACCOUNTING_TIME_ZONE_UNSET; the payment stays GL_POST_FAILED with this code in glPostError'
+      security:
+      - bearerAuth:
+        - accounting:je:post
+      summary: Retry AP Payment GL Posting
+      tags:
+      - AP Payments
+      x-required-permissions:
+      - accounting:je:post
   /v1/accounting/audit/actor/{actorId}:
     get:
       description: 'Returns audit trail entries recorded by one actor (user) within a date range, across all exception types.
@@ -4435,7 +4524,7 @@ paths:
       - accounting:events:view
   /v1/accounting/events/types:
     get:
-      description: 'Lists every accounting event type the deployed code records, each with its code, display name, source domain, ingestion path (KAFKA or API) and whether a fact of that type can produce a journal entry. KAFKA types are recorded by the module''s topic listeners; API types are the ones the module''s own code submits through submitEvent (INVOICE_PAYMENT, AP_PAYMENT_GL_POSTING). Vendor bills post at approval through the VENDOR_BILL posting category; VENDOR_BILL_GL_POSTING is retired.
+      description: 'Lists every accounting event type the deployed code records, each with its code, display name, source domain, ingestion path (KAFKA or API) and whether a fact of that type can produce a journal entry. KAFKA types are recorded by the module''s topic listeners; API types are the ones the module''s own code submits through submitEvent (INVOICE_PAYMENT). Vendor bills post at approval through the VENDOR_BILL posting category and AP payments from the outbox through the AP_PAYMENT posting category; VENDOR_BILL_GL_POSTING and AP_PAYMENT_GL_POSTING are retired.
 
         submitEvent checks only that eventType is present and accepts any string, so a caller can record a type this list does not hold; such an event is posted only when an active posting rule set or default GL mapping resolves its type, and is otherwise suspended.
 
@@ -13434,6 +13523,16 @@ paths:
       - accounting:ap:view
 components:
   schemas:
+    APPaymentGLPostingRetryRequest:
+      description: Optional request payload for posting a refused AP payment again
+      properties:
+        overrideJustification:
+          description: Justification for posting into the CLOSED period of the payment's own date; honoured only with the caller's accounting:period:override, and audited under the caller. A retry never reuses the override the payer gave on the pay command. Never bypasses the hard lock.
+          example: Period reopened for audit adjustments; posting the June vendor payment
+          maxLength: 1000
+          minLength: 10
+          type: string
+      type: object
     APPaymentResponse:
       description: AP Payment response with allocations and GL status
       properties:
@@ -13442,6 +13541,11 @@ components:
           items:
             $ref: '#/components/schemas/AllocationLineResponse'
           type: array
+        bankAccountId:
+          description: GL account id of the BANK_CASH account the payment was made from (CAP:550 S42)
+          example: 01936e5c-1111-7a3d-8b6e-2b3456789012
+          format: uuid
+          type: string
         createdAt:
           description: Payment created timestamp
           example: '2026-02-09T10:29:00Z'
@@ -13474,8 +13578,8 @@ components:
           format: uuid
           type: string
         glPostError:
-          description: GL posting error message (if failed)
-          example: Account 2000 not found
+          description: Why the posting was refused, as its code (GL_MAPPING_NOT_CONFIGURED, PERIOD_CLOSED, PERIOD_HARD_LOCKED, ACCOUNTING_TIME_ZONE_UNSET, GL_ACCOUNT_NOT_ACTIVE) or GL_POST_RETRIES_EXHAUSTED (the outbox gave up on a transient failure) while the payment is GL_POST_FAILED; in every case gl-posting-retry is the remedy once the cause is fixed
+          example: GL_MAPPING_NOT_CONFIGURED
           type: string
         glPostedAt:
           description: GL posting timestamp
@@ -13490,10 +13594,11 @@ components:
           description: Payment memo/notes
           example: Monthly supplier payment
           type: string
-        netAmount:
-          description: Net amount
-          example: 1485.0
-          type: number
+        paymentDate:
+          description: The tenant business date the payment executed on; its entry posts on this date (CAP:550 S42)
+          example: '2026-10-08'
+          format: date
+          type: string
         paymentId:
           description: Payment UUID
           example: 01936e5c-7890-7a3d-8b6e-2b3456789012
@@ -18494,8 +18599,13 @@ components:
           items:
             $ref: '#/components/schemas/AllocationLineRequest'
           type: array
+        bankAccountId:
+          description: 'GL account id of the BANK_CASH account the payment is made from: active at the start of the execution date, not deactivated before the payment, and in the functional currency. May be omitted only when exactly one such account exists, which is then used (CAP:550 S42, AW41)'
+          example: 01936e5c-1111-7a3d-8b6e-2b3456789012
+          format: uuid
+          type: string
         currency:
-          description: ISO 4217 currency code
+          description: ISO 4217 currency code; must be the tenant's functional currency (else 422 CURRENCY_NOT_SUPPORTED, ADR-0067 PC-9)
           example: USD
           maxLength: 3
           minLength: 3
@@ -18515,10 +18625,12 @@ components:
           maxLength: 1000
           minLength: 0
           type: string
-        netAmount:
-          description: Net amount deposited (if applicable)
-          example: 1485.0
-          type: number
+        overrideJustification:
+          description: Justification for paying while the execution date's period is CLOSED; honoured only with accounting:period:override. The override is stored with the payment and applied to its posting, whose audit row names the payer (CAP:550 S42)
+          example: Supplier paid on the agreed date; the period was closed early by mistake
+          maxLength: 1000
+          minLength: 10
+          type: string
         paymentMethod:
           description: Payment method (ACH, CHECK, WIRE, CREDIT_CARD, OTHER)
           enum:

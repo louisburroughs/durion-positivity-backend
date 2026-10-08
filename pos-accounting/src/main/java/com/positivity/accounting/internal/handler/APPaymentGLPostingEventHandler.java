@@ -1,159 +1,63 @@
 package com.positivity.accounting.internal.handler;
 
-import com.positivity.accounting.internal.config.AccountingEventTypeRegistry;
 import com.positivity.accounting.internal.dto.APPaymentGLPostingEvent;
-import com.positivity.accounting.internal.dto.AccountingEventResponse;
-import com.positivity.accounting.internal.service.EventIngestionService;
-import com.positivity.accounting.internal.service.EventIngestionServiceImpl;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import com.positivity.accounting.internal.service.APPaymentFailurePersistenceService;
+import com.positivity.accounting.internal.service.APPaymentPostingService;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Event handler for AP payment GL posting events.
+ * Delivers an executed AP payment to the ledger from the transactional outbox (CAP:550 S42, #2603; AW40, AW41): {@link
+ * APPaymentPostingService} posts the payment's own entry (Dr 2000 / Dr 6030 fee / Cr its bank) through the {@code
+ * AP_PAYMENT} posting category. No accounting event and no posting-rule version is involved.
  *
- * <p>
- * Listens to {@link APPaymentGLPostingEvent} and creates accounting events for
- * journal entry generation. The posting engine will create:
+ * <p><b>Failures</b> (ruling 4 of #2603):
+ *
  * <ul>
- * <li>Dr Accounts Payable (reduce liability for each allocated bill)</li>
- * <li>Cr Cash / Bank (payment outflow)</li>
+ *   <li>A <b>refusal</b> is not transient: {@code GL_MAPPING_NOT_CONFIGURED}, {@code PERIOD_CLOSED}, {@code
+ *       PERIOD_HARD_LOCKED} and {@code ACCOUNTING_TIME_ZONE_UNSET}. The money has moved, so the payment stands: it goes
+ *       {@code GL_POST_FAILED} with the code as its {@code glPostError}, recorded in a transaction of its own, and the
+ *       outbox row completes without spending its retries. The remedy is {@code gl-posting-retry}.
+ *   <li><b>Any other exception</b> is transient and propagates, so the outbox retries the row with backoff.
  * </ul>
  *
- * <p>
- * If the payment has processing fees, an additional entry is created:
- * <ul>
- * <li>Dr Processing Fee Expense</li>
- * <li>Cr Cash / Bank</li>
- * </ul>
- *
- * <p>
- * This handler converts the domain event into an
- * {@link com.positivity.accounting.internal.entity.AccountingEvent}
- * which is then processed by the posting engine to:
- * <ol>
- * <li>Load active posting rule set for the event</li>
- * <li>Evaluate rules to determine GL account mappings</li>
- * <li>Create balanced journal entry</li>
- * <li>Auto-post if rule set allows</li>
- * </ol>
- *
- * @see EventIngestionServiceImpl
- * @see <a href=
- *      "https://github.com/louisburroughs/durion-positivity-backend/issues/128">Issue
- *      #128</a>
+ * <p>The handler runs no transaction of its own: the posting's transaction rolls back on a refusal before the refusal
+ * is recorded, and nothing here would be committed by a caller's.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class APPaymentGLPostingEventHandler {
 
-    private final EventIngestionService eventIngestionService;
+    private final APPaymentPostingService postingService;
+    private final APPaymentFailurePersistenceService failures;
 
-    /**
-     * Handle AP payment GL posting event → create accounting event for journal
-     * entry generation.
-     *
-     * @param event AP payment GL posting event
-     */
+    /** Posts the payment the work item names. */
     @EventListener
-    @Transactional
     public void onAPPaymentGLPosting(@NonNull APPaymentGLPostingEvent event) {
         log.info(
-                "Received APPaymentGLPostingEvent | eventId={} | paymentId={} | paymentRef={} | amount={}",
+                "Received APPaymentGLPostingEvent | eventId={} | paymentId={} | paymentRef={}",
                 event.getEventId(),
                 event.getPaymentId(),
-                event.getPaymentRef(),
-                event.getGrossAmount());
-
+                event.getPaymentRef());
         try {
-            Map<String, Object> accountingEventPayload = createAccountingEventPayload(event);
-
-            AccountingEventResponse response = eventIngestionService.submitEvent(accountingEventPayload);
-
-            log.info(
-                    "AP payment GL posting event submitted | paymentId={} | accountingEventId={} | status={}",
+            postingService.postPending(event.getPaymentId());
+        } catch (RuntimeException e) {
+            Optional<String> refusal = APPaymentPostingService.refusalCode(e);
+            if (refusal.isEmpty()) {
+                // Transient: the outbox retries the row.
+                throw e;
+            }
+            log.warn(
+                    "AP payment posting refused, payment left GL_POST_FAILED | paymentId={} | code={} | reason={}",
                     event.getPaymentId(),
-                    response.getEventId(),
-                    response.getStatus());
-
-        } catch (Exception e) {
-            log.error(
-                    "Failed to process APPaymentGLPostingEvent | paymentId={} | eventId={} | error={}",
-                    event.getPaymentId(),
-                    event.getEventId(),
-                    e.getMessage(),
-                    e);
-            throw new RuntimeException("GL posting failed for AP payment: " + event.getPaymentId(), e);
+                    refusal.get(),
+                    e.getMessage());
+            failures.persistGLPostRefusal(event.getPaymentId(), refusal.get());
         }
-    }
-
-    /**
-     * Convert APPaymentGLPostingEvent to AccountingEvent payload format.
-     *
-     * <p>
-     * The payload structure follows the accounting event schema with:
-     * <ul>
-     * <li>eventType: AP_PAYMENT_GL_POSTING</li>
-     * <li>sourceSystem: POS (Durion Positivity backend)</li>
-     * <li>transactionDate: gateway timestamp (or event creation time)</li>
-     * <li>payload: payment details including allocations per vendor bill</li>
-     * </ul>
-     *
-     * @param event AP payment GL posting event
-     * @return AccountingEvent payload map
-     */
-    private Map<String, Object> createAccountingEventPayload(@NonNull APPaymentGLPostingEvent event) {
-        Map<String, Object> payload = new HashMap<>();
-
-        // Event metadata
-        payload.put("eventId", event.getEventId());
-        payload.put("eventType", AccountingEventTypeRegistry.AP_PAYMENT_GL_POSTING);
-        payload.put("sourceSystem", "POS");
-        payload.put("transactionDate", event.getGatewayTimestamp());
-        payload.put("organizationId", event.getOrganizationId());
-
-        // Payment details
-        Map<String, Object> paymentDetails = new HashMap<>();
-        paymentDetails.put("paymentId", event.getPaymentId());
-        paymentDetails.put("paymentRef", event.getPaymentRef());
-        paymentDetails.put("vendorId", event.getVendorId());
-        paymentDetails.put("vendorName", event.getVendorName());
-        paymentDetails.put("grossAmount", event.getGrossAmount());
-        paymentDetails.put("feeAmount", event.getFeeAmount());
-        paymentDetails.put("netAmount", event.getNetAmount());
-        paymentDetails.put("unappliedAmount", event.getUnappliedAmount());
-        paymentDetails.put("currency", event.getCurrency());
-        paymentDetails.put("paymentMethod", event.getPaymentMethod());
-        paymentDetails.put("gatewayTransactionId", event.getGatewayTransactionId());
-        paymentDetails.put("gatewayTimestamp", event.getGatewayTimestamp());
-        paymentDetails.put("memo", event.getMemo());
-
-        // Allocations for per-bill AP reduction entries
-        List<Map<String, Object>> allocationItems = event.getAllocations().stream()
-                .map(alloc -> {
-                    Map<String, Object> allocItem = new HashMap<>();
-                    allocItem.put("allocationId", alloc.getAllocationId());
-                    allocItem.put("vendorBillId", alloc.getVendorBillId());
-                    allocItem.put("appliedAmount", alloc.getAppliedAmount());
-                    allocItem.put("allocationSequence", alloc.getAllocationSequence());
-                    return allocItem;
-                })
-                .toList();
-
-        paymentDetails.put("allocations", allocationItems);
-        payload.put("payload", paymentDetails);
-
-        // Dimensions for multi-dimensional accounting (optional, can be added later)
-        Map<String, Object> dimensions = new HashMap<>();
-        payload.put("dimensions", dimensions);
-
-        return payload;
     }
 }

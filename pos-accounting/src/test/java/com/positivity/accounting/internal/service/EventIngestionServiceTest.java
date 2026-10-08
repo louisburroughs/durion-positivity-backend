@@ -362,8 +362,7 @@ class EventIngestionServiceTest {
                         AccountingEventTypeResponse::code,
                         AccountingEventTypeResponse::sourceDomain,
                         AccountingEventTypeResponse::postsToGl)
-                .containsExactlyInAnyOrder(
-                        tuple("INVOICE_PAYMENT", "payment", false), tuple("AP_PAYMENT_GL_POSTING", "accounting", true));
+                .containsExactly(tuple("INVOICE_PAYMENT", "payment", false));
     }
 
     @Test

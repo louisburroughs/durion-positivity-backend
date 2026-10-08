@@ -20,7 +20,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.UUID;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -93,14 +93,12 @@ public class APPayment extends TenantScopedEntity {
     @Column(name = "fee_amount", precision = 19, scale = 4)
     private BigDecimal feeAmount;
 
-    @Column(name = "net_amount", precision = 19, scale = 4)
-    private BigDecimal netAmount;
-
     @Column(name = "unapplied_amount", precision = 19, scale = 4)
     private BigDecimal unappliedAmount;
 
+    /** ISO 4217, the tenant's functional currency (checked before the gateway, ADR-0067 PC-9). */
     @Column(name = "currency", length = 3, nullable = false)
-    private String currency = "USD";
+    private String currency;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 30, nullable = false)
@@ -110,11 +108,27 @@ public class APPayment extends TenantScopedEntity {
     @Column(name = "payment_method", length = 20)
     private PaymentMethod paymentMethod;
 
+    /**
+     * The tenant business date the payment executed on (CAP:550 S42, #2603; AW41), fixed once before the gateway call:
+     * the date the period check used, the date its entry posts on and the date a retry posts on. Never re-dated.
+     */
     @Column(name = "payment_date")
-    private LocalDateTime paymentDate;
+    private LocalDate paymentDate;
 
+    /** The {@code BANK_CASH} GL account the payment was made from: the credit side of its entry (AW41). */
     @Column(name = "bank_account_id")
     private UUID bankAccountId;
+
+    /**
+     * The justification of a closed-period override accepted on the pay command (S42); the outbox posting applies it as
+     * {@link #periodOverrideBy}. Null when the execution date's period was open.
+     */
+    @Column(name = "period_override_justification", length = 1000)
+    private String periodOverrideJustification;
+
+    /** Who gave the closed-period override: the payer, named by the posting's override audit row. */
+    @Column(name = "period_override_by", length = 50)
+    private String periodOverrideBy;
 
     @Column(name = "gateway_transaction_id", length = 200)
     private String gatewayTransactionId;
@@ -154,9 +168,6 @@ public class APPayment extends TenantScopedEntity {
     public void onPrePersist() {
         if (status == null) {
             status = APPaymentStatus.INITIATED;
-        }
-        if (currency == null) {
-            currency = "USD";
         }
     }
 

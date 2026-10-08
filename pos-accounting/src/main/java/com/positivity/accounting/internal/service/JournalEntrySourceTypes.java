@@ -62,6 +62,13 @@ public final class JournalEntrySourceTypes {
      */
     public static final String GOODS_RECEIPT_ACCRUAL = "GOODS_RECEIPT_ACCRUAL";
 
+    /**
+     * An AP payment's own entry, posted from the outbox or by {@code gl-posting-retry} (CAP:550 S42, #2603; AW41): Dr
+     * 2000 / Dr 6030 fee / Cr the payment's bank account; its source event id derives from the posting key ({@code
+     * nameUUIDFromBytes("AP_PAYMENT:" + paymentId)}).
+     */
+    public static final String AP_PAYMENT = "AP_PAYMENT";
+
     public static final String INVOICE_REVENUE = "INVOICE_REVENUE";
     public static final String INVOICE_REVENUE_REVERSAL = "INVOICE_REVENUE_REVERSAL";
 

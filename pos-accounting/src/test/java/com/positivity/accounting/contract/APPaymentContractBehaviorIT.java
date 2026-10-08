@@ -11,19 +11,30 @@ import com.positivity.accounting.BaseContractIntegrationTest;
 import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
 import com.positivity.accounting.internal.entity.APPayment;
 import com.positivity.accounting.internal.entity.APPaymentAllocation;
+import com.positivity.accounting.internal.entity.GLAccount;
+import com.positivity.accounting.internal.entity.GLMapping;
 import com.positivity.accounting.internal.entity.JournalEntry;
+import com.positivity.accounting.internal.entity.MappingKey;
+import com.positivity.accounting.internal.entity.PostingCategory;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
+import com.positivity.accounting.internal.enums.AccountSubtype;
+import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.accounting.internal.enums.PaymentMethod;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.repository.APPaymentAllocationRepository;
 import com.positivity.accounting.internal.repository.APPaymentRepository;
+import com.positivity.accounting.internal.repository.GLAccountRepository;
+import com.positivity.accounting.internal.repository.GLMappingRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
+import com.positivity.accounting.internal.repository.MappingKeyRepository;
+import com.positivity.accounting.internal.repository.PostingCategoryRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
@@ -68,6 +79,24 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
     @Autowired
     private JournalEntryRepository journalEntryRepository;
 
+    @Autowired
+    private GLAccountRepository glAccountRepository;
+
+    @Autowired
+    private PostingCategoryRepository postingCategoryRepository;
+
+    @Autowired
+    private MappingKeyRepository mappingKeyRepository;
+
+    @Autowired
+    private GLMappingRepository glMappingRepository;
+
+    @Autowired
+    private com.positivity.accounting.internal.repository.EventOutboxRepository outboxRepository;
+
+    /** The BANK_CASH account every payment here is made from (CAP:550 S42, #2603). */
+    private UUID bankAccountId;
+
     private static final String API_V1_AP_PAYMENTS = "/v1/accounting/ap/payments";
     private static final String API_V1_AP_BILLS = "/v1/accounting/ap/bills";
 
@@ -83,6 +112,15 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
         apPaymentRepository.deleteAll();
         journalEntryRepository.deleteAll();
         vendorBillRepository.deleteAll();
+
+        // S42 (#2603): the H2 context runs no Flyway, so give it the AP_PAYMENT ledger the template seeds.
+        bankAccountId = account("1000-CT", "Contract operating bank", AccountType.ASSET, AccountSubtype.BANK_CASH);
+        mapAccount(
+                "ACCOUNTS_PAYABLE",
+                account("2000-CT", "Contract payables", AccountType.LIABILITY, AccountSubtype.PAYABLE));
+        mapAccount(
+                "PAYMENT_FEES",
+                account("6030-CT", "Contract bank fees", AccountType.EXPENSE, AccountSubtype.OPERATING_EXPENSE));
 
         // Setup test vendor and bills
         testVendorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -114,11 +152,31 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
 
     @AfterEach
     void tearDown() {
-        // Clean up test data after each test
+        // Clean up test data after each test; the payments' outbox rows first, so no poll posts them meanwhile.
+        outboxRepository.findAll().stream()
+                .filter(row -> "APPayment".equals(row.getAggregateType()))
+                .forEach(outboxRepository::delete);
         allocationRepository.deleteAll();
         apPaymentRepository.deleteAll();
         journalEntryRepository.deleteAll();
         vendorBillRepository.deleteAll();
+        // S42: the AP_PAYMENT ledger this class added, so classes sharing the H2 context can clear the chart.
+        postingCategoryRepository.findByCategoryName("AP_PAYMENT").ifPresent(category -> {
+            glMappingRepository.findAll().stream()
+                    .filter(mapping -> mapping.getPostingCategory() != null
+                            && category.getPostingCategoryId()
+                                    .equals(mapping.getPostingCategory().getPostingCategoryId()))
+                    .forEach(glMappingRepository::delete);
+            mappingKeyRepository.findAll().stream()
+                    .filter(key -> key.getPostingCategory() != null
+                            && category.getPostingCategoryId()
+                                    .equals(key.getPostingCategory().getPostingCategoryId()))
+                    .forEach(mappingKeyRepository::delete);
+            postingCategoryRepository.delete(category);
+        });
+        for (String code : List.of("1000-CT", "2000-CT", "6030-CT")) {
+            glAccountRepository.findByAccountCode(code).ifPresent(glAccountRepository::delete);
+        }
     }
 
     // ===============================================
@@ -136,10 +194,10 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
         request.setVendorId(testVendorId);
         request.setGrossAmount(new BigDecimal("600.00"));
         request.setFeeAmount(BigDecimal.ZERO);
-        request.setNetAmount(new BigDecimal("600.00"));
         request.setCurrency("USD");
         request.setPaymentRef(paymentRef);
         request.setPaymentMethod(PaymentMethod.ACH);
+        request.setBankAccountId(bankAccountId);
         request.setMemo("Automatic allocation test");
         request.setAllocations(List.of()); // Empty allocations triggers automatic
 
@@ -152,7 +210,8 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
                 .andExpect(jsonPath("$.paymentRef").value(paymentRef))
                 .andExpect(jsonPath("$.vendorId").value(testVendorId.toString()))
                 .andExpect(jsonPath("$.grossAmount").value(600.00))
-                .andExpect(jsonPath("$.netAmount").value(600.00))
+                .andExpect(jsonPath("$.netAmount").doesNotExist())
+                .andExpect(jsonPath("$.bankAccountId").value(bankAccountId.toString()))
                 .andExpect(jsonPath("$.status").value("GL_POST_PENDING"))
                 .andExpect(jsonPath("$.allocations").isNotEmpty())
                 .andReturn();
@@ -186,10 +245,10 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
         request.setVendorId(testVendorId);
         request.setGrossAmount(new BigDecimal("400.00"));
         request.setFeeAmount(new BigDecimal("5.00"));
-        request.setNetAmount(new BigDecimal("395.00"));
         request.setCurrency("USD");
         request.setPaymentRef(paymentRef);
         request.setPaymentMethod(PaymentMethod.WIRE);
+        request.setBankAccountId(bankAccountId);
         request.setMemo("Explicit allocation to BILL-002 only");
 
         // Explicit allocation: pay bill2 $300, leave $100 unapplied
@@ -231,10 +290,10 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
         request.setVendorId(testVendorId);
         request.setGrossAmount(new BigDecimal("200.00"));
         request.setFeeAmount(BigDecimal.ZERO);
-        request.setNetAmount(new BigDecimal("200.00"));
         request.setCurrency("USD");
         request.setPaymentRef(paymentRef);
         request.setPaymentMethod(PaymentMethod.CHECK);
+        request.setBankAccountId(bankAccountId);
         request.setMemo("Idempotency test");
         request.setAllocations(List.of());
 
@@ -302,7 +361,6 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
         payment.setPaymentRef(paymentRef);
         payment.setGrossAmount(new BigDecimal("100.00"));
         payment.setFeeAmount(BigDecimal.ZERO);
-        payment.setNetAmount(new BigDecimal("100.00"));
         payment.setUnappliedAmount(new BigDecimal("100.00"));
         payment.setCurrency("USD");
         payment.setPaymentMethod(PaymentMethod.ACH);
@@ -334,7 +392,6 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
         payment.setPaymentRef(paymentRef);
         payment.setGrossAmount(new BigDecimal("200.00"));
         payment.setFeeAmount(BigDecimal.ZERO);
-        payment.setNetAmount(new BigDecimal("200.00"));
         payment.setUnappliedAmount(BigDecimal.ZERO);
         payment.setCurrency("USD");
         payment.setPaymentMethod(PaymentMethod.CHECK);
@@ -372,11 +429,11 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
         request.setVendorId(testVendorId);
         request.setGrossAmount(new BigDecimal("-100.00")); // Invalid: negative
         request.setFeeAmount(BigDecimal.ZERO);
-        request.setNetAmount(new BigDecimal("-100.00"));
         request.setCurrency("USD");
         request.setPaymentRef(
                 UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
         request.setPaymentMethod(PaymentMethod.ACH);
+        request.setBankAccountId(bankAccountId);
         request.setAllocations(List.of());
 
         // Act & Assert: Expect 400 Bad Request
@@ -397,10 +454,10 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
         request.setVendorId(testVendorId);
         request.setGrossAmount(new BigDecimal("100.00"));
         request.setFeeAmount(BigDecimal.ZERO);
-        request.setNetAmount(new BigDecimal("100.00"));
         request.setCurrency("USD");
         request.setPaymentRef(paymentRef);
         request.setPaymentMethod(PaymentMethod.WIRE);
+        request.setBankAccountId(bankAccountId);
 
         // Invalid allocation: sum = $600 > gross = $100
         ExecuteAPPaymentRequest.AllocationLineRequest allocation = new ExecuteAPPaymentRequest.AllocationLineRequest();
@@ -426,10 +483,10 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
         request1.setVendorId(testVendorId);
         request1.setGrossAmount(new BigDecimal("100.00"));
         request1.setFeeAmount(BigDecimal.ZERO);
-        request1.setNetAmount(new BigDecimal("100.00"));
         request1.setCurrency("USD");
         request1.setPaymentRef(paymentRef);
         request1.setPaymentMethod(PaymentMethod.CHECK);
+        request1.setBankAccountId(bankAccountId);
         request1.setAllocations(List.of());
 
         // Act: First request (201 Created)
@@ -443,10 +500,10 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
         request2.setVendorId(testVendorId);
         request2.setGrossAmount(new BigDecimal("200.00")); // DIFFERENT amount
         request2.setFeeAmount(BigDecimal.ZERO);
-        request2.setNetAmount(new BigDecimal("200.00"));
         request2.setCurrency("USD");
         request2.setPaymentRef(paymentRef); // SAME paymentRef
         request2.setPaymentMethod(PaymentMethod.ACH);
+        request2.setBankAccountId(bankAccountId);
         request2.setAllocations(List.of());
 
         // Act & Assert: Expect 409 Conflict (idempotency key mismatch)
@@ -524,5 +581,63 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
                 .andExpect(jsonPath("$.content").isArray())
                 .andExpect(jsonPath("$.content").isEmpty())
                 .andExpect(jsonPath("$.totalElements").value(0));
+    }
+
+    private UUID account(String code, String name, AccountType type, AccountSubtype subtype) {
+        return glAccountRepository
+                .findByAccountCode(code)
+                .orElseGet(() -> {
+                    GLAccount account = new GLAccount();
+                    account.setAccountCode(code);
+                    account.setAccountName(name);
+                    account.setAccountType(type);
+                    account.setAccountSubtype(subtype);
+                    // Active from before any execution day: eligibility and posting judge an account at the start of
+                    // the payment's date (S42 review), and an account created now would only be active from tomorrow.
+                    account.setActivationDate(LocalDateTime.of(2020, 1, 1, 0, 0));
+                    account.setCreatedBy("contract-test");
+                    account.setModifiedBy("contract-test");
+                    return glAccountRepository.save(account);
+                })
+                .getGlAccountId();
+    }
+
+    private void mapAccount(String keyName, UUID glAccountId) {
+        PostingCategory category = postingCategoryRepository
+                .findByCategoryName("AP_PAYMENT")
+                .orElseGet(() -> {
+                    PostingCategory created = new PostingCategory();
+                    created.setCategoryName("AP_PAYMENT");
+                    created.setDescription("AP payments (S42)");
+                    created.setCreatedBy("contract-test");
+                    created.setModifiedBy("contract-test");
+                    return postingCategoryRepository.save(created);
+                });
+        MappingKey key = mappingKeyRepository
+                .findByPostingCategory_PostingCategoryIdAndKeyName(category.getPostingCategoryId(), keyName)
+                .orElseGet(() -> {
+                    MappingKey created = new MappingKey();
+                    created.setPostingCategory(category);
+                    created.setKeyName(keyName);
+                    created.setDescription(keyName);
+                    created.setCreatedBy("contract-test");
+                    created.setModifiedBy("contract-test");
+                    return mappingKeyRepository.save(created);
+                });
+        LocalDateTime start = LocalDateTime.of(2020, 1, 1, 0, 0);
+        if (glMappingRepository
+                .findEffectiveMapping(
+                        category.getPostingCategoryId(), key.getMappingKeyId(), LocalDateTime.now(TEST_CLOCK))
+                .isEmpty()) {
+            GLMapping mapping = new GLMapping();
+            mapping.setSourceSystem("ACCOUNTING");
+            mapping.setExternalCode("AP_PAYMENT_" + keyName + "_CT");
+            mapping.setPostingCategory(category);
+            mapping.setMappingKey(key);
+            mapping.setGlAccount(glAccountRepository.getReferenceById(glAccountId));
+            mapping.setEffectiveStartDate(start);
+            mapping.setCreatedBy("contract-test");
+            glMappingRepository.save(mapping);
+        }
     }
 }

@@ -992,12 +992,12 @@ def gen_accounting_db():
             f.insert(
                 "ap_payment",
                 ["payment_id", "vendor_id", "vendor_name", "vendor_bill_id", "currency",
-                 "gross_amount", "net_amount", "fee_amount", "unapplied_amount", "status",
+                 "gross_amount", "fee_amount", "unapplied_amount", "status",
                  "payment_method", "payment_date", "gl_posted_at", "created_at",
                  "created_by", "payment_ref"],
                 [q(pay_id), q(VENDOR_ID[vk]), q(VENDORS[vk]), q(bill_id), q(CCY),
-                 money(amt), money(amt), money(0), money(0), q("GL_POSTED"), q("ACH"),
-                 q(tsnaive(pay_d, 12)), q(tstz(pay_d, 13)), q(tstz(pay_d, 12)),
+                 money(amt), money(0), money(0), q("GL_POSTED"), q("ACH"),
+                 q(pay_d.isoformat()), q(tstz(pay_d, 13)), q(tstz(pay_d, 12)),
                  q(SEED_USER), q("%s-PAY-%s" % (MARK, key.replace("bill-", "").upper()))],
             )
             f.insert(

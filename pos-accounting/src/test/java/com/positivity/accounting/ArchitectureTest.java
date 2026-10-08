@@ -345,6 +345,44 @@ public class ArchitectureTest {
                     + " (AccountingCalendarZoneResolver), never in the clock's or the JVM's zone; a technical UTC"
                     + " value states ZoneOffset.UTC explicitly");
 
+    /** The two entry points that post under an override recorded earlier, with no caller to check (CAP:550 S42). */
+    static final java.util.Set<String> RECORDED_OVERRIDE_METHODS =
+            java.util.Set.of("postJournalEntryWithRecordedOverride", "assertPostingAllowedWithRecordedOverride");
+
+    /** The only classes that may call them: the AP payment's outbox posting, and the journal-entry service it uses. */
+    static final java.util.Set<String> RECORDED_OVERRIDE_CALLERS = java.util.Set.of(
+            "com.positivity.accounting.internal.service.APPaymentPostingService",
+            "com.positivity.accounting.internal.service.JournalEntryServiceImpl");
+
+    /** A call or a method reference (an access) to either entry point. */
+    private static final DescribedPredicate<com.tngtech.archunit.core.domain.JavaAccess<?>> RECORDED_OVERRIDE_CALL =
+            new DescribedPredicate<>("post under an override recorded earlier") {
+                @Override
+                public boolean test(com.tngtech.archunit.core.domain.JavaAccess<?> input) {
+                    return RECORDED_OVERRIDE_METHODS.contains(input.getName());
+                }
+            };
+
+    /**
+     * #2641 review (LOW 5; ruling 5 of #2603): an override recorded on the AP pay command is applied without a caller,
+     * so only the AP payment's outbox posting may reach it; a {@code gl-posting-retry} or any other path checks the
+     * caller's own authority through {@code postJournalEntry}.
+     */
+    @ArchTest
+    static final ArchRule recorded_overrides_are_applied_only_by_the_ap_payment_outbox_posting = noClasses()
+            .that()
+            .resideInAPackage("com.positivity.accounting..")
+            .and(new DescribedPredicate<com.tngtech.archunit.core.domain.JavaClass>("are not the allowed callers") {
+                @Override
+                public boolean test(com.tngtech.archunit.core.domain.JavaClass input) {
+                    return !RECORDED_OVERRIDE_CALLERS.contains(input.getName());
+                }
+            })
+            .should()
+            .accessTargetWhere(RECORDED_OVERRIDE_CALL)
+            .because("an override recorded on the AP pay command is the payer's authority; only the AP payment's"
+                    + " outbox delivery applies it (ruling 5 of #2603; a retry never does, ruling 1 of 2026-10-08)");
+
     /** CustomerCreditIssuanceRuleTest proves this rule catches a second issuer and passes the real one. */
     @ArchTest
     static final ArchRule customer_credits_are_issued_only_on_the_guarded_posted_path = noClasses()

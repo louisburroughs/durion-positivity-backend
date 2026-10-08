@@ -25,10 +25,13 @@ import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
@@ -64,6 +67,9 @@ public class APPaymentServiceImpl implements APPaymentService {
     private final OutboxService outboxService;
     private final APPaymentFailurePersistenceService paymentFailurePersistenceService;
     private final VendorBillPayGuard payGuard;
+    private final APPaymentPreGatewayChecks preGatewayChecks;
+    private final APPaymentPostingService postingService;
+    private final ApLockTimeout lockTimeout;
 
     /** One allocation of the plan: the bill, locked, and the amount applied to it. */
     record PlannedAllocation(
@@ -84,25 +90,41 @@ public class APPaymentServiceImpl implements APPaymentService {
             return toResponse(existing);
         }
 
-        // ---- The pre-gateway block (CAP:550 S13, #2510; ruling 6048398147 item 4) ----------------------------
+        // ---- The pre-gateway block (CAP:550 S13, #2510; ruling 6048398147 item 4; S42, #2603) ----------------------
         // Every check that can refuse the payment runs here, in this order, before the payment row is saved and
-        // before the gateway is called; a refusal persists nothing but its own audit rows. Later stories add theirs
-        // at the numbered places:
-        //   1. the request checks: S42's method, currency and bank account; S24's vendor exists and is active;
-        //   2. the allocation plan, its bills locked in id order (explicit, or oldest due first);
-        //   3. the pay guard, approver is not payer (S13);
+        // before the gateway is called; a refusal charges nothing and saves no payment, so the same paymentRef may be
+        // sent again (a refusal's own audit row, e.g. VENDOR_BILL_PAYMENT_REFUSED, commits in its own transaction). The
+        // first refusal wins. Guard order (S42 ruling 2 of #2603; whichever of S24/S42 merges second keeps it):
+        //   1. the request checks (APPaymentPreGatewayChecks#checkRequest):
+        //        1a. method: CREDIT_CARD, OTHER -> 422 AP_PAYMENT_METHOD_NOT_SUPPORTED (S42, OI-17);
+        //        1b. currency: not the functional currency -> 422 CURRENCY_NOT_SUPPORTED (S42, ADR-0067 PC-9 (a));
+        //        1c. bank account: missing and not exactly one eligible, or not eligible -> 400 VALIDATION_ERROR
+        //            fieldErrors[bankAccountId] (S42, AW41);
+        //        1d. S24's vendor exists and is active;
+        //   2. the allocation plan, its bills locked in id order (explicit, or oldest due first; S13);
+        //   3. the pay guard, approver is not payer -> 403 AP_PAYMENT_SELF_APPROVED_BILL (S13);
         //   4. S24's remit-to check;
-        //   5. S42's period check.
-        // A refused allocation (a bill missing, not APPROVED or another vendor's; over-allocation) is refused here,
-        // before the gateway: nothing is charged, no ap_payment row is saved, and the same paymentRef may be sent
-        // again once corrected (ruling 6063520413 item 4).
-        // The plan's bill locks (FOR UPDATE; the automatic plan locks every APPROVED bill of the vendor) are held
-        // until this transaction ends, across the gateway call below: a void or another payment of those bills waits
-        // for it. The gateway client sets no timeout of its own (the Stripe SDK's defaults, 30 s connect and 80 s
-        // read), and no lock_timeout or statement_timeout is configured on the database, so the wait is bounded by
-        // the gateway call alone.
-        List<PlannedAllocation> plan = plan(request);
+        //   5. the period and mapping checks (APPaymentPreGatewayChecks#checkPeriodAndMapping, S42):
+        //        5a. time zone -> 422 ACCOUNTING_TIME_ZONE_UNSET; 5b. hard lock -> 422 PERIOD_HARD_LOCKED;
+        //        5c. closed period without an accepted override -> 422 PERIOD_CLOSED (the period row read unlocked: no
+        //            period lock is held across the gateway call; a period closed meanwhile refuses the outbox posting,
+        //            and the payment goes GL_POST_FAILED);
+        //        5d. AP_PAYMENT/ACCOUNTS_PAYABLE, and PAYMENT_FEES when fee > 0 -> 422 GL_MAPPING_NOT_CONFIGURED.
+        // A refused allocation (a bill missing, not APPROVED or another vendor's; over-allocation) is refused in
+        // slot 2 (ruling 6063520413 item 4).
+        // Bounded waits (#2627): the bill locks of slot 2 (FOR UPDATE; the automatic plan locks every APPROVED bill of
+        // the vendor) are held until this transaction ends, across the gateway call below; the period row is not
+        // locked. accounting.ap.lock-timeout (SET LOCAL lock_timeout, default 5 s) bounds every wait for them
+        // (409 LOCK_TIMEOUT, nothing persisted), and the gateway's own connect and read timeouts (5 s / 20 s) bound
+        // how long they are held.
+        lockTimeout.apply();
+        Optional<LocalDate> businessDate = preGatewayChecks.businessDate();
+        UUID bankAccountId = preGatewayChecks.checkRequest(request, businessDate); // slot 1 (S24 adds 1d after it)
+        List<PlannedAllocation> plan = plan(request); // slot 2
         payGuard.check(plan.stream().map(PlannedAllocation::bill).toList(), currentUser, request.getPaymentRef());
+        // slot 4: S24's remit-to check goes here.
+        APPaymentPreGatewayChecks.Execution execution = preGatewayChecks.checkPeriodAndMapping(
+                businessDate, request.getFeeAmount(), request.getOverrideJustification()); // slot 5
         // ---- end of the pre-gateway block -------------------------------------------------------------------
 
         // Create payment entity
@@ -111,10 +133,16 @@ public class APPaymentServiceImpl implements APPaymentService {
         payment.setVendorId(request.getVendorId());
         payment.setGrossAmount(request.getGrossAmount());
         payment.setFeeAmount(request.getFeeAmount());
-        payment.setNetAmount(request.getNetAmount());
-        payment.setCurrency(request.getCurrency());
+        payment.setCurrency(request.getCurrency().trim().toUpperCase(Locale.ROOT));
         payment.setPaymentMethod(request.getPaymentMethod());
         payment.setMemo(request.getMemo());
+        payment.setBankAccountId(bankAccountId);
+        payment.setPaymentDate(execution.date());
+        if (execution.overrideAccepted()) {
+            // The override travels with the payment (ruling 5 of #2603): its posting applies it as the payer.
+            payment.setPeriodOverrideJustification(request.getOverrideJustification());
+            payment.setPeriodOverrideBy(currentUser);
+        }
         payment.setStatus(APPaymentStatus.INITIATED);
         payment.setCreatedBy(currentUser);
 
@@ -182,7 +210,6 @@ public class APPaymentServiceImpl implements APPaymentService {
                     .vendorName(payment.getVendorName())
                     .grossAmount(payment.getGrossAmount())
                     .feeAmount(payment.getFeeAmount())
-                    .netAmount(payment.getNetAmount())
                     .unappliedAmount(payment.getUnappliedAmount())
                     .currency(payment.getCurrency())
                     .paymentMethod(
@@ -240,19 +267,13 @@ public class APPaymentServiceImpl implements APPaymentService {
     }
 
     /**
-     * Validates that a duplicate payment request is truly idempotent by comparing
-     * all key
-     * financial fields.
-     * <p>
-     * Verifies that vendorId, grossAmount, currency, paymentMethod, feeAmount, and
-     * netAmount
-     * match the existing payment. If any field differs, throws
-     * IdempotencyConflictException.
-     * <p>
-     * Note: Allocations are not compared as they may vary during automatic
-     * allocation;
-     * the critical financial amounts above ensure the effective payment is the
-     * same.
+     * Validates that a duplicate payment request is truly idempotent by comparing all key financial fields: vendorId,
+     * grossAmount, currency, paymentMethod, feeAmount and the bank account (CAP:550 S42, #2603). The bank account is
+     * compared as resolved: an omitted {@code bankAccountId} matches when the one eligible account on the payment's
+     * execution date is the stored one. If any field differs, throws IdempotencyConflictException.
+     *
+     * <p>Allocations are not compared as they may vary during automatic allocation; the critical financial amounts above
+     * ensure the effective payment is the same.
      *
      * @param existing the existing payment record
      * @param request  the incoming payment request
@@ -262,25 +283,39 @@ public class APPaymentServiceImpl implements APPaymentService {
         // Validate all key fields match to ensure true idempotency
         boolean vendorMatch = existing.getVendorId().equals(request.getVendorId());
         boolean grossAmountMatch = existing.getGrossAmount().compareTo(request.getGrossAmount()) == 0;
-        boolean currencyMatch = existing.getCurrency().equals(request.getCurrency());
+        boolean currencyMatch =
+                existing.getCurrency().equalsIgnoreCase(request.getCurrency().trim());
         boolean paymentMethodMatch = existing.getPaymentMethod() == request.getPaymentMethod();
 
-        // Compare fees and net amounts (null-safe)
+        // Compare fees (null-safe)
         boolean feeMatch = (existing.getFeeAmount() == null && request.getFeeAmount() == null)
                 || (existing.getFeeAmount() != null
                         && request.getFeeAmount() != null
                         && existing.getFeeAmount().compareTo(request.getFeeAmount()) == 0);
-        boolean netMatch = (existing.getNetAmount() == null && request.getNetAmount() == null)
-                || (existing.getNetAmount() != null
-                        && request.getNetAmount() != null
-                        && existing.getNetAmount().compareTo(request.getNetAmount()) == 0);
+        boolean bankAccountMatch = Objects.equals(existing.getBankAccountId(), resolvedBankAccount(existing, request));
 
-        if (!vendorMatch || !grossAmountMatch || !currencyMatch || !paymentMethodMatch || !feeMatch || !netMatch) {
+        if (!vendorMatch
+                || !grossAmountMatch
+                || !currencyMatch
+                || !paymentMethodMatch
+                || !feeMatch
+                || !bankAccountMatch) {
             throw new IdempotencyConflictException(
                     "Conflicting payload for existing paymentRef: " + request.getPaymentRef()
                             + ". Idempotent replay must match vendorId, grossAmount, currency, paymentMethod, "
-                            + "feeAmount, and netAmount.");
+                            + "feeAmount, and bankAccountId.");
         }
+    }
+
+    /** The bank account a replay names: the one given, else the one eligible account on the stored execution date. */
+    private @Nullable UUID resolvedBankAccount(@NonNull APPayment existing, @NonNull ExecuteAPPaymentRequest request) {
+        if (request.getBankAccountId() != null) {
+            return request.getBankAccountId();
+        }
+        if (existing.getPaymentDate() == null) {
+            return null;
+        }
+        return preGatewayChecks.defaultBankAccount(existing.getPaymentDate()).orElse(null);
     }
 
     /**
@@ -472,6 +507,28 @@ public class APPaymentServiceImpl implements APPaymentService {
         log.error("GL posting failed for payment {}: {}", paymentId, errorMessage);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Runs no transaction of its own: the posting's ({@link APPaymentPostingService#retry}) rolls back on a refusal,
+     * and the refusal's code is then recorded in a transaction of its own, so the payment stays {@code GL_POST_FAILED}
+     * with the new reason.
+     */
+    @Override
+    public @NonNull APPaymentResponse retryGLPosting(@NonNull UUID paymentId, @Nullable String overrideJustification) {
+        try {
+            postingService.retry(paymentId, overrideJustification);
+        } catch (RuntimeException e) {
+            APPaymentPostingService.refusalCode(e)
+                    .ifPresent(code -> paymentFailurePersistenceService.persistGLPostRefusal(paymentId, code));
+            throw e;
+        }
+        return paymentRepository
+                .findById(paymentId)
+                .map(this::toResponse)
+                .orElseThrow(() -> new IllegalStateException("AP payment " + paymentId + " vanished after posting"));
+    }
+
     private @NonNull APPaymentResponse toResponse(@NonNull APPayment payment) {
         List<APPaymentAllocation> allocations =
                 allocationRepository.findByPayment_PaymentIdOrderByAllocationSequenceAsc(payment.getPaymentId());
@@ -483,9 +540,10 @@ public class APPaymentServiceImpl implements APPaymentService {
                 .vendorName(payment.getVendorName())
                 .grossAmount(payment.getGrossAmount())
                 .feeAmount(payment.getFeeAmount())
-                .netAmount(payment.getNetAmount())
                 .unappliedAmount(payment.getUnappliedAmount())
                 .currency(payment.getCurrency())
+                .bankAccountId(payment.getBankAccountId())
+                .paymentDate(payment.getPaymentDate())
                 .status(payment.getStatus())
                 .gatewayTransactionId(payment.getGatewayTransactionId())
                 .gatewayTimestamp(payment.getGatewayTimestamp())

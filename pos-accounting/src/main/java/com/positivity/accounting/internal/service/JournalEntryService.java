@@ -117,6 +117,21 @@ public interface JournalEntryService {
     JournalEntryResponse postJournalEntry(@NonNull UUID journalEntryId, @Nullable String overrideJustification);
 
     /**
+     * {@link #postJournalEntry(UUID, String)} for a posting that runs without its caller, applying a closed-period
+     * override accepted and stored earlier (CAP:550 S42, #2603): an AP payment's outbox posting, under the override its
+     * payer gave on the pay command with {@code accounting:period:override}. The override audit row names {@code
+     * actor}; the hard lock is never overridden. Only the AP payment's outbox delivery may call it (an ArchUnit rule in
+     * {@code ArchitectureTest}); a {@code gl-posting-retry} never does (#2603 ruling 1 of 2026-10-08).
+     *
+     * @param journalEntryId entry to post
+     * @param justification  the stored override justification
+     * @param actor          who gave the override
+     * @return posted entry
+     */
+    JournalEntryResponse postJournalEntryWithRecordedOverride(
+            @NonNull UUID journalEntryId, @NonNull String justification, @NonNull String actor);
+
+    /**
      * Reverses a posted journal entry by creating an inverse entry (story A3,
      * issue #943).
      *

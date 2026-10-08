@@ -59,7 +59,9 @@ import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.persistence.LockTimeoutException;
 import jakarta.persistence.OptimisticLockException;
+import jakarta.persistence.PessimisticLockException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Instant;
@@ -68,6 +70,7 @@ import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -767,6 +770,32 @@ public class AccountingExceptionHandler {
                 "OPTIMISTIC_LOCK",
                 "The record was changed by another request; reload it and retry",
                 request);
+    }
+
+    /**
+     * A row lock waited beyond {@code accounting.ap.lock-timeout} (CAP:550 S42, #2627): {@code SET LOCAL lock_timeout}
+     * on the AP payment and vendor-bill decision paths turns an unbounded wait into SQLSTATE 55P03, which Spring
+     * translates to a {@link PessimisticLockingFailureException} ({@code CannotAcquireLockException}) and JPA raises as
+     * {@link LockTimeoutException} or {@link PessimisticLockException}. 409 per ADR-0017 §2: another request holds the
+     * rows, the transaction rolled back and nothing was persisted, so the caller retries.
+     */
+    @ExceptionHandler({
+        PessimisticLockingFailureException.class,
+        LockTimeoutException.class,
+        PessimisticLockException.class
+    })
+    public ResponseEntity<ApiError> handleLockTimeout(Exception ex, HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, "LOCK_TIMEOUT", lockTimeoutMessage(request), request);
+    }
+
+    /** The AP payment and vendor-bill paths name the bills; any other path that hits a lock wait stays neutral. */
+    private static String lockTimeoutMessage(HttpServletRequest request) {
+        String path = request == null ? null : request.getRequestURI();
+        boolean billPath = path != null
+                && (path.startsWith("/v1/accounting/ap/") || path.startsWith("/v1/accounting/vendor-bills"));
+        return billPath
+                ? "Another request is working on these bills; retry"
+                : "Another request is working on this record; retry";
     }
 
     @ExceptionHandler(ResponseStatusException.class)

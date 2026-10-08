@@ -109,6 +109,7 @@ class VendorBillApprovalServiceTest {
                 locks,
                 new LedgerCurrency("USD"),
                 policy,
+                mock(ApLockTimeout.class),
                 mock(PlatformTransactionManager.class));
         // No policy rows: the defaults, a clerk limit of 0 (every bill OVER_LIMIT), both switches off (S13).
         when(policy.settings()).thenReturn(DEFAULT_POLICY);

@@ -38,7 +38,8 @@ class VendorBillApprovalMigrationIT {
         UUID received = event(jdbc, "VENDOR_BILL_GL_POSTING", "RECEIVED");
         UUID suspended = event(jdbc, "VENDOR_BILL_GL_POSTING", "SUSPENDED");
         UUID processed = event(jdbc, "VENDOR_BILL_GL_POSTING", "PROCESSED");
-        UUID otherType = event(jdbc, "AP_PAYMENT_GL_POSTING", "FAILED");
+        // Not AP_PAYMENT_GL_POSTING: V19 retires that one too (CAP:550 S42, #2603).
+        UUID otherType = event(jdbc, "INVOICE_PAYMENT", "FAILED");
         assertThatThrownBy(() -> bill(jdbc, "AWAITING_APPROVAL"))
                 .as("before V17 the status check does not know AWAITING_APPROVAL")
                 .isInstanceOf(DataIntegrityViolationException.class);

@@ -164,7 +164,9 @@ class OutboxServiceImplTest {
             when(outboxRepository.findById(outboxId)).thenReturn(Optional.of(testOutbox));
             when(outboxRepository.save(any(EventOutbox.class))).thenReturn(testOutbox);
 
-            service.markAsFailed(outboxId, "Connection timeout", 5);
+            assertThat(service.markAsFailed(outboxId, "Connection timeout", 5))
+                    .as("not the last failure")
+                    .isFalse();
 
             assertThat(testOutbox.getRetryCount()).isEqualTo(2);
             assertThat(testOutbox.getStatus()).isEqualTo(OutboxStatus.PENDING);
@@ -179,7 +181,9 @@ class OutboxServiceImplTest {
             when(outboxRepository.findById(outboxId)).thenReturn(Optional.of(testOutbox));
             when(outboxRepository.save(any(EventOutbox.class))).thenReturn(testOutbox);
 
-            service.markAsFailed(outboxId, "Connection timeout", 5);
+            assertThat(service.markAsFailed(outboxId, "Connection timeout", 5))
+                    .as("the last failure: the row is FAILED")
+                    .isTrue();
 
             assertThat(testOutbox.getRetryCount()).isEqualTo(5);
             assertThat(testOutbox.getStatus()).isEqualTo(OutboxStatus.FAILED);
@@ -190,7 +194,7 @@ class OutboxServiceImplTest {
         void notFound() {
             when(outboxRepository.findById(outboxId)).thenReturn(Optional.empty());
 
-            service.markAsFailed(outboxId, "Error", 5);
+            assertThat(service.markAsFailed(outboxId, "Error", 5)).isFalse();
 
             verify(outboxRepository, never()).save(any());
         }

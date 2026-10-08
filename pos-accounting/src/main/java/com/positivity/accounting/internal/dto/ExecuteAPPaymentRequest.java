@@ -60,17 +60,35 @@ public class ExecuteAPPaymentRequest {
     @JsonProperty("feeAmount")
     private BigDecimal feeAmount;
 
-    @Nullable
-    @Schema(description = "Net amount deposited (if applicable)", example = "1485.00")
-    @JsonProperty("netAmount")
-    private BigDecimal netAmount;
-
     @NonNull
     @NotEmpty(message = "Currency is required")
     @Size(min = 3, max = 3, message = "Currency must be 3-character ISO code")
-    @Schema(description = "ISO 4217 currency code", example = "USD", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "ISO 4217 currency code; must be the tenant's functional currency (else 422"
+                    + " CURRENCY_NOT_SUPPORTED, ADR-0067 PC-9)",
+            example = "USD",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     @JsonProperty("currency")
     private String currency;
+
+    @Nullable
+    @Schema(
+            description = "GL account id of the BANK_CASH account the payment is made from: active at the start of the"
+                    + " execution date, not deactivated before the payment, and in the functional currency. May be"
+                    + " omitted only when exactly one such account exists, which is then used (CAP:550 S42, AW41)",
+            example = "01936e5c-1111-7a3d-8b6e-2b3456789012")
+    @JsonProperty("bankAccountId")
+    private UUID bankAccountId;
+
+    @Nullable
+    @Size(min = 10, max = 1000, message = "Override justification must be 10-1000 characters")
+    @Schema(
+            description = "Justification for paying while the execution date's period is CLOSED; honoured only with"
+                    + " accounting:period:override. The override is stored with the payment and applied to its"
+                    + " posting, whose audit row names the payer (CAP:550 S42)",
+            example = "Supplier paid on the agreed date; the period was closed early by mistake")
+    @JsonProperty("overrideJustification")
+    private String overrideJustification;
 
     @NonNull
     @NotEmpty(message = "Payment reference is required")

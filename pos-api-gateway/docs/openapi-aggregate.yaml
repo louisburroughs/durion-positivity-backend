@@ -21,6 +21,8 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1ap~1payments~1by-ref~1{paymentRef}
   /v1/accounting/ap/payments/{paymentId}:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1ap~1payments~1{paymentId}
+  /v1/accounting/ap/payments/{paymentId}/gl-posting-retry:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1ap~1payments~1{paymentId}~1gl-posting-retry
   /v1/accounting/audit/actor/{actorId}:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1audit~1actor~1{actorId}
   /v1/accounting/audit/by-order/{orderId}:

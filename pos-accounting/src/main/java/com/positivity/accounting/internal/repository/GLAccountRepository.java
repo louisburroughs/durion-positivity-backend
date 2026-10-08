@@ -69,6 +69,24 @@ public interface GLAccountRepository extends JpaRepository<GLAccount, UUID> {
             @Param("subtype") @NonNull AccountSubtype subtype, @Param("at") @NonNull LocalDateTime at);
 
     /**
+     * Accounts of one subtype active at {@code at}, reconcilable or not, by the rule a posting checks ({@code
+     * GLAccountService.validateAccountForPosting}): activated at or before {@code at} (a null activation date counts as
+     * active from the start) and not deactivated by it. The AP pay command counts its eligible {@code BANK_CASH}
+     * accounts with it at the start of the execution day, the instant the payment's entry posts at (CAP:550 S42, #2603),
+     * and with {@code notDeactivatedBy} the later of that instant and the command's own moment: an account deactivated
+     * at any point up to the pay command cannot fund it (Accounting ruling of 2026-10-08, #2603 comment 6068272860).
+     */
+    @Query("SELECT g FROM GLAccount g WHERE g.accountSubtype = :subtype "
+            + "AND (g.activationDate IS NULL OR g.activationDate <= :at) "
+            + "AND (g.deactivationDate IS NULL OR g.deactivationDate > :notDeactivatedBy) "
+            + "ORDER BY g.accountCode")
+    @NonNull
+    List<GLAccount> findBySubtypeActiveAt(
+            @Param("subtype") @NonNull AccountSubtype subtype,
+            @Param("at") @NonNull LocalDateTime at,
+            @Param("notDeactivatedBy") @NonNull LocalDateTime notDeactivatedBy);
+
+    /**
      * Every reconcilable account active at {@code at}, whatever its subtype — close readiness under {@code
      * BANK_REC_CLOSE_SCOPE = ALL_RECONCILABLE} (bank reconciliation §5.2, D5; story S6, #2305).
      */
