@@ -3602,7 +3602,7 @@ paths:
     get:
       description: 'Returns one page of the tenant''s vendors ordered by vendorNumber, each with its approved
 
-        remit-to, default terms and status.
+        remit-to, default terms, status and masked tax registrations (scheme, region, last4).
 
         Use this tool to find a vendor by number or name, or to list active or inactive vendors; use
 
@@ -3707,7 +3707,9 @@ paths:
 
         V-000002 and so on when omitted, and never changes afterwards; taxRegistrations and remitTo
 
-        are optional.
+        are optional, and each new registration needs its number, which is encrypted at once and
+
+        never returned (the response shows last4).
 
         Emits a SUPPLIER_VENDOR_CREATE audit event and queues one supplier.vendor.updated fact in the
 
@@ -3738,7 +3740,7 @@ paths:
                     postalCode: '29615'
                     region: SC
                   taxRegistrations:
-                  - number: 12-3456789
+                  - number: 000-00-0000
                     scheme: EIN
             schema:
               $ref: '#/components/schemas/VendorCreateRequest'
@@ -3856,9 +3858,11 @@ paths:
       - supplier:fact:replay
   /v1/supplier/vendors/{vendorId}:
     get:
-      description: 'Returns one vendor with its tax registrations, approved remit-to and version, default terms
+      description: 'Returns one vendor with its masked tax registrations (registrationId, scheme, region and
 
-        and currency, and status.
+        last4, never the number), approved remit-to and version, default terms and currency, and
+
+        status.
 
         Use this tool when the vendorId is known, for example from a bill, a purchase order or a
 
@@ -3928,13 +3932,21 @@ paths:
 
         Required inputs: vendorId (UUIDv7) path parameter plus the full body, because every field is
 
-        replaced; omitting taxRegistrations clears them.
+        replaced; omitting taxRegistrations clears them. Send a stored registration''s registrationId
+
+        without number to keep it (its scheme and region must be unchanged), with number to replace
+
+        the number, and send a new registration without registrationId and with its number.
 
         Emits a SUPPLIER_VENDOR_UPDATE audit event and queues one supplier.vendor.updated fact in the
 
         same transaction.
 
-        Returns 200 with the vendor, 400 VALIDATION_ERROR for a malformed field, 404
+        Returns 200 with the vendor, 400 VALIDATION_ERROR for a malformed field or a refused
+
+        registration (fieldErrors names taxRegistrations[i].number, .registrationId, .scheme or
+
+        .region), 404
 
         SUPPLIER_VENDOR_NOT_FOUND, and 409 CONFLICT when version is stale.
 
@@ -3960,7 +3972,9 @@ paths:
                   defaultPaymentTerms: NET45
                   displayName: Michelin
                   legalName: Michelin North America, Inc.
-                  taxRegistrations: []
+                  taxRegistrations:
+                  - registrationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                    scheme: EIN
                   version: 3
             schema:
               $ref: '#/components/schemas/VendorUpdateRequest'
@@ -3978,7 +3992,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'VALIDATION_ERROR: a field is missing or malformed.'
+          description: 'VALIDATION_ERROR: a field is missing or malformed, a registrationId is not this vendor''s, a new registration has no number, a kept registration changed its scheme or region without its number, or a scheme or region carrying a number breaks its shape (no digits). No message echoes a submitted value.'
         '401':
           description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
         '403':
@@ -4549,6 +4563,206 @@ paths:
       - Supplier Vendors
       x-required-permissions:
       - supplier:vendor_remit:approve
+  /v1/supplier/vendors/{vendorId}/tax-id-reveals:
+    get:
+      description: 'Returns one page of a vendor''s tax-registration reveals, newest first: who revealed which
+
+        registration, their roles, the reason, the correlation id, when, and whether it was
+
+        REVEALED, UNREADABLE or REASON_REJECTED.
+
+        Use this tool to review who saw a vendor''s full numbers; do not use it to read a number,
+
+        which only revealSupplierVendorTaxRegistration returns, and use getSupplierVendor instead
+
+        for the masked registrations.
+
+        Preconditions: the vendor must exist in the caller''s tenant; only that tenant''s reveals are
+
+        visible.
+
+        Required inputs: vendorId (UUIDv7) path parameter; page is zero-based and size is 1 to 200
+
+        (default 20).
+
+        Emits a SUPPLIER_VENDOR_TAX_ID_REVEAL_LIST audit event; nothing is changed, and no row
+
+        carries the number or last4.
+
+        Returns 200 with an empty page when nothing was revealed, 400 when page or size is out of
+
+        range, and 404 SUPPLIER_VENDOR_NOT_FOUND.
+
+        '
+      operationId: listSupplierVendorTaxIdReveals
+      parameters:
+      - description: Vendor identifier (UUIDv7). Must reference a vendor of the caller's tenant.
+        in: path
+        name: vendorId
+        required: true
+        schema:
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+          format: uuid
+          type: string
+      - description: Zero-based page index.
+        example: 0
+        in: query
+        name: page
+        required: false
+        schema:
+          default: 0
+          format: int32
+          type: integer
+      - description: Page size, 1 to 200.
+        example: 20
+        in: query
+        name: size
+        required: false
+        schema:
+          default: 20
+          format: int32
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedResponseTaxIdRevealRecordView'
+          description: A page of reveals, newest first.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: page or size out of range.
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Authenticated caller lacks the required supplier permission.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'SUPPLIER_VENDOR_NOT_FOUND: no vendor with that id in the tenant.'
+      security:
+      - bearerAuth: []
+      summary: List a vendor's tax-registration reveals
+      tags:
+      - Supplier Vendors
+      x-required-permissions:
+      - supplier:audit:read
+  /v1/supplier/vendors/{vendorId}/tax-registrations/{registrationId}/reveal:
+    post:
+      description: 'Returns one tax registration''s full number, after recording who revealed it, their roles,
+
+        the reason and the correlation id in an append-only audit row in the same transaction.
+
+        Use this tool only when a person must see the full number, for example to check a W-9 or a
+
+        payee statement; do not use it to show a registration, and use getSupplierVendor instead,
+
+        which returns the masked last4.
+
+        Preconditions: the vendor and the registration must exist in the caller''s tenant, and the
+
+        caller must hold supplier:vendor_tax_id:reveal (ADMIN and CONTROLLER only).
+
+        Required inputs: vendorId and registrationId (UUIDv7) path parameters, and a reason of 10
+
+        to 500 characters once trimmed.
+
+        Emits a SUPPLIER_VENDOR_TAX_ID_REVEAL audit event and writes one reveal audit row; no row,
+
+        no number. The response carries Cache-Control: no-store and must never be cached, logged or
+
+        put in a URL.
+
+        Returns 200 with the number, 400 JUSTIFICATION_REQUIRED, or VALIDATION_ERROR for an over-long
+
+        reason or one that contains the number itself (recorded as REASON_REJECTED, nothing revealed), 404
+
+        SUPPLIER_VENDOR_NOT_FOUND or SUPPLIER_VENDOR_TAX_REGISTRATION_NOT_FOUND, and 500
+
+        SUPPLIER_VENDOR_TAX_ID_UNREADABLE when the stored number cannot be decrypted, which is
+
+        still recorded.
+
+        '
+      operationId: revealSupplierVendorTaxRegistration
+      parameters:
+      - description: Vendor identifier (UUIDv7). Must reference a vendor of the caller's tenant.
+        in: path
+        name: vendorId
+        required: true
+        schema:
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+          format: uuid
+          type: string
+      - description: Tax registration identifier (UUIDv7). Must reference a registration of the addressed vendor.
+        in: path
+        name: registrationId
+        required: true
+        schema:
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              W-9 check:
+                description: W-9 check
+                value:
+                  reason: Verifying W-9 received 2026-10-08
+            schema:
+              $ref: '#/components/schemas/TaxIdRevealRequest'
+        description: Why the full number is needed.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxIdRevealView'
+          description: 'The number, with Cache-Control: no-store.'
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'JUSTIFICATION_REQUIRED: the reason is missing or shorter than 10 characters; VALIDATION_ERROR: it is longer than 500, or it contains the number itself, which reveals nothing and records a REASON_REJECTED row without the reason.'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Authenticated caller lacks the required supplier permission. Nothing is revealed and no audit row is written.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: SUPPLIER_VENDOR_NOT_FOUND or SUPPLIER_VENDOR_TAX_REGISTRATION_NOT_FOUND.
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'SUPPLIER_VENDOR_TAX_ID_UNREADABLE: the stored number cannot be decrypted; nothing is revealed and the attempt is recorded.'
+      security:
+      - bearerAuth: []
+      summary: Reveal a vendor tax-registration number
+      tags:
+      - Supplier Vendors
+      x-required-permissions:
+      - supplier:vendor_tax_id:reveal
 components:
   schemas:
     ApiError:
@@ -5394,6 +5608,35 @@ components:
           format: int32
           type: integer
       type: object
+    PagedResponseTaxIdRevealRecordView:
+      description: A page of results.
+      properties:
+        items:
+          description: Items on this page, in the order documented by the endpoint.
+          items:
+            $ref: '#/components/schemas/TaxIdRevealRecordView'
+          type: array
+        page:
+          description: Zero-based index of this page.
+          example: 0
+          format: int32
+          type: integer
+        size:
+          description: Requested page size.
+          example: 50
+          format: int32
+          type: integer
+        totalElements:
+          description: Total number of matching items across all pages.
+          example: 137
+          format: int64
+          type: integer
+        totalPages:
+          description: Total number of pages available for this page size.
+          example: 3
+          format: int32
+          type: integer
+      type: object
     PagedResponseVendorView:
       description: A page of results.
       properties:
@@ -5975,19 +6218,123 @@ components:
           format: uuid
           type: string
       type: object
-    TaxRegistrationDto:
-      description: One tax registration of a vendor.
+    TaxIdRevealRecordView:
+      description: One reveal of a vendor tax-registration number. Never carries the number or last4.
+      properties:
+        correlationId:
+          description: Correlation id of the request.
+          example: c0ffee00-0000-7000-8000-000000000001
+          type: string
+        outcome:
+          description: REVEALED, UNREADABLE or REASON_REJECTED.
+          enum:
+          - REVEALED
+          - UNREADABLE
+          - REASON_REJECTED
+          example: REVEALED
+          type: string
+        reason:
+          description: Reason given; null only on a REASON_REJECTED row, whose reason held the number.
+          example: Verifying W-9 received 2026-10-08
+          type: string
+        registrationId:
+          description: Registration revealed.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+          format: uuid
+          type: string
+        revealId:
+          description: Audit row identity (UUIDv7).
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5d
+          format: uuid
+          type: string
+        revealedAt:
+          description: When.
+          format: date-time
+          type: string
+        revealedBy:
+          description: Who revealed it, from the security context.
+          example: controller.b
+          type: string
+        revealedByRoles:
+          description: Roles the person held at the time.
+          example:
+          - CONTROLLER
+          items:
+            type: string
+          type: array
+        scheme:
+          description: Its scheme at the time.
+          example: GST_HST
+          type: string
+      type: object
+    TaxIdRevealRequest:
+      description: Why the full registration number is needed. Kept on the reveal audit row.
+      properties:
+        reason:
+          description: Reason, 10 to 500 characters once trimmed.
+          example: Verifying W-9 received 2026-10-08
+          type: string
+      type: object
+    TaxIdRevealView:
+      description: 'A revealed registration number. RESTRICTED: never cache, log, or put it in a URL.'
       properties:
         number:
-          description: Registration number as issued. Never blank.
-          example: 123456789RT0001
+          description: The full registration number as issued.
+          example: 000-00-0000
           type: string
         region:
           description: Issuing region, where the scheme is regional.
           example: 'ON'
           type: string
+        registrationId:
+          description: Registration identity (UUIDv7).
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+          format: uuid
+          type: string
+        scheme:
+          description: Registration scheme.
+          example: GST_HST
+          type: string
+      type: object
+    TaxRegistrationDto:
+      description: 'One tax registration of a vendor, as a create or update sends it. Reads never return the number: send registrationId without number to keep a stored registration.'
+      properties:
+        number:
+          description: Registration number as issued, 1 to 64 characters. Required for a new registration; omit it to keep the stored number of registrationId. Never returned by a read.
+          example: 000-00-0000
+          type: string
+        region:
+          description: Issuing region, where the scheme is regional.
+          example: 'ON'
+          type: string
+        registrationId:
+          description: A stored registration of this vendor, to keep or re-key it. Omit for a new registration.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+          format: uuid
+          type: string
         scheme:
           description: Registration scheme. Never blank.
+          example: GST_HST
+          type: string
+      type: object
+    TaxRegistrationView:
+      description: 'One tax registration of a vendor, masked: scheme, region and the last four characters. The number is never returned here.'
+      properties:
+        last4:
+          description: Last four alphanumerics of the number; null when the number has fewer than 8, which a screen shows as on file.
+          example: '0000'
+          type: string
+        region:
+          description: Issuing region, where the scheme is regional.
+          example: 'ON'
+          type: string
+        registrationId:
+          description: Registration identity (UUIDv7); send it back to keep the registration.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+          format: uuid
+          type: string
+        scheme:
+          description: Registration scheme.
           example: GST_HST
           type: string
       type: object
@@ -6285,9 +6632,9 @@ components:
           description: Reason given for the last status change.
           type: string
         taxRegistrations:
-          description: Tax registrations.
+          description: 'Tax registrations, masked: never a number.'
           items:
-            $ref: '#/components/schemas/TaxRegistrationDto'
+            $ref: '#/components/schemas/TaxRegistrationView'
           type: array
         updatedAt:
           description: Last change time.
