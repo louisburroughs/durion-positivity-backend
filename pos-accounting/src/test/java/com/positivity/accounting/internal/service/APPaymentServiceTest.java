@@ -355,14 +355,10 @@ class APPaymentServiceTest {
         when(paymentRepository.findByPaymentRef(testPaymentRef)).thenReturn(Optional.empty());
         when(billRepository.lockByVendorBillIdIn(any())).thenReturn(List.of(bill));
         when(paymentRepository.save(any(APPayment.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(paymentGateway.executePayment(any()))
-                .thenReturn(GatewayPaymentResponse.builder()
-                        .transactionId("txn-z")
-                        .status(PaymentGatewayProvider.GatewayPaymentStatus.SUCCEEDED)
-                        .rawResponse("{}")
-                        .build());
+        // The guard passes; the payment then reaches the gateway (stubbed to fail here, past the guard's point).
+        when(paymentGateway.executePayment(any())).thenThrow(new RuntimeException("gateway down"));
 
-        service.executePayment(request, "ana");
+        assertThatThrownBy(() -> service.executePayment(request, "ana")).isInstanceOf(PaymentGatewayException.class);
 
         verify(payGuard).check(List.of(), "ana", testPaymentRef);
     }
