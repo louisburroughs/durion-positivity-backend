@@ -619,19 +619,35 @@ class AccountingExceptionHandlerTest {
             "#2627: a lock wait beyond lock_timeout is 409 LOCK_TIMEOUT, whichever layer raised it")
     void lockTimeoutIs409() {
         AccountingExceptionHandler lockHandler = new AccountingExceptionHandler(java.time.Clock.systemUTC());
+        org.springframework.mock.web.MockHttpServletRequest pay =
+                new org.springframework.mock.web.MockHttpServletRequest("POST", "/v1/accounting/ap/payments");
+        org.springframework.mock.web.MockHttpServletRequest approve =
+                new org.springframework.mock.web.MockHttpServletRequest(
+                        "POST", "/v1/accounting/vendor-bills/0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a01/approve");
+        org.springframework.mock.web.MockHttpServletRequest other =
+                new org.springframework.mock.web.MockHttpServletRequest("POST", "/v1/accounting/deposits");
         for (Exception timeout : java.util.List.<Exception>of(
                 new org.springframework.dao.CannotAcquireLockException("canceling statement due to lock timeout"),
                 new org.springframework.dao.PessimisticLockingFailureException("lock"),
                 new jakarta.persistence.LockTimeoutException("lock"),
                 new jakarta.persistence.PessimisticLockException("lock"))) {
-            org.springframework.http.ResponseEntity<com.positivity.shared.error.ApiError> response =
-                    lockHandler.handleLockTimeout(timeout, null);
-            org.assertj.core.api.Assertions.assertThat(response.getStatusCode().value())
-                    .isEqualTo(409);
-            org.assertj.core.api.Assertions.assertThat(response.getBody().code())
-                    .isEqualTo("LOCK_TIMEOUT");
-            org.assertj.core.api.Assertions.assertThat(response.getBody().message())
-                    .isEqualTo("Another request is working on these bills; retry");
+            for (org.springframework.mock.web.MockHttpServletRequest billPath : java.util.List.of(pay, approve)) {
+                org.springframework.http.ResponseEntity<com.positivity.shared.error.ApiError> response =
+                        lockHandler.handleLockTimeout(timeout, billPath);
+                org.assertj.core.api.Assertions.assertThat(
+                                response.getStatusCode().value())
+                        .isEqualTo(409);
+                org.assertj.core.api.Assertions.assertThat(response.getBody().code())
+                        .isEqualTo("LOCK_TIMEOUT");
+                org.assertj.core.api.Assertions.assertThat(response.getBody().message())
+                        .isEqualTo("Another request is working on these bills; retry");
+            }
+            org.assertj.core.api.Assertions.assertThat(lockHandler
+                            .handleLockTimeout(timeout, other)
+                            .getBody()
+                            .message())
+                    .as("LOW 7: a non-AP path gets a neutral message")
+                    .isEqualTo("Another request is working on this record; retry");
         }
     }
 }

@@ -471,6 +471,121 @@ class APPaymentPostingPostgresIT extends PostgresTenancyTestBase {
         assertThat(payment.getStatus()).isEqualTo(APPaymentStatus.GL_POST_PENDING);
     }
 
+    @Test
+    @DisplayName("MAJOR 1, AC11 (#2641 review): while a payment sits in a slow gateway call, approving another vendor's"
+            + " bill dated in the same month proceeds; a second payment or a void of the bill the payment holds"
+            + " waits only lock_timeout (LOCK_TIMEOUT) and the first payment then completes")
+    void postingsProceedDuringAPaymentsGatewayCall() throws Exception {
+        UUID tenant = tenant();
+        VendorBillResponse paying = approvedBill(tenant, "200.00");
+        VendorBillResponse another = awaitingBill(tenant, "90.00", today());
+        CountDownLatch inGateway = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        reset(gateway);
+        when(gateway.executePayment(any())).thenAnswer(invocation -> {
+            inGateway.countDown();
+            release.await(60, TimeUnit.SECONDS);
+            GatewayPaymentRequest request = invocation.getArgument(0);
+            return new GatewayPaymentResponse(
+                    "ch_" + request.getIdempotencyKey(),
+                    PaymentGatewayProvider.GatewayPaymentStatus.SUCCEEDED,
+                    "ch_" + request.getIdempotencyKey(),
+                    null,
+                    "{}");
+        });
+        ExecutorService payer = Executors.newSingleThreadExecutor();
+        try {
+            Future<APPaymentResponse> inFlight =
+                    payer.submit(() -> pay(tenant, request(paying, "200.00", null, "200.00")));
+            assertThat(inGateway.await(60, TimeUnit.SECONDS))
+                    .as("the payment reached the gateway")
+                    .isTrue();
+
+            signIn(CONTROLLER, CONTROLLER_GRANTS);
+            VendorBillResponse approved = asTenant(
+                    tenant,
+                    () -> approvals.approve(
+                            another.getVendorBillId(),
+                            new VendorBillCommands.Approve("Checked against the delivery", null, null, null)));
+            assertThat(approved.getStatus())
+                    .as("no period lock is held across the gateway call: the approval posts at once")
+                    .isEqualTo(VendorBillStatus.APPROVED);
+
+            assertThatThrownBy(() -> pay(tenant, request(paying, "200.00", null, "200.00")))
+                    .as("a second payment of the held bill waits lock_timeout, never the gateway call")
+                    .isInstanceOfAny(
+                            PessimisticLockingFailureException.class,
+                            LockTimeoutException.class,
+                            PessimisticLockException.class);
+            signIn(CONTROLLER, CONTROLLER_GRANTS);
+            assertThatThrownBy(() -> asTenant(
+                            tenant,
+                            () -> approvals.voidBill(
+                                    paying.getVendorBillId(),
+                                    new VendorBillCommands.VoidBill("Billed twice, the vendor confirmed", null))))
+                    .as("a void of the bill the payment holds answers LOCK_TIMEOUT")
+                    .isInstanceOfAny(
+                            PessimisticLockingFailureException.class,
+                            LockTimeoutException.class,
+                            PessimisticLockException.class);
+            SecurityContextHolder.clearContext();
+
+            release.countDown();
+            APPaymentResponse payment = inFlight.get(60, TimeUnit.SECONDS);
+            assertThat(payment.getStatus()).isEqualTo(APPaymentStatus.GL_POST_PENDING);
+            assertThat(count(tenant, "ap_payment", "true")).isEqualTo(1);
+            assertThat(billStatus(tenant, paying.getVendorBillId())).isEqualTo("APPROVED");
+        } finally {
+            release.countDown();
+            payer.shutdownNow();
+        }
+    }
+
+    @Test
+    @DisplayName("Ruling 1 (2026-10-08): a retry never reuses the payer's override; without its own into a closed"
+            + " period → PERIOD_CLOSED, still GL_POST_FAILED, stored override unchanged; with its own → posted and"
+            + " audited under the retrier")
+    void retryNeedsItsOwnOverride() throws Exception {
+        UUID tenant = tenant();
+        VendorBillResponse bill = approvedBill(tenant, "120.00");
+        closePeriod(tenant, today());
+        ExecuteAPPaymentRequest request = request(bill, "120.00", null, "120.00");
+        request.setOverrideJustification(OVERRIDE);
+        APPaymentResponse payment = pay(tenant, request, "accounting:ap:pay", "accounting:period:override");
+        endMapping(tenant, "ACCOUNTS_PAYABLE");
+        deliver(tenant, payment.getPaymentId());
+        assertThat(paymentState(tenant, payment.getPaymentId()))
+                .containsEntry("status", "GL_POST_FAILED")
+                .containsEntry("gl_post_error", "GL_MAPPING_NOT_CONFIGURED");
+        restoreMapping(tenant, "ACCOUNTS_PAYABLE");
+
+        signIn(CONTROLLER, "accounting:je:post", "accounting:period:override");
+        assertThatThrownBy(() -> asTenant(tenant, () -> payments.retryGLPosting(payment.getPaymentId(), null)))
+                .isInstanceOf(AccountingPeriodClosedException.class);
+        assertThat(paymentState(tenant, payment.getPaymentId()))
+                .containsEntry("status", "GL_POST_FAILED")
+                .containsEntry("gl_post_error", "PERIOD_CLOSED");
+        assertThat(owner().queryForMap(
+                                "SELECT period_override_justification, period_override_by FROM ap_payment"
+                                        + " WHERE tenant_id = ? AND payment_id = ?",
+                                tenant,
+                                payment.getPaymentId()))
+                .containsEntry("period_override_justification", OVERRIDE)
+                .containsEntry("period_override_by", PAYER);
+
+        String own = "Controller posts the June payment into the closed period";
+        APPaymentResponse retried = asTenant(tenant, () -> payments.retryGLPosting(payment.getPaymentId(), own));
+        SecurityContextHolder.clearContext();
+        assertThat(retried.getStatus()).isEqualTo(APPaymentStatus.GL_POSTED);
+        assertThat(owner().queryForMap(
+                                "SELECT user_id, justification FROM accounting_audit_log WHERE tenant_id = ? AND entity_id = ?"
+                                        + " AND operation = 'PERIOD_OVERRIDE_POST'",
+                                tenant,
+                                retried.getGlJournalEntryId()))
+                .containsEntry("user_id", CONTROLLER)
+                .containsEntry("justification", own);
+    }
+
     // ---- helpers ------------------------------------------------------------------------------------------------
 
     private UUID tenant() {
@@ -543,11 +658,14 @@ class APPaymentPostingPostgresIT extends PostgresTenancyTestBase {
 
     /** A goods receipt of one stocked line of {@code amount}, then the vendor's invoice of the same amount. */
     private VendorBillResponse awaitingBill(UUID tenant, String amount) {
+        return awaitingBill(tenant, amount, today().minusDays(1));
+    }
+
+    private VendorBillResponse awaitingBill(UUID tenant, String amount, LocalDate invoiced) {
         signIn("receiving.dock", "accounting:ap:view");
         try {
             UUID vendor = UUIDv7Generator.generate();
             UUID product = UUIDv7Generator.generate();
-            LocalDate invoiced = today().minusDays(1);
             asTenant(
                     tenant,
                     () -> vendorBills.handleGoodsReceivedEvent(GoodsReceivedEvent.builder()

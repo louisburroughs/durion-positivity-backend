@@ -69,19 +69,18 @@ public interface GLAccountRepository extends JpaRepository<GLAccount, UUID> {
             @Param("subtype") @NonNull AccountSubtype subtype, @Param("at") @NonNull LocalDateTime at);
 
     /**
-     * Accounts of one subtype active on the day {@code [dayStart, dayEnd)}, reconcilable or not: activated before the
-     * day ends (a null activation date counts as active from the start) and not deactivated by the day's start. The AP
-     * pay command counts its eligible {@code BANK_CASH} accounts with it (CAP:550 S42, #2603).
+     * Accounts of one subtype active at {@code at}, reconcilable or not, by the rule a posting checks ({@code
+     * GLAccountService.validateAccountForPosting}): activated at or before {@code at} (a null activation date counts as
+     * active from the start) and not deactivated by it. The AP pay command counts its eligible {@code BANK_CASH}
+     * accounts with it at the start of the execution day, the instant the payment's entry posts at (CAP:550 S42, #2603).
      */
     @Query("SELECT g FROM GLAccount g WHERE g.accountSubtype = :subtype "
-            + "AND (g.activationDate IS NULL OR g.activationDate < :dayEnd) "
-            + "AND (g.deactivationDate IS NULL OR g.deactivationDate > :dayStart) "
+            + "AND (g.activationDate IS NULL OR g.activationDate <= :at) "
+            + "AND (g.deactivationDate IS NULL OR g.deactivationDate > :at) "
             + "ORDER BY g.accountCode")
     @NonNull
-    List<GLAccount> findBySubtypeActiveOnDay(
-            @Param("subtype") @NonNull AccountSubtype subtype,
-            @Param("dayStart") @NonNull LocalDateTime dayStart,
-            @Param("dayEnd") @NonNull LocalDateTime dayEnd);
+    List<GLAccount> findBySubtypeActiveAt(
+            @Param("subtype") @NonNull AccountSubtype subtype, @Param("at") @NonNull LocalDateTime at);
 
     /**
      * Every reconcilable account active at {@code at}, whatever its subtype — close readiness under {@code

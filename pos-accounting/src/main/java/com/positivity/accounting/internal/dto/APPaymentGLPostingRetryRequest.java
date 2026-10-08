@@ -26,8 +26,8 @@ public class APPaymentGLPostingRetryRequest {
     @Size(min = 10, max = 1000, message = "Override justification must be 10-1000 characters")
     @Schema(
             description = "Justification for posting into the CLOSED period of the payment's own date; honoured only"
-                    + " with accounting:period:override, and audited under the caller. Without it, an override the"
-                    + " payer gave on the pay command applies. Never bypasses the hard lock.",
+                    + " with the caller's accounting:period:override, and audited under the caller. A retry never reuses"
+                    + " the override the payer gave on the pay command. Never bypasses the hard lock.",
             example = "Period reopened for audit adjustments; posting the June vendor payment",
             requiredMode = NOT_REQUIRED)
     @JsonProperty("overrideJustification")

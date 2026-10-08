@@ -785,7 +785,17 @@ public class AccountingExceptionHandler {
         PessimisticLockException.class
     })
     public ResponseEntity<ApiError> handleLockTimeout(Exception ex, HttpServletRequest request) {
-        return build(HttpStatus.CONFLICT, "LOCK_TIMEOUT", "Another request is working on these bills; retry", request);
+        return build(HttpStatus.CONFLICT, "LOCK_TIMEOUT", lockTimeoutMessage(request), request);
+    }
+
+    /** The AP payment and vendor-bill paths name the bills; any other path that hits a lock wait stays neutral. */
+    private static String lockTimeoutMessage(HttpServletRequest request) {
+        String path = request == null ? null : request.getRequestURI();
+        boolean billPath = path != null
+                && (path.startsWith("/v1/accounting/ap/") || path.startsWith("/v1/accounting/vendor-bills"));
+        return billPath
+                ? "Another request is working on these bills; retry"
+                : "Another request is working on this record; retry";
     }
 
     @ExceptionHandler(ResponseStatusException.class)

@@ -72,6 +72,7 @@ class APPaymentPreGatewayChecksTest {
     private final AccountingAuditLogRepository auditLogs = mock(AccountingAuditLogRepository.class);
     private final GLMappingResolver mappings = mock(GLMappingResolver.class);
     private final AccountingPeriodService periodService = mock(AccountingPeriodService.class);
+    private final GLAccountService glAccountService = mock(GLAccountService.class);
 
     private final java.util.Map<UUID, GLAccount> accounts = new java.util.HashMap<>();
 
@@ -82,7 +83,7 @@ class APPaymentPreGatewayChecksTest {
         checks = checks(TestZoneResolvers.utc(CLOCK));
         lenient().when(configuration.getHardLockDate()).thenReturn(Optional.empty());
         lenient().when(periods.findWithLockByPeriodCode(anyString())).thenReturn(Optional.empty());
-        lenient().when(periods.findWithShareLockByPeriodCode(anyString())).thenReturn(Optional.empty());
+        lenient().when(periods.findByPeriodCode(anyString())).thenReturn(Optional.empty());
         lenient().when(bankAccountCurrencies.currencyOf(any())).thenReturn(Optional.empty());
         lenient().when(bankAccountCurrencies.currencyOf(CAD_BANK)).thenReturn(Optional.of("CAD"));
         lenient()
@@ -108,7 +109,14 @@ class APPaymentPreGatewayChecksTest {
         AccountingPeriodGate gate =
                 new AccountingPeriodGate(periodService, periods, configuration, auditLogs, zoneResolver);
         return new APPaymentPreGatewayChecks(
-                CLOCK, zoneResolver, glAccounts, bankAccountCurrencies, new LedgerCurrency("USD"), gate, mappings);
+                CLOCK,
+                zoneResolver,
+                glAccounts,
+                bankAccountCurrencies,
+                new LedgerCurrency("USD"),
+                gate,
+                mappings,
+                glAccountService);
     }
 
     private void account(UUID id, AccountSubtype subtype, LocalDateTime deactivated) {
@@ -125,10 +133,7 @@ class APPaymentPreGatewayChecksTest {
     private void eligibleOnToday(UUID... ids) {
         List<GLAccount> active = java.util.Arrays.stream(ids).map(accounts::get).toList();
         lenient()
-                .when(glAccounts.findBySubtypeActiveOnDay(
-                        AccountSubtype.BANK_CASH,
-                        TODAY.atStartOfDay(),
-                        TODAY.plusDays(1).atStartOfDay()))
+                .when(glAccounts.findBySubtypeActiveAt(AccountSubtype.BANK_CASH, TODAY.atStartOfDay()))
                 .thenReturn(active);
     }
 
@@ -157,8 +162,8 @@ class APPaymentPreGatewayChecksTest {
     private void closed(String periodCode) {
         AccountingPeriod period = new AccountingPeriod();
         period.setStatus(AccountingPeriodStatus.CLOSED);
-        // Slot 5 reads the period under a share lock: payments of one month never wait for each other.
-        when(periods.findWithShareLockByPeriodCode(periodCode)).thenReturn(Optional.of(period));
+        // Slot 5 reads the period unlocked: no period lock is held across the gateway call (#2641 review).
+        when(periods.findByPeriodCode(periodCode)).thenReturn(Optional.of(period));
     }
 
     private static VendorBillException.Code code(Throwable refusal) {
@@ -189,7 +194,7 @@ class APPaymentPreGatewayChecksTest {
                     .extracting(APPaymentPreGatewayChecksTest::code)
                     .isEqualTo(VendorBillException.Code.AP_PAYMENT_METHOD_NOT_SUPPORTED);
             verify(glAccounts, never()).findById(any());
-            verify(glAccounts, never()).findBySubtypeActiveOnDay(any(), any(), any());
+            verify(glAccounts, never()).findBySubtypeActiveAt(any(), any());
         }
 
         @Test
@@ -270,6 +275,31 @@ class APPaymentPreGatewayChecksTest {
                                     .containsExactly("bankAccountId");
                         });
             }
+        }
+
+        @Test
+        @DisplayName("MAJOR 2 (#2641): eligibility is judged at the start of the execution day, the instant the entry"
+                + " posts at: an account activated at 00:00 is eligible, one activated at 10:00 that day is not")
+        void activationBoundary() {
+            UUID midnight = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f1040");
+            UUID morning = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f1050");
+            account(midnight, AccountSubtype.BANK_CASH, null);
+            accounts.get(midnight).setActivationDate(TODAY.atStartOfDay());
+            account(morning, AccountSubtype.BANK_CASH, null);
+            accounts.get(morning).setActivationDate(TODAY.atTime(10, 0));
+
+            assertThat(checks.checkRequest(request(PaymentMethod.ACH, "USD", midnight), Optional.of(TODAY)))
+                    .isEqualTo(midnight);
+            assertThatThrownBy(
+                            () -> checks.checkRequest(request(PaymentMethod.ACH, "USD", morning), Optional.of(TODAY)))
+                    .isInstanceOfSatisfying(
+                            VendorBillException.class,
+                            refusal -> assertThat(refusal.getFieldErrors())
+                                    .extracting(VendorBillException.FieldError::field)
+                                    .containsExactly("bankAccountId"));
+            assertThat(checks.checkRequest(request(PaymentMethod.ACH, "USD", morning), Optional.of(TODAY.plusDays(1))))
+                    .as("the next day it is eligible")
+                    .isEqualTo(morning);
         }
 
         @Test
@@ -355,10 +385,9 @@ class APPaymentPreGatewayChecksTest {
 
             assertThat(execution).isEqualTo(new APPaymentPreGatewayChecks.Execution(TODAY, true));
             verifyNoInteractions(auditLogs);
-            // The month is provisioned before it is share-locked, so a missing row cannot be closed mid-gateway.
-            org.mockito.InOrder order = org.mockito.Mockito.inOrder(periodService, periods);
-            order.verify(periodService).ensurePeriodExists(TODAY);
-            order.verify(periods).findWithShareLockByPeriodCode("2026-10");
+            // No period lock across the gateway call, and nothing provisioned (#2641 review, MAJOR 1).
+            verify(periods, never()).findWithLockByPeriodCode(any());
+            verifyNoInteractions(periodService);
         }
 
         @Test
@@ -383,6 +412,21 @@ class APPaymentPreGatewayChecksTest {
                         assertThat(refusal.getNextAction()).contains("AP_PAYMENT/ACCOUNTS_PAYABLE");
                     });
             verify(mappings).resolveGLAccount("AP_PAYMENT", "ACCOUNTS_PAYABLE", TODAY.atStartOfDay());
+        }
+
+        @Test
+        @DisplayName(
+                "MAJOR 2 (#2641): a mapped account not active at the start of the day is GL_MAPPING_NOT_CONFIGURED")
+        void inactiveMappedAccount() {
+            org.mockito.Mockito.doThrow(new com.positivity.accounting.internal.exception.GLAccountNotActiveException(
+                            "Account 2000 is inactive as of 2026-10-08T00:00"))
+                    .when(glAccountService)
+                    .validateAccountForPosting(PAYABLES, TODAY.atStartOfDay());
+
+            assertThatThrownBy(() -> checks.checkPeriodAndMapping(Optional.of(TODAY), BigDecimal.ZERO, null))
+                    .isInstanceOfSatisfying(
+                            GLMappingNotConfiguredException.class,
+                            refusal -> assertThat(refusal.getReferenceId()).isEqualTo("AP_PAYMENT/ACCOUNTS_PAYABLE"));
         }
 
         @Test

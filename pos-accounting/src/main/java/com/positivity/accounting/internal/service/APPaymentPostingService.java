@@ -9,6 +9,7 @@ import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
 import com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetException;
+import com.positivity.accounting.internal.exception.GLAccountNotActiveException;
 import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
 import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.accounting.internal.repository.APPaymentRepository;
@@ -51,14 +52,17 @@ import org.springframework.transaction.annotation.Transactional;
  * AP_PAYMENT:<paymentId>} ({@link JournalEntrySourceTypes#AP_PAYMENT}): an entry already posted under it is linked,
  * never posted again.
  *
- * <p><b>Refusals</b> propagate unwrapped: {@link GLMappingNotConfiguredException}, {@link
- * AccountingPeriodClosedException}, {@link AccountingPeriodHardLockedException} and {@link
+ * <p><b>Refusals</b> propagate unwrapped: {@link GLMappingNotConfiguredException}, {@link GLAccountNotActiveException},
+ * {@link AccountingPeriodClosedException}, {@link AccountingPeriodHardLockedException} and {@link
  * AccountingTimeZoneUnsetException} ({@link #refusalCode}). The transaction rolls back; the caller records the code on
  * the payment in a transaction of its own ({@link APPaymentFailurePersistenceService#persistGLPostRefusal}).
  *
  * <p><b>The period override.</b> A closed-period override the payer gave on the pay command is stored on the payment
- * and applied here as the payer ({@link JournalEntryService#postJournalEntryWithRecordedOverride}): the override audit
- * row names the payer. A retry may bring its own override instead, applied for its caller.
+ * and applied by the <em>outbox delivery only</em> ({@link #postPending}), as the payer ({@link
+ * JournalEntryService#postJournalEntryWithRecordedOverride}): the override audit row names the payer (ruling 5 of
+ * #2603). A {@code gl-posting-retry} is a new act (ruling 1 of 2026-10-08): it never uses the stored override, only the
+ * caller's own {@code overrideJustification} with the caller's {@code accounting:period:override}, and it never changes
+ * the stored override fields.
  */
 @Slf4j
 @Component
@@ -95,16 +99,15 @@ public class APPaymentPostingService {
                     payment.getStatus());
             return null;
         }
-        return post(payment, null);
+        return post(payment, null, true);
     }
 
     /**
      * {@code POST /v1/accounting/ap/payments/{paymentId}/gl-posting-retry}: posts a {@code GL_POST_FAILED} payment on
      * its stored {@code payment_date}.
      *
-     * @param overrideJustification the caller's closed-period justification, honoured with {@code
-     *                              accounting:period:override}; when absent, an override stored by the pay command
-     *                              applies
+     * @param overrideJustification the caller's closed-period justification, honoured with the caller's {@code
+     *                              accounting:period:override}; the override stored by the pay command never applies
      * @return the posted entry's id
      * @throws EntityNotFoundException when no such payment is visible (404 {@code NOT_FOUND})
      * @throws VendorBillException {@code AP_PAYMENT_NOT_RETRYABLE} when the payment is not {@code GL_POST_FAILED}
@@ -120,7 +123,7 @@ public class APPaymentPostingService {
                     "AP payment " + payment.getPaymentRef() + " is " + payment.getStatus()
                             + "; only a payment whose posting failed (GL_POST_FAILED) can be posted again");
         }
-        return post(payment, overrideJustification);
+        return post(payment, overrideJustification, false);
     }
 
     /**
@@ -133,6 +136,8 @@ public class APPaymentPostingService {
             case AccountingPeriodClosedException _ -> Optional.of("PERIOD_CLOSED");
             case AccountingPeriodHardLockedException _ -> Optional.of("PERIOD_HARD_LOCKED");
             case AccountingTimeZoneUnsetException _ -> Optional.of("ACCOUNTING_TIME_ZONE_UNSET");
+            // The payment's own bank account not active at the start of payment_date: configuration, not transient.
+            case GLAccountNotActiveException _ -> Optional.of("GL_ACCOUNT_NOT_ACTIVE");
             default -> Optional.empty();
         };
     }
@@ -147,7 +152,11 @@ public class APPaymentPostingService {
         return UUID.nameUUIDFromBytes(postingKey(paymentId).getBytes(StandardCharsets.UTF_8));
     }
 
-    private UUID post(APPayment payment, @Nullable String callerOverride) {
+    /**
+     * @param callerOverride      the retry caller's own justification (null on the outbox delivery)
+     * @param applyRecordedOverride true on the outbox delivery only: the payer's stored override applies
+     */
+    private UUID post(APPayment payment, @Nullable String callerOverride, boolean applyRecordedOverride) {
         UUID paymentId = payment.getPaymentId();
         UUID sourceEventId = toSourceEventId(paymentId);
         Optional<JournalEntry> alreadyPosted = journalEntryRepository.findBySourceEvent(sourceEventId).stream()
@@ -196,13 +205,14 @@ public class APPaymentPostingService {
                 .build());
         UUID entryId = created.getJournalEntryId();
         JournalEntryResponse posted;
-        if (callerOverride != null && !callerOverride.isBlank()) {
-            posted = journalEntryService.postJournalEntry(entryId, callerOverride);
-        } else if (payment.getPeriodOverrideJustification() != null && payment.getPeriodOverrideBy() != null) {
+        if (applyRecordedOverride
+                && payment.getPeriodOverrideJustification() != null
+                && payment.getPeriodOverrideBy() != null) {
             posted = journalEntryService.postJournalEntryWithRecordedOverride(
                     entryId, payment.getPeriodOverrideJustification(), payment.getPeriodOverrideBy());
         } else {
-            posted = journalEntryService.postJournalEntry(entryId, null);
+            // A retry: the caller's own override (or none), checked against the caller's authority by the gate.
+            posted = journalEntryService.postJournalEntry(entryId, callerOverride);
         }
         markPosted(payment, posted.getJournalEntryId());
         log.info(

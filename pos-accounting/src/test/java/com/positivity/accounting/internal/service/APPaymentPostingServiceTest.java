@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -285,10 +284,51 @@ class APPaymentPostingServiceTest {
         verify(journalEntries).postJournalEntry(ENTRY, "Reopened June for the audit adjustments");
         verify(journalEntries, never()).postJournalEntryWithRecordedOverride(any(), any(), any());
 
+        // Ruling 1 (2026-10-08): a retry with no override of its own never reuses the payer's stored override.
         payment.setStatus(APPaymentStatus.GL_POST_FAILED);
         service.retry(PAYMENT_ID, null);
+        verify(journalEntries).postJournalEntry(ENTRY, null);
+        verify(journalEntries, never()).postJournalEntryWithRecordedOverride(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("ruling 1: a retry with no override into a still-closed period is refused PERIOD_CLOSED; the payment"
+            + " stays as it was and its stored override fields are unchanged")
+    void retryIntoAClosedPeriodWithoutItsOwnOverride() {
+        payment.setStatus(APPaymentStatus.GL_POST_FAILED);
+        payment.setGlPostError("GL_MAPPING_NOT_CONFIGURED");
+        payment.setPeriodOverrideJustification("Supplier paid on the agreed date");
+        payment.setPeriodOverrideBy("payer.pat");
+        AccountingPeriodClosedException closed = new AccountingPeriodClosedException("2026-10", "closed");
+        when(journalEntries.postJournalEntry(ENTRY, null)).thenThrow(closed);
+
+        assertThatThrownBy(() -> service.retry(PAYMENT_ID, null)).isSameAs(closed);
+
+        assertThat(APPaymentPostingService.refusalCode(closed)).contains("PERIOD_CLOSED");
+        assertThat(payment.getStatus()).isEqualTo(APPaymentStatus.GL_POST_FAILED);
+        assertThat(payment.getPeriodOverrideJustification()).isEqualTo("Supplier paid on the agreed date");
+        assertThat(payment.getPeriodOverrideBy()).isEqualTo("payer.pat");
+        verify(journalEntries, never()).postJournalEntryWithRecordedOverride(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("the outbox delivery, and only it, applies the stored override as the payer")
+    void outboxAppliesTheStoredOverride() {
+        payment.setPeriodOverrideJustification("Supplier paid on the agreed date");
+        payment.setPeriodOverrideBy("payer.pat");
+
+        service.postPending(PAYMENT_ID);
+
         verify(journalEntries)
                 .postJournalEntryWithRecordedOverride(ENTRY, "Supplier paid on the agreed date", "payer.pat");
-        verify(journalEntries, never()).postJournalEntry(eq(ENTRY), isNull());
+        verify(journalEntries, never()).postJournalEntry(any(), any());
+    }
+
+    @Test
+    @DisplayName("MAJOR 2: an inactive bank account at posting is a refusal (GL_ACCOUNT_NOT_ACTIVE), not transient")
+    void inactiveAccountIsARefusal() {
+        assertThat(APPaymentPostingService.refusalCode(
+                        new com.positivity.accounting.internal.exception.GLAccountNotActiveException("inactive")))
+                .contains("GL_ACCOUNT_NOT_ACTIVE");
     }
 }

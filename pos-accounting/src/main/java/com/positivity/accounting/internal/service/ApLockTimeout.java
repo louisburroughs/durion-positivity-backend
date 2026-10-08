@@ -10,11 +10,12 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Bounds how long an AP command waits for a row lock (CAP:550 S42, #2627). The AP pay command locks its bills and the
- * period row before the gateway call and holds them across it; approve, reject, void and the due-date change lock a
+ * Bounds how long an AP command waits for a row lock (CAP:550 S42, #2627). The AP pay command locks its bills before
+ * the gateway call and holds them across it; approve, reject, void and the due-date change lock a
  * bill. Each runs {@link #apply} first, so a wait beyond {@code accounting.ap.lock-timeout} (default 5 s) fails with
- * SQLSTATE 55P03 instead of queueing behind a slow gateway: the transaction rolls back, nothing is persisted, and the
- * caller gets 409 {@code LOCK_TIMEOUT} and retries.
+ * SQLSTATE 55P03 instead of queueing behind a slow gateway: the transaction rolls back and the caller gets 409 {@code
+ * LOCK_TIMEOUT} and retries. Work committed in a REQUIRES_NEW transaction (an audit row of a refusal) does not inherit
+ * the limit and is not rolled back.
  *
  * <p>{@code set_config(..., true)} is {@code SET LOCAL}: the limit lasts until the transaction ends and never leaks to
  * the next borrower of the pooled connection. The value is bound as a parameter, never spliced into SQL. On H2 (the dev

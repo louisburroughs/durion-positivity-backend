@@ -82,7 +82,7 @@ public class APPaymentController {
                 gross, Dr 6030 the fee and Cr the bank account on the payment's business date (AP_PAYMENT category).
                 Use this tool to pay a vendor; do not use applyPayment, which is the AR-side application of customer \
                 payments to invoices, and use listApBills first to find APPROVED bills to allocate against.
-                Preconditions: checked in this order before the gateway is called and persisting nothing, the method \
+                Preconditions: checked in this order before the gateway is called, charging nothing, the method \
                 is ACH, CHECK or WIRE, the currency is the functional currency, the bank account is eligible (active \
                 on the business date, not in a foreign currency), every allocated bill exists, is APPROVED, belongs \
                 to the vendor and fits the gross amount, the payer approved none of the bills paid (unless the AP \
@@ -119,8 +119,7 @@ public class APPaymentController {
     @ApiResponse(
             responseCode = "409",
             description = "IDEMPOTENCY_CONFLICT: paymentRef exists with a different payload; LOCK_TIMEOUT: another"
-                    + " request held these bills or the period row beyond accounting.ap.lock-timeout, nothing was"
-                    + " persisted, retry",
+                    + " request held these bills beyond accounting.ap.lock-timeout, the payment was not saved, retry",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
@@ -205,14 +204,14 @@ public class APPaymentController {
                 Preconditions: the payment exists and is GL_POST_FAILED; the payment row is locked for the retry, \
                 and the entry is never re-dated, so a payment whose date is now hard-locked stays GL_POST_FAILED.
                 Required inputs: paymentId (UUID) as a path parameter and an optional body with \
-                overrideJustification (10-1000 chars, honoured with accounting:period:override and audited under \
-                the caller); without one, an override the payer gave on the pay command applies.
+                overrideJustification (10-1000 chars, honoured with the caller's accounting:period:override and \
+                audited under the caller); a retry never reuses the override the payer gave on the pay command.
                 Emits ACCOUNTING_AP_PAYMENT_GL_POSTING_RETRY; on success the payment is GL_POSTED with its journal \
                 entry id, and a refused retry leaves it GL_POST_FAILED with the new reason in glPostError.
                 Returns 404 NOT_FOUND when no such payment exists, 409 AP_PAYMENT_NOT_RETRYABLE when it is not \
                 GL_POST_FAILED (already posted, pending, or a gateway state), 409 LOCK_TIMEOUT when another request \
-                holds it, and 422 GL_MAPPING_NOT_CONFIGURED, PERIOD_CLOSED, PERIOD_HARD_LOCKED or \
-                ACCOUNTING_TIME_ZONE_UNSET when the posting is still refused.
+                holds it, and 422 GL_MAPPING_NOT_CONFIGURED, GL_ACCOUNT_NOT_ACTIVE, PERIOD_CLOSED, PERIOD_HARD_LOCKED \
+                or ACCOUNTING_TIME_ZONE_UNSET when the posting is still refused.
                 """,
             tags = {"AP Payments"})
     @ApiResponse(responseCode = "200", description = "Posted: the payment is GL_POSTED with its journal entry id")
@@ -231,12 +230,13 @@ public class APPaymentController {
     @ApiResponse(
             responseCode = "409",
             description = "AP_PAYMENT_NOT_RETRYABLE: the payment is not GL_POST_FAILED; LOCK_TIMEOUT: another request"
-                    + " held the payment or the period row beyond accounting.ap.lock-timeout",
+                    + " held the payment or the period row (posting's period gate) beyond accounting.ap.lock-timeout",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
             description =
-                    "The posting is still refused: GL_MAPPING_NOT_CONFIGURED, PERIOD_CLOSED, PERIOD_HARD_LOCKED or"
+                    "The posting is still refused: GL_MAPPING_NOT_CONFIGURED, GL_ACCOUNT_NOT_ACTIVE, PERIOD_CLOSED (no"
+                            + " overrideJustification of the caller's own), PERIOD_HARD_LOCKED or"
                             + " ACCOUNTING_TIME_ZONE_UNSET; the payment stays GL_POST_FAILED with this code in glPostError",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @SecurityRequirement(

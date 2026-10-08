@@ -92,7 +92,8 @@ public class APPaymentServiceImpl implements APPaymentService {
 
         // ---- The pre-gateway block (CAP:550 S13, #2510; ruling 6048398147 item 4; S42, #2603) ----------------------
         // Every check that can refuse the payment runs here, in this order, before the payment row is saved and
-        // before the gateway is called; a refusal persists nothing, so the same paymentRef may be sent again. The
+        // before the gateway is called; a refusal charges nothing and saves no payment, so the same paymentRef may be
+        // sent again (a refusal's own audit row, e.g. VENDOR_BILL_PAYMENT_REFUSED, commits in its own transaction). The
         // first refusal wins. Guard order (S42 ruling 2 of #2603; whichever of S24/S42 merges second keeps it):
         //   1. the request checks (APPaymentPreGatewayChecks#checkRequest):
         //        1a. method: CREDIT_CARD, OTHER -> 422 AP_PAYMENT_METHOD_NOT_SUPPORTED (S42, OI-17);
@@ -105,13 +106,15 @@ public class APPaymentServiceImpl implements APPaymentService {
         //   4. S24's remit-to check;
         //   5. the period and mapping checks (APPaymentPreGatewayChecks#checkPeriodAndMapping, S42):
         //        5a. time zone -> 422 ACCOUNTING_TIME_ZONE_UNSET; 5b. hard lock -> 422 PERIOD_HARD_LOCKED;
-        //        5c. closed period without an accepted override -> 422 PERIOD_CLOSED (the period row share-locked);
+        //        5c. closed period without an accepted override -> 422 PERIOD_CLOSED (the period row read unlocked: no
+        //            period lock is held across the gateway call; a period closed meanwhile refuses the outbox posting,
+        //            and the payment goes GL_POST_FAILED);
         //        5d. AP_PAYMENT/ACCOUNTS_PAYABLE, and PAYMENT_FEES when fee > 0 -> 422 GL_MAPPING_NOT_CONFIGURED.
         // A refused allocation (a bill missing, not APPROVED or another vendor's; over-allocation) is refused in
         // slot 2 (ruling 6063520413 item 4).
         // Bounded waits (#2627): the bill locks of slot 2 (FOR UPDATE; the automatic plan locks every APPROVED bill of
-        // the vendor) and the period row share lock of slot 5c are held until this transaction ends, across the gateway
-        // call below. accounting.ap.lock-timeout (SET LOCAL lock_timeout, default 5 s) bounds every wait for them
+        // the vendor) are held until this transaction ends, across the gateway call below; the period row is not
+        // locked. accounting.ap.lock-timeout (SET LOCAL lock_timeout, default 5 s) bounds every wait for them
         // (409 LOCK_TIMEOUT, nothing persisted), and the gateway's own connect and read timeouts (5 s / 20 s) bound
         // how long they are held.
         lockTimeout.apply();

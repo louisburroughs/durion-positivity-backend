@@ -997,7 +997,7 @@ def gen_accounting_db():
                  "created_by", "payment_ref"],
                 [q(pay_id), q(VENDOR_ID[vk]), q(VENDORS[vk]), q(bill_id), q(CCY),
                  money(amt), money(0), money(0), q("GL_POSTED"), q("ACH"),
-                 q(tsnaive(pay_d, 12)), q(tstz(pay_d, 13)), q(tstz(pay_d, 12)),
+                 q(pay_d.isoformat()), q(tstz(pay_d, 13)), q(tstz(pay_d, 12)),
                  q(SEED_USER), q("%s-PAY-%s" % (MARK, key.replace("bill-", "").upper()))],
             )
             f.insert(

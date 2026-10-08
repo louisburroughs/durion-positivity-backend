@@ -1163,7 +1163,8 @@ on the day it executed. No posting-rule version is involved: `AP_PAYMENT_GL_POST
 SKIPPED / `RETIRED_EVENT_TYPE`, and `POST /v1/accounting/events` refuses it).
 
 **The pay command.** `POST /v1/accounting/ap/payments` takes `bankAccountId` (the GL account id of an eligible
-`BANK_CASH` account: active on the execution date and not in a foreign currency per its bank profile) and an optional
+`BANK_CASH` account: active at the start of the execution date, the instant its entry posts at, and not in a foreign
+currency per its bank profile; an account activated later that day is eligible from the next day) and an optional
 `overrideJustification` (10-1000 characters). `bankAccountId` may be omitted only when exactly one eligible account
 exists; inactive and foreign-currency accounts are not counted. `netAmount` is gone from the request, the response, the
 outbox event, the entity and the table: the bank pays gross + fee. An idempotent replay compares the resolved bank
@@ -1171,7 +1172,8 @@ account (an omitted one resolves to the one eligible account on the stored date)
 and `paymentDate`.
 
 **Guard order** (`APPaymentServiceImpl.executePayment`, `APPaymentPreGatewayChecks`). Every refusal comes before the
-gateway is called and persists nothing, so the same `paymentRef` may be sent again; the first refusal wins:
+gateway is called, charges nothing and saves no payment, so the same `paymentRef` may be sent again; the first refusal
+wins. (A refusal's own audit row, such as `VENDOR_BILL_PAYMENT_REFUSED`, commits in a transaction of its own.)
 
 | Slot | Status | Code | When |
 | --- | --- | --- | --- |
@@ -1179,15 +1181,18 @@ gateway is called and persists nothing, so the same `paymentRef` may be sent aga
 | 1b | 400 / 422 | `VALIDATION_ERROR` / `CURRENCY_NOT_SUPPORTED` | not ISO 4217 / not the functional currency (ADR-0067) |
 | 1c | 400 | `VALIDATION_ERROR` `fieldErrors[bankAccountId]` | missing and not exactly one eligible, or the supplied one not eligible |
 | 2, 3 | 400 / 403 | allocation refusals, `AP_PAYMENT_SELF_APPROVED_BILL` | S13 |
-| 2-5 | 409 | `LOCK_TIMEOUT` | a bill or the period row lock waited beyond `accounting.ap.lock-timeout` |
+| 2 | 409 | `LOCK_TIMEOUT` | a bill lock waited beyond `accounting.ap.lock-timeout` |
 | 5a | 422 | `ACCOUNTING_TIME_ZONE_UNSET` | no accounting time zone (fails closed) |
 | 5b | 422 | `PERIOD_HARD_LOCKED` | the execution date is hard-locked |
 | 5c | 422 | `PERIOD_CLOSED` | its period is closed, without an `overrideJustification` and `accounting:period:override` |
-| 5d | 422 | `GL_MAPPING_NOT_CONFIGURED` | no `AP_PAYMENT/ACCOUNTS_PAYABLE` mapping on the date, or no `PAYMENT_FEES` with a fee above 0 |
+| 5d | 422 | `GL_MAPPING_NOT_CONFIGURED` | no `AP_PAYMENT/ACCOUNTS_PAYABLE` mapping to an account active on the date, or none for `PAYMENT_FEES` with a fee above 0 |
 
-S24 adds its vendor check at the end of slot 1 and its remit-to check in slot 4. Slot 5c reads the period row under a
-share lock (`FOR SHARE`) to the end of the transaction: a `closePeriod` waits for the payment, while payments of the
-same month do not wait for each other across their gateway calls.
+S24 adds its vendor check at the end of slot 1 and its remit-to check in slot 4. Slot 5c reads the period row
+**without a lock**: a lock held across the gateway call would hold every other posting of the month (each takes the row
+`FOR UPDATE` in the period gate) behind it. A period closed during the gateway call refuses the outbox posting
+(`PERIOD_CLOSED`) and the payment goes `GL_POST_FAILED`; whether a close should wait for unposted AP payments is close
+readiness (S19, #2515). Likewise a hard lock moved past the payment's date during the gateway call leaves the payment
+`GL_POST_FAILED` for good (`PERIOD_HARD_LOCKED`, never re-dated); that race is out of scope here.
 
 **Execution date.** The tenant's business date (accounting time zone) is read once and fixed in slot 5 on
 `ap_payment.payment_date` (`DATE`): the date the period check used, the date the entry posts on and the date a retry
@@ -1198,31 +1203,39 @@ Dr `AP_PAYMENT/ACCOUNTS_PAYABLE` (2000) the gross, Dr `AP_PAYMENT/PAYMENT_FEES` 
 payment's own bank account the gross + fee, dated `payment_date`, source `AP_PAYMENT` with source event id
 `nameUUIDFromBytes("AP_PAYMENT:" + paymentId)`. The payment stores its entry and moves to `GL_POSTED`; a second
 delivery or a retry posts nothing. Allocations post nothing; an unapplied amount stays a debit in 2000 for the vendor.
+A gateway `PENDING` charge (an ACH charge in flight) posts on the day it was initiated, like a mailed check; a charge
+that later fails is not yet detected (follow-up #2642: settlement and returns).
 The `AP_PAYMENT` category, its keys and mappings are template rows (`R__seed_reference_accounting.sql`) that S37's
 applier and startup sweep give every tenant. No pos-tax function is used: a payment has no tax leg (AW48, OI-4).
 
 **Refused after execution.** The money has moved, so the payment stands. A refusal at the outbox
-(`GL_MAPPING_NOT_CONFIGURED`, `PERIOD_CLOSED`, `PERIOD_HARD_LOCKED`, `ACCOUNTING_TIME_ZONE_UNSET`) is not transient:
-the payment goes `GL_POST_FAILED` with the code in `glPostError`, recorded in its own transaction, and the outbox row
-completes without spending its retries. Any other exception retries through the outbox.
+(`GL_MAPPING_NOT_CONFIGURED`, `GL_ACCOUNT_NOT_ACTIVE`, `PERIOD_CLOSED`, `PERIOD_HARD_LOCKED`,
+`ACCOUNTING_TIME_ZONE_UNSET`) is not transient: the payment goes `GL_POST_FAILED` with the code in `glPostError`,
+recorded in its own transaction, and the outbox row completes without spending its retries. Any other exception
+retries through the outbox; when the last retry fails, the payment goes `GL_POST_FAILED` with
+`GL_POST_RETRIES_EXHAUSTED`, so `gl-posting-retry` can post it.
 
 **The period override travels with the payment.** A closed-period override accepted in slot 5c is stored
 (`period_override_justification`, `period_override_by`); the outbox posting applies it as the payer
 (`AccountingPeriodGate.assertPostingAllowedWithRecordedOverride`), and the `PERIOD_OVERRIDE_POST` audit row names the
-payer.
+payer. Only the outbox delivery applies it (an ArchUnit rule limits the callers); a retry never does.
 
 **Retry.** `POST /v1/accounting/ap/payments/{paymentId}/gl-posting-retry` `{overrideJustification?}`
 (`accounting:je:post`; `accounting:period:override` for the override) locks the payment and posts a `GL_POST_FAILED`
 one on its stored date: 200 with the payment `GL_POSTED`; 404 `NOT_FOUND`; 409 `AP_PAYMENT_NOT_RETRYABLE` for any
-other status; 409 `LOCK_TIMEOUT`; 422 `GL_MAPPING_NOT_CONFIGURED`, `PERIOD_CLOSED`, `PERIOD_HARD_LOCKED` or
-`ACCOUNTING_TIME_ZONE_UNSET` with the payment left `GL_POST_FAILED` and the new code in `glPostError`. A caller's own
-override is applied and audited for the caller; without one, an override stored by the pay command applies.
+other status; 409 `LOCK_TIMEOUT`; 422 `GL_MAPPING_NOT_CONFIGURED`, `GL_ACCOUNT_NOT_ACTIVE`, `PERIOD_CLOSED`,
+`PERIOD_HARD_LOCKED` or `ACCOUNTING_TIME_ZONE_UNSET` with the payment left `GL_POST_FAILED` and the new code in
+`glPostError`. A retry is a new act (Accounting ruling 1 of 2026-10-08 on #2603): into a closed period it needs the
+caller's own `overrideJustification` and `accounting:period:override`, applied and audited for the caller; the override
+the payer gave on the pay command never applies to it, and the stored override fields are never changed.
 
 **Bounded waits (#2627).** Every gateway call carries `payment.gateway.connect-timeout` (default 5 s) and
 `payment.gateway.read-timeout` (default 20 s) on its Stripe `RequestOptions`. The pay command, the retry and the
 vendor-bill decisions that lock a bill (approve, reject, void, due-date change, send, resolve) run `SET LOCAL
 lock_timeout` from `accounting.ap.lock-timeout` (default 5 s) first; a wait beyond it answers 409 `LOCK_TIMEOUT`
-("Another request is working on these bills; retry"), and the transaction rolls back. A gateway timeout means the
+("Another request is working on these bills; retry" on the AP paths, a neutral message elsewhere), and the transaction
+rolls back. Work a REQUIRES_NEW transaction committed (a provisioned period row, a refusal's audit row) is not undone,
+and such a transaction does not inherit the limit. A gateway timeout means the
 outcome is unknown: the transaction rolls back (no `ap_payment` row, no allocation, no posting) and the caller sends
 the same `paymentRef` again within the gateway idempotency window (`STRIPE_IDEMPOTENCY_WINDOW_HOURS`), whose key
 replays the original outcome. If `idle_in_transaction_session_timeout` is ever set for pos-accounting, it must exceed
@@ -1333,7 +1346,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `AP_PAYMENT_SELF_APPROVED_BILL` | 403 | The payer approved a bill the payment would pay; `fieldErrors[selfApprovedBillNumbers]` name them; nothing is paid (#2510) |
 | `AP_PAYMENT_METHOD_NOT_SUPPORTED` | 422 | An AP payment by `CREDIT_CARD` or `OTHER`: no funding account is modelled for them (OI-17); refused first, before the gateway (#2603) |
 | `AP_PAYMENT_NOT_RETRYABLE` | 409 | `gl-posting-retry` of an AP payment that is not `GL_POST_FAILED` (already posted, pending, or a gateway state) (#2603) |
-| `LOCK_TIMEOUT` | 409 | A row lock waited beyond `accounting.ap.lock-timeout` on the AP pay command, its retry or a vendor-bill decision: another request is working on these bills; nothing was persisted, retry (#2627) |
+| `LOCK_TIMEOUT` | 409 | A row lock waited beyond `accounting.ap.lock-timeout` on the AP pay command, its retry or a vendor-bill decision: another request is working on these bills (a neutral message on other paths); the transaction rolled back, retry (#2627) |
 | `UNAUTHENTICATED` | 401 | No usable authentication on the request |
 | `FORBIDDEN` | 403 | Caller lacks the required permission |
 | `AUTHORIZATION_DENIED` | 403 | Audit-trail event creation refused because the caller may not record that event |

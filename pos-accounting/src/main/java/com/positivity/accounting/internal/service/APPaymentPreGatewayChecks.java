@@ -9,6 +9,8 @@ import com.positivity.accounting.internal.enums.AccountSubtype;
 import com.positivity.accounting.internal.enums.PaymentMethod;
 import com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetException;
 import com.positivity.accounting.internal.exception.CurrencyNotSupportedException;
+import com.positivity.accounting.internal.exception.GLAccountNotActiveException;
+import com.positivity.accounting.internal.exception.GLAccountNotFoundException;
 import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
 import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
@@ -33,7 +35,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * The AP pay command's own refusals (CAP:550 S42, #2603; AW40, AW41), run in the numbered slots of its pre-gateway
  * block ({@link APPaymentServiceImpl#executePayment}). Every one comes before the payment row is saved and before the
- * gateway is called, and persists nothing, so the same {@code paymentRef} may be sent again once corrected. The first
+ * gateway is called, charges nothing and saves no payment, so the same {@code paymentRef} may be sent again once
+ * corrected (a refusal's own audit row may commit in its own transaction). The first
  * refusal wins.
  *
  * <ul>
@@ -49,8 +52,8 @@ import org.springframework.transaction.annotation.Transactional;
  *       ({@code ACCOUNTS_PAYABLE} always, {@code PAYMENT_FEES} when the fee is above zero).
  * </ul>
  *
- * <p><b>Eligible bank account</b>: a {@code BANK_CASH} GL account active on the execution date (activated before the
- * day ends, not deactivated by its start) and not in a foreign
+ * <p><b>Eligible bank account</b>: a {@code BANK_CASH} GL account active at the start of the execution date (the
+ * instant its entry posts at: activated at or before it, not deactivated by it) and not in a foreign
  * currency ({@link BankAccountCurrencies}, {@link LedgerCurrency}). {@code bankAccountId} may be omitted only when
  * exactly one eligible account exists; inactive and foreign-currency accounts are not counted.
  *
@@ -83,6 +86,7 @@ public class APPaymentPreGatewayChecks {
     private final LedgerCurrency ledgerCurrency;
     private final AccountingPeriodGate periodGate;
     private final GLMappingResolver glMappingResolver;
+    private final GLAccountService glAccountService;
 
     /** What slot 5 fixed: the execution date and whether a closed-period override was accepted for it. */
     public record Execution(@NonNull LocalDate date, boolean overrideAccepted) {}
@@ -149,8 +153,8 @@ public class APPaymentPreGatewayChecks {
     }
 
     /**
-     * Slot 5: time zone, then hard lock, then closed period, then mapping. The period row is locked to the end of the
-     * transaction.
+     * Slot 5: time zone, then hard lock, then closed period, then mapping. The period row is read without a lock: no
+     * period lock is held across the gateway call (#2641 review).
      *
      * @param businessDate          the command's business date (empty when the zone is unset)
      * @param feeAmount             the payment's fee; {@code PAYMENT_FEES} is needed only above zero
@@ -185,16 +189,20 @@ public class APPaymentPreGatewayChecks {
     }
 
     /**
-     * Resolves one {@code AP_PAYMENT} key on {@code date}, refusing with a guided {@code GL_MAPPING_NOT_CONFIGURED}
-     * (#2601) that names {@code AP_PAYMENT/<key>}.
+     * Resolves one {@code AP_PAYMENT} key at {@code at} to an account the entry can post to, refusing with a guided
+     * {@code GL_MAPPING_NOT_CONFIGURED} (#2601) that names {@code AP_PAYMENT/<key>} when no mapping is effective or
+     * its account is missing or not active at {@code at} (as {@code VendorBillPostingService.resolve} does). Slot 5d
+     * and the posting both call it, so a payment that passes 5d never posts to an inactive mapped account.
      */
     public @NonNull UUID resolve(@NonNull String mappingKey, @NonNull LocalDateTime at) {
         try {
-            return glMappingResolver.resolveGLAccount(POSTING_CATEGORY, mappingKey, at);
-        } catch (GLMappingNotConfiguredException e) {
+            UUID account = glMappingResolver.resolveGLAccount(POSTING_CATEGORY, mappingKey, at);
+            glAccountService.validateAccountForPosting(account, at);
+            return account;
+        } catch (GLMappingNotConfiguredException | GLAccountNotActiveException | GLAccountNotFoundException e) {
             throw new GLMappingNotConfiguredException(
                     "No active " + POSTING_CATEGORY + "/" + mappingKey + " mapping on " + at.toLocalDate()
-                            + "; an AP payment cannot be booked without it",
+                            + "; an AP payment cannot be booked without it (" + e.getMessage() + ")",
                     POSTING_CATEGORY,
                     mappingKey,
                     "Set up the " + POSTING_CATEGORY + "/" + mappingKey + " GL mapping, then pay again.");
@@ -210,12 +218,7 @@ public class APPaymentPreGatewayChecks {
     }
 
     private List<UUID> eligibleBankAccounts(LocalDate date) {
-        return glAccounts
-                .findBySubtypeActiveOnDay(
-                        AccountSubtype.BANK_CASH,
-                        date.atStartOfDay(),
-                        date.plusDays(1).atStartOfDay())
-                .stream()
+        return glAccounts.findBySubtypeActiveAt(AccountSubtype.BANK_CASH, date.atStartOfDay()).stream()
                 .filter(account -> !isForeign(account))
                 .map(GLAccount::getGlAccountId)
                 .toList();
@@ -225,13 +228,14 @@ public class APPaymentPreGatewayChecks {
         if (account.getAccountSubtype() != AccountSubtype.BANK_CASH) {
             return false;
         }
-        // Active on the date: activated before it ends, not deactivated by its start (as findBySubtypeActiveOnDay).
-        LocalDateTime dayStart = date.atStartOfDay();
-        LocalDateTime dayEnd = date.plusDays(1).atStartOfDay();
+        // Active at the start of the execution day, the instant the entry posts at (APPaymentPostingService), by the
+        // posting's own rule (GLAccountService.validateAccountForPosting): an account activated later that day cannot
+        // take the entry, so it is not eligible that day (#2641 review, MAJOR 2).
+        LocalDateTime at = date.atStartOfDay();
         boolean active = (account.getActivationDate() == null
-                        || account.getActivationDate().isBefore(dayEnd))
+                        || !account.getActivationDate().isAfter(at))
                 && (account.getDeactivationDate() == null
-                        || account.getDeactivationDate().isAfter(dayStart));
+                        || account.getDeactivationDate().isAfter(at));
         return active && !isForeign(account);
     }
 

@@ -56,6 +56,10 @@ public class OutboxProcessor {
     private final OutboxService outboxService;
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
+    private final APPaymentFailurePersistenceService apPaymentFailures;
+
+    /** {@code glPostError} of an AP payment whose outbox posting failed its last retry (CAP:550 S42, #2641 review). */
+    static final String AP_PAYMENT_RETRIES_EXHAUSTED = "GL_POST_RETRIES_EXHAUSTED";
 
     private static final int BATCH_SIZE = 10;
     private static final int MAX_RETRIES = 5;
@@ -136,6 +140,12 @@ public class OutboxProcessor {
                     e);
 
             outboxService.markAsFailed(outbox.getOutboxId(), e.getMessage(), MAX_RETRIES);
+            if (outbox.getRetryCount() + 1 >= MAX_RETRIES
+                    && APPaymentGLPostingEvent.class.getName().equals(outbox.getEventType())) {
+                // The row is FAILED and never polled again: give the payment the remedy a refusal has, so
+                // gl-posting-retry accepts it (only from GL_POST_PENDING / GL_POST_FAILED, never over GL_POSTED).
+                apPaymentFailures.persistGLPostRefusal(outbox.getAggregateId(), AP_PAYMENT_RETRIES_EXHAUSTED);
+            }
         }
     }
 

@@ -52,6 +52,9 @@ class OutboxProcessorTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private APPaymentFailurePersistenceService apPaymentFailures;
+
     private ObjectMapper objectMapper;
 
     @InjectMocks
@@ -68,7 +71,8 @@ class OutboxProcessorTest {
         eventId = UUID.fromString("00000000-0000-0000-0000-000000000002");
 
         objectMapper = new ObjectMapper();
-        processor = new OutboxProcessor(clock, outboxRepository, outboxService, eventPublisher, objectMapper);
+        processor = new OutboxProcessor(
+                clock, outboxRepository, outboxService, eventPublisher, objectMapper, apPaymentFailures);
 
         testOutbox = new EventOutbox();
         testOutbox.setTenantId(TENANT);
@@ -135,8 +139,8 @@ class OutboxProcessorTest {
 
         ObjectMapper timeAwareMapper =
                 new ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
-        OutboxProcessor timeAwareProcessor =
-                new OutboxProcessor(clock, outboxRepository, outboxService, eventPublisher, timeAwareMapper);
+        OutboxProcessor timeAwareProcessor = new OutboxProcessor(
+                clock, outboxRepository, outboxService, eventPublisher, timeAwareMapper, apPaymentFailures);
 
         testOutbox.setAggregateType("PaymentApplication");
         testOutbox.setEventType(
@@ -211,7 +215,8 @@ class OutboxProcessorTest {
                 outboxRepository,
                 outboxService,
                 event -> handler.onAPPaymentGLPosting((APPaymentGLPostingEvent) event),
-                objectMapper);
+                objectMapper,
+                apPaymentFailures);
     }
 
     private void pendingApPayment(UUID paymentId) throws Exception {
@@ -273,5 +278,29 @@ class OutboxProcessorTest {
         verify(failures).persistGLPostRefusal(paymentId, "GL_MAPPING_NOT_CONFIGURED");
         verify(outboxService).markAsPublished(outboxId);
         verify(outboxService, never()).markAsFailed(any(), any(), org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
+    @DisplayName("S42 MINOR 3 (#2641): when the last retry fails, the AP payment goes GL_POST_FAILED"
+            + " (GL_POST_RETRIES_EXHAUSTED) so gl-posting-retry can post it; earlier failures leave it pending")
+    void apPaymentRetriesExhausted() throws Exception {
+        UUID paymentId = UUID.fromString("00000000-0000-0000-0000-000000000044");
+        testOutbox.setAggregateId(paymentId);
+        APPaymentPostingService postingService = org.mockito.Mockito.mock(APPaymentPostingService.class);
+        when(postingService.postPending(paymentId))
+                .thenThrow(new org.springframework.dao.CannotAcquireLockException("lock timeout"));
+        pendingApPayment(paymentId);
+        OutboxProcessor delivering =
+                processorDeliveringTo(new com.positivity.accounting.internal.handler.APPaymentGLPostingEventHandler(
+                        postingService, apPaymentFailures));
+
+        testOutbox.setRetryCount(3);
+        delivering.processPendingEvents();
+        verify(apPaymentFailures, never()).persistGLPostRefusal(any(), any());
+
+        testOutbox.setRetryCount(4); // this failure is the fifth: the row goes FAILED
+        delivering.processPendingEvents();
+        verify(apPaymentFailures).persistGLPostRefusal(paymentId, "GL_POST_RETRIES_EXHAUSTED");
+        verify(outboxService, org.mockito.Mockito.times(2)).markAsFailed(eq(outboxId), any(String.class), eq(5));
     }
 }

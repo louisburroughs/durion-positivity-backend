@@ -111,10 +111,12 @@ public class AccountingPeriodGate {
     /**
      * The AP pay command's period check, before any journal entry exists (CAP:550 S42, #2603; slot 5 of its pre-gateway
      * block): the same rules as {@link #assertPostingAllowed}, in the same order (time zone, hard lock, closed period),
-     * with the period row provisioned when missing and share-locked to the end of the transaction: a {@code closePeriod}
-     * waits for the payment, while
-     * payments of the same month do not wait for each other across their gateway calls. Nothing is written: the accepted
-     * override is stored on the payment and audited when its entry posts ({@link
+     * with the period row read <em>without a lock</em>. The payment holds its transaction across the gateway call, and a
+     * lock on the period row would hold every other posting of the month behind it (each takes the row {@code FOR UPDATE}
+     * in {@link #assertPostingAllowed}). Nothing is lost: the entry posts later, from the outbox, through the locked
+     * gate; a period closed meanwhile refuses it {@code PERIOD_CLOSED} and the payment goes {@code GL_POST_FAILED}
+     * (ruling 4 of #2603). Whether a close should wait for unposted AP payments is close readiness (S19, #2515). Nothing
+     * is written: the accepted override is stored on the payment and audited when its entry posts ({@link
      * #assertPostingAllowedWithRecordedOverride}).
      *
      * @param date                  the payment's execution date
@@ -124,12 +126,8 @@ public class AccountingPeriodGate {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean assertPaymentDateAllowed(@NonNull LocalDate date, @Nullable String overrideJustification) {
-        Optional<String> closed = closedPeriodOf(date, periodCode -> {
-            // A missing row would leave nothing to lock, and a closePeriod could provision and close the month during
-            // the gateway call: provision it first (REQUIRES_NEW, as every posting does), then share-lock it.
-            accountingPeriodService.ensurePeriodExists(date);
-            return periodRepository.findWithShareLockByPeriodCode(periodCode);
-        });
+        // Unlocked: no period lock is held across the gateway call (see above). A missing row counts as open.
+        Optional<String> closed = closedPeriodOf(date, periodRepository::findByPeriodCode);
         if (closed.isEmpty()) {
             return false;
         }
@@ -165,10 +163,10 @@ public class AccountingPeriodGate {
     }
 
     /**
-     * The time zone and hard-lock checks, then the period, read under a row lock through {@code lockedRead}: the code of
-     * the CLOSED period of {@code date}, or empty when it is open (a missing row counts as open).
+     * The time zone and hard-lock checks, then the period, read through {@code periodRead} (locked for a posting): the
+     * code of the CLOSED period of {@code date}, or empty when it is open (a missing row counts as open).
      */
-    private Optional<String> closedPeriodOf(LocalDate date, Function<String, Optional<AccountingPeriod>> lockedRead) {
+    private Optional<String> closedPeriodOf(LocalDate date, Function<String, Optional<AccountingPeriod>> periodRead) {
         // Fail closed (#2558 ruling): the gate refuses every posting while the tenant has no accounting time zone,
         // whether or not its date was derived through the resolver (an explicit date, an open original period).
         zoneResolver.zone();
@@ -181,7 +179,7 @@ public class AccountingPeriodGate {
         // closePeriod updates this row and must wait for the in-flight
         // posting (or, having committed first, is seen here as CLOSED). A
         // missing row counts as OPEN; there is nothing to lock.
-        boolean periodOpen = lockedRead
+        boolean periodOpen = periodRead
                 .apply(periodCode)
                 .map(period -> period.getStatus() == AccountingPeriodStatus.OPEN)
                 .orElse(true);

@@ -48,6 +48,10 @@ class APPaymentPostingControllerTest extends BaseIntegrationTest {
     @MockitoBean
     private APPaymentService apPaymentService;
 
+    /** The real emission, observed: AC6 asks that the retry writes ACCOUNTING_AP_PAYMENT_GL_POSTING_RETRY. */
+    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
+    private com.positivity.events.internal.service.EventEmissionService eventEmission;
+
     private static String payBody(String extra) {
         return """
                 {"vendorId":"0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f5001","grossAmount":412.00,"feeAmount":1.50,\
@@ -209,6 +213,9 @@ class APPaymentPostingControllerTest extends BaseIntegrationTest {
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.status").value("GL_POSTED"));
             verify(apPaymentService).retryGLPosting(eq(PAYMENT_ID), isNull());
+            // AC6: the retry writes its audit event through the platform's emission service.
+            verify(eventEmission)
+                    .executeWithEventEmission(eq("ACCOUNTING_AP_PAYMENT_GL_POSTING_RETRY"), eq("1"), any());
         }
 
         @Test

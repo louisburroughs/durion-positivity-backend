@@ -121,8 +121,8 @@ public interface APPaymentService {
      * its stored {@code payment_date}, with the payment row locked.
      *
      * @param paymentId             the payment
-     * @param overrideJustification the caller's closed-period justification (with {@code accounting:period:override});
-     *                              when absent, an override stored by the pay command applies
+     * @param overrideJustification the caller's closed-period justification (with the caller's {@code
+     *                              accounting:period:override}); the override stored by the pay command never applies
      * @return the payment, {@code GL_POSTED} with its journal entry id
      * @throws jakarta.persistence.EntityNotFoundException when no such payment is visible (404 {@code NOT_FOUND})
      * @throws com.positivity.accounting.internal.exception.VendorBillException {@code AP_PAYMENT_NOT_RETRYABLE} (409)
