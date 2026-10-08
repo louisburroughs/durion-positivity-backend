@@ -278,10 +278,11 @@ class VendorTaxRegistrationMigrationIT {
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> flyway(null).migrate())
                 .satisfies(failure -> {
-                    String said = String.valueOf(failure.getMessage())
-                            + (failure.getCause() == null
-                                    ? ""
-                                    : failure.getCause().getMessage());
+                    StringBuilder chain = new StringBuilder();
+                    for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+                        chain.append(cause.getMessage()).append('\n');
+                    }
+                    String said = chain.toString();
                     assertThat(said).contains("1 stored vendor tax registration");
                     assertThat(said.contains("EIN123") || said.contains(SSN))
                             .as("value absent")
