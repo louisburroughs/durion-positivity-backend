@@ -1619,7 +1619,7 @@ components:
           description: Postal code of the receipt
           example: Z1Z 1Z1
           maxLength: 20
-          minLength: 0
+          minLength: 1
           type: string
         receiptTotal:
           description: Receipt total, tax included, above zero and at most the currency's decimals
