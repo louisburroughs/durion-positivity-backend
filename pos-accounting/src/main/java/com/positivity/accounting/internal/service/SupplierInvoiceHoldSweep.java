@@ -36,7 +36,9 @@ public class SupplierInvoiceHoldSweep {
     static final Duration STALE = Duration.ofHours(24);
 
     private final SupplierInvoiceHoldRepository holds;
-    private final SupplierEventsListener listener;
+    /** The consumer that releases holds; absent where the Kafka rails are off (dev, test), then nothing is released. */
+    private final ObjectProvider<SupplierEventsListener> listener;
+
     private final TenantIterator tenantIterator;
     private final TransactionTemplate transaction;
     private final Clock clock;
@@ -44,7 +46,7 @@ public class SupplierInvoiceHoldSweep {
 
     public SupplierInvoiceHoldSweep(
             SupplierInvoiceHoldRepository holds,
-            SupplierEventsListener listener,
+            ObjectProvider<SupplierEventsListener> listener,
             TenantIterator tenantIterator,
             PlatformTransactionManager transactionManager,
             Clock clock,
@@ -76,8 +78,9 @@ public class SupplierInvoiceHoldSweep {
         tenantIterator.forEachActiveTenant(tenantId -> {
             List<UUID> releasable = transaction.execute(
                     _ -> holds.findCopiedVendorIdsWithOpenHolds(SupplierInvoiceHold.Reason.VENDOR_NOT_IN_COPY));
-            if (releasable != null) {
-                releasable.forEach(listener::releaseHolds);
+            SupplierEventsListener releaser = listener.getIfAvailable();
+            if (releasable != null && releaser != null) {
+                releasable.forEach(releaser::releaseHolds);
             }
             for (SupplierInvoiceHold.Reason reason : SupplierInvoiceHold.Reason.values()) {
                 Long count = transaction.execute(_ -> holds.countByReasonAndReleasedAtIsNull(reason));

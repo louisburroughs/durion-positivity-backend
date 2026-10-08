@@ -58,7 +58,7 @@ class SupplierVendorCopyPostgresIT extends PostgresTenancyTestBase {
     private static final String FAKE_NUMBER_BARE = "000001234";
     private static final String LAST4 = "Z9Q8";
 
-    @Autowired
+    /** Built by hand: the {@code pg} profile runs without the Kafka rails, so the consumer is not a bean. */
     private SupplierEventsListener listener;
 
     @Autowired
@@ -110,6 +110,20 @@ class SupplierVendorCopyPostgresIT extends PostgresTenancyTestBase {
 
     @BeforeEach
     void captureLogs() {
+        listener = new SupplierEventsListener(
+                clock,
+                objectMapper,
+                processed,
+                bills,
+                vendorCopy,
+                holds,
+                ledgerCurrency,
+                ingestion,
+                duplicateGuard,
+                reissues,
+                locks,
+                meters,
+                transactionManager);
         accountingLogger = (Logger) LoggerFactory.getLogger("com.positivity.accounting");
         previousLevel = accountingLogger.getLevel();
         accountingLogger.setLevel(Level.DEBUG);

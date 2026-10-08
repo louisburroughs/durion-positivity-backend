@@ -181,6 +181,10 @@ class AccountingExceptionHandlerTest {
                                             .FLOAT_ALREADY_ESTABLISHED,
                                     "Register T-1 already has a float"),
                             request)),
+                    Named.of("handleVendorNotFound", (HandlerInvocation) request -> handler.handleVendorNotFound(
+                            new com.positivity.accounting.internal.exception.VendorNotFoundException(
+                                    java.util.UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f7a01")),
+                            request)),
                     Named.of("handleVendorBill", (HandlerInvocation) request -> handler.handleVendorBill(
                             new com.positivity.accounting.internal.exception.VendorBillException(
                                     com.positivity.accounting.internal.exception.VendorBillException.Code
