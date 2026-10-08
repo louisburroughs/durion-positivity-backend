@@ -318,15 +318,17 @@ public class SupplierVendorController {
                     Emits a SUPPLIER_VENDOR_UPDATE audit event and queues one supplier.vendor.updated fact in the
                     same transaction.
                     Returns 200 with the vendor, 400 VALIDATION_ERROR for a malformed field or a refused
-                    registration (fieldErrors names taxRegistrations[i].number or .registrationId), 404
+                    registration (fieldErrors names taxRegistrations[i].number, .registrationId, .scheme or
+                    .region), 404
                     SUPPLIER_VENDOR_NOT_FOUND, and 409 CONFLICT when version is stale.
                     """)
     @ApiResponse(responseCode = "200", description = "Vendor updated.")
     @ApiResponse(
             responseCode = "400",
             description = "VALIDATION_ERROR: a field is missing or malformed, a registrationId is not this"
-                    + " vendor's, a new registration has no number, or a kept registration changed its scheme or"
-                    + " region without its number. No message echoes a number.",
+                    + " vendor's, a new registration has no number, a kept registration changed its scheme or"
+                    + " region without its number, or a scheme or region carrying a number breaks its shape (no"
+                    + " digits). No message echoes a submitted value.",
             content = @Content(mediaType = JSON, schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
