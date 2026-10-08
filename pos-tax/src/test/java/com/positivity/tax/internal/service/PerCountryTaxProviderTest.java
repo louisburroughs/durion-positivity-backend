@@ -115,6 +115,13 @@ class PerCountryTaxProviderTest {
                         .postalCode("A1A1A1")
                         .build())
                 .transactionDate(date)
+                // Fixture currencies: the profile's own for each fixture country (not tax law).
+                .currencyCode(
+                        switch (country) {
+                            case "CA" -> "CAD";
+                            case "ZZ" -> "JPY";
+                            default -> "USD";
+                        })
                 .build();
     }
 
@@ -233,6 +240,18 @@ class PerCountryTaxProviderTest {
 
             assertThatThrownBy(() -> s.calc().calculateTax(request("CA", "AB", "2026-08-27", line("1", "10.00"))))
                     .isInstanceOf(TaxJurisdictionNotConfiguredException.class);
+        }
+
+        @Test
+        @DisplayName(
+                "a request in another currency than the profile's is refused (ADR-0067 PC-9), never rounded under it")
+        void otherCurrencyIsRefused() {
+            TaxCalculationRequest usd = request("CA", "BC", "2026-08-27", line("1", "100.00"));
+            usd.setCurrencyCode("USD");
+
+            assertThatThrownBy(() -> firstCountry().calc().calculateTax(usd))
+                    .isInstanceOf(com.positivity.tax.internal.exception.TaxCurrencyNotSupportedException.class)
+                    .hasMessageContaining("CAD");
         }
 
         @Test

@@ -17,7 +17,6 @@ import com.positivity.tenancy.TenantResolver;
 import com.positivity.tenancy.testing.TenantTestSupport;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
-import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.BeforeEach;
@@ -84,7 +83,16 @@ class TaxProviderLifecycleServiceTest {
                         .profile("ZZ")
                         .orElseThrow(),
                 Clock.systemUTC());
-        when(selector.pluginById(PLUGIN)).thenReturn(Optional.of(plugin));
+        when(selector.isSelfHosted(org.mockito.ArgumentMatchers.anyString()))
+                .thenAnswer(inv -> inv.<String>getArgument(0).endsWith("_SELF"));
+        when(selector.lifecycleProviderFor(org.mockito.ArgumentMatchers.anyString()))
+                .thenAnswer(inv -> {
+                    String name = inv.getArgument(0);
+                    if (PLUGIN.equals(name)) {
+                        return plugin;
+                    }
+                    return name.endsWith("_SELF") ? new RetiredSelfHostedPlugin(name) : provider;
+                });
         ObjectProvider<MeterRegistry> meterRegistry = mock(ObjectProvider.class);
         when(meterRegistry.getIfAvailable()).thenReturn(null);
         TaxProviderTransactionResolver resolver =
@@ -252,6 +260,22 @@ class TaxProviderLifecycleServiceTest {
 
         assertThat(repository.findByReferenceId(ref).orElseThrow().getProvider())
                 .isEqualTo("FAKE");
+    }
+
+    @Test
+    @DisplayName(
+            "S32a: a document priced by a plug-in whose profile was since removed still commits there, never via the switch")
+    void retiredPluginStillOwnsItsDocuments() {
+        UUID ref = UUID.randomUUID();
+        service.recordPricing(ref, "INVOICE", "QQ_SELF");
+        provider.failCommit = true;
+
+        TaxProviderTransactionResult result = service.commit(ref, "INVOICE");
+
+        assertThat(result.status()).isEqualTo(TaxProviderTransactionStatus.COMMITTED);
+        TaxProviderTransaction row = repository.findByReferenceId(ref).orElseThrow();
+        assertThat(row.getProvider()).isEqualTo("QQ_SELF");
+        assertThat(row.getExternalTransactionId()).isNull();
     }
 
     /** Test double whose commit can be toggled to fail. */

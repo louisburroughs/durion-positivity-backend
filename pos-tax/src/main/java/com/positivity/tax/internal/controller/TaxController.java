@@ -83,7 +83,8 @@ public class TaxController {
                     inputTaxRecoverable are null on every other country's rows.
                     Returns 400 when line items or the destination address are missing or malformed, 422
                     TAX_JURISDICTION_NOT_CONFIGURED when such a country has no rate row for the region on the
-                    transaction date, and 500 when the provider is unreachable in production mode.
+                    transaction date or CURRENCY_NOT_SUPPORTED when currencyCode is not that country's configured
+                    currency, and 500 when the provider is unreachable in production mode.
                     """)
     @ApiResponse(responseCode = "200", description = "Tax calculated successfully")
     @ApiResponse(
@@ -92,7 +93,8 @@ public class TaxController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description = "No rate row is configured for the destination region (TAX_JURISDICTION_NOT_CONFIGURED)",
+            description = "No rate row is configured for the destination region (TAX_JURISDICTION_NOT_CONFIGURED), or"
+                    + " currencyCode is not the destination country's configured currency (CURRENCY_NOT_SUPPORTED)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "500",

@@ -39,7 +39,8 @@ Tax calculation service for the Durion Positivity ETSMS platform. Supports two o
 - `GET /v1/tax/mode` — returns current operating mode (`test` or `production`)
 
 Error codes beyond validation: 422 `TAX_JURISDICTION_NOT_CONFIGURED` (a profiled country has no rate row for the region on
-the date) and 501 `TAX_RATE_LOOKUP_UNSUPPORTED` (rate lookup on a deployment-wide provider other than test mode).
+the date), 422 `CURRENCY_NOT_SUPPORTED` (a calculation for a profiled country states another currency than the profile's;
+ADR-0067 PC-9) and 501 `TAX_RATE_LOOKUP_UNSUPPORTED` (rate lookup on a deployment-wide provider other than test mode).
 
 ## Provider plug-ins
 
@@ -171,7 +172,8 @@ pos.tax:
   calculation (sale and refund), commit and void, in every provider mode. Every other country keeps the switch above. A plug-in
   serves only its own country.
 - **Rows.** `effective-from` and `effective-to` are inclusive; `effective-to` is optional. The rows of the destination region in
-  effect on the date answer, one per tax type; with none, 422 `TAX_JURISDICTION_NOT_CONFIGURED`.
+  effect on the date answer, one per tax type; with none, 422 `TAX_JURISDICTION_NOT_CONFIGURED`. A calculation must state the
+  profile's currency (rows round at its exponent and are never converted), otherwise 422 `CURRENCY_NOT_SUPPORTED`.
 - **Startup check** (`TaxCountryProfiles`). Startup fails, naming the property, when a country code is not ISO 3166-1 alpha-2
   (assigned or user-assigned, so a fixture may use `ZZ`); a currency is missing or not ISO 4217; a `tax-types` key is not a
   `TaxType`; a tax type names an undeclared regime, lacks `jurisdiction-type` or `input-tax-recoverable`; a region code is not 1–3
@@ -180,7 +182,8 @@ pos.tax:
   or a `default-providers` entry names a plug-in other than its own country's `<country>_SELF`.
 - **Lifecycle log.** A committable calculation priced by a plug-in records an `ESTIMATED` row in `tax_provider_transaction`
   naming the plug-in (`provider`), so its commit and void reach the same plug-in as logged no-ops; the re-commit job ignores
-  `ESTIMATED` rows. No new column was needed: `provider` already names the provider that owns each document.
+  `ESTIMATED` rows. A logged `<country>_SELF` keeps its documents even if its profile is later removed (its no-op commit
+  and void need no profile); only rows priced by the switch fall back to it. No new column was needed: `provider` already names the provider that owns each document.
 - **Callers (ADR-0021 §3).** pos-order, pos-invoice and pos-accounting call computation and the tax-types read directly with the
   service authority; there is no gateway route.
 

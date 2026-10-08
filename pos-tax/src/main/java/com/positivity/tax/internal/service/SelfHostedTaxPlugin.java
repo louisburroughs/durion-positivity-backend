@@ -13,6 +13,7 @@ import com.positivity.tax.common.enums.ExemptionReasonCode;
 import com.positivity.tax.common.enums.TaxCalculationType;
 import com.positivity.tax.common.enums.TaxJurisdictionType;
 import com.positivity.tax.common.enums.TaxProviderTransactionStatus;
+import com.positivity.tax.internal.exception.TaxCurrencyNotSupportedException;
 import com.positivity.tax.internal.exception.TaxJurisdictionNotConfiguredException;
 import com.positivity.tax.internal.service.TaxCountryProfiles.ConfiguredRate;
 import com.positivity.tax.internal.service.TaxCountryProfiles.CountryTaxProfile;
@@ -40,6 +41,8 @@ import org.jspecify.annotations.Nullable;
  *       minor-unit exponent per row; line and total tax are the sums of the rounded rows. With no
  *       row it refuses with {@link TaxJurisdictionNotConfiguredException}, never another
  *       country's rates. {@code REFUND} uses the same rows.</li>
+ *   <li><b>Currency</b>: the request's {@code currencyCode} must be the profile currency, otherwise
+ *       {@link TaxCurrencyNotSupportedException} (422 {@code CURRENCY_NOT_SUPPORTED}, ADR-0067 PC-9).</li>
  *   <li><b>Exemptions</b>: a line that claims one (a reason code or certificate id) is taxed and
  *       flagged as denied; which exemptions apply is held for expert advice (OI-4). A bare
  *       {@code taxExempt} line, the caller's own declaration, is taxed zero with zero-amount rows.</li>
@@ -85,6 +88,7 @@ public class SelfHostedTaxPlugin implements TaxProviderClient {
     @Override
     @NonNull
     public TaxCalculationResponse estimate(@NonNull TaxCalculationRequest request) {
+        requireProfileCurrency(request.getCurrencyCode());
         LocalDate date = TaxTransactionDates.resolve(request.getTransactionDate(), clock);
         List<ConfiguredRate> rows = rowsFor(request.getStateCode(), date);
         int scale = profile.currencyExponent();
@@ -181,6 +185,17 @@ public class SelfHostedTaxPlugin implements TaxProviderClient {
                 components.stream().map(TaxRateComponent::rate).reduce(BigDecimal.ZERO, BigDecimal::add);
         return new TaxRateLookupResponse(
                 profile.countryCode(), regionCode, city, postalCode, asOf, components, combinedRate, SOURCE);
+    }
+
+    /**
+     * Rows are rounded at the profile currency's exponent and never converted, so a request in any
+     * other currency is refused (ADR-0067 PC-9); there is no implicit currency (R-2).
+     */
+    private void requireProfileCurrency(@Nullable String currencyCode) {
+        if (currencyCode == null || !profile.currency().equalsIgnoreCase(currencyCode.trim())) {
+            throw new TaxCurrencyNotSupportedException("Tax for country " + profile.countryCode() + " is calculated in "
+                    + profile.currency() + "; the request states " + currencyCode);
+        }
     }
 
     @NonNull

@@ -218,7 +218,7 @@ public class TaxProviderLifecycleService {
      */
     @Transactional
     public void recordPricing(@NonNull UUID referenceId, @Nullable String referenceType, @NonNull String providerName) {
-        boolean pricedByPlugin = selector.pluginById(providerName).isPresent();
+        boolean pricedByPlugin = selector.isSelfHosted(providerName);
         Optional<TaxProviderTransaction> existing = repository.findByReferenceId(referenceId);
         if (existing.isEmpty()) {
             if (pricedByPlugin) {
@@ -227,7 +227,7 @@ public class TaxProviderLifecycleService {
             return;
         }
         TaxProviderTransaction tx = existing.get();
-        boolean rowNamesPlugin = selector.pluginById(tx.getProvider()).isPresent();
+        boolean rowNamesPlugin = selector.isSelfHosted(tx.getProvider());
         if (tx.getStatus() != TaxProviderTransactionStatus.COMMITTED
                 && !providerName.equals(tx.getProvider())
                 && (pricedByPlugin || rowNamesPlugin)) {
@@ -236,7 +236,10 @@ public class TaxProviderLifecycleService {
         }
     }
 
-    /** The provider that priced {@code referenceId}: its logged plug-in, otherwise the switch. */
+    /**
+     * The provider that priced {@code referenceId}: its logged self-hosted plug-in (even one whose
+     * profile was since removed), otherwise the switch.
+     */
     @NonNull
     private TaxProviderClient providerFor(@NonNull UUID referenceId) {
         return repository.findByReferenceId(referenceId).map(this::providerFor).orElseGet(selector::select);
@@ -244,9 +247,7 @@ public class TaxProviderLifecycleService {
 
     @NonNull
     private TaxProviderClient providerFor(@NonNull TaxProviderTransaction tx) {
-        return selector.pluginById(tx.getProvider())
-                .<TaxProviderClient>map(plugin -> plugin)
-                .orElseGet(selector::select);
+        return selector.lifecycleProviderFor(tx.getProvider());
     }
 
     /**

@@ -88,6 +88,23 @@ class TaxExceptionHandlerTest {
     }
 
     @Nested
+    @DisplayName("handleCurrencyNotSupported (CAP:550 S32a, ADR-0067 PC-9)")
+    class HandleCurrencyNotSupported {
+
+        @Test
+        @DisplayName("returns 422 CURRENCY_NOT_SUPPORTED with the exception message")
+        void returns422WithMessage() {
+            ResponseEntity<ApiError> response = sut.handleCurrencyNotSupported(
+                    new TaxCurrencyNotSupportedException("Tax for country ZZ is calculated in JPY"),
+                    requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("CURRENCY_NOT_SUPPORTED");
+        }
+    }
+
+    @Nested
     @DisplayName("handleConstraintViolation")
     class HandleConstraintViolation {
 
@@ -129,6 +146,9 @@ class TaxExceptionHandlerTest {
                     Named.of("handleRateLookupUnsupported", (HandlerInvocation)
                             request -> handler.handleRateLookupUnsupported(
                                     new TaxRateLookupUnsupportedException("Rate lookup unsupported"), request)),
+                    Named.of("handleCurrencyNotSupported", (HandlerInvocation)
+                            request -> handler.handleCurrencyNotSupported(
+                                    new TaxCurrencyNotSupportedException("currency mismatch"), request)),
                     Named.of("handleJurisdictionNotConfigured", (HandlerInvocation)
                             request -> handler.handleJurisdictionNotConfigured(
                                     new TaxJurisdictionNotConfiguredException("No tax rate is configured"), request)),

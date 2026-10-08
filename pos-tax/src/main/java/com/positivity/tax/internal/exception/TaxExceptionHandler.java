@@ -60,6 +60,16 @@ public class TaxExceptionHandler {
         return build(HttpStatus.UNPROCESSABLE_CONTENT, "TAX_JURISDICTION_NOT_CONFIGURED", ex.getMessage(), request);
     }
 
+    /**
+     * A calculation for a profiled country states a currency other than the profile's (CAP:550 S32a,
+     * ADR-0067 PC-9): 422, never a price rounded under another currency's rules.
+     */
+    @ExceptionHandler(TaxCurrencyNotSupportedException.class)
+    public ResponseEntity<ApiError> handleCurrencyNotSupported(
+            TaxCurrencyNotSupportedException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNPROCESSABLE_CONTENT, "CURRENCY_NOT_SUPPORTED", ex.getMessage(), request);
+    }
+
     /** {@code @Validated} query-parameter constraint failures (e.g. an invalid countryCode). */
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiError> handleConstraintViolation(

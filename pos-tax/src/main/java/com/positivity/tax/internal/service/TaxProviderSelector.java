@@ -109,4 +109,32 @@ public class TaxProviderSelector {
     public Optional<SelfHostedTaxPlugin> pluginById(@Nullable String providerName) {
         return providerName == null ? Optional.empty() : Optional.ofNullable(plugins.get(providerName));
     }
+
+    /**
+     * Whether a provider label names a self-hosted plug-in ({@code <country>_SELF}), configured or not.
+     *
+     * @param providerName a provider label from the transaction log; may be {@code null}
+     * @return {@code true} for a self-hosted plug-in id
+     */
+    public boolean isSelfHosted(@Nullable String providerName) {
+        return providerName != null && providerName.endsWith(TaxCountryProfiles.SELF_PLUGIN_SUFFIX);
+    }
+
+    /**
+     * The provider that commits and voids a document whose log row names {@code providerName}: the
+     * plug-in that priced it, never the deployment-wide switch. A self-hosted plug-in whose profile
+     * has since been removed is still answered by its logged no-op commit and void, because those hold
+     * no state; only a row priced by the switch falls back to {@link #select()}.
+     *
+     * @param providerName the provider label recorded on the transaction log
+     * @return the lifecycle provider
+     */
+    @NonNull
+    public TaxProviderClient lifecycleProviderFor(@NonNull String providerName) {
+        Optional<SelfHostedTaxPlugin> plugin = pluginById(providerName);
+        if (plugin.isPresent()) {
+            return plugin.get();
+        }
+        return isSelfHosted(providerName) ? new RetiredSelfHostedPlugin(providerName) : select();
+    }
 }
