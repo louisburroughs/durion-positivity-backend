@@ -938,7 +938,7 @@ components:
           type: number
         taxType:
           description: Tax-type code of this row as the country profile configures it (1-32 upper-case letters, digits or underscores); null for a country without a tax-type profile
-          example: GST
+          example: ZZ_LEVY
           pattern: ^[A-Z0-9_]{1,32}$
           type:
           - string
@@ -1375,7 +1375,7 @@ components:
           format: uuid
           type: string
         status:
-          description: Recorded lifecycle status
+          description: Recorded lifecycle status. Commit returns COMMITTED or PENDING_COMMIT and void returns VOIDED or FAILED; ESTIMATED is a log-only status (a plug-in priced the document) and is never returned
           enum:
           - PENDING_COMMIT
           - COMMITTED
@@ -1413,7 +1413,7 @@ components:
           type: number
         taxType:
           description: Tax-type code of this component as the country profile configures it (1-32 upper-case letters, digits or underscores); null for a country without a tax-type profile
-          example: GST
+          example: ZZ_LEVY
           pattern: ^[A-Z0-9_]{1,32}$
           type:
           - string
@@ -1510,7 +1510,7 @@ components:
           - 'null'
         taxType:
           description: Tax-type code as the country profile declares it (1-32 upper-case letters, digits or underscores); the vocabulary is configuration only
-          example: GST
+          example: ZZ_LEVY
           pattern: ^[A-Z0-9_]{1,32}$
           type: string
       required:
