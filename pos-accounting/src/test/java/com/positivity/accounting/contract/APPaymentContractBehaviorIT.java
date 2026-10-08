@@ -592,6 +592,9 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
                     account.setAccountName(name);
                     account.setAccountType(type);
                     account.setAccountSubtype(subtype);
+                    // Active from before any execution day: eligibility and posting judge an account at the start of
+                    // the payment's date (S42 review), and an account created now would only be active from tomorrow.
+                    account.setActivationDate(LocalDateTime.of(2020, 1, 1, 0, 0));
                     account.setCreatedBy("contract-test");
                     account.setModifiedBy("contract-test");
                     return glAccountRepository.save(account);
