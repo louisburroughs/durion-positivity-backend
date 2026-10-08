@@ -68,11 +68,11 @@ public class OpenApiToolMapper {
 
         String routingPrefix = "/" + routingDomain(serviceId);
         openApi.getPaths().forEach((path, pathItem) -> {
-            Map<HttpMethod, Operation> operations = withoutRevealOperations(routingPrefix + path, pathItem);
+            Map<HttpMethod, Operation> candidates = withoutRevealOperations(routingPrefix + path, pathItem);
             if (!properties.includesPath(path)) {
                 return;
             }
-            operations.forEach((method, operation) -> {
+            candidates.forEach((method, operation) -> {
                 if (properties.excludesWrite(routingPrefix + path, method)) {
                     LOGGER.debug(
                             "Per-service discovery of {} excluded write operation {} {} (#2370: audit/platform-event"
@@ -118,11 +118,11 @@ public class OpenApiToolMapper {
             return specs;
         }
         openApi.getPaths().forEach((path, pathItem) -> {
-            Map<HttpMethod, Operation> operations = withoutRevealOperations(path, pathItem);
+            Map<HttpMethod, Operation> candidates = withoutRevealOperations(path, pathItem);
             if (!properties.includesPath(path) || properties.excludesPath(path)) {
                 return;
             }
-            operations.forEach((method, operation) -> {
+            candidates.forEach((method, operation) -> {
                 if (properties.excludesWrite(path, method)) {
                     return;
                 }
@@ -148,11 +148,11 @@ public class OpenApiToolMapper {
             return operations;
         }
         openApi.getPaths().forEach((path, pathItem) -> {
-            Map<HttpMethod, Operation> operations = withoutRevealOperations(path, pathItem);
+            Map<HttpMethod, Operation> candidates = withoutRevealOperations(path, pathItem);
             if (!properties.includesPath(path) || properties.excludesPath(path)) {
                 return;
             }
-            operations.forEach((method, operation) -> {
+            candidates.forEach((method, operation) -> {
                 if (properties.excludesWrite(path, method)) {
                     // #2370: the one log line per excluded operation per discovery run (no body).
                     LOGGER.debug(
