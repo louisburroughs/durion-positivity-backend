@@ -92,6 +92,9 @@ class ReceivingSessionReceiptIT extends BaseContractIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private ObjectMapper objectMapper;
+
     @BeforeEach
     void setUp() {
         jdbcTemplate.execute("CREATE SEQUENCE IF NOT EXISTS purchase_order_number_seq START WITH 1 INCREMENT BY 1");
@@ -177,6 +180,49 @@ class ReceivingSessionReceiptIT extends BaseContractIntegrationTest {
             assertThat(line.getQuantityReceived()).isEqualByComparingTo("4");
         });
         assertThat(goodsReceiptFacts(open.purchaseOrderId())).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("S41 (#2602): the fact names the saved receipt line, its posted GOODS_RECEIPT row and the order's"
+            + " currency")
+    void sessionReceipt_factCarriesTheSavedLineAndThePostedRow() {
+        OpenSession open = openSession(10);
+
+        receive(open, "4", null);
+
+        UUID receiptId = goodsReceiptRepository
+                .findByPurchaseOrderId(open.purchaseOrderId())
+                .getFirst()
+                .getReceiptId();
+        UUID receiptLineId = jdbcTemplate.queryForObject(
+                "select receipt_line_id from goods_receipt_line where receipt_id = ?", UUID.class, receiptId);
+        UUID ledgerEntryId = ledgerRepository.findAll().stream()
+                .filter(entry -> open.productId().toString().equals(entry.getStockItemId()))
+                .filter(entry -> entry.getEventType()
+                        == com.positivity.inventory.internal.enums.InventoryLedgerEventType.GOODS_RECEIPT)
+                .map(entry -> entry.getLedgerEntryId())
+                .findFirst()
+                .orElseThrow();
+        tools.jackson.databind.JsonNode payload = objectMapper
+                .readTree(jdbcTemplate.queryForObject(
+                        "select payload from event_outbox where record_key = ? and payload like"
+                                + " '%goodsreceipt.recorded%'",
+                        String.class, open.purchaseOrderId().toString()))
+                .path("payload");
+
+        assertThat(payload.path("currencyCode").stringValue(null)).isEqualTo("USD");
+        assertThat(payload.path("totalAccruedAmountMinor").asLong()).isZero();
+        tools.jackson.databind.JsonNode line = payload.path("lines").get(0);
+        assertThat(line.path("receiptLineId").stringValue(null)).isEqualTo(receiptLineId.toString());
+        assertThat(line.path("ledgerEntryId").stringValue(null)).isEqualTo(ledgerEntryId.toString());
+        assertThat(line.path("productId").stringValue(null))
+                .isEqualTo(open.productId().toString());
+        // The fixture's order line is unpriced and the product has no cost yet: an uncosted row, no value.
+        assertThat(line.path("costSource").stringValue(null)).isEqualTo("NONE");
+        assertThat(line.path("inventoryValueMinor").isNull()
+                        || line.path("inventoryValueMinor").isMissingNode())
+                .isTrue();
+        assertThat(line.path("accruedAmountMinor").asLong()).isZero();
     }
 
     @Test
