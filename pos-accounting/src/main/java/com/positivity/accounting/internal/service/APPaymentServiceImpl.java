@@ -94,7 +94,14 @@ public class APPaymentServiceImpl implements APPaymentService {
         //   4. S24's remit-to check;
         //   5. S42's period check.
         List<PlannedAllocation> plan = plan(request);
-        payGuard.check(plan.stream().map(PlannedAllocation::bill).toList(), currentUser, request.getPaymentRef());
+        // Only the bills this payment pays: an explicit line of 0.00 pays nothing, so it never blocks.
+        payGuard.check(
+                plan.stream()
+                        .filter(planned -> planned.appliedAmount().signum() > 0)
+                        .map(PlannedAllocation::bill)
+                        .toList(),
+                currentUser,
+                request.getPaymentRef());
         // ---- end of the pre-gateway block -------------------------------------------------------------------
 
         // Create payment entity

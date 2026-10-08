@@ -63,6 +63,7 @@ public class ApApprovalPolicyServiceImpl implements ApApprovalPolicyService {
     private final AccountingConfigurationRepository configurationRepository;
     private final AccountingAuditLogRepository auditLogRepository;
     private final FunctionalCurrency functionalCurrency;
+    private final ApApprovalPolicyLock policyLock;
 
     @Override
     @Transactional(readOnly = true)
@@ -96,8 +97,9 @@ public class ApApprovalPolicyServiceImpl implements ApApprovalPolicyService {
         String justification = VendorBillDecisions.required(request.justification(), "justification");
         Map<String, String> requested = validated(request);
 
-        // Every policy row locked, in key order, before anything is read: a concurrent PUT waits, and so does a
-        // decision reading the policy share-locked.
+        // The tenant's policy lock first: on a fresh tenant there is no row to lock, and two first PUTs would race on
+        // the inserts. Then every policy row, in key order, so a decision reading them share-locked waits too.
+        policyLock.lock();
         Map<String, AccountingConfiguration> rows = new HashMap<>();
         for (String key : ApApprovalPolicy.KEYS.stream().sorted().toList()) {
             configurationRepository.findWithLockByConfigKey(key).ifPresent(row -> rows.put(key, row));

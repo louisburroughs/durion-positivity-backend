@@ -65,7 +65,8 @@ class ApApprovalPolicyServiceTest {
     @BeforeEach
     void wire() {
         ApApprovalPolicy policy = new ApApprovalPolicy(configuration, usd);
-        service = new ApApprovalPolicyServiceImpl(CLOCK, policy, configuration, auditLogs, usd);
+        service = new ApApprovalPolicyServiceImpl(
+                CLOCK, policy, configuration, auditLogs, usd, mock(ApApprovalPolicyLock.class));
         when(configuration.findByConfigKeyIn(anyCollection())).thenAnswer(inv -> List.copyOf(stored.values()));
         when(configuration.findWithLockByConfigKey(anyString()))
                 .thenAnswer(inv -> Optional.ofNullable(stored.get(inv.getArgument(0, String.class))));

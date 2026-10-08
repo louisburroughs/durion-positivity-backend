@@ -63,7 +63,6 @@ public interface VendorBillApprovalService {
     @NonNull
     VendorBillResponse voidBill(@NonNull UUID billId, VendorBillCommands.@NonNull VoidBill command);
 
-    /** The bill read for the review screen. */
     /**
      * Enters the bill's real due date during approval review (CAP:550 S13, #2510; §4.2, AW11): {@code
      * PENDING_RECEIPT_MATCH}, {@code MATCH_EXCEPTION} or {@code AWAITING_APPROVAL}, else 409 {@code
@@ -73,6 +72,7 @@ public interface VendorBillApprovalService {
     @NonNull
     VendorBillResponse setDueDate(@NonNull UUID billId, VendorBillCommands.@NonNull SetDueDate command);
 
+    /** The bill read for the review screen. */
     @NonNull
     VendorBillResponse getBill(@NonNull UUID billId);
 

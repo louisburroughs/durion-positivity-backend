@@ -345,6 +345,29 @@ class APPaymentServiceTest {
     }
 
     @Test
+    @DisplayName("S13 review: an explicit 0.00 line pays nothing, so its bill never reaches the pay guard")
+    void zeroAllocationIsNotPaid() {
+        VendorBill bill = approvedBill("INV-Z", "400.00", "ana");
+        ExecuteAPPaymentRequest request =
+                buildRequest(testPaymentRef, testVendorId, new BigDecimal("400.00"), PaymentMethod.ACH);
+        request.setAllocations(
+                List.of(new ExecuteAPPaymentRequest.AllocationLineRequest(bill.getVendorBillId(), BigDecimal.ZERO)));
+        when(paymentRepository.findByPaymentRef(testPaymentRef)).thenReturn(Optional.empty());
+        when(billRepository.lockByVendorBillIdIn(any())).thenReturn(List.of(bill));
+        when(paymentRepository.save(any(APPayment.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(paymentGateway.executePayment(any()))
+                .thenReturn(GatewayPaymentResponse.builder()
+                        .transactionId("txn-z")
+                        .status(PaymentGatewayProvider.GatewayPaymentStatus.SUCCEEDED)
+                        .rawResponse("{}")
+                        .build());
+
+        service.executePayment(request, "ana");
+
+        verify(payGuard).check(List.of(), "ana", testPaymentRef);
+    }
+
+    @Test
     @DisplayName("S13: an allocation to an unapproved bill is refused before the payment row and the gateway")
     void invalidPlanRefusedBeforeTheGateway() {
         VendorBill bill = approvedBill("INV-C", "400.00", "bob");

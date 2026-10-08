@@ -165,6 +165,38 @@ class VendorBillApprovalLimitsPostgresIT extends PostgresTenancyTestBase {
     }
 
     @Test
+    @DisplayName("Two first PUTs on a fresh tenant serialize on the tenant's policy lock: both succeed, no duplicate"
+            + " setting row")
+    void concurrentFirstPuts() throws Exception {
+        UUID tenant = tenant();
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<Object> one = pool.submit(inTenant(
+                    start,
+                    tenant,
+                    CONTROLLER,
+                    CONTROLLER_GRANTS,
+                    () -> policies.set(limits("1000.00", "0.00", "First manager sets the limit", null))));
+            Future<Object> two = pool.submit(inTenant(
+                    start,
+                    tenant,
+                    "gm.gary",
+                    CONTROLLER_GRANTS,
+                    () -> policies.set(limits("2000.00", "0.00", "Second manager sets the limit", null))));
+            start.countDown();
+            assertThat(one.get(60, TimeUnit.SECONDS)).isInstanceOf(ApApprovalPolicyResponse.class);
+            assertThat(two.get(60, TimeUnit.SECONDS)).isInstanceOf(ApApprovalPolicyResponse.class);
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(count(tenant, "accounting_configuration", "config_key = 'AP_CLERK_APPROVAL_LIMIT'"))
+                .isEqualTo(1);
+        assertThat(count(tenant, "accounting_audit_log", "operation = 'AP_APPROVAL_POLICY_SET'"))
+                .isEqualTo(2);
+    }
+
+    @Test
     @DisplayName("AC5: automatic 500.00, clerk 300.00: a 250.00 HIGH match of stocked lines is APPROVED by SYSTEM and"
             + " posted on the invoice date; a 400.00 one waits for a person")
     void automaticApproval() {
