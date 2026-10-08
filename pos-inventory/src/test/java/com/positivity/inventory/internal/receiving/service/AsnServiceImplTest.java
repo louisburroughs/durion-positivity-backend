@@ -584,7 +584,7 @@ class AsnServiceImplTest {
         // has to go out here, or stock would sit on the shelf while the order went on expecting
         // it and the projection went on promising supply that had already been delivered.
         ArgumentCaptor<GoodsReceiptEntity> receiptCaptor = ArgumentCaptor.forClass(GoodsReceiptEntity.class);
-        verify(goodsReceiptFactPublisher).publish(receiptCaptor.capture(), any());
+        verify(goodsReceiptFactPublisher).publish(receiptCaptor.capture(), any(), any());
         // Notably it says nothing about the order's resulting status. Whether the order is now
         // fully received is a question about the order's lines, and pos-order is the only module
         // holding them — a fully received ASN is not the same thing as a fully received order.
@@ -614,5 +614,81 @@ class AsnServiceImplTest {
         assertThrows(ResourceNotFoundException.class, () -> {
             asnService.getGoodsReceipt(receiptId);
         });
+    }
+
+    @Test
+    @DisplayName("S41 (#2602): 2.5 at 1.01 accrues 2.53 HALF_UP; the fact line names its saved receipt line, its posted"
+            + " GOODS_RECEIPT row and the order's currency")
+    void createGoodsReceipt_decimalQuantity_accruesHalfUpAndPassesThePostedRow() {
+        com.positivity.inventory.internal.service.UomConversionService decimals =
+                org.mockito.Mockito.mock(com.positivity.inventory.internal.service.UomConversionService.class);
+        when(decimals.declaredBaseScale(any())).thenReturn(1);
+        AsnServiceImpl decimalService = new AsnServiceImpl(
+                FIXED_CLOCK,
+                asnRepository,
+                asnLineRepository,
+                goodsReceiptRepository,
+                purchaseOrderRepository,
+                purchaseOrderLineRepository,
+                inventoryLedgerEntryRepository,
+                ledgerPostingService,
+                org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
+                goodsReceiptFactPublisher,
+                applicationEventPublisher,
+                new com.positivity.inventory.internal.service.DocumentQuantityConverter(
+                        org.mockito.Mockito.mock(com.positivity.inventory.internal.service.UomConversionService.class)),
+                org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryLotCaptureService.class),
+                new com.positivity.inventory.internal.service.QuantityScaleGuard(decimals),
+                new com.positivity.inventory.internal.service.ReceiptCostCurrencyPolicy("USD"));
+        UUID poId = UUID.fromString("00000000-0000-0000-0000-0000000004a1");
+        UUID productId = UUID.fromString("00000000-0000-0000-0000-0000000004a2");
+        UUID savedLineId = UUID.fromString("00000000-0000-0000-0000-0000000004a3");
+        CreateGoodsReceiptLineRequest line = new CreateGoodsReceiptLineRequest();
+        line.setSku(productId.toString());
+        line.setQuantityReceived(new BigDecimal("2.5"));
+        line.setUnitCostMinor(101L);
+        CreateGoodsReceiptRequest request = new CreateGoodsReceiptRequest();
+        request.setPoId(poId);
+        request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        request.setLines(List.of(line));
+        when(purchaseOrderRepository.findById(poId))
+                .thenReturn(Optional.of(ExtPurchaseOrderReplica.builder()
+                        .purchaseOrderId(poId)
+                        .status("APPROVED")
+                        .vendorId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                        .poNumber("PO-S41")
+                        .currency("USD")
+                        .grandTotalMinor(10_000L)
+                        .openBalanceMinor(10_000L)
+                        .build()));
+        when(goodsReceiptRepository.save(any(GoodsReceiptEntity.class))).thenAnswer(invocation -> {
+            GoodsReceiptEntity entity = invocation.getArgument(0);
+            entity.setReceiptId(UUID.fromString("00000000-0000-0000-0000-0000000004a4"));
+            entity.getLines().getFirst().setReceiptLineId(savedLineId);
+            return entity;
+        });
+
+        decimalService.createGoodsReceipt(request, "receiver");
+
+        ArgumentCaptor<GoodsReceiptEntity> receipt = ArgumentCaptor.forClass(GoodsReceiptEntity.class);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.GoodsReceiptLineFact>>
+                facts = ArgumentCaptor.forClass(List.class);
+        verify(goodsReceiptFactPublisher)
+                .publish(receipt.capture(), org.mockito.ArgumentMatchers.eq("USD"), facts.capture());
+        assertEquals(253L, receipt.getValue().getTotalAccruedAmountMinor());
+        ArgumentCaptor<com.positivity.inventory.internal.entity.InventoryLedgerEntry> posted =
+                ArgumentCaptor.forClass(com.positivity.inventory.internal.entity.InventoryLedgerEntry.class);
+        verify(ledgerPostingService).post(posted.capture());
+        var fact = facts.getValue().getFirst();
+        assertEquals(253L, fact.accruedAmountMinor());
+        assertEquals(savedLineId, fact.receiptLineId());
+        assertEquals(productId, fact.productId());
+        assertEquals(0, new BigDecimal("2.5").compareTo(fact.quantityReceived()));
+        org.junit.jupiter.api.Assertions.assertSame(posted.getValue(), fact.receiptRow());
+        assertEquals(
+                com.positivity.inventory.internal.enums.InventoryLedgerEventType.GOODS_RECEIPT,
+                fact.receiptRow().getEventType());
+        assertEquals(0, new BigDecimal("1.0100").compareTo(fact.receiptRow().getUnitCost()));
     }
 }

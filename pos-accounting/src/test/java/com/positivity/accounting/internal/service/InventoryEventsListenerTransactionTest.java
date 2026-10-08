@@ -97,6 +97,7 @@ class InventoryEventsListenerTransactionTest {
                 shrinkagePostingService,
                 failingPostingService,
                 revaluationPostingService,
+                org.mockito.Mockito.mock(GoodsReceiptAccrualPostingService.class),
                 ingestionRecorder,
                 meterRegistry,
                 transactionManager,

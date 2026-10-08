@@ -232,6 +232,15 @@ public class SourceDocumentResolver {
     }
 
     /**
+     * The document currency of the purchase order a session receives against, as the order replica
+     * states it (CAP:550 S41 #2602): the currency of every amount on its {@code goodsreceipt.recorded}.
+     * Never defaulted (ADR-0067 R-2): empty when the order is not projected or states none.
+     */
+    public Optional<String> purchaseOrderCurrency(@NonNull UUID purchaseOrderId) {
+        return purchaseOrderRepository.findById(purchaseOrderId).map(ExtPurchaseOrderReplica::getCurrency);
+    }
+
+    /**
      * Which purchase-order line a received base quantity settles, and what it is worth in minor
      * units of the order's currency (#2417) — the two things {@code goodsreceipt.recorded} needs
      * per line for pos-order to reduce the line's open quantity and the order's open balance.
@@ -261,7 +270,10 @@ public class SourceDocumentResolver {
         return new ReceiptLineValue(line.getLineId(), accruedMinor(line, baseQuantity));
     }
 
-    /** {@code baseQuantity} priced at the line's price per base unit, half-even to whole minor units. */
+    /**
+     * {@code baseQuantity} priced at the line's price per base unit, HALF_UP to whole minor units
+     * (ADR-0067 OP-11; CAP:550 S41 #2602), the rounding the line's inventory value takes too.
+     */
     private static long accruedMinor(@NonNull ExtPurchaseOrderLineReplica line, @NonNull BigDecimal baseQuantity) {
         Long unitCostMinor = line.getUnitCostMinor();
         if (unitCostMinor == null) {
@@ -280,7 +292,7 @@ public class SourceDocumentResolver {
         }
         return baseQuantity
                 .multiply(BigDecimal.valueOf(unitCostMinor))
-                .divide(factor, 0, RoundingMode.HALF_EVEN)
+                .divide(factor, 0, RoundingMode.HALF_UP)
                 .longValueExact();
     }
 

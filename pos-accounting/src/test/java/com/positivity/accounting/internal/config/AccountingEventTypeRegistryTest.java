@@ -11,6 +11,7 @@ import com.positivity.accounting.internal.service.OrderEventsListener;
 import com.positivity.accounting.internal.service.SettlementEventsListener;
 import com.positivity.accounting.internal.service.SupplierInvoiceEventsListener;
 import com.positivity.accounting.internal.service.WarrantyEventsListener;
+import com.positivity.domainevents.inventory.GoodsReceiptRecordedV1;
 import com.positivity.domainevents.inventory.InventoryAdjustedV1;
 import com.positivity.domainevents.inventory.ProductValueChangedV1;
 import com.positivity.domainevents.inventory.ScrapPostedV1;
@@ -58,7 +59,8 @@ class AccountingEventTypeRegistryTest {
                         List.of(
                                 ScrapPostedV1.EVENT_TYPE,
                                 InventoryAdjustedV1.EVENT_TYPE,
-                                ProductValueChangedV1.EVENT_TYPE)),
+                                ProductValueChangedV1.EVENT_TYPE,
+                                GoodsReceiptRecordedV1.EVENT_TYPE)),
                 Arguments.of(
                         "supplier",
                         SupplierInvoiceEventsListener.RECORDED_EVENT_TYPES,

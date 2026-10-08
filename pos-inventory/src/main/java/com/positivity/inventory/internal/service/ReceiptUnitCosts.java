@@ -4,12 +4,17 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Currency;
 import java.util.Locale;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Turns a receipt's document price into the per-base-unit cost a {@code GOODS_RECEIPT} ledger row
  * carries (#2203, ADR-0048 IMP-002). The costing engine reads that cost as the document cost:
  * AVERAGE blends it into the running average and STANDARD keeps it as its latest-receipt memo.
+ *
+ * <p>Every rounding here is HALF_UP (ADR-0067 OP-11, PC-6; CAP:550 S41 #2602): the accrual and the
+ * inventory value of a receipt line must round the same way, or a half-cent line leaves a cent in
+ * purchase price differences.
  */
 public final class ReceiptUnitCosts {
 
@@ -36,12 +41,26 @@ public final class ReceiptUnitCosts {
         }
         BigDecimal major = BigDecimal.valueOf(unitCostMinor).movePointLeft(fractionDigits(currency));
         if (conversionFactor == null || conversionFactor.compareTo(BigDecimal.ONE) == 0) {
-            return major.setScale(LEDGER_COST_SCALE, RoundingMode.HALF_EVEN);
+            return major.setScale(LEDGER_COST_SCALE, RoundingMode.HALF_UP);
         }
         if (conversionFactor.signum() <= 0) {
             return null;
         }
-        return major.divide(conversionFactor, LEDGER_COST_SCALE, RoundingMode.HALF_EVEN);
+        return major.divide(conversionFactor, LEDGER_COST_SCALE, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * {@code majorAmount} in whole minor units of {@code currency}, HALF_UP (ADR-0067 OP-11): how a
+     * receipt line's inventory value, quantity × the ledger row's unit cost, goes on the fact.
+     *
+     * @param majorAmount an amount in major units of {@code currency}
+     * @param currency    ISO 4217 code deciding the minor-unit digits; two when null or unknown
+     */
+    public static long toMinorUnits(@NonNull BigDecimal majorAmount, @Nullable String currency) {
+        return majorAmount
+                .movePointRight(fractionDigits(currency))
+                .setScale(0, RoundingMode.HALF_UP)
+                .longValueExact();
     }
 
     private static int fractionDigits(@Nullable String currency) {

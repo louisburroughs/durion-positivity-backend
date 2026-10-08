@@ -402,6 +402,56 @@ class SourceDocumentResolverTest {
         assertThat(value.accruedAmountMinor()).isZero();
     }
 
+    // ─── CAP:550 S41 (#2602): HALF_UP accruals, the currency, and "no cost implies no accrual" ──
+
+    @Test
+    @DisplayName("S41: a half-cent accrual rounds HALF_UP, like the line's value: 2.5 at 1.01 accrues 2.53")
+    void valueReceiptLine_halfCent_roundsHalfUp() {
+        projectOrder("APPROVED");
+        when(purchaseOrderLineRepository.findById(LINE_ID))
+                .thenReturn(Optional.of(pricedLine(LINE_ID, 101L, BigDecimal.ONE)));
+
+        assertThat(resolver.valueReceiptLine(PO_ID, LINE_ID, SKU_ID.toString(), new BigDecimal("2.5"))
+                        .accruedAmountMinor())
+                .isEqualTo(253L);
+        assertThat(resolver.resolveReceiptUnitCost(SourceDocumentType.PO, PO_ID.toString(), LINE_ID, SKU_ID.toString()))
+                .hasValueSatisfying(cost -> assertThat(cost).isEqualByComparingTo("1.0100"));
+    }
+
+    /**
+     * S41 producer invariant: on an order in the functional currency the accrual and the row's document cost come from
+     * the same order line, so a line with no document cost (the row enters uncosted or at the running average) never
+     * accrues anything.
+     */
+    @Test
+    @DisplayName("S41: in the functional currency, a line with no document cost accrues 0")
+    void valueReceiptLine_noDocumentCost_accruesNothing() {
+        projectOrder("APPROVED");
+        for (ExtPurchaseOrderLineReplica line : List.of(
+                pricedLine(LINE_ID, null, BigDecimal.ONE),
+                pricedLine(LINE_ID, 250L, null),
+                pricedLine(LINE_ID, null, null))) {
+            when(purchaseOrderLineRepository.findById(LINE_ID)).thenReturn(Optional.of(line));
+
+            assertThat(resolver.resolveReceiptUnitCost(
+                            SourceDocumentType.PO, PO_ID.toString(), LINE_ID, SKU_ID.toString()))
+                    .isEmpty();
+            assertThat(resolver.valueReceiptLine(PO_ID, LINE_ID, SKU_ID.toString(), new BigDecimal("4"))
+                            .accruedAmountMinor())
+                    .isZero();
+        }
+    }
+
+    @Test
+    @DisplayName("S41: the order's currency is the replica's, never defaulted")
+    void purchaseOrderCurrency_isTheReplicas() {
+        projectOrder("APPROVED", "CAD");
+        assertThat(resolver.purchaseOrderCurrency(PO_ID)).contains("CAD");
+
+        projectOrder("APPROVED", (String) null);
+        assertThat(resolver.purchaseOrderCurrency(PO_ID)).isEmpty();
+    }
+
     private static ExtPurchaseOrderLineReplica pricedLine(UUID lineId, Long unitCostMinor, BigDecimal factor) {
         ExtPurchaseOrderLineReplica line = line(lineId, SKU_ID, 1, "12", "12");
         line.setUnitCostMinor(unitCostMinor);

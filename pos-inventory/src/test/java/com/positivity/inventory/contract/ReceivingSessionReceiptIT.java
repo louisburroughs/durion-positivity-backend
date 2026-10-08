@@ -92,6 +92,15 @@ class ReceivingSessionReceiptIT extends BaseContractIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @Autowired
+    private com.positivity.inventory.internal.repository.CostingMethodConfigRepository costingMethodConfigRepository;
+
+    @Autowired
+    private com.positivity.inventory.internal.repository.SkuCostStateRepository skuCostStateRepository;
+
     @BeforeEach
     void setUp() {
         jdbcTemplate.execute("CREATE SEQUENCE IF NOT EXISTS purchase_order_number_seq START WITH 1 INCREMENT BY 1");
@@ -177,6 +186,111 @@ class ReceivingSessionReceiptIT extends BaseContractIntegrationTest {
             assertThat(line.getQuantityReceived()).isEqualByComparingTo("4");
         });
         assertThat(goodsReceiptFacts(open.purchaseOrderId())).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("S41 (#2602): the fact names the saved receipt line, its posted GOODS_RECEIPT row and the order's"
+            + " currency")
+    void sessionReceipt_factCarriesTheSavedLineAndThePostedRow() {
+        OpenSession open = openSession(10);
+
+        receive(open, "4", null);
+
+        UUID receiptId = goodsReceiptRepository
+                .findByPurchaseOrderId(open.purchaseOrderId())
+                .getFirst()
+                .getReceiptId();
+        UUID receiptLineId = jdbcTemplate.queryForObject(
+                "select receipt_line_id from goods_receipt_line where receipt_id = ?", UUID.class, receiptId);
+        UUID ledgerEntryId = ledgerRepository.findAll().stream()
+                .filter(entry -> open.productId().toString().equals(entry.getStockItemId()))
+                .filter(entry -> entry.getEventType()
+                        == com.positivity.inventory.internal.enums.InventoryLedgerEventType.GOODS_RECEIPT)
+                .map(entry -> entry.getLedgerEntryId())
+                .findFirst()
+                .orElseThrow();
+        tools.jackson.databind.JsonNode payload = objectMapper
+                .readTree(jdbcTemplate.queryForObject(
+                        "select payload from event_outbox where record_key = ? and payload like"
+                                + " '%goodsreceipt.recorded%'",
+                        String.class, open.purchaseOrderId().toString()))
+                .path("payload");
+
+        assertThat(payload.path("currencyCode").stringValue(null)).isEqualTo("USD");
+        assertThat(payload.path("totalAccruedAmountMinor").asLong()).isZero();
+        tools.jackson.databind.JsonNode line = payload.path("lines").get(0);
+        assertThat(line.path("receiptLineId").stringValue(null)).isEqualTo(receiptLineId.toString());
+        assertThat(line.path("ledgerEntryId").stringValue(null)).isEqualTo(ledgerEntryId.toString());
+        assertThat(line.path("productId").stringValue(null))
+                .isEqualTo(open.productId().toString());
+        // The fixture's order line is unpriced and the product has no cost yet: an uncosted row, no value.
+        assertThat(line.path("costSource").stringValue(null)).isEqualTo("NONE");
+        assertThat(line.path("inventoryValueMinor").isNull()
+                        || line.path("inventoryValueMinor").isMissingNode())
+                .isTrue();
+        assertThat(line.path("accruedAmountMinor").asLong()).isZero();
+    }
+
+    @Test
+    @DisplayName("S41 (#2602): an ASN receipt of a STANDARD SKU states qty x standard (HALF_UP), STANDARD and the"
+            + " GOODS_RECEIPT row, against its accrual at the document price")
+    void asnReceipt_standardSku_factCarriesTheStandardValue() {
+        UUID productId = UUID.randomUUID();
+        extProductReplicaRepository.save(ExtProductReplica.builder()
+                .productId(productId)
+                .baseUom("EA")
+                .trackingLevel("NONE")
+                .aggregateVersion(1L)
+                .build());
+        costingMethodConfigRepository.save(com.positivity.inventory.internal.entity.CostingMethodConfig.builder()
+                .scopeType(com.positivity.inventory.internal.enums.CostingScopeType.SKU)
+                .scopeValue(productId.toString())
+                .method(com.positivity.inventory.internal.enums.CostingMethod.STANDARD)
+                .active(true)
+                .build());
+        // Standard 33.3333 against a document price of 33.00: 3 x 33.3333 = 99.9999, 100.00 HALF_UP.
+        skuCostStateRepository.save(com.positivity.inventory.internal.entity.SkuCostState.builder()
+                .stockItemId(productId.toString())
+                .onHandQty(BigDecimal.ZERO)
+                .standardCost(new BigDecimal("33.3333"))
+                .build());
+        UUID purchaseOrderId = projection.projectReceivable("APPROVED", UUID.randomUUID(), productId, "10", 100_000L);
+        com.positivity.inventory.internal.dto.asn.CreateGoodsReceiptLineRequest line =
+                new com.positivity.inventory.internal.dto.asn.CreateGoodsReceiptLineRequest();
+        line.setSku(productId.toString());
+        line.setQuantityReceived(new BigDecimal("3"));
+        line.setUnitCostMinor(3_300L);
+        com.positivity.inventory.internal.dto.asn.CreateGoodsReceiptRequest request =
+                new com.positivity.inventory.internal.dto.asn.CreateGoodsReceiptRequest();
+        request.setPoId(purchaseOrderId);
+        request.setLocationId(UUID.randomUUID());
+        request.setLines(List.of(line));
+
+        asnService.createGoodsReceipt(request, ACTOR);
+
+        com.positivity.inventory.internal.entity.InventoryLedgerEntry row = ledgerRepository.findAll().stream()
+                .filter(entry -> productId.toString().equals(entry.getStockItemId()))
+                .filter(entry -> entry.getEventType()
+                        == com.positivity.inventory.internal.enums.InventoryLedgerEventType.GOODS_RECEIPT)
+                .findFirst()
+                .orElseThrow();
+        assertThat(row.getUnitCost()).isEqualByComparingTo("33.3333");
+        tools.jackson.databind.JsonNode payload = objectMapper
+                .readTree(jdbcTemplate.queryForObject(
+                        "select payload from event_outbox where record_key = ? and payload like"
+                                + " '%goodsreceipt.recorded%'",
+                        String.class, purchaseOrderId.toString()))
+                .path("payload");
+        assertThat(payload.path("currencyCode").stringValue(null)).isEqualTo("USD");
+        assertThat(payload.path("totalAccruedAmountMinor").asLong()).isEqualTo(9_900L);
+        tools.jackson.databind.JsonNode factLine = payload.path("lines").get(0);
+        assertThat(factLine.path("accruedAmountMinor").asLong()).isEqualTo(9_900L);
+        assertThat(factLine.path("inventoryValueMinor").asLong()).isEqualTo(10_000L);
+        assertThat(factLine.path("costSource").stringValue(null)).isEqualTo("STANDARD");
+        assertThat(factLine.path("ledgerEntryId").stringValue(null))
+                .isEqualTo(row.getLedgerEntryId().toString());
+        assertThat(factLine.path("productId").stringValue(null)).isEqualTo(productId.toString());
+        assertThat(factLine.path("receiptLineId").stringValue(null)).isNotBlank();
     }
 
     @Test
