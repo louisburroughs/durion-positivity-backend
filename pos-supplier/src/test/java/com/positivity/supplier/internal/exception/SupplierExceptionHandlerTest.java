@@ -500,6 +500,11 @@ class SupplierExceptionHandlerTest {
                             new PayloadUnreadableException(
                                     PayloadUnreadableException.UNKNOWN_KEY_ID, "no key for id 7"),
                             request)),
+                    Named.of("handleVendorTaxIdUnreadable", (HandlerInvocation)
+                            request -> handler.handleVendorTaxIdUnreadable(
+                                    new VendorTaxIdUnreadableException(
+                                            "AUTHENTICATION_FAILED", "k1", "failed authentication", null),
+                                    request)),
                     Named.of("handleBodyValidation", (HandlerInvocation)
                             request -> handler.handleBodyValidation(bodyValidationException(), request)),
                     Named.of("handleConstraintViolation", (HandlerInvocation)
