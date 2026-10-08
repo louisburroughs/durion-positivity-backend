@@ -12,12 +12,15 @@ import com.positivity.order.internal.dto.purchaseorder.CreatePurchaseOrderReques
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderLineRequest;
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderResponse;
 import com.positivity.order.internal.dto.purchaseorder.RevisePurchaseOrderRequest;
+import com.positivity.order.internal.entity.ExtSupplierVendor;
 import com.positivity.order.internal.entity.PurchaseOrderEntity;
 import com.positivity.order.internal.entity.PurchaseOrderLineEntity;
 import com.positivity.order.internal.enums.PurchaseOrderStatus;
 import com.positivity.order.internal.exception.PurchaseOrderNotFoundException;
 import com.positivity.order.internal.exception.PurchaseOrderRequestValidationException;
 import com.positivity.order.internal.exception.PurchaseOrderStateConflictException;
+import com.positivity.order.internal.exception.PurchaseOrderVendorException;
+import com.positivity.order.internal.repository.ExtSupplierVendorRepository;
 import com.positivity.order.internal.repository.PurchaseOrderLineRepository;
 import com.positivity.order.internal.repository.PurchaseOrderRepository;
 import com.positivity.order.internal.repository.PurchaseOrderTransmissionEventRepository;
@@ -32,6 +35,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -78,6 +82,9 @@ class PurchaseOrderServiceImplTest {
     @Mock
     private jakarta.persistence.EntityManager entityManager;
 
+    @Mock
+    private ExtSupplierVendorRepository vendorRepository;
+
     private PurchaseOrderServiceImpl service;
 
     @BeforeEach
@@ -89,7 +96,10 @@ class PurchaseOrderServiceImplTest {
                 entityManager,
                 purchaseOrderFactPublisher,
                 documentQuantityConverter,
-                Clock.fixed(NOW, ZoneOffset.UTC));
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                new SupplierVendorGuard(vendorRepository));
+        when(vendorRepository.findById(VENDOR_ID))
+                .thenReturn(Optional.of(vendor(VENDOR_ID, ExtSupplierVendor.Status.ACTIVE)));
         when(documentQuantityConverter.convertIfPresent(any(), any(), any(), any()))
                 .thenReturn(Optional.empty());
         when(purchaseOrderRepository.getNextPurchaseOrderSequence()).thenReturn(42L);
@@ -100,6 +110,17 @@ class PurchaseOrderServiceImplTest {
             }
             return saved;
         });
+    }
+
+    private static ExtSupplierVendor vendor(UUID vendorId, ExtSupplierVendor.Status status) {
+        return ExtSupplierVendor.builder()
+                .vendorId(vendorId)
+                .vendorNumber("V-000123")
+                .displayName("Acme Parts")
+                .status(status)
+                .aggregateVersion(1L)
+                .updatedAt(NOW)
+                .build();
     }
 
     private static PurchaseOrderLineRequest lineRequest(String quantity, long unitCostMinor) {
@@ -338,5 +359,150 @@ class PurchaseOrderServiceImplTest {
 
         // The fact still goes out, or nothing downstream learns the order exists.
         verify(purchaseOrderFactPublisher).publish(any(), any());
+    }
+
+    @Nested
+    @DisplayName("the vendor guard (CAP:550 S24, #2517)")
+    class VendorGuard {
+
+        private final UUID otherVendor = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a09");
+
+        @Test
+        @DisplayName("create refuses a vendor missing from the copy with VENDOR_NOT_FOUND and saves nothing")
+        void createRefusesUnknownVendor() {
+            when(vendorRepository.findById(VENDOR_ID)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.createPurchaseOrder(createRequest(), ACTOR))
+                    .isInstanceOfSatisfying(
+                            PurchaseOrderVendorException.class,
+                            e -> assertThat(e.getCode()).isEqualTo(PurchaseOrderVendorException.Code.VENDOR_NOT_FOUND));
+            verify(purchaseOrderRepository, never()).save(any());
+            verify(purchaseOrderFactPublisher, never()).publish(any(), any());
+        }
+
+        @Test
+        @DisplayName("create refuses an inactive vendor with VENDOR_INACTIVE, naming its number")
+        void createRefusesInactiveVendor() {
+            when(vendorRepository.findById(VENDOR_ID))
+                    .thenReturn(Optional.of(vendor(VENDOR_ID, ExtSupplierVendor.Status.INACTIVE)));
+
+            assertThatThrownBy(() -> service.createPurchaseOrder(createRequest(), ACTOR))
+                    .isInstanceOfSatisfying(PurchaseOrderVendorException.class, e -> {
+                        assertThat(e.getCode()).isEqualTo(PurchaseOrderVendorException.Code.VENDOR_INACTIVE);
+                        assertThat(e.getMessage()).contains("V-000123");
+                    });
+            verify(purchaseOrderRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("approve refuses a draft whose vendor is missing from the copy, and the order stays a draft")
+        void approveRefusesUnknownVendor() {
+            PurchaseOrderEntity draft = existingOrder(PurchaseOrderStatus.DRAFT);
+            when(purchaseOrderRepository.findById(PO_ID)).thenReturn(Optional.of(draft));
+            when(vendorRepository.findById(VENDOR_ID)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.approvePurchaseOrder(PO_ID, new ApprovePurchaseOrderRequest(), ACTOR))
+                    .isInstanceOfSatisfying(
+                            PurchaseOrderVendorException.class,
+                            e -> assertThat(e.getCode()).isEqualTo(PurchaseOrderVendorException.Code.VENDOR_NOT_FOUND));
+            assertThat(draft.getStatus()).isEqualTo(PurchaseOrderStatus.DRAFT);
+            verify(purchaseOrderFactPublisher, never()).publish(any(), any());
+        }
+
+        @Test
+        @DisplayName("approve refuses a draft whose vendor is inactive")
+        void approveRefusesInactiveVendor() {
+            when(purchaseOrderRepository.findById(PO_ID))
+                    .thenReturn(Optional.of(existingOrder(PurchaseOrderStatus.DRAFT)));
+            when(vendorRepository.findById(VENDOR_ID))
+                    .thenReturn(Optional.of(vendor(VENDOR_ID, ExtSupplierVendor.Status.INACTIVE)));
+
+            assertThatThrownBy(() -> service.approvePurchaseOrder(PO_ID, new ApprovePurchaseOrderRequest(), ACTOR))
+                    .isInstanceOfSatisfying(
+                            PurchaseOrderVendorException.class,
+                            e -> assertThat(e.getCode()).isEqualTo(PurchaseOrderVendorException.Code.VENDOR_INACTIVE));
+        }
+
+        @Test
+        @DisplayName("a draft revised to an active vendor takes that vendor, and can then be approved")
+        void revisionChangesVendorOfDraft() {
+            PurchaseOrderEntity draft = existingOrder(PurchaseOrderStatus.DRAFT);
+            when(purchaseOrderRepository.findById(PO_ID)).thenReturn(Optional.of(draft));
+            when(vendorRepository.findById(otherVendor))
+                    .thenReturn(Optional.of(vendor(otherVendor, ExtSupplierVendor.Status.ACTIVE)));
+            RevisePurchaseOrderRequest request = new RevisePurchaseOrderRequest();
+            request.setRevisionReason("vendor set up in the master");
+            request.setVendorId(otherVendor);
+            request.setLines(List.of(lineRequest("4", 6_000L)));
+
+            PurchaseOrderResponse revised = service.revisePurchaseOrder(PO_ID, request, ACTOR);
+
+            assertThat(revised.getVendorId()).isEqualTo(otherVendor);
+            assertThat(service.approvePurchaseOrder(PO_ID, new ApprovePurchaseOrderRequest(), ACTOR)
+                            .getStatus())
+                    .isEqualTo(PurchaseOrderStatus.APPROVED);
+        }
+
+        @Test
+        @DisplayName("a revision to a vendor missing from the copy or inactive is refused and keeps the vendor")
+        void revisionRefusesInvalidVendor() {
+            PurchaseOrderEntity draft = existingOrder(PurchaseOrderStatus.DRAFT);
+            when(purchaseOrderRepository.findById(PO_ID)).thenReturn(Optional.of(draft));
+            RevisePurchaseOrderRequest request = new RevisePurchaseOrderRequest();
+            request.setVendorId(otherVendor);
+            request.setLines(List.of(lineRequest("4", 6_000L)));
+
+            when(vendorRepository.findById(otherVendor)).thenReturn(Optional.empty());
+            assertThatThrownBy(() -> service.revisePurchaseOrder(PO_ID, request, ACTOR))
+                    .isInstanceOfSatisfying(
+                            PurchaseOrderVendorException.class,
+                            e -> assertThat(e.getCode()).isEqualTo(PurchaseOrderVendorException.Code.VENDOR_NOT_FOUND));
+
+            when(vendorRepository.findById(otherVendor))
+                    .thenReturn(Optional.of(vendor(otherVendor, ExtSupplierVendor.Status.INACTIVE)));
+            assertThatThrownBy(() -> service.revisePurchaseOrder(PO_ID, request, ACTOR))
+                    .isInstanceOfSatisfying(
+                            PurchaseOrderVendorException.class,
+                            e -> assertThat(e.getCode()).isEqualTo(PurchaseOrderVendorException.Code.VENDOR_INACTIVE));
+            assertThat(draft.getVendorId()).isEqualTo(VENDOR_ID);
+            verify(purchaseOrderRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("an approved order cannot change its vendor; naming its own vendor is not a change")
+        void revisionCannotChangeVendorPastDraft() {
+            when(purchaseOrderRepository.findById(PO_ID))
+                    .thenReturn(Optional.of(existingOrder(PurchaseOrderStatus.APPROVED)));
+            RevisePurchaseOrderRequest request = new RevisePurchaseOrderRequest();
+            request.setVendorId(otherVendor);
+            request.setLines(List.of(lineRequest("4", 6_000L)));
+
+            assertThatThrownBy(() -> service.revisePurchaseOrder(PO_ID, request, ACTOR))
+                    .isInstanceOf(PurchaseOrderStateConflictException.class);
+
+            request.setVendorId(VENDOR_ID);
+            assertThat(service.revisePurchaseOrder(PO_ID, request, ACTOR).getVendorId())
+                    .isEqualTo(VENDOR_ID);
+        }
+
+        @Test
+        @DisplayName("an order requested on order.commands.v1 lands in DRAFT whatever its vendor; approval stops it")
+        void requestedOrderLandsDraftThenApprovalRefuses() {
+            when(vendorRepository.findById(VENDOR_ID)).thenReturn(Optional.empty());
+            UUID requestedId = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a0a");
+            ArgumentCaptor<PurchaseOrderEntity> persisted = ArgumentCaptor.forClass(PurchaseOrderEntity.class);
+
+            service.createRequested(requestedId, createRequest(), "pos-inventory");
+
+            verify(entityManager).persist(persisted.capture());
+            assertThat(persisted.getValue().getStatus()).isEqualTo(PurchaseOrderStatus.DRAFT);
+            when(purchaseOrderRepository.findById(requestedId)).thenReturn(Optional.of(persisted.getValue()));
+            assertThatThrownBy(
+                            () -> service.approvePurchaseOrder(requestedId, new ApprovePurchaseOrderRequest(), ACTOR))
+                    .isInstanceOfSatisfying(
+                            PurchaseOrderVendorException.class,
+                            e -> assertThat(e.getCode()).isEqualTo(PurchaseOrderVendorException.Code.VENDOR_NOT_FOUND));
+            assertThat(persisted.getValue().getStatus()).isEqualTo(PurchaseOrderStatus.DRAFT);
+        }
     }
 }

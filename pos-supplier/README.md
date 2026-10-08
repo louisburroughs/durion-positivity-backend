@@ -116,9 +116,14 @@ connection profile belongs to exactly one vendor. No endpoint deletes a vendor.
   record header) re-queues that tenant's published `supplier.events.v1` rows of the window with their
   original event ids; a window older than `pos.supplier.outbox.replay.max-lookback` (default `P30D`) is
   logged and dropped, and an inverted or empty window is logged at error and dropped.
-- **Not yet:** the per-tenant reconciliation manifest on `supplier.manifest.v1`. `TopicInventoryTest`
-  refuses a `*.manifest.v1` topic without a production consumer, so the manifest publisher ships with
-  S24's first `supplier.manifest.v1` listener (durion-positivity-backend#2517).
+- **Reconciliation manifest (ADR-0044 §4, CAP:550 S24 #2517).** `ManifestPublisher` publishes, per tenant and
+  per closed window (`pos.supplier.manifest.window`, default `PT1H`, after `pos.supplier.manifest.grace`, default
+  `PT5M`), one `ReconciliationManifestV1` on `supplier.manifest.v1` summarising every `supplier.events.v1` row
+  published from `supplier_event_outbox` whose eventId timestamp falls in the window; every active tenant gets one,
+  zero-count when it published nothing. pos-accounting's and pos-order's `SupplierManifestListener` compare it with
+  their `processed_events` rows of owner `supplier` and send `supplier.outbox.replay-requested` on drift. Metrics:
+  `supplier.manifest.published`, `supplier.manifest.publish.failures`. A row whose payload cannot be read is
+  excluded and logged with the exception class only, never the payload.
 
 ### Vendor profile administration — `supplier:profile:read` / `supplier:profile:write`
 

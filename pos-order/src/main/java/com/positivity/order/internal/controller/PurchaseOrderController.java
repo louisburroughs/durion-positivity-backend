@@ -68,14 +68,15 @@ public class PurchaseOrderController {
                     Use this tool when ordering stock from a vendor manually; do not use revisePurchaseOrder, \
                     which replaces the lines of an existing order, and do not use convertPurchaseSuggestions, \
                     which turns accepted replenishment suggestions into orders.
-                    Preconditions: none; the order starts in DRAFT and must pass approvePurchaseOrder before any \
-                    receiving.
+                    Preconditions: vendorId must name an ACTIVE vendor of pos-order's copy of the pos-supplier \
+                    vendor master; the order starts in DRAFT and must pass approvePurchaseOrder before any receiving.
                     Required inputs: vendorId (UUID), poDate, currency (ISO 4217) and lines (non-empty), each \
                     naming lineNumber, description and unitCostMinor plus either quantity in base UoM or the \
                     documentUom/documentQuantity pair; tax is derived from the configured default rate.
                     Emits an ORDER_PURCHASE_ORDER_CREATE event; no stock, ledger or vendor-side state is \
                     touched.
-                    Returns 400 when a line's quantity is missing without the document-UoM pair, and 422 when a \
+                    Returns 400 when a line's quantity is missing without the document-UoM pair, and 422 with \
+                    VENDOR_NOT_FOUND or VENDOR_INACTIVE when the vendor is not in the copy or inactive, or when a \
                     documentUom has no conversion path to the product's base UoM.
                     """,
             tags = {"Purchase Orders"})
@@ -93,6 +94,10 @@ public class PurchaseOrderController {
     @ApiResponse(
             responseCode = "403",
             description = "User lacks required purchase order create authority",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "VENDOR_NOT_FOUND or VENDOR_INACTIVE, or a document UoM without a conversion",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<PurchaseOrderResponse> createPurchaseOrder(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -255,13 +260,15 @@ public class PurchaseOrderController {
                     Use this tool to release a drafted order for receiving; do not use cancelPurchaseOrder, which \
                     terminates the order, and note that receiving happens in pos-inventory, whose \
                     createGoodsReceipt rejects orders that were never approved.
-                    Preconditions: the purchase order must exist and be in DRAFT status; any other status is a \
-                    conflict.
+                    Preconditions: the purchase order must exist and be in DRAFT status, and its vendor must be ACTIVE \
+                    in pos-order's vendor copy; an order requested by pos-inventory may name another vendor and is \
+                    revised to a valid one first.
                     Required inputs: poId (UUIDv7) path parameter and a JSON body where approvalNotes is optional, \
                     so an empty object is acceptable.
                     Emits an ORDER_PURCHASE_ORDER_APPROVE event; the order becomes eligible for ASNs, goods \
                     receipts and receiving sessions.
-                    Returns 404 when the purchase order does not exist, and 409 when it is not in DRAFT status.
+                    Returns 404 when the purchase order does not exist, 409 when it is not in DRAFT status, and 422 \
+                    VENDOR_NOT_FOUND or VENDOR_INACTIVE when its vendor is not in the copy or inactive.
                     """,
             tags = {"Purchase Orders"})
     @ApiResponse(
@@ -286,6 +293,10 @@ public class PurchaseOrderController {
     @ApiResponse(
             responseCode = "409",
             description = "Purchase order is in a conflicting state",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "VENDOR_NOT_FOUND or VENDOR_INACTIVE: the order's vendor cannot take new business",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<PurchaseOrderResponse> approvePurchaseOrder(
             @Parameter(description = "Purchase order identifier", required = true) @PathVariable UUID poId,
@@ -329,17 +340,19 @@ public class PurchaseOrderController {
                     Use this tool to change quantities, costs or delivery terms on an order; do not use \
                     createPurchaseOrder, which starts a new order, and use cancelPurchaseOrder instead when the \
                     order should be terminated rather than changed.
-                    Preconditions: the purchase order must exist; the service applies no status gate, so a \
+                    Preconditions: the purchase order must exist; the service applies no status gate outside a \
+                    vendor change, so a \
                     revision replaces lines and open balance in any lifecycle status, discarding received-quantity \
                     bookkeeping on the replaced lines.
                     Required inputs: poId (UUIDv7) path parameter plus poDate, revisionReason and the full \
                     replacement lines list, because every line is replaced rather than merged; paymentTermsId, \
                     expectedDeliveryDate, shipToLocationId, requestedBy and comment overwrite the stored values \
-                    even when omitted.
+                    even when omitted, while an optional vendorId changes the vendor of a DRAFT order only.
                     Emits an ORDER_PURCHASE_ORDER_REVISE event carrying the field-level delta and the \
                     revision reason.
-                    Returns 404 when the purchase order does not exist, and 422 when a line's documentUom has no \
-                    conversion path to the product's base UoM.
+                    Returns 404 when the purchase order does not exist, 409 when vendorId changes the vendor of an \
+                    order past DRAFT, and 422 VENDOR_NOT_FOUND or VENDOR_INACTIVE for a new vendor outside the copy \
+                    or inactive, or when a line's documentUom has no conversion path to the product's base UoM.
                     """,
             tags = {"Purchase Orders"})
     @ApiResponse(
@@ -364,6 +377,10 @@ public class PurchaseOrderController {
     @ApiResponse(
             responseCode = "409",
             description = "Purchase order is in a conflicting state",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "VENDOR_NOT_FOUND or VENDOR_INACTIVE, or a document UoM without a conversion",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<PurchaseOrderResponse> revisePurchaseOrder(
             @Parameter(description = "Purchase order identifier", required = true) @PathVariable UUID poId,
@@ -457,16 +474,16 @@ public class PurchaseOrderController {
                     Use this tool to actually place an order with a vendor; do not use approvePurchaseOrder for \
                     this, which commits the spend internally and sends nothing to anyone.
                     Preconditions: the order must be APPROVED or PARTIALLY_RECEIVED, must name a supplierRef, \
-                    must have no transmission already in flight or awaiting review, and every line must carry an \
-                    article code the vendor would recognise.
+                    must have no transmission already in flight or awaiting review, must name an ACTIVE vendor of \
+                    pos-order's vendor copy, and every line must carry an article code the vendor would recognise.
                     Required inputs: poId (UUIDv7) path parameter; there is no request body, because what is sent \
                     is the order as it stands.
                     Emits an ORDER_PURCHASE_ORDER_TRANSMIT event and queues a supplier order command; the vendor's \
                     answer arrives later and appears on the order's transmission state and timeline.
                     Returns 404 when the purchase order does not exist, and 422 with a code naming the obstacle \
                     when the order cannot be sent: SUPPLIER_REF_MISSING, PURCHASE_ORDER_NOT_APPROVED, \
-                    TRANSMISSION_IN_FLIGHT, TRANSMISSION_AWAITING_REVIEW, ARTICLE_NOT_IDENTIFIABLE or \
-                    FRACTIONAL_QUANTITY.
+                    TRANSMISSION_IN_FLIGHT, TRANSMISSION_AWAITING_REVIEW, VENDOR_NOT_FOUND, VENDOR_INACTIVE, \
+                    ARTICLE_NOT_IDENTIFIABLE or FRACTIONAL_QUANTITY.
                     """,
             tags = {"Purchase Orders"})
     @ApiResponse(responseCode = "202", description = "Transmission requested")

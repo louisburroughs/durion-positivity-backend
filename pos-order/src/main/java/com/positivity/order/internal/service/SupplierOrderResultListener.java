@@ -8,6 +8,7 @@ import com.positivity.domainevents.supplier.SupplierOrderStatusChangedV1;
 import com.positivity.domainevents.supplier.SupplierOrderStatusDespatch;
 import com.positivity.domainevents.supplier.SupplierOrderStatusLine;
 import com.positivity.domainevents.supplier.SupplierOrderStatusSchedule;
+import com.positivity.domainevents.supplier.SupplierVendorUpdatedV1;
 import com.positivity.kafka.common.KafkaRails;
 import com.positivity.order.internal.entity.ProcessedEvent;
 import com.positivity.order.internal.entity.PurchaseOrderEntity;
@@ -25,6 +26,7 @@ import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.dao.DataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -66,6 +68,15 @@ import tools.jackson.databind.ObjectMapper;
  * propagate for container retry. The mark commits with the work, not after it, because every
  * observation appends a timeline row: a mark lost after its work committed would let redelivery
  * append the row twice.
+ *
+ * <h2>The vendor copy (CAP:550 S24, #2517)</h2>
+ *
+ * {@code supplier.vendor.updated} is applied here, by {@link SupplierVendorReplica}, rather than by a listener of
+ * its own: {@code processed_events} is keyed by event id alone, so a second consumer group on this topic would
+ * suppress this one's marks or be suppressed by them. Every event this consumer sees, handled or ignored, is marked
+ * with owner {@value #OWNER} and the tenant it was applied under, so pos-supplier's reconciliation manifest
+ * ({@code SupplierManifestListener}) compares a whole window. A vendor fact's payload is never logged, not even
+ * when it cannot be read (Security ruling on #2617).
  */
 @Slf4j
 @Component
@@ -81,6 +92,7 @@ public class SupplierOrderResultListener {
     private final ProcessedEventRepository processedEventRepository;
     private final PurchaseOrderRepository purchaseOrderRepository;
     private final PurchaseOrderTransmissionEventRepository transmissionEventRepository;
+    private final SupplierVendorReplica vendorReplica;
 
     /** The event's handler work and its processed mark, in a transaction of their own; see the class doc. */
     private final TransactionTemplate handlerTransaction;
@@ -91,12 +103,14 @@ public class SupplierOrderResultListener {
             ProcessedEventRepository processedEventRepository,
             PurchaseOrderRepository purchaseOrderRepository,
             PurchaseOrderTransmissionEventRepository transmissionEventRepository,
+            SupplierVendorReplica vendorReplica,
             PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.purchaseOrderRepository = purchaseOrderRepository;
         this.transmissionEventRepository = transmissionEventRepository;
+        this.vendorReplica = vendorReplica;
         this.handlerTransaction = new TransactionTemplate(transactionManager);
         this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -134,6 +148,8 @@ public class SupplierOrderResultListener {
                     applyReviewRequired(envelope);
                 } else if (SupplierOrderNotDispatchedV1.EVENT_TYPE.equals(eventType)) {
                     applyNotDispatched(envelope);
+                } else if (SupplierVendorUpdatedV1.EVENT_TYPE.equals(eventType)) {
+                    vendorReplica.apply(envelope, eventId);
                 } else {
                     log.debug("Ignoring supplier event type={} eventId={}", eventType, eventId);
                 }
@@ -146,7 +162,23 @@ public class SupplierOrderResultListener {
                 // already given, with nothing left to correct it.
                 throw e;
             }
-            log.warn("Skipping malformed supplier event eventId={}", eventId, e);
+            if (SupplierVendorUpdatedV1.EVENT_TYPE.equals(eventType) && e instanceof DataAccessException) {
+                // Every database failure of the vendor copy propagates, not only the transient ones (S24, ADR-0044
+                // amendments): a mark here would lose the vendor until the next change, and the manifest would
+                // count the event as received.
+                throw e;
+            }
+            if (SupplierVendorUpdatedV1.EVENT_TYPE.equals(eventType)) {
+                // Never the exception itself: a mapping failure's message can quote the payload, and a vendor
+                // fact's payload is never logged (Security ruling on #2617).
+                log.warn(
+                        "Skipping malformed supplier vendor fact eventId={} eventType={} error={}",
+                        eventId,
+                        eventType,
+                        e.getClass().getSimpleName());
+            } else {
+                log.warn("Skipping malformed supplier event eventId={}", eventId, e);
+            }
             handlerTransaction.executeWithoutResult(_ -> markProcessed(eventId));
         }
     }

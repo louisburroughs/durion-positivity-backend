@@ -250,6 +250,13 @@ pos:
         # supplier.outbox.replay-requested (#2516, ADR-0044 §4): how far back a requested window may
         # start; an older request is logged and dropped. The pos-customer value.
         max-lookback: ${SUPPLIER_OUTBOX_REPLAY_MAX_LOOKBACK:P30D}
+    # Reconciliation manifests of supplier.events.v1, one per tenant per closed window (ADR-0044 section 4,
+    # CAP:550 S24 #2517): pos-accounting and pos-order compare their processed-events log and send
+    # supplier.outbox.replay-requested on supplier.commands.v1 when a window disagrees.
+    manifest:
+      topic: ${SUPPLIER_MANIFEST_TOPIC:supplier.manifest.v1}
+      window: ${SUPPLIER_MANIFEST_WINDOW:PT1H}
+      grace: ${SUPPLIER_MANIFEST_GRACE:PT5M}
     mktcat:
       # Full catalogue sweep. The mode that always works: change subscription is better where a
       # catalogue offers it, but a subscription the vendor has silently forgotten produces no error,

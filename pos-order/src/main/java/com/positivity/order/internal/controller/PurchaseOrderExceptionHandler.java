@@ -4,6 +4,7 @@ import com.positivity.order.internal.exception.PurchaseOrderNotFoundException;
 import com.positivity.order.internal.exception.PurchaseOrderNotTransmittableException;
 import com.positivity.order.internal.exception.PurchaseOrderRequestValidationException;
 import com.positivity.order.internal.exception.PurchaseOrderStateConflictException;
+import com.positivity.order.internal.exception.PurchaseOrderVendorException;
 import com.positivity.order.internal.exception.UomConversionUndefinedException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -58,6 +59,16 @@ public class PurchaseOrderExceptionHandler {
     public ResponseEntity<ApiError> handleNotTransmittable(
             PurchaseOrderNotTransmittableException ex, HttpServletRequest request) {
         return respond(HttpStatus.UNPROCESSABLE_ENTITY, ex.getErrorCode(), ex.getMessage(), request);
+    }
+
+    /**
+     * The order names a vendor outside pos-order's vendor copy, or an inactive one (CAP:550 S24, #2517): 422 with
+     * {@code VENDOR_NOT_FOUND} or {@code VENDOR_INACTIVE}, on create, approve, a vendor-changing revision and
+     * transmit.
+     */
+    @ExceptionHandler(PurchaseOrderVendorException.class)
+    public ResponseEntity<ApiError> handleVendor(PurchaseOrderVendorException ex, HttpServletRequest request) {
+        return respond(HttpStatus.UNPROCESSABLE_ENTITY, ex.getCode().name(), ex.getMessage(), request);
     }
 
     /** A line keyed in a unit with no conversion to base; never a silent 1:1 assumption. */

@@ -37,6 +37,14 @@ public interface SupplierOutboxEventRepository extends JpaRepository<SupplierOut
     }
 
     /**
+     * Published rows of one topic created in {@code [from, to]} (CAP:550 S24, #2517): the candidates of one
+     * reconciliation-manifest window, which {@code ManifestPublisher} narrows by each row's eventId timestamp. A
+     * global table read across every tenant; the publisher groups the rows by their {@code tenant_id}.
+     */
+    List<SupplierOutboxEventEntity> findByTopicAndPublishedAtIsNotNullAndCreatedAtBetween(
+            @NonNull String topic, @NonNull Instant from, @NonNull Instant to);
+
+    /**
      * Re-queues {@code tenantId}'s already-published rows of one topic created in {@code [since, until)}
      * (ADR-0044 §4 drift repair, #2516). The publisher re-sends them with their original envelopes — and so
      * their original event ids, which consumers dedupe on. A global table: the tenant is a column here, not a

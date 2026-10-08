@@ -66,7 +66,8 @@ class PurchaseOrderSummaryTest {
                 entityManager,
                 purchaseOrderFactPublisher,
                 documentQuantityConverter,
-                Clock.fixed(Instant.parse("2026-09-05T12:00:00Z"), ZoneOffset.UTC));
+                Clock.fixed(Instant.parse("2026-09-05T12:00:00Z"), ZoneOffset.UTC),
+                org.mockito.Mockito.mock(SupplierVendorGuard.class));
     }
 
     /**
