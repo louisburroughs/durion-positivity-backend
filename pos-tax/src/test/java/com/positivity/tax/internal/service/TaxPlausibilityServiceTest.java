@@ -10,6 +10,7 @@ import com.positivity.tax.internal.dto.PlausibilityCheckRequest.StatedTax;
 import com.positivity.tax.internal.dto.PlausibilityCheckResponse;
 import com.positivity.tax.internal.exception.TaxAmountImplausibleException;
 import com.positivity.tax.internal.exception.TaxRequestInvalidException;
+import com.positivity.tax.internal.exception.TaxRequestUnprocessableException;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
@@ -52,11 +53,11 @@ class TaxPlausibilityServiceTest {
         TaxProperties bound = TaxProfileFixtures.bind(properties);
         TaxCountryProfiles profiles = new TaxCountryProfiles(bound);
         StaticListableBeanFactory beans = new StaticListableBeanFactory(Map.of("meterRegistry", registry));
-        return new TaxPlausibilityService(
+        return new TaxPlausibilityServiceImpl(
                 bound,
                 profiles,
                 new RegistrationNumberShapes(bound, profiles),
-                new TaxEvidenceRules(bound, profiles, CLOCK),
+                new TaxEvidenceRulesImpl(bound, profiles, CLOCK),
                 CLOCK,
                 beans.getBeanProvider(MeterRegistry.class));
     }
@@ -237,54 +238,93 @@ class TaxPlausibilityServiceTest {
     }
 
     @Nested
-    @DisplayName("400 VALIDATION_ERROR: the request does not fit the profile")
-    class Invalid {
+    @DisplayName("Refusals before the bound: 400 for shape, 422 for configuration (ADR-0017, ADR-0067)")
+    class Refused {
 
-        private List<ApiError.FieldError> invalid(PlausibilityCheckRequest request) {
+        private TaxRequestUnprocessableException unprocessable(PlausibilityCheckRequest request) {
             TaxPlausibilityService service = service();
             try {
                 service.check(request);
-            } catch (TaxRequestInvalidException ex) {
-                return ex.getFieldErrors();
+            } catch (TaxRequestUnprocessableException ex) {
+                return ex;
             }
-            throw new AssertionError("expected VALIDATION_ERROR");
+            throw new AssertionError("expected a 422 refusal");
         }
 
         @Test
+        @DisplayName("[M] a currency other than the profile's is 422 CURRENCY_NOT_SUPPORTED")
         void currencyOtherThanTheProfiles() {
             PlausibilityCheckRequest request =
                     new PlausibilityCheckRequest("CA", "ON", "A1A 1A1", null, AS_OF, "USD", T, List.of(), null);
 
-            assertThat(invalid(request)).extracting(ApiError.FieldError::field).containsExactly("currencyCode");
+            TaxRequestUnprocessableException ex = unprocessable(request);
+
+            assertThat(ex.getCode()).isEqualTo("CURRENCY_NOT_SUPPORTED");
+            assertThat(ex.getFieldErrors())
+                    .extracting(ApiError.FieldError::field)
+                    .containsExactly("currencyCode");
         }
 
         @Test
+        @DisplayName("a regime not declared for the country is 422 TAX_REGIME_NOT_DECLARED")
         void regimeNotDeclaredForTheCountry() {
-            assertThat(invalid(request("ON", T, List.of(tax("NO_SUCH", "1.00")), null)))
+            TaxRequestUnprocessableException ex =
+                    unprocessable(request("ON", T, List.of(tax("NO_SUCH", "1.00")), null));
+
+            assertThat(ex.getCode()).isEqualTo("TAX_REGIME_NOT_DECLARED");
+            assertThat(ex.getFieldErrors())
                     .extracting(ApiError.FieldError::field)
                     .containsExactly("statedTaxes[0].regime");
         }
 
         @Test
-        void duplicatedRegime() {
-            assertThat(invalid(request("ON", T, List.of(tax("GST_HST", "1.00"), tax("GST_HST", "1.00")), null)))
-                    .extracting(ApiError.FieldError::field)
-                    .containsExactly("statedTaxes[1].regime");
-        }
-
-        @Test
+        @DisplayName("[M] amounts finer than the currency are 422 AMOUNT_PRECISION_EXCEEDS_CURRENCY, each named")
         void amountsFinerThanTheCurrency() {
-            assertThat(invalid(request("ON", new BigDecimal("113.001"), List.of(tax("GST_HST", "1.001")), null)))
+            TaxRequestUnprocessableException ex =
+                    unprocessable(request("ON", new BigDecimal("113.001"), List.of(tax("GST_HST", "1.001")), null));
+
+            assertThat(ex.getCode()).isEqualTo("AMOUNT_PRECISION_EXCEEDS_CURRENCY");
+            assertThat(ex.getFieldErrors())
                     .extracting(ApiError.FieldError::field)
                     .containsExactly("receiptTotal", "statedTaxes[0].amount");
         }
 
         @Test
+        @DisplayName("trailing zeros are not extra precision")
+        void trailingZerosAreNotPrecision() {
+            assertThat(service()
+                            .check(request("ON", new BigDecimal("113.0000"), List.of(), null))
+                            .outcome())
+                    .isEqualTo("PLAUSIBLE");
+        }
+
+        @Test
+        @DisplayName("a country without a profile is 422 TAX_JURISDICTION_NOT_CONFIGURED")
         void countryWithoutAProfile() {
             PlausibilityCheckRequest request =
                     new PlausibilityCheckRequest("US", "NY", "10001", null, AS_OF, "USD", T, List.of(), null);
 
-            assertThat(invalid(request)).extracting(ApiError.FieldError::field).containsExactly("countryCode");
+            TaxRequestUnprocessableException ex = unprocessable(request);
+
+            assertThat(ex.getCode()).isEqualTo("TAX_JURISDICTION_NOT_CONFIGURED");
+            assertThat(ex.getFieldErrors())
+                    .extracting(ApiError.FieldError::field)
+                    .containsExactly("countryCode");
+        }
+
+        @Test
+        @DisplayName("a repeated regime is request shape: 400, before the configuration is read")
+        void duplicatedRegime() {
+            TaxPlausibilityService service = service();
+            PlausibilityCheckRequest request = new PlausibilityCheckRequest(
+                    "US", "NY", "10001", null, AS_OF, "USD", T, List.of(tax("X_1", "1"), tax("X_1", "1")), null);
+
+            assertThatThrownBy(() -> service.check(request))
+                    .isInstanceOfSatisfying(
+                            TaxRequestInvalidException.class,
+                            ex -> assertThat(ex.getFieldErrors())
+                                    .extracting(ApiError.FieldError::field)
+                                    .containsExactly("statedTaxes[1].regime"));
         }
     }
 

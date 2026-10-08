@@ -116,19 +116,25 @@ public class TaxEvidenceController {
                     Each stated amount must be below receiptTotal, as must their sum, and at most receiptTotal times r
                     over one plus r rounded up to the minor unit plus a configured tolerance, where r is the regime's
                     rate in the region; RATE_UNAVAILABLE means the region has no rate row and only the total applied.
-                    Returns 400 VALIDATION_ERROR for a missing or malformed field, a negative amount, another currency
-                    or an undeclared or repeated regime, and 422 TAX_AMOUNT_IMPLAUSIBLE with each offending amount's
-                    maximum in fieldErrors.
+                    Returns 400 VALIDATION_ERROR for a missing or malformed field, a negative amount or a repeated
+                    regime; 422 TAX_JURISDICTION_NOT_CONFIGURED for a country without a tax profile,
+                    CURRENCY_NOT_SUPPORTED for another currency than the profile's, AMOUNT_PRECISION_EXCEEDS_CURRENCY
+                    for an amount finer than the currency's minor unit, TAX_REGIME_NOT_DECLARED for a regime the country
+                    does not declare, and TAX_AMOUNT_IMPLAUSIBLE with each offending amount's maximum, every 422 naming
+                    its fields in fieldErrors.
                     """)
     @ApiResponse(responseCode = "200", description = "Stated tax plausible (PLAUSIBLE or RATE_UNAVAILABLE)")
     @ApiResponse(
             responseCode = "400",
-            description = "Missing or malformed field, negative amount, another currency, or an undeclared or"
-                    + " repeated regime (VALIDATION_ERROR)",
+            description = "Missing or malformed field, negative amount, or a repeated regime (VALIDATION_ERROR)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description = "A stated amount is implausible for the receipt total (TAX_AMOUNT_IMPLAUSIBLE)",
+            description = "The country has no tax profile (TAX_JURISDICTION_NOT_CONFIGURED), currencyCode is not the"
+                    + " profile's currency (CURRENCY_NOT_SUPPORTED), an amount is finer than the currency's minor unit"
+                    + " (AMOUNT_PRECISION_EXCEEDS_CURRENCY), a regime is not declared for the country"
+                    + " (TAX_REGIME_NOT_DECLARED), or a stated amount is implausible (TAX_AMOUNT_IMPLAUSIBLE); fieldErrors"
+                    + " name each offending field",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @SecurityRequirement(
             name = "bearerAuth",

@@ -81,6 +81,16 @@ public class TaxExceptionHandler {
     }
 
     /**
+     * A well-formed request that the configuration or currency it names refuses (CAP:550 S32b; ADR-0017 §2,
+     * ADR-0067 PC-6 and PC-9): 422 with the exception's code and field errors.
+     */
+    @ExceptionHandler(TaxRequestUnprocessableException.class)
+    public ResponseEntity<ApiError> handleRequestUnprocessable(
+            TaxRequestUnprocessableException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNPROCESSABLE_CONTENT, ex.getCode(), ex.getMessage(), ex.getFieldErrors(), request);
+    }
+
+    /**
      * A stated tax amount that cannot be right for its receipt (CAP:550 S32b, AW55): 422 with one field
      * error per offending amount, each carrying its maximum.
      */

@@ -1,0 +1,12 @@
+# CAP:550 S32b test fixture (RegistrationNumberShapesTest): a multi-document file whose second document sets
+# a shape. Not tax law.
+pos:
+  tax:
+    plausibility:
+      tolerance-minor-units: 5
+---
+pos:
+  tax:
+    registration:
+      formats:
+        - { regime: R_1, shape: "ZZ#####" }

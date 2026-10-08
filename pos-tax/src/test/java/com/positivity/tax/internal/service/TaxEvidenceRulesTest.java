@@ -41,7 +41,7 @@ class TaxEvidenceRulesTest {
 
     private static TaxEvidenceRules rules(Map<String, String> properties) {
         TaxProperties bound = TaxProfileFixtures.bind(properties);
-        return new TaxEvidenceRules(bound, new TaxCountryProfiles(bound), CLOCK);
+        return new TaxEvidenceRulesImpl(bound, new TaxCountryProfiles(bound), CLOCK);
     }
 
     static Stream<Arguments> invalidRules() {
@@ -129,7 +129,7 @@ class TaxEvidenceRulesTest {
     @DisplayName("AC 3: the shipped row is SUPPLIER_REGISTRATION_NUMBER from 100.00 for drawer receipts and bills")
     void shippedRow() throws Exception {
         TaxProperties shipped = RegistrationNumberShapesTest.shipped();
-        TaxEvidenceRules rules = new TaxEvidenceRules(shipped, new TaxCountryProfiles(shipped), CLOCK);
+        TaxEvidenceRules rules = new TaxEvidenceRulesImpl(shipped, new TaxCountryProfiles(shipped), CLOCK);
 
         EvidenceRulesResponse response = rules.read("CA", null);
 

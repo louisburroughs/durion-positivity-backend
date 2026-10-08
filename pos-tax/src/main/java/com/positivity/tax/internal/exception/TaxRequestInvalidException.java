@@ -4,12 +4,11 @@ import com.positivity.shared.error.ApiError;
 import java.util.List;
 
 /**
- * A request whose shape is valid but whose values do not fit the configuration it names (CAP:550
- * S32b): a country without a profile, a currency other than the profile's, an amount with more
- * decimals than the currency allows, or a regime the country does not declare or that is stated twice.
+ * A request whose shape is invalid in a way bean validation cannot see (CAP:550 S32b): today, a regime
+ * stated more than once on a plausibility check.
  * <p>
- * Maps to {@code 400 VALIDATION_ERROR} with {@code fieldErrors}. A field error names the field and the
- * rule, never the rejected value.
+ * Maps to {@code 400 VALIDATION_ERROR} with {@code fieldErrors}. A field error names the field and the rule,
+ * never the rejected value.
  */
 public class TaxRequestInvalidException extends RuntimeException {
 

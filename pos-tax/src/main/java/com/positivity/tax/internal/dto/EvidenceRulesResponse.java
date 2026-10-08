@@ -1,5 +1,6 @@
 package com.positivity.tax.internal.dto;
 
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -79,10 +80,13 @@ public record EvidenceRulesResponse(
                     requiredMode = Schema.RequiredMode.REQUIRED)
             BigDecimal fromAmount,
 
-            @Schema(
-                    description = "Document types the rule applies to",
-                    example = "[\"DRAWER_RECEIPT\", \"VENDOR_BILL\"]",
-                    requiredMode = Schema.RequiredMode.REQUIRED)
+            @ArraySchema(
+                    arraySchema =
+                            @Schema(
+                                    description = "Document types the rule applies to",
+                                    example = "[\"DRAWER_RECEIPT\", \"VENDOR_BILL\"]",
+                                    requiredMode = Schema.RequiredMode.REQUIRED),
+                    schema = @Schema(allowableValues = {"DRAWER_RECEIPT", "VENDOR_BILL"}))
             List<String> appliesTo,
 
             @Schema(

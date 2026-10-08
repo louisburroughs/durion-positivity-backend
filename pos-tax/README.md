@@ -44,11 +44,19 @@ Tax calculation service for the Durion Positivity ETSMS platform. Supports two o
 
 Error codes beyond validation: 422 `TAX_JURISDICTION_NOT_CONFIGURED` (a profiled country has no rate row for the region on
 the date), 422 `CURRENCY_NOT_SUPPORTED` (a calculation for a profiled country states another currency than the profile's;
-ADR-0067 PC-9), 422 `TAX_AMOUNT_IMPLAUSIBLE` (a stated amount on a plausibility check is implausible; `fieldErrors` name each
-amount with its maximum) and 501 `TAX_RATE_LOOKUP_UNSUPPORTED` (rate lookup on a deployment-wide provider other than test mode).
-The plausibility check answers 400 `VALIDATION_ERROR` with `fieldErrors` for a country without a profile, a currency other than
-the profile's, an amount finer than the currency's minor unit, a negative amount, or a regime not declared for the country or
-stated twice; a field error never carries the rejected value.
+ADR-0067 PC-9) and 501 `TAX_RATE_LOOKUP_UNSUPPORTED` (rate lookup on a deployment-wide provider other than test mode).
+
+The plausibility check (CAP:550 S32b) refuses in ADR-0017 order, and every refusal names its fields in `fieldErrors` without
+the rejected value:
+
+| Status · code | When |
+| --- | --- |
+| 400 `VALIDATION_ERROR` | Request shape: a missing or malformed field, a negative stated amount, `receiptTotal` ≤ 0, or a regime stated twice |
+| 422 `TAX_JURISDICTION_NOT_CONFIGURED` | The country has no tax profile (`fieldErrors[countryCode]`) |
+| 422 `CURRENCY_NOT_SUPPORTED` | `currencyCode` is not the profile's currency (ADR-0067 PC-9; `fieldErrors[currencyCode]`) |
+| 422 `AMOUNT_PRECISION_EXCEEDS_CURRENCY` | `receiptTotal` or a stated amount has more decimal places than the currency's minor unit (ADR-0067 PC-6); each offending amount is named. Trailing zeros do not count |
+| 422 `TAX_REGIME_NOT_DECLARED` | A stated regime is not declared for the country (`fieldErrors[statedTaxes[i].regime]`) |
+| 422 `TAX_AMOUNT_IMPLAUSIBLE` | A stated amount, or their sum, reaches the total, or an amount is above its maximum; each offending amount carries its maximum, the sum is `fieldErrors[statedTaxes]` |
 
 ## Provider plug-ins
 
@@ -228,12 +236,21 @@ pos.tax:
             effective-from: 2026-01-01, effective-to: 2026-12-31 }   # dates optional, inclusive
 ```
 
-- **Shapes are a security control** (ADR-0072 Decision 1, conditions (a) and (b); Security decision on durion#571). A number is
-  trimmed and upper-cased, spaces and hyphens are removed, and it must then equal the shape character for character. A regime
-  with no shape refuses every number. A shape is the service's shipped configuration, changed only by a reviewed commit: never
-  per tenant, by a tenant, by a tax provider or at runtime. Startup fails when `pos.tax.registration` is set by any source other
-  than a classpath `application*.yml` (an environment variable, a system property, a command-line argument or an external file).
-  pos-tax never logs, stores or returns a number that fails.
+- **Shapes are a security control** (ADR-0072 Decision 1, conditions (a) and (b); Security decision on durion#571). A number
+  must equal the shape character for character after normalisation. A regime with no shape refuses every number. A shape is the
+  service's shipped configuration, changed only by a reviewed commit: never per tenant, by a tenant, by a tax provider or at
+  runtime. pos-tax never logs, stores or returns a number that fails.
+- **Normalisation, the exact rule** (S32d's pos-order and S32c re-implement exactly this): `String.trim()` (drop leading and
+  trailing characters at or below U+0020); then remove every U+0020 SPACE and U+002D HYPHEN-MINUS, and nothing else; then
+  upper-case `a`–`z` only (no other character is case-mapped, so a non-ASCII letter or digit never matches). A number longer
+  than 128 characters is never well formed and is not normalised; callers must not add a bean-validation size constraint for
+  it, because its binding error echoes the value.
+- **Where a shape may come from.** At startup every bound value under `pos.tax.registration` must originate in a classpath file
+  named `application*.yml` or `application*.yaml` (at the root or under `config/`) inside the service's own code source: the
+  shipped `application.yml`, a shipped profile file such as `application-dev.yml`, and any document of a multi-document file
+  qualify. Startup fails, naming the property and the source, for an environment variable, a system property, a command-line
+  argument, an external file, a file in another jar, or a property source that cannot list its names (only the `random` source
+  and property-source stubs, which hold no value, are exempt).
 - **Startup check, shapes** (`RegistrationNumberShapes`). Startup fails, naming the property, when a regime declared in any
   country profile has no shape; a shape is blank, longer than 32, contains a character other than `#` or `A`–`Z`, or contains no
   letter (the only kind that can match bare digits, so a nine-digit SSN/SIN/EIN/ITIN shape cannot be configured); a `regime` code

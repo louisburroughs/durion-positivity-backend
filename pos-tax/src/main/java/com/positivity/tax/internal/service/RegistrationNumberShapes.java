@@ -6,20 +6,32 @@ import com.positivity.tax.internal.config.TaxProperties;
 import com.positivity.tax.internal.config.TaxProperties.CountryProfile;
 import com.positivity.tax.internal.config.TaxProperties.RegistrationFormat;
 import com.positivity.tax.internal.service.TaxCountryProfiles.CountryTaxProfile;
+import java.io.IOException;
+import java.net.URL;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.regex.Pattern;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.properties.source.ConfigurationProperty;
 import org.springframework.boot.context.properties.source.ConfigurationPropertyName;
 import org.springframework.boot.context.properties.source.ConfigurationPropertySource;
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources;
 import org.springframework.boot.context.properties.source.ConfigurationPropertyState;
+import org.springframework.boot.context.properties.source.IterableConfigurationPropertySource;
+import org.springframework.boot.env.RandomValuePropertySource;
+import org.springframework.boot.origin.Origin;
+import org.springframework.boot.origin.PropertySourceOrigin;
+import org.springframework.boot.origin.TextResourceOrigin;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.PropertySource;
+import org.springframework.core.env.PropertySource.StubPropertySource;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
 /**
@@ -48,7 +60,17 @@ public class RegistrationNumberShapes {
     /** The longest shape: a normalised number is stored in at most 32 characters. */
     static final int MAX_SHAPE_LENGTH = 32;
 
+    /**
+     * The longest number considered: a longer one is never well formed and is not normalised. Callers must
+     * not add a bean-validation size constraint, whose binding error would echo the value.
+     */
+    public static final int MAX_NUMBER_LENGTH = 128;
+
     private static final String REGISTRATION = "pos.tax.registration";
+
+    /** A shipped file, relative to the code source root. */
+    private static final Pattern SHIPPED_FILE = Pattern.compile("^(config/)?application(-[A-Za-z0-9_.-]+)?\\.ya?ml$");
+
     private static final String FORMATS = REGISTRATION + ".formats";
     private static final String COUNTRIES = "pos.tax.countries.";
 
@@ -96,7 +118,7 @@ public class RegistrationNumberShapes {
      */
     public boolean wellFormed(@Nullable String regime, @Nullable String number) {
         String shape = regime == null ? null : shapes.get(regime);
-        if (shape == null || number == null) {
+        if (shape == null || number == null || number.length() > MAX_NUMBER_LENGTH) {
             return false;
         }
         String normalized = normalize(number);
@@ -115,14 +137,22 @@ public class RegistrationNumberShapes {
     }
 
     /**
-     * The normalised form of a number: trimmed, ASCII letters upper-cased, spaces and hyphens removed. A
-     * caller stores this form once {@link #wellFormed} accepts it.
+     * The normalised form of a number, the exact rule a caller re-implementing it must follow:
+     * {@link String#trim()} (drops leading and trailing characters at or below U+0020), then remove every
+     * U+0020 SPACE and U+002D HYPHEN-MINUS, then upper-case {@code a}-{@code z} only (no other character is
+     * case-mapped). A caller stores this form once {@link #wellFormed} accepts it.
      *
-     * @param number the number as entered
+     * @param number the number as entered, at most {@link #MAX_NUMBER_LENGTH} characters
      * @return the normalised number
+     * @throws IllegalArgumentException when the number is longer than {@link #MAX_NUMBER_LENGTH}; the message
+     *     never carries the value
      */
     @NonNull
     public static String normalize(@NonNull String number) {
+        if (number.length() > MAX_NUMBER_LENGTH) {
+            throw new IllegalArgumentException(
+                    "A number longer than " + MAX_NUMBER_LENGTH + " characters is not normalised");
+        }
         String trimmed = number.trim();
         StringBuilder normalized = new StringBuilder(trimmed.length());
         for (int i = 0; i < trimmed.length(); i++) {
@@ -152,10 +182,15 @@ public class RegistrationNumberShapes {
     // ---------------------------------------------------------------------------------------
 
     /**
-     * Refuses a shape set anywhere but the service's shipped configuration: an environment variable, a
-     * system property, a command-line argument or an external file could change a security control
-     * without a reviewed commit (Security clarification B on durion#571). Only a classpath
-     * {@code application*.yml} resource, which ships inside the service, may set {@code pos.tax.registration}.
+     * Refuses a shape bound from anywhere but the service's shipped configuration: an environment variable,
+     * a system property, a command-line argument, an external file or another jar's file could change a
+     * security control without a reviewed commit (Security clarification B on durion#571).
+     * <p>
+     * Every bound value under {@code pos.tax.registration} must have a {@link TextResourceOrigin} on a
+     * {@link ClassPathResource} named {@code application*.yml} (or {@code .yaml}, at the classpath root or under
+     * {@code config/}) inside this service's own code source; a profile file and any document of a
+     * multi-document file qualify. A property source that cannot list its names is refused unless it is the
+     * {@code random} source or a {@link StubPropertySource}, which hold no configured value.
      *
      * @param properties  the bound properties, returned unchanged
      * @param environment the environment
@@ -164,27 +199,87 @@ public class RegistrationNumberShapes {
     @NonNull
     static TaxProperties requireShippedSource(
             @NonNull TaxProperties properties, @NonNull ConfigurableEnvironment environment) {
-        ConfigurationPropertyName registration = ConfigurationPropertyName.of(REGISTRATION);
-        for (PropertySource<?> source : environment.getPropertySources()) {
-            if (isShipped(source)) {
-                continue;
-            }
-            for (ConfigurationPropertySource adapted : ConfigurationPropertySources.from(source)) {
-                if (adapted.containsDescendantOf(registration) == ConfigurationPropertyState.PRESENT) {
-                    throw invalid(
-                            REGISTRATION,
-                            "may be set only in the service's shipped application configuration, never by "
-                                    + source.getName());
-                }
-            }
-        }
+        requireShippedSource(environment, codeSourceRoot(RegistrationNumberShapes.class));
         return properties;
     }
 
-    private static boolean isShipped(@NonNull PropertySource<?> source) {
-        String name = source.getName();
-        return name.contains("'class path resource [application") && name.endsWith("'")
-                || "configurationProperties".equals(name);
+    /**
+     * The check of {@link #requireShippedSource(TaxProperties, ConfigurableEnvironment)} against a given code
+     * source root.
+     *
+     * @param environment    the environment
+     * @param codeSourceRoot the URL prefix of the code source the shipped files must come from
+     */
+    static void requireShippedSource(@NonNull ConfigurableEnvironment environment, @NonNull String codeSourceRoot) {
+        ConfigurationPropertyName registration = ConfigurationPropertyName.of(REGISTRATION);
+        for (PropertySource<?> source : environment.getPropertySources()) {
+            if (ConfigurationPropertySources.isAttachedConfigurationPropertySource(source)
+                    || source instanceof StubPropertySource
+                    || source instanceof RandomValuePropertySource) {
+                continue;
+            }
+            for (ConfigurationPropertySource adapted : ConfigurationPropertySources.from(source)) {
+                if (adapted instanceof IterableConfigurationPropertySource iterable) {
+                    iterable.filter(registration::isAncestorOf).stream().forEach(name -> {
+                        ConfigurationProperty property = iterable.getConfigurationProperty(name);
+                        Origin origin = property == null ? null : property.getOrigin();
+                        if (!isShipped(origin, codeSourceRoot)) {
+                            throw invalid(
+                                    name.toString(),
+                                    "may be set only in the service's shipped application*.yml, never by "
+                                            + source.getName());
+                        }
+                    });
+                } else if (adapted.containsDescendantOf(registration) != ConfigurationPropertyState.ABSENT) {
+                    throw invalid(
+                            REGISTRATION,
+                            "may be set only in the service's shipped application*.yml, and " + source.getName()
+                                    + " cannot show that it does not set it");
+                }
+            }
+        }
+    }
+
+    private static boolean isShipped(@Nullable Origin origin, @NonNull String codeSourceRoot) {
+        Origin current = origin;
+        while (current != null) {
+            if (current instanceof PropertySourceOrigin wrapper) {
+                // The property source's own wrapper: look at the origin it carries, if any.
+                current = wrapper.getOrigin();
+                continue;
+            }
+            if (current instanceof TextResourceOrigin text) {
+                if (!(text.getResource() instanceof ClassPathResource resource)) {
+                    return false;
+                }
+                try {
+                    String url = resource.getURL().toString();
+                    return url.startsWith(codeSourceRoot)
+                            && SHIPPED_FILE
+                                    .matcher(url.substring(codeSourceRoot.length()))
+                                    .matches();
+                } catch (IOException ex) {
+                    return false;
+                }
+            }
+            current = current.getParent();
+        }
+        return false;
+    }
+
+    /**
+     * The URL prefix of the classpath root that holds {@code type}: its class file's URL without the class
+     * file's path.
+     *
+     * @param type a class of the code source
+     * @return the root URL, ending in {@code /}
+     */
+    @NonNull
+    static String codeSourceRoot(@NonNull Class<?> type) {
+        String classFile = type.getName().replace('.', '/') + ".class";
+        URL url = Objects.requireNonNull(type.getClassLoader().getResource(classFile), classFile);
+        String location = url.toString();
+        return location.substring(0, location.length() - classFile.length());
     }
 
     @NonNull

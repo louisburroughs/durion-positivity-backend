@@ -24,8 +24,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.context.properties.bind.PropertySourcesPlaceholdersResolver;
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources;
+import org.springframework.boot.env.RandomValuePropertySource;
 import org.springframework.boot.env.YamlPropertySourceLoader;
-import org.springframework.core.env.MapPropertySource;
 import org.springframework.core.env.PropertySource;
 import org.springframework.core.env.StandardEnvironment;
 import org.springframework.core.env.SystemEnvironmentPropertySource;
@@ -227,8 +227,20 @@ class RegistrationNumberShapesTest {
         assertThat(shapes.wellFormed("R_1", "1212345")).isFalse();
     }
 
+    /** The classpath root of the test resources, standing in for the service's own code source. */
+    private static final String TEST_ROOT = RegistrationNumberShapes.codeSourceRoot(RegistrationNumberShapesTest.class);
+
+    private static StandardEnvironment environmentWith(String resource) throws Exception {
+        StandardEnvironment environment = new StandardEnvironment();
+        for (PropertySource<?> source :
+                new YamlPropertySourceLoader().load(resource, new ClassPathResource(resource))) {
+            environment.getPropertySources().addLast(source);
+        }
+        return environment;
+    }
+
     @Test
-    @DisplayName("a shape set outside the shipped configuration fails startup (never at runtime)")
+    @DisplayName("a shape set by an environment variable fails startup (never at runtime)")
     void shapeFromTheEnvironmentFailsStartup() {
         TaxProperties bound = TaxProfileFixtures.bind(stubsWith(p -> {}));
         StandardEnvironment environment = new StandardEnvironment();
@@ -239,22 +251,94 @@ class RegistrationNumberShapesTest {
 
         assertThatThrownBy(() -> new RegistrationNumberShapes(bound, new TaxCountryProfiles(bound), environment))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageStartingWith("Invalid tax configuration pos.tax.registration:")
-                .hasMessageContaining("test-systemEnvironment");
+                .hasMessageStartingWith("Invalid tax configuration pos.tax.registration.formats[0].shape:")
+                .hasMessageContaining("test-systemEnvironment")
+                .hasMessageNotContaining("A#########");
     }
 
     @Test
-    @DisplayName("a shape from the shipped classpath configuration is accepted")
-    void shapeFromTheShippedConfigurationIsAccepted() {
-        TaxProperties bound = TaxProfileFixtures.bind(stubsWith(p -> {}));
-        StandardEnvironment environment = new StandardEnvironment();
-        environment
-                .getPropertySources()
-                .addLast(new MapPropertySource(
-                        "Config resource 'class path resource [application.yml]' via location 'optional:classpath:/'",
-                        Map.of(FORMATS + "[0].shape", "#########RT####")));
+    @DisplayName("a shape from a shipped profile file in the service's code source is accepted")
+    void shapeFromAShippedProfileFileIsAccepted() throws Exception {
+        StandardEnvironment environment = environmentWith("application-s32bguard.yml");
 
-        assertThatCode(() -> new RegistrationNumberShapes(bound, new TaxCountryProfiles(bound), environment))
+        assertThatCode(() -> RegistrationNumberShapes.requireShippedSource(environment, TEST_ROOT))
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("a shape from any document of a shipped multi-document file is accepted")
+    void shapeFromAMultiDocumentFileIsAccepted() throws Exception {
+        StandardEnvironment environment = environmentWith("application-s32bmultidoc.yml");
+
+        assertThat(environment.getPropertySources().stream().map(PropertySource::getName))
+                .anyMatch(name -> name.contains("(document #1)"));
+        assertThatCode(() -> RegistrationNumberShapes.requireShippedSource(environment, TEST_ROOT))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("an application*.yml from another code source is refused")
+    void shapeFromAnotherCodeSourceIsRefused() throws Exception {
+        StandardEnvironment environment = environmentWith("application-s32bguard.yml");
+        String serviceRoot = RegistrationNumberShapes.codeSourceRoot(RegistrationNumberShapes.class);
+
+        assertThat(serviceRoot).isNotEqualTo(TEST_ROOT);
+        assertThatThrownBy(() -> RegistrationNumberShapes.requireShippedSource(environment, serviceRoot))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("pos.tax.registration.formats[0]");
+    }
+
+    @Test
+    @DisplayName("a classpath file not named application*.yml is refused")
+    void shapeFromAnotherFileNameIsRefused() throws Exception {
+        StandardEnvironment environment = environmentWith("s32b/shapes.yml");
+
+        assertThatThrownBy(() -> RegistrationNumberShapes.requireShippedSource(environment, TEST_ROOT))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("pos.tax.registration.formats[0]");
+    }
+
+    @Test
+    @DisplayName("a source that cannot list its names is refused, except random and stubs")
+    void unlistableSourceIsRefused() {
+        StandardEnvironment environment = new StandardEnvironment();
+        environment.getPropertySources().addLast(new PropertySource<Object>("opaque-remote", new Object()) {
+            @Override
+            public Object getProperty(String name) {
+                return null;
+            }
+        });
+
+        assertThatThrownBy(() -> RegistrationNumberShapes.requireShippedSource(environment, TEST_ROOT))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("opaque-remote");
+
+        StandardEnvironment allowed = new StandardEnvironment();
+        allowed.getPropertySources().addLast(new RandomValuePropertySource());
+        allowed.getPropertySources().addLast(new PropertySource.StubPropertySource("servletConfigInitParams"));
+        assertThatCode(() -> RegistrationNumberShapes.requireShippedSource(allowed, TEST_ROOT))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("a number longer than 128 characters is never well formed and is not normalised")
+    void overlongNumber() {
+        RegistrationNumberShapes shapes = shapes(stubsWith(p -> {}));
+        String overlong = "000000000RT0001" + " ".repeat(RegistrationNumberShapes.MAX_NUMBER_LENGTH);
+
+        assertThat(shapes.wellFormed("GST_HST", overlong)).isFalse();
+        assertThatThrownBy(() -> RegistrationNumberShapes.normalize(overlong))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageNotContaining("000000000RT0001");
+        // At the limit, a padded number still normalises and matches.
+        String atLimit = "000000000RT0001" + " ".repeat(RegistrationNumberShapes.MAX_NUMBER_LENGTH - 15);
+        assertThat(shapes.wellFormed("GST_HST", atLimit)).isTrue();
+    }
+
+    @Test
+    @DisplayName("normalisation: String.trim, then only U+0020 and U+002D removed, then only a-z upper-cased")
+    void normalisationRule() {
+        assertThat(RegistrationNumberShapes.normalize("\t ab-c d\u00e9\u00a0 ")).isEqualTo("ABCD\u00e9\u00a0");
+        assertThat(RegistrationNumberShapes.normalize("a\u2010b")).isEqualTo("A\u2010B");
     }
 }

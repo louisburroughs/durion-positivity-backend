@@ -81,6 +81,12 @@ class TaxExceptionHandlerTest {
         assertThat(implausible.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(implausible.getBody().code()).isEqualTo("TAX_AMOUNT_IMPLAUSIBLE");
         assertThat(implausible.getBody().fieldErrors()).isEqualTo(errors);
+        ResponseEntity<ApiError> unprocessable = handler.handleRequestUnprocessable(
+                new TaxRequestUnprocessableException("AMOUNT_PRECISION_EXCEEDS_CURRENCY", "too precise", errors),
+                requestWithoutHeader());
+        assertThat(unprocessable.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(unprocessable.getBody().code()).isEqualTo("AMOUNT_PRECISION_EXCEEDS_CURRENCY");
+        assertThat(unprocessable.getBody().fieldErrors()).isEqualTo(errors);
     }
 
     @Nested
@@ -190,6 +196,13 @@ class TaxExceptionHandlerTest {
                             new TaxRequestInvalidException(
                                     List.of(new ApiError.FieldError("currencyCode", "must be CAD"))),
                             request)),
+                    Named.of("handleRequestUnprocessable", (HandlerInvocation) request ->
+                            handler.handleRequestUnprocessable(
+                                    new TaxRequestUnprocessableException(
+                                            "CURRENCY_NOT_SUPPORTED",
+                                            "currency mismatch",
+                                            List.of(new ApiError.FieldError("currencyCode", "must be CAD"))),
+                                    request)),
                     Named.of("handleAmountImplausible", (HandlerInvocation) request -> handler.handleAmountImplausible(
                             new TaxAmountImplausibleException(List.of(new ApiError.FieldError(
                                     "statedTaxes[0].amount", "must not exceed the plausible maximum 4.82"))),

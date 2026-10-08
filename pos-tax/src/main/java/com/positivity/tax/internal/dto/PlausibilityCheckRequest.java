@@ -100,8 +100,10 @@ public record PlausibilityCheckRequest(
 
         @Schema(
                 description = "Supplier's registration number as printed; it is checked against the country's"
-                        + " supplier regime shape and is never echoed, logged or stored",
+                        + " supplier regime shape and is never echoed, logged or stored. A value longer than 128"
+                        + " characters is never well formed",
                 nullable = true,
+                maxLength = 128,
                 requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         @Nullable
         String supplierRegistrationNumber) {
@@ -117,7 +119,7 @@ public record PlausibilityCheckRequest(
                 + ", asOf=" + asOf
                 + ", currencyCode=" + currencyCode + ", receiptTotal=" + receiptTotal + ", statedTaxes="
                 + statedTaxes
-                + ", supplierRegistrationNumberProvided=" + (supplierRegistrationNumber != null) + "]";
+                + ", supplierNumberSent=" + (supplierRegistrationNumber != null) + "]";
     }
 
     /**

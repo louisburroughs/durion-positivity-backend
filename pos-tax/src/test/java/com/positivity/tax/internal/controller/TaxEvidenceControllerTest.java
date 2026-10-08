@@ -18,7 +18,9 @@ import com.positivity.tax.internal.config.TaxProperties;
 import com.positivity.tax.internal.service.RegistrationNumberShapes;
 import com.positivity.tax.internal.service.TaxCountryProfiles;
 import com.positivity.tax.internal.service.TaxEvidenceRules;
+import com.positivity.tax.internal.service.TaxEvidenceRulesImpl;
 import com.positivity.tax.internal.service.TaxPlausibilityService;
+import com.positivity.tax.internal.service.TaxPlausibilityServiceImpl;
 import com.positivity.tax.internal.service.TaxProfileFixtures;
 import com.positivity.web.common.WebCommonErrorAutoConfiguration;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -106,7 +108,7 @@ class TaxEvidenceControllerTest {
 
         @Bean
         TaxEvidenceRules taxEvidenceRules(TaxCountryProfiles profiles, Clock clock) {
-            return new TaxEvidenceRules(PROPERTIES, profiles, clock);
+            return new TaxEvidenceRulesImpl(PROPERTIES, profiles, clock);
         }
 
         @Bean
@@ -121,7 +123,7 @@ class TaxEvidenceControllerTest {
                 TaxEvidenceRules rules,
                 Clock clock,
                 ObjectProvider<MeterRegistry> meterRegistry) {
-            return new TaxPlausibilityService(PROPERTIES, profiles, shapes, rules, clock, meterRegistry);
+            return new TaxPlausibilityServiceImpl(PROPERTIES, profiles, shapes, rules, clock, meterRegistry);
         }
 
         /** Same as {@code TaxControllerRatesTest}: run the gateway filter only inside the security chain. */
@@ -303,18 +305,67 @@ class TaxEvidenceControllerTest {
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
 
+    private void expectUnprocessable(String body, String code, String... fields) throws Exception {
+        var result = mockMvc.perform(authed(
+                        post("/v1/tax/plausibility-checks")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body),
+                        "tax:rates:view"))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value(code));
+        for (int i = 0; i < fields.length; i++) {
+            result.andExpect(jsonPath("$.fieldErrors[" + i + "].field").value(fields[i]));
+        }
+    }
+
     @Test
-    void plausibility_rejectsAnUndeclaredRegimeAndAnotherCurrency() throws Exception {
+    void plausibility_refusesAnotherCurrencyWithCurrencyNotSupported() throws Exception {
+        expectUnprocessable(
+                body("ON", "113.00", "[{\"regime\":\"NO_SUCH\",\"amount\":1.00}]", null)
+                        .replace("\"CAD\"", "\"EUR\""),
+                "CURRENCY_NOT_SUPPORTED",
+                "currencyCode");
+    }
+
+    @Test
+    void plausibility_refusesAnAmountFinerThanTheCurrencyWithPrecisionExceeded() throws Exception {
+        expectUnprocessable(
+                body("ON", "113.001", "[{\"regime\":\"GST_HST\",\"amount\":1.001}]", null),
+                "AMOUNT_PRECISION_EXCEEDS_CURRENCY",
+                "receiptTotal",
+                "statedTaxes[0].amount");
+    }
+
+    @Test
+    void plausibility_refusesAnUndeclaredRegimeWithRegimeNotDeclared() throws Exception {
+        expectUnprocessable(
+                body("ON", "113.00", "[{\"regime\":\"NO_SUCH\",\"amount\":1.00}]", null),
+                "TAX_REGIME_NOT_DECLARED",
+                "statedTaxes[0].regime");
+    }
+
+    @Test
+    void plausibility_refusesACountryWithoutAProfileWithJurisdictionNotConfigured() throws Exception {
+        expectUnprocessable(
+                body("NY", "113.00", null, null).replace("\"CA\"", "\"US\"").replace("\"CAD\"", "\"USD\""),
+                "TAX_JURISDICTION_NOT_CONFIGURED",
+                "countryCode");
+    }
+
+    @Test
+    void plausibility_rejectsARepeatedRegimeAsShape() throws Exception {
         mockMvc.perform(authed(
                         post("/v1/tax/plausibility-checks")
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(body("ON", "113.00", "[{\"regime\":\"NO_SUCH\",\"amount\":1.00}]", null)
-                                        .replace("\"CAD\"", "\"EUR\"")),
+                                .content(body(
+                                        "ON",
+                                        "113.00",
+                                        "[{\"regime\":\"GST_HST\",\"amount\":1},{\"regime\":\"GST_HST\",\"amount\":1}]",
+                                        null)),
                         "tax:rates:view"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
-                .andExpect(jsonPath("$.fieldErrors[0].field").value("currencyCode"))
-                .andExpect(jsonPath("$.fieldErrors[1].field").value("statedTaxes[0].regime"));
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("statedTaxes[1].regime"));
     }
 
     @Test
@@ -350,7 +401,7 @@ class TaxEvidenceControllerTest {
                 .andExpect(status().isUnauthorized());
     }
 
-    /** AC 6: the 200, 400 and 422 bodies and every captured log line never carry the number. */
+    /** AC 6: the 200, 400 and 422 bodies (shape, configuration and implausible) and every captured log line never carry the number. */
     @Test
     void plausibility_neverEchoesOrLogsTheNumber() throws Exception {
         MvcResult wellFormed = check(body("ON", "150.00", "[]", GOOD_NUMBER));
@@ -366,7 +417,7 @@ class TaxEvidenceControllerTest {
         assertThat(malformed.getResponse().getContentAsString())
                 .contains("\"supplierRegistrationNumberWellFormed\":false");
         assertThat(invalid.getResponse().getStatus()).isEqualTo(400);
-        assertThat(profileInvalid.getResponse().getStatus()).isEqualTo(400);
+        assertThat(profileInvalid.getResponse().getStatus()).isEqualTo(422);
         assertThat(implausible.getResponse().getStatus()).isEqualTo(422);
 
         for (MvcResult result : List.of(wellFormed, malformed, invalid, profileInvalid, implausible)) {
