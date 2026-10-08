@@ -314,5 +314,32 @@ public class TaxCalculationResponse {
                 example = "RESALE",
                 requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         private ExemptionReasonCode exemptionReasonCode;
+
+        /**
+         * Tax-type code of this row (CAP:550 S32a), a configuration-only vocabulary declared by the
+         * country profile (see {@code TaxTypeCodes}); {@code null} for a country without a tax-type
+         * profile (the United States today). Readers copy a well-formed code as received and never
+         * infer one.
+         */
+        @Schema(
+                description = "Tax-type code of this row as the country profile configures it (1-32 upper-case"
+                        + " letters, digits or underscores); null for a country without a tax-type profile",
+                example = "ZZ_LEVY",
+                pattern = "^[A-Z0-9_]{1,32}$",
+                nullable = true,
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+        private String taxType;
+
+        /**
+         * Configured placeholder recoverability of this row's tax type (CAP:550 S32a, held for
+         * expert advice); {@code null} for a country without a tax-type profile.
+         */
+        @Schema(
+                description = "Configured placeholder recoverability of this row's tax type (held for expert"
+                        + " advice); null for a country without a tax-type profile",
+                example = "true",
+                nullable = true,
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+        private Boolean inputTaxRecoverable;
     }
 }

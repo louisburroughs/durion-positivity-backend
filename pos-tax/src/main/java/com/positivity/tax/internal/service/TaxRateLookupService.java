@@ -1,6 +1,7 @@
 package com.positivity.tax.internal.service;
 
 import com.positivity.tax.common.dto.TaxRateLookupResponse;
+import com.positivity.tax.common.dto.TaxTypesResponse;
 import java.time.LocalDate;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -13,7 +14,9 @@ import org.jspecify.annotations.Nullable;
  * rates from the same address/effective-date rule logic {@link TaxCalculationService} uses for
  * {@code /calculate}. When the configured production provider does not support a rate-only
  * call (every provider today), lookup fails with a {@code TaxRateLookupUnsupportedException}
- * (surfaced as HTTP 501) rather than synthesizing an estimate.
+ * (surfaced as HTTP 501) rather than synthesizing an estimate. An address whose country the
+ * per-country default routes to a plug-in (CAP:550 S32a) is answered by that plug-in in every
+ * provider mode.
  */
 public interface TaxRateLookupService {
 
@@ -36,4 +39,14 @@ public interface TaxRateLookupService {
             @Nullable String city,
             @NonNull String postalCode,
             @Nullable LocalDate asOf);
+
+    /**
+     * The tax types, regimes and currency configured for a country (CAP:550 S32a). A country with
+     * no profile answers empty lists and a {@code null} currency.
+     *
+     * @param countryCode an upper-case two-letter country code
+     * @return the configured profile projection, {@code source = STUB}
+     */
+    @NonNull
+    TaxTypesResponse lookupTaxTypes(@NonNull String countryCode);
 }

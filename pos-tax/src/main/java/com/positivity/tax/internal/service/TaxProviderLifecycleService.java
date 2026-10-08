@@ -7,7 +7,10 @@ import com.positivity.tax.internal.repository.TaxProviderTransactionRepository;
 import com.positivity.tenancy.TenantIterator;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -39,6 +42,13 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Slf4j
 @Service
 public class TaxProviderLifecycleService {
+
+    /**
+     * Statuses whose row holds no provider document still owed to its owner, so a re-price by another
+     * provider may re-point it (CAP:550 S32a). Never PENDING_COMMIT, FAILED or COMMITTED.
+     */
+    private static final Set<TaxProviderTransactionStatus> REPOINTABLE =
+            EnumSet.of(TaxProviderTransactionStatus.ESTIMATED, TaxProviderTransactionStatus.VOIDED);
 
     /** Max stored length of {@code last_error} (matches the column width). */
     private static final int MAX_ERROR_LEN = 1024;
@@ -87,7 +97,7 @@ public class TaxProviderLifecycleService {
     @NonNull
     @Transactional
     public TaxProviderTransactionResult commit(@NonNull UUID referenceId, @Nullable String referenceType) {
-        TaxProviderClient provider = selector.select();
+        TaxProviderClient provider = providerFor(referenceId);
         // Isolate the find-or-insert so a concurrent-commit UNIQUE(reference_id) collision can
         // never poison this transaction (#983).
         UUID rowId = resolver.resolveId(referenceId, referenceType, provider.providerName());
@@ -134,7 +144,7 @@ public class TaxProviderLifecycleService {
     @NonNull
     @Transactional
     public TaxProviderTransactionResult voidTransaction(@NonNull UUID referenceId) {
-        TaxProviderClient provider = selector.select();
+        TaxProviderClient provider = providerFor(referenceId);
         UUID rowId = resolver.resolveId(referenceId, null, provider.providerName());
         TaxProviderTransaction tx = repository.findById(rowId).orElseThrow();
         try {
@@ -178,9 +188,9 @@ public class TaxProviderLifecycleService {
         if (pending.isEmpty()) {
             return;
         }
-        TaxProviderClient provider = selector.select();
         int promoted = 0;
         for (TaxProviderTransaction tx : pending) {
+            TaxProviderClient provider = providerFor(tx);
             try {
                 TaxProviderTransactionResult result = provider.commit(tx.getReferenceId());
                 tx.setStatus(TaxProviderTransactionStatus.COMMITTED);
@@ -199,6 +209,71 @@ public class TaxProviderLifecycleService {
         if (promoted > 0) {
             log.info("Re-commit job promoted {} of {} PENDING_COMMIT tax documents", promoted, pending.size());
         }
+    }
+
+    /**
+     * Records which provider priced a committable document (CAP:550 S32a, ADR-0071 §3), so its
+     * commit and void reach the same provider.
+     * <p>
+     * A document priced by a per-country plug-in gets an {@link TaxProviderTransactionStatus#ESTIMATED}
+     * row naming the plug-in; the re-commit job never picks it up. A row with no live provider
+     * document — {@link TaxProviderTransactionStatus#ESTIMATED} or
+     * {@link TaxProviderTransactionStatus#VOIDED} — that is re-priced by a different provider (the
+     * address moved between a plug-in country and the deployment-wide switch) is re-pointed to it.
+     * A row whose document still needs its owner is <strong>never</strong> re-pointed:
+     * {@code COMMITTED}, {@code PENDING_COMMIT} (the re-commit job must reach the real provider) and
+     * {@code FAILED} (a void still owed to it). Otherwise a calculation reusing another document's
+     * {@code referenceId} could re-home that document to a no-op plug-in. A document priced by the
+     * deployment-wide switch with no row keeps today's behaviour: no row until commit.
+     *
+     * @param referenceId   the source document id
+     * @param referenceType the source transaction type label; may be null
+     * @param providerName  the provider that priced the document
+     */
+    @Transactional
+    public void recordPricing(@NonNull UUID referenceId, @Nullable String referenceType, @NonNull String providerName) {
+        boolean pricedByPlugin = selector.isSelfHosted(providerName);
+        Optional<TaxProviderTransaction> existing = repository.findByReferenceId(referenceId);
+        if (existing.isEmpty()) {
+            if (pricedByPlugin) {
+                resolver.resolveId(referenceId, referenceType, providerName, TaxProviderTransactionStatus.ESTIMATED);
+            }
+            return;
+        }
+        TaxProviderTransaction tx = existing.get();
+        boolean rowNamesPlugin = selector.isSelfHosted(tx.getProvider());
+        if (REPOINTABLE.contains(tx.getStatus())
+                && !providerName.equals(tx.getProvider())
+                && (pricedByPlugin || rowNamesPlugin)) {
+            // Durable re-point history belongs to the ADR-0071 §3 log (#2629); until then the log line
+            // keeps who held the document before. The previous provider's document id means nothing
+            // to the new provider, so it is cleared.
+            log.info(
+                    "Tax document re-pointed: referenceId={} fromProvider={} toProvider={} status={}"
+                            + " priorExternalTransactionId={}",
+                    referenceId,
+                    tx.getProvider(),
+                    providerName,
+                    tx.getStatus(),
+                    tx.getExternalTransactionId());
+            tx.setProvider(providerName);
+            tx.setExternalTransactionId(null);
+            repository.save(tx);
+        }
+    }
+
+    /**
+     * The provider that priced {@code referenceId}: its logged self-hosted plug-in (even one whose
+     * profile was since removed), otherwise the switch.
+     */
+    @NonNull
+    private TaxProviderClient providerFor(@NonNull UUID referenceId) {
+        return repository.findByReferenceId(referenceId).map(this::providerFor).orElseGet(selector::select);
+    }
+
+    @NonNull
+    private TaxProviderClient providerFor(@NonNull TaxProviderTransaction tx) {
+        return selector.lifecycleProviderFor(tx.getProvider());
     }
 
     /**

@@ -83,14 +83,39 @@ class TaxProviderTransactionResolver {
     @NonNull
     @Transactional
     public UUID resolveId(@NonNull UUID referenceId, @Nullable String referenceType, @NonNull String providerName) {
+        return resolveId(referenceId, referenceType, providerName, TaxProviderTransactionStatus.PENDING_COMMIT);
+    }
+
+    /**
+     * As {@link #resolveId(UUID, String, String)}, creating an absent row in {@code initialStatus}
+     * (CAP:550 S32a: {@link TaxProviderTransactionStatus#ESTIMATED} when a plug-in prices a
+     * committable document).
+     *
+     * @param referenceId   the source document id
+     * @param referenceType the source transaction type label; may be null
+     * @param providerName  the provider label
+     * @param initialStatus the status of a newly created row
+     * @return the persisted row id
+     */
+    @NonNull
+    @Transactional
+    public UUID resolveId(
+            @NonNull UUID referenceId,
+            @Nullable String referenceType,
+            @NonNull String providerName,
+            @NonNull TaxProviderTransactionStatus initialStatus) {
         return repository
                 .findByReferenceId(referenceId)
                 .map(TaxProviderTransaction::getId)
-                .orElseGet(() -> upsert(referenceId, referenceType, providerName));
+                .orElseGet(() -> upsert(referenceId, referenceType, providerName, initialStatus));
     }
 
     @NonNull
-    private UUID upsert(@NonNull UUID referenceId, @Nullable String referenceType, @NonNull String providerName) {
+    private UUID upsert(
+            @NonNull UUID referenceId,
+            @Nullable String referenceType,
+            @NonNull String providerName,
+            @NonNull TaxProviderTransactionStatus initialStatus) {
         // Atomic create: inserts a fresh PENDING_COMMIT row, or no-ops on a concurrent
         // winner's
         // UNIQUE(reference_id) collision — never throws, never poisons this
@@ -102,7 +127,7 @@ class TaxProviderTransactionResolver {
                 referenceId,
                 referenceType,
                 providerName,
-                TaxProviderTransactionStatus.PENDING_COMMIT.name(),
+                initialStatus.name(),
                 Instant.now(clock));
         // Unconditional re-read returns the winning row id whether we inserted it or
         // adopted the

@@ -46,6 +46,7 @@ class InvoiceUpdatedV1Test {
                 new BigDecimal("200.00"),
                 new BigDecimal("14.50"),
                 false,
+                null,
                 null);
         TaxBreakdownLine county = new TaxBreakdownLine(
                 "1",
@@ -55,6 +56,7 @@ class InvoiceUpdatedV1Test {
                 new BigDecimal("200.00"),
                 new BigDecimal("2.03"),
                 false,
+                null,
                 null);
         InvoiceUpdatedV1 evt = event(List.of(state, county));
 
@@ -180,7 +182,8 @@ class InvoiceUpdatedV1Test {
                 new BigDecimal("50.00"),
                 BigDecimal.ZERO,
                 true,
-                "RESALE");
+                "RESALE",
+                null);
         InvoiceUpdatedV1 read =
                 MAPPER.readValue(MAPPER.writeValueAsString(event(List.of(exemptRow))), InvoiceUpdatedV1.class);
 
@@ -188,5 +191,72 @@ class InvoiceUpdatedV1Test {
         assertThat(row.exempt()).isTrue();
         assertThat(row.exemptionReasonCode()).isEqualTo("RESALE");
         assertThat(row.taxAmount()).isEqualByComparingTo(BigDecimal.ZERO);
+    }
+
+    /** The pre-S32a shape of a breakdown row: what a consumer built before {@code taxType} reads into. */
+    record PreTaxTypeBreakdownLine(
+            String lineItemId,
+            String jurisdictionType,
+            String jurisdictionCode,
+            BigDecimal rate,
+            BigDecimal taxableBase,
+            BigDecimal taxAmount,
+            boolean exempt,
+            String exemptionReasonCode) {}
+
+    @Test
+    void typedRowRoundTripsWithinSchemaVersionOne() {
+        // CAP:550 S32a: taxType is additive (last component, nullable String), same schema version.
+        TaxBreakdownLine gst = new TaxBreakdownLine(
+                "1",
+                "COUNTRY",
+                "ZZ",
+                new BigDecimal("0.011"),
+                new BigDecimal("200.00"),
+                new BigDecimal("2.20"),
+                false,
+                null,
+                "GST");
+        InvoiceUpdatedV1 evt = event(List.of(gst));
+
+        String json = MAPPER.writeValueAsString(evt);
+        InvoiceUpdatedV1 read = MAPPER.readValue(json, InvoiceUpdatedV1.class);
+
+        assertThat(json).contains("\"taxType\":\"GST\"");
+        assertThat(read).isEqualTo(evt);
+        assertThat(read.taxBreakdown().get(0).taxType()).isEqualTo("GST");
+        assertThat(InvoiceUpdatedV1.SCHEMA_VERSION).isEqualTo(1);
+    }
+
+    @Test
+    void payloadWithoutTaxTypeReadsAsNull() {
+        String legacyRow = """
+                {"lineItemId":"1","jurisdictionType":"STATE","jurisdictionCode":"STATE","rate":0.0725,
+                 "taxableBase":200.00,"taxAmount":14.50,"exempt":false,"exemptionReasonCode":null}
+                """;
+
+        TaxBreakdownLine read = MAPPER.readValue(legacyRow, TaxBreakdownLine.class);
+
+        assertThat(read.taxType()).isNull();
+        assertThat(read.taxAmount()).isEqualByComparingTo("14.50");
+    }
+
+    @Test
+    void consumerBuiltBeforeTheFieldReadsTheNewJson() {
+        TaxBreakdownLine typed = new TaxBreakdownLine(
+                "1",
+                "PROVINCE",
+                "Z1",
+                new BigDecimal("0.022"),
+                new BigDecimal("100.00"),
+                new BigDecimal("2.20"),
+                false,
+                null,
+                "PST");
+
+        PreTaxTypeBreakdownLine old = MAPPER.readValue(MAPPER.writeValueAsString(typed), PreTaxTypeBreakdownLine.class);
+
+        assertThat(old.jurisdictionCode()).isEqualTo("Z1");
+        assertThat(old.taxAmount()).isEqualByComparingTo("2.20");
     }
 }

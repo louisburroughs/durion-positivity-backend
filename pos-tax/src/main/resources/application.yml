@@ -98,6 +98,31 @@ pos:
       max-attempts: 3
       initial-backoff: 500
       multiplier: 2.0
+    # Interim per-country default plug-in (ADR-0071 §3; CAP:550 S32a, #2636). An address in a listed
+    # country is answered by the named plug-in in every provider mode; every other country keeps the
+    # switch above. The self-hosted plug-in of a profiled country is <country>_SELF. ADR-0071 step 1
+    # (#2629) makes this map the fallback of the per-tenant binding.
+    default-providers:
+      CA: CA_SELF
+    # Per-country tax profiles (CAP:550 S32a). Every value below is a PLACEHOLDER held for expert advice
+    # (spec AW48, OI-4): the tax types, the regime grouping and the recoverability flags. No rate ships:
+    # `rates` stays empty, so an address here answers 422 TAX_JURISDICTION_NOT_CONFIGURED until rates are
+    # advised. Tests and dev use fixture rows marked "not tax law". Rows: {region-code, tax-type, rate,
+    # effective-from, effective-to?}; adding a country is a block here plus a default-providers entry.
+    # Country keys must be upper case and cannot be set through environment variables (relaxed binding
+    # lower-cases them, and the startup check then refuses the key).
+    countries:
+      CA:
+        currency: CAD
+        tax-types: # a list with explicit codes, so binding never mangles a code
+          - { code: GST, regime: GST_HST, jurisdiction-type: COUNTRY, input-tax-recoverable: true }
+          - { code: HST, regime: GST_HST, jurisdiction-type: PROVINCE, input-tax-recoverable: true }
+          - { code: QST, regime: QST, jurisdiction-type: PROVINCE, input-tax-recoverable: true }
+          - { code: PST, jurisdiction-type: PROVINCE, input-tax-recoverable: false } # no regime
+        regimes: # empty regions = the whole country
+          - { code: GST_HST, regions: [] }
+          - { code: QST, regions: [QC] }
+        # rates: none shipped (OI-4)
 
 logging:
   level:

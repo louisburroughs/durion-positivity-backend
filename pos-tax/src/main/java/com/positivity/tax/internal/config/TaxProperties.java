@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -67,6 +68,104 @@ public class TaxProperties {
      * Retry configuration for external service calls.
      */
     private Retry retry = new Retry();
+
+    /**
+     * Interim per-country default provider plug-in (ADR-0071 §3; CAP:550 S32a), keyed by ISO
+     * 3166-1 alpha-2 country code, e.g. {@code XX: XX_SELF}.
+     * <p>
+     * An address whose country has an entry is answered by the named plug-in in every provider
+     * mode; every other country keeps the deployment-wide switch ({@code test-mode.enabled},
+     * {@link #provider}). The only plug-ins today are the configuration-driven self-hosted ones,
+     * one per profiled country, named {@code <country>_SELF}. When the tenant binding of
+     * ADR-0071 step 1 lands, a binding takes precedence and this map becomes the resolver's
+     * fallback. Never {@code null}.
+     */
+    private Map<String, String> defaultProviders = new LinkedHashMap<>();
+
+    /**
+     * Per-country tax profiles (CAP:550 S32a), keyed by ISO 3166-1 alpha-2 country code.
+     * <p>
+     * Every value is a placeholder held for expert advice (spec AW48, OI-4): the tax types, their
+     * regime grouping and recoverability, and the rates. Adding a country is configuration only.
+     * Validated at startup by {@code TaxCountryProfiles}. Never {@code null}.
+     */
+    private Map<String, CountryProfile> countries = new LinkedHashMap<>();
+
+    /**
+     * One country's tax profile (CAP:550 S32a).
+     */
+    @Data
+    public static class CountryProfile {
+        /** ISO 4217 currency of the country's tax amounts; its exponent sets the rounding scale. */
+        private String currency;
+
+        /**
+         * Declared tax types, each with an explicit {@code code} (1-32 upper-case letters, digits or
+         * underscores). A list, not a map: map keys lose their underscores under relaxed binding. The
+         * vocabulary is configuration only. Never {@code null}.
+         */
+        private List<TaxTypeProfile> taxTypes = new ArrayList<>();
+
+        /**
+         * Registration and recovery regimes, each with an explicit {@code code}. Several tax types may
+         * share one regime. Never {@code null}.
+         */
+        private List<RegimeProfile> regimes = new ArrayList<>();
+
+        /** Effective-dated rate rows. None ship; tests and dev use fixtures. Never {@code null}. */
+        private List<RateRow> rates = new ArrayList<>();
+    }
+
+    /**
+     * A declared tax type of one country.
+     */
+    @Data
+    public static class TaxTypeProfile {
+        /** The tax-type code (1-32 upper-case letters, digits or underscores). */
+        private String code;
+
+        /** The regime this tax type is registered and recovered under; blank for none. */
+        private String regime;
+
+        /** The {@code TaxJurisdictionType} code the type is levied at (e.g. a country or a region). */
+        private String jurisdictionType;
+
+        /** Placeholder recoverability; required for every declared tax type. */
+        private Boolean inputTaxRecoverable;
+    }
+
+    /**
+     * A registration and recovery regime of one country.
+     */
+    @Data
+    public static class RegimeProfile {
+        /** The regime code. */
+        private String code;
+
+        /** Region codes the regime covers; empty means the whole country. Never {@code null}. */
+        private List<String> regions = new ArrayList<>();
+    }
+
+    /**
+     * An effective-dated rate row: one tax type in one region.
+     */
+    @Data
+    public static class RateRow {
+        /** Region (subdivision) code, 1–3 letters or digits. */
+        private String regionCode;
+
+        /** A tax type the country declares. */
+        private String taxType;
+
+        /** The rate as a decimal fraction in {@code [0, 1)}. */
+        private BigDecimal rate;
+
+        /** Inclusive first date the row is in effect. */
+        private LocalDate effectiveFrom;
+
+        /** Inclusive last date the row is in effect; {@code null} for open-ended. */
+        private LocalDate effectiveTo;
+    }
 
     @Data
     public static class TestMode {

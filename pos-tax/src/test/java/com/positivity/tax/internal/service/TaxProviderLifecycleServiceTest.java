@@ -22,10 +22,13 @@ import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.PlatformTransactionManager;
 
@@ -54,6 +57,7 @@ import org.springframework.transaction.PlatformTransactionManager;
         })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
+@ExtendWith(OutputCaptureExtension.class)
 class TaxProviderLifecycleServiceTest {
 
     @Autowired
@@ -65,7 +69,10 @@ class TaxProviderLifecycleServiceTest {
     @Autowired
     private PlatformTransactionManager transactionManager;
 
+    private static final String PLUGIN = "ZZ_SELF";
+
     private ControllableProvider provider;
+    private SelfHostedTaxPlugin plugin;
     private TaxProviderLifecycleService service;
 
     @BeforeEach
@@ -74,6 +81,22 @@ class TaxProviderLifecycleServiceTest {
         provider = new ControllableProvider();
         TaxProviderSelector selector = mock(TaxProviderSelector.class);
         when(selector.select()).thenReturn(provider);
+        // CAP:550 S32a: a per-country plug-in from a made-up fixture country (not tax law).
+        plugin = new SelfHostedTaxPlugin(
+                new TaxCountryProfiles(TaxProfileFixtures.bind(TaxProfileFixtures.MADE_UP_COUNTRY))
+                        .profile("ZZ")
+                        .orElseThrow(),
+                Clock.systemUTC());
+        when(selector.isSelfHosted(org.mockito.ArgumentMatchers.anyString()))
+                .thenAnswer(inv -> inv.<String>getArgument(0).endsWith("_SELF"));
+        when(selector.lifecycleProviderFor(org.mockito.ArgumentMatchers.anyString()))
+                .thenAnswer(inv -> {
+                    String name = inv.getArgument(0);
+                    if (PLUGIN.equals(name)) {
+                        return plugin;
+                    }
+                    return name.endsWith("_SELF") ? new RetiredSelfHostedPlugin(name) : provider;
+                });
         ObjectProvider<MeterRegistry> meterRegistry = mock(ObjectProvider.class);
         when(meterRegistry.getIfAvailable()).thenReturn(null);
         TaxProviderTransactionResolver resolver =
@@ -158,9 +181,171 @@ class TaxProviderLifecycleServiceTest {
         assertThat(service.pendingCommitBacklog()).isEqualTo(0.0);
     }
 
+    @Test
+    @DisplayName("S32a: a plug-in-priced document is logged ESTIMATED with the plug-in, and the re-commit job skips it")
+    void pluginPricingIsLoggedEstimated() {
+        UUID ref = UUID.randomUUID();
+
+        service.recordPricing(ref, "INVOICE", PLUGIN);
+
+        TaxProviderTransaction row = repository.findByReferenceId(ref).orElseThrow();
+        assertThat(row.getStatus()).isEqualTo(TaxProviderTransactionStatus.ESTIMATED);
+        assertThat(row.getProvider()).isEqualTo(PLUGIN);
+        assertThat(service.pendingCommitBacklog()).isZero();
+        service.recommitPending();
+        assertThat(repository.findByReferenceId(ref).orElseThrow().getStatus())
+                .isEqualTo(TaxProviderTransactionStatus.ESTIMATED);
+    }
+
+    @Test
+    @DisplayName("S32a AC 4: commit of a plug-in-priced document is a logged no-op naming the plug-in")
+    void pluginCommitIsLoggedNoOp() {
+        UUID ref = UUID.randomUUID();
+        service.recordPricing(ref, "INVOICE", PLUGIN);
+        // The switch's provider would fail: a COMMITTED result proves the plug-in answered.
+        provider.failCommit = true;
+
+        TaxProviderTransactionResult result = service.commit(ref, "INVOICE");
+
+        assertThat(result.status()).isEqualTo(TaxProviderTransactionStatus.COMMITTED);
+        TaxProviderTransaction row = repository.findByReferenceId(ref).orElseThrow();
+        assertThat(row.getStatus()).isEqualTo(TaxProviderTransactionStatus.COMMITTED);
+        assertThat(row.getProvider()).isEqualTo(PLUGIN);
+        assertThat(row.getExternalTransactionId()).isNull();
+    }
+
+    @Test
+    @DisplayName("S32a AC 4: void of a plug-in-priced document is a logged no-op naming the plug-in")
+    void pluginVoidIsLoggedNoOp() {
+        UUID ref = UUID.randomUUID();
+        service.recordPricing(ref, "INVOICE", PLUGIN);
+        service.commit(ref, "INVOICE");
+
+        TaxProviderTransactionResult result = service.voidTransaction(ref);
+
+        assertThat(result.status()).isEqualTo(TaxProviderTransactionStatus.VOIDED);
+        TaxProviderTransaction row = repository.findByReferenceId(ref).orElseThrow();
+        assertThat(row.getStatus()).isEqualTo(TaxProviderTransactionStatus.VOIDED);
+        assertThat(row.getProvider()).isEqualTo(PLUGIN);
+        assertThat(row.getExternalTransactionId()).isNull();
+    }
+
+    @Test
+    @DisplayName("S32a: a document priced by the switch with no row records nothing (today's behaviour)")
+    void switchPricingRecordsNothing() {
+        UUID ref = UUID.randomUUID();
+
+        service.recordPricing(ref, "INVOICE", "FAKE");
+
+        assertThat(repository.findByReferenceId(ref)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("S32a: re-pricing an uncommitted plug-in document through the switch re-points the log")
+    void repricingThroughTheSwitchRepointsTheLog() {
+        UUID ref = UUID.randomUUID();
+        service.recordPricing(ref, "INVOICE", PLUGIN);
+
+        service.recordPricing(ref, "INVOICE", "FAKE");
+        service.commit(ref, "INVOICE");
+
+        TaxProviderTransaction row = repository.findByReferenceId(ref).orElseThrow();
+        assertThat(row.getProvider()).isEqualTo("FAKE");
+        assertThat(row.getExternalTransactionId()).isEqualTo("ext-123");
+    }
+
+    @Test
+    @DisplayName("S32a: a PENDING_COMMIT document of the switch is never re-pointed to a plug-in")
+    void pendingCommitIsNeverRepointed() {
+        UUID ref = UUID.randomUUID();
+        provider.failCommit = true;
+        service.commit(ref, "INVOICE");
+        assertThat(repository.findByReferenceId(ref).orElseThrow().getStatus())
+                .isEqualTo(TaxProviderTransactionStatus.PENDING_COMMIT);
+
+        // A committable calculation for a plug-in country reusing this referenceId.
+        service.recordPricing(ref, "INVOICE", PLUGIN);
+
+        TaxProviderTransaction row = repository.findByReferenceId(ref).orElseThrow();
+        assertThat(row.getProvider()).isEqualTo("FAKE");
+        // The re-commit job still reaches the real provider, not the no-op plug-in.
+        provider.failCommit = false;
+        service.recommitPending();
+        TaxProviderTransaction after = repository.findByReferenceId(ref).orElseThrow();
+        assertThat(after.getStatus()).isEqualTo(TaxProviderTransactionStatus.COMMITTED);
+        assertThat(after.getExternalTransactionId()).isEqualTo("ext-123");
+    }
+
+    @Test
+    @DisplayName("S32a: a FAILED void of the switch is never re-pointed to a plug-in")
+    void failedVoidIsNeverRepointed() {
+        UUID ref = UUID.randomUUID();
+        service.commit(ref, "INVOICE");
+        provider.failVoid = true;
+        service.voidTransaction(ref);
+        assertThat(repository.findByReferenceId(ref).orElseThrow().getStatus())
+                .isEqualTo(TaxProviderTransactionStatus.FAILED);
+
+        service.recordPricing(ref, "INVOICE", PLUGIN);
+
+        assertThat(repository.findByReferenceId(ref).orElseThrow().getProvider())
+                .isEqualTo("FAKE");
+    }
+
+    @Test
+    @DisplayName("S32a: a VOIDED document (no live provider document) re-priced by a plug-in is re-pointed")
+    void voidedDocumentIsRepointed(CapturedOutput output) {
+        UUID ref = UUID.randomUUID();
+        service.commit(ref, "INVOICE");
+        service.voidTransaction(ref);
+        assertThat(repository.findByReferenceId(ref).orElseThrow().getExternalTransactionId())
+                .isEqualTo("ext-123");
+
+        service.recordPricing(ref, "INVOICE", PLUGIN);
+
+        TaxProviderTransaction row = repository.findByReferenceId(ref).orElseThrow();
+        assertThat(row.getProvider()).isEqualTo(PLUGIN);
+        // The previous provider's document id means nothing to the plug-in: cleared.
+        assertThat(row.getExternalTransactionId()).isNull();
+        // The re-point is recorded in a structured INFO line (durable history is #2629's).
+        assertThat(output.getOut())
+                .contains("Tax document re-pointed: referenceId=" + ref)
+                .contains("fromProvider=FAKE toProvider=" + PLUGIN + " status=VOIDED")
+                .contains("priorExternalTransactionId=ext-123");
+    }
+
+    @Test
+    @DisplayName("S32a: a committed document is never re-pointed")
+    void committedDocumentIsNeverRepointed() {
+        UUID ref = UUID.randomUUID();
+        service.commit(ref, "INVOICE");
+
+        service.recordPricing(ref, "INVOICE", PLUGIN);
+
+        assertThat(repository.findByReferenceId(ref).orElseThrow().getProvider())
+                .isEqualTo("FAKE");
+    }
+
+    @Test
+    @DisplayName(
+            "S32a: a document priced by a plug-in whose profile was since removed still commits there, never via the switch")
+    void retiredPluginStillOwnsItsDocuments() {
+        UUID ref = UUID.randomUUID();
+        service.recordPricing(ref, "INVOICE", "QQ_SELF");
+        provider.failCommit = true;
+
+        TaxProviderTransactionResult result = service.commit(ref, "INVOICE");
+
+        assertThat(result.status()).isEqualTo(TaxProviderTransactionStatus.COMMITTED);
+        TaxProviderTransaction row = repository.findByReferenceId(ref).orElseThrow();
+        assertThat(row.getProvider()).isEqualTo("QQ_SELF");
+        assertThat(row.getExternalTransactionId()).isNull();
+    }
+
     /** Test double whose commit can be toggled to fail. */
     private static final class ControllableProvider implements TaxProviderClient {
         private boolean failCommit;
+        private boolean failVoid;
 
         @Override
         @NonNull
@@ -194,6 +379,9 @@ class TaxProviderLifecycleServiceTest {
         @Override
         @NonNull
         public TaxProviderTransactionResult voidTransaction(@NonNull UUID referenceId) {
+            if (failVoid) {
+                throw new TaxCalculationException("provider down");
+            }
             return new TaxProviderTransactionResult(referenceId, TaxProviderTransactionStatus.VOIDED, "ext-123", "ok");
         }
     }

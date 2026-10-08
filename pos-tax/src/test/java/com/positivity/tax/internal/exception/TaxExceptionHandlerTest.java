@@ -69,6 +69,42 @@ class TaxExceptionHandlerTest {
     }
 
     @Nested
+    @DisplayName("handleJurisdictionNotConfigured (CAP:550 S32a)")
+    class HandleJurisdictionNotConfigured {
+
+        @Test
+        @DisplayName("returns 422 TAX_JURISDICTION_NOT_CONFIGURED with the exception message")
+        void returns422WithMessage() {
+            TaxJurisdictionNotConfiguredException ex =
+                    new TaxJurisdictionNotConfiguredException("No tax rate is configured for country ZZ");
+
+            ResponseEntity<ApiError> response = sut.handleJurisdictionNotConfigured(ex, requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("TAX_JURISDICTION_NOT_CONFIGURED");
+            assertThat(response.getBody().message()).isEqualTo("No tax rate is configured for country ZZ");
+        }
+    }
+
+    @Nested
+    @DisplayName("handleCurrencyNotSupported (CAP:550 S32a, ADR-0067 PC-9)")
+    class HandleCurrencyNotSupported {
+
+        @Test
+        @DisplayName("returns 422 CURRENCY_NOT_SUPPORTED with the exception message")
+        void returns422WithMessage() {
+            ResponseEntity<ApiError> response = sut.handleCurrencyNotSupported(
+                    new TaxCurrencyNotSupportedException("Tax for country ZZ is calculated in JPY"),
+                    requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("CURRENCY_NOT_SUPPORTED");
+        }
+    }
+
+    @Nested
     @DisplayName("handleConstraintViolation")
     class HandleConstraintViolation {
 
@@ -110,6 +146,12 @@ class TaxExceptionHandlerTest {
                     Named.of("handleRateLookupUnsupported", (HandlerInvocation)
                             request -> handler.handleRateLookupUnsupported(
                                     new TaxRateLookupUnsupportedException("Rate lookup unsupported"), request)),
+                    Named.of("handleCurrencyNotSupported", (HandlerInvocation)
+                            request -> handler.handleCurrencyNotSupported(
+                                    new TaxCurrencyNotSupportedException("currency mismatch"), request)),
+                    Named.of("handleJurisdictionNotConfigured", (HandlerInvocation)
+                            request -> handler.handleJurisdictionNotConfigured(
+                                    new TaxJurisdictionNotConfiguredException("No tax rate is configured"), request)),
                     Named.of("handleConstraintViolation", (HandlerInvocation)
                             request -> handler.handleConstraintViolation(
                                     new ConstraintViolationException("bad countryCode", Collections.emptySet()),

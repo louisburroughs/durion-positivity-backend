@@ -7,6 +7,7 @@ import com.positivity.invoice.internal.repository.InvoiceTaxSummaryRepository;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
 import com.positivity.tax.common.dto.TaxCalculationResponse.JurisdictionTax;
 import com.positivity.tax.common.dto.TaxCalculationResponse.LineItemTax;
+import com.positivity.tax.common.validation.TaxTypeCodes;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
@@ -108,6 +109,9 @@ public class InvoiceTaxBreakdownWriter {
         String reason = j.getExemptionReasonCode() == null
                 ? null
                 : j.getExemptionReasonCode().name();
+        // CAP:550 S32a: copy the tax-type code exactly as pos-tax sent it, never infer one. An absent
+        // or malformed value is stored null and the row is still written.
+        String taxType = TaxTypeCodes.wellFormedOrNull(j.getTaxType());
         BigDecimal amount = scale(j.getAmount());
         lineRows.add(InvoiceLineTax.builder()
                 .invoiceId(invoiceId)
@@ -119,14 +123,17 @@ public class InvoiceTaxBreakdownWriter {
                 .taxAmount(amount)
                 .exempt(j.isExempt())
                 .exemptionReasonCode(reason)
+                .taxType(taxType)
                 .build());
 
+        // Rollup key includes the tax type so two types sharing a jurisdiction are never merged.
         InvoiceTaxSummary summary = summaries.computeIfAbsent(
-                type + "|" + j.getCode(),
+                type + "|" + j.getCode() + "|" + taxType,
                 k -> InvoiceTaxSummary.builder()
                         .invoiceId(invoiceId)
                         .jurisdictionType(type)
                         .jurisdictionCode(j.getCode())
+                        .taxType(taxType)
                         .taxableBase(BigDecimal.ZERO)
                         .taxAmount(BigDecimal.ZERO)
                         .build());

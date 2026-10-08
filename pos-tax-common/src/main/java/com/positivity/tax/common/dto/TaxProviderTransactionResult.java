@@ -24,7 +24,11 @@ public record TaxProviderTransactionResult(
                 requiredMode = Schema.RequiredMode.REQUIRED)
         UUID referenceId,
 
-        @Schema(description = "Recorded lifecycle status", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(
+                description = "Recorded lifecycle status. Commit returns COMMITTED or PENDING_COMMIT and void returns"
+                        + " VOIDED or FAILED; ESTIMATED is a log-only status (a plug-in priced the document) and is"
+                        + " never returned",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         TaxProviderTransactionStatus status,
 
         @Schema(

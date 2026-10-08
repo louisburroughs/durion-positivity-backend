@@ -8,6 +8,7 @@ import com.positivity.tax.common.dto.TaxCalculationRequest;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
 import com.positivity.tax.common.dto.TaxProviderTransactionResult;
 import com.positivity.tax.common.dto.TaxRateLookupResponse;
+import com.positivity.tax.common.dto.TaxTypesResponse;
 import com.positivity.tax.common.validation.IsoCountryCode;
 import com.positivity.tax.internal.security.TaxPermissions;
 import com.positivity.tax.internal.service.TaxCalculationService;
@@ -22,6 +23,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import java.time.LocalDate;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
@@ -76,13 +78,23 @@ public class TaxController {
                     source document id so the result can later be committed.
                     Emits a TAX_CALCULATE event and, in production mode, calls the configured external tax provider;
                     no provider document is created until commitTaxDocument is called.
-                    Returns 400 when line items or the destination address are missing or malformed, and 500 when the
-                    provider is unreachable in production mode.
+                    A destination whose country the per-country default routes to a plug-in is priced by that plug-in
+                    in every provider mode, one typed jurisdiction row per tax type, and taxType and
+                    inputTaxRecoverable are null on every other country's rows.
+                    Returns 400 when line items or the destination address are missing or malformed, 422
+                    TAX_JURISDICTION_NOT_CONFIGURED when such a country has no rate row for the region on the
+                    transaction date or CURRENCY_NOT_SUPPORTED when currencyCode is not that country's configured
+                    currency, and 500 when the provider is unreachable in production mode.
                     """)
     @ApiResponse(responseCode = "200", description = "Tax calculated successfully")
     @ApiResponse(
             responseCode = "400",
             description = "Invalid tax calculation request",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "No rate row is configured for the destination region (TAX_JURISDICTION_NOT_CONFIGURED), or"
+                    + " currencyCode is not the destination country's configured currency (CURRENCY_NOT_SUPPORTED)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "500",
@@ -256,14 +268,24 @@ public class TaxController {
                     No events are emitted and no state changes; components are per-jurisdiction rates as decimal
                     fractions (not a blended estimate), and SPECIAL/DISTRICT jurisdiction types appear only when a
                     configured rule produces them — today's test-mode rules emit STATE/COUNTY/CITY.
-                    Returns 400 when countryCode or postalCode are missing or malformed, and 501 when the configured
-                    tax provider does not support rate-only lookup (every production provider today; AvaTax
-                    rate-by-address is a documented follow-up, not yet implemented).
+                    For a country whose per-country default routes it to a plug-in, the plug-in answers in every
+                    provider mode with one typed component per tax type in effect (taxType, inputTaxRecoverable,
+                    source STUB), and taxType and inputTaxRecoverable are null for every other country.
+                    Returns 400 when countryCode or postalCode are missing or malformed, 422
+                    TAX_JURISDICTION_NOT_CONFIGURED when such a country has no rate row for the region on asOf, and
+                    501 when the configured tax provider does not support rate-only lookup (every production provider
+                    today; AvaTax rate-by-address is a documented follow-up, not yet implemented).
                     """)
     @ApiResponse(responseCode = "200", description = "Rates resolved successfully")
     @ApiResponse(
             responseCode = "400",
             description = "Invalid address parameters",
+            content =
+                    @io.swagger.v3.oas.annotations.media.Content(
+                            schema = @Schema(implementation = com.positivity.shared.error.ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "No rate row is configured for the region on the date (TAX_JURISDICTION_NOT_CONFIGURED)",
             content =
                     @io.swagger.v3.oas.annotations.media.Content(
                             schema = @Schema(implementation = com.positivity.shared.error.ApiError.class)))
@@ -284,6 +306,45 @@ public class TaxController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOf) {
         log.info("Received tax rate lookup request for postal code(mask): {}", maskForLog(postalCode));
         return ResponseEntity.ok(taxRateLookupService.lookupRates(countryCode, regionCode, city, postalCode, asOf));
+    }
+
+    /**
+     * The tax types, regimes and currency configured for a country (CAP:550 S32a).
+     *
+     * @param countryCode two upper-case letters
+     * @return the configured profile projection
+     */
+    @GetMapping("/tax-types")
+    @PreAuthorize("hasAuthority('" + TaxPermissions.RATES_VIEW + "')")
+    @Operation(operationId = "getTaxTypes", summary = "List a country's configured tax types", description = """
+                    Returns the tax types a country's configured profile declares, with the regime each is registered
+                    and recovered under, the jurisdiction level it is levied at, its placeholder recoverability, the
+                    country's regimes and its currency.
+                    Use this tool when a service must know a country's tax types without naming any of them in its own
+                    code; do not use it to price an address, which is getTaxRates or calculateTax instead.
+                    Preconditions: this endpoint is internal-only (ADR-0021/ADR-0014), reached by direct in-cluster
+                    calls from pos-order, pos-invoice and pos-accounting with the service authority, never through
+                    pos-api-gateway.
+                    Required inputs: countryCode, two upper-case letters; there is no request body.
+                    No events are emitted and no state changes; every value is configuration held for expert advice,
+                    so source is always STUB.
+                    Returns 200 with empty lists and a null currency for a country without a profile, and 400
+                    VALIDATION_ERROR when countryCode is missing or malformed.
+                    """)
+    @ApiResponse(responseCode = "200", description = "Configured tax types resolved (empty for a country without one)")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Missing or malformed countryCode",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"tax:rates:view"})
+    public ResponseEntity<TaxTypesResponse> getTaxTypes(
+            @RequestParam
+                    @NotBlank
+                    @Pattern(regexp = "^[A-Z]{2}$", message = "countryCode must be two upper-case letters")
+                    String countryCode) {
+        return ResponseEntity.ok(taxRateLookupService.lookupTaxTypes(countryCode));
     }
 
     /**

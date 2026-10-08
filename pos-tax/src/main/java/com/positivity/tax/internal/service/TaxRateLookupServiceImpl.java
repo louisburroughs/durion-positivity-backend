@@ -2,12 +2,14 @@ package com.positivity.tax.internal.service;
 
 import com.positivity.tax.common.dto.TaxRateComponent;
 import com.positivity.tax.common.dto.TaxRateLookupResponse;
+import com.positivity.tax.common.dto.TaxTypesResponse;
 import com.positivity.tax.internal.config.TaxProperties;
 import com.positivity.tax.internal.exception.TaxRateLookupUnsupportedException;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -30,16 +32,19 @@ public class TaxRateLookupServiceImpl implements TaxRateLookupService {
     private final TaxProperties properties;
     private final TaxProviderSelector providerSelector;
     private final TestModeRateResolver rateResolver;
+    private final TaxCountryProfiles profiles;
     private final Clock clock;
 
     public TaxRateLookupServiceImpl(
             TaxProperties properties,
             TaxProviderSelector providerSelector,
             TestModeRateResolver rateResolver,
+            TaxCountryProfiles profiles,
             Clock clock) {
         this.properties = properties;
         this.providerSelector = providerSelector;
         this.rateResolver = rateResolver;
+        this.profiles = profiles;
         this.clock = clock;
     }
 
@@ -51,6 +56,13 @@ public class TaxRateLookupServiceImpl implements TaxRateLookupService {
             @Nullable String city,
             @NonNull String postalCode,
             @Nullable LocalDate asOf) {
+        LocalDate effectiveAsOf = asOf != null ? asOf : LocalDate.now(clock);
+        Optional<SelfHostedTaxPlugin> plugin = providerSelector.pluginFor(countryCode);
+        if (plugin.isPresent()) {
+            // The per-country default plug-in answers in every provider mode (CAP:550 S32a).
+            return plugin.get().lookupRates(regionCode, city, postalCode, effectiveAsOf);
+        }
+
         TaxProviderClient provider = providerSelector.select();
         if (!properties.getTestMode().isEnabled()) {
             throw new TaxRateLookupUnsupportedException(
@@ -59,7 +71,6 @@ public class TaxRateLookupServiceImpl implements TaxRateLookupService {
                             + "); it only supports full transaction tax calculation today.");
         }
 
-        LocalDate effectiveAsOf = asOf != null ? asOf : LocalDate.now(clock);
         log.info("Resolving jurisdiction rates in TEST MODE for postal code(mask): {}", maskForLog(postalCode));
 
         TestModeRateResolver.ResolvedRates resolvedRates =
@@ -68,7 +79,7 @@ public class TaxRateLookupServiceImpl implements TaxRateLookupService {
                 rateResolver.determineJurisdictionSpecs(resolvedRates.rates());
 
         List<TaxRateComponent> components = specs.stream()
-                .map(spec -> new TaxRateComponent(spec.type(), spec.rate()))
+                .map(spec -> new TaxRateComponent(spec.type(), spec.rate(), null, null))
                 .toList();
         BigDecimal combinedRate =
                 components.stream().map(TaxRateComponent::rate).reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -82,6 +93,20 @@ public class TaxRateLookupServiceImpl implements TaxRateLookupService {
                 components,
                 combinedRate,
                 provider.providerName());
+    }
+
+    @Override
+    @NonNull
+    public TaxTypesResponse lookupTaxTypes(@NonNull String countryCode) {
+        return profiles.profile(countryCode)
+                .map(profile -> new TaxTypesResponse(
+                        countryCode,
+                        profile.currency(),
+                        profile.taxTypes(),
+                        profile.regimes(),
+                        SelfHostedTaxPlugin.SOURCE))
+                .orElseGet(() ->
+                        new TaxTypesResponse(countryCode, null, List.of(), List.of(), SelfHostedTaxPlugin.SOURCE));
     }
 
     private static String maskForLog(String value) {

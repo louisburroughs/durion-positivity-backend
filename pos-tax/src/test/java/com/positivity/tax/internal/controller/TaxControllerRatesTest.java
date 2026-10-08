@@ -10,8 +10,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.tax.common.dto.TaxRateComponent;
 import com.positivity.tax.common.dto.TaxRateLookupResponse;
+import com.positivity.tax.common.dto.TaxTypesResponse;
 import com.positivity.tax.common.enums.TaxJurisdictionType;
 import com.positivity.tax.internal.config.SecurityConfig;
+import com.positivity.tax.internal.exception.TaxJurisdictionNotConfiguredException;
 import com.positivity.tax.internal.exception.TaxRateLookupUnsupportedException;
 import com.positivity.tax.internal.service.TaxCalculationService;
 import com.positivity.tax.internal.service.TaxProviderLifecycleService;
@@ -97,7 +99,7 @@ class TaxControllerRatesTest {
                 "San Francisco",
                 "94103",
                 LocalDate.parse("2026-08-27"),
-                List.of(new TaxRateComponent(TaxJurisdictionType.STATE, new BigDecimal("0.0725"))),
+                List.of(new TaxRateComponent(TaxJurisdictionType.STATE, new BigDecimal("0.0725"), null, null)),
                 new BigDecimal("0.0725"),
                 "TEST_MODE");
         when(taxRateLookupService.lookupRates(
@@ -180,5 +182,80 @@ class TaxControllerRatesTest {
     void getRates_returnsUnauthorized_whenNotAuthenticated() throws Exception {
         mockMvc.perform(get("/v1/tax/rates").param("countryCode", "US").param("postalCode", "94103"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void getRates_returns422_whenAProfiledCountryHasNoRowForTheRegion() throws Exception {
+        when(taxRateLookupService.lookupRates(any(), any(), any(), any(), any()))
+                .thenThrow(new TaxJurisdictionNotConfiguredException("No tax rate is configured"));
+
+        mockMvc.perform(authed(
+                        get("/v1/tax/rates")
+                                .param("countryCode", "CA")
+                                .param("postalCode", "A1A1A1")
+                                .param("regionCode", "AB"),
+                        "tax:rates:view"))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("TAX_JURISDICTION_NOT_CONFIGURED"));
+    }
+
+    @Test
+    void getRates_rendersTypedComponents() throws Exception {
+        TaxRateLookupResponse response = new TaxRateLookupResponse(
+                "CA",
+                "BC",
+                null,
+                "A1A1A1",
+                LocalDate.parse("2026-08-27"),
+                List.of(new TaxRateComponent(TaxJurisdictionType.PROVINCE, new BigDecimal("0.022"), "PST", false)),
+                new BigDecimal("0.022"),
+                "STUB");
+        when(taxRateLookupService.lookupRates(eq("CA"), eq("BC"), isNull(), eq("A1A1A1"), isNull()))
+                .thenReturn(response);
+
+        mockMvc.perform(authed(
+                        get("/v1/tax/rates")
+                                .param("countryCode", "CA")
+                                .param("postalCode", "A1A1A1")
+                                .param("regionCode", "BC"),
+                        "tax:rates:view"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.source").value("STUB"))
+                .andExpect(jsonPath("$.components[0].taxType").value("PST"))
+                .andExpect(jsonPath("$.components[0].inputTaxRecoverable").value(false));
+    }
+
+    @Test
+    void getTaxTypes_returnsTheConfiguredProfile() throws Exception {
+        when(taxRateLookupService.lookupTaxTypes("CA"))
+                .thenReturn(new TaxTypesResponse(
+                        "CA",
+                        "CAD",
+                        List.of(new TaxTypesResponse.TaxTypeEntry("GST", "R1", TaxJurisdictionType.COUNTRY, true)),
+                        List.of(new TaxTypesResponse.RegimeEntry("R1", List.of())),
+                        "STUB"));
+
+        mockMvc.perform(authed(get("/v1/tax/tax-types").param("countryCode", "CA"), "tax:rates:view"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currency").value("CAD"))
+                .andExpect(jsonPath("$.taxTypes[0].taxType").value("GST"))
+                .andExpect(jsonPath("$.taxTypes[0].regime").value("R1"))
+                .andExpect(jsonPath("$.taxTypes[0].jurisdictionType").value("COUNTRY"))
+                .andExpect(jsonPath("$.taxTypes[0].inputTaxRecoverable").value(true))
+                .andExpect(jsonPath("$.regimes[0].regime").value("R1"))
+                .andExpect(jsonPath("$.source").value("STUB"));
+    }
+
+    @Test
+    void getTaxTypes_rejectsAMalformedCountryCode() throws Exception {
+        mockMvc.perform(authed(get("/v1/tax/tax-types").param("countryCode", "C1"), "tax:rates:view"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void getTaxTypes_returnsForbidden_whenCallerLacksThePermission() throws Exception {
+        mockMvc.perform(authed(get("/v1/tax/tax-types").param("countryCode", "CA"), "tax:calculate"))
+                .andExpect(status().isForbidden());
     }
 }

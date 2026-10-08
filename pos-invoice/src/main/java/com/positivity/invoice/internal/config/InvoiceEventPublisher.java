@@ -115,7 +115,8 @@ public class InvoiceEventPublisher {
                         r.getTaxableBase(),
                         r.getTaxAmount(),
                         r.isExempt(),
-                        r.getExemptionReasonCode()))
+                        r.getExemptionReasonCode(),
+                        r.getTaxType()))
                 .toList();
     }
 

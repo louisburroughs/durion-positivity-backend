@@ -41,9 +41,19 @@ paths:
 
         no provider document is created until commitTaxDocument is called.
 
-        Returns 400 when line items or the destination address are missing or malformed, and 500 when the
+        A destination whose country the per-country default routes to a plug-in is priced by that plug-in
 
-        provider is unreachable in production mode.
+        in every provider mode, one typed jurisdiction row per tax type, and taxType and
+
+        inputTaxRecoverable are null on every other country''s rows.
+
+        Returns 400 when line items or the destination address are missing or malformed, 422
+
+        TAX_JURISDICTION_NOT_CONFIGURED when such a country has no rate row for the region on the
+
+        transaction date or CURRENCY_NOT_SUPPORTED when currencyCode is not that country''s configured
+
+        currency, and 500 when the provider is unreachable in production mode.
 
         '
       operationId: calculateTax
@@ -87,6 +97,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Invalid tax calculation request
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No rate row is configured for the destination region (TAX_JURISDICTION_NOT_CONFIGURED), or currencyCode is not the destination country's configured currency (CURRENCY_NOT_SUPPORTED)
         '500':
           content:
             application/json:
@@ -396,11 +412,19 @@ paths:
 
         configured rule produces them — today''s test-mode rules emit STATE/COUNTY/CITY.
 
-        Returns 400 when countryCode or postalCode are missing or malformed, and 501 when the configured
+        For a country whose per-country default routes it to a plug-in, the plug-in answers in every
 
-        tax provider does not support rate-only lookup (every production provider today; AvaTax
+        provider mode with one typed component per tax type in effect (taxType, inputTaxRecoverable,
 
-        rate-by-address is a documented follow-up, not yet implemented).
+        source STUB), and taxType and inputTaxRecoverable are null for every other country.
+
+        Returns 400 when countryCode or postalCode are missing or malformed, 422
+
+        TAX_JURISDICTION_NOT_CONFIGURED when such a country has no rate row for the region on asOf, and
+
+        501 when the configured tax provider does not support rate-only lookup (every production provider
+
+        today; AvaTax rate-by-address is a documented follow-up, not yet implemented).
 
         '
       operationId: getTaxRates
@@ -446,6 +470,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Invalid address parameters
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No rate row is configured for the region on the date (TAX_JURISDICTION_NOT_CONFIGURED)
         '501':
           content:
             application/json:
@@ -456,6 +486,65 @@ paths:
       - bearerAuth:
         - tax:rates:view
       summary: Look up jurisdiction tax rates
+      tags:
+      - Tax
+      x-required-permissions:
+      - tax:rates:view
+  /v1/tax/tax-types:
+    get:
+      description: 'Returns the tax types a country''s configured profile declares, with the regime each is registered
+
+        and recovered under, the jurisdiction level it is levied at, its placeholder recoverability, the
+
+        country''s regimes and its currency.
+
+        Use this tool when a service must know a country''s tax types without naming any of them in its own
+
+        code; do not use it to price an address, which is getTaxRates or calculateTax instead.
+
+        Preconditions: this endpoint is internal-only (ADR-0021/ADR-0014), reached by direct in-cluster
+
+        calls from pos-order, pos-invoice and pos-accounting with the service authority, never through
+
+        pos-api-gateway.
+
+        Required inputs: countryCode, two upper-case letters; there is no request body.
+
+        No events are emitted and no state changes; every value is configuration held for expert advice,
+
+        so source is always STUB.
+
+        Returns 200 with empty lists and a null currency for a country without a profile, and 400
+
+        VALIDATION_ERROR when countryCode is missing or malformed.
+
+        '
+      operationId: getTaxTypes
+      parameters:
+      - in: query
+        name: countryCode
+        required: true
+        schema:
+          minLength: 1
+          pattern: ^[A-Z]{2}$
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxTypesResponse'
+          description: Configured tax types resolved (empty for a country without one)
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Missing or malformed countryCode
+      security:
+      - bearerAuth:
+        - tax:rates:view
+      summary: List a country's configured tax types
       tags:
       - Tax
       x-required-permissions:
@@ -824,6 +913,12 @@ components:
           - OTHER
           example: RESALE
           type: string
+        inputTaxRecoverable:
+          description: Configured placeholder recoverability of this row's tax type (held for expert advice); null for a country without a tax-type profile
+          example: true
+          type:
+          - boolean
+          - 'null'
         jurisdictionType:
           description: Jurisdiction type (e.g. STATE, COUNTY, CITY, DISTRICT)
           enum:
@@ -841,6 +936,13 @@ components:
           example: 0.0725
           minimum: 0
           type: number
+        taxType:
+          description: Tax-type code of this row as the country profile configures it (1-32 upper-case letters, digits or underscores); null for a country without a tax-type profile
+          example: ZZ_LEVY
+          pattern: ^[A-Z0-9_]{1,32}$
+          type:
+          - string
+          - 'null'
       required:
       - amount
       - code
@@ -1273,12 +1375,13 @@ components:
           format: uuid
           type: string
         status:
-          description: Recorded lifecycle status
+          description: Recorded lifecycle status. Commit returns COMMITTED or PENDING_COMMIT and void returns VOIDED or FAILED; ESTIMATED is a log-only status (a plug-in priced the document) and is never returned
           enum:
           - PENDING_COMMIT
           - COMMITTED
           - VOIDED
           - FAILED
+          - ESTIMATED
           type: string
       required:
       - referenceId
@@ -1287,6 +1390,12 @@ components:
     TaxRateComponent:
       description: A single per-jurisdiction tax rate, expressed as a decimal fraction
       properties:
+        inputTaxRecoverable:
+          description: Configured placeholder recoverability of this tax type (held for expert advice); null for a country without a tax-type profile
+          example: true
+          type:
+          - boolean
+          - 'null'
         jurisdictionType:
           description: Jurisdiction level the rate applies at
           enum:
@@ -1302,6 +1411,13 @@ components:
           description: Tax rate as a decimal fraction (e.g. 0.0725 for 7.25%), not a percentage
           example: 0.0725
           type: number
+        taxType:
+          description: Tax-type code of this component as the country profile configures it (1-32 upper-case letters, digits or underscores); null for a country without a tax-type profile
+          example: ZZ_LEVY
+          pattern: ^[A-Z0-9_]{1,32}$
+          type:
+          - string
+          - 'null'
       required:
       - jurisdictionType
       - rate
@@ -1350,6 +1466,90 @@ components:
       - countryCode
       - postalCode
       - source
+      type: object
+    TaxRegimeEntry:
+      description: One registration and recovery regime a country declares
+      properties:
+        regime:
+          description: Regime name
+          example: REGIME_1
+          type: string
+        regions:
+          description: Region codes the regime covers; an empty list means the whole country
+          items:
+            type: string
+          type: array
+      required:
+      - regime
+      - regions
+      type: object
+    TaxTypeEntry:
+      description: One tax type a country declares, with its regime and level
+      properties:
+        inputTaxRecoverable:
+          description: Placeholder recoverability of the tax type, held for expert advice
+          example: true
+          type: boolean
+        jurisdictionType:
+          description: Jurisdiction level the tax type is levied at
+          enum:
+          - COUNTRY
+          - STATE
+          - PROVINCE
+          - COUNTY
+          - CITY
+          - DISTRICT
+          - SPECIAL
+          example: COUNTRY
+          type: string
+        regime:
+          description: Regime the tax type is registered and recovered under; null when it has none
+          example: REGIME_1
+          type:
+          - string
+          - 'null'
+        taxType:
+          description: Tax-type code as the country profile declares it (1-32 upper-case letters, digits or underscores); the vocabulary is configuration only
+          example: ZZ_LEVY
+          pattern: ^[A-Z0-9_]{1,32}$
+          type: string
+      required:
+      - inputTaxRecoverable
+      - jurisdictionType
+      - taxType
+      type: object
+    TaxTypesResponse:
+      description: The tax types, regimes and currency configured for one country
+      properties:
+        countryCode:
+          description: Country code in ISO 3166-1 alpha-2 format, echoed from the request
+          example: US
+          type: string
+        currency:
+          description: ISO 4217 currency configured for the country; null when the country has no profile
+          example: USD
+          type:
+          - string
+          - 'null'
+        regimes:
+          description: Registration and recovery regimes the country declares; empty with no profile
+          items:
+            $ref: '#/components/schemas/TaxRegimeEntry'
+          type: array
+        source:
+          description: Origin of the answer; always STUB, because every value is a placeholder
+          example: STUB
+          type: string
+        taxTypes:
+          description: Tax types the country declares, in configured order; empty with no profile
+          items:
+            $ref: '#/components/schemas/TaxTypeEntry'
+          type: array
+      required:
+      - countryCode
+      - regimes
+      - source
+      - taxTypes
       type: object
   securitySchemes:
     bearerAuth:

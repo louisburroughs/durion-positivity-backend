@@ -32,7 +32,7 @@ public final class TaxPermissions {
     /** View current tax service mode (test or production). */
     public static final String MODE_VIEW = "tax:mode:view";
 
-    /** View jurisdiction tax rates via the rate lookup endpoint. */
+    /** View jurisdiction tax rates (rate lookup) and a country's configured tax types (tax-types read). */
     public static final String RATES_VIEW = "tax:rates:view";
 
     private TaxPermissions() {
