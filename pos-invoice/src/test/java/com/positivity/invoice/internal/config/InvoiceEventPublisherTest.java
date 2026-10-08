@@ -9,7 +9,9 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.invoice.InvoiceUpdatedV1;
+import com.positivity.domainevents.invoice.TaxBreakdownLine;
 import com.positivity.invoice.internal.entity.Invoice;
+import com.positivity.invoice.internal.entity.InvoiceLineTax;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
 import com.positivity.invoice.internal.repository.InvoiceLineTaxRepository;
 import jakarta.persistence.EntityManager;
@@ -113,5 +115,46 @@ class InvoiceEventPublisherTest {
 
         assertThat(payload.depositSourceType()).isNull();
         assertThat(payload.depositSourceId()).isNull();
+    }
+
+    private static InvoiceLineTax storedRow(String type, String code, String amount, String taxType) {
+        return InvoiceLineTax.builder()
+                .invoiceId(UUID.fromString("550e8400-e29b-41d4-a716-446655440000"))
+                .lineItemId("1")
+                .jurisdictionType(type)
+                .jurisdictionCode(code)
+                .rate(new BigDecimal("0.0110"))
+                .taxableBase(new BigDecimal("100.0000"))
+                .taxAmount(new BigDecimal(amount))
+                .taxType(taxType)
+                .build();
+    }
+
+    @Test
+    @DisplayName("S32a AC 6 [M]: each taxBreakdown row carries its stored taxType code")
+    void breakdownCarriesTheStoredTaxType() {
+        Invoice invoice = finalizedInvoice();
+        when(invoiceLineTaxRepository.findByInvoiceId(eq(invoice.getId())))
+                .thenReturn(List.of(
+                        storedRow("COUNTRY", "ZZ", "1.1000", "GST"), storedRow("PROVINCE", "Z1", "2.2000", "PST")));
+
+        InvoiceUpdatedV1 payload = capturePayload(invoice);
+
+        assertThat(payload.taxBreakdown()).extracting(TaxBreakdownLine::taxType).containsExactly("GST", "PST");
+    }
+
+    @Test
+    @DisplayName("S32a AC 6: a US invoice's rows carry a null taxType")
+    void usBreakdownCarriesNullTaxType() {
+        Invoice invoice = finalizedInvoice();
+        when(invoiceLineTaxRepository.findByInvoiceId(eq(invoice.getId())))
+                .thenReturn(List.of(storedRow("STATE", "STATE", "7.2500", null)));
+
+        InvoiceUpdatedV1 payload = capturePayload(invoice);
+
+        assertThat(payload.taxBreakdown()).singleElement().satisfies(row -> {
+            assertThat(row.taxType()).isNull();
+            assertThat(row.jurisdictionType()).isEqualTo("STATE");
+        });
     }
 }

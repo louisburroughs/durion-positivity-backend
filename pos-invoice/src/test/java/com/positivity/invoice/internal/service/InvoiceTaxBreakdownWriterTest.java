@@ -14,6 +14,7 @@ import com.positivity.tax.common.dto.TaxCalculationResponse.JurisdictionTax;
 import com.positivity.tax.common.dto.TaxCalculationResponse.LineItemTax;
 import com.positivity.tax.common.enums.ExemptionReasonCode;
 import com.positivity.tax.common.enums.TaxJurisdictionType;
+import com.positivity.tax.common.enums.TaxType;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -268,5 +269,134 @@ class InvoiceTaxBreakdownWriterTest {
         InvoiceLineTax row = lineRows.getValue().get(0);
         assertThat(row.getTaxableBase()).isEqualByComparingTo(BigDecimal.ZERO);
         assertThat(row.getTaxAmount()).isEqualByComparingTo(BigDecimal.ZERO);
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // CAP:550 S32a: the taxType hand-off (copy, never infer; rollup by tax type). Fixture
+    // values are made up, not tax law.
+    // ---------------------------------------------------------------------------------------
+
+    private static JurisdictionTax typed(
+            TaxJurisdictionType type, String code, String rate, String amount, TaxType taxType) {
+        return JurisdictionTax.builder()
+                .jurisdictionType(type)
+                .code(code)
+                .rate(new BigDecimal(rate))
+                .amount(new BigDecimal(amount))
+                .taxType(taxType)
+                .build();
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<InvoiceLineTax> savedLineRows() {
+        ArgumentCaptor<List<InvoiceLineTax>> rows = ArgumentCaptor.forClass(List.class);
+        verify(lineTaxRepository).saveAll(rows.capture());
+        return rows.getValue();
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<InvoiceTaxSummary> savedSummaryRows() {
+        ArgumentCaptor<List<InvoiceTaxSummary>> rows = ArgumentCaptor.forClass(List.class);
+        verify(taxSummaryRepository).saveAll(rows.capture());
+        return rows.getValue();
+    }
+
+    @Test
+    @DisplayName("S32a AC 7 [M]: each row persists its own taxType or null, untyped rows are kept, rows total the tax")
+    void copiesTaxTypeOntoEachRow() {
+        LineItemTax typedLine = LineItemTax.builder()
+                .lineItemId("1")
+                .subtotal(new BigDecimal("100.00"))
+                .taxAmount(new BigDecimal("3.30"))
+                .total(new BigDecimal("103.30"))
+                .jurisdictions(List.of(
+                        typed(TaxJurisdictionType.COUNTRY, "ZZ", "0.011", "1.10", TaxType.GST),
+                        typed(TaxJurisdictionType.PROVINCE, "Z1", "0.022", "2.20", TaxType.PST)))
+                .build();
+        LineItemTax usLine = LineItemTax.builder()
+                .lineItemId("2")
+                .subtotal(new BigDecimal("100.00"))
+                .taxAmount(new BigDecimal("7.25"))
+                .total(new BigDecimal("107.25"))
+                .jurisdictions(List.of(jurisdiction(TaxJurisdictionType.STATE, "0.0725", "7.25")))
+                .build();
+        LineItemTax untypedLine = LineItemTax.builder()
+                .lineItemId("3")
+                .subtotal(new BigDecimal("10.00"))
+                .taxAmount(new BigDecimal("0.44"))
+                .total(new BigDecimal("10.44"))
+                .jurisdictions(List.of(typed(TaxJurisdictionType.PROVINCE, "Z2", "0.044", "0.44", null)))
+                .build();
+
+        writer.replace(INVOICE_ID, response(List.of(typedLine, usLine, untypedLine)));
+
+        List<InvoiceLineTax> rows = savedLineRows();
+        assertThat(rows)
+                .extracting(InvoiceLineTax::getJurisdictionCode, InvoiceLineTax::getTaxType)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("ZZ", "GST"),
+                        org.assertj.core.groups.Tuple.tuple("Z1", "PST"),
+                        org.assertj.core.groups.Tuple.tuple("STATE", null),
+                        org.assertj.core.groups.Tuple.tuple("Z2", null));
+        // The untyped row is written, so the rows still total the invoice tax (3.30 + 7.25 + 0.44).
+        assertThat(rows.stream().map(InvoiceLineTax::getTaxAmount).reduce(BigDecimal.ZERO, BigDecimal::add))
+                .isEqualByComparingTo("10.99");
+        assertThat(savedSummaryRows())
+                .extracting(InvoiceTaxSummary::getTaxType)
+                .containsExactlyInAnyOrder("GST", "PST", null, null);
+    }
+
+    @Test
+    @DisplayName("S32a AC 7: two tax types sharing a jurisdiction type and code roll up into two summary rows")
+    void rollupKeepsTaxTypesApart() {
+        LineItemTax line = LineItemTax.builder()
+                .lineItemId("1")
+                .subtotal(new BigDecimal("100.00"))
+                .taxAmount(new BigDecimal("5.50"))
+                .total(new BigDecimal("105.50"))
+                .jurisdictions(List.of(
+                        typed(TaxJurisdictionType.PROVINCE, "Z1", "0.022", "2.20", TaxType.PST),
+                        typed(TaxJurisdictionType.PROVINCE, "Z1", "0.033", "3.30", TaxType.QST)))
+                .build();
+
+        writer.replace(INVOICE_ID, response(List.of(line, line)));
+
+        List<InvoiceTaxSummary> summaries = savedSummaryRows();
+        assertThat(summaries).hasSize(2);
+        assertThat(summaries)
+                .filteredOn(s -> "PST".equals(s.getTaxType()))
+                .singleElement()
+                .satisfies(s -> {
+                    assertThat(s.getJurisdictionCode()).isEqualTo("Z1");
+                    assertThat(s.getTaxAmount()).isEqualByComparingTo("4.40");
+                });
+        assertThat(summaries)
+                .filteredOn(s -> "QST".equals(s.getTaxType()))
+                .singleElement()
+                .satisfies(s -> assertThat(s.getTaxAmount()).isEqualByComparingTo("6.60"));
+    }
+
+    @Test
+    @DisplayName("S32a AC 8: an unknown taxType from pos-tax reads as null and the invoice still prices")
+    void unknownTaxTypeReadsAsNull() throws Exception {
+        String fromPosTax = """
+                {"subtotal":100.00,"totalTax":1.10,"total":101.10,"effectiveTaxRate":1.10,"jurisdictions":[],
+                 "testMode":true,"calculatedAt":"2026-07-20T00:00:00Z",
+                 "lineItemTaxes":[{"lineItemId":"1","subtotal":100.00,"taxAmount":1.10,"total":101.10,
+                   "jurisdictions":[{"jurisdictionType":"COUNTRY","code":"ZZ","rate":0.011,"amount":1.10,
+                                     "taxType":"A_TYPE_FROM_A_LATER_BUILD","inputTaxRecoverable":true}]}]}
+                """;
+
+        TaxCalculationResponse read = tools.jackson.databind.json.JsonMapper.builder()
+                .build()
+                .readValue(fromPosTax, TaxCalculationResponse.class);
+        writer.replace(INVOICE_ID, read);
+
+        assertThat(read.getLineItemTaxes().get(0).getJurisdictions().get(0).getTaxType())
+                .isNull();
+        assertThat(savedLineRows()).singleElement().satisfies(row -> {
+            assertThat(row.getTaxType()).isNull();
+            assertThat(row.getTaxAmount()).isEqualByComparingTo("1.10");
+        });
     }
 }

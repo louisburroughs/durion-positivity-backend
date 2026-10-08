@@ -17,6 +17,7 @@ import com.positivity.invoice.internal.entity.InvoiceAdjustment;
 import com.positivity.invoice.internal.entity.InvoiceItem;
 import com.positivity.invoice.internal.enums.InvoiceAdjustmentType;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
+import com.positivity.invoice.internal.exception.InvalidInvoiceStateException;
 import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
 import com.positivity.invoice.internal.exception.InvoiceRequestValidationException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
@@ -675,6 +676,25 @@ class InvoiceServiceImplTest {
 
         assertThatThrownBy(() -> invoiceService.applyAdjustment(invoiceId, request))
                 .isInstanceOf(RuntimeException.class);
+    }
+
+    @Test
+    @DisplayName(
+            "S32a AC 9: re-pricing a finalized invoice is refused by the existing guard, so tax_type cannot change")
+    void applyAdjustment_finalizedInvoice_neverRewritesTaxRows() {
+        draftInvoice.setStatus(InvoiceStatus.FINALIZED);
+        AdjustmentRequest request = new AdjustmentRequest();
+        request.setType(InvoiceAdjustmentType.DISCOUNT);
+        request.setAmount(BigDecimal.valueOf(10));
+        request.setReason("reason");
+        request.setAuthorizedBy("manager");
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
+
+        assertThatThrownBy(() -> invoiceService.applyAdjustment(invoiceId, request))
+                .isInstanceOf(InvalidInvoiceStateException.class);
+
+        verify(taxBreakdownWriter, never()).replace(any(), any());
+        verify(invoiceRepository, never()).save(any());
     }
 
     @Test

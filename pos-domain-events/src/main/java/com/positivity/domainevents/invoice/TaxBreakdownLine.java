@@ -11,7 +11,7 @@ import org.jspecify.annotations.Nullable;
  * <p>This is the event-contract projection of pos-invoice's {@code invoice_line_tax} rows, which
  * in turn mirror the per-line jurisdiction matrix produced by pos-tax
  * ({@code TaxCalculationResponse.LineItemTax.jurisdictions[]}). It is deliberately
- * dependency-light: {@code jurisdictionType} and {@code exemptionReasonCode} are plain
+ * dependency-light: {@code jurisdictionType}, {@code exemptionReasonCode} and {@code taxType} are plain
  * {@code String}s rather than pos-tax-common enums, so {@code pos-domain-events} need not depend
  * on {@code pos-tax-common}. Consumers that want the typed enums re-parse the codes.
  *
@@ -32,6 +32,11 @@ import org.jspecify.annotations.Nullable;
  * @param exempt              whether this is a reportable zero-rate exempt row (story T3)
  * @param exemptionReasonCode the exemption reason echoed onto an exempt (or exemption-denied)
  *                            row; {@code null} for a normal taxed row
+ * @param taxType             the row's tax-type code (pos-tax-common {@code TaxType}, e.g.
+ *                            {@code GST}), copied as pos-tax sent it and never inferred; {@code null}
+ *                            for an untyped row (every US row, and a row whose code the producer did
+ *                            not know). Added additively within schema version 1 (CAP:550 S32a,
+ *                            ADR-0044 §3); a consumer built before the field ignores it.
  */
 public record TaxBreakdownLine(
         @Nullable String lineItemId,
@@ -41,4 +46,5 @@ public record TaxBreakdownLine(
         @NonNull BigDecimal taxableBase,
         @NonNull BigDecimal taxAmount,
         boolean exempt,
-        @Nullable String exemptionReasonCode) {}
+        @Nullable String exemptionReasonCode,
+        @Nullable String taxType) {}

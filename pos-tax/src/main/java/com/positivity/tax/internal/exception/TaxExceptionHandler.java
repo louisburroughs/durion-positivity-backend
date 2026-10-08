@@ -50,6 +50,16 @@ public class TaxExceptionHandler {
         return build(HttpStatus.NOT_IMPLEMENTED, "TAX_RATE_LOOKUP_UNSUPPORTED", ex.getMessage(), request);
     }
 
+    /**
+     * An address in a profiled country with no configured rate row for its region and date
+     * (CAP:550 S32a): 422, never a price from another country's rates.
+     */
+    @ExceptionHandler(TaxJurisdictionNotConfiguredException.class)
+    public ResponseEntity<ApiError> handleJurisdictionNotConfigured(
+            TaxJurisdictionNotConfiguredException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNPROCESSABLE_CONTENT, "TAX_JURISDICTION_NOT_CONFIGURED", ex.getMessage(), request);
+    }
+
     /** {@code @Validated} query-parameter constraint failures (e.g. an invalid countryCode). */
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiError> handleConstraintViolation(

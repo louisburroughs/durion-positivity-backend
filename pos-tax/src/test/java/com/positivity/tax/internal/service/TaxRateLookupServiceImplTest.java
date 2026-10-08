@@ -59,11 +59,12 @@ class TaxRateLookupServiceImplTest {
 
     private TaxRateLookupServiceImpl buildService(TaxProperties props) {
         TestModeRateResolver rateResolver = new TestModeRateResolver(props);
+        TaxCountryProfiles profiles = new TaxCountryProfiles(props);
         TestModeTaxProvider testModeProvider = new TestModeTaxProvider(mock(TestModeTaxCalculator.class));
         ExternalTaxProvider externalProvider = new ExternalTaxProvider(null);
-        TaxProviderSelector selector =
-                new TaxProviderSelector(props, testModeProvider, externalProvider, avalaraProvider);
-        return new TaxRateLookupServiceImpl(props, selector, rateResolver, FIXED_CLOCK);
+        TaxProviderSelector selector = new TaxProviderSelector(
+                props, testModeProvider, externalProvider, avalaraProvider, profiles, FIXED_CLOCK);
+        return new TaxRateLookupServiceImpl(props, selector, rateResolver, profiles, FIXED_CLOCK);
     }
 
     @Test
@@ -76,7 +77,7 @@ class TaxRateLookupServiceImplTest {
         assertThat(response.regionCode()).isEqualTo("CA");
         assertThat(response.postalCode()).isEqualTo("90001");
         assertThat(response.components())
-                .containsExactly(new TaxRateComponent(TaxJurisdictionType.STATE, new BigDecimal("0.0725")));
+                .containsExactly(new TaxRateComponent(TaxJurisdictionType.STATE, new BigDecimal("0.0725"), null, null));
         assertThat(response.combinedRate()).isEqualByComparingTo("0.0725");
         assertThat(response.source()).isEqualTo("TEST_MODE");
     }

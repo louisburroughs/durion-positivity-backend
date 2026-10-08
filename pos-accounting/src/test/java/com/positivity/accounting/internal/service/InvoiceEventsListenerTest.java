@@ -210,6 +210,38 @@ class InvoiceEventsListenerTest {
     }
 
     @Test
+    @DisplayName("S32a AC 6: reads a breakdown whose rows carry the additive taxType (same schema version)")
+    void readsTypedTaxBreakdown() {
+        when(processedEvents.existsById("e-typed")).thenReturn(false);
+        when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
+        // Made-up fixture rows, not tax law: one typed row, one untyped row.
+        String typed = """
+                {"eventId":"e-typed","eventType":"invoice.invoice.updated","schemaVersion":1,
+                 "aggregateId":"%s","aggregateVersion":8,
+                 "payload":{"invoiceId":"%s","workorderId":"%s","status":"FINALIZED",
+                            "invoiceNumber":"INV-2026-000124","total":103.30,"subtotal":100.00,"tax":3.30,
+                            "taxBreakdown":[
+                              {"lineItemId":"1","jurisdictionType":"COUNTRY","jurisdictionCode":"ZZ",
+                               "rate":0.011,"taxableBase":100.00,"taxAmount":1.10,"exempt":false,
+                               "exemptionReasonCode":null,"taxType":"GST"},
+                              {"lineItemId":"1","jurisdictionType":"PROVINCE","jurisdictionCode":"Z1",
+                               "rate":0.022,"taxableBase":100.00,"taxAmount":2.20,"exempt":false,
+                               "exemptionReasonCode":null,"taxType":null}]}}
+                """.formatted(INVOICE_ID, INVOICE_ID, WORKORDER_ID);
+
+        listener.onInvoiceEvent(typed);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<ExtInvoiceTax>> saved = ArgumentCaptor.forClass(List.class);
+        verify(taxReplica).saveAll(saved.capture());
+        assertThat(saved.getValue())
+                .extracting(ExtInvoiceTax::getJurisdictionCode)
+                .containsExactly("ZZ", "Z1");
+        assertThat(saved.getValue().stream().map(ExtInvoiceTax::getTaxAmount).reduce(BigDecimal.ZERO, BigDecimal::add))
+                .isEqualByComparingTo("3.30");
+    }
+
+    @Test
     @DisplayName("Leaves ext_invoice_tax untouched when the event carries no breakdown")
     void skipsTaxBreakdownWhenAbsent() {
         when(processedEvents.existsById("e-nobreak")).thenReturn(false);

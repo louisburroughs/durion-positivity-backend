@@ -3,6 +3,7 @@ package com.positivity.tax.internal.service;
 import com.positivity.tax.common.dto.TaxCalculationRequest;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
 import com.positivity.tax.internal.config.TaxProperties;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
@@ -19,10 +20,15 @@ public class TaxCalculationServiceImpl implements TaxCalculationService {
 
     private final TaxProperties properties;
     private final TaxProviderSelector providerSelector;
+    private final TaxProviderLifecycleService lifecycleService;
 
-    public TaxCalculationServiceImpl(TaxProperties properties, TaxProviderSelector providerSelector) {
+    public TaxCalculationServiceImpl(
+            TaxProperties properties,
+            TaxProviderSelector providerSelector,
+            TaxProviderLifecycleService lifecycleService) {
         this.properties = properties;
         this.providerSelector = providerSelector;
+        this.lifecycleService = lifecycleService;
     }
 
     @Override
@@ -30,10 +36,23 @@ public class TaxCalculationServiceImpl implements TaxCalculationService {
     public TaxCalculationResponse calculateTax(@NonNull TaxCalculationRequest request) {
         validateRequest(request);
 
-        // Provider abstraction (story T6): select the test-mode or external provider and
-        // delegate the uncommitted estimate. Commit/void document lifecycle is driven
-        // separately by TaxProviderLifecycleService at invoice finalization/revert.
-        return providerSelector.select().estimate(request);
+        // Provider abstraction (story T6): the destination country's per-country default plug-in
+        // when one is configured (CAP:550 S32a), otherwise the test-mode or external provider;
+        // delegate the uncommitted estimate. Commit/void document lifecycle is driven separately
+        // by TaxProviderLifecycleService at invoice finalization/revert.
+        TaxProviderClient provider = providerSelector.selectFor(request.getCountryCode());
+        TaxCalculationResponse response = provider.estimate(request);
+        UUID referenceId = request.getReferenceId();
+        if (request.isCommittable() && referenceId != null) {
+            // Remember which provider priced the document so commit and void reach it (ADR-0071 §3).
+            lifecycleService.recordPricing(
+                    referenceId,
+                    request.getReferenceType() == null
+                            ? null
+                            : request.getReferenceType().name(),
+                    provider.providerName());
+        }
+        return response;
     }
 
     @Override

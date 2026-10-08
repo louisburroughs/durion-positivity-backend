@@ -57,6 +57,13 @@ public class InvoiceTaxSummary extends TenantScopedEntity {
     @Column(name = "tax_amount", nullable = false, precision = 19, scale = 4)
     private BigDecimal taxAmount;
 
+    /**
+     * The tax-type code of the rows rolled up here (CAP:550 S32a); part of the rollup key, so two tax
+     * types sharing a jurisdiction are never merged. {@code null} for untyped rows.
+     */
+    @Column(name = "tax_type", length = 32)
+    private String taxType;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

@@ -20,7 +20,8 @@ class TaxProviderSelectorTest {
     private final AvalaraTaxProvider avalara = mock(AvalaraTaxProvider.class);
 
     private TaxProviderSelector selector(TaxProperties props) {
-        return new TaxProviderSelector(props, testMode, external, avalara);
+        return new TaxProviderSelector(
+                props, testMode, external, avalara, new TaxCountryProfiles(props), java.time.Clock.systemUTC());
     }
 
     @Test

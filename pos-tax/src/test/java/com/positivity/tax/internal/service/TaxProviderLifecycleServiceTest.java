@@ -17,6 +17,7 @@ import com.positivity.tenancy.TenantResolver;
 import com.positivity.tenancy.testing.TenantTestSupport;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.BeforeEach;
@@ -65,7 +66,10 @@ class TaxProviderLifecycleServiceTest {
     @Autowired
     private PlatformTransactionManager transactionManager;
 
+    private static final String PLUGIN = "ZZ_SELF";
+
     private ControllableProvider provider;
+    private SelfHostedTaxPlugin plugin;
     private TaxProviderLifecycleService service;
 
     @BeforeEach
@@ -74,6 +78,13 @@ class TaxProviderLifecycleServiceTest {
         provider = new ControllableProvider();
         TaxProviderSelector selector = mock(TaxProviderSelector.class);
         when(selector.select()).thenReturn(provider);
+        // CAP:550 S32a: a per-country plug-in from a made-up fixture country (not tax law).
+        plugin = new SelfHostedTaxPlugin(
+                new TaxCountryProfiles(TaxProfileFixtures.bind(TaxProfileFixtures.MADE_UP_COUNTRY))
+                        .profile("ZZ")
+                        .orElseThrow(),
+                Clock.systemUTC());
+        when(selector.pluginById(PLUGIN)).thenReturn(Optional.of(plugin));
         ObjectProvider<MeterRegistry> meterRegistry = mock(ObjectProvider.class);
         when(meterRegistry.getIfAvailable()).thenReturn(null);
         TaxProviderTransactionResolver resolver =
@@ -156,6 +167,91 @@ class TaxProviderLifecycleServiceTest {
         assertThat(row.getExternalTransactionId()).isEqualTo("ext-123");
         assertThat(row.getAttempts()).isEqualTo(2);
         assertThat(service.pendingCommitBacklog()).isEqualTo(0.0);
+    }
+
+    @Test
+    @DisplayName("S32a: a plug-in-priced document is logged ESTIMATED with the plug-in, and the re-commit job skips it")
+    void pluginPricingIsLoggedEstimated() {
+        UUID ref = UUID.randomUUID();
+
+        service.recordPricing(ref, "INVOICE", PLUGIN);
+
+        TaxProviderTransaction row = repository.findByReferenceId(ref).orElseThrow();
+        assertThat(row.getStatus()).isEqualTo(TaxProviderTransactionStatus.ESTIMATED);
+        assertThat(row.getProvider()).isEqualTo(PLUGIN);
+        assertThat(service.pendingCommitBacklog()).isZero();
+        service.recommitPending();
+        assertThat(repository.findByReferenceId(ref).orElseThrow().getStatus())
+                .isEqualTo(TaxProviderTransactionStatus.ESTIMATED);
+    }
+
+    @Test
+    @DisplayName("S32a AC 4: commit of a plug-in-priced document is a logged no-op naming the plug-in")
+    void pluginCommitIsLoggedNoOp() {
+        UUID ref = UUID.randomUUID();
+        service.recordPricing(ref, "INVOICE", PLUGIN);
+        // The switch's provider would fail: a COMMITTED result proves the plug-in answered.
+        provider.failCommit = true;
+
+        TaxProviderTransactionResult result = service.commit(ref, "INVOICE");
+
+        assertThat(result.status()).isEqualTo(TaxProviderTransactionStatus.COMMITTED);
+        TaxProviderTransaction row = repository.findByReferenceId(ref).orElseThrow();
+        assertThat(row.getStatus()).isEqualTo(TaxProviderTransactionStatus.COMMITTED);
+        assertThat(row.getProvider()).isEqualTo(PLUGIN);
+        assertThat(row.getExternalTransactionId()).isNull();
+    }
+
+    @Test
+    @DisplayName("S32a AC 4: void of a plug-in-priced document is a logged no-op naming the plug-in")
+    void pluginVoidIsLoggedNoOp() {
+        UUID ref = UUID.randomUUID();
+        service.recordPricing(ref, "INVOICE", PLUGIN);
+        service.commit(ref, "INVOICE");
+
+        TaxProviderTransactionResult result = service.voidTransaction(ref);
+
+        assertThat(result.status()).isEqualTo(TaxProviderTransactionStatus.VOIDED);
+        TaxProviderTransaction row = repository.findByReferenceId(ref).orElseThrow();
+        assertThat(row.getStatus()).isEqualTo(TaxProviderTransactionStatus.VOIDED);
+        assertThat(row.getProvider()).isEqualTo(PLUGIN);
+        assertThat(row.getExternalTransactionId()).isNull();
+    }
+
+    @Test
+    @DisplayName("S32a: a document priced by the switch with no row records nothing (today's behaviour)")
+    void switchPricingRecordsNothing() {
+        UUID ref = UUID.randomUUID();
+
+        service.recordPricing(ref, "INVOICE", "FAKE");
+
+        assertThat(repository.findByReferenceId(ref)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("S32a: re-pricing an uncommitted plug-in document through the switch re-points the log")
+    void repricingThroughTheSwitchRepointsTheLog() {
+        UUID ref = UUID.randomUUID();
+        service.recordPricing(ref, "INVOICE", PLUGIN);
+
+        service.recordPricing(ref, "INVOICE", "FAKE");
+        service.commit(ref, "INVOICE");
+
+        TaxProviderTransaction row = repository.findByReferenceId(ref).orElseThrow();
+        assertThat(row.getProvider()).isEqualTo("FAKE");
+        assertThat(row.getExternalTransactionId()).isEqualTo("ext-123");
+    }
+
+    @Test
+    @DisplayName("S32a: a committed document is never re-pointed")
+    void committedDocumentIsNeverRepointed() {
+        UUID ref = UUID.randomUUID();
+        service.commit(ref, "INVOICE");
+
+        service.recordPricing(ref, "INVOICE", PLUGIN);
+
+        assertThat(repository.findByReferenceId(ref).orElseThrow().getProvider())
+                .isEqualTo("FAKE");
     }
 
     /** Test double whose commit can be toggled to fail. */

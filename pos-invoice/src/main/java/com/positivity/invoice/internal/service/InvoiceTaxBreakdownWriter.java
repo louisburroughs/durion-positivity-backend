@@ -108,6 +108,9 @@ public class InvoiceTaxBreakdownWriter {
         String reason = j.getExemptionReasonCode() == null
                 ? null
                 : j.getExemptionReasonCode().name();
+        // CAP:550 S32a: copy the tax type exactly as pos-tax sent it, never infer one. An absent or
+        // unknown value (read as null) is stored null and the row is still written.
+        String taxType = j.getTaxType() == null ? null : j.getTaxType().name();
         BigDecimal amount = scale(j.getAmount());
         lineRows.add(InvoiceLineTax.builder()
                 .invoiceId(invoiceId)
@@ -119,14 +122,17 @@ public class InvoiceTaxBreakdownWriter {
                 .taxAmount(amount)
                 .exempt(j.isExempt())
                 .exemptionReasonCode(reason)
+                .taxType(taxType)
                 .build());
 
+        // Rollup key includes the tax type so two types sharing a jurisdiction are never merged.
         InvoiceTaxSummary summary = summaries.computeIfAbsent(
-                type + "|" + j.getCode(),
+                type + "|" + j.getCode() + "|" + taxType,
                 k -> InvoiceTaxSummary.builder()
                         .invoiceId(invoiceId)
                         .jurisdictionType(type)
                         .jurisdictionCode(j.getCode())
+                        .taxType(taxType)
                         .taxableBase(BigDecimal.ZERO)
                         .taxAmount(BigDecimal.ZERO)
                         .build());

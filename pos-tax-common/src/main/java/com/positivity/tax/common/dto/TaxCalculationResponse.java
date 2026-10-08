@@ -4,6 +4,7 @@ import com.positivity.tax.common.enums.ExemptionReasonCode;
 import com.positivity.tax.common.enums.TaxCalculationType;
 import com.positivity.tax.common.enums.TaxJurisdictionType;
 import com.positivity.tax.common.enums.TaxReferenceType;
+import com.positivity.tax.common.enums.TaxType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -314,5 +315,30 @@ public class TaxCalculationResponse {
                 example = "RESALE",
                 requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         private ExemptionReasonCode exemptionReasonCode;
+
+        /**
+         * Configured tax type of this row (CAP:550 S32a); {@code null} for a country without a
+         * tax-type profile (the United States today) and for a code unknown to the reader's build.
+         * Readers copy it as received and never infer it.
+         */
+        @Schema(
+                description = "Configured tax type of this row; null for a country without a tax-type profile,"
+                        + " and null when the value is unknown to the reader's build",
+                example = "GST",
+                nullable = true,
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+        private TaxType taxType;
+
+        /**
+         * Configured placeholder recoverability of this row's tax type (CAP:550 S32a, held for
+         * expert advice); {@code null} for a country without a tax-type profile.
+         */
+        @Schema(
+                description = "Configured placeholder recoverability of this row's tax type (held for expert"
+                        + " advice); null for a country without a tax-type profile",
+                example = "true",
+                nullable = true,
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+        private Boolean inputTaxRecoverable;
     }
 }
