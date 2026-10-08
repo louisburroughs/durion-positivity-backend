@@ -128,7 +128,9 @@ green build (`pos-reference-mock`, #1646). Behaviour is covered by
 
 Compose interpolates the service-to-service secrets from the on-box env file
 (`${ALPHA_ROOT}/.env`); `deploy-backend.sh` writes only `BACKEND_TAG`, `ECR_REGISTRY`,
-`SECURITY_SEED_ADMIN_PASSWORD_HASH` and `SUPPLIER_AUDIT_ENC_KEY` there itself. Every other secret
+`SECURITY_SEED_ADMIN_PASSWORD_HASH`, `SUPPLIER_AUDIT_ENC_KEY` and `SUPPLIER_VENDOR_TAXID_ENC_KEY`
+(#2621; pos-supplier's two encryption keys, from the repository secrets of the same names) there
+itself. Every other secret
 is an entry an operator adds once, by hand, before the service that needs it is deployed; a
 missing entry interpolates to empty and the receiving service fails closed (a 401 on the guarded
 path), it does not fall back.
@@ -1254,12 +1256,33 @@ Provisioned alert thresholds (dashboard-only delivery in alpha):
 
 Consumers retry failed records with exponential backoff, then dead-letter to `{topic}.dlq`
 (e.g. `workorder.events.v1.dlq`). Redelivery is safe: consumers deduplicate by `eventId`
-(unique-keyed processing log). To inspect a DLQ:
+(unique-keyed processing log).
+
+**A DLQ record holds the whole original value**, which may carry CONFIDENTIAL or RESTRICTED data
+(Security ruling on #2617, ruling 7). Inspect a DLQ by its **metadata only**: key, headers,
+partition, offset and timestamp, never values:
 
 ```bash
 docker exec kafka-positivity /opt/kafka/bin/kafka-console-consumer.sh \
-  --bootstrap-server localhost:9092 --topic workorder.events.v1.dlq --from-beginning --max-messages 10
+  --bootstrap-server localhost:9092 --topic workorder.events.v1.dlq --from-beginning --max-messages 10 \
+  --property print.value=false --property print.key=true --property print.headers=true \
+  --property print.partition=true --property print.offset=true --property print.timestamp=true
 ```
+
+When the cause needs one record's value, print **that one record only**, by its partition and offset
+from the metadata listing:
+
+```bash
+docker exec kafka-positivity /opt/kafka/bin/kafka-console-consumer.sh \
+  --bootstrap-server localhost:9092 --topic workorder.events.v1.dlq \
+  --partition N --offset M --max-messages 1
+```
+
+Rules:
+
+- Never run `--from-beginning` (or any multi-record read) with values printed.
+- The output stays in your terminal. Never paste it into an issue, PR, ticket or chat, and never
+  redirect it to a file.
 
 To reprocess a DLQ'd record after fixing the cause, re-emit it from the owner's outbox (below) —
 do not hand-copy messages between topics.

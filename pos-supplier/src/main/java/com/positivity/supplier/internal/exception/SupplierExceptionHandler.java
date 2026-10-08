@@ -258,6 +258,22 @@ public class SupplierExceptionHandler {
         return build(HttpStatus.INTERNAL_SERVER_ERROR, ex.getCode(), PAYLOAD_UNREADABLE_MESSAGE, request);
     }
 
+    /**
+     * A vendor's stored tax-registration number cannot be decrypted (#2621). 500 with a generic message:
+     * the caller can do nothing about it. The reveal service has already logged the vendor, the
+     * registration and the key id, and its audit row records the attempt as {@code UNREADABLE}
+     * ({@code noRollbackFor}). Nothing here can carry the number: the exception never held it.
+     */
+    @ExceptionHandler(VendorTaxIdUnreadableException.class)
+    public ResponseEntity<ApiError> handleVendorTaxIdUnreadable(
+            VendorTaxIdUnreadableException ex, HttpServletRequest request) {
+        return build(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                ex.getCode(),
+                "The stored registration number could not be read. Nothing was revealed; the attempt is recorded.",
+                request);
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiError> handleBodyValidation(
             MethodArgumentNotValidException ex, HttpServletRequest request) {

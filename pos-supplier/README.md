@@ -32,7 +32,7 @@ S2S operation) would be a new capability with its own spec, not a revival of thi
 
 The vendor master is under `/v1/supplier/vendors`; connection configuration is under `/v1/supplier/admin`.
 
-### Vendor master (#2516, ADR-0070 Decision 2) — `supplier:vendor:read` / `supplier:vendor:write` / `supplier:vendor_remit:approve` / `supplier:fact:replay`
+### Vendor master (#2516, ADR-0070 Decision 2) — `supplier:vendor:read` / `supplier:vendor:write` / `supplier:vendor_remit:approve` / `supplier:fact:replay` / `supplier:vendor_tax_id:reveal`
 
 One vendor for every party the shop buys from or pays, with or without a supplier connection. Every
 connection profile belongs to exactly one vendor. No endpoint deletes a vendor.
@@ -49,6 +49,8 @@ connection profile belongs to exactly one vendor. No endpoint deletes a vendor.
 | POST | `…/remit-to-changes/{changeId}/approval` `{verificationNote}` | `supplier:vendor_remit:approve` | 200, 400, 403 `SUPPLIER_VENDOR_REMIT_SELF_APPROVAL`, 409 `SUPPLIER_VENDOR_REMIT_CHANGE_NOT_PENDING` |
 | POST | `…/remit-to-changes/{changeId}/rejection` `{note}` | `supplier:vendor_remit:approve` | 200, 400, 409 `SUPPLIER_VENDOR_REMIT_CHANGE_NOT_PENDING` |
 | POST | `/v1/supplier/vendors/facts/replay?afterVendorId=&limit=` | `supplier:fact:replay` | 200 (`emitted`, `nextAfterVendorId`, `complete`) |
+| POST | `…/{vendorId}/tax-registrations/{registrationId}/reveal` `{reason}` | `supplier:vendor_tax_id:reveal` | 200 (`Cache-Control: no-store`), 400 `JUSTIFICATION_REQUIRED` / `VALIDATION_ERROR`, 404 `SUPPLIER_VENDOR_NOT_FOUND` / `SUPPLIER_VENDOR_TAX_REGISTRATION_NOT_FOUND`, 500 `SUPPLIER_VENDOR_TAX_ID_UNREADABLE` |
+| GET | `…/{vendorId}/tax-id-reveals?page=&size=` | `supplier:audit:read` | 200 (newest first, default size 20, max 200), 404 |
 
 - **`vendorNumber`** is optional on create: give one (`^[A-Z0-9][A-Z0-9-]{0,29}$`, unique in the tenant)
   or get `V-000001`, `V-000002`, … from a per-tenant counter. It never changes afterwards: YAML profiles
@@ -62,9 +64,31 @@ connection profile belongs to exactly one vendor. No endpoint deletes a vendor.
 - **Status** is `ACTIVE ⇄ INACTIVE` with a reason. Deactivation does not disable the vendor's profiles:
   its EDI documents still arrive, and accounting records them as exceptions.
 - **No bank details** — not on the record, not on Kafka (OI-14).
-- **`supplier.vendor.updated` v1** (`SupplierVendorUpdatedV1`) on `supplier.events.v1`, key `vendorId`,
-  `aggregateVersion` = the vendor's `@Version`: queued through the outbox in the transaction of every
-  create, update, status change and remit-to approval. It carries every vendor field plus
+- **Tax registrations are RESTRICTED, encrypted and masked (#2621, Security ruling on #2617).** Every
+  number, whatever its scheme, is sealed with AES-256-GCM under `SUPPLIER_VENDOR_TAXID_ENC_KEY` (its own
+  key, never the exchange-audit one; same envelope and fail-closed key policy, see "Encryption" below),
+  with the tenant, vendor and registration ids bound as AAD so a ciphertext copied into another row fails.
+  Each stored element is `{registrationId, scheme, region, last4, numberCiphertext}`. Every read, and every
+  create, update, status and remit-to response, returns `taxRegistrations[]` as
+  `{registrationId, scheme, region, last4}` and never decrypts. `last4` is the last four alphanumerics
+  once separators are removed, `null` under 8 (shown as "on file").
+  - **Update rule.** Send a stored registration's `registrationId` without `number` to keep it (its
+    `scheme` and `region` must be unchanged, or 400 `VALIDATION_ERROR` with
+    `fieldErrors[taxRegistrations[i].number]` "re-enter the number to change its scheme or region"); with
+    `number` to replace its number; and a new registration without `registrationId` and with its `number`
+    (1–64 characters). An id the vendor does not hold is 400; a stored registration left out is removed. A
+    PUT that keeps every registration unchanged publishes nothing. No message or log echoes a number.
+  - **Reveal.** Only `supplier:vendor_tax_id:reveal` (ADMIN, CONTROLLER) sees a number, with a reason of
+    10–500 characters. The `supplier_vendor_tax_id_reveal` audit row (actor, roles, reason, correlation id,
+    outcome `REVEALED` | `UNREADABLE`; never the number or `last4`) is written in the same transaction
+    before the number is returned: if it cannot be written, nothing is revealed. The rows are read through
+    `supplier:audit:read`, so a controller's reveals are reviewed by someone else. A 403 writes nothing.
+- **`supplier.vendor.updated` schema version 2** (`SupplierVendorUpdatedV1`) on `supplier.events.v1`, key
+  `vendorId`, `aggregateVersion` = the vendor's `@Version`: queued through the outbox in the transaction of
+  every create, update, status change and remit-to approval. Version 2 (#2621) carries tax registrations as
+  `{scheme, region, last4}` only; version 1 carried the number, and `V5` rewrote every queued vendor fact
+  in `supplier_event_outbox` to version 2 so no replay can publish one again. Consumers apply only version
+  2 or later. It carries every vendor field plus
   `remitToChangedAt`, `remitToRequestedBy`, `remitToApprovedBy` (security-context principal names),
   `createdBy`, `createdAt`, `occurredAt`. Consumers apply it under `ReplicaVersionGuard`: skip only when they hold a newer version; an equal version (a replay) re-applies. A no-op update publishes nothing.
 - **Replay (ADR-0044 §4).** `POST /v1/supplier/vendors/facts/replay` re-emits one page (limit clamped to
@@ -623,6 +647,14 @@ suspected tampering — for data the deployment destroyed itself.
 | `SUPPLIER_AUDIT_ENC_KEY` | Active key, 32 bytes base64. **Provision before first deploy.** |
 | `SUPPLIER_AUDIT_ENC_KEY_ID` | Key id recorded in each envelope (default `k1`) |
 | `SUPPLIER_AUDIT_ENC_PREVIOUS_KEYS` | Decrypt-only keys, `keyId:base64` comma-separated |
+| `SUPPLIER_VENDOR_TAXID_ENC_KEY` | Vendor tax-registration number key (#2621), 32 bytes base64. A **different** key, same rules. **Provision before first deploy**, from the secret store. |
+| `SUPPLIER_VENDOR_TAXID_ENC_KEY_ID` | Its key id (default `k1`) |
+| `SUPPLIER_VENDOR_TAXID_ENC_PREVIOUS_KEYS` | Its decrypt-only keys; a retired key must stay while any number it sealed is stored |
+
+The envelope and key policy are shared by both ciphers (`AesGcmEnvelopeCipher`); the vendor tax-id cipher
+additionally binds `tenantId`, `vendorId` and `registrationId` into the AAD. `V4` (a Flyway **Java**
+migration, a Spring bean with the cipher injected, because SQL cannot hold the key) encrypted every
+number stored before #2621; it logs counts only.
 
 To rotate: move the current key into `previous-keys`, set a new `key` and a new `key-id`. **A retired
 key must stay in `previous-keys` for the whole retention window** — remove it and every payload it

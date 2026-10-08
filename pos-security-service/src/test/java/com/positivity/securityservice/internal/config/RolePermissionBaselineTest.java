@@ -727,6 +727,13 @@ class RolePermissionBaselineTest {
         }
 
         @Test
+        @DisplayName("CAP:550 #2621: supplier:vendor_tax_id:reveal is held by exactly ADMIN and CONTROLLER (Security"
+                + " ruling on #2617, ruling 4); never the clerk, the general manager, SUPPORT or SYSTEM_ADMINISTRATOR")
+        void vendorTaxIdRevealHolders() {
+            assertThat(holdersOf("supplier:vendor_tax_id:reveal")).containsExactly("ADMIN", "CONTROLLER");
+        }
+
+        @Test
         @DisplayName("BR-3: accounting:payment:apply is held by exactly ACCOUNT_MANAGER, ACCOUNTING_CLERK, "
                 + "ADMIN, CONTROLLER and GENERAL_MANAGER (G13)")
         void paymentApplyHolders() {

@@ -23,6 +23,13 @@ public class SupplierValidationException extends RuntimeException {
      */
     public static final String VALIDATION_ERROR = "VALIDATION_ERROR";
 
+    /**
+     * A reveal of a vendor's tax-registration number without a reason of at least 10 characters (#2621,
+     * Security ruling on #2617, ruling 4). The platform's code for a missing justification
+     * (pos-accounting answers it for period overrides the same way).
+     */
+    public static final String JUSTIFICATION_REQUIRED = "JUSTIFICATION_REQUIRED";
+
     public static final String UNKNOWN_CAPABILITY = "SUPPLIER_UNKNOWN_CAPABILITY";
     public static final String UNKNOWN_PROTOCOL_FAMILY = "SUPPLIER_UNKNOWN_PROTOCOL_FAMILY";
     public static final String AUTH_REFS_INCOMPLETE = "SUPPLIER_AUTH_REFS_INCOMPLETE";

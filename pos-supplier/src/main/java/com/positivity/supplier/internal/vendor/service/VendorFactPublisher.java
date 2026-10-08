@@ -25,7 +25,8 @@ import org.springframework.transaction.annotation.Transactional;
  * envelope's {@code aggregateVersion}. It advances with every committed change (a no-op update
  * publishes nothing); a replay re-sends the current version, so consumers apply a fact unless they
  * already hold a <em>newer</em> one ({@code ReplicaVersionGuard}: equal versions re-apply). The record key is {@code vendorId}. No bank details exist to publish
- * (OI-14), and a pending remit-to change is never on the vendor row, so it cannot leak here.
+ * (OI-14), and a pending remit-to change is never on the vendor row, so it cannot leak here. Tax
+ * registrations travel as scheme, region and last4 at schema version 2; the full number never does (#2621).
  */
 @Component
 @RequiredArgsConstructor
@@ -70,8 +71,10 @@ public class VendorFactPublisher {
                 vendor.getLegalName(),
                 vendor.getDisplayName(),
                 vendor.getTaxRegistrations().stream()
+                        // Scheme, region and the STORED last4 only: the number is RESTRICTED and never leaves
+                        // pos-supplier, and nothing here decrypts (#2621, Security ruling on #2617).
                         .map(registration -> new SupplierVendorUpdatedV1.TaxRegistration(
-                                registration.scheme(), registration.number(), registration.region()))
+                                registration.scheme(), registration.region(), registration.last4()))
                         .toList(),
                 toFactRemitTo(vendor.getRemitTo()),
                 vendor.getRemitToVersion(),

@@ -1,5 +1,6 @@
 package com.positivity.domainevents.supplier;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -28,14 +29,22 @@ import org.jspecify.annotations.Nullable;
  * not here either: only an approved remit-to is published, so {@code remitTo} is always the address
  * a payment may be sent to.
  *
- * <p>Additions must be additive-only within schema version 1 (ADR-0044 §3).
+ * <p>A full tax-registration number. Registrations carry scheme, region and the last four characters
+ * only (Security ruling on #2617, ruling 1: every registration number is RESTRICTED, whatever its
+ * scheme). The number stays encrypted in pos-supplier and is shown only through its audited reveal.
+ *
+ * <p>Additions must be additive-only within a schema version (ADR-0044 §3). Version 2 withdrew the
+ * registration {@code number} in place, under the ADR-0044 §3 amendment for RESTRICTED fields: no
+ * consumer read it, the version is bumped, pos-supplier's outbox is scrubbed in the same release, and
+ * consumers apply only version 2 or later.
  *
  * @param vendorId the vendor's identity (also the envelope aggregateId and the record key)
  * @param vendorNumber the tenant-unique, immutable reference people quote (ADR-0064), e.g.
  *     {@code V-000001} or {@code MICHELIN}
  * @param legalName the vendor's legal name
  * @param displayName the name screens show
- * @param taxRegistrations the vendor's tax registrations; empty when none are recorded
+ * @param taxRegistrations the vendor's tax registrations as scheme, region and last four characters;
+ *     empty when none are recorded. Being on the list means a number is on file
  * @param remitTo the approved remit-to address; {@code null} while the vendor has none
  *     ({@code remitToVersion = 0})
  * @param remitToVersion 0 with no remit-to, 1 for a remit-to given at creation, then +1 per
@@ -79,8 +88,13 @@ public record SupplierVendorUpdatedV1(
     /** Event type of this payload on {@code supplier.events.v1}. */
     public static final String EVENT_TYPE = "supplier.vendor.updated";
 
-    /** Payload schema version; additive changes only within v1 (ADR-0044 §3). */
-    public static final int SCHEMA_VERSION = 1;
+    /**
+     * Payload schema version. 2 withdrew {@code TaxRegistration.number} and added {@code last4} in place,
+     * on the same event type and topic, under the ADR-0044 §3 amendment that lets a RESTRICTED field be
+     * withdrawn from a live payload (Security ruling on #2617, ruling 9). Version 1 facts carried the full
+     * number; consumers apply only version 2 or later.
+     */
+    public static final int SCHEMA_VERSION = 2;
 
     /** Vendor status. A vendor is never deleted, only deactivated. */
     public enum Status {
@@ -89,19 +103,25 @@ public record SupplierVendorUpdatedV1(
     }
 
     /**
-     * One tax registration of the vendor.
+     * One tax registration of the vendor, minimised (Security ruling on #2617, rulings 1 and 2). The full
+     * number never travels: it is RESTRICTED and stays encrypted in pos-supplier.
      *
      * @param scheme the registration scheme, e.g. {@code GST_HST}, {@code QST}, {@code EIN}
-     * @param number the registration number as issued
      * @param region the issuing region where the scheme is regional; {@code null} otherwise
+     * @param last4 the last four alphanumerics of the number once separators are removed, as pos-supplier
+     *     stored them; {@code null} when the number has fewer than 8 alphanumerics. CONFIDENTIAL: never
+     *     logged and never used as a metric tag. Consumers read it; they never derive it again
      */
+    // A version 1 fact (a replay of an old outbox row, a record still on the broker or a DLQ) carries
+    // "number". It is dropped on read, never kept, so mapping a v1 fact cannot fail even under a mapper that
+    // fails on unknown properties; consumers then skip it by schemaVersion (#2621).
+    @JsonIgnoreProperties({"number"})
     public record TaxRegistration(
             @NonNull String scheme,
-            @NonNull String number,
-            @Nullable String region) {
+            @Nullable String region,
+            @Nullable String last4) {
         public TaxRegistration {
             Objects.requireNonNull(scheme, "scheme must not be null");
-            Objects.requireNonNull(number, "number must not be null");
         }
     }
 

@@ -1671,9 +1671,9 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 102")
+    @DisplayName("CATALOG_VERSION is 103")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(102);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(103);
     }
 
     @Test
@@ -2039,8 +2039,10 @@ class SecurityGatewayConfigTest {
         // beyond array must return null
         // catalog v102 (CAP:550 S12, #2509): vendor-bill approval over the clerk limit (bit 558)
         assertThat(GatewayPermissionCatalog.authorityForBit(558)).isEqualTo("PERM_accounting:ap:approve_over_limit");
+        // catalog v103 (CAP:550 #2621): reveal of a vendor's full tax-registration number (bit 559)
+        assertThat(GatewayPermissionCatalog.authorityForBit(559)).isEqualTo("PERM_supplier:vendor_tax_id:reveal");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(559)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(560)).isNull();
     }
 
     @Test

@@ -6,9 +6,14 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.RecordComponent;
+import java.lang.reflect.Type;
+import java.lang.reflect.TypeVariable;
+import java.lang.reflect.WildcardType;
 import java.math.BigDecimal;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
@@ -18,7 +23,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -323,6 +330,138 @@ class DomainEventContractTest {
             return false;
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("Unable to probe " + eventType.getName(), e);
+        }
+    }
+
+    // ── Restricted field names (Security ruling on #2617, ruling 8; #2621) ─────────────────
+
+    /**
+     * Component names that name RESTRICTED data (Security ruling on #2617, ruling 1): a government or
+     * tax identifier, bank or card data, or a credential. Compared case-insensitively against every
+     * component of every event record, nested records and collection element types included. A RESTRICTED
+     * value never leaves its owner except as a masked derivative such as {@code last4}, so a component
+     * with one of these names on a fact is a leak waiting for a value.
+     */
+    private static final Set<String> RESTRICTED_NAMES = Set.of(
+            "number",
+            "ssn",
+            "sin",
+            "tin",
+            "itin",
+            "taxid",
+            "taxnumber",
+            "nationalid",
+            "accountnumber",
+            "routingnumber",
+            "iban",
+            "cardnumber",
+            "pan",
+            "cvv",
+            "password",
+            "secret");
+
+    /**
+     * Exceptions to {@link #noRestrictedFieldNames}, keyed {@code <record FQN>#<component path>}, each
+     * valued with the written reason and the Security sign-off reference. It starts empty (ruling 8): on
+     * {@code main} the only match was {@code SupplierVendorUpdatedV1.TaxRegistration.number}, which #2621
+     * removed. Adding an entry is a Security decision, never a way to make the build pass.
+     */
+    private static final Map<String, String> ALLOWED = Map.of();
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("eventRecords")
+    @DisplayName("#2621: no event record carries a component named like RESTRICTED data, at any depth")
+    void noRestrictedFieldNames(Class<?> eventType) {
+        List<String> found = restrictedFieldPaths(eventType).stream()
+                .filter(path -> !ALLOWED.containsKey(eventType.getName() + "#" + path))
+                .toList();
+
+        assertThat(found)
+                .as(
+                        "%s names RESTRICTED data (Security ruling on #2617, ruling 1). Publish a masked derivative"
+                                + " such as last4 instead, or ask Security for an ALLOWED entry",
+                        eventType.getName())
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("#2621 AC 16: the restricted-name guard reaches a name nested in a list's element record")
+    void restrictedNameGuardWalksNestedCollections() {
+        assertThat(restrictedFieldPaths(GuardProbe.class))
+                .containsExactlyInAnyOrder("items[].taxId", "byScheme[].ssn", "cards[].pan", "owner.password");
+        assertThat(restrictedFieldPaths(GuardProbe.Inner.class)).containsExactly("taxId");
+        assertThat(restrictedFieldPaths(CleanProbe.class)).isEmpty();
+    }
+
+    /** Test-only shapes for the guard; never scanned, because the scan reads the main classes only. */
+    record GuardProbe(
+            String label,
+            List<Inner> items,
+            Map<String, Keyed> byScheme,
+            Card[] cards,
+            Owner owner,
+            List<GuardProbe> children) {
+
+        record Inner(String scheme, String taxId) {}
+
+        record Keyed(String region, String ssn) {}
+
+        record Card(String last4, String pan) {}
+
+        record Owner(String name, String password) {}
+    }
+
+    record CleanProbe(String scheme, String region, String last4, List<String> numbers) {}
+
+    /**
+     * Every component path under {@code recordType} whose name is in {@link #RESTRICTED_NAMES}. Walks
+     * nested records, the element types of lists, sets, maps (keys and values) and arrays; a record that
+     * contains itself is visited once per path.
+     */
+    static List<String> restrictedFieldPaths(Class<?> recordType) {
+        List<String> found = new ArrayList<>();
+        walkRecord(recordType, "", found, new HashSet<>());
+        return found;
+    }
+
+    private static void walkRecord(Class<?> type, String prefix, List<String> found, Set<Class<?>> visiting) {
+        if (!visiting.add(type)) {
+            return;
+        }
+        for (RecordComponent component : type.getRecordComponents()) {
+            String path = prefix.isEmpty() ? component.getName() : prefix + "." + component.getName();
+            if (RESTRICTED_NAMES.contains(component.getName().toLowerCase(Locale.ROOT))) {
+                found.add(path);
+            }
+            walkType(component.getGenericType(), path, found, visiting);
+        }
+        visiting.remove(type);
+    }
+
+    private static void walkType(Type type, String path, List<String> found, Set<Class<?>> visiting) {
+        if (type instanceof Class<?> raw) {
+            if (raw.isArray()) {
+                walkType(raw.getComponentType(), path + "[]", found, visiting);
+            } else if (raw.isRecord()) {
+                walkRecord(raw, path, found, visiting);
+            }
+        } else if (type instanceof ParameterizedType parameterized) {
+            // List<Inner>, Set<Inner>, Map<K, V>, Optional<Inner>: the element types are where a nested
+            // record hides, so each type argument is walked as an element of the collection.
+            walkType(parameterized.getRawType(), path, found, visiting);
+            for (Type argument : parameterized.getActualTypeArguments()) {
+                walkType(argument, path + "[]", found, visiting);
+            }
+        } else if (type instanceof GenericArrayType array) {
+            walkType(array.getGenericComponentType(), path + "[]", found, visiting);
+        } else if (type instanceof WildcardType wildcard) {
+            for (Type bound : wildcard.getUpperBounds()) {
+                walkType(bound, path, found, visiting);
+            }
+        } else if (type instanceof TypeVariable<?> variable) {
+            for (Type bound : variable.getBounds()) {
+                walkType(bound, path, found, visiting);
+            }
         }
     }
 

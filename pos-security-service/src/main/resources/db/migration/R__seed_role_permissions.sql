@@ -338,12 +338,19 @@ SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', 
 --     supplier:vendor:read           -> ADMIN, CONTROLLER, ACCOUNTING_CLERK, GENERAL_MANAGER
 --       SUPPORT also receives supplier:vendor:read. That grant is NOT part of the OI-5 sign-off: it follows
 --       the ADR-0062 section 7 SUPPORT read-only-ceiling rule (SUPPORT holds every view/read a floor role
---       holds), which RolePermissionBaselineTest#supportIsReadOnly enforces. Pending Security owner
---       confirmation.
+--       holds), which RolePermissionBaselineTest#supportIsReadOnly enforces. Confirmed by the Security
+--       ruling on #2617 (ruling 4, 2026-10-08): once tax registrations are masked (#2621), the read exposes
+--       last4 only.
 --     supplier:vendor:write          -> ADMIN, CONTROLLER, ACCOUNTING_CLERK
 --     supplier:vendor_remit:approve  -> ADMIN, CONTROLLER, GENERAL_MANAGER (never the requester: the
 --                                       service refuses self-approval whatever the grant)
 --     supplier:fact:replay           -> ADMIN (the crm:fact:replay precedent)
+-- * CAP:550 #2621 (Security ruling on #2617, ruling 4, 2026-10-08): supplier:vendor_tax_id:reveal, the only
+--   way to see a vendor's full tax-registration number (every other read is masked); each reveal needs a
+--   reason and writes an audit row first. The action is reveal, not view, so SUPPORT's read-only ceiling
+--   keeps it off structurally.
+--     supplier:vendor_tax_id:reveal  -> ADMIN, CONTROLLER (ACCOUNTING_CLERK, GENERAL_MANAGER, SUPPORT and
+--                                       SYSTEM_ADMINISTRATOR receive nothing)
 -- * CAP:550 S15 (#2511, SPEC-accounting-workspace §4.6 "Float", Security sign-off OI-5 2026-10-05, AW31):
 --   accounting:float:manage (bit 553), the register go-live float and Change float commands.
 --     accounting:float:manage        -> ADMIN, CONTROLLER (ACCOUNTING_CLERK and GENERAL_MANAGER receive nothing)
@@ -844,6 +851,7 @@ FROM (VALUES
     ('supplier:vendor:read', 'supplier', 'vendor', 'read', 550),
     ('supplier:vendor:write', 'supplier', 'vendor', 'write', 551),
     ('supplier:vendor_remit:approve', 'supplier', 'vendor_remit', 'approve', 552),
+    ('supplier:vendor_tax_id:reveal', 'supplier', 'vendor_tax_id', 'reveal', 559),
     ('supplier:workorderauth:request', 'supplier', 'workorderauth', 'request', 462),
     ('supplier:workorderauth:review', 'supplier', 'workorderauth', 'review', 463),
     ('tax:calculate', 'tax', '', 'calculate', 163),
@@ -1366,6 +1374,7 @@ FROM (VALUES
     ('ADMIN', 'supplier:vendor:read'),
     ('ADMIN', 'supplier:vendor:write'),
     ('ADMIN', 'supplier:vendor_remit:approve'),
+    ('ADMIN', 'supplier:vendor_tax_id:reveal'),
     ('ADMIN', 'supplier:workorderauth:request'),
     ('ADMIN', 'supplier:workorderauth:review'),
     ('ADMIN', 'tax:calculate'),
@@ -1528,6 +1537,7 @@ FROM (VALUES
     ('CONTROLLER', 'supplier:vendor:read'),
     ('CONTROLLER', 'supplier:vendor:write'),
     ('CONTROLLER', 'supplier:vendor_remit:approve'),
+    ('CONTROLLER', 'supplier:vendor_tax_id:reveal'),
     ('CONTROLLER', 'tax:commit'),
     ('CONTROLLER', 'workorder:financials:view'),
     ('DISPATCHER', 'appointments:cancel'),
@@ -2276,6 +2286,7 @@ BEGIN
         ('supplier:vendor:read'),
         ('supplier:vendor:write'),
         ('supplier:vendor_remit:approve'),
+        ('supplier:vendor_tax_id:reveal'),
         ('supplier:workorderauth:request'),
         ('supplier:workorderauth:review'),
         ('tax:calculate'),

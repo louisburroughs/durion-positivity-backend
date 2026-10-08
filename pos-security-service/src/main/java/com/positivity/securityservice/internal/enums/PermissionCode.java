@@ -1056,13 +1056,15 @@ public enum PermissionCode {
     ACCOUNTING__DEPOSIT__REVERSE(557, "accounting:deposit:reverse"),
     // ── Accounting (new) ───────────────────────────────────────────────────────
     /** Approve a vendor bill over the clerk limit (CAP:550 S12, #2509; SPEC-accounting-workspace §4.3, AW4, AW5). */
-    ACCOUNTING__AP__APPROVE_OVER_LIMIT(558, "accounting:ap:approve_over_limit");
+    ACCOUNTING__AP__APPROVE_OVER_LIMIT(558, "accounting:ap:approve_over_limit"),
+    // ── Supplier (new) ─────────────────────────────────────────────────────────
+    SUPPLIER__VENDOR_TAX_ID__REVEAL(559, "supplier:vendor_tax_id:reveal");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 102;
+    public static final int CATALOG_VERSION = 103;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

@@ -155,65 +155,77 @@ trim_space() {
   printf '%s' "${v}"
 }
 
-require_supplier_audit_key() {
-  local existing supplied
-  existing="$(grep -E "^SUPPLIER_AUDIT_ENC_KEY=" "${ENV_FILE}" | head -n1 | cut -d= -f2- || true)"
+# Resolves one pos-supplier encryption key: the exchange-audit key (ADR-0050 §7) or the vendor
+# tax-registration number key (#2621, Security ruling on #2617 ruling 3). Same rules for both:
+# a value supplied by the workflow wins and is persisted, but never silently replaces a different
+# key already on the box; otherwise the one on the box must be there and non-empty.
+#   $1 the variable, e.g. SUPPLIER_AUDIT_ENC_KEY
+#   $2 what it seals, for the messages
+require_supplier_key() {
+  local name="$1" what="$2" existing supplied
+  existing="$(grep -E "^${name}=" "${ENV_FILE}" | head -n1 | cut -d= -f2- || true)"
   existing="${existing%\'}"
   existing="${existing#\'}"
   existing="$(trim_space "${existing}")"
-  supplied="$(trim_space "${SUPPLIER_AUDIT_ENC_KEY:-}")"
+  supplied="$(trim_space "${!name:-}")"
 
   if [[ -n "${supplied}" ]]; then
     # Padding is optional: Base64.getDecoder() accepts an unpadded 43-char key, so requiring the
     # '=' would reject a key the service decodes fine.
     if ! [[ "${supplied}" =~ ^[A-Za-z0-9+/]{43}=?$ ]]; then
-      echo "ERROR: SUPPLIER_AUDIT_ENC_KEY must be 32 bytes of base64 (openssl rand -base64 32)." >&2
+      echo "ERROR: ${name} must be 32 bytes of base64 (openssl rand -base64 32)." >&2
       exit 1
     fi
     # Compare unpadded: a 32-byte key takes exactly one '=', so the padded and unpadded
     # spellings are the same key and must not read as a rotation.
     if [[ -n "${existing}" && "${existing%=}" != "${supplied%=}" ]]; then
-      echo "ERROR: SUPPLIER_AUDIT_ENC_KEY differs from the key already on this box." >&2
-      echo "Rotating it here would orphan every exchange-audit payload sealed with the old" >&2
+      echo "ERROR: ${name} differs from the key already on this box." >&2
+      echo "Rotating it here would orphan every ${what} sealed with the old" >&2
       echo "key. Rotate deliberately instead: move the current key into" >&2
-      echo "SUPPLIER_AUDIT_ENC_PREVIOUS_KEYS as '<keyId>:<base64>' and bump" >&2
-      echo "SUPPLIER_AUDIT_ENC_KEY_ID before changing this value." >&2
+      echo "${name%_KEY}_PREVIOUS_KEYS as '<keyId>:<base64>' and bump" >&2
+      echo "${name}_ID before changing this value." >&2
       exit 1
     fi
     local quoted
     quoted="$(env_single_quote "${supplied}")"
-    if grep -q "^SUPPLIER_AUDIT_ENC_KEY=" "${ENV_FILE}"; then
-      sed -i "s|^SUPPLIER_AUDIT_ENC_KEY=.*|SUPPLIER_AUDIT_ENC_KEY=${quoted}|" "${ENV_FILE}"
+    if grep -q "^${name}=" "${ENV_FILE}"; then
+      sed -i "s|^${name}=.*|${name}=${quoted}|" "${ENV_FILE}"
     else
-      printf 'SUPPLIER_AUDIT_ENC_KEY=%s\n' "${quoted}" >> "${ENV_FILE}"
+      printf '%s=%s\n' "${name}" "${quoted}" >> "${ENV_FILE}"
     fi
-    drop_shell_copy_of_audit_key
+    drop_shell_copy_of_supplier_key "${name}"
     return 0
   fi
 
   if [[ -z "${existing}" ]]; then
-    echo "ERROR: SUPPLIER_AUDIT_ENC_KEY is empty or missing in ${ENV_FILE} and none was" >&2
+    echo "ERROR: ${name} is empty or missing in ${ENV_FILE} and none was" >&2
     echo "supplied by the deploy. pos-supplier will not start without it. Generate one with" >&2
     echo "  openssl rand -base64 32" >&2
-    echo "and set it as the SUPPLIER_AUDIT_ENC_KEY repository secret (or add it to the" >&2
+    echo "and set it as the ${name} repository secret (or add it to the" >&2
     echo "on-box env file) before deploying." >&2
     exit 1
   fi
-  drop_shell_copy_of_audit_key
+  drop_shell_copy_of_supplier_key "${name}"
+}
+
+# Both pos-supplier keys. Kept under the original name: every deploy path already calls it.
+require_supplier_audit_key() {
+  require_supplier_key SUPPLIER_AUDIT_ENC_KEY "exchange-audit payload"
+  require_supplier_key SUPPLIER_VENDOR_TAXID_ENC_KEY "vendor tax-registration number"
 }
 
 # Compose ranks the shell environment ABOVE --env-file, so an exported
-# SUPPLIER_AUDIT_ENC_KEY shadows the one this script just made authoritative in the env
-# file. The deploy workflow always passes the variable, so when the repository secret is
-# unset it arrives set-but-empty and every ${SUPPLIER_AUDIT_ENC_KEY} in the compose files
-# resolves to "" — pos-supplier then starts with no key and fails closed, while the env
-# file that everyone inspects looks perfectly correct (#1577). Unsetting it once the key is
-# persisted leaves exactly one source of truth: the env file.
+# SUPPLIER_AUDIT_ENC_KEY (or SUPPLIER_VENDOR_TAXID_ENC_KEY) shadows the one this script just
+# made authoritative in the env file. The deploy workflow always passes the variable, so when
+# the repository secret is unset it arrives set-but-empty and every ${SUPPLIER_AUDIT_ENC_KEY}
+# in the compose files resolves to "" — pos-supplier then starts with no key and fails closed,
+# while the env file that everyone inspects looks perfectly correct (#1577). Unsetting it once
+# the key is persisted leaves exactly one source of truth: the env file.
 #
-# Only the bare ${SUPPLIER_AUDIT_ENC_KEY} is exposed to this; the sibling KEY_ID and
-# PREVIOUS_KEYS use ${VAR:-default}, which falls back when a variable is set-but-empty.
-drop_shell_copy_of_audit_key() {
-  unset SUPPLIER_AUDIT_ENC_KEY
+# Only the bare key variables are exposed to this; the sibling KEY_ID and PREVIOUS_KEYS use
+# ${VAR:-default}, which falls back when a variable is set-but-empty.
+drop_shell_copy_of_supplier_key() {
+  unset "$1"
 }
 
 # Reads a value out of the env file, stripping one layer of the single quotes

@@ -47,6 +47,12 @@ echo -e "${YELLOW}Starting Core Services...${NC}"
 # caller exported another ISO 4217 code. Production and alpha set it explicitly in their compose files.
 export POS_ORDER_FUNCTIONAL_CURRENCY="${POS_ORDER_FUNCTIONAL_CURRENCY:-USD}"
 
+# pos-supplier's encryption keys (ADR-0050 §7; #2621). Passed through from the caller's environment and never
+# defaulted to a value: a key is a secret and comes from the secret store or .env, never from this script.
+# Under the dev profile pos-supplier mints an ephemeral key and logs one WARN when these are empty.
+export SUPPLIER_AUDIT_ENC_KEY="${SUPPLIER_AUDIT_ENC_KEY:-}"
+export SUPPLIER_VENDOR_TAXID_ENC_KEY="${SUPPLIER_VENDOR_TAXID_ENC_KEY:-}"
+
 # Start all business services
 services=(
     "pos-accounting"

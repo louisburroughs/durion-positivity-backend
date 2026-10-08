@@ -23,7 +23,7 @@ public final class DownstreamPermissionCatalog {
      * {@code PermissionCode.CATALOG_VERSION}.
      * Updated automatically by {@code scripts/generate-permissions.py --sync}.
      */
-    public static final int CATALOG_VERSION = 102;
+    public static final int CATALOG_VERSION = 103;
 
     /**
      * Index-to-authority mapping. Entry at position N is the {@code PERM_*}-prefixed
@@ -781,7 +781,10 @@ public final class DownstreamPermissionCatalog {
         "PERM_accounting:deposit:reverse", // 557
 
         // ── New batch (bits 558–558) ──────────────────────────────────────────
-        "PERM_accounting:ap:approve_over_limit" // 558
+        "PERM_accounting:ap:approve_over_limit", // 558
+
+        // ── New batch (bits 559–559) ──────────────────────────────────────────
+        "PERM_supplier:vendor_tax_id:reveal" // 559
     };
 
     public static String authorityForBit(int bitIndex) {

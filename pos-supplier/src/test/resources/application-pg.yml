@@ -39,6 +39,12 @@ pos:
         # decode to exactly 32 bytes (AES-256) or the cipher refuses to start.
         key: cGctdGVzdC1vbmx5LWtleS1wZy10ZXN0LW9ubHkta2U=
         key-id: pg-test
+    vendor-tax-id:
+      encryption:
+        # VendorTaxIdCipher has the same fail-closed policy and its OWN key (#2621). A fixed, obviously fake
+        # test key, not a secret: base64 of "FAKE-test-only-vendor-tax-id-key" (32 bytes).
+        key: RkFLRS10ZXN0LW9ubHktdmVuZG9yLXRheC1pZC1rZXk=
+        key-id: pg-test-taxid
 
 eureka:
   client:

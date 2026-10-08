@@ -55,6 +55,12 @@ public class SupplierNotFoundException extends RuntimeException {
     /** No remit-to change with that id on the addressed vendor (#2516). */
     public static final String VENDOR_REMIT_CHANGE_NOT_FOUND = "SUPPLIER_VENDOR_REMIT_CHANGE_NOT_FOUND";
 
+    /**
+     * No tax registration with that id on the addressed vendor (#2621). One code for "no such registration"
+     * and "a registration of another vendor": the reveal never confirms an id exists elsewhere.
+     */
+    public static final String VENDOR_TAX_REGISTRATION_NOT_FOUND = "SUPPLIER_VENDOR_TAX_REGISTRATION_NOT_FOUND";
+
     private final String code;
 
     public SupplierNotFoundException(String code, String message) {
