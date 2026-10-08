@@ -159,6 +159,19 @@ class TaxPlausibilityServiceTest {
         }
 
         @Test
+        @DisplayName("an amount at or above T with a rate names its maximum, not only the total")
+        void amountReachingTheTotalWithRateCarriesItsMaximum() {
+            TaxPlausibilityService service = service();
+
+            assertThat(implausible(() -> service.check(request("ON", T, List.of(tax("GST_HST", "113.00")), null))))
+                    .singleElement()
+                    .satisfies(error -> {
+                        assertThat(error.field()).isEqualTo("statedTaxes[0].amount");
+                        assertThat(error.message()).contains("4.82");
+                    });
+        }
+
+        @Test
         @DisplayName("stated amounts whose sum reaches T are TAX_AMOUNT_IMPLAUSIBLE")
         void sumReachingTheTotal() {
             TaxPlausibilityService service = service();

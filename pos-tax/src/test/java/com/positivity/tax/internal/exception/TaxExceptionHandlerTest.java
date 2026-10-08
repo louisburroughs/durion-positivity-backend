@@ -51,6 +51,20 @@ class TaxExceptionHandlerTest {
     }
 
     @Test
+    @DisplayName("an inbound X-Correlation-Id is trimmed before it is echoed, as the shared envelope does")
+    void inboundCorrelationIdIsTrimmed() {
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getHeader("X-Correlation-Id")).thenReturn(" trace-id ");
+
+        ResponseEntity<ApiError> response = sut.handleRequestInvalid(
+                new TaxRequestInvalidException(List.of(new ApiError.FieldError("currencyCode", "must be CAD"))),
+                request);
+
+        assertThat(response.getHeaders().getFirst("X-Correlation-Id")).isEqualTo("trace-id");
+        assertThat(response.getBody().correlationId()).isEqualTo("trace-id");
+    }
+
+    @Test
     @DisplayName("CAP:550 S32b: 400 VALIDATION_ERROR and 422 TAX_AMOUNT_IMPLAUSIBLE carry their field errors")
     void s32bHandlersCarryFieldErrors() {
         TaxExceptionHandler handler = new TaxExceptionHandler(TEST_CLOCK);

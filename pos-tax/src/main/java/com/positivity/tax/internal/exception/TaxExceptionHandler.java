@@ -128,7 +128,7 @@ public class TaxExceptionHandler {
         }
         String header = request.getHeader(X_CORRELATION_ID);
         return (header != null && !header.isBlank())
-                ? header
+                ? header.trim()
                 : UUIDv7Generator.generate().toString();
     }
 }

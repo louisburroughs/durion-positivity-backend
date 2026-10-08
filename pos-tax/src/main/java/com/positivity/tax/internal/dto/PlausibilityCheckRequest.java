@@ -54,7 +54,7 @@ public record PlausibilityCheckRequest(
                 example = "Z1Z 1Z1",
                 requiredMode = Schema.RequiredMode.REQUIRED)
         @NotBlank
-        @Size(max = 20)
+        @Size(min = 1, max = 20)
         String postalCode,
 
         @Schema(
@@ -85,6 +85,8 @@ public record PlausibilityCheckRequest(
         @Schema(
                 description = "Receipt total, tax included, above zero and at most the currency's decimals",
                 example = "150.00",
+                minimum = "0",
+                exclusiveMinimum = true,
                 requiredMode = Schema.RequiredMode.REQUIRED)
         @NotNull
         @Positive

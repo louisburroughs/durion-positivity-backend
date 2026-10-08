@@ -142,8 +142,8 @@ public class TaxPlausibilityService {
                 BigDecimal maximum = maximum(total, rate, profile.currencyExponent());
                 maximums.add(new RegimeMaximum(tax.regime(), maximum));
                 if (tax.amount().compareTo(maximum) > 0) {
-                    implausible.putIfAbsent(
-                            amountField(i), "must not exceed the plausible maximum " + maximum.toPlainString());
+                    // Overwrites the total check's message: with a rate, every refused amount carries its maximum.
+                    implausible.put(amountField(i), "must not exceed the plausible maximum " + maximum.toPlainString());
                 }
             }
         }
