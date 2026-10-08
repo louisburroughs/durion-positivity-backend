@@ -30,6 +30,7 @@ import com.positivity.accounting.internal.service.KafkaFactIngestionRecorder;
 import com.positivity.accounting.internal.service.SupplierInvoiceEventsListener;
 import com.positivity.accounting.internal.service.VendorBillDuplicateGuard;
 import com.positivity.accounting.internal.service.VendorBillInvoiceMatcher;
+import com.positivity.accounting.internal.service.VendorBillLocks;
 import com.positivity.accounting.internal.service.VendorBillReader;
 import com.positivity.accounting.internal.service.VendorBillService;
 import com.positivity.accounting.internal.service.VendorBillServiceImpl;
@@ -101,6 +102,9 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
     private static final LocalDateTime OCT_1_EVENING = LocalDateTime.of(2026, 10, 1, 17, 0);
 
     private final JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
+
+    @Autowired
+    private VendorBillLocks locks;
 
     @Autowired
     private Clock clock;
@@ -184,6 +188,7 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
                 ingestionRecorder,
                 guard,
                 reissues,
+                locks,
                 transactionManager);
     }
 
@@ -450,6 +455,7 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
                 ingestionRecorder,
                 racing,
                 reissues,
+                locks,
                 transactionManager);
 
         String eventId = deliver(TENANT_A, "inv-1", "2026-10-01", "100.00");
@@ -602,7 +608,8 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
                 com.positivity.accounting.internal.service.TestZoneResolvers.utc(java.time.Clock.systemUTC()),
                 matcher,
                 reader,
-                auditLogs);
+                auditLogs,
+                locks);
     }
 
     /**
@@ -755,7 +762,8 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
                 com.positivity.accounting.internal.service.TestZoneResolvers.utc(java.time.Clock.systemUTC()),
                 matcher,
                 reader,
-                auditLogs);
+                auditLogs,
+                locks);
     }
 
     private String create(VendorBillService service, UUID tenant, UUID vendorId) {
@@ -898,9 +906,9 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
         UUID id = UUID.randomUUID();
         owner.update(
                 "INSERT INTO vendor_bill (tenant_id, vendor_bill_id, vendor_id, vendor_name, bill_number,"
-                        + " bill_number_key, bill_date, total_amount, currency, status, created_at, modified_at,"
-                        + " created_by, modified_by) VALUES (?, ?, ?, 'Acme Tire', ?, ?, ?, 100.00, 'USD', ?, TIMESTAMPTZ"
-                        + " '2026-09-01 00:00:00+00', TIMESTAMPTZ '2026-09-01 00:00:00+00', 'test', 'test')",
+                    + " bill_number_key, bill_date, total_amount, currency, status, created_at, modified_at,"
+                    + " created_by, modified_by) VALUES (?, ?, ?, 'Acme Tire', ?, ?, ?, 100.00, 'USD', ?, TIMESTAMPTZ"
+                    + " '2026-09-01 00:00:00+00', TIMESTAMPTZ '2026-09-01 00:00:00+00', 'test', 'test')",
                 tenant,
                 id,
                 vendorId,

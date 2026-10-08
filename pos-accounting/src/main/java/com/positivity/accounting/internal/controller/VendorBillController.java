@@ -167,14 +167,15 @@ public class VendorBillController {
             operationId = "matchVendorInvoice",
             summary = "Match Vendor Invoice",
             description = """
-                Runs the three-way match of a received vendor invoice against pending goods-received bills: a \
-                HIGH match (score 70 or more) within tolerance sends the bill to AWAITING_APPROVAL with \
-                submittedBy SYSTEM and never approves it, a MEDIUM score or a discrepancy parks it in \
+                Runs the three-way match of a received vendor invoice against pending goods-received bills (never \
+                an EDI bill): a HIGH match (score 70 or more) within tolerance sends the bill to AWAITING_APPROVAL \
+                with submittedBy SYSTEM and never approves it, a MEDIUM score or a discrepancy parks it in \
                 MATCH_EXCEPTION, and an AMBIGUOUS match keeps the scored candidates for a person to select one; \
                 nothing is posted.
-                Every routed match keeps what the vendor billed (the billed total and each line's billed \
-                quantity and price) and an append-only evidence record with the score, the points per criterion \
-                (amount 40, products 30, date 20, purchase order 5) and the line comparison.
+                Every routed single match takes the invoice's number and its invoiceDate as the bill date (AW45) \
+                and keeps what the vendor billed (the billed total and each line's billed quantity and price) and \
+                an append-only evidence record with the receipt date, the score, the points per criterion (amount \
+                40 against the received total, products 30, date 20, purchase order 5) and the line comparison.
                 Use this tool when a vendor invoice arrives; do not use createVendorBillFromGoodsReceived, which \
                 records the receipt, and use resolveVendorBillMatchException or selectVendorBillMatchCandidate \
                 to clear exceptions.
@@ -183,11 +184,13 @@ public class VendorBillController {
                 lineItems; dueDate is optional.
                 Emits an ACCOUNTING_VENDOR_BILL_MATCH event and writes a VENDOR_BILL_MATCH_ROUTED audit row; the \
                 returned bill's status conveys the outcome.
-                Returns 400 when no pending receipt matches the invoice or the payload fails validation, and 409 \
-                AP_BILL_DUPLICATE when another live bill (any status except VOIDED or REJECTED) of the vendor \
-                already holds the invoiceReference on the same bill date, compared ignoring case, spacing, \
-                punctuation and leading zeros (referenceId names it), or the generic 409 DUPLICATE_RESOURCE, \
-                with no referenceId, when a concurrent writer takes the number between the check and the commit.
+                Returns 400 when no pending receipt matches the invoice or the payload fails validation (a missing \
+                invoiceDate included), 409 AP_BILL_DUPLICATE when another live bill (any status except VOIDED or \
+                REJECTED) of the vendor already holds the invoiceReference on the invoiceDate, compared ignoring \
+                case, spacing, punctuation and leading zeros (referenceId names it, and the receipt bill is left \
+                untouched), the generic 409 DUPLICATE_RESOURCE when a concurrent writer takes the number between \
+                the check and the commit, and 409 OPTIMISTIC_LOCK when the matched bill was decided meanwhile (send \
+                the invoice again).
                 """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
@@ -201,8 +204,9 @@ public class VendorBillController {
     @ApiResponse(
             responseCode = "409",
             description = "AP_BILL_DUPLICATE: another live bill of this vendor already holds this invoice reference "
-                    + "on the same bill date; referenceId is that bill's vendorBillId. DUPLICATE_RESOURCE, with no "
-                    + "referenceId, when a concurrent writer takes the number between the check and the commit",
+                    + "on the invoice date; referenceId is that bill's vendorBillId. DUPLICATE_RESOURCE, with no "
+                    + "referenceId, when a concurrent writer takes the number between the check and the commit. "
+                    + "OPTIMISTIC_LOCK when the matched bill was decided meanwhile",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<VendorBillResponse> matchVendorInvoice(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -256,19 +260,22 @@ public class VendorBillController {
             operationId = "getVendorBillById",
             summary = "Get Vendor Bill By Id",
             description = """
-                Returns one vendor bill as the review screen reads it: status, amounts and open amount, \
-                channel, the submission and (once approved) the approval, the rejection, the status \
-                explanation, the latest match evidence with any open candidates, the received lines with \
-                what was billed, the checks MATCHED_TO_DELIVERY and WITHIN_PRICE_TOLERANCE, the decisions the \
-                caller may take now (availableActions) and the posting (journalEntryReference, postingDate, \
-                postingDateRule, reversalReference).
+                Returns one vendor bill as the review screen reads it: status, amounts (with the vendor's net and \
+                tax) and open amount, channel, the submission and (once approved) the approval, the rejection, the \
+                status explanation, the latest match evidence, the open candidates of an ambiguous match (each \
+                with candidateId and invoiceEventId), re-issues held against it, the received lines with what was \
+                billed, the checks (MATCHED_TO_DELIVERY, WITHIN_PRICE_TOLERANCE, TOTALS_ADD_UP and, on an EDI bill \
+                classified GOODS, OPEN_DELIVERIES_FROM_VENDOR), the decisions the caller may take now \
+                (availableActions) and the posting (journalEntryReference, postingDate, postingDateRule, \
+                roundingAdjustment, difference, reversalReference).
                 Use this tool when the bill id is already known; use getVendorBillByOriginEventId \
                 instead when only the goods-received event id is available, or listVendorBillsByStage to \
                 browse a stage.
                 Preconditions: the vendor bill must exist.
                 Required inputs: billId (UUID) as a path parameter; there is no request body.
                 Emits an ACCOUNTING_VENDOR_BILL_GET audit event; no state changes.
-                Returns 404 VENDOR_BILL_NOT_FOUND when no vendor bill exists for the supplied id.
+                Returns 404 VENDOR_BILL_NOT_FOUND when no vendor bill exists for the supplied id, 401 without a \
+                valid token, and 403 FORBIDDEN without accounting:ap:view.
                 """,
             tags = {"Vendor Bill API"})
     @ApiResponse(

@@ -24,10 +24,27 @@ public class VendorBillException extends RuntimeException {
         AP_BILL_NOT_APPROVABLE(HttpStatus.CONFLICT),
         /** An approved bill with an allocation cannot be voided; a vendor credit note corrects it (AW42). */
         AP_BILL_NOT_VOIDABLE(HttpStatus.CONFLICT),
+        /**
+         * A goods-receipt bill no vendor invoice has been matched to yet cannot be sent, approved or accepted (AW44):
+         * match the invoice, select a candidate, or void the bill.
+         */
+        AP_BILL_AWAITING_INVOICE(HttpStatus.CONFLICT),
+        /**
+         * A bill's entry, or its void's reversal, reversed outside the void: a bill's ledger follows its status, so
+         * only {@code POST /v1/accounting/vendor-bills/{billId}/void} reverses it, and the void is never reversed itself.
+         */
+        AP_BILL_ENTRY_NOT_REVERSIBLE(HttpStatus.CONFLICT),
         /** Someone else already resolved the ambiguous match. */
         AP_MATCH_CANDIDATE_ALREADY_RESOLVED(HttpStatus.CONFLICT),
         /** No class for the bill (or its non-stock lines) and no vendor default (AW39). */
         AP_BILL_UNCLASSIFIED(HttpStatus.UNPROCESSABLE_CONTENT),
+        /**
+         * The vendor's gross differs from its net + tax beyond the rounding tolerance and the command says nowhere
+         * the difference posts (AW46); nothing is written.
+         */
+        AP_BILL_TOTALS_UNRECONCILED(HttpStatus.UNPROCESSABLE_CONTENT),
+        /** A bill totalling 0.00 has nothing to send, approve or post: correct it or void it. */
+        AP_BILL_ZERO_TOTAL(HttpStatus.UNPROCESSABLE_CONTENT),
         /** A justification or reason absent, blank or under 10 characters. */
         JUSTIFICATION_REQUIRED(HttpStatus.BAD_REQUEST),
         /** A request field outside its contract (an unknown action, a class the document cannot take). */

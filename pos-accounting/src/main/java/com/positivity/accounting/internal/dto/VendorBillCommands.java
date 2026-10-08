@@ -30,7 +30,14 @@ public final class VendorBillCommands {
             String justification,
 
             @Schema(description = "The classification proposed to the approver", requiredMode = NOT_REQUIRED) @Valid
-            VendorBillReview.@Nullable Classification classification) {}
+            VendorBillReview.@Nullable Classification classification,
+
+            @Schema(
+                    description = "Where the vendor's unreconciled difference posts (AW46); required while"
+                            + " gross - (net + tax) exceeds the rounding tolerance",
+                    requiredMode = NOT_REQUIRED)
+            @Valid
+            VendorBillReview.@Nullable Difference difference) {}
 
     @Schema(name = "VendorBillApproveRequest", description = "Approve a bill; the approval posts it")
     public record Approve(
@@ -56,7 +63,14 @@ public final class VendorBillCommands {
                     requiredMode = NOT_REQUIRED)
             @Size(max = 1000)
             @Nullable
-            String overrideJustification) {}
+            String overrideJustification,
+
+            @Schema(
+                    description = "Where the vendor's unreconciled difference posts (AW46); required while"
+                            + " gross - (net + tax) exceeds the rounding tolerance",
+                    requiredMode = NOT_REQUIRED)
+            @Valid
+            VendorBillReview.@Nullable Difference difference) {}
 
     @Schema(name = "VendorBillRejectRequest", description = "Reject a bill awaiting approval")
     public record Reject(
@@ -68,8 +82,11 @@ public final class VendorBillCommands {
             @Nullable
             String reason) {}
 
-    @Schema(name = "VendorBillVoidRequest", description = "Void an approved bill while nothing is allocated to it")
-    public record VoidApproved(
+    @Schema(
+            name = "VendorBillVoidRequest",
+            description = "Void an approved bill while nothing is allocated to it, or a goods-receipt bill no invoice"
+                    + " will match")
+    public record VoidBill(
             @Schema(
                     description = "Why (at least 10 characters)",
                     example = "Billed twice, the vendor confirmed",
@@ -79,8 +96,8 @@ public final class VendorBillCommands {
             String reason,
 
             @Schema(
-                    description = "To reverse into a CLOSED period: at least 10 characters, with"
-                            + " accounting:period:override",
+                    description = "An approved bill only: to reverse into a CLOSED period, at least 10 characters,"
+                            + " with accounting:period:override",
                     requiredMode = NOT_REQUIRED)
             @Size(max = 1000)
             @Nullable
@@ -114,5 +131,12 @@ public final class VendorBillCommands {
                     requiredMode = NOT_REQUIRED)
             @Size(max = 1000)
             @Nullable
-            String overrideJustification) {}
+            String overrideJustification,
+
+            @Schema(
+                    description = "Where the vendor's unreconciled difference posts (AW46), ACCEPT only; required while"
+                            + " gross - (net + tax) exceeds the rounding tolerance",
+                    requiredMode = NOT_REQUIRED)
+            @Valid
+            VendorBillReview.@Nullable Difference difference) {}
 }

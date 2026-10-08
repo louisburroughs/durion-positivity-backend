@@ -351,7 +351,7 @@ FROM (VALUES
     ('BALANCE_SHEET', '1200', 'BS_CUSTOMERS_OWE_YOU', NULL::text, 'Money customers owe you', 4, 'SUM'),
     ('BALANCE_SHEET', '1300', 'BS_INVENTORY', NULL::text, 'Tires and parts on your shelves', 5, 'SUM'),
     ('BALANCE_SHEET', '2000', 'BS_BILLS_FROM_VENDORS', NULL::text, 'Bills from vendors', 6, 'SUM'),
-    ('BALANCE_SHEET', '2100', 'BS_DELIVERIES_NOT_BILLED', NULL::text, 'Deliveries not yet billed', 6, 'SUM'),
+    ('BALANCE_SHEET', '2100', 'BS_DELIVERIES_NOT_BILLED', NULL::text, 'Deliveries not yet billed', 11, 'SUM'),
     ('BALANCE_SHEET', '2200', 'BS_SALES_TAX_COLLECTED', NULL::text, 'Sales tax collected, not yet paid', 7, 'SUM'),
     ('BALANCE_SHEET', '2300', 'BS_CUSTOMER_CREDITS', NULL::text, 'Credits customers can still use', 8, 'SUM'),
     ('BALANCE_SHEET', '3000', 'BS_OWNER_EQUITY', NULL::text, 'Owner''s equity', 9, 'SUM'),

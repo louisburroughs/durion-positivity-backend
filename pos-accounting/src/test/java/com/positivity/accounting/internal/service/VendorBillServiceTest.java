@@ -90,6 +90,9 @@ class VendorBillServiceTest {
     private VendorBillReader reader;
 
     @Mock
+    private VendorBillLocks locks;
+
+    @Mock
     private VendorDirectoryService vendorDirectoryService;
 
     /** A mock answers "no duplicate"; the {@link DuplicateRule} tests build a service over a real guard. */
@@ -121,6 +124,8 @@ class VendorBillServiceTest {
     @BeforeEach
     void setUp() {
         when(reader.read(any(VendorBill.class))).thenAnswer(inv -> response(inv.getArgument(0)));
+        // The lock re-reads the bill as it is now; unchanged unless a test says otherwise.
+        when(locks.lock(any(VendorBill.class))).thenAnswer(inv -> inv.getArgument(0));
         when(evidenceRepository.save(any(VendorBillMatchEvidence.class))).thenAnswer(inv -> inv.getArgument(0));
         vendorBillService = service(duplicateGuard);
         testVendorId = UUID.fromString("00000000-0000-0000-0000-000000000003");
@@ -307,6 +312,94 @@ class VendorBillServiceTest {
                     .extracting(VendorBillInvoiceMatcher.InvoiceLine::productId)
                     .containsExactly(testProductId1, testProductId2);
             assertThat(savedEvidence().getConfidence()).isEqualTo(MatchConfidence.AMBIGUOUS);
+        }
+    }
+
+    @Nested
+    @DisplayName("#2509 review: the received baseline, the invoice date and the lock")
+    class Review {
+
+        @Test
+        @DisplayName("AW45(a): a matched bill takes the invoice date; the evidence keeps the receipt date")
+        void matchedBillTakesTheInvoiceDate() {
+            VendorBill bill = buildBill(
+                    testBillId, VendorBillStatus.PENDING_RECEIPT_MATCH, new BigDecimal("1300.00"), BILL_DATE_CLOSE);
+            bill.setPurchaseOrderId(UUID.randomUUID());
+            pending(bill);
+            when(billLineRepository.findByVendorBill_VendorBillIdOrderByLineNumber(testBillId))
+                    .thenReturn(receivedLines(testBillId));
+
+            vendorBillService.handleVendorInvoiceReceivedEvent(
+                    buildInvoiceEvent(testVendorId, new BigDecimal("1300.00")));
+
+            assertThat(bill.getBillDate()).isEqualTo(INVOICE_DATE);
+            VendorBillMatchEvidence evidence = savedEvidence();
+            assertThat(evidence.getInvoiceDate()).isEqualTo(INVOICE_DATE);
+            assertThat(evidence.getReceivedDate()).isEqualTo(BILL_DATE_CLOSE);
+            verify(duplicateGuard)
+                    .refuseIfDuplicate(
+                            VendorBillDuplicateGuard.Channel.MATCH,
+                            testVendorId,
+                            "INV-2026-001",
+                            INVOICE_DATE,
+                            testBillId);
+        }
+
+        @Test
+        @DisplayName("B-MAJ2: the amount points compare the invoice with the received lines, not a total an earlier"
+                + " match left on the bill")
+        void amountPointsUseTheReceivedTotal() {
+            VendorBill bill = buildBill(
+                    testBillId, VendorBillStatus.PENDING_RECEIPT_MATCH, new BigDecimal("9999.00"), BILL_DATE_CLOSE);
+            bill.setPurchaseOrderId(UUID.randomUUID());
+            pending(bill);
+            when(billLineRepository.findByVendorBill_VendorBillIdOrderByLineNumber(testBillId))
+                    .thenReturn(receivedLines(testBillId));
+
+            vendorBillService.handleVendorInvoiceReceivedEvent(
+                    buildInvoiceEvent(testVendorId, new BigDecimal("1300.00")));
+
+            VendorBillMatchEvidence evidence = savedEvidence();
+            assertThat(evidence.getAmountPoints()).isEqualTo(40);
+            assertThat(evidence.getReceivedTotal()).isEqualByComparingTo("1300.00");
+            assertThat(evidence.isWithinTolerance()).isTrue();
+        }
+
+        @Test
+        @DisplayName("B-MAJ2: an EDI bill is never a match candidate")
+        void ediBillIsNoCandidate() {
+            VendorBill edi = buildBill(
+                    testBillId, VendorBillStatus.PENDING_RECEIPT_MATCH, new BigDecimal("1300.00"), BILL_DATE_CLOSE);
+            edi.setOriginEventType(VendorBillReader.ORIGIN_SUPPLIER_INVOICE);
+            pending(edi);
+
+            assertThatThrownBy(() -> vendorBillService.handleVendorInvoiceReceivedEvent(
+                            buildInvoiceEvent(testVendorId, new BigDecimal("1300.00"))))
+                    .isInstanceOf(VendorBillMatchNotFoundException.class);
+            verify(billRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("B-MAJ3: a bill decided while the invoice was scored is 409 OPTIMISTIC_LOCK; nothing is written")
+        void billDecidedMeanwhileIsRefused() {
+            VendorBill bill = buildBill(
+                    testBillId, VendorBillStatus.PENDING_RECEIPT_MATCH, new BigDecimal("1300.00"), BILL_DATE_CLOSE);
+            bill.setPurchaseOrderId(UUID.randomUUID());
+            pending(bill);
+            when(billLineRepository.findByVendorBill_VendorBillIdOrderByLineNumber(testBillId))
+                    .thenReturn(receivedLines(testBillId));
+            when(locks.lock(bill)).thenAnswer(inv -> {
+                bill.setStatus(VendorBillStatus.VOIDED);
+                return bill;
+            });
+
+            assertThatThrownBy(() -> vendorBillService.handleVendorInvoiceReceivedEvent(
+                            buildInvoiceEvent(testVendorId, new BigDecimal("1300.00"))))
+                    .isInstanceOf(org.springframework.dao.OptimisticLockingFailureException.class)
+                    .hasMessageContaining("VOIDED");
+            verify(billRepository, never()).save(any());
+            verify(evidenceRepository, never()).save(any());
+            verify(matchCandidateRepository, never()).save(any());
         }
     }
 
@@ -722,13 +815,14 @@ class VendorBillServiceTest {
                 "criterion 6: a match onto a live bill's number is refused and the goods-receipt bill is untouched")
         void matchOntoALiveBillsNumberIsRefused() {
             VendorBill goodsReceiptBill = matchableGoodsReceiptBill();
-            VendorBill live = original("INV-77", BILL_DATE_CLOSE.withHour(8), VendorBillStatus.PENDING_RECEIPT_MATCH);
-            // Same vendor, same key, the goods-receipt bill's own date, the goods-receipt bill excluded.
+            VendorBill live = original("INV-77", INVOICE_DATE.withHour(8), VendorBillStatus.PENDING_RECEIPT_MATCH);
+            // Same vendor, same key, the invoice's date (AW45: the bill is about to take it), the goods-receipt
+            // bill excluded.
             when(billRepository.findLiveDuplicate(
                             testVendorId,
                             "INV77",
+                            LocalDateTime.of(2026, 1, 15, 0, 0),
                             LocalDateTime.of(2026, 1, 16, 0, 0),
-                            LocalDateTime.of(2026, 1, 17, 0, 0),
                             testBillId))
                     .thenReturn(Optional.of(live));
 
@@ -744,8 +838,10 @@ class VendorBillServiceTest {
             assertThat(goodsReceiptBill.getApprovalJustification()).isNull();
             assertThat(goodsReceiptBill.getRejectionReason()).isNull();
             assertThat(goodsReceiptBill.getDueDate()).isNull();
+            assertThat(goodsReceiptBill.getBillDate()).as("AW45(b): untouched").isEqualTo(BILL_DATE_CLOSE);
             verify(billRepository, never()).save(any());
             verify(matchCandidateRepository, never()).save(any());
+            verify(evidenceRepository, never()).save(any());
         }
 
         @Test
@@ -764,8 +860,8 @@ class VendorBillServiceTest {
                     .findLiveDuplicate(
                             testVendorId,
                             "INV77",
+                            LocalDateTime.of(2026, 1, 15, 0, 0),
                             LocalDateTime.of(2026, 1, 16, 0, 0),
-                            LocalDateTime.of(2026, 1, 17, 0, 0),
                             testBillId);
         }
     }
@@ -799,7 +895,8 @@ class VendorBillServiceTest {
                 TestZoneResolvers.utc(FIXED_CLOCK),
                 new VendorBillInvoiceMatcher(clock, billLineRepository, evidenceRepository, new LedgerCurrency("USD")),
                 reader,
-                auditLogs);
+                auditLogs,
+                locks);
     }
 
     /** What the reader answers in these tests: the bill's own fields, enough to assert the routing. */

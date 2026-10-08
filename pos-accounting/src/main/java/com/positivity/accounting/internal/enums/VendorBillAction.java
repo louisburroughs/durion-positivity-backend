@@ -20,5 +20,10 @@ public enum VendorBillAction {
     /** Pick this bill among the candidates of an ambiguous match; it moves to AWAITING_APPROVAL. */
     SELECT_CANDIDATE,
     /** {@code APPROVED -> VOIDED} while nothing is allocated (AW42); reverses the entry on the void date. */
-    VOID_APPROVED
+    VOID_APPROVED,
+    /**
+     * {@code PENDING_RECEIPT_MATCH -> VOIDED} for a goods-receipt bill no invoice will match (AW44), with a reason:
+     * posts nothing, the receipt's accrual stays in 2100 for the vendor's EDI bill to clear.
+     */
+    VOID_UNMATCHED
 }

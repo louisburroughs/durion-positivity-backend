@@ -9,8 +9,10 @@ import com.positivity.accounting.internal.entity.VendorBillGlPosting;
 import com.positivity.accounting.internal.entity.VendorBillLine;
 import com.positivity.accounting.internal.entity.VendorBillMatchCandidate;
 import com.positivity.accounting.internal.entity.VendorBillMatchEvidence;
+import com.positivity.accounting.internal.enums.MatchConfidence;
 import com.positivity.accounting.internal.enums.VendorBillAction;
 import com.positivity.accounting.internal.enums.VendorBillCheckOutcome;
+import com.positivity.accounting.internal.enums.VendorBillDebitClass;
 import com.positivity.accounting.internal.enums.VendorBillStage;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.repository.APPaymentAllocationRepository;
@@ -19,6 +21,7 @@ import com.positivity.accounting.internal.repository.VendorBillGlPostingReposito
 import com.positivity.accounting.internal.repository.VendorBillLineRepository;
 import com.positivity.accounting.internal.repository.VendorBillMatchCandidateRepository;
 import com.positivity.accounting.internal.repository.VendorBillMatchEvidenceRepository;
+import com.positivity.accounting.internal.repository.VendorBillReissueRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -66,6 +69,23 @@ public class VendorBillReader {
 
     static final String CHECK_MATCHED_TO_DELIVERY = "MATCHED_TO_DELIVERY";
     static final String CHECK_WITHIN_PRICE_TOLERANCE = "WITHIN_PRICE_TOLERANCE";
+    static final String CHECK_TOTALS_ADD_UP = "TOTALS_ADD_UP";
+    static final String CHECK_OPEN_DELIVERIES_FROM_VENDOR = "OPEN_DELIVERIES_FROM_VENDOR";
+
+    /** {@code MATCHED_TO_DELIVERY} FAIL reasons. */
+    static final String REASON_PICK_A_MATCH = "PICK_A_MATCH";
+
+    static final String REASON_INVOICE_NOT_MATCHED = "INVOICE_NOT_MATCHED";
+    static final String REASON_NO_DELIVERY_RECORDED = "NO_DELIVERY_RECORDED";
+
+    /** Statuses in which a goods-receipt bill is still open for {@code OPEN_DELIVERIES_FROM_VENDOR} (AW44). */
+    static final Set<VendorBillStatus> OPEN_DELIVERY_STATUSES = EnumSet.of(
+            VendorBillStatus.PENDING_RECEIPT_MATCH,
+            VendorBillStatus.MATCH_EXCEPTION,
+            VendorBillStatus.AWAITING_APPROVAL);
+
+    /** At most this many bill numbers in the {@code OPEN_DELIVERIES_FROM_VENDOR} args; the count is always whole. */
+    static final int OPEN_DELIVERIES_LISTED = 10;
 
     /** Page size cap of the stage lists (the vendor-bill list precedent). */
     static final int MAX_PAGE_SIZE = 100;
@@ -76,6 +96,7 @@ public class VendorBillReader {
     private final VendorBillMatchEvidenceRepository evidence;
     private final VendorBillMatchCandidateRepository candidates;
     private final VendorBillGlPostingRepository postings;
+    private final VendorBillReissueRepository reissues;
     private final APPaymentAllocationRepository allocations;
     private final JournalEntryRepository journalEntries;
     private final AccountingCalendarZoneResolver zoneResolver;
@@ -90,11 +111,14 @@ public class VendorBillReader {
         BigDecimal openAmount = nz(bill.getTotalAmount()).subtract(nz(allocated));
         Optional<VendorBillMatchEvidence> latest =
                 evidence.findFirstByVendorBillIdOrderByRecordedAtDescMatchEvidenceIdDesc(billId);
+        List<VendorBillLine> stored = billLines.findByVendorBill_VendorBillIdOrderByLineNumber(billId);
+        boolean matched = invoiceMatched(latest.orElse(null), stored);
         List<VendorBillMatchCandidate> openCandidates = openCandidates(billId);
         Optional<VendorBillGlPosting> posting = postings.findByVendorBillId(billId);
         boolean approvedOnce = posting.isPresent()
                 && (bill.getStatus() == VendorBillStatus.APPROVED || bill.getStatus() == VendorBillStatus.VOIDED);
         VendorBillReview.Channel channel = channelOf(bill);
+        Optional<VendorBillTotals> totals = VendorBillTotals.of(bill);
 
         return VendorBillResponse.builder()
                 .vendorBillId(billId)
@@ -104,6 +128,8 @@ public class VendorBillReader {
                 .billDate(bill.getBillDate())
                 .dueDate(bill.getDueDate())
                 .totalAmount(bill.getTotalAmount())
+                .netAmount(bill.getNetAmount())
+                .taxAmount(bill.getTaxAmount())
                 .currency(bill.getCurrency())
                 .status(bill.getStatus())
                 .originEventId(bill.getOriginEventId())
@@ -117,15 +143,61 @@ public class VendorBillReader {
                 .rejection(rejection(bill))
                 .statusExplanation(statusExplanation(bill))
                 .openAmount(openAmount)
-                .match(latest.map(e -> match(e, openCandidates, currencyCode)).orElse(null))
-                .lines(lines(billId, currencyCode))
-                .checks(checks(channel, latest.orElse(null)))
+                .match(latest.map(VendorBillReader::match).orElse(null))
+                .openCandidates(openCandidates.stream()
+                        .map(c -> candidate(c, currencyCode))
+                        .toList())
+                .reissues(reissues(billId))
+                .lines(lines(stored, currencyCode))
+                .checks(checks(
+                        channel,
+                        matched ? latest.orElse(null) : null,
+                        !openCandidates.isEmpty(),
+                        totals.orElse(null),
+                        openDeliveries(bill, channel, posting.orElse(null))))
                 .availableActions(availableActions(
                         bill.getStatus(),
+                        channel,
                         !openCandidates.isEmpty(),
-                        nz(allocated).signum() != 0))
-                .posting(posting.map(p -> posting(p)).orElse(null))
+                        awaitsInvoice(channel, matched),
+                        nz(allocated).signum() != 0,
+                        posting.isPresent()))
+                .posting(posting.map(this::posting).orElse(null))
                 .build();
+    }
+
+    /**
+     * Whether a vendor invoice was matched to the bill (AW44): its latest evidence is a match or a selection, not the
+     * scoring of an ambiguous match, and its lines carry what the invoice billed (a {@code CORRECT} clears them).
+     */
+    static boolean invoiceMatched(@Nullable VendorBillMatchEvidence latest, @NonNull List<VendorBillLine> stored) {
+        return latest != null && !ambiguousScoring(latest) && VendorBillInvoiceMatcher.billed(stored);
+    }
+
+    /** {@link #invoiceMatched} for a stored bill. */
+    @Transactional(readOnly = true)
+    public boolean invoiceMatched(@NonNull VendorBill bill) {
+        return invoiceMatched(
+                evidence.findFirstByVendorBillIdOrderByRecordedAtDescMatchEvidenceIdDesc(bill.getVendorBillId())
+                        .orElse(null),
+                billLines.findByVendorBill_VendorBillIdOrderByLineNumber(bill.getVendorBillId()));
+    }
+
+    /** Whether a goods-receipt bill still waits for its vendor invoice (AW44); never for an EDI bill. */
+    static boolean awaitsInvoice(VendorBillReview.@Nullable Channel channel, boolean matched) {
+        return channel == VendorBillReview.Channel.GOODS_RECEIPT && !matched;
+    }
+
+    /** Whether an ambiguous match left candidates naming the bill that nobody has picked yet. */
+    @Transactional(readOnly = true)
+    public boolean hasOpenCandidates(@NonNull UUID billId) {
+        return !candidates.findByVendorBill_VendorBillIdAndResolvedFalse(billId).isEmpty();
+    }
+
+    /** The evidence of an ambiguous match's scoring: the top bill was named, nothing billed was kept. */
+    static boolean ambiguousScoring(@NonNull VendorBillMatchEvidence row) {
+        return row.getSource() == VendorBillMatchEvidence.Source.MATCH
+                && row.getConfidence() == MatchConfidence.AMBIGUOUS;
     }
 
     // ---- stages ---------------------------------------------------------------------------------------------
@@ -246,12 +318,19 @@ public class VendorBillReader {
                         ? null
                         : new VendorBillReview.Classification(
                                 bill.getProposedDebitClass(), bill.getProposedExpenseMappingKey());
+        VendorBillReview.Difference difference = bill.getDifferenceClass() == null
+                ? null
+                : new VendorBillReview.Difference(
+                        bill.getDifferenceClass(),
+                        bill.getDifferenceExpenseMappingKey(),
+                        bill.getDifferenceJustification());
         return new VendorBillReview.Approval(
                 bill.getSubmittedAt(),
                 bill.getSubmittedBy(),
                 bill.getSubmissionJustification(),
                 VendorBillReview.RequiredTier.OVER_LIMIT,
                 proposed,
+                difference,
                 approvedOnce ? bill.getApprovedAt() : null,
                 approvedOnce ? bill.getApprovedBy() : null,
                 approvedOnce ? bill.getApprovalJustification() : null);
@@ -272,8 +351,7 @@ public class VendorBillReader {
                 : null;
     }
 
-    private VendorBillReview.Match match(
-            VendorBillMatchEvidence row, List<VendorBillMatchCandidate> open, String currencyCode) {
+    private static VendorBillReview.Match match(VendorBillMatchEvidence row) {
         return new VendorBillReview.Match(
                 row.getMatchEvidenceId(),
                 row.getSource().name(),
@@ -286,12 +364,12 @@ public class VendorBillReader {
                         row.getPurchaseOrderPoints()),
                 row.getInvoiceReference(),
                 row.getInvoiceDate(),
+                row.getReceivedDate(),
                 row.getReceivedTotal(),
                 row.getBilledTotal(),
                 row.getCurrencyCode(),
                 row.isWithinTolerance(),
-                row.getRecordedAt(),
-                open.stream().map(c -> candidate(c, currencyCode)).toList());
+                row.getRecordedAt());
     }
 
     /** The unresolved candidates of every ambiguous match naming this bill. */
@@ -316,6 +394,7 @@ public class VendorBillReader {
                         nzi(c.getPurchaseOrderPoints()));
         return new VendorBillReview.Candidate(
                 c.getCandidateId(),
+                c.getInvoiceEventId(),
                 c.getVendorBillId(),
                 c.getBillNumber(),
                 c.getBillTotalAmount(),
@@ -324,9 +403,23 @@ public class VendorBillReader {
                 points);
     }
 
-    private List<VendorBillReview.Line> lines(UUID billId, String currencyCode) {
+    private List<VendorBillReview.Reissue> reissues(UUID billId) {
+        return reissues.findByVendorBillIdOrderByCreatedAtAsc(billId).stream()
+                .map(r -> new VendorBillReview.Reissue(
+                        r.getVendorBillReissueId(),
+                        r.getIncomingBillNumber(),
+                        r.getIncomingBillDate(),
+                        r.getIncomingAmount(),
+                        r.getIncomingCurrencyCode(),
+                        r.getHeldAmount(),
+                        r.getHeldCurrencyCode(),
+                        r.getCreatedAt()))
+                .toList();
+    }
+
+    private static List<VendorBillReview.Line> lines(List<VendorBillLine> stored, String currencyCode) {
         List<VendorBillReview.Line> lines = new ArrayList<>();
-        for (VendorBillLine line : billLines.findByVendorBill_VendorBillIdOrderByLineNumber(billId)) {
+        for (VendorBillLine line : stored) {
             lines.add(new VendorBillReview.Line(
                     line.getLineNumber(),
                     line.getProductId(),
@@ -341,53 +434,138 @@ public class VendorBillReader {
         return lines;
     }
 
-    /** {@code MATCHED_TO_DELIVERY} and {@code WITHIN_PRICE_TOLERANCE} (§5.2); later stories add codes. */
+    /** The goods-receipt bills of an EDI GOODS bill's vendor still open (AW44); null when the check does not apply. */
+    private @Nullable List<VendorBill> openDeliveries(
+            VendorBill bill, VendorBillReview.@Nullable Channel channel, @Nullable VendorBillGlPosting posting) {
+        VendorBillDebitClass debitClass = posting != null ? posting.getDebitClass() : bill.getProposedDebitClass();
+        if (channel != VendorBillReview.Channel.SUPPLIER_CONNECTION
+                || debitClass != VendorBillDebitClass.GOODS
+                || bill.getVendorId() == null) {
+            return null;
+        }
+        return bills.findByVendorIdAndOriginEventTypeAndStatusInOrderByCreatedAtAscVendorBillIdAsc(
+                bill.getVendorId(), ORIGIN_GOODS_RECEIVED, OPEN_DELIVERY_STATUSES);
+    }
+
+    /**
+     * The checks of the review (§5.2; AW44, AW46):
+     *
+     * <ul>
+     *   <li>{@code MATCHED_TO_DELIVERY}: PASS once an invoice is matched (a HIGH or MEDIUM match, or a selection;
+     *       MEDIUM passes, its lower confidence is in {@code args.confidence}); FAIL with {@code reason} {@code
+     *       PICK_A_MATCH} while an ambiguous match's candidates are open, {@code INVOICE_NOT_MATCHED} for a
+     *       goods-receipt bill and {@code NO_DELIVERY_RECORDED} for an EDI bill.
+     *   <li>{@code WITHIN_PRICE_TOLERANCE}: the matched invoice against the receipt; NOT_APPLICABLE before a match.
+     *   <li>{@code TOTALS_ADD_UP}: only on a bill with the vendor's header totals; FAIL with {@code difference} beyond
+     *       the rounding tolerance.
+     *   <li>{@code OPEN_DELIVERIES_FROM_VENDOR}: only on an EDI bill classified GOODS; FAIL with {@code count} and
+     *       {@code billNumbers} while the vendor has goods-receipt bills open. Informational: it blocks nothing.
+     * </ul>
+     *
+     * @param matched the latest evidence when an invoice is matched to the bill, else null
+     * @param openDeliveries the vendor's open goods-receipt bills, or null when the check does not apply
+     */
     static @NonNull List<VendorBillReview.Check> checks(
-            VendorBillReview.@Nullable Channel channel, @Nullable VendorBillMatchEvidence latest) {
+            VendorBillReview.@Nullable Channel channel,
+            @Nullable VendorBillMatchEvidence matched,
+            boolean hasOpenCandidates,
+            @Nullable VendorBillTotals totals,
+            @Nullable List<VendorBill> openDeliveries) {
         List<VendorBillReview.Check> checks = new ArrayList<>();
-        if (latest != null) {
+        if (matched != null && !hasOpenCandidates) {
             Map<String, String> args = new LinkedHashMap<>();
-            args.put("invoiceReference", latest.getInvoiceReference());
-            args.put("score", String.valueOf(latest.getScore()));
-            args.put("confidence", latest.getConfidence().name());
+            args.put("invoiceReference", matched.getInvoiceReference());
+            args.put("score", String.valueOf(matched.getScore()));
+            args.put("confidence", matched.getConfidence().name());
             checks.add(new VendorBillReview.Check(CHECK_MATCHED_TO_DELIVERY, VendorBillCheckOutcome.PASS, args));
-            Map<String, String> totals = new LinkedHashMap<>();
-            totals.put("receivedTotal", latest.getReceivedTotal().toPlainString());
-            totals.put("billedTotal", latest.getBilledTotal().toPlainString());
-            totals.put("currencyCode", latest.getCurrencyCode());
+            Map<String, String> amounts = new LinkedHashMap<>();
+            amounts.put("receivedTotal", matched.getReceivedTotal().toPlainString());
+            amounts.put("billedTotal", matched.getBilledTotal().toPlainString());
+            amounts.put("currencyCode", matched.getCurrencyCode());
             checks.add(new VendorBillReview.Check(
                     CHECK_WITHIN_PRICE_TOLERANCE,
-                    latest.isWithinTolerance() ? VendorBillCheckOutcome.PASS : VendorBillCheckOutcome.FAIL,
-                    totals));
-            return checks;
+                    matched.isWithinTolerance() ? VendorBillCheckOutcome.PASS : VendorBillCheckOutcome.FAIL,
+                    amounts));
+        } else {
+            String reason;
+            if (hasOpenCandidates) {
+                reason = REASON_PICK_A_MATCH;
+            } else if (channel == VendorBillReview.Channel.GOODS_RECEIPT) {
+                reason = REASON_INVOICE_NOT_MATCHED;
+            } else {
+                reason = REASON_NO_DELIVERY_RECORDED;
+            }
+            checks.add(new VendorBillReview.Check(
+                    CHECK_MATCHED_TO_DELIVERY, VendorBillCheckOutcome.FAIL, Map.of("reason", reason)));
+            checks.add(new VendorBillReview.Check(
+                    CHECK_WITHIN_PRICE_TOLERANCE, VendorBillCheckOutcome.NOT_APPLICABLE, Map.of()));
         }
-        Map<String, String> args = new LinkedHashMap<>();
-        args.put(
-                "reason",
-                channel == VendorBillReview.Channel.GOODS_RECEIPT ? "INVOICE_NOT_MATCHED" : "NO_DELIVERY_RECORDED");
-        checks.add(new VendorBillReview.Check(CHECK_MATCHED_TO_DELIVERY, VendorBillCheckOutcome.FAIL, args));
-        checks.add(new VendorBillReview.Check(
-                CHECK_WITHIN_PRICE_TOLERANCE, VendorBillCheckOutcome.NOT_APPLICABLE, Map.of()));
+        if (totals != null) {
+            Map<String, String> args = new LinkedHashMap<>();
+            args.put("difference", totals.difference().toPlainString());
+            args.put("netAmount", totals.net().toPlainString());
+            args.put("taxAmount", totals.tax().toPlainString());
+            args.put("totalAmount", totals.gross().toPlainString());
+            args.put("tolerance", totals.tolerance().toPlainString());
+            checks.add(new VendorBillReview.Check(
+                    CHECK_TOTALS_ADD_UP,
+                    totals.reconciled() ? VendorBillCheckOutcome.PASS : VendorBillCheckOutcome.FAIL,
+                    args));
+        }
+        if (openDeliveries != null) {
+            Map<String, String> args = new LinkedHashMap<>();
+            args.put("count", String.valueOf(openDeliveries.size()));
+            args.put(
+                    "billNumbers",
+                    openDeliveries.stream()
+                            .limit(OPEN_DELIVERIES_LISTED)
+                            .map(VendorBill::getBillNumber)
+                            .collect(Collectors.joining(", ")));
+            checks.add(new VendorBillReview.Check(
+                    CHECK_OPEN_DELIVERIES_FROM_VENDOR,
+                    openDeliveries.isEmpty() ? VendorBillCheckOutcome.PASS : VendorBillCheckOutcome.FAIL,
+                    args));
+        }
         return checks;
     }
 
     /**
-     * The decisions valid for {@code status} whose permission the caller holds (P5). {@code blockedReason} is S13's;
-     * an approved bill with an allocation is not voidable, so its void is not listed.
+     * The decisions valid for the bill now whose permission the caller holds (P5). {@code blockedReason} is S13's.
+     *
+     * <ul>
+     *   <li>While an ambiguous match's candidates are open, the bill is picked first: no send or accept (#2509
+     *       review).
+     *   <li>A goods-receipt bill no invoice is matched to is never sent, approved or accepted (AW44); in {@code
+     *       PENDING_RECEIPT_MATCH} it can be voided ({@code VOID_UNMATCHED}).
+     *   <li>An approved bill is voidable only with its posting and no allocation.
+     * </ul>
      */
     static @NonNull List<VendorBillReview.AvailableAction> availableActions(
-            @NonNull VendorBillStatus status, boolean hasOpenCandidates, boolean allocated) {
+            @NonNull VendorBillStatus status,
+            VendorBillReview.@Nullable Channel channel,
+            boolean hasOpenCandidates,
+            boolean awaitingInvoice,
+            boolean allocated,
+            boolean posted) {
         List<VendorBillReview.AvailableAction> actions = new ArrayList<>();
+        boolean sendable = !hasOpenCandidates && !awaitingInvoice;
         switch (status) {
             case PENDING_RECEIPT_MATCH -> {
-                offer(actions, VendorBillAction.SUBMIT_FOR_APPROVAL);
+                if (sendable) {
+                    offer(actions, VendorBillAction.SUBMIT_FOR_APPROVAL);
+                }
                 if (hasOpenCandidates) {
                     offer(actions, VendorBillAction.SELECT_CANDIDATE);
                 }
+                if (channel == VendorBillReview.Channel.GOODS_RECEIPT) {
+                    offer(actions, VendorBillAction.VOID_UNMATCHED);
+                }
             }
             case MATCH_EXCEPTION -> {
-                offer(actions, VendorBillAction.SUBMIT_FOR_APPROVAL);
-                offer(actions, VendorBillAction.ACCEPT_EXCEPTION);
+                if (sendable) {
+                    offer(actions, VendorBillAction.SUBMIT_FOR_APPROVAL);
+                    offer(actions, VendorBillAction.ACCEPT_EXCEPTION);
+                }
                 offer(actions, VendorBillAction.CORRECT_EXCEPTION);
                 offer(actions, VendorBillAction.VOID_EXCEPTION);
                 if (hasOpenCandidates) {
@@ -395,11 +573,13 @@ public class VendorBillReader {
                 }
             }
             case AWAITING_APPROVAL -> {
-                offer(actions, VendorBillAction.APPROVE);
+                if (!awaitingInvoice) {
+                    offer(actions, VendorBillAction.APPROVE);
+                }
                 offer(actions, VendorBillAction.REJECT);
             }
             case APPROVED -> {
-                if (!allocated) {
+                if (posted && !allocated) {
                     offer(actions, VendorBillAction.VOID_APPROVED);
                 }
             }
@@ -425,6 +605,9 @@ public class VendorBillReader {
                 posting.getPostingDateRule(),
                 posting.getGrossAmount(),
                 posting.getCurrencyCode(),
+                posting.getRoundingAdjustment() == null ? BigDecimal.ZERO.setScale(2) : posting.getRoundingAdjustment(),
+                posting.getDifferenceClass(),
+                posting.getDifferenceAmount(),
                 posting.getReversalJournalEntryId() == null ? null : entryNumber(posting.getReversalJournalEntryId()),
                 posting.getReversalDate());
     }

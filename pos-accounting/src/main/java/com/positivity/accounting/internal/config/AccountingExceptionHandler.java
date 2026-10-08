@@ -192,10 +192,31 @@ public class AccountingExceptionHandler {
         return build(HttpStatus.UNPROCESSABLE_CONTENT, "GL_ACCOUNT_NOT_ACTIVE", ex.getMessage(), request);
     }
 
+    /**
+     * A posting with no active mapping for one of its keys (#2601): 422, guided when the posting named the mapping
+     * ({@code referenceId} {@code CATEGORY/KEY} and a {@code nextAction}), as a vendor-bill approval does.
+     */
     @ExceptionHandler(GLMappingNotConfiguredException.class)
     public ResponseEntity<ApiError> handleGLMappingNotConfigured(
             GLMappingNotConfiguredException ex, HttpServletRequest request) {
-        return build(HttpStatus.UNPROCESSABLE_CONTENT, "GL_MAPPING_NOT_CONFIGURED", ex.getMessage(), request);
+        if (ex.getNextAction() == null) {
+            return build(HttpStatus.UNPROCESSABLE_CONTENT, "GL_MAPPING_NOT_CONFIGURED", ex.getMessage(), request);
+        }
+        String correlationId = resolveCorrelationId(request);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        return new ResponseEntity<>(
+                ApiError.guided(
+                        "GL_MAPPING_NOT_CONFIGURED",
+                        ex.getMessage(),
+                        HttpStatus.UNPROCESSABLE_CONTENT.value(),
+                        Instant.now(clock).toString(),
+                        correlationId,
+                        ex.getReferenceId(),
+                        ex.getNextAction(),
+                        null),
+                headers,
+                HttpStatus.UNPROCESSABLE_CONTENT);
     }
 
     /**

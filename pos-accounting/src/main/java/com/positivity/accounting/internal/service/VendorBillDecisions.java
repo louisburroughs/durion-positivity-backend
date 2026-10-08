@@ -15,7 +15,13 @@ import org.springframework.security.access.AccessDeniedException;
  *
  * <p>Until S13 adds the clerk limit (default 0) every bill is over it, so approving, and {@code ACCEPT} with it,
  * needs {@code accounting:ap:approve_over_limit}; S13 widens approval to {@code accounting:ap:approve} within the
- * limit. Voiding an approved bill needs {@code accounting:ap:reject} plus that same approval tier (AW42).
+ * limit. Voiding an approved bill needs {@code accounting:ap:reject} plus that same approval tier (AW42); voiding a
+ * goods-receipt bill no invoice will match needs {@code accounting:ap:reject} alone (AW44).
+ *
+ * <p><b>For S13.</b> The tier is {@code OVER_LIMIT} for every bill here and in the read's {@code requiredTier}, and
+ * the audit records the limit as 0: S13 replaces {@link #mayTake} for {@code APPROVE}, {@code ACCEPT_EXCEPTION} and
+ * {@code VOID_APPROVED} with the bill's tier against the stored limit, fills {@code blockedReason} for the rule-based
+ * blocks, and records the real limit in the audit row. Nothing else here depends on the limit.
  */
 final class VendorBillDecisions {
 
@@ -32,7 +38,7 @@ final class VendorBillDecisions {
             case SUBMIT_FOR_APPROVAL, CORRECT_EXCEPTION, SELECT_CANDIDATE ->
                 has(AccountingPermissions.AP_APPROVE) || has(AccountingPermissions.AP_APPROVE_OVER_LIMIT);
             case APPROVE, ACCEPT_EXCEPTION -> has(AccountingPermissions.AP_APPROVE_OVER_LIMIT);
-            case REJECT, VOID_EXCEPTION -> has(AccountingPermissions.AP_REJECT);
+            case REJECT, VOID_EXCEPTION, VOID_UNMATCHED -> has(AccountingPermissions.AP_REJECT);
             case VOID_APPROVED ->
                 has(AccountingPermissions.AP_REJECT) && has(AccountingPermissions.AP_APPROVE_OVER_LIMIT);
         };
@@ -48,8 +54,13 @@ final class VendorBillDecisions {
     static boolean justificationRequired(@NonNull VendorBillAction action) {
         return switch (action) {
             case APPROVE, SELECT_CANDIDATE -> false;
-            case SUBMIT_FOR_APPROVAL, REJECT, ACCEPT_EXCEPTION, CORRECT_EXCEPTION, VOID_EXCEPTION, VOID_APPROVED ->
-                true;
+            case SUBMIT_FOR_APPROVAL,
+                    REJECT,
+                    ACCEPT_EXCEPTION,
+                    CORRECT_EXCEPTION,
+                    VOID_EXCEPTION,
+                    VOID_APPROVED,
+                    VOID_UNMATCHED -> true;
         };
     }
 
@@ -75,11 +86,18 @@ final class VendorBillDecisions {
         return required(value, field);
     }
 
-    /** The caller, from the security context (ADR-0018); never a body field. */
+    /**
+     * The caller, from the security context (ADR-0018); never a body field. A decision is a person's: a caller
+     * without a name is refused with 403 rather than recorded as {@value #SYSTEM}, which only a HIGH match writes.
+     */
     static @NonNull String actor() {
-        return SecurityContextHelper.isAuthenticated()
-                ? SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM)
-                : SYSTEM;
+        String name = SecurityContextHelper.isAuthenticated()
+                ? SecurityContextHelper.getCurrentUsernameOrDefault("").trim()
+                : "";
+        if (name.isEmpty() || SYSTEM.equalsIgnoreCase(name)) {
+            throw new AccessDeniedException("A vendor-bill decision needs a named caller");
+        }
+        return name;
     }
 
     private static boolean has(String authority) {

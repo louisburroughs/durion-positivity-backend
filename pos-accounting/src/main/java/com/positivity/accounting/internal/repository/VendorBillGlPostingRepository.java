@@ -9,4 +9,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface VendorBillGlPostingRepository extends JpaRepository<VendorBillGlPosting, UUID> {
 
     Optional<VendorBillGlPosting> findByVendorBillId(UUID vendorBillId);
+
+    /** The posting whose entry is {@code journalEntryId}: the entry a bill's approval posted. */
+    Optional<VendorBillGlPosting> findByJournalEntryId(UUID journalEntryId);
+
+    /** The posting whose void reversed it with {@code reversalJournalEntryId}. */
+    Optional<VendorBillGlPosting> findByReversalJournalEntryId(UUID reversalJournalEntryId);
 }

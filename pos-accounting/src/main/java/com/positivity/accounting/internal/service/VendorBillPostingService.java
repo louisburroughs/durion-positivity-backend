@@ -7,7 +7,9 @@ import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.entity.VendorBillGlPosting;
 import com.positivity.accounting.internal.entity.VendorBillLine;
 import com.positivity.accounting.internal.enums.VendorBillDebitClass;
+import com.positivity.accounting.internal.enums.VendorBillDifferenceClass;
 import com.positivity.accounting.internal.enums.VendorBillPostingDateRule;
+import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
 import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.accounting.internal.repository.VendorBillGlPostingRepository;
 import com.positivity.accounting.internal.repository.VendorBillLineRepository;
@@ -23,6 +25,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -56,9 +59,15 @@ import org.springframework.transaction.annotation.Transactional;
  * </ul>
  *
  * A credit note posts the mirror: Dr {@code ACCOUNTS_PAYABLE} / Cr its {@code EXPENSE_<CODE>} key ({@code EXPENSE})
- * or {@code PURCHASE_PRICE_DIFFERENCE} ({@code PRICE_ALLOWANCE}). A bill never debits 1300 (ADR-0048 §1). No phase-3
- * source states freight separately, so {@code FREIGHT_IN} (5060) is seeded for the template but no bill posts to it
- * yet.
+ * or {@code PURCHASE_PRICE_DIFFERENCE} ({@code PRICE_ALLOWANCE}). A bill never debits 1300 (ADR-0048 §1).
+ *
+ * <p><b>The vendor's own totals (AW46).</b> A bill with the vendor's header totals (EDI) debits its class at the
+ * stated net, and the stated tax as above: GOODS is Dr 2100 net / Dr 5050 tax, EXPENSE is Dr {@code EXPENSE_<CODE>}
+ * net + tax. Accounts payable is always the gross. A gap {@code gross - (net + tax)} within the rounding tolerance
+ * ({@link VendorBillTotals}) goes on the largest debit and is kept as {@code roundingAdjustment}; a larger one posts
+ * where the person deciding said ({@code difference}): FREIGHT to {@code FREIGHT_IN} (5060), GOODS to 2100, EXPENSE
+ * to its key, PRICE_DIFFERENCE to 5050, a negative gap as a credit. Without that decision it is 422 {@code
+ * AP_BILL_TOTALS_UNRECONCILED}.
  *
  * <p><b>The date (AW42).</b> The bill date when it is on or before the approval date and its period is open (neither
  * closed nor hard-locked); otherwise the approval date, both in the tenant's accounting calendar. The entry then goes
@@ -67,7 +76,11 @@ import org.springframework.transaction.annotation.Transactional;
  * missing or inactive mapping is refused too (#2601). Every refusal propagates, so the approval rolls back with it.
  *
  * <p><b>The void (AW42).</b> The entry is reversed through the journal-entry reversal (ADR-0047: linked both ways),
- * dated on the void date in that date's period, never back in the original period.
+ * dated on the void date in that date's period, never back in the original period. Only the void reverses it: the
+ * journal-entry endpoint refuses a bill's entry and its void's ({@link VendorBillReversalReaction}).
+ *
+ * <p><b>Mappings (#2601).</b> A key with no active mapping on the posting date is 422 {@code
+ * GL_MAPPING_NOT_CONFIGURED}, naming the category and key and what to do next; the approval rolls back.
  */
 @Slf4j
 @Component
@@ -80,6 +93,7 @@ public class VendorBillPostingService {
     static final String ACCOUNTS_PAYABLE_KEY = "ACCOUNTS_PAYABLE";
     static final String GOODS_RECEIVED_NOT_BILLED_KEY = "GOODS_RECEIVED_NOT_BILLED";
     static final String PURCHASE_PRICE_DIFFERENCE_KEY = "PURCHASE_PRICE_DIFFERENCE";
+    static final String FREIGHT_IN_KEY = "FREIGHT_IN";
 
     /** Prefix of the {@code VENDOR_BILL} expense keys: {@code EXPENSE_<CODE>}, the nine AW18 codes. */
     public static final String EXPENSE_KEY_PREFIX = "EXPENSE_";
@@ -113,15 +127,29 @@ public class VendorBillPostingService {
     /** One debit (positive) or credit (negative) of the entry, by {@code VENDOR_BILL} mapping key. */
     record Leg(@NonNull String mappingKey, @NonNull BigDecimal signedAmount) {}
 
+    /** Where a vendor's unreconciled difference posts (AW46): the class, its expense key for EXPENSE. */
+    public record Difference(
+            @NonNull VendorBillDifferenceClass differenceClass,
+            @Nullable String expenseMappingKey) {}
+
+    /** The entry's legs, the rounding put on the largest debit, and the unreconciled difference posted. */
+    record Entry(
+            @NonNull List<Leg> legs,
+            @NonNull BigDecimal roundingAdjustment,
+            @Nullable Difference difference,
+            @Nullable BigDecimal differenceAmount) {}
+
     /**
      * Posts {@code bill} for its approval. Joins the approval's transaction: any refusal propagates and rolls the
      * approval back with it (AW42).
      *
      * @param overrideJustification honoured by the period gate only for a holder of {@code accounting:period:override}
      * @return the posting row, entry and date included
-     * @throws VendorBillException 409 {@code AP_BILL_NOT_APPROVABLE} when the bill is already posted, has nothing to
-     *     post or is held for its currency; 422 {@code AP_BILL_UNCLASSIFIED} without a needed class; 400 {@code
+     * @throws VendorBillException 409 {@code AP_BILL_NOT_APPROVABLE} when the bill is already posted or is held for
+     *     its currency; 422 {@code AP_BILL_ZERO_TOTAL} for a bill of 0.00, {@code AP_BILL_UNCLASSIFIED} without a
+     *     needed class and {@code AP_BILL_TOTALS_UNRECONCILED} without a needed difference; 400 {@code
      *     VALIDATION_ERROR} for a class the document cannot take
+     * @throws GLMappingNotConfiguredException 422 for a key with no active mapping on the posting date
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public @NonNull VendorBillGlPosting post(
@@ -147,14 +175,14 @@ public class VendorBillPostingService {
                     "Bill " + bill.getBillNumber() + " is already posted");
         }
         Classification effective = classification == null ? new Classification(null, null) : classification;
-        List<Leg> legs = legs(bill, billLines.findByVendorBill_VendorBillIdOrderByLineNumber(billId), effective);
+        Entry entry = entry(
+                bill, billLines.findByVendorBill_VendorBillIdOrderByLineNumber(billId), effective, difference(bill));
 
         PostingDate postingDate = postingDate(bill);
         List<JournalEntryCreateRequest.JournalEntryLineRequest> lines = new ArrayList<>();
-        for (Leg leg : legs) {
-            UUID account = glMappingResolver.resolveGLAccount(
-                    POSTING_CATEGORY, leg.mappingKey(), postingDate.date().atStartOfDay());
-            lines.add(line(account, leg.signedAmount(), describe(leg.mappingKey(), bill)));
+        for (Leg leg : entry.legs()) {
+            UUID account = resolve(bill, leg.mappingKey(), postingDate.date());
+            lines.add(line(account, leg.signedAmount(), describe(leg, bill)));
         }
         JournalEntryResponse created = journalEntryService.createJournalEntry(JournalEntryCreateRequest.builder()
                 .transactionDate(postingDate.date().atStartOfDay())
@@ -176,6 +204,12 @@ public class VendorBillPostingService {
         posting.setExpenseMappingKey(effective.expenseMappingKey());
         posting.setGrossAmount(gross(bill));
         posting.setCurrencyCode(ledgerCurrency.code());
+        posting.setRoundingAdjustment(entry.roundingAdjustment());
+        if (entry.difference() != null) {
+            posting.setDifferenceClass(entry.difference().differenceClass());
+            posting.setDifferenceAmount(entry.differenceAmount());
+            posting.setDifferenceJustification(bill.getDifferenceJustification());
+        }
         posting.setPostedAt(Instant.now(clock));
         posting.setPostedBy(actor);
         VendorBillGlPosting saved = postings.saveAndFlush(posting);
@@ -211,11 +245,14 @@ public class VendorBillPostingService {
         }
         // The void's own date, in that date's period: never back in the original period, even when it is open.
         LocalDate voidDate = zoneResolver.today();
-        JournalEntryResponse reversal = journalEntryService.reverseJournalEntry(
-                posting.getJournalEntryId(),
-                truncate("Vendor bill " + bill.getBillNumber() + " voided", 200),
-                voidDate,
-                overrideJustification);
+        // Bound for the reversal reaction: this reversal is the bill's void, the one route that may reverse it.
+        JournalEntryResponse reversal = VendorBillReversalReaction.underVoid(
+                bill.getVendorBillId(),
+                () -> journalEntryService.reverseJournalEntry(
+                        posting.getJournalEntryId(),
+                        truncate("Vendor bill " + bill.getBillNumber() + " voided", 200),
+                        voidDate,
+                        overrideJustification));
         posting.setReversalSourceKey(VOID_SOURCE_KEY_PREFIX + bill.getVendorBillId());
         posting.setReversalJournalEntryId(reversal.getJournalEntryId());
         posting.setReversalDate(voidDate);
@@ -256,26 +293,49 @@ public class VendorBillPostingService {
 
     /**
      * The entry's legs by mapping key, summed per key, the credit last. Debits are positive, credits negative; they
-     * net to zero, the billed gross on {@code ACCOUNTS_PAYABLE} (a residual cent of rounding goes to the largest
-     * debit, so the payable is always the billed gross).
+     * net to zero, the billed gross on {@code ACCOUNTS_PAYABLE}. A residual within the rounding tolerance goes to the
+     * largest debit and is returned as the rounding adjustment (AW46).
+     *
+     * @param difference where an unreconciled difference of the vendor's totals posts; null when none was decided
+     * @throws VendorBillException 422 {@code AP_BILL_ZERO_TOTAL} for a bill of 0.00; 422 {@code
+     *     AP_BILL_TOTALS_UNRECONCILED} when the vendor's totals are apart by more than the tolerance and no
+     *     difference is decided
      */
-    static @NonNull List<Leg> legs(
-            @NonNull VendorBill bill, @NonNull List<VendorBillLine> lines, @NonNull Classification classification) {
+    static @NonNull Entry entry(
+            @NonNull VendorBill bill,
+            @NonNull List<VendorBillLine> lines,
+            @NonNull Classification classification,
+            @Nullable Difference difference) {
         BigDecimal gross = gross(bill);
         if (gross.signum() == 0) {
             throw new VendorBillException(
-                    VendorBillException.Code.AP_BILL_NOT_APPROVABLE,
-                    "Bill " + bill.getBillNumber() + " totals 0.00; there is nothing to approve or post");
+                    VendorBillException.Code.AP_BILL_ZERO_TOTAL,
+                    "Bill " + bill.getBillNumber() + " totals 0.00; there is nothing to approve or post. Correct it"
+                            + " or void it");
         }
         Map<String, BigDecimal> debits = new LinkedHashMap<>();
-        if (gross.signum() < 0) {
-            creditNote(bill, gross.negate(), classification, debits);
-        } else if (lines.isEmpty()) {
-            headerOnly(bill, gross, classification, debits);
+        Difference posted = null;
+        BigDecimal differenceAmount = null;
+        Optional<VendorBillTotals> totals = VendorBillTotals.of(bill);
+        if (totals.isPresent() || lines.isEmpty() || gross.signum() < 0) {
+            VendorBillTotals stated = totals.orElseGet(() -> legacyTotals(bill, gross));
+            if (gross.signum() < 0) {
+                creditNote(bill, stated.net().add(stated.tax()), classification, debits);
+            } else {
+                headerOnly(bill, stated, classification, debits);
+            }
+            if (!stated.reconciled()) {
+                if (difference == null) {
+                    throw unreconciled(bill, stated);
+                }
+                add(debits, differenceKey(bill, difference), stated.difference());
+                posted = difference;
+                differenceAmount = stated.difference();
+            }
         } else {
             byLine(bill, lines, classification, debits);
         }
-        balanceOnLargest(debits, gross);
+        BigDecimal rounding = balanceOnLargest(debits, gross);
         List<Leg> legs = new ArrayList<>();
         debits.forEach((key, amount) -> {
             if (amount.signum() != 0) {
@@ -283,16 +343,60 @@ public class VendorBillPostingService {
             }
         });
         legs.add(new Leg(ACCOUNTS_PAYABLE_KEY, gross.negate()));
-        return legs;
+        return new Entry(legs, rounding, posted, differenceAmount);
     }
 
-    /** A credit note (AW39): Dr accounts payable / Cr its class, tax included. */
+    /** The legs alone; see {@link #entry}. */
+    static @NonNull List<Leg> legs(
+            @NonNull VendorBill bill,
+            @NonNull List<VendorBillLine> lines,
+            @NonNull Classification classification,
+            @Nullable Difference difference) {
+        return entry(bill, lines, classification, difference).legs();
+    }
+
+    /**
+     * Refuses a bill whose vendor totals need a decision nobody has made (AW46): 422 {@code
+     * AP_BILL_TOTALS_UNRECONCILED}. The approval service asks before writing anything; the posting asks again.
+     */
+    static void requireReconciled(@NonNull VendorBill bill, @Nullable Difference difference) {
+        Optional<VendorBillTotals> totals = VendorBillTotals.of(bill);
+        if (totals.isPresent() && !totals.get().reconciled() && difference == null) {
+            throw unreconciled(bill, totals.get());
+        }
+    }
+
+    /** The difference decided on {@code bill} (at submission, approval or acceptance), or null. */
+    static @Nullable Difference difference(@NonNull VendorBill bill) {
+        return bill.getDifferenceClass() == null
+                ? null
+                : new Difference(bill.getDifferenceClass(), bill.getDifferenceExpenseMappingKey());
+    }
+
+    private static VendorBillException unreconciled(VendorBill bill, VendorBillTotals totals) {
+        return new VendorBillException(
+                VendorBillException.Code.AP_BILL_TOTALS_UNRECONCILED,
+                totals.explanation() + " (difference " + totals.difference().toPlainString() + ") on bill "
+                        + bill.getBillNumber() + "; say where it posts (difference: FREIGHT, GOODS, EXPENSE or"
+                        + " PRICE_DIFFERENCE, with a justification), correct the bill or void it");
+    }
+
+    /** A bill stored before AW46 without its net: net = gross - tax, the tax as stated. */
+    private static VendorBillTotals legacyTotals(VendorBill bill, BigDecimal gross) {
+        BigDecimal tax = scaled(bill.getTaxAmount());
+        if (gross.signum() < 0 && tax.signum() > 0) {
+            tax = tax.negate();
+        }
+        return new VendorBillTotals(gross, gross.subtract(tax), tax, BigDecimal.ZERO.setScale(SCALE), BigDecimal.ZERO);
+    }
+
+    /** A credit note (AW39): Dr accounts payable / Cr its class, tax included. {@code signed} is negative. */
     private static void creditNote(
-            VendorBill bill, BigDecimal magnitude, Classification classification, Map<String, BigDecimal> debits) {
+            VendorBill bill, BigDecimal signed, Classification classification, Map<String, BigDecimal> debits) {
         VendorBillDebitClass debitClass = requireClass(bill, classification);
         switch (debitClass) {
-            case EXPENSE -> add(debits, expenseKey(bill, classification), magnitude.negate());
-            case PRICE_ALLOWANCE -> add(debits, PURCHASE_PRICE_DIFFERENCE_KEY, magnitude.negate());
+            case EXPENSE -> add(debits, expenseKey(bill, classification), signed);
+            case PRICE_ALLOWANCE -> add(debits, PURCHASE_PRICE_DIFFERENCE_KEY, signed);
             default ->
                 throw new VendorBillException(
                         VendorBillException.Code.VALIDATION_ERROR,
@@ -300,22 +404,40 @@ public class VendorBillPostingService {
         }
     }
 
-    /** A bill whose lines are not stored (AW39): one class for the whole bill, the stated tax into its cost. */
+    /** A bill whose lines are not stored (AW39, AW46): one class for the whole bill, at the stated net and tax. */
     private static void headerOnly(
-            VendorBill bill, BigDecimal gross, Classification classification, Map<String, BigDecimal> debits) {
+            VendorBill bill, VendorBillTotals stated, Classification classification, Map<String, BigDecimal> debits) {
         VendorBillDebitClass debitClass = requireClass(bill, classification);
-        BigDecimal tax = scaled(bill.getTaxAmount()).abs();
         switch (debitClass) {
             case GOODS -> {
-                add(debits, GOODS_RECEIVED_NOT_BILLED_KEY, gross.subtract(tax));
-                add(debits, PURCHASE_PRICE_DIFFERENCE_KEY, tax);
+                add(debits, GOODS_RECEIVED_NOT_BILLED_KEY, stated.net());
+                add(debits, PURCHASE_PRICE_DIFFERENCE_KEY, stated.tax());
             }
-            case EXPENSE -> add(debits, expenseKey(bill, classification), gross);
+            case EXPENSE ->
+                add(debits, expenseKey(bill, classification), stated.net().add(stated.tax()));
             default ->
                 throw new VendorBillException(
                         VendorBillException.Code.VALIDATION_ERROR,
                         "A bill without receipt-matched lines posts as GOODS or EXPENSE, not " + debitClass);
         }
+    }
+
+    private static String differenceKey(VendorBill bill, Difference difference) {
+        return switch (difference.differenceClass()) {
+            case FREIGHT -> FREIGHT_IN_KEY;
+            case GOODS -> GOODS_RECEIVED_NOT_BILLED_KEY;
+            case PRICE_DIFFERENCE -> PURCHASE_PRICE_DIFFERENCE_KEY;
+            case EXPENSE -> {
+                String key = difference.expenseMappingKey();
+                if (key == null || key.isBlank()) {
+                    throw new VendorBillException(
+                            VendorBillException.Code.VALIDATION_ERROR,
+                            "difference.expenseMappingKey is required with class EXPENSE on bill "
+                                    + bill.getBillNumber());
+                }
+                yield key.trim();
+            }
+        };
     }
 
     /** A goods-receipt bill (AW39): each line by its own class, a header tax prorated by line net. */
@@ -392,17 +514,33 @@ public class VendorBillPostingService {
         return shares;
     }
 
-    private static void balanceOnLargest(Map<String, BigDecimal> debits, BigDecimal gross) {
+    /** Puts {@code gross - sum(debits)} on the largest debit and returns it, the rounding adjustment. */
+    private static BigDecimal balanceOnLargest(Map<String, BigDecimal> debits, BigDecimal gross) {
         BigDecimal sum = debits.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal residual = gross.subtract(sum);
+        BigDecimal residual = gross.subtract(sum).setScale(SCALE, RoundingMode.HALF_UP);
         if (residual.signum() == 0 || debits.isEmpty()) {
-            return;
+            return BigDecimal.ZERO.setScale(SCALE);
         }
         String largest = debits.entrySet().stream()
                 .max(Comparator.comparing(e -> e.getValue().abs()))
                 .map(Map.Entry::getKey)
                 .orElseThrow();
         debits.merge(largest, residual, BigDecimal::add);
+        return residual;
+    }
+
+    /** The account of {@code key} on {@code date}; a missing mapping names itself and what to do (#2601). */
+    private UUID resolve(VendorBill bill, String key, LocalDate date) {
+        try {
+            return glMappingResolver.resolveGLAccount(POSTING_CATEGORY, key, date.atStartOfDay());
+        } catch (GLMappingNotConfiguredException missing) {
+            throw new GLMappingNotConfiguredException(
+                    "Bill " + bill.getBillNumber() + " cannot post on " + date + ": " + missing.getMessage(),
+                    POSTING_CATEGORY,
+                    key,
+                    "Map " + POSTING_CATEGORY + " / " + key + " to an active account effective on " + date
+                            + " in GL mappings, then approve the bill again");
+        }
     }
 
     private static VendorBillDebitClass requireClass(VendorBill bill, Classification classification) {
@@ -454,12 +592,15 @@ public class VendorBillPostingService {
                 .build();
     }
 
-    private static String describe(String mappingKey, VendorBill bill) {
+    private static String describe(Leg leg, VendorBill bill) {
+        String mappingKey = leg.mappingKey();
         String what =
                 switch (mappingKey) {
-                    case ACCOUNTS_PAYABLE_KEY -> "Owed to vendor";
+                    case ACCOUNTS_PAYABLE_KEY ->
+                        leg.signedAmount().signum() > 0 ? "Credit from vendor" : "Owed to vendor";
                     case GOODS_RECEIVED_NOT_BILLED_KEY -> "Goods received, now billed";
                     case PURCHASE_PRICE_DIFFERENCE_KEY -> "Purchase price difference and tax on goods";
+                    case FREIGHT_IN_KEY -> "Freight on the vendor's bill";
                     default -> "Expense " + mappingKey.substring(Math.min(mappingKey.length(), 8));
                 };
         return truncate(what + " - bill " + bill.getBillNumber(), 500);

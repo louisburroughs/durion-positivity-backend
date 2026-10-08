@@ -22,6 +22,7 @@ import com.positivity.accounting.internal.entity.VendorBillMatchCandidate;
 import com.positivity.accounting.internal.entity.VendorBillMatchEvidence;
 import com.positivity.accounting.internal.enums.MatchConfidence;
 import com.positivity.accounting.internal.enums.VendorBillDebitClass;
+import com.positivity.accounting.internal.enums.VendorBillDifferenceClass;
 import com.positivity.accounting.internal.enums.VendorBillPostingDateRule;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
@@ -85,6 +86,7 @@ class VendorBillApprovalServiceTest {
     private final VendorBillInvoiceMatcher matcher = mock();
     private final VendorBillDuplicateGuard duplicateGuard = mock();
     private final VendorBillReader reader = mock();
+    private final VendorBillLocks locks = mock();
     private VendorBillApprovalServiceImpl service;
     private VendorBill bill;
 
@@ -101,6 +103,7 @@ class VendorBillApprovalServiceTest {
                 matcher,
                 duplicateGuard,
                 reader,
+                locks,
                 new LedgerCurrency("USD"),
                 mock(PlatformTransactionManager.class));
         bill = new VendorBill(BILL_ID);
@@ -119,6 +122,7 @@ class VendorBillApprovalServiceTest {
                         .status(inv.getArgument(0, VendorBill.class).getStatus())
                         .build());
         when(postingService.post(any(), any(), any(), anyString())).thenAnswer(inv -> posting());
+        when(locks.lockAll(any())).thenAnswer(inv -> List.of(bill));
     }
 
     @AfterEach
@@ -131,6 +135,7 @@ class VendorBillApprovalServiceTest {
         posting.setJournalEntryId(UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a10"));
         posting.setPostingDate(LocalDate.of(2026, 10, 1));
         posting.setPostingDateRule(VendorBillPostingDateRule.BILL_DATE);
+        posting.setRoundingAdjustment(new BigDecimal("0.00"));
         return posting;
     }
 
@@ -182,8 +187,8 @@ class VendorBillApprovalServiceTest {
                     BILL_ID,
                     new VendorBillCommands.Submit(
                             "No delivery!",
-                            new VendorBillReview.Classification(
-                                    VendorBillDebitClass.EXPENSE, "expense_shop_supplies")));
+                            new VendorBillReview.Classification(VendorBillDebitClass.EXPENSE, "expense_shop_supplies"),
+                            null));
 
             assertThat(response.getStatus()).isEqualTo(VendorBillStatus.AWAITING_APPROVAL);
             assertThat(bill.getSubmittedBy()).isEqualTo("clerk.ana");
@@ -206,7 +211,8 @@ class VendorBillApprovalServiceTest {
             signIn("clerk.ana", APPROVE);
             in(VendorBillStatus.PENDING_RECEIPT_MATCH);
 
-            assertThatThrownBy(() -> service.submitForApproval(BILL_ID, new VendorBillCommands.Submit("short", null)))
+            assertThatThrownBy(() ->
+                            service.submitForApproval(BILL_ID, new VendorBillCommands.Submit("short", null, null)))
                     .satisfies(e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.JUSTIFICATION_REQUIRED));
             assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.PENDING_RECEIPT_MATCH);
             verify(bills, never()).save(any());
@@ -222,7 +228,7 @@ class VendorBillApprovalServiceTest {
             in(from);
 
             assertThatThrownBy(() -> service.submitForApproval(
-                            BILL_ID, new VendorBillCommands.Submit(CLERK_JUSTIFICATION, null)))
+                            BILL_ID, new VendorBillCommands.Submit(CLERK_JUSTIFICATION, null, null)))
                     .isInstanceOf(VendorBillException.class)
                     .hasMessageContaining(from.name())
                     .satisfies(e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.AP_BILL_NOT_APPROVABLE));
@@ -236,8 +242,8 @@ class VendorBillApprovalServiceTest {
             UUID other = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4aff");
             when(bills.lockById(other)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() ->
-                            service.submitForApproval(other, new VendorBillCommands.Submit(CLERK_JUSTIFICATION, null)))
+            assertThatThrownBy(() -> service.submitForApproval(
+                            other, new VendorBillCommands.Submit(CLERK_JUSTIFICATION, null, null)))
                     .hasMessage("Vendor bill not found")
                     .satisfies(e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.VENDOR_BILL_NOT_FOUND));
         }
@@ -256,8 +262,8 @@ class VendorBillApprovalServiceTest {
             in(VendorBillStatus.AWAITING_APPROVAL);
             bill.setProposedDebitClass(VendorBillDebitClass.GOODS);
 
-            VendorBillResponse response =
-                    service.approve(BILL_ID, new VendorBillCommands.Approve("Checked against delivery", null, null));
+            VendorBillResponse response = service.approve(
+                    BILL_ID, new VendorBillCommands.Approve("Checked against delivery", null, null, null));
 
             assertThat(response.getStatus()).isEqualTo(VendorBillStatus.APPROVED);
             assertThat(bill.getApprovedBy()).isEqualTo("controller.cfo");
@@ -281,7 +287,7 @@ class VendorBillApprovalServiceTest {
             signIn("controller.cfo", OVER_LIMIT);
             in(VendorBillStatus.APPROVED);
 
-            assertThatThrownBy(() -> service.approve(BILL_ID, new VendorBillCommands.Approve(null, null, null)))
+            assertThatThrownBy(() -> service.approve(BILL_ID, new VendorBillCommands.Approve(null, null, null, null)))
                     .hasMessageContaining("APPROVED")
                     .satisfies(e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.AP_BILL_NOT_APPROVABLE));
             verify(postingService, never()).post(any(), any(), any(), anyString());
@@ -295,7 +301,8 @@ class VendorBillApprovalServiceTest {
             for (String[] held : List.of(
                     new String[] {APPROVE}, new String[] {"accounting:ap:pay"}, new String[] {REJECT, APPROVE})) {
                 signIn("clerk.ana", held);
-                assertThatThrownBy(() -> service.approve(BILL_ID, new VendorBillCommands.Approve(null, null, null)))
+                assertThatThrownBy(
+                                () -> service.approve(BILL_ID, new VendorBillCommands.Approve(null, null, null, null)))
                         .isInstanceOf(AccessDeniedException.class);
             }
             assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.AWAITING_APPROVAL);
@@ -310,7 +317,7 @@ class VendorBillApprovalServiceTest {
             when(postingService.post(any(), any(), any(), anyString()))
                     .thenThrow(new AccountingPeriodHardLockedException(LocalDate.of(2026, 11, 1), "hard-locked"));
 
-            assertThatThrownBy(() -> service.approve(BILL_ID, new VendorBillCommands.Approve(null, null, null)))
+            assertThatThrownBy(() -> service.approve(BILL_ID, new VendorBillCommands.Approve(null, null, null, null)))
                     .isInstanceOf(AccountingPeriodHardLockedException.class);
 
             assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.AWAITING_APPROVAL);
@@ -326,7 +333,7 @@ class VendorBillApprovalServiceTest {
             signIn("controller.cfo", OVER_LIMIT);
             in(VendorBillStatus.AWAITING_APPROVAL);
 
-            assertThatThrownBy(() -> service.approve(BILL_ID, new VendorBillCommands.Approve(null, null, "late")))
+            assertThatThrownBy(() -> service.approve(BILL_ID, new VendorBillCommands.Approve(null, null, "late", null)))
                     .satisfies(e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.JUSTIFICATION_REQUIRED));
         }
 
@@ -340,7 +347,8 @@ class VendorBillApprovalServiceTest {
                     new VendorBillReview.Classification(VendorBillDebitClass.EXPENSE, null),
                     new VendorBillReview.Classification(VendorBillDebitClass.RECEIPT_MATCHED, null),
                     new VendorBillReview.Classification(VendorBillDebitClass.EXPENSE, "SHOP_SUPPLIES"))) {
-                assertThatThrownBy(() -> service.approve(BILL_ID, new VendorBillCommands.Approve(null, bad, null)))
+                assertThatThrownBy(
+                                () -> service.approve(BILL_ID, new VendorBillCommands.Approve(null, bad, null, null)))
                         .satisfies(e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.VALIDATION_ERROR));
             }
         }
@@ -351,7 +359,7 @@ class VendorBillApprovalServiceTest {
             signIn("controller.cfo", OVER_LIMIT);
             in(VendorBillStatus.CURRENCY_HOLD);
 
-            assertThatThrownBy(() -> service.approve(BILL_ID, new VendorBillCommands.Approve(null, null, null)))
+            assertThatThrownBy(() -> service.approve(BILL_ID, new VendorBillCommands.Approve(null, null, null, null)))
                     .satisfies(e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.AP_BILL_NOT_APPROVABLE));
             verify(postingService, never()).post(any(), any(), any(), anyString());
         }
@@ -425,10 +433,18 @@ class VendorBillApprovalServiceTest {
             signIn("someone", held);
             in(VendorBillStatus.MATCH_EXCEPTION);
             VendorBillCommands.ResolveException command =
-                    new VendorBillCommands.ResolveException(action, "Agreed with the vendor", null, null);
+                    new VendorBillCommands.ResolveException(action, "Agreed with the vendor", null, null, null);
 
             if (allowed) {
                 service.resolveException(BILL_ID, command);
+                assertThat(bill.getStatus())
+                        .as("the action %s took effect", action)
+                        .isEqualTo(
+                                switch (action) {
+                                    case "ACCEPT" -> VendorBillStatus.APPROVED;
+                                    case "CORRECT" -> VendorBillStatus.PENDING_RECEIPT_MATCH;
+                                    default -> VendorBillStatus.VOIDED;
+                                });
             } else {
                 assertThatThrownBy(() -> service.resolveException(BILL_ID, command))
                         .isInstanceOf(AccessDeniedException.class);
@@ -443,7 +459,7 @@ class VendorBillApprovalServiceTest {
             in(VendorBillStatus.MATCH_EXCEPTION);
 
             service.resolveException(
-                    BILL_ID, new VendorBillCommands.ResolveException("accept", "Price rise agreed", null, null));
+                    BILL_ID, new VendorBillCommands.ResolveException("accept", "Price rise agreed", null, null, null));
 
             assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.APPROVED);
             assertThat(bill.getApprovedBy()).isEqualTo("controller.cfo");
@@ -459,7 +475,8 @@ class VendorBillApprovalServiceTest {
             in(VendorBillStatus.MATCH_EXCEPTION);
 
             service.resolveException(
-                    BILL_ID, new VendorBillCommands.ResolveException("CORRECT", "Recount the delivery", null, null));
+                    BILL_ID,
+                    new VendorBillCommands.ResolveException("CORRECT", "Recount the delivery", null, null, null));
 
             assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.PENDING_RECEIPT_MATCH);
             assertNoApprovalField(bill);
@@ -475,7 +492,7 @@ class VendorBillApprovalServiceTest {
             in(VendorBillStatus.MATCH_EXCEPTION);
 
             service.resolveException(
-                    BILL_ID, new VendorBillCommands.ResolveException("VOID", "Duplicate of INV-0", null, null));
+                    BILL_ID, new VendorBillCommands.ResolveException("VOID", "Duplicate of INV-0", null, null, null));
 
             assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.VOIDED);
             assertThat(bill.getRejectedBy()).isEqualTo("clerk.ana");
@@ -492,10 +509,10 @@ class VendorBillApprovalServiceTest {
 
             assertThatThrownBy(() -> service.resolveException(
                             BILL_ID,
-                            new VendorBillCommands.ResolveException("APPROVE", "Agreed with vendor", null, null)))
+                            new VendorBillCommands.ResolveException("APPROVE", "Agreed with vendor", null, null, null)))
                     .satisfies(e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.VALIDATION_ERROR));
             assertThatThrownBy(() -> service.resolveException(
-                            BILL_ID, new VendorBillCommands.ResolveException("CORRECT", "short", null, null)))
+                            BILL_ID, new VendorBillCommands.ResolveException("CORRECT", "short", null, null, null)))
                     .satisfies(e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.JUSTIFICATION_REQUIRED));
         }
 
@@ -507,7 +524,7 @@ class VendorBillApprovalServiceTest {
 
             assertThatThrownBy(() -> service.resolveException(
                             BILL_ID,
-                            new VendorBillCommands.ResolveException("ACCEPT", "Agreed with vendor", null, null)))
+                            new VendorBillCommands.ResolveException("ACCEPT", "Agreed with vendor", null, null, null)))
                     .satisfies(e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.AP_BILL_NOT_APPROVABLE));
         }
     }
@@ -571,7 +588,8 @@ class VendorBillApprovalServiceTest {
                             eq(MatchConfidence.AMBIGUOUS),
                             eq(new VendorBillInvoiceMatcher.Points(40, 0, 20, 5)),
                             eq("INV-77"),
-                            any(),
+                            eq(LocalDateTime.of(2026, 10, 1, 0, 0)),
+                            eq(LocalDateTime.of(2026, 10, 1, 0, 0)),
                             any(),
                             eq("clerk.ana"));
             verify(postingService, never()).post(any(), any(), any(), anyString());
@@ -621,7 +639,7 @@ class VendorBillApprovalServiceTest {
             reversed.setReversalDate(LocalDate.of(2026, 10, 3));
             when(postingService.reverse(bill, null, "controller.cfo")).thenReturn(reversed);
 
-            service.voidApproved(BILL_ID, new VendorBillCommands.VoidApproved("Billed twice by mistake", null));
+            service.voidBill(BILL_ID, new VendorBillCommands.VoidBill("Billed twice by mistake", null));
 
             assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.VOIDED);
             assertThat(bill.getRejectedBy()).isEqualTo("controller.cfo");
@@ -638,8 +656,7 @@ class VendorBillApprovalServiceTest {
             in(VendorBillStatus.APPROVED);
             when(allocations.existsByVendorBill_VendorBillId(BILL_ID)).thenReturn(true);
 
-            assertThatThrownBy(() ->
-                            service.voidApproved(BILL_ID, new VendorBillCommands.VoidApproved("Billed twice", null)))
+            assertThatThrownBy(() -> service.voidBill(BILL_ID, new VendorBillCommands.VoidBill("Billed twice", null)))
                     .satisfies(e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.AP_BILL_NOT_VOIDABLE));
             verify(postingService, never()).reverse(any(), any(), anyString());
             assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.APPROVED);
@@ -652,8 +669,8 @@ class VendorBillApprovalServiceTest {
             for (String[] held :
                     List.of(new String[] {REJECT}, new String[] {OVER_LIMIT}, new String[] {REJECT, APPROVE})) {
                 signIn("someone", held);
-                assertThatThrownBy(() -> service.voidApproved(
-                                BILL_ID, new VendorBillCommands.VoidApproved("Billed twice by mistake", null)))
+                assertThatThrownBy(() -> service.voidBill(
+                                BILL_ID, new VendorBillCommands.VoidBill("Billed twice by mistake", null)))
                         .isInstanceOf(AccessDeniedException.class);
             }
             verify(postingService, times(0)).reverse(any(), any(), anyString());
@@ -665,10 +682,387 @@ class VendorBillApprovalServiceTest {
             signIn("controller.cfo", REJECT, OVER_LIMIT);
             for (VendorBillStatus status : EnumSet.complementOf(EnumSet.of(VendorBillStatus.APPROVED))) {
                 in(status);
-                assertThatThrownBy(() -> service.voidApproved(
-                                BILL_ID, new VendorBillCommands.VoidApproved("Billed twice by mistake", null)))
+                assertThatThrownBy(() -> service.voidBill(
+                                BILL_ID, new VendorBillCommands.VoidBill("Billed twice by mistake", null)))
                         .satisfies(e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.AP_BILL_NOT_VOIDABLE));
             }
+        }
+    }
+
+    private VendorBill goodsReceipt(VendorBillStatus status) {
+        bill.setOriginEventType(VendorBillReader.ORIGIN_GOODS_RECEIVED);
+        return in(status);
+    }
+
+    private VendorBill edi(VendorBillStatus status, String gross, String net, String tax) {
+        bill.setOriginEventType(VendorBillReader.ORIGIN_SUPPLIER_INVOICE);
+        bill.setTotalAmount(new BigDecimal(gross));
+        bill.setNetAmount(new BigDecimal(net));
+        bill.setTaxAmount(new BigDecimal(tax));
+        bill.setStatedLineCount(1);
+        return in(status);
+    }
+
+    private static VendorBillReview.Difference freight() {
+        return new VendorBillReview.Difference(
+                VendorBillDifferenceClass.FREIGHT, null, "Freight on the invoice, not stated");
+    }
+
+    @Nested
+    @DisplayName("Ready to decide: open candidates, a matched invoice, a total, the vendor's totals (#2509 review)")
+    class ReadyToDecide {
+
+        @Test
+        @DisplayName("AW44(a): an unmatched goods-receipt bill is 409 AP_BILL_AWAITING_INVOICE on submit, approve and"
+                + " ACCEPT; nothing is written")
+        void unmatchedGoodsReceiptAwaitsItsInvoice() {
+            signIn("controller.cfo", APPROVE, OVER_LIMIT);
+            when(reader.invoiceMatched(bill)).thenReturn(false);
+
+            goodsReceipt(VendorBillStatus.PENDING_RECEIPT_MATCH);
+            assertThatThrownBy(() -> service.submitForApproval(
+                            BILL_ID, new VendorBillCommands.Submit(CLERK_JUSTIFICATION, null, null)))
+                    .satisfies(e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.AP_BILL_AWAITING_INVOICE));
+            goodsReceipt(VendorBillStatus.AWAITING_APPROVAL);
+            assertThatThrownBy(() -> service.approve(BILL_ID, new VendorBillCommands.Approve(null, null, null, null)))
+                    .satisfies(e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.AP_BILL_AWAITING_INVOICE));
+            goodsReceipt(VendorBillStatus.MATCH_EXCEPTION);
+            assertThatThrownBy(() -> service.resolveException(
+                            BILL_ID,
+                            new VendorBillCommands.ResolveException("ACCEPT", "Agreed with vendor", null, null, null)))
+                    .satisfies(e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.AP_BILL_AWAITING_INVOICE));
+
+            verify(bills, never()).save(any());
+            verify(postingService, never()).post(any(), any(), any(), anyString());
+            verify(auditLogs, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("AW44: a goods-receipt bill with its invoice matched is sent as before")
+        void matchedGoodsReceiptIsSent() {
+            signIn("clerk.ana", APPROVE);
+            goodsReceipt(VendorBillStatus.MATCH_EXCEPTION);
+            when(reader.invoiceMatched(bill)).thenReturn(true);
+
+            service.submitForApproval(BILL_ID, new VendorBillCommands.Submit(CLERK_JUSTIFICATION, null, null));
+
+            assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.AWAITING_APPROVAL);
+        }
+
+        @Test
+        @DisplayName("AW44(d): an EDI bill is still sent without a delivery match, with a justification")
+        void ediBillIsSentWithoutMatch() {
+            signIn("clerk.ana", APPROVE);
+            edi(VendorBillStatus.PENDING_RECEIPT_MATCH, "1070.00", "1000.00", "70.00");
+            when(reader.invoiceMatched(bill)).thenReturn(false);
+
+            service.submitForApproval(BILL_ID, new VendorBillCommands.Submit(CLERK_JUSTIFICATION, null, null));
+
+            assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.AWAITING_APPROVAL);
+            assertThat(bill.getSubmissionJustification()).isEqualTo(CLERK_JUSTIFICATION);
+        }
+
+        @Test
+        @DisplayName("An open ambiguous match naming the bill: submit and ACCEPT are 409 AP_BILL_NOT_APPROVABLE, pick"
+                + " the match first")
+        void openCandidatesComeFirst() {
+            signIn("controller.cfo", APPROVE, OVER_LIMIT);
+            when(reader.hasOpenCandidates(BILL_ID)).thenReturn(true);
+
+            in(VendorBillStatus.MATCH_EXCEPTION);
+            assertThatThrownBy(() -> service.submitForApproval(
+                            BILL_ID, new VendorBillCommands.Submit(CLERK_JUSTIFICATION, null, null)))
+                    .hasMessageContaining("pick the match first")
+                    .satisfies(e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.AP_BILL_NOT_APPROVABLE));
+            assertThatThrownBy(() -> service.resolveException(
+                            BILL_ID,
+                            new VendorBillCommands.ResolveException("ACCEPT", "Agreed with vendor", null, null, null)))
+                    .hasMessageContaining("pick the match first")
+                    .satisfies(e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.AP_BILL_NOT_APPROVABLE));
+            assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.MATCH_EXCEPTION);
+            verify(postingService, never()).post(any(), any(), any(), anyString());
+        }
+
+        @Test
+        @DisplayName("L7: a bill of 0.00 is 422 AP_BILL_ZERO_TOTAL on submit; nothing is written")
+        void zeroTotalIsRefused() {
+            signIn("clerk.ana", APPROVE);
+            in(VendorBillStatus.MATCH_EXCEPTION);
+            bill.setTotalAmount(new BigDecimal("0.00"));
+
+            assertThatThrownBy(() -> service.submitForApproval(
+                            BILL_ID, new VendorBillCommands.Submit(CLERK_JUSTIFICATION, null, null)))
+                    .satisfies(e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.AP_BILL_ZERO_TOTAL));
+            verify(bills, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("AW46(a): totals 15.00 apart: approve without a difference is 422 AP_BILL_TOTALS_UNRECONCILED and"
+                + " writes nothing")
+        void unreconciledTotalsNeedADifference() {
+            signIn("controller.cfo", OVER_LIMIT);
+            edi(VendorBillStatus.AWAITING_APPROVAL, "1085.00", "1000.00", "70.00");
+            bill.setProposedDebitClass(VendorBillDebitClass.GOODS);
+
+            assertThatThrownBy(() -> service.approve(BILL_ID, new VendorBillCommands.Approve(null, null, null, null)))
+                    .hasMessageContaining("difference 15.00")
+                    .satisfies(
+                            e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.AP_BILL_TOTALS_UNRECONCILED));
+            assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.AWAITING_APPROVAL);
+            assertThat(bill.getDifferenceClass()).isNull();
+            verify(postingService, never()).post(any(), any(), any(), anyString());
+            verify(auditLogs, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("AW46(b): with difference FREIGHT the approval posts and the decision is kept and audited")
+        void differenceIsKeptAndPosted() {
+            signIn("controller.cfo", OVER_LIMIT);
+            edi(VendorBillStatus.AWAITING_APPROVAL, "1085.00", "1000.00", "70.00");
+
+            service.approve(
+                    BILL_ID,
+                    new VendorBillCommands.Approve(
+                            null,
+                            new VendorBillReview.Classification(VendorBillDebitClass.GOODS, null),
+                            null,
+                            freight()));
+
+            assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.APPROVED);
+            assertThat(bill.getDifferenceClass()).isEqualTo(VendorBillDifferenceClass.FREIGHT);
+            assertThat(bill.getDifferenceJustification()).isEqualTo("Freight on the invoice, not stated");
+            verify(postingService).post(eq(bill), any(), eq(null), eq("controller.cfo"));
+            assertThat(onlyAudit().getNewValue()).contains("differenceClass=FREIGHT", "difference=15.00");
+        }
+
+        @Test
+        @DisplayName("AW46: a difference proposed at submission is kept on the bill for the approval")
+        void differenceProposedAtSubmission() {
+            signIn("clerk.ana", APPROVE);
+            edi(VendorBillStatus.MATCH_EXCEPTION, "1085.00", "1000.00", "70.00");
+
+            service.submitForApproval(BILL_ID, new VendorBillCommands.Submit(CLERK_JUSTIFICATION, null, freight()));
+
+            assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.AWAITING_APPROVAL);
+            assertThat(bill.getDifferenceClass()).isEqualTo(VendorBillDifferenceClass.FREIGHT);
+        }
+
+        @Test
+        @DisplayName("AW46: a difference without its class or key is 400 VALIDATION_ERROR, a short justification 400"
+                + " JUSTIFICATION_REQUIRED")
+        void malformedDifference() {
+            signIn("controller.cfo", OVER_LIMIT);
+            edi(VendorBillStatus.AWAITING_APPROVAL, "1085.00", "1000.00", "70.00");
+
+            for (VendorBillReview.Difference bad : List.of(
+                    new VendorBillReview.Difference(null, null, "Freight on the invoice"),
+                    new VendorBillReview.Difference(VendorBillDifferenceClass.EXPENSE, null, "Shop supplies too"),
+                    new VendorBillReview.Difference(
+                            VendorBillDifferenceClass.EXPENSE, "SHOP_SUPPLIES", "Shop supplies too"))) {
+                assertThatThrownBy(
+                                () -> service.approve(BILL_ID, new VendorBillCommands.Approve(null, null, null, bad)))
+                        .satisfies(e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.VALIDATION_ERROR));
+            }
+            assertThatThrownBy(() -> service.approve(
+                            BILL_ID,
+                            new VendorBillCommands.Approve(
+                                    null,
+                                    null,
+                                    null,
+                                    new VendorBillReview.Difference(VendorBillDifferenceClass.FREIGHT, null, "short"))))
+                    .satisfies(e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.JUSTIFICATION_REQUIRED));
+            verify(bills, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("L1: a caller without a name is 403; no decision is recorded as SYSTEM")
+        void namelessCallerIsRefused() {
+            UsernamePasswordAuthenticationToken nameless =
+                    new UsernamePasswordAuthenticationToken("", "n/a", List.of(new SimpleGrantedAuthority(APPROVE)));
+            SecurityContextHolder.getContext().setAuthentication(nameless);
+            in(VendorBillStatus.MATCH_EXCEPTION);
+
+            assertThatThrownBy(() -> service.submitForApproval(
+                            BILL_ID, new VendorBillCommands.Submit(CLERK_JUSTIFICATION, null, null)))
+                    .isInstanceOf(AccessDeniedException.class);
+            verify(bills, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("LOW-12: the approver's classification is merged with the proposal field by field")
+        void classificationIsMergedFieldByField() {
+            signIn("controller.cfo", OVER_LIMIT);
+            in(VendorBillStatus.AWAITING_APPROVAL);
+            bill.setProposedDebitClass(VendorBillDebitClass.EXPENSE);
+            bill.setProposedExpenseMappingKey("EXPENSE_SHOP_SUPPLIES");
+
+            service.approve(
+                    BILL_ID,
+                    new VendorBillCommands.Approve(
+                            null, new VendorBillReview.Classification(null, "expense_equipment_repairs"), null, null));
+
+            ArgumentCaptor<VendorBillPostingService.Classification> classification =
+                    ArgumentCaptor.forClass(VendorBillPostingService.Classification.class);
+            verify(postingService).post(eq(bill), classification.capture(), eq(null), eq("controller.cfo"));
+            assertThat(classification.getValue())
+                    .isEqualTo(new VendorBillPostingService.Classification(
+                            VendorBillDebitClass.EXPENSE, "EXPENSE_EQUIPMENT_REPAIRS"));
+        }
+    }
+
+    @Nested
+    @DisplayName("Correct, release and the receipt's void (#2509 review; AW44, AW45)")
+    class ReceiptBaseline {
+
+        private final UUID invoiceEventId = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a30");
+        private final UUID chosenId = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a31");
+        private final UUID otherCandidateId = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a32");
+        private final UUID topBillId = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a33");
+
+        @Test
+        @DisplayName("B-MAJ2: CORRECT puts a goods-receipt bill back to its receipt: lines and total restored, the"
+                + " receipt date, nothing proposed")
+        void correctRestoresTheReceipt() {
+            signIn("clerk.ana", APPROVE);
+            goodsReceipt(VendorBillStatus.MATCH_EXCEPTION);
+            bill.setBillDate(LocalDateTime.of(2026, 10, 2, 0, 0));
+            bill.setProposedDebitClass(VendorBillDebitClass.GOODS);
+            bill.setDifferenceClass(VendorBillDifferenceClass.FREIGHT);
+            bill.setSubmissionJustification("Sent before the correction");
+            VendorBillMatchEvidence latest = new VendorBillMatchEvidence();
+            latest.setReceivedDate(LocalDateTime.of(2026, 9, 28, 0, 0));
+            when(evidence.findFirstByVendorBillIdOrderByRecordedAtDescMatchEvidenceIdDesc(BILL_ID))
+                    .thenReturn(Optional.of(latest));
+
+            service.resolveException(
+                    BILL_ID,
+                    new VendorBillCommands.ResolveException("CORRECT", "Recount the delivery", null, null, null));
+
+            verify(matcher).restoreReceived(bill);
+            assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.PENDING_RECEIPT_MATCH);
+            assertThat(bill.getBillDate()).isEqualTo(LocalDateTime.of(2026, 9, 28, 0, 0));
+            assertThat(bill.getProposedDebitClass()).isNull();
+            assertThat(bill.getDifferenceClass()).isNull();
+            assertThat(bill.getSubmissionJustification()).isNull();
+            assertThat(bill.getRejectionReason()).isNull();
+        }
+
+        @Test
+        @DisplayName("AW44(b): an ap:reject holder voids an unmatched receipt with a 12-character reason: VOIDED, no"
+                + " entry")
+        void voidsAnUnmatchedReceipt() {
+            signIn("clerk.ana", REJECT);
+            goodsReceipt(VendorBillStatus.PENDING_RECEIPT_MATCH);
+
+            service.voidBill(BILL_ID, new VendorBillCommands.VoidBill("No invoice ever", null));
+
+            assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.VOIDED);
+            assertThat(bill.getRejectedBy()).isEqualTo("clerk.ana");
+            verify(postingService, never()).reverse(any(), any(), anyString());
+            verify(postingService, never()).post(any(), any(), any(), anyString());
+            assertThat(onlyAudit().getNewValue()).contains("action=VOID_UNMATCHED", "posted=none");
+        }
+
+        @Test
+        @DisplayName("AW44(b): without ap:reject the receipt's void is 403; an EDI bill in PENDING_RECEIPT_MATCH is"
+                + " not voided this way")
+        void receiptVoidNeedsRejectAndAReceipt() {
+            signIn("clerk.ana", APPROVE, OVER_LIMIT);
+            goodsReceipt(VendorBillStatus.PENDING_RECEIPT_MATCH);
+            assertThatThrownBy(
+                            () -> service.voidBill(BILL_ID, new VendorBillCommands.VoidBill("No invoice ever", null)))
+                    .isInstanceOf(AccessDeniedException.class);
+
+            signIn("clerk.ana", REJECT);
+            edi(VendorBillStatus.PENDING_RECEIPT_MATCH, "1070.00", "1000.00", "70.00");
+            assertThatThrownBy(
+                            () -> service.voidBill(BILL_ID, new VendorBillCommands.VoidBill("No invoice ever", null)))
+                    .satisfies(e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.AP_BILL_NOT_VOIDABLE));
+            assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.PENDING_RECEIPT_MATCH);
+        }
+
+        private VendorBillMatchCandidate candidate(UUID id, UUID billId, LocalDateTime invoiceDate) {
+            VendorBillMatchCandidate candidate = new VendorBillMatchCandidate();
+            candidate.setCandidateId(id);
+            candidate.setInvoiceEventId(invoiceEventId);
+            candidate.setVendorBillId(billId);
+            candidate.setMatchScore(65);
+            candidate.setInvoiceReference("INV-1");
+            candidate.setInvoiceDate(invoiceDate);
+            candidate.setInvoiceLines(List.of());
+            return candidate;
+        }
+
+        @Test
+        @DisplayName("AW45 + AB-ambig: the selected bill takes the invoice date; the top bill the match held returns"
+                + " to PENDING_RECEIPT_MATCH")
+        void selectionTakesTheInvoiceDateAndReleasesTheTopBill() {
+            signIn("clerk.ana", APPROVE);
+            goodsReceipt(VendorBillStatus.PENDING_RECEIPT_MATCH);
+            bill.setBillDate(LocalDateTime.of(2026, 9, 28, 0, 0));
+            LocalDateTime invoiceDate = LocalDateTime.of(2026, 10, 2, 0, 0);
+            VendorBill top = new VendorBill(topBillId);
+            top.setBillNumber("BILL_TOP");
+            top.setStatus(VendorBillStatus.MATCH_EXCEPTION);
+            top.setRejectionReason("Ambiguous match - multiple candidates found.");
+            top.setTotalAmount(new BigDecimal("400.00"));
+            VendorBillMatchEvidence scoring = new VendorBillMatchEvidence();
+            scoring.setSource(VendorBillMatchEvidence.Source.MATCH);
+            scoring.setConfidence(MatchConfidence.AMBIGUOUS);
+            scoring.setInvoiceEventId(invoiceEventId);
+            when(evidence.findFirstByVendorBillIdOrderByRecordedAtDescMatchEvidenceIdDesc(topBillId))
+                    .thenReturn(Optional.of(scoring));
+            VendorBillMatchCandidate chosen = candidate(chosenId, BILL_ID, invoiceDate);
+            VendorBillMatchCandidate other = candidate(otherCandidateId, topBillId, invoiceDate);
+            when(candidates.findById(chosenId)).thenReturn(Optional.of(chosen));
+            when(candidates.lockByInvoiceEventId(invoiceEventId)).thenReturn(List.of(chosen, other));
+            when(locks.lockAll(any())).thenReturn(List.of(bill, top));
+            when(matcher.applyBilled(eq(bill), any()))
+                    .thenReturn(new VendorBillInvoiceMatcher.Comparison(
+                            List.of(), true, new BigDecimal("400.00"), new BigDecimal("400.00")));
+
+            service.selectCandidate(chosenId);
+
+            verify(duplicateGuard)
+                    .refuseIfDuplicate(
+                            VendorBillDuplicateGuard.Channel.MATCH, bill.getVendorId(), "INV-1", invoiceDate, BILL_ID);
+            assertThat(bill.getBillDate()).isEqualTo(invoiceDate);
+            assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.AWAITING_APPROVAL);
+            verify(matcher)
+                    .record(
+                            eq(bill),
+                            eq(invoiceEventId),
+                            eq(VendorBillMatchEvidence.Source.CANDIDATE_SELECTION),
+                            eq(MatchConfidence.AMBIGUOUS),
+                            any(),
+                            eq("INV-1"),
+                            eq(invoiceDate),
+                            eq(LocalDateTime.of(2026, 9, 28, 0, 0)),
+                            any(),
+                            eq("clerk.ana"));
+            assertThat(top.getStatus()).isEqualTo(VendorBillStatus.PENDING_RECEIPT_MATCH);
+            assertThat(top.getRejectionReason()).isNull();
+            ArgumentCaptor<AccountingAuditLog> rows = ArgumentCaptor.forClass(AccountingAuditLog.class);
+            verify(auditLogs, times(2)).save(rows.capture());
+            assertThat(rows.getAllValues())
+                    .extracting(AccountingAuditLog::getOperation)
+                    .containsExactly("VENDOR_BILL_MATCH_CANDIDATE_SELECT", "VENDOR_BILL_MATCH_CANDIDATE_RELEASE");
+        }
+
+        @Test
+        @DisplayName("A candidate scored before #2509 kept no invoice: 409 AP_BILL_AWAITING_INVOICE, nothing resolved")
+        void legacyCandidateIsRefused() {
+            signIn("clerk.ana", APPROVE);
+            goodsReceipt(VendorBillStatus.PENDING_RECEIPT_MATCH);
+            VendorBillMatchCandidate legacy = candidate(chosenId, BILL_ID, null);
+            legacy.setInvoiceReference(null);
+            when(candidates.findById(chosenId)).thenReturn(Optional.of(legacy));
+            when(candidates.lockByInvoiceEventId(invoiceEventId)).thenReturn(List.of(legacy));
+
+            assertThatThrownBy(() -> service.selectCandidate(chosenId))
+                    .satisfies(e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.AP_BILL_AWAITING_INVOICE));
+            assertThat(legacy.isResolved()).isFalse();
+            assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.PENDING_RECEIPT_MATCH);
         }
     }
 }

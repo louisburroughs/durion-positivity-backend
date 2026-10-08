@@ -10,8 +10,11 @@ import com.positivity.domainevents.supplier.SupplierInvoiceReceivedV1;
 import com.positivity.domainevents.warranty.WarrantyReimbursementResolvedV1;
 import com.positivity.domainevents.warranty.WarrantyReimbursementSubmittedV1;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Code-first registry of the accounting event types this module records (#2436). The Kafka
@@ -22,8 +25,10 @@ import org.jspecify.annotations.NonNull;
  * (CAP:550 S12, #2509; AW40): a vendor bill posts at approval through the {@code VENDOR_BILL} posting
  * category, and V17 closed the events of that type SKIPPED / {@code RETIRED_EVENT_TYPE}.
  *
- * <p>The API submit path ({@code POST /v1/accounting/events}) validates only that {@code eventType}
- * is present: it persists any string as a {@code RECEIVED} event without checking it against this
+ * <p>The API submit path ({@code POST /v1/accounting/events}) validates that {@code eventType} is
+ * present and not {@linkplain #isRetired retired} (400 {@code VALIDATION_ERROR}; #2509 review): a
+ * retired type would be posted by the engine beside the posting that replaced it. Otherwise it
+ * persists any string as a {@code RECEIVED} event without checking it against this
  * registry, a posting rule set or a default GL mapping. Resolution happens afterwards, when the
  * received-event drainer processes the event: {@link #INVOICE_PAYMENT} goes to its AR subledger
  * processor, and every other type goes through the posting engine, which posts it when an active
@@ -41,6 +46,15 @@ public final class AccountingEventTypeRegistry {
      * posted by the posting engine (Dr AP, Cr Cash/Bank).
      */
     public static final String AP_PAYMENT_GL_POSTING = "AP_PAYMENT_GL_POSTING";
+
+    /**
+     * Event type of a vendor bill's GL posting, retired (CAP:550 S12, #2509; AW40): the bill posts at approval
+     * through the {@code VENDOR_BILL} posting category.
+     */
+    public static final String VENDOR_BILL_GL_POSTING = "VENDOR_BILL_GL_POSTING";
+
+    /** Types no longer accepted: each is posted by something else now, and recording one would post twice. */
+    private static final Set<String> RETIRED = Set.of(VENDOR_BILL_GL_POSTING);
 
     /** Source domains. */
     public static final String DOMAIN_INVOICE = "invoice";
@@ -125,6 +139,11 @@ public final class AccountingEventTypeRegistry {
                     true));
 
     private AccountingEventTypeRegistry() {}
+
+    /** Whether {@code eventType} is retired; compared as given, trimmed and upper-cased. */
+    public static boolean isRetired(@Nullable String eventType) {
+        return eventType != null && RETIRED.contains(eventType.trim().toUpperCase(Locale.ROOT));
+    }
 
     /** Every registered event type. */
     public static @NonNull List<Entry> entries() {

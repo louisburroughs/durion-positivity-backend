@@ -42,6 +42,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -89,6 +90,7 @@ public class VendorBillServiceImpl implements VendorBillService {
     private final VendorBillInvoiceMatcher matcher;
     private final VendorBillReader reader;
     private final AccountingAuditLogRepository auditLogs;
+    private final VendorBillLocks locks;
 
     private final AccountingCalendarZoneResolver zoneResolver;
 
@@ -112,7 +114,8 @@ public class VendorBillServiceImpl implements VendorBillService {
             AccountingCalendarZoneResolver zoneResolver,
             VendorBillInvoiceMatcher matcher,
             VendorBillReader reader,
-            AccountingAuditLogRepository auditLogs) {
+            AccountingAuditLogRepository auditLogs,
+            VendorBillLocks locks) {
         this.zoneResolver = zoneResolver;
         this.clock = clock;
         this.billRepository = billRepository;
@@ -124,6 +127,7 @@ public class VendorBillServiceImpl implements VendorBillService {
         this.matcher = matcher;
         this.reader = reader;
         this.auditLogs = auditLogs;
+        this.locks = locks;
         this.goodsReceiptTransaction = new TransactionTemplate(transactionManager);
     }
 
@@ -331,6 +335,18 @@ public class VendorBillServiceImpl implements VendorBillService {
                     + event.getInvoiceReference() + ". " + matchResult.getMatchingDetails());
         }
 
+        // The bill the match names, locked and seen as it is now (#2509 review, B-MAJ3): candidates were read
+        // without a lock, and a decision taken meanwhile must not be overwritten. A bill no longer pending is a 409
+        // OPTIMISTIC_LOCK: nothing is written, and the invoice is sent again.
+        BillMatchResult.ScoredBill top = matchResult.getConfidence() == MatchConfidence.AMBIGUOUS
+                ? matchResult.getAlternativeCandidates().get(0)
+                : Objects.requireNonNull(matchResult.getBestScored());
+        VendorBill locked = locks.lock(top.getBill());
+        if (locked.getStatus() != VendorBillStatus.PENDING_RECEIPT_MATCH) {
+            throw new OptimisticLockingFailureException("Vendor bill " + locked.getBillNumber() + " became "
+                    + locked.getStatus() + " while invoice " + event.getInvoiceReference() + " was matched to it");
+        }
+
         if (matchResult.getConfidence() == MatchConfidence.AMBIGUOUS) {
             log.warn(
                     "Ambiguous match found | vendorId={} | invoiceRef={} | candidates={} | details={}",
@@ -342,9 +358,8 @@ public class VendorBillServiceImpl implements VendorBillService {
             persistMatchCandidates(event, invoiceLines, matchResult.getAlternativeCandidates());
 
             // Mark best-match bill as MATCH_EXCEPTION awaiting operator selection
-            BillMatchResult.ScoredBill best =
-                    matchResult.getAlternativeCandidates().get(0);
-            VendorBill bill = best.getBill();
+            BillMatchResult.ScoredBill best = top;
+            VendorBill bill = locked;
             bill.setStatus(VendorBillStatus.MATCH_EXCEPTION);
             bill.setRejectionReason("Ambiguous match - multiple candidates found. "
                     + "Use /match-candidates/{invoiceEventId} to list and select. "
@@ -359,14 +374,15 @@ public class VendorBillServiceImpl implements VendorBillService {
                     points(best),
                     event.getInvoiceReference(),
                     event.getInvoiceDate(),
+                    bill.getBillDate(),
                     matcher.compare(bill, invoiceLines),
                     currentUser);
             auditRouted(bill, evidence, "AMBIGUOUS");
             return reader.read(bill);
         }
 
-        BillMatchResult.ScoredBill best = Objects.requireNonNull(matchResult.getBestScored());
-        VendorBill bill = best.getBill();
+        BillMatchResult.ScoredBill best = top;
+        VendorBill bill = locked;
 
         // Log match confidence
         log.info(
@@ -381,17 +397,17 @@ public class VendorBillServiceImpl implements VendorBillService {
         // invoice with what was received.
         VendorBillInvoiceMatcher.Comparison comparison = matcher.compare(bill, invoiceLines);
         boolean hasDiscrepancy = !comparison.withinTolerance();
+        LocalDateTime receivedDate = bill.getBillDate();
 
-        if (!hasDiscrepancy) {
-            // The bill is about to take the vendor's invoice reference as its number: the duplicate rule
-            // (#2501) is checked first, the bill itself excluded, so a refusal leaves it untouched.
-            duplicateGuard.refuseIfDuplicate(
-                    VendorBillDuplicateGuard.Channel.MATCH,
-                    bill.getVendorId(),
-                    event.getInvoiceReference(),
-                    bill.getBillDate(),
-                    bill.getVendorBillId());
-        }
+        // The bill is about to take the vendor's invoice reference as its number and the invoice date as its date
+        // (AW45), whatever the routing: the duplicate rule (#2501) is checked first on that number and date, the
+        // bill itself excluded, so a refusal leaves it untouched.
+        duplicateGuard.refuseIfDuplicate(
+                VendorBillDuplicateGuard.Channel.MATCH,
+                bill.getVendorId(),
+                event.getInvoiceReference(),
+                event.getInvoiceDate(),
+                bill.getVendorBillId());
 
         // Step 3: Keep what the vendor billed (AW39): the billed lines and total, whatever the routing.
         matcher.applyBilled(bill, invoiceLines);
@@ -420,8 +436,10 @@ public class VendorBillServiceImpl implements VendorBillService {
                     "Medium confidence match - requires review (score=" + matchResult.getBestScore() + ")");
             outcome = "MEDIUM";
         }
-        if (!hasDiscrepancy) {
-            bill.setBillNumber(event.getInvoiceReference());
+        // AW45: the vendor's number and date; the receipt date stays in the evidence.
+        bill.setBillNumber(event.getInvoiceReference());
+        bill.setBillDate(event.getInvoiceDate());
+        if (event.getDueDate() != null) {
             bill.setDueDate(event.getDueDate());
         }
         bill.setModifiedBy(currentUser);
@@ -435,6 +453,7 @@ public class VendorBillServiceImpl implements VendorBillService {
                 points(best),
                 event.getInvoiceReference(),
                 event.getInvoiceDate(),
+                receivedDate,
                 comparison,
                 currentUser);
         auditRouted(bill, evidence, outcome);
@@ -514,8 +533,13 @@ public class VendorBillServiceImpl implements VendorBillService {
      * @return BillMatchResult with best match and confidence level
      */
     private BillMatchResult findBestMatchingBillWithConfidence(@NonNull VendorInvoiceReceivedEvent event) {
+        // Receipt bills only: an EDI bill is the vendor's own invoice, never matched to one (#2509 review, B-MAJ2).
         List<VendorBill> candidates =
-                billRepository.findByVendorIdAndStatus(event.getVendorId(), VendorBillStatus.PENDING_RECEIPT_MATCH);
+                billRepository
+                        .findByVendorIdAndStatus(event.getVendorId(), VendorBillStatus.PENDING_RECEIPT_MATCH)
+                        .stream()
+                        .filter(bill -> !VendorBillReader.ORIGIN_SUPPLIER_INVOICE.equals(bill.getOriginEventType()))
+                        .toList();
 
         if (candidates.isEmpty()) {
             return BillMatchResult.noMatch("No pending bills found for vendor " + event.getVendorId());
@@ -577,20 +601,24 @@ public class VendorBillServiceImpl implements VendorBillService {
         int purchaseOrderPoints = 0;
         StringBuilder details = new StringBuilder();
 
-        // 1. Amount matching (40 points)
-        BigDecimal amountDiff = bill.getTotalAmount().subtract(invoiceTotal).abs();
-        BigDecimal tolerance = bill.getTotalAmount().multiply(new BigDecimal("0.10")); // 10%
+        // 1. Amount matching (40 points), against what was received (#2509 review, B-MAJ2): the received lines'
+        // total, never a total an earlier match left on the bill; a bill without lines keeps its own total.
+        List<VendorBillLine> stored =
+                billLineRepository.findByVendorBill_VendorBillIdOrderByLineNumber(bill.getVendorBillId());
+        List<VendorBillLine> billLines = VendorBillInvoiceMatcher.received(stored);
+        BigDecimal receivedTotal =
+                billLines.isEmpty() ? bill.getTotalAmount() : VendorBillInvoiceMatcher.receivedTotal(billLines);
+        BigDecimal amountDiff = receivedTotal.subtract(invoiceTotal).abs();
+        BigDecimal tolerance = receivedTotal.multiply(new BigDecimal("0.10")); // 10%
         if (amountDiff.compareTo(tolerance) <= 0) {
             amountPoints = 40;
             score += 40;
             details.append("amount_match(40);");
         } else {
-            details.append(String.format("amount_mismatch(bill=%s,invoice=%s);", bill.getTotalAmount(), invoiceTotal));
+            details.append(String.format("amount_mismatch(bill=%s,invoice=%s);", receivedTotal, invoiceTotal));
         }
 
-        // 2. Line item overlap using Jaccard similarity (30 points)
-        List<VendorBillLine> billLines =
-                billLineRepository.findByVendorBill_VendorBillIdOrderByLineNumber(bill.getVendorBillId());
+        // 2. Line item overlap using Jaccard similarity (30 points), over the received lines
         if (!billLines.isEmpty()) {
             double similarity = calculateLineItemSimilarity(billLines, event.getLineItems());
             int lineItemScore = (int) Math.round(30 * similarity);

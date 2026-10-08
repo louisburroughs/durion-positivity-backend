@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -88,6 +89,9 @@ class SupplierInvoiceEventsListenerTest {
     private VendorBillReissueRepository reissueRepository;
 
     @Mock
+    private VendorBillLocks locks;
+
+    @Mock
     private KafkaFactIngestionRecorder ingestionRecorder;
 
     private SupplierInvoiceEventsListener listener;
@@ -106,7 +110,10 @@ class SupplierInvoiceEventsListenerTest {
                 // The real guard over the mocked repository: the listener's lookup is the rule's query.
                 new VendorBillDuplicateGuard(vendorBillRepository, noMeters),
                 reissueRepository,
+                locks,
                 mock(PlatformTransactionManager.class));
+        // The lock re-reads the bill as it is now; here it is unchanged.
+        lenient().when(locks.lock(any())).thenAnswer(inv -> inv.getArgument(0));
         when(processedEventRepository.existsById(any())).thenReturn(false);
         when(vendorBillRepository.findLiveDuplicate(any(), any(), any(), any(), any()))
                 .thenReturn(Optional.empty());
@@ -121,15 +128,30 @@ class SupplierInvoiceEventsListenerTest {
         return event(eventId, number, type, total, currency, "2026-08-14");
     }
 
+    /** An invoice whose totals add up (AW46): tax 48.00 and the net the rest of the gross. */
     private static String event(
             String eventId, String number, String type, String total, String currency, String invoiceDate) {
+        String net = new BigDecimal(total).subtract(new BigDecimal("48.00")).toPlainString();
+        return event(eventId, number, type, currency, invoiceDate, total, net, "48.00", "[]");
+    }
+
+    private static String event(
+            String eventId,
+            String number,
+            String type,
+            String currency,
+            String invoiceDate,
+            String gross,
+            String net,
+            String tax,
+            String lines) {
         return """
             {"eventId":"%s","eventType":"supplier.invoice.received","payload":{
               "vendorProfileId":"%s","supplierRef":"michelin-de","vendorInvoiceNumber":"%s",
               "invoiceDate":"%s","type":"%s","currency":"%s",
-              "totalNetAmount":240.00,"totalTaxAmount":48.00,"totalGrossAmount":%s,
-              "vendorOrderReference":"PO-778","occurredAt":"2026-08-16T08:00:00Z","lines":[]}}
-            """.formatted(eventId, PROFILE, number, invoiceDate, type, currency, total);
+              "totalNetAmount":%s,"totalTaxAmount":%s,"totalGrossAmount":%s,
+              "vendorOrderReference":"PO-778","occurredAt":"2026-08-16T08:00:00Z","lines":%s}}
+            """.formatted(eventId, PROFILE, number, invoiceDate, type, currency, net, tax, gross, lines);
     }
 
     /** The rule's window for the default invoice date, 2026-08-14. */
@@ -255,6 +277,61 @@ class SupplierInvoiceEventsListenerTest {
         assertThat(created.getTotalAmount()).isEqualByComparingTo("288.00");
         assertThat(created.getNetAmount()).isEqualByComparingTo("240.00");
         assertThat(created.getTaxAmount()).isEqualByComparingTo("48.00");
+    }
+
+    @Nested
+    @DisplayName("the vendor's own totals: gross vs net + tax (AW46)")
+    class Totals {
+
+        private VendorBill created(String gross, String net, String tax, String lines) {
+            listener.onSupplierEvent(event(EVENT_1, "INV-1", "INVOICE", "USD", "2026-08-14", gross, net, tax, lines));
+            return captured();
+        }
+
+        @Test
+        @DisplayName("AC(a): gross 1,085.00 / net 1,000.00 / tax 70.00 is created in MATCH_EXCEPTION, explained")
+        void apartBeyondTheToleranceIsAnException() {
+            VendorBill bill = created("1085.00", "1000.00", "70.00", "[]");
+
+            assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.MATCH_EXCEPTION);
+            assertThat(bill.getRejectionReason())
+                    .isEqualTo("The vendor's totals don't add up: net 1000.00 + tax 70.00 ≠ total 1085.00");
+            assertThat(bill.getTotalAmount()).isEqualByComparingTo("1085.00");
+            assertThat(bill.getStatedLineCount()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("AC(c): 0.01 apart on a one-line document waits for its receipt as usual")
+        void withinTheToleranceIsPending() {
+            assertThat(created("1070.01", "1000.00", "70.00", "[]").getStatus())
+                    .isEqualTo(VendorBillStatus.PENDING_RECEIPT_MATCH);
+        }
+
+        @Test
+        @DisplayName("No net stated: net = gross - tax; a net and no tax: tax = gross - net; neither: tax 0")
+        void missingAmountsAreDerived() {
+            VendorBill noNet = created("1070.00", "null", "70.00", "[]");
+            assertThat(noNet.getNetAmount()).isEqualByComparingTo("1000.00");
+            assertThat(noNet.getTaxAmount()).isEqualByComparingTo("70.00");
+            assertThat(noNet.getStatus()).isEqualTo(VendorBillStatus.PENDING_RECEIPT_MATCH);
+        }
+
+        @Test
+        @DisplayName("L8: a net and no tax stated: the tax is gross - net, so the totals add up")
+        void taxIsDerivedFromTheNet() {
+            VendorBill noTax = created("1070.00", "1000.00", "null", "[]");
+            assertThat(noTax.getTaxAmount()).isEqualByComparingTo("70.00");
+            assertThat(noTax.getStatus()).isEqualTo(VendorBillStatus.PENDING_RECEIPT_MATCH);
+        }
+
+        @Test
+        @DisplayName("Neither net nor tax stated: net = gross, tax 0")
+        void grossAlone() {
+            VendorBill gross = created("1070.00", "null", "null", "[]");
+            assertThat(gross.getNetAmount()).isEqualByComparingTo("1070.00");
+            assertThat(gross.getTaxAmount()).isEqualByComparingTo("0");
+            assertThat(gross.getStatus()).isEqualTo(VendorBillStatus.PENDING_RECEIPT_MATCH);
+        }
     }
 
     @Test
@@ -468,6 +545,22 @@ class SupplierInvoiceEventsListenerTest {
                             any(),
                             eq(new FactPostingOutcome.NothingToPost()));
             verify(processedEventRepository).save(any());
+        }
+
+        @Test
+        @DisplayName("B-MAJ3: the original is locked and re-read first; one voided meanwhile is retried, never flagged")
+        void originalDecidedMeanwhileIsRetried() {
+            VendorBill found = held("100.00", VendorBillStatus.APPROVED);
+            liveOriginal("INV1", found);
+            when(locks.lock(found)).thenAnswer(inv -> {
+                found.setStatus(VendorBillStatus.VOIDED);
+                return found;
+            });
+
+            assertThatThrownBy(() -> listener.onSupplierEvent(event(EVENT_1, "inv-1", "INVOICE", "120.00")))
+                    .isInstanceOf(org.springframework.dao.ConcurrencyFailureException.class);
+            verify(reissueRepository, never()).save(any());
+            verify(processedEventRepository, never()).save(any());
         }
 
         @Test

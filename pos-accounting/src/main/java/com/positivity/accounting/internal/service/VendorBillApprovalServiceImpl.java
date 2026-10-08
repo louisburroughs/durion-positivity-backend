@@ -12,6 +12,7 @@ import com.positivity.accounting.internal.entity.VendorBillMatchEvidence;
 import com.positivity.accounting.internal.enums.MatchConfidence;
 import com.positivity.accounting.internal.enums.VendorBillAction;
 import com.positivity.accounting.internal.enums.VendorBillDebitClass;
+import com.positivity.accounting.internal.enums.VendorBillDifferenceClass;
 import com.positivity.accounting.internal.enums.VendorBillStage;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
@@ -27,6 +28,7 @@ import java.io.Serial;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
@@ -67,6 +69,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
     static final String AUDIT_RESOLVE = "VENDOR_BILL_MATCH_EXCEPTION_RESOLVE";
     static final String AUDIT_SELECT = "VENDOR_BILL_MATCH_CANDIDATE_SELECT";
     static final String AUDIT_VOID = "VENDOR_BILL_VOID";
+    static final String AUDIT_RELEASE = "VENDOR_BILL_MATCH_CANDIDATE_RELEASE";
 
     /** Suffix of the audit operation that records an approval refused by its posting (AW42). */
     static final String AUDIT_REFUSED_SUFFIX = "_REFUSED";
@@ -87,6 +90,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
     private final VendorBillInvoiceMatcher matcher;
     private final VendorBillDuplicateGuard duplicateGuard;
     private final VendorBillReader reader;
+    private final VendorBillLocks locks;
     private final LedgerCurrency ledgerCurrency;
     private final TransactionTemplate commandTransaction;
     private final TransactionTemplate refusalTransaction;
@@ -102,6 +106,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
             VendorBillInvoiceMatcher matcher,
             VendorBillDuplicateGuard duplicateGuard,
             VendorBillReader reader,
+            VendorBillLocks locks,
             LedgerCurrency ledgerCurrency,
             PlatformTransactionManager transactionManager) {
         this.clock = clock;
@@ -114,6 +119,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
         this.matcher = matcher;
         this.duplicateGuard = duplicateGuard;
         this.reader = reader;
+        this.locks = locks;
         this.ledgerCurrency = ledgerCurrency;
         this.commandTransaction = new TransactionTemplate(transactionManager);
         this.refusalTransaction = new TransactionTemplate(transactionManager);
@@ -126,23 +132,28 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
     public @NonNull VendorBillResponse submitForApproval(
             @NonNull UUID billId, VendorBillCommands.@NonNull Submit command) {
         VendorBillDecisions.require(VendorBillAction.SUBMIT_FOR_APPROVAL);
+        String actor = VendorBillDecisions.actor();
         String justification = VendorBillDecisions.required(command.justification(), "justification");
-        VendorBillPostingService.Classification proposed = classification(command.classification());
+        VendorBillPostingService.Classification proposed = requireExpenseKey(classification(command.classification()));
+        DifferenceDecision difference = difference(command.difference());
         return inTransaction(() -> {
             VendorBill bill = lock(billId);
             if (!SUBMITTABLE.contains(bill.getStatus())) {
                 throw notApprovable(bill, "sent for approval");
             }
-            String actor = VendorBillDecisions.actor();
+            readyToDecide(bill, difference, "sent for approval");
             bill.setStatus(VendorBillStatus.AWAITING_APPROVAL);
             bill.setSubmittedBy(actor);
             bill.setSubmittedAt(Instant.now(clock));
             bill.setSubmissionJustification(justification);
             bill.setProposedDebitClass(proposed == null ? null : proposed.debitClass());
             bill.setProposedExpenseMappingKey(proposed == null ? null : proposed.expenseMappingKey());
+            if (difference != null) {
+                difference.applyTo(bill);
+            }
             bill.setModifiedBy(actor);
             bills.save(bill);
-            audit(bill, AUDIT_SUBMIT, actor, justification, null);
+            audit(bill, AUDIT_SUBMIT, actor, justification, differenceDetails(bill));
             return reader.read(bill);
         });
     }
@@ -150,15 +161,18 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
     @Override
     public @NonNull VendorBillResponse approve(@NonNull UUID billId, VendorBillCommands.@NonNull Approve command) {
         VendorBillDecisions.require(VendorBillAction.APPROVE);
+        String actor = VendorBillDecisions.actor();
         String justification = VendorBillDecisions.optional(command.justification(), "justification");
         String override = VendorBillDecisions.optional(command.overrideJustification(), "overrideJustification");
         VendorBillPostingService.Classification classification = classification(command.classification());
+        DifferenceDecision difference = difference(command.difference());
         return approving(AUDIT_APPROVE, () -> {
             VendorBill bill = lock(billId);
             if (bill.getStatus() != VendorBillStatus.AWAITING_APPROVAL) {
                 throw notApprovable(bill, "approved");
             }
-            approveAndPost(bill, justification, classification, override, AUDIT_APPROVE, null);
+            readyToDecide(bill, difference, "approved");
+            approveAndPost(bill, actor, justification, classification, difference, override, AUDIT_APPROVE, null);
             return reader.read(bill);
         });
     }
@@ -166,13 +180,13 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
     @Override
     public @NonNull VendorBillResponse reject(@NonNull UUID billId, VendorBillCommands.@NonNull Reject command) {
         VendorBillDecisions.require(VendorBillAction.REJECT);
+        String actor = VendorBillDecisions.actor();
         String reason = VendorBillDecisions.required(command.reason(), "reason");
         return inTransaction(() -> {
             VendorBill bill = lock(billId);
             if (bill.getStatus() != VendorBillStatus.AWAITING_APPROVAL) {
                 throw notApprovable(bill, "rejected");
             }
-            String actor = VendorBillDecisions.actor();
             bill.setStatus(VendorBillStatus.REJECTED);
             bill.setRejectedBy(actor);
             bill.setRejectedAt(Instant.now(clock));
@@ -189,46 +203,40 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
             @NonNull UUID billId, VendorBillCommands.@NonNull ResolveException command) {
         Resolution resolution = Resolution.parse(command.resolutionAction());
         VendorBillDecisions.require(resolution.action);
+        String actor = VendorBillDecisions.actor();
         String reason = VendorBillDecisions.required(command.reason(), "reason");
-        String override = resolution == Resolution.ACCEPT
-                ? VendorBillDecisions.optional(command.overrideJustification(), "overrideJustification")
-                : null;
+        boolean accept = resolution == Resolution.ACCEPT;
+        String override =
+                accept ? VendorBillDecisions.optional(command.overrideJustification(), "overrideJustification") : null;
         VendorBillPostingService.Classification classification =
-                resolution == Resolution.ACCEPT ? classification(command.classification()) : null;
+                accept ? classification(command.classification()) : null;
+        DifferenceDecision difference = accept ? difference(command.difference()) : null;
         Supplier<VendorBillResponse> work = () -> {
             VendorBill bill = lock(billId);
             if (bill.getStatus() != VendorBillStatus.MATCH_EXCEPTION) {
                 throw notApprovable(bill, "resolved as a match exception");
             }
-            String actor = VendorBillDecisions.actor();
             switch (resolution) {
-                case ACCEPT -> approveAndPost(bill, reason, classification, override, AUDIT_RESOLVE, "ACCEPT");
-                case CORRECT -> {
-                    // Not an approval: no approval or rejection field is written.
-                    bill.setStatus(VendorBillStatus.PENDING_RECEIPT_MATCH);
-                    bill.setModifiedBy(actor);
-                    bills.save(bill);
-                    audit(bill, AUDIT_RESOLVE, actor, reason, "action=CORRECT");
+                case ACCEPT -> {
+                    readyToDecide(bill, difference, "accepted");
+                    approveAndPost(bill, actor, reason, classification, difference, override, AUDIT_RESOLVE, "ACCEPT");
                 }
+                case CORRECT -> correct(bill, actor, reason);
                 case VOID -> {
                     // Never posted (AW42): nothing to reverse.
-                    bill.setStatus(VendorBillStatus.VOIDED);
-                    bill.setRejectedBy(actor);
-                    bill.setRejectedAt(Instant.now(clock));
-                    bill.setRejectionReason(reason);
-                    bill.setModifiedBy(actor);
-                    bills.save(bill);
+                    markVoided(bill, actor, reason);
                     audit(bill, AUDIT_RESOLVE, actor, reason, "action=VOID");
                 }
             }
             return reader.read(bill);
         };
-        return resolution == Resolution.ACCEPT ? approving(AUDIT_RESOLVE, work) : inTransaction(work);
+        return accept ? approving(AUDIT_RESOLVE, work) : inTransaction(work);
     }
 
     @Override
     public @NonNull VendorBillResponse selectCandidate(@NonNull UUID candidateId) {
         VendorBillDecisions.require(VendorBillAction.SELECT_CANDIDATE);
+        String actor = VendorBillDecisions.actor();
         return inTransaction(() -> {
             UUID invoiceEventId = candidates
                     .findById(candidateId)
@@ -247,13 +255,21 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
                         VendorBillException.Code.AP_MATCH_CANDIDATE_ALREADY_RESOLVED,
                         "This ambiguous match was already resolved by " + selected.getResolvedBy());
             }
-            VendorBill bill = lock(selected.getVendorBillId());
+            // Then every bill the open candidates name, in id order, each seen as it is now (#2509 review, B-MAJ3).
+            List<VendorBill> named = locks.lockAll(set.stream()
+                    .filter(c -> !c.isResolved())
+                    .map(VendorBillMatchCandidate::getVendorBillId)
+                    .toList());
+            VendorBill bill = named.stream()
+                    .filter(b -> b.getVendorBillId().equals(selected.getVendorBillId()))
+                    .findFirst()
+                    .orElseThrow(VendorBillApprovalServiceImpl::notFound);
             if (!SUBMITTABLE.contains(bill.getStatus())) {
                 throw notApprovable(bill, "selected for this invoice");
             }
-            String actor = VendorBillDecisions.actor();
             Instant now = Instant.now(clock);
             long open = set.stream().filter(c -> !c.isResolved()).count();
+            keepWhatWasBilled(bill, selected, actor);
             for (VendorBillMatchCandidate candidate : set) {
                 if (!candidate.isResolved()) {
                     candidate.setResolved(true);
@@ -263,9 +279,9 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
                     candidates.save(candidate);
                 }
             }
-            keepWhatWasBilled(bill, selected, actor);
             // Selection is matching only: the bill goes to approval, nothing approves it (§7.1).
             bill.setStatus(VendorBillStatus.AWAITING_APPROVAL);
+            bill.setRejectionReason(null);
             bill.setSubmittedBy(actor);
             bill.setSubmittedAt(now);
             bill.setSubmissionJustification("Selected among " + open + " candidates of an ambiguous match (score "
@@ -273,47 +289,118 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
             bill.setModifiedBy(actor);
             bills.save(bill);
             audit(bill, AUDIT_SELECT, actor, null, "candidateId=" + candidateId + ";candidates=" + open);
+            named.stream()
+                    .filter(b -> !b.getVendorBillId().equals(bill.getVendorBillId()))
+                    .forEach(other -> release(other, invoiceEventId, actor));
             return reader.read(bill);
         });
     }
 
     @Override
-    public @NonNull VendorBillResponse voidApproved(
-            @NonNull UUID billId, VendorBillCommands.@NonNull VoidApproved command) {
-        VendorBillDecisions.require(VendorBillAction.VOID_APPROVED);
+    public @NonNull VendorBillResponse voidBill(@NonNull UUID billId, VendorBillCommands.@NonNull VoidBill command) {
+        // Every void needs accounting:ap:reject; an approved bill's needs the approval tier too, checked below.
+        VendorBillDecisions.require(VendorBillAction.VOID_UNMATCHED);
+        String actor = VendorBillDecisions.actor();
         String reason = VendorBillDecisions.required(command.reason(), "reason");
         String override = VendorBillDecisions.optional(command.overrideJustification(), "overrideJustification");
         return inTransaction(() -> {
             VendorBill bill = lock(billId);
-            if (bill.getStatus() != VendorBillStatus.APPROVED) {
+            if (bill.getStatus() == VendorBillStatus.APPROVED) {
+                voidApproved(bill, actor, reason, override);
+            } else if (bill.getStatus() == VendorBillStatus.PENDING_RECEIPT_MATCH
+                    && VendorBillReader.channelOf(bill) == VendorBillReview.Channel.GOODS_RECEIPT) {
+                // AW44: the receipt's placeholder closed. Nothing posts: the receipt's accrual stays in 2100 until the
+                // vendor's EDI bill, classified GOODS, clears it at its approval.
+                markVoided(bill, actor, reason);
+                audit(bill, AUDIT_VOID, actor, reason, "action=VOID_UNMATCHED;posted=none");
+            } else {
                 throw new VendorBillException(
                         VendorBillException.Code.AP_BILL_NOT_VOIDABLE,
-                        "Bill " + bill.getBillNumber() + " is " + bill.getStatus()
-                                + "; only an APPROVED bill can be voided this way");
+                        "Bill " + bill.getBillNumber() + " is " + bill.getStatus() + "; only an APPROVED bill, or a"
+                                + " goods-receipt bill in PENDING_RECEIPT_MATCH, is voided this way (a bill in"
+                                + " MATCH_EXCEPTION is voided by resolve-exception VOID, one awaiting approval is"
+                                + " rejected)");
             }
-            if (allocations.existsByVendorBill_VendorBillId(billId)) {
-                throw new VendorBillException(
-                        VendorBillException.Code.AP_BILL_NOT_VOIDABLE,
-                        "Bill " + bill.getBillNumber() + " has payments allocated to it; correct it with a vendor"
-                                + " credit note");
-            }
-            String actor = VendorBillDecisions.actor();
-            VendorBillGlPosting posting = postingService.reverse(bill, override, actor);
-            bill.setStatus(VendorBillStatus.VOIDED);
-            bill.setRejectedBy(actor);
-            bill.setRejectedAt(Instant.now(clock));
-            bill.setRejectionReason(reason);
-            bill.setModifiedBy(actor);
-            bills.save(bill);
-            audit(
-                    bill,
-                    AUDIT_VOID,
-                    actor,
-                    reason,
-                    "reversalJournalEntryId=" + posting.getReversalJournalEntryId() + ";voidDate="
-                            + posting.getReversalDate() + (override == null ? "" : ";periodOverride=true"));
             return reader.read(bill);
         });
+    }
+
+    private void voidApproved(VendorBill bill, String actor, String reason, @Nullable String override) {
+        VendorBillDecisions.require(VendorBillAction.VOID_APPROVED);
+        if (allocations.existsByVendorBill_VendorBillId(bill.getVendorBillId())) {
+            throw new VendorBillException(
+                    VendorBillException.Code.AP_BILL_NOT_VOIDABLE,
+                    "Bill " + bill.getBillNumber() + " has payments allocated to it; correct it with a vendor"
+                            + " credit note");
+        }
+        VendorBillGlPosting posting = postingService.reverse(bill, override, actor);
+        markVoided(bill, actor, reason);
+        audit(
+                bill,
+                AUDIT_VOID,
+                actor,
+                reason,
+                "action=VOID_APPROVED;reversalJournalEntryId=" + posting.getReversalJournalEntryId() + ";voidDate="
+                        + posting.getReversalDate() + (override == null ? "" : ";periodOverride=true"));
+    }
+
+    private void markVoided(VendorBill bill, String actor, String reason) {
+        bill.setStatus(VendorBillStatus.VOIDED);
+        bill.setRejectedBy(actor);
+        bill.setRejectedAt(Instant.now(clock));
+        bill.setRejectionReason(reason);
+        bill.setModifiedBy(actor);
+        bills.save(bill);
+    }
+
+    /**
+     * Resolve-exception {@code CORRECT} (#2509 review, B-MAJ2): not an approval, no approval or rejection field is
+     * written. A goods-receipt bill goes back to its receipt, as if no invoice had been matched: the billed lines and
+     * total are undone and the bill date is the receipt date again, so the next match compares the invoice with what
+     * was received. Whatever was proposed for approval is cleared with it.
+     */
+    private void correct(VendorBill bill, String actor, String reason) {
+        if (VendorBillReader.channelOf(bill) == VendorBillReview.Channel.GOODS_RECEIPT) {
+            matcher.restoreReceived(bill);
+            evidence.findFirstByVendorBillIdOrderByRecordedAtDescMatchEvidenceIdDesc(bill.getVendorBillId())
+                    .map(VendorBillMatchEvidence::getReceivedDate)
+                    .ifPresent(bill::setBillDate);
+        }
+        bill.setStatus(VendorBillStatus.PENDING_RECEIPT_MATCH);
+        bill.setRejectionReason(null);
+        bill.setSubmittedAt(null);
+        bill.setSubmittedBy(null);
+        bill.setSubmissionJustification(null);
+        bill.setProposedDebitClass(null);
+        bill.setProposedExpenseMappingKey(null);
+        DifferenceDecision.clear(bill);
+        bill.setModifiedBy(actor);
+        bills.save(bill);
+        audit(bill, AUDIT_RESOLVE, actor, reason, "action=CORRECT");
+    }
+
+    /**
+     * Another bill of the same ambiguous match after the selection (#2509 review): the top bill the match had put in
+     * {@code MATCH_EXCEPTION} for it goes back to {@code PENDING_RECEIPT_MATCH}, to wait for its own invoice. A bill
+     * someone moved on meanwhile is left as it is.
+     */
+    private void release(VendorBill other, UUID invoiceEventId, String actor) {
+        if (other.getStatus() != VendorBillStatus.MATCH_EXCEPTION) {
+            return;
+        }
+        boolean heldForThisMatch = evidence.findFirstByVendorBillIdOrderByRecordedAtDescMatchEvidenceIdDesc(
+                        other.getVendorBillId())
+                .filter(VendorBillReader::ambiguousScoring)
+                .filter(row -> invoiceEventId.equals(row.getInvoiceEventId()))
+                .isPresent();
+        if (!heldForThisMatch) {
+            return;
+        }
+        other.setStatus(VendorBillStatus.PENDING_RECEIPT_MATCH);
+        other.setRejectionReason(null);
+        other.setModifiedBy(actor);
+        bills.save(other);
+        audit(other, AUDIT_RELEASE, actor, null, "invoiceEventId=" + invoiceEventId);
     }
 
     // ---- reads ----------------------------------------------------------------------------------------------
@@ -339,20 +426,22 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
     /**
      * Posts the bill, then writes the approval (AW37): a bill is approved if and only if it posted. A refusal of the
      * posting leaves the bill as it was and propagates, carried by {@link PostingRefused} so the refusal is audited
-     * after the rollback.
+     * after the rollback. The classification given is merged with the one proposed at submission, field by field; a
+     * difference given replaces the one proposed.
      */
     private void approveAndPost(
             VendorBill bill,
+            String actor,
             @Nullable String justification,
             VendorBillPostingService.@Nullable Classification classification,
+            @Nullable DifferenceDecision difference,
             @Nullable String override,
             String operation,
             @Nullable String resolution) {
-        String actor = VendorBillDecisions.actor();
-        VendorBillPostingService.Classification effective = classification != null
-                ? classification
-                : new VendorBillPostingService.Classification(
-                        bill.getProposedDebitClass(), bill.getProposedExpenseMappingKey());
+        VendorBillPostingService.Classification effective = requireExpenseKey(merge(classification, bill));
+        if (difference != null) {
+            difference.applyTo(bill);
+        }
         VendorBillGlPosting posting;
         try {
             posting = postingService.post(bill, effective, override, actor);
@@ -360,11 +449,13 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
             throw new PostingRefused(bill.getVendorBillId(), bill.getBillNumber(), actor, refused);
         }
         bill.setStatus(VendorBillStatus.APPROVED);
+        bill.setRejectionReason(null);
         bill.setApprovedBy(actor);
         bill.setApprovedAt(Instant.now(clock));
         bill.setApprovalJustification(justification);
         bill.setModifiedBy(actor);
         bills.save(bill);
+        String details = differenceDetails(bill);
         audit(
                 bill,
                 operation,
@@ -372,8 +463,40 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
                 justification,
                 (resolution == null ? "" : "action=" + resolution + ";") + "journalEntryId="
                         + posting.getJournalEntryId() + ";postingDate=" + posting.getPostingDate()
-                        + ";postingDateRule=" + posting.getPostingDateRule()
+                        + ";postingDateRule=" + posting.getPostingDateRule() + ";roundingAdjustment="
+                        + posting.getRoundingAdjustment().toPlainString()
+                        + (details == null ? "" : ";" + details)
                         + (override == null ? "" : ";periodOverride=true"));
+    }
+
+    /**
+     * What every send, approval and acceptance needs first (#2509 review; AW44, AW46), refused before anything is
+     * written: no open ambiguous match naming the bill, a matched invoice for a goods-receipt bill, a total that is
+     * not 0.00, and the vendor's totals adding up or a {@code difference} decided.
+     */
+    private void readyToDecide(VendorBill bill, @Nullable DifferenceDecision difference, String what) {
+        if (reader.hasOpenCandidates(bill.getVendorBillId())) {
+            throw new VendorBillException(
+                    VendorBillException.Code.AP_BILL_NOT_APPROVABLE,
+                    "Bill " + bill.getBillNumber() + " is a candidate of an ambiguous match nobody has picked yet;"
+                            + " pick the match first (select a candidate), then it can be " + what);
+        }
+        if (VendorBillReader.channelOf(bill) == VendorBillReview.Channel.GOODS_RECEIPT
+                && !reader.invoiceMatched(bill)) {
+            throw new VendorBillException(
+                    VendorBillException.Code.AP_BILL_AWAITING_INVOICE,
+                    "Bill " + bill.getBillNumber() + " is a goods receipt no vendor invoice has been matched to; match"
+                            + " the invoice (POST /v1/accounting/vendor-bills/match) or select a candidate before it"
+                            + " is " + what + ", or void the bill if no invoice will come");
+        }
+        if (bill.getTotalAmount() == null || bill.getTotalAmount().signum() == 0) {
+            throw new VendorBillException(
+                    VendorBillException.Code.AP_BILL_ZERO_TOTAL,
+                    "Bill " + bill.getBillNumber() + " totals 0.00; there is nothing to approve or post. Correct it"
+                            + " or void it");
+        }
+        VendorBillPostingService.requireReconciled(
+                bill, difference != null ? difference.difference() : VendorBillPostingService.difference(bill));
     }
 
     /** A posting refused at approval, carried out of the rolled-back transaction to be audited. */
@@ -445,27 +568,30 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
     // ---- candidate selection --------------------------------------------------------------------------------
 
     /**
-     * Candidate selection keeps what the vendor billed, as {@code /match} does (AW39): the billed lines and total,
-     * the vendor's invoice number and due date, and the evidence. A candidate scored before #2509 kept no invoice; it
-     * is selected without them.
+     * Candidate selection keeps what the vendor billed, as {@code /match} does (AW39, AW45): the billed lines and
+     * total, the vendor's invoice number, its date as the bill date and its due date, and the evidence with the
+     * receipt date. The duplicate rule is checked first on the invoice's number and date, so a refusal changes
+     * nothing. A candidate scored before #2509 kept no invoice: it cannot be selected (409 {@code
+     * AP_BILL_AWAITING_INVOICE}); the invoice is matched again instead.
      */
     private void keepWhatWasBilled(VendorBill bill, VendorBillMatchCandidate selected, String actor) {
         if (selected.getInvoiceReference() == null || selected.getInvoiceDate() == null) {
-            log.warn(
-                    "Match candidate {} predates #2509 and kept no invoice; bill {} keeps its receipt amounts",
-                    selected.getCandidateId(),
-                    bill.getBillNumber());
-            return;
+            throw new VendorBillException(
+                    VendorBillException.Code.AP_BILL_AWAITING_INVOICE,
+                    "This candidate was scored before #2509 and kept no invoice; match the vendor invoice again"
+                            + " (POST /v1/accounting/vendor-bills/match)");
         }
         duplicateGuard.refuseIfDuplicate(
                 VendorBillDuplicateGuard.Channel.MATCH,
                 bill.getVendorId(),
                 selected.getInvoiceReference(),
-                bill.getBillDate(),
+                selected.getInvoiceDate(),
                 bill.getVendorBillId());
+        LocalDateTime receivedDate = bill.getBillDate();
         VendorBillInvoiceMatcher.Comparison comparison =
                 matcher.applyBilled(bill, VendorBillInvoiceMatcher.fromJson(selected.getInvoiceLines()));
         bill.setBillNumber(selected.getInvoiceReference());
+        bill.setBillDate(selected.getInvoiceDate());
         if (selected.getInvoiceDueDate() != null) {
             bill.setDueDate(selected.getInvoiceDueDate());
         }
@@ -481,6 +607,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
                         nz(selected.getPurchaseOrderPoints())),
                 selected.getInvoiceReference(),
                 selected.getInvoiceDate(),
+                receivedDate,
                 comparison,
                 actor);
     }
@@ -517,20 +644,107 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
                     VendorBillException.Code.VALIDATION_ERROR,
                     "classification.debitClass RECEIPT_MATCHED is never given: matched lines class themselves");
         }
-        String key = isBlank(given.expenseMappingKey())
-                ? null
-                : given.expenseMappingKey().trim().toUpperCase(Locale.ROOT);
-        if (key != null && !key.startsWith(VendorBillPostingService.EXPENSE_KEY_PREFIX)) {
-            throw new VendorBillException(
-                    VendorBillException.Code.VALIDATION_ERROR,
-                    "classification.expenseMappingKey must be a VENDOR_BILL expense key, EXPENSE_<CODE>");
-        }
-        if (given.debitClass() == VendorBillDebitClass.EXPENSE && key == null) {
+        return new VendorBillPostingService.Classification(
+                given.debitClass(), expenseKey(given.expenseMappingKey(), "classification.expenseMappingKey"));
+    }
+
+    /**
+     * The classification an approval posts with (#2509 review, LOW-12): each field given wins, an absent one is the
+     * proposal's; null when neither says anything.
+     */
+    static VendorBillPostingService.@Nullable Classification merge(
+            VendorBillPostingService.@Nullable Classification given, @NonNull VendorBill bill) {
+        VendorBillDebitClass debitClass =
+                given != null && given.debitClass() != null ? given.debitClass() : bill.getProposedDebitClass();
+        String key = given != null && given.expenseMappingKey() != null
+                ? given.expenseMappingKey()
+                : bill.getProposedExpenseMappingKey();
+        return debitClass == null && key == null ? null : new VendorBillPostingService.Classification(debitClass, key);
+    }
+
+    /** An EXPENSE classification names its key (400 VALIDATION_ERROR). */
+    private static VendorBillPostingService.@Nullable Classification requireExpenseKey(
+            VendorBillPostingService.@Nullable Classification classification) {
+        if (classification != null
+                && classification.debitClass() == VendorBillDebitClass.EXPENSE
+                && classification.expenseMappingKey() == null) {
             throw new VendorBillException(
                     VendorBillException.Code.VALIDATION_ERROR,
                     "classification.expenseMappingKey is required with debitClass EXPENSE");
         }
-        return new VendorBillPostingService.Classification(given.debitClass(), key);
+        return classification;
+    }
+
+    /**
+     * The request's difference decision (AW46), its shape checked: a class (400 VALIDATION_ERROR), an expense key for
+     * EXPENSE, and a justification of at least 10 characters (400 JUSTIFICATION_REQUIRED). Null when none is given.
+     */
+    static @Nullable DifferenceDecision difference(VendorBillReview.@Nullable Difference given) {
+        if (given == null) {
+            return null;
+        }
+        if (given.differenceClass() == null) {
+            throw new VendorBillException(
+                    VendorBillException.Code.VALIDATION_ERROR,
+                    "difference.class is required: FREIGHT, GOODS, EXPENSE or PRICE_DIFFERENCE");
+        }
+        String key = expenseKey(given.expenseMappingKey(), "difference.expenseMappingKey");
+        if (given.differenceClass() == VendorBillDifferenceClass.EXPENSE && key == null) {
+            throw new VendorBillException(
+                    VendorBillException.Code.VALIDATION_ERROR,
+                    "difference.expenseMappingKey is required with class EXPENSE");
+        }
+        String justification = VendorBillDecisions.required(given.justification(), "difference.justification");
+        return new DifferenceDecision(
+                new VendorBillPostingService.Difference(
+                        given.differenceClass(),
+                        given.differenceClass() == VendorBillDifferenceClass.EXPENSE ? key : null),
+                justification);
+    }
+
+    /** An expense key as given, upper-cased; it must be a {@code VENDOR_BILL} key {@code EXPENSE_<CODE>}. */
+    private static @Nullable String expenseKey(@Nullable String given, String field) {
+        if (isBlank(given)) {
+            return null;
+        }
+        String key = given.trim().toUpperCase(Locale.ROOT);
+        if (!key.startsWith(VendorBillPostingService.EXPENSE_KEY_PREFIX)) {
+            throw new VendorBillException(
+                    VendorBillException.Code.VALIDATION_ERROR,
+                    field + " must be a VENDOR_BILL expense key, EXPENSE_<CODE>");
+        }
+        return key;
+    }
+
+    /** A decided difference (AW46) with its justification, stored on the bill until it posts. */
+    record DifferenceDecision(
+            VendorBillPostingService.@NonNull Difference difference,
+            @NonNull String justification) {
+
+        void applyTo(VendorBill bill) {
+            bill.setDifferenceClass(difference.differenceClass());
+            bill.setDifferenceExpenseMappingKey(difference.expenseMappingKey());
+            bill.setDifferenceJustification(justification);
+        }
+
+        static void clear(VendorBill bill) {
+            bill.setDifferenceClass(null);
+            bill.setDifferenceExpenseMappingKey(null);
+            bill.setDifferenceJustification(null);
+        }
+    }
+
+    private static @Nullable String differenceDetails(VendorBill bill) {
+        if (bill.getDifferenceClass() == null) {
+            return null;
+        }
+        return "differenceClass=" + bill.getDifferenceClass()
+                + (bill.getDifferenceExpenseMappingKey() == null
+                        ? ""
+                        : ";differenceExpenseMappingKey=" + bill.getDifferenceExpenseMappingKey())
+                + VendorBillTotals.of(bill)
+                        .map(t -> ";difference=" + t.difference().toPlainString())
+                        .orElse("");
     }
 
     private void audit(

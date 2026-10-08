@@ -145,9 +145,40 @@ public class VendorBillResponse {
     @JsonProperty("openAmount")
     private BigDecimal openAmount;
 
-    @Schema(description = "The latest match evidence and the open candidates", requiredMode = NOT_REQUIRED)
+    @Schema(description = "The latest match evidence; null before any match", requiredMode = NOT_REQUIRED)
     @JsonProperty("match")
     private VendorBillReview.@Nullable Match match;
+
+    @Schema(
+            description = "Unresolved candidates of every ambiguous match naming this bill, each with its"
+                    + " invoiceEventId; pick one with the select command before sending or accepting the bill",
+            requiredMode = REQUIRED)
+    @NotNull
+    @JsonProperty("openCandidates")
+    private List<VendorBillReview.Candidate> openCandidates;
+
+    @Schema(
+            description = "Re-issues of this approved bill under its number, held as exception items",
+            requiredMode = REQUIRED)
+    @NotNull
+    @JsonProperty("reissues")
+    private List<VendorBillReview.Reissue> reissues;
+
+    @Nullable
+    @Schema(
+            description = "The net the vendor's document states (AW46); null on a bill without header totals",
+            example = "1000.00",
+            requiredMode = NOT_REQUIRED)
+    @JsonProperty("netAmount")
+    private BigDecimal netAmount;
+
+    @Nullable
+    @Schema(
+            description = "The tax the vendor's document states, never recalculated (AW39, AW46)",
+            example = "70.00",
+            requiredMode = NOT_REQUIRED)
+    @JsonProperty("taxAmount")
+    private BigDecimal taxAmount;
 
     @Schema(
             description = "Received lines with what the vendor billed; empty for a bill without lines",
@@ -156,7 +187,10 @@ public class VendorBillResponse {
     @JsonProperty("lines")
     private List<VendorBillReview.Line> lines;
 
-    @Schema(description = "MATCHED_TO_DELIVERY and WITHIN_PRICE_TOLERANCE", requiredMode = REQUIRED)
+    @Schema(
+            description = "MATCHED_TO_DELIVERY, WITHIN_PRICE_TOLERANCE, TOTALS_ADD_UP and, on an EDI bill classified"
+                    + " GOODS, OPEN_DELIVERIES_FROM_VENDOR",
+            requiredMode = REQUIRED)
     @NotNull
     @JsonProperty("checks")
     private List<VendorBillReview.Check> checks;

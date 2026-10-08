@@ -105,7 +105,11 @@ public class VendorBillMatchEvidence extends TenantScopedEntity {
     @Column(name = "invoice_date", nullable = false, updatable = false)
     private LocalDateTime invoiceDate;
 
-    /** What the receipt put on the bill before the match. */
+    /** The bill's date before the match: the receipt date (AW45); the bill takes the invoice date. */
+    @Column(name = "received_date", nullable = false, updatable = false)
+    private LocalDateTime receivedDate;
+
+    /** What the receipt put on the bill before the match: the received lines' total. */
     @Column(name = "received_total", precision = 19, scale = 4, nullable = false, updatable = false)
     private BigDecimal receivedTotal;
 

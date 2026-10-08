@@ -261,6 +261,34 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
     @Query("SELECT vb FROM VendorBill vb WHERE vb.vendorBillId = :billId")
     Optional<VendorBill> lockById(@Param("billId") UUID billId);
 
+    /**
+     * The bills of {@code billIds} under row locks taken in id order (#2509 review, A3): a payment allocating to
+     * several bills locks them all before it reads their status, in the one order every such payment uses.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT vb FROM VendorBill vb WHERE vb.vendorBillId IN :billIds ORDER BY vb.vendorBillId")
+    List<VendorBill> lockByVendorBillIdIn(@Param("billIds") Collection<UUID> billIds);
+
+    /**
+     * A vendor's bills in {@code status} under row locks taken in id order (#2509 review, A3). The status is
+     * evaluated on the locked row, so a bill voided meanwhile is not returned.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT vb FROM VendorBill vb
+        WHERE vb.vendorId = :vendorId AND vb.status = :status
+        ORDER BY vb.vendorBillId
+        """)
+    List<VendorBill> lockByVendorIdAndStatus(
+            @Param("vendorId") UUID vendorId, @Param("status") VendorBillStatus status);
+
+    /**
+     * A vendor's bills of one origin in any of {@code statuses}, oldest first (AW44: the goods-receipt bills still open
+     * when its EDI bill is read).
+     */
+    List<VendorBill> findByVendorIdAndOriginEventTypeAndStatusInOrderByCreatedAtAscVendorBillIdAsc(
+            UUID vendorId, String originEventType, Collection<VendorBillStatus> statuses);
+
     // ===== Stage reads (#2509; SPEC-accounting-workspace §5.2): no due-date window =====
 
     /** Bills in any of {@code statuses}, paged; the caller sets the order. */

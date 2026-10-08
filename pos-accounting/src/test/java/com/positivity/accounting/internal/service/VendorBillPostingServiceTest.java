@@ -17,9 +17,12 @@ import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.entity.VendorBillGlPosting;
 import com.positivity.accounting.internal.entity.VendorBillLine;
 import com.positivity.accounting.internal.enums.VendorBillDebitClass;
+import com.positivity.accounting.internal.enums.VendorBillDifferenceClass;
 import com.positivity.accounting.internal.enums.VendorBillPostingDateRule;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
+import com.positivity.accounting.internal.event.LedgerReversalApplied;
 import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
+import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
 import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.accounting.internal.repository.VendorBillGlPostingRepository;
 import com.positivity.accounting.internal.repository.VendorBillLineRepository;
@@ -32,6 +35,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -80,8 +84,16 @@ class VendorBillPostingServiceTest {
 
     private static List<String> legs(
             VendorBill bill, List<VendorBillLine> lines, VendorBillPostingService.Classification c) {
+        return legs(bill, lines, c, null);
+    }
+
+    private static List<String> legs(
+            VendorBill bill,
+            List<VendorBillLine> lines,
+            VendorBillPostingService.Classification c,
+            VendorBillPostingService.Difference difference) {
         List<String> out = new ArrayList<>();
-        for (VendorBillPostingService.Leg leg : VendorBillPostingService.legs(bill, lines, c)) {
+        for (VendorBillPostingService.Leg leg : VendorBillPostingService.legs(bill, lines, c, difference)) {
             BigDecimal amount = leg.signedAmount();
             out.add(leg.mappingKey()
                     + (amount.signum() > 0 ? " Dr " : " Cr ")
@@ -151,7 +163,7 @@ class VendorBillPostingServiceTest {
                             "GOODS_RECEIVED_NOT_BILLED Dr 400.00",
                             "EXPENSE_POSTAGE_SHIPPING Dr 50.00",
                             "ACCOUNTS_PAYABLE Cr 450.00");
-            assertThatThrownBy(() -> VendorBillPostingService.legs(bill("450.00"), lines, NONE))
+            assertThatThrownBy(() -> VendorBillPostingService.legs(bill("450.00"), lines, NONE, null))
                     .isInstanceOfSatisfying(
                             VendorBillException.class,
                             e -> assertThat(e.getCode()).isEqualTo(VendorBillException.Code.AP_BILL_UNCLASSIFIED));
@@ -192,7 +204,7 @@ class VendorBillPostingServiceTest {
         @Test
         @DisplayName("Ruling Q2 AC7: a bill without lines, class or vendor default is 422 AP_BILL_UNCLASSIFIED")
         void headerBillWithoutClassIsUnclassified() {
-            assertThatThrownBy(() -> VendorBillPostingService.legs(bill("214.00"), List.of(), NONE))
+            assertThatThrownBy(() -> VendorBillPostingService.legs(bill("214.00"), List.of(), NONE, null))
                     .isInstanceOfSatisfying(
                             VendorBillException.class,
                             e -> assertThat(e.getCode()).isEqualTo(VendorBillException.Code.AP_BILL_UNCLASSIFIED));
@@ -220,24 +232,26 @@ class VendorBillPostingServiceTest {
             assertThatThrownBy(() -> VendorBillPostingService.legs(
                             bill("-50.00"),
                             List.of(),
-                            new VendorBillPostingService.Classification(VendorBillDebitClass.GOODS, null)))
+                            new VendorBillPostingService.Classification(VendorBillDebitClass.GOODS, null),
+                            null))
                     .isInstanceOfSatisfying(
                             VendorBillException.class,
                             e -> assertThat(e.getCode()).isEqualTo(VendorBillException.Code.VALIDATION_ERROR));
             assertThatThrownBy(() -> VendorBillPostingService.legs(
                             bill("50.00"),
                             List.of(),
-                            new VendorBillPostingService.Classification(VendorBillDebitClass.PRICE_ALLOWANCE, null)))
+                            new VendorBillPostingService.Classification(VendorBillDebitClass.PRICE_ALLOWANCE, null),
+                            null))
                     .isInstanceOf(VendorBillException.class);
         }
 
         @Test
-        @DisplayName("A bill totalling 0.00 has nothing to post: 409 AP_BILL_NOT_APPROVABLE")
+        @DisplayName("L7: a bill totalling 0.00 has nothing to post: 422 AP_BILL_ZERO_TOTAL")
         void zeroBillHasNothingToPost() {
-            assertThatThrownBy(() -> VendorBillPostingService.legs(bill("0.00"), List.of(), NONE))
+            assertThatThrownBy(() -> VendorBillPostingService.legs(bill("0.00"), List.of(), NONE, null))
                     .isInstanceOfSatisfying(
                             VendorBillException.class,
-                            e -> assertThat(e.getCode()).isEqualTo(VendorBillException.Code.AP_BILL_NOT_APPROVABLE));
+                            e -> assertThat(e.getCode()).isEqualTo(VendorBillException.Code.AP_BILL_ZERO_TOTAL));
         }
 
         @Test
@@ -266,6 +280,152 @@ class VendorBillPostingServiceTest {
             assertThat(shares)
                     .usingElementComparator(BigDecimal::compareTo)
                     .containsExactly(new BigDecimal("0.04"), new BigDecimal("0.03"), new BigDecimal("0.03"));
+        }
+    }
+
+    private static VendorBill ediBill(String gross, String net, String tax, int statedLines) {
+        VendorBill edi = bill(gross);
+        edi.setNetAmount(new BigDecimal(net));
+        edi.setTaxAmount(new BigDecimal(tax));
+        edi.setStatedLineCount(statedLines);
+        return edi;
+    }
+
+    private static final VendorBillPostingService.Classification GOODS =
+            new VendorBillPostingService.Classification(VendorBillDebitClass.GOODS, null);
+
+    @Nested
+    @DisplayName("The vendor's own totals: gross vs net + tax (AW46)")
+    class Totals {
+
+        @Test
+        @DisplayName("AC(a): gross 1,085.00 / net 1,000.00 / tax 70.00 without a difference is 422"
+                + " AP_BILL_TOTALS_UNRECONCILED")
+        void unreconciledWithoutDifferenceIsRefused() {
+            assertThatThrownBy(() -> VendorBillPostingService.legs(
+                            ediBill("1085.00", "1000.00", "70.00", 1), List.of(), GOODS, null))
+                    .isInstanceOfSatisfying(VendorBillException.class, e -> {
+                        assertThat(e.getCode()).isEqualTo(VendorBillException.Code.AP_BILL_TOTALS_UNRECONCILED);
+                        assertThat(e.getMessage()).contains("net 1000.00 + tax 70.00 ≠ total 1085.00");
+                    });
+        }
+
+        @Test
+        @DisplayName("AC(b): the same with FREIGHT -> Dr 2100 1,000.00 / Dr 5050 70.00 / Dr 5060 15.00 / Cr 2000"
+                + " 1,085.00")
+        void freightDifferencePostsToFreightIn() {
+            VendorBillPostingService.Entry entry = VendorBillPostingService.entry(
+                    ediBill("1085.00", "1000.00", "70.00", 1),
+                    List.of(),
+                    GOODS,
+                    new VendorBillPostingService.Difference(VendorBillDifferenceClass.FREIGHT, null));
+
+            assertThat(entry.legs())
+                    .extracting(
+                            leg -> leg.mappingKey() + " " + leg.signedAmount().toPlainString())
+                    .containsExactly(
+                            "GOODS_RECEIVED_NOT_BILLED 1000.00",
+                            "PURCHASE_PRICE_DIFFERENCE 70.00",
+                            "FREIGHT_IN 15.00",
+                            "ACCOUNTS_PAYABLE -1085.00");
+            assertThat(entry.roundingAdjustment()).isEqualByComparingTo("0.00");
+            assertThat(entry.differenceAmount()).isEqualByComparingTo("15.00");
+        }
+
+        @Test
+        @DisplayName("AC(c): gross 1,070.01 -> Dr 2100 1,000.01 / Dr 5050 70.00 / Cr 2000 1,070.01, roundingAdjustment"
+                + " 0.01")
+        void roundingWithinToleranceGoesOnTheLargestDebit() {
+            VendorBillPostingService.Entry entry =
+                    VendorBillPostingService.entry(ediBill("1070.01", "1000.00", "70.00", 1), List.of(), GOODS, null);
+
+            assertThat(entry.legs())
+                    .extracting(
+                            leg -> leg.mappingKey() + " " + leg.signedAmount().toPlainString())
+                    .containsExactly(
+                            "GOODS_RECEIVED_NOT_BILLED 1000.01",
+                            "PURCHASE_PRICE_DIFFERENCE 70.00",
+                            "ACCOUNTS_PAYABLE -1070.01");
+            assertThat(entry.roundingAdjustment()).isEqualByComparingTo("0.01");
+            assertThat(entry.difference()).isNull();
+        }
+
+        @Test
+        @DisplayName("AC(d): gross 1,060.00 with PRICE_DIFFERENCE -> Dr 2100 1,000.00 / Dr 5050 60.00 / Cr 2000"
+                + " 1,060.00")
+        void negativeDifferenceCreditsPriceDifference() {
+            assertThat(legs(
+                            ediBill("1060.00", "1000.00", "70.00", 1),
+                            List.of(),
+                            GOODS,
+                            new VendorBillPostingService.Difference(VendorBillDifferenceClass.PRICE_DIFFERENCE, null)))
+                    .containsExactly(
+                            "GOODS_RECEIVED_NOT_BILLED Dr 1000.00",
+                            "PURCHASE_PRICE_DIFFERENCE Dr 60.00",
+                            "ACCOUNTS_PAYABLE Cr 1060.00");
+        }
+
+        @Test
+        @DisplayName("An EXPENSE difference posts to its own key; GOODS adds to 2100")
+        void expenseAndGoodsDifferences() {
+            assertThat(legs(
+                            ediBill("1085.00", "1000.00", "70.00", 1),
+                            List.of(),
+                            GOODS,
+                            new VendorBillPostingService.Difference(
+                                    VendorBillDifferenceClass.EXPENSE, "EXPENSE_POSTAGE_SHIPPING")))
+                    .containsExactly(
+                            "GOODS_RECEIVED_NOT_BILLED Dr 1000.00",
+                            "PURCHASE_PRICE_DIFFERENCE Dr 70.00",
+                            "EXPENSE_POSTAGE_SHIPPING Dr 15.00",
+                            "ACCOUNTS_PAYABLE Cr 1085.00");
+            assertThat(legs(
+                            ediBill("1085.00", "1000.00", "70.00", 1),
+                            List.of(),
+                            GOODS,
+                            new VendorBillPostingService.Difference(VendorBillDifferenceClass.GOODS, null)))
+                    .containsExactly(
+                            "GOODS_RECEIVED_NOT_BILLED Dr 1015.00",
+                            "PURCHASE_PRICE_DIFFERENCE Dr 70.00",
+                            "ACCOUNTS_PAYABLE Cr 1085.00");
+        }
+
+        @Test
+        @DisplayName("The tolerance is 0.01 per stated line, at most 0.05 per bill")
+        void toleranceScalesWithStatedLinesUpToTheCap() {
+            assertThat(VendorBillTotals.tolerance(null)).isEqualByComparingTo("0.01");
+            assertThat(VendorBillTotals.tolerance(3)).isEqualByComparingTo("0.03");
+            assertThat(VendorBillTotals.tolerance(12)).isEqualByComparingTo("0.05");
+            assertThat(VendorBillTotals.of(ediBill("1070.03", "1000.00", "70.00", 3))
+                            .orElseThrow()
+                            .reconciled())
+                    .isTrue();
+            assertThat(VendorBillTotals.of(ediBill("1070.04", "1000.00", "70.00", 3))
+                            .orElseThrow()
+                            .reconciled())
+                    .isFalse();
+            assertThat(VendorBillTotals.of(ediBill("1070.06", "1000.00", "70.00", 12))
+                            .orElseThrow()
+                            .reconciled())
+                    .isFalse();
+            assertThat(VendorBillTotals.of(bill("412.00")))
+                    .as("a bill without header totals")
+                    .isEmpty();
+        }
+
+        @Test
+        @DisplayName("An EDI EXPENSE bill puts its rounding on the expense")
+        void expenseRounding() {
+            VendorBillPostingService.Entry entry = VendorBillPostingService.entry(
+                    ediBill("214.01", "200.00", "14.00", 1),
+                    List.of(),
+                    new VendorBillPostingService.Classification(VendorBillDebitClass.EXPENSE, "EXPENSE_SHOP_SUPPLIES"),
+                    null);
+            assertThat(entry.legs())
+                    .extracting(
+                            leg -> leg.mappingKey() + " " + leg.signedAmount().toPlainString())
+                    .containsExactly("EXPENSE_SHOP_SUPPLIES 214.01", "ACCOUNTS_PAYABLE -214.01");
+            assertThat(entry.roundingAdjustment()).isEqualByComparingTo("0.01");
         }
     }
 
@@ -335,7 +495,47 @@ class VendorBillPostingServiceTest {
             assertThat(posting.getGrossAmount()).isEqualByComparingTo("412.00");
             assertThat(posting.getCurrencyCode()).isEqualTo("USD");
             assertThat(posting.getPostedBy()).isEqualTo("controller.cfo");
+            assertThat(posting.getRoundingAdjustment()).isEqualByComparingTo("0.00");
+            assertThat(posting.getDifferenceClass()).isNull();
             assertThat(bill.getJournalEntryId()).isEqualTo(entryId);
+        }
+
+        @Test
+        @DisplayName("AW46: the difference decided on the bill posts and is recorded with its amount and justification")
+        void recordsTheDifference() {
+            when(lines.findByVendorBill_VendorBillIdOrderByLineNumber(BILL_ID)).thenReturn(List.of());
+            VendorBill edi = ediBill("1085.00", "1000.00", "70.00", 1);
+            edi.setDifferenceClass(VendorBillDifferenceClass.FREIGHT);
+            edi.setDifferenceJustification("Freight on the invoice, not stated");
+
+            VendorBillGlPosting posting = service.post(edi, GOODS, null, "controller.cfo");
+
+            ArgumentCaptor<JournalEntryCreateRequest> request =
+                    ArgumentCaptor.forClass(JournalEntryCreateRequest.class);
+            verify(journalEntries).createJournalEntry(request.capture());
+            assertThat(request.getValue().getLines()).hasSize(4);
+            assertThat(posting.getDifferenceClass()).isEqualTo(VendorBillDifferenceClass.FREIGHT);
+            assertThat(posting.getDifferenceAmount()).isEqualByComparingTo("15.00");
+            assertThat(posting.getDifferenceJustification()).isEqualTo("Freight on the invoice, not stated");
+            assertThat(posting.getRoundingAdjustment()).isEqualByComparingTo("0.00");
+        }
+
+        @Test
+        @DisplayName("A4 (#2601): a key without an active mapping is 422 GL_MAPPING_NOT_CONFIGURED naming the"
+                + " category, the key and what to do; nothing is created")
+        void missingMappingIsGuided() {
+            when(resolver.resolveGLAccount(
+                            eq("VENDOR_BILL"), eq("PURCHASE_PRICE_DIFFERENCE"), any(LocalDateTime.class)))
+                    .thenThrow(new GLMappingNotConfiguredException("No mapping for key PURCHASE_PRICE_DIFFERENCE"));
+
+            assertThatThrownBy(() -> service.post(bill("412.00"), null, null, "controller.cfo"))
+                    .isInstanceOfSatisfying(GLMappingNotConfiguredException.class, e -> {
+                        assertThat(e.getReferenceId()).isEqualTo("VENDOR_BILL/PURCHASE_PRICE_DIFFERENCE");
+                        assertThat(e.getNextAction())
+                                .contains("Map VENDOR_BILL / PURCHASE_PRICE_DIFFERENCE", "2026-10-01");
+                        assertThat(e.getMessage()).contains("Bill INV-1 cannot post on 2026-10-01");
+                    });
+            verify(journalEntries, never()).createJournalEntry(any());
         }
 
         @Test
@@ -407,10 +607,17 @@ class VendorBillPostingServiceTest {
             posting.setJournalEntryId(entryId);
             when(postings.findByVendorBillId(BILL_ID)).thenReturn(Optional.of(posting));
             UUID reversalId = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a11");
+            VendorBillReversalReaction reaction = new VendorBillReversalReaction(postings);
+            when(postings.findByJournalEntryId(entryId)).thenReturn(Optional.of(posting));
             when(journalEntries.reverseJournalEntry(eq(entryId), anyString(), eq(TODAY), eq("Late void, agreed")))
-                    .thenReturn(JournalEntryResponse.builder()
-                            .journalEntryId(reversalId)
-                            .build());
+                    .thenAnswer(inv -> {
+                        // A1: the reversal reaction sees this reversal as the bill's own void and lets it through.
+                        reaction.onReversed(new LedgerReversalApplied(
+                                entryId, reversalId, TODAY, List.of(), Set.of(), "controller.cfo", null, "voided"));
+                        return JournalEntryResponse.builder()
+                                .journalEntryId(reversalId)
+                                .build();
+                    });
 
             VendorBillGlPosting reversed = service.reverse(bill("412.00"), "Late void, agreed", "controller.cfo");
 

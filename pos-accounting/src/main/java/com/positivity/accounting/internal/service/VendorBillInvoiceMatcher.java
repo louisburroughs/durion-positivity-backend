@@ -34,6 +34,11 @@ import org.springframework.stereotype.Component;
  *
  * <p><b>Tolerance.</b> Quantity within 0.1% and unit price within 5% of the received line, and the billed total
  * within 5% of the received total; an unpaired line on either side is outside it.
+ *
+ * <p><b>The received baseline.</b> Every comparison is against what was received: the lines with a received quantity
+ * above 0 and the sum of their line totals, never the bill's current total or a line an earlier match added. A
+ * second match first removes what the first kept, and {@link #restoreReceived} (resolve-exception {@code CORRECT})
+ * puts the bill back to its receipt.
  */
 @Component
 @RequiredArgsConstructor
@@ -77,20 +82,21 @@ public class VendorBillInvoiceMatcher {
     /** Compares {@code invoice} with the bill's receipt lines; writes nothing. */
     public @NonNull Comparison compare(@NonNull VendorBill bill, @NonNull List<InvoiceLine> invoice) {
         List<VendorBillLine> received =
-                billLines.findByVendorBill_VendorBillIdOrderByLineNumber(bill.getVendorBillId());
-        return compare(bill, received, invoice, pair(received, invoice));
+                received(billLines.findByVendorBill_VendorBillIdOrderByLineNumber(bill.getVendorBillId()));
+        return compare(received, invoice, pair(received, invoice));
     }
 
     /**
      * Keeps what the vendor billed (AW39): each receipt line's billed quantity and price, a line of its own for an
-     * invoice line with no receipt behind it, and the bill's total as the billed total. Returns the comparison made
-     * before anything changed.
+     * invoice line with no receipt behind it, and the bill's total as the billed total. What an earlier match kept is
+     * replaced, never added to. Returns the comparison with the receipt.
      */
     public @NonNull Comparison applyBilled(@NonNull VendorBill bill, @NonNull List<InvoiceLine> invoice) {
-        List<VendorBillLine> received =
-                billLines.findByVendorBill_VendorBillIdOrderByLineNumber(bill.getVendorBillId());
+        List<VendorBillLine> stored = billLines.findByVendorBill_VendorBillIdOrderByLineNumber(bill.getVendorBillId());
+        List<VendorBillLine> received = received(stored);
+        removeBilledOnly(stored, received);
         int[] pairing = pair(received, invoice);
-        Comparison comparison = compare(bill, received, invoice, pairing);
+        Comparison comparison = compare(received, invoice, pairing);
         boolean[] paired = new boolean[received.size()];
         int nextLineNumber =
                 received.stream().mapToInt(VendorBillLine::getLineNumber).max().orElse(0) + 1;
@@ -129,6 +135,58 @@ public class VendorBillInvoiceMatcher {
         return comparison;
     }
 
+    /**
+     * Puts a matched bill back to its receipt (resolve-exception {@code CORRECT}, #2509 review): the lines a match
+     * added are removed, the billed quantity and price of every received line cleared, and the total is the received
+     * total again. The match evidence stays: it is append-only.
+     */
+    public void restoreReceived(@NonNull VendorBill bill) {
+        List<VendorBillLine> stored = billLines.findByVendorBill_VendorBillIdOrderByLineNumber(bill.getVendorBillId());
+        List<VendorBillLine> received = received(stored);
+        removeBilledOnly(stored, received);
+        for (VendorBillLine line : received) {
+            if (line.getBilledQuantity() != null || line.getBilledUnitPrice() != null) {
+                line.setBilledQuantity(null);
+                line.setBilledUnitPrice(null);
+                billLines.save(line);
+            }
+        }
+        if (!received.isEmpty()) {
+            bill.setTotalAmount(receivedTotal(received));
+        }
+    }
+
+    /** The lines a receipt put on the bill: a received quantity above 0. A line a match added has 0. */
+    static @NonNull List<VendorBillLine> received(@NonNull List<VendorBillLine> stored) {
+        return stored.stream()
+                .filter(line -> line.getQuantity() != null && line.getQuantity().signum() > 0)
+                .toList();
+    }
+
+    /** The received total: the sum of the received lines' totals, to the cent. */
+    static @NonNull BigDecimal receivedTotal(@NonNull List<VendorBillLine> stored) {
+        return received(stored).stream()
+                .map(line -> line.getLineTotal() != null
+                        ? line.getLineTotal()
+                        : line.getQuantity().multiply(line.getUnitPrice()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /** Whether a match kept what an invoice billed on the bill's lines (AW44): a billed quantity on any line. */
+    static boolean billed(@NonNull List<VendorBillLine> stored) {
+        return stored.stream().anyMatch(line -> line.getBilledQuantity() != null);
+    }
+
+    private void removeBilledOnly(List<VendorBillLine> stored, List<VendorBillLine> received) {
+        List<VendorBillLine> billedOnly =
+                stored.stream().filter(line -> !received.contains(line)).toList();
+        if (!billedOnly.isEmpty()) {
+            billLines.deleteAll(billedOnly);
+            billLines.flush();
+        }
+    }
+
     /** Writes the append-only evidence of one match of {@code bill} (#2509). */
     public @NonNull VendorBillMatchEvidence record(
             @NonNull VendorBill bill,
@@ -138,6 +196,7 @@ public class VendorBillInvoiceMatcher {
             @NonNull Points points,
             @NonNull String invoiceReference,
             @NonNull LocalDateTime invoiceDate,
+            @NonNull LocalDateTime receivedDate,
             @NonNull Comparison comparison,
             @NonNull String recordedBy) {
         VendorBillMatchEvidence row = new VendorBillMatchEvidence();
@@ -152,6 +211,7 @@ public class VendorBillInvoiceMatcher {
         row.setPurchaseOrderPoints(points.purchaseOrder());
         row.setInvoiceReference(invoiceReference);
         row.setInvoiceDate(invoiceDate);
+        row.setReceivedDate(receivedDate);
         row.setReceivedTotal(comparison.receivedTotal());
         row.setBilledTotal(comparison.billedTotal());
         row.setCurrencyCode(currencyOf(bill));
@@ -216,8 +276,7 @@ public class VendorBillInvoiceMatcher {
         return pairing;
     }
 
-    private Comparison compare(
-            VendorBill bill, List<VendorBillLine> received, List<InvoiceLine> invoice, int[] pairing) {
+    private static Comparison compare(List<VendorBillLine> received, List<InvoiceLine> invoice, int[] pairing) {
         List<Map<String, Object>> lines = new ArrayList<>();
         boolean within = received.size() == invoice.size();
         boolean[] paired = new boolean[received.size()];
@@ -281,9 +340,7 @@ public class VendorBillInvoiceMatcher {
                 lines.add(entry);
             }
         }
-        BigDecimal receivedTotal = bill.getTotalAmount() == null
-                ? BigDecimal.ZERO
-                : bill.getTotalAmount().setScale(2, RoundingMode.HALF_UP);
+        BigDecimal receivedTotal = receivedTotal(received);
         BigDecimal totalTolerance = receivedTotal.multiply(PRICE_TOLERANCE_PERCENT);
         within &= receivedTotal.subtract(billedTotal).abs().compareTo(totalTolerance) <= 0;
         return new Comparison(lines, within, receivedTotal, billedTotal);

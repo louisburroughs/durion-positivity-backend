@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
 import com.positivity.accounting.internal.enums.VendorBillDebitClass;
+import com.positivity.accounting.internal.enums.VendorBillDifferenceClass;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.tenancy.TenantScopedEntity;
@@ -154,9 +155,27 @@ public class VendorBill extends TenantScopedEntity {
     @Column(name = "net_amount", precision = 19, scale = 4)
     private BigDecimal netAmount;
 
-    /** The tax the vendor's document states, never recalculated (AW39); null or zero when none is stated. */
+    /**
+     * The tax the vendor's document states, never recalculated (AW39); with only the net stated, gross - net; with
+     * neither, zero (AW46). Null on a bill whose source states no header amounts.
+     */
     @Column(name = "tax_amount", precision = 19, scale = 4)
     private BigDecimal taxAmount;
+
+    /** Lines the vendor's document states (EDI), at least 1: the rounding tolerance's base (AW46). */
+    @Column(name = "stated_line_count")
+    private Integer statedLineCount;
+
+    /** How an unreconciled gross - (net + tax) posts, as proposed at submission (AW46). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "difference_class", length = 30)
+    private VendorBillDifferenceClass differenceClass;
+
+    @Column(name = "difference_expense_mapping_key", length = 100)
+    private String differenceExpenseMappingKey;
+
+    @Column(name = "difference_justification", length = 1000)
+    private String differenceJustification;
 
     // Status transition audit
     /** When the bill was sent for approval (#2509): by a person, a HIGH match or a candidate selection. */

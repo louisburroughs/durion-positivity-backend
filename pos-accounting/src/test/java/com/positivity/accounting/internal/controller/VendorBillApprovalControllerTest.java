@@ -15,6 +15,7 @@ import com.positivity.accounting.BaseControllerSliceTest;
 import com.positivity.accounting.internal.dto.VendorBillCommands;
 import com.positivity.accounting.internal.dto.VendorBillResponse;
 import com.positivity.accounting.internal.dto.VendorBillReview;
+import com.positivity.accounting.internal.enums.VendorBillDifferenceClass;
 import com.positivity.accounting.internal.enums.VendorBillStage;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.VendorBillException;
@@ -35,6 +36,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
@@ -104,7 +106,9 @@ class VendorBillApprovalControllerTest extends BaseControllerSliceTest {
                 Arguments.of(
                         "void",
                         json(post(BASE + "/" + BILL_ID + "/void"), "{\"reason\":\"Billed twice by mistake\"}"),
-                        List.of(REJECT + "," + OVER_LIMIT, REJECT + "," + APPROVE)));
+                        // AW44: every void needs ap:reject alone at the gate; an approved bill's approval tier is
+                        // the service's check, once it knows the status.
+                        List.of(REJECT, REJECT + "," + OVER_LIMIT)));
     }
 
     @ParameterizedTest(name = "{0}")
@@ -127,7 +131,7 @@ class VendorBillApprovalControllerTest extends BaseControllerSliceTest {
         when(approvalService.reject(any(), any())).thenReturn(awaiting());
         when(approvalService.resolveException(any(), any())).thenReturn(awaiting());
         when(approvalService.selectCandidate(any())).thenReturn(awaiting());
-        when(approvalService.voidApproved(any(), any())).thenReturn(awaiting());
+        when(approvalService.voidBill(any(), any())).thenReturn(awaiting());
         for (String authorities : allowed) {
             MockHttpServletRequestBuilder request = endpoints()
                     .filter(a -> a.get()[0].equals(name))
@@ -157,7 +161,8 @@ class VendorBillApprovalControllerTest extends BaseControllerSliceTest {
                 ArgumentCaptor.forClass(VendorBillCommands.ResolveException.class);
         verify(approvalService).resolveException(eq(BILL_ID), body.capture());
         org.assertj.core.api.Assertions.assertThat(body.getValue())
-                .isEqualTo(new VendorBillCommands.ResolveException("CORRECT", "Recount the delivery", null, null));
+                .isEqualTo(
+                        new VendorBillCommands.ResolveException("CORRECT", "Recount the delivery", null, null, null));
     }
 
     static Stream<Arguments> refusals() {
@@ -166,7 +171,11 @@ class VendorBillApprovalControllerTest extends BaseControllerSliceTest {
                 Arguments.of(VendorBillException.Code.AP_BILL_NOT_APPROVABLE, 409),
                 Arguments.of(VendorBillException.Code.AP_BILL_NOT_VOIDABLE, 409),
                 Arguments.of(VendorBillException.Code.AP_MATCH_CANDIDATE_ALREADY_RESOLVED, 409),
+                Arguments.of(VendorBillException.Code.AP_BILL_AWAITING_INVOICE, 409),
+                Arguments.of(VendorBillException.Code.AP_BILL_ENTRY_NOT_REVERSIBLE, 409),
                 Arguments.of(VendorBillException.Code.AP_BILL_UNCLASSIFIED, 422),
+                Arguments.of(VendorBillException.Code.AP_BILL_TOTALS_UNRECONCILED, 422),
+                Arguments.of(VendorBillException.Code.AP_BILL_ZERO_TOTAL, 422),
                 Arguments.of(VendorBillException.Code.JUSTIFICATION_REQUIRED, 400),
                 Arguments.of(VendorBillException.Code.VALIDATION_ERROR, 400));
     }
@@ -180,6 +189,60 @@ class VendorBillApprovalControllerTest extends BaseControllerSliceTest {
         mockMvc.perform(withAuth(json(post(BASE + "/" + BILL_ID + "/approve"), "{}"), OVER_LIMIT))
                 .andExpect(status().is(httpStatus))
                 .andExpect(jsonPath("$.code").value(code.name()));
+    }
+
+    @Test
+    @DisplayName("L2: the void gate is accounting:ap:reject; the approval tier alone never passes it")
+    void voidGateIsReject() throws Exception {
+        mockMvc.perform(withAuth(
+                        json(post(BASE + "/" + BILL_ID + "/void"), "{\"reason\":\"Billed twice by mistake\"}"),
+                        APPROVE + "," + OVER_LIMIT))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+        verifyNoInteractions(approvalService);
+    }
+
+    @Test
+    @DisplayName("B-M5: the service's own 403 (an approved bill's void without the approval tier) answers FORBIDDEN")
+    void serviceRefusalIsForbidden() throws Exception {
+        when(approvalService.voidBill(eq(BILL_ID), any()))
+                .thenThrow(new AccessDeniedException("The caller may not VOID_APPROVED vendor bills"));
+
+        mockMvc.perform(withAuth(
+                        json(post(BASE + "/" + BILL_ID + "/void"), "{\"reason\":\"Billed twice by mistake\"}"), REJECT))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("AW46: difference binds from JSON with its key \"class\"")
+    void differenceBindsItsClass() throws Exception {
+        when(approvalService.submitForApproval(eq(BILL_ID), any())).thenReturn(awaiting());
+
+        mockMvc.perform(withAuth(
+                        json(
+                                post(BASE + "/" + BILL_ID + "/submit-for-approval"),
+                                "{\"justification\":\"Totals checked with the vendor\",\"difference\":"
+                                        + "{\"class\":\"FREIGHT\",\"justification\":\"Freight on the invoice\"}}"),
+                        APPROVE))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<VendorBillCommands.Submit> body = ArgumentCaptor.forClass(VendorBillCommands.Submit.class);
+        verify(approvalService).submitForApproval(eq(BILL_ID), body.capture());
+        org.assertj.core.api.Assertions.assertThat(body.getValue().difference())
+                .isEqualTo(new VendorBillReview.Difference(
+                        VendorBillDifferenceClass.FREIGHT, null, "Freight on the invoice"));
+    }
+
+    @Test
+    @DisplayName("L3: a reason over 1000 characters is 400 ARGUMENT_NOT_VALID before the service is called")
+    void oversizedReasonIsNotValid() throws Exception {
+        mockMvc.perform(withAuth(
+                        json(post(BASE + "/" + BILL_ID + "/reject"), "{\"reason\":\"" + "x".repeat(1001) + "\"}"),
+                        REJECT))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("ARGUMENT_NOT_VALID"));
+        verifyNoInteractions(approvalService);
     }
 
     @Test

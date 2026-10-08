@@ -147,4 +147,17 @@ class AccountingEventTypeRegistryTest {
                 .map(Entry::code)
                 .toList();
     }
+
+    @Test
+    @DisplayName("LOW-8 (#2509 review): VENDOR_BILL_GL_POSTING is retired and never registered")
+    void vendorBillGlPostingIsRetired() {
+        assertThat(AccountingEventTypeRegistry.isRetired("VENDOR_BILL_GL_POSTING"))
+                .isTrue();
+        assertThat(AccountingEventTypeRegistry.isRetired("AP_PAYMENT_GL_POSTING"))
+                .isFalse();
+        assertThat(AccountingEventTypeRegistry.isRetired(null)).isFalse();
+        assertThat(AccountingEventTypeRegistry.entries())
+                .extracting(Entry::code)
+                .doesNotContain("VENDOR_BILL_GL_POSTING");
+    }
 }

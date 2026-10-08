@@ -3,17 +3,18 @@ package com.positivity.accounting.internal.dto;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.positivity.accounting.internal.enums.MatchConfidence;
 import com.positivity.accounting.internal.enums.VendorBillAction;
 import com.positivity.accounting.internal.enums.VendorBillCheckOutcome;
 import com.positivity.accounting.internal.enums.VendorBillDebitClass;
+import com.positivity.accounting.internal.enums.VendorBillDifferenceClass;
 import com.positivity.accounting.internal.enums.VendorBillPostingDateRule;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -62,6 +63,34 @@ public final class VendorBillReview {
             @Nullable
             String expenseMappingKey) {}
 
+    /** How a vendor's unreconciled gross - (net + tax) posts (AW46), with who decided it and why. */
+    @Schema(
+            name = "VendorBillDifference",
+            description = "Where the gap between the vendor's gross and its net + tax posts (AW46)")
+    public record Difference(
+            @Schema(
+                    description = "FREIGHT (5060), GOODS (2100), EXPENSE (the expenseMappingKey given) or"
+                            + " PRICE_DIFFERENCE (5050); a negative difference is a credit",
+                    example = "FREIGHT",
+                    requiredMode = REQUIRED)
+            @JsonProperty("class")
+            @Nullable
+            VendorBillDifferenceClass differenceClass,
+
+            @Schema(
+                    description = "The VENDOR_BILL expense key, EXPENSE_<CODE>: required with class EXPENSE",
+                    example = "EXPENSE_SHOP_SUPPLIES",
+                    requiredMode = NOT_REQUIRED)
+            @Nullable
+            String expenseMappingKey,
+
+            @Schema(
+                    description = "Why the difference posts there (at least 10 characters)",
+                    example = "Freight on the invoice, not stated separately",
+                    requiredMode = REQUIRED)
+            @Nullable
+            String justification) {}
+
     @Schema(
             name = "VendorBillApproval",
             description = "Who sent the bill for approval and, once approved, who approved it")
@@ -84,6 +113,12 @@ public final class VendorBillReview {
 
             @Schema(description = "The classification proposed at submission", requiredMode = NOT_REQUIRED) @Nullable
             Classification proposedClassification,
+
+            @Schema(
+                    description = "Where the vendor's unreconciled difference posts, as proposed (AW46)",
+                    requiredMode = NOT_REQUIRED)
+            @Nullable
+            Difference proposedDifference,
 
             @Schema(description = "When it was approved; only on an approved bill", requiredMode = NOT_REQUIRED)
             @Nullable
@@ -126,6 +161,9 @@ public final class VendorBillReview {
             @Schema(description = "Candidate id, for the select command", requiredMode = REQUIRED)
             UUID candidateId,
 
+            @Schema(description = "The invoice the candidates were scored against", requiredMode = REQUIRED)
+            UUID invoiceEventId,
+
             @Schema(description = "The candidate bill", requiredMode = REQUIRED)
             UUID vendorBillId,
 
@@ -152,7 +190,7 @@ public final class VendorBillReview {
             @Nullable
             Points points) {}
 
-    @Schema(name = "VendorBillMatch", description = "The bill's latest match evidence and the open candidates")
+    @Schema(name = "VendorBillMatch", description = "The bill's latest match evidence")
     public record Match(
             @Schema(description = "Evidence record id", requiredMode = REQUIRED)
             UUID evidenceId,
@@ -172,8 +210,11 @@ public final class VendorBillReview {
             @Schema(description = "The vendor's invoice number", example = "INV-88421", requiredMode = REQUIRED)
             String invoiceReference,
 
-            @Schema(description = "The invoice date", requiredMode = REQUIRED)
+            @Schema(description = "The invoice date, the matched bill's date (AW45)", requiredMode = REQUIRED)
             LocalDateTime invoiceDate,
+
+            @Schema(description = "The receipt date, the bill's date before the match (AW45)", requiredMode = REQUIRED)
+            LocalDateTime receivedDate,
 
             @Schema(description = "What the receipt put on the bill", example = "400.00", requiredMode = REQUIRED)
             BigDecimal receivedTotal,
@@ -188,12 +229,7 @@ public final class VendorBillReview {
             boolean withinTolerance,
 
             @Schema(description = "When the evidence was recorded", requiredMode = REQUIRED)
-            Instant recordedAt,
-
-            @Schema(
-                    description = "Unresolved candidates of an ambiguous match naming this bill",
-                    requiredMode = REQUIRED)
-            List<Candidate> candidates) {}
+            Instant recordedAt) {}
 
     @Schema(name = "VendorBillLine", description = "A received line with what the vendor billed for it")
     public record Line(
@@ -238,7 +274,8 @@ public final class VendorBillReview {
     @Schema(name = "VendorBillCheck", description = "One check the review shows")
     public record Check(
             @Schema(
-                    description = "MATCHED_TO_DELIVERY or WITHIN_PRICE_TOLERANCE",
+                    description = "MATCHED_TO_DELIVERY, WITHIN_PRICE_TOLERANCE, TOTALS_ADD_UP or"
+                            + " OPEN_DELIVERIES_FROM_VENDOR",
                     example = "MATCHED_TO_DELIVERY",
                     requiredMode = REQUIRED)
             String code,
@@ -287,8 +324,29 @@ public final class VendorBillReview {
                     requiredMode = REQUIRED)
             BigDecimal grossAmount,
 
-            @Schema(description = "ISO 4217 code of grossAmount", example = "USD", requiredMode = REQUIRED)
+            @Schema(description = "ISO 4217 code of the amounts", example = "USD", requiredMode = REQUIRED)
             String currencyCode,
+
+            @Schema(
+                    description = "The rounding plug put on the largest debit, within 0.01 per stated line and 0.05"
+                            + " per bill (AW46); 0.00 when the legs added up",
+                    example = "0.01",
+                    requiredMode = REQUIRED)
+            BigDecimal roundingAdjustment,
+
+            @Schema(
+                    description = "Where an unreconciled difference posted (AW46); null when the totals added up",
+                    example = "FREIGHT",
+                    requiredMode = NOT_REQUIRED)
+            @Nullable
+            VendorBillDifferenceClass differenceClass,
+
+            @Schema(
+                    description = "The unreconciled difference posted, gross - (net + tax); null when none",
+                    example = "15.00",
+                    requiredMode = NOT_REQUIRED)
+            @Nullable
+            BigDecimal differenceAmount,
 
             @Schema(
                     description = "The reversal entry's number after a void",
@@ -299,6 +357,38 @@ public final class VendorBillReview {
 
             @Schema(description = "The void date, the reversal's date", requiredMode = NOT_REQUIRED) @Nullable
             LocalDate reversalDate) {}
+
+    /** A re-issue of an approved bill under the same number, held as an exception item (#2509, §4.3). */
+    @Schema(
+            name = "VendorBillReissue",
+            description = "A re-issue of an approved bill under its number, with both amounts")
+    public record Reissue(
+            @Schema(description = "Exception item id", requiredMode = REQUIRED)
+            UUID reissueId,
+
+            @Schema(
+                    description = "The number the vendor re-issued under",
+                    example = "INV-88421",
+                    requiredMode = REQUIRED)
+            String incomingBillNumber,
+
+            @Schema(description = "The re-issue's date", requiredMode = REQUIRED)
+            LocalDate incomingBillDate,
+
+            @Schema(description = "The re-issued amount", example = "430.00", requiredMode = REQUIRED)
+            BigDecimal incomingAmount,
+
+            @Schema(description = "ISO 4217 code of incomingAmount", example = "USD", requiredMode = REQUIRED)
+            String incomingCurrencyCode,
+
+            @Schema(description = "The approved bill's amount", example = "412.00", requiredMode = REQUIRED)
+            BigDecimal heldAmount,
+
+            @Schema(description = "ISO 4217 code of heldAmount", example = "USD", requiredMode = REQUIRED)
+            String heldCurrencyCode,
+
+            @Schema(description = "When it arrived", requiredMode = REQUIRED)
+            Instant receivedAt) {}
 
     @Schema(name = "VendorBillStageCounts", description = "How many bills are in each stage of Bills to pay")
     public record StageCounts(

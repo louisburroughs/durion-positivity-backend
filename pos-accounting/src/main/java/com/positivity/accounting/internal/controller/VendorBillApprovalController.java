@@ -33,9 +33,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * The vendor-bill approval lifecycle (CAP:550 S12, #2509; SPEC-accounting-workspace §4.3, §5.2, §7.1; AW8, AW37-AW43):
- * submit, approve, reject, resolve a match exception, select a match candidate, void an approved bill, and the
- * stage reads of Bills to pay. The actor of every command is the caller (ADR-0018); no body carries one.
+ * The vendor-bill approval lifecycle (CAP:550 S12, #2509; SPEC-accounting-workspace §4.3, §5.2, §7.1; AW8, AW37-AW46):
+ * submit, approve, reject, resolve a match exception, select a match candidate, void an approved bill or a receipt
+ * placeholder, and the stage reads of Bills to pay. The actor of every command is the caller (ADR-0018); no body
+ * carries one. The commands take no idempotency key: a replay finds the bill moved on and is answered 409.
  */
 @RestController
 @RequestMapping("/v1/accounting/vendor-bills")
@@ -63,22 +64,29 @@ public class VendorBillApprovalController {
             summary = "Submit Vendor Bill For Approval",
             description = """
                 Sends a vendor bill in PENDING_RECEIPT_MATCH or MATCH_EXCEPTION for approval: it moves to \
-                AWAITING_APPROVAL with the caller as submittedBy. From PENDING_RECEIPT_MATCH this is "send \
-                without a delivery match" (service bills, shop supplies, EDI bills that will never have a \
-                receipt); from MATCH_EXCEPTION it resolves the exception for a person to approve.
-                Use this tool when a clerk has checked a bill and wants it approved; do not use \
-                approveVendorBill, which is the approver's decision, or resolveVendorBillMatchException, which \
-                accepts, corrects or voids an exception directly.
-                Preconditions: the bill is PENDING_RECEIPT_MATCH or MATCH_EXCEPTION; CURRENCY_HOLD and every \
-                other status are refused. Nothing is posted.
-                Required inputs: billId (UUID) as a path parameter and justification (at least 10 \
-                characters); classification {debitClass, expenseMappingKey} is an optional proposal the \
-                approver may keep.
-                Emits ACCOUNTING_VENDOR_BILL_SUBMIT and writes a VENDOR_BILL_SUBMIT audit row.
-                Returns 200 with the bill read, 400 JUSTIFICATION_REQUIRED for a missing or short \
-                justification, 400 VALIDATION_ERROR for a malformed classification, 403 FORBIDDEN without \
-                accounting:ap:approve or accounting:ap:approve_over_limit, 404 VENDOR_BILL_NOT_FOUND, and 409 \
-                AP_BILL_NOT_APPROVABLE naming the bill's status.
+                AWAITING_APPROVAL with the caller as submittedBy, and nothing is posted.
+                From PENDING_RECEIPT_MATCH this is "send without a delivery match", for EDI bills only (a \
+                goods-receipt bill needs its vendor invoice matched first, AW44); from MATCH_EXCEPTION it resolves \
+                the exception for a person to approve.
+                Use this tool when a clerk has checked a bill and wants it approved; do not use approveVendorBill, \
+                which is the approver's decision, or resolveVendorBillMatchException, which accepts, corrects or \
+                voids an exception directly.
+                Preconditions: the bill is PENDING_RECEIPT_MATCH or MATCH_EXCEPTION (never CURRENCY_HOLD), no \
+                ambiguous match naming it is open, a goods-receipt bill has its invoice matched, its total is not \
+                0.00, and the vendor's gross equals net + tax within 0.01 per stated line (at most 0.05) unless a \
+                difference is given (AW46).
+                Required inputs: billId (UUID) as a path parameter and justification (at least 10 characters); \
+                classification {debitClass, expenseMappingKey} is an optional proposal the approver may keep, and \
+                difference {class FREIGHT|GOODS|EXPENSE|PRICE_DIFFERENCE, expenseMappingKey, justification} says \
+                where an unreconciled gap posts.
+                Emits ACCOUNTING_VENDOR_BILL_SUBMIT and writes a VENDOR_BILL_SUBMIT audit row; the command takes no \
+                idempotency key, so a replay finds the bill AWAITING_APPROVAL and is answered 409 \
+                AP_BILL_NOT_APPROVABLE.
+                Returns 200 with the bill read; 400 JUSTIFICATION_REQUIRED, VALIDATION_ERROR or ARGUMENT_NOT_VALID; \
+                401 without a valid token; 403 FORBIDDEN without accounting:ap:approve or \
+                accounting:ap:approve_over_limit; 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE naming the \
+                status or an open ambiguous match, or AP_BILL_AWAITING_INVOICE; 422 AP_BILL_ZERO_TOTAL or \
+                AP_BILL_TOTALS_UNRECONCILED, writing nothing.
                 """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
@@ -87,7 +95,11 @@ public class VendorBillApprovalController {
             content = @Content(schema = @Schema(implementation = VendorBillResponse.class)))
     @ApiResponse(
             responseCode = "400",
-            description = "JUSTIFICATION_REQUIRED or VALIDATION_ERROR",
+            description = "JUSTIFICATION_REQUIRED, VALIDATION_ERROR or ARGUMENT_NOT_VALID",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Not authenticated: no valid bearer token",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
@@ -99,13 +111,19 @@ public class VendorBillApprovalController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "AP_BILL_NOT_APPROVABLE: the bill's status does not allow it",
+            description = "AP_BILL_NOT_APPROVABLE (the bill's status, or an open ambiguous match) or"
+                    + " AP_BILL_AWAITING_INVOICE (a goods-receipt bill without its matched invoice); a replay is"
+                    + " refused this way too",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "AP_BILL_ZERO_TOTAL or AP_BILL_TOTALS_UNRECONCILED; nothing is written",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<VendorBillResponse> submitForApproval(
             @Parameter(description = BILL_ID, example = BILL_ID_EXAMPLE) @NonNull @PathVariable UUID billId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description =
-                                    "The justification (at least 10 characters) and an optional classification proposed to the approver.",
+                            description = "The justification (at least 10 characters) and an optional classification"
+                                    + " proposed to the approver.",
                             required = true,
                             content =
                                     @Content(
@@ -134,30 +152,35 @@ public class VendorBillApprovalController {
             operationId = "approveVendorBill",
             summary = "Approve Vendor Bill",
             description = """
-                    Approves a vendor bill in AWAITING_APPROVAL and posts it in the same transaction, so a bill is \
-                    approved if and only if it posted (AW37): the entry credits accounts payable for the billed \
-                    gross and debits through the VENDOR_BILL posting category by class (receipt-matched lines 2100 \
-                    at the received price with the difference in 5050, unmatched goods 2100, expenses the chosen \
-                    EXPENSE_<CODE> key, US tax into the cost).
-                    The entry is dated on the bill date when that is on or before today and its period is open, \
-                    otherwise today, and the read serves postingDate and postingDateRule.
-                    Use this tool for the approver's decision on a bill sent for approval; do not use \
-                    submitVendorBillForApproval, which only sends it, or resolveVendorBillMatchException with \
-                    ACCEPT, which approves a bill still in MATCH_EXCEPTION.
-                    Preconditions: the bill is AWAITING_APPROVAL (CURRENCY_HOLD bills never are), and until approval \
-                    limits exist every bill needs accounting:ap:approve_over_limit.
-                    Required inputs: billId (UUID) as a path parameter; justification (at least 10 characters), \
-                    classification {debitClass GOODS|EXPENSE, expenseMappingKey} (required for a bill without \
-                    receipt-matched lines and for non-stock lines, else the one proposed at submission) and \
-                    overrideJustification (at least 10 characters, with accounting:period:override, to post into a \
-                    CLOSED period) are optional.
-                    Emits ACCOUNTING_VENDOR_BILL_APPROVE and writes a VENDOR_BILL_APPROVE audit row; a refused \
-                    posting writes one VENDOR_BILL_APPROVE_REFUSED row and changes nothing else.
-                    Returns 200 with the bill read, its posting included; 400 JUSTIFICATION_REQUIRED or \
-                    VALIDATION_ERROR; 403 FORBIDDEN; 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE naming \
-                    the status, a second approve included; 422 AP_BILL_UNCLASSIFIED, PERIOD_CLOSED, \
-                    PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED, each leaving the bill as it was.
-                    """,
+                Approves a vendor bill in AWAITING_APPROVAL and posts it in the same transaction, so a bill is \
+                approved if and only if it posted (AW37): accounts payable is credited the billed gross and the \
+                debits follow the VENDOR_BILL posting category by class (receipt-matched lines 2100 at the received \
+                price with the difference in 5050, unmatched goods 2100 at the stated net with the tax in 5050, \
+                expenses the chosen EXPENSE_<CODE> key with the tax).
+                The vendor's gross - (net + tax) within 0.01 per stated line, at most 0.05, goes on the largest \
+                debit as roundingAdjustment and a larger one where difference says (FREIGHT 5060, GOODS 2100, \
+                EXPENSE its key, PRICE_DIFFERENCE 5050); the entry is dated on the bill date when that is on or \
+                before today and its period is open, otherwise today.
+                Use this tool for the approver's decision on a bill sent for approval; do not use \
+                submitVendorBillForApproval, which only sends it, or resolveVendorBillMatchException with ACCEPT, \
+                which approves a bill still in MATCH_EXCEPTION.
+                Preconditions: the bill is AWAITING_APPROVAL (CURRENCY_HOLD bills never are), a goods-receipt bill \
+                has its invoice matched, and until approval limits exist every bill needs \
+                accounting:ap:approve_over_limit.
+                Required inputs: billId (UUID) as a path parameter; justification (at least 10 characters), \
+                classification {debitClass GOODS|EXPENSE, expenseMappingKey} (each field given wins over the one \
+                proposed at submission), difference (as submitVendorBillForApproval takes it) and \
+                overrideJustification (with accounting:period:override, to post into a CLOSED period) are optional.
+                Emits ACCOUNTING_VENDOR_BILL_APPROVE and writes a VENDOR_BILL_APPROVE audit row; a refused posting \
+                writes one VENDOR_BILL_APPROVE_REFUSED row and changes nothing else, and a replayed approve finds \
+                the bill APPROVED and is answered 409 AP_BILL_NOT_APPROVABLE.
+                Returns 200 with the bill read, its posting included; 400 JUSTIFICATION_REQUIRED, VALIDATION_ERROR \
+                or ARGUMENT_NOT_VALID; 401 without a valid token; 403 FORBIDDEN; 404 VENDOR_BILL_NOT_FOUND; 409 \
+                AP_BILL_NOT_APPROVABLE or AP_BILL_AWAITING_INVOICE; 422 AP_BILL_UNCLASSIFIED, \
+                AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED or \
+                GL_MAPPING_NOT_CONFIGURED (guided: referenceId CATEGORY/KEY and nextAction), each leaving the bill \
+                as it was.
+                """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
             responseCode = "200",
@@ -165,7 +188,11 @@ public class VendorBillApprovalController {
             content = @Content(schema = @Schema(implementation = VendorBillResponse.class)))
     @ApiResponse(
             responseCode = "400",
-            description = "JUSTIFICATION_REQUIRED or VALIDATION_ERROR",
+            description = "JUSTIFICATION_REQUIRED, VALIDATION_ERROR or ARGUMENT_NOT_VALID",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Not authenticated: no valid bearer token",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
@@ -177,18 +204,19 @@ public class VendorBillApprovalController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "AP_BILL_NOT_APPROVABLE",
+            description = "AP_BILL_NOT_APPROVABLE (a replay included) or AP_BILL_AWAITING_INVOICE",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description = "AP_BILL_UNCLASSIFIED, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED;"
-                    + " the approval is rolled back",
+            description = "AP_BILL_UNCLASSIFIED, AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED,"
+                    + " PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED; the approval is rolled back",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<VendorBillResponse> approve(
             @Parameter(description = BILL_ID, example = BILL_ID_EXAMPLE) @NonNull @PathVariable UUID billId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description =
-                                    "The approver's optional justification, the classification the bill posts under, and an optional override justification for a CLOSED period.",
+                                    "The approver's optional justification, the classification the bill posts under,"
+                                            + " and an optional override justification for a CLOSED period.",
                             required = true,
                             content =
                                     @Content(
@@ -215,17 +243,20 @@ public class VendorBillApprovalController {
             operationId = "rejectVendorBill",
             summary = "Reject Vendor Bill",
             description = """
-                Rejects a vendor bill in AWAITING_APPROVAL: it moves to REJECTED, terminal, with the caller \
-                as rejectedBy and the reason recorded. Nothing was posted, so nothing is reversed.
-                Use this tool when the approver refuses a bill; do not use voidApprovedVendorBill, which \
-                voids a bill already approved, or resolveVendorBillMatchException with VOID, which voids a \
-                bill still in MATCH_EXCEPTION.
+                Rejects a vendor bill in AWAITING_APPROVAL: it moves to REJECTED, terminal, with the caller as \
+                rejectedBy and the reason recorded.
+                Nothing was posted, so nothing is reversed.
+                Use this tool when the approver refuses a bill; do not use voidVendorBill, which voids a bill \
+                already approved or a receipt placeholder, or resolveVendorBillMatchException with VOID, which voids \
+                a bill still in MATCH_EXCEPTION.
                 Preconditions: the bill is AWAITING_APPROVAL.
                 Required inputs: billId (UUID) as a path parameter and reason (at least 10 characters).
-                Emits ACCOUNTING_VENDOR_BILL_REJECT and writes a VENDOR_BILL_REJECT audit row.
-                Returns 200 with the bill read, 400 JUSTIFICATION_REQUIRED for a missing or short reason, \
-                403 FORBIDDEN without accounting:ap:reject, 404 VENDOR_BILL_NOT_FOUND, and 409 \
-                AP_BILL_NOT_APPROVABLE naming the bill's status.
+                Emits ACCOUNTING_VENDOR_BILL_REJECT and writes a VENDOR_BILL_REJECT audit row; a replay finds the \
+                bill REJECTED and is answered 409 AP_BILL_NOT_APPROVABLE.
+                Returns 200 with the bill read, 400 JUSTIFICATION_REQUIRED for a missing or short reason or \
+                ARGUMENT_NOT_VALID for one over 1000 characters, 401 without a valid token, 403 FORBIDDEN without \
+                accounting:ap:reject, 404 VENDOR_BILL_NOT_FOUND, and 409 AP_BILL_NOT_APPROVABLE naming the bill's \
+                status.
                 """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
@@ -234,7 +265,11 @@ public class VendorBillApprovalController {
             content = @Content(schema = @Schema(implementation = VendorBillResponse.class)))
     @ApiResponse(
             responseCode = "400",
-            description = "JUSTIFICATION_REQUIRED",
+            description = "JUSTIFICATION_REQUIRED or ARGUMENT_NOT_VALID",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Not authenticated: no valid bearer token",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
@@ -246,7 +281,7 @@ public class VendorBillApprovalController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "AP_BILL_NOT_APPROVABLE",
+            description = "AP_BILL_NOT_APPROVABLE, a replay included",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<VendorBillResponse> reject(
             @Parameter(description = BILL_ID, example = BILL_ID_EXAMPLE) @NonNull @PathVariable UUID billId,
@@ -278,28 +313,32 @@ public class VendorBillApprovalController {
             operationId = "resolveVendorBillMatchException",
             summary = "Resolve Vendor Bill Match Exception",
             description = """
-                    Resolves a vendor bill in MATCH_EXCEPTION: ACCEPT is an approval and posts the bill exactly as \
-                    approveVendorBill does, CORRECT sends it back to PENDING_RECEIPT_MATCH writing no approval or \
-                    rejection field, and VOID voids it with the caller as rejectedBy (nothing was posted, so nothing \
-                    is reversed).
-                    Use this tool for a quantity, price or medium-confidence exception on one bill; do not use \
-                    selectVendorBillMatchCandidate, which resolves an ambiguous match among several bills, or \
-                    submitVendorBillForApproval, which sends the bill to another person's approval.
-                    Preconditions: the bill is MATCH_EXCEPTION, and each action needs its own permission: ACCEPT \
-                    accounting:ap:approve_over_limit, CORRECT accounting:ap:approve or \
-                    accounting:ap:approve_over_limit, VOID accounting:ap:reject.
-                    Required inputs: billId (UUID) as a path parameter, resolutionAction (ACCEPT, CORRECT or VOID) \
-                    and reason (at least 10 characters); ACCEPT also takes classification and overrideJustification \
-                    as approveVendorBill does, and an operatorId in the body is ignored because the actor is the \
-                    caller.
-                    Emits ACCOUNTING_VENDOR_BILL_MATCH_EXCEPTION_RESOLVE and writes a \
-                    VENDOR_BILL_MATCH_EXCEPTION_RESOLVE audit row.
-                    Returns 200 with the bill read; 400 VALIDATION_ERROR for an unknown action or \
-                    JUSTIFICATION_REQUIRED for a missing or short reason; 403 FORBIDDEN without the action's \
-                    permission; 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE naming the status; for ACCEPT, \
-                    422 AP_BILL_UNCLASSIFIED, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED, \
-                    leaving the bill as it was.
-                    """,
+                Resolves a vendor bill in MATCH_EXCEPTION: ACCEPT is an approval and posts the bill exactly as \
+                approveVendorBill does, CORRECT sends it back to PENDING_RECEIPT_MATCH as received (the billed lines \
+                and total undone, the bill date the receipt date again, anything proposed cleared) writing no \
+                approval or rejection field, and VOID voids it with the caller as rejectedBy (nothing was posted, so \
+                nothing is reversed).
+                Use this tool for a quantity, price, medium-confidence or totals exception on one bill; do not use \
+                selectVendorBillMatchCandidate, which resolves an ambiguous match among several bills, or \
+                submitVendorBillForApproval, which sends the bill to another person's approval.
+                Preconditions: the bill is MATCH_EXCEPTION, and each action needs its own permission: ACCEPT \
+                accounting:ap:approve_over_limit, CORRECT accounting:ap:approve or accounting:ap:approve_over_limit, \
+                VOID accounting:ap:reject; ACCEPT also needs what approveVendorBill needs (no open ambiguous match, \
+                a matched invoice for a goods-receipt bill, the vendor's totals reconciled or a difference).
+                Required inputs: billId (UUID) as a path parameter, resolutionAction (ACCEPT, CORRECT or VOID) and \
+                reason (at least 10 characters); ACCEPT also takes classification, difference and \
+                overrideJustification as approveVendorBill does, and an operatorId in the body is ignored because \
+                the actor is the caller.
+                Emits ACCOUNTING_VENDOR_BILL_MATCH_EXCEPTION_RESOLVE and writes a \
+                VENDOR_BILL_MATCH_EXCEPTION_RESOLVE audit row; a replay finds the bill moved on and is answered 409 \
+                AP_BILL_NOT_APPROVABLE.
+                Returns 200 with the bill read; 400 VALIDATION_ERROR for an unknown action, JUSTIFICATION_REQUIRED \
+                for a missing or short reason, or ARGUMENT_NOT_VALID; 401 without a valid token; 403 FORBIDDEN \
+                without the action's permission; 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE or, for \
+                ACCEPT, AP_BILL_AWAITING_INVOICE; for ACCEPT, 422 AP_BILL_UNCLASSIFIED, AP_BILL_TOTALS_UNRECONCILED, \
+                AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED, leaving the bill \
+                as it was.
+                """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
             responseCode = "200",
@@ -307,7 +346,11 @@ public class VendorBillApprovalController {
             content = @Content(schema = @Schema(implementation = VendorBillResponse.class)))
     @ApiResponse(
             responseCode = "400",
-            description = "VALIDATION_ERROR or JUSTIFICATION_REQUIRED",
+            description = "VALIDATION_ERROR, JUSTIFICATION_REQUIRED or ARGUMENT_NOT_VALID",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Not authenticated: no valid bearer token",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
@@ -319,18 +362,19 @@ public class VendorBillApprovalController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "AP_BILL_NOT_APPROVABLE",
+            description = "AP_BILL_NOT_APPROVABLE (a replay included) or, for ACCEPT, AP_BILL_AWAITING_INVOICE",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description = "ACCEPT only: AP_BILL_UNCLASSIFIED, PERIOD_CLOSED, PERIOD_HARD_LOCKED or"
-                    + " GL_MAPPING_NOT_CONFIGURED; the approval is rolled back",
+            description = "ACCEPT only: AP_BILL_UNCLASSIFIED, AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL,"
+                    + " PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED; the approval is rolled back",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<VendorBillResponse> resolveMatchException(
             @Parameter(description = BILL_ID, example = BILL_ID_EXAMPLE) @NonNull @PathVariable UUID billId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description =
-                                    "The resolution action (ACCEPT, CORRECT or VOID) and its reason; ACCEPT may add a classification and an override justification.",
+                                    "The resolution action (ACCEPT, CORRECT or VOID) and its reason; ACCEPT may add a"
+                                            + " classification and an override justification.",
                             required = true,
                             content =
                                     @Content(
@@ -356,28 +400,37 @@ public class VendorBillApprovalController {
             operationId = "selectVendorBillMatchCandidate",
             summary = "Select Vendor Bill Match Candidate",
             description = """
-                Picks one candidate bill of an ambiguous invoice match and resolves the candidate set. \
-                Selection is matching only: the chosen bill keeps what the vendor billed (lines, total, the \
-                invoice number and due date), gets its match evidence and moves to AWAITING_APPROVAL with the \
-                caller as submittedBy; nothing approves it and nothing is posted.
-                Use this tool after reviewing listVendorBillMatchCandidates; do not use \
-                resolveVendorBillMatchException, which handles discrepancy exceptions on a single bill.
-                Preconditions: the candidate exists and its set is unresolved; the chosen bill is \
-                PENDING_RECEIPT_MATCH or MATCH_EXCEPTION.
+                Picks one candidate bill of an ambiguous invoice match and resolves the candidate set.
+                Selection is matching only: the chosen bill keeps what the vendor billed (lines, total, the invoice \
+                number, the invoice date as its bill date and the due date, AW45), gets its match evidence with the \
+                receipt date and moves to AWAITING_APPROVAL with the caller as submittedBy, while a bill the match \
+                had held in MATCH_EXCEPTION for this invoice returns to PENDING_RECEIPT_MATCH; nothing approves it \
+                and nothing is posted.
+                Use this tool after reviewing listVendorBillMatchCandidates or a bill read's openCandidates; do not \
+                use resolveVendorBillMatchException, which handles discrepancy exceptions on a single bill.
+                Preconditions: the candidate exists and its set is unresolved, the chosen bill is \
+                PENDING_RECEIPT_MATCH or MATCH_EXCEPTION, and the candidate kept its invoice (one scored before \
+                #2509 is refused; match the invoice again instead).
                 Required inputs: candidateId (UUID) as a path parameter; there is no request body.
-                Emits ACCOUNTING_VENDOR_BILL_MATCH_CANDIDATE_SELECT and writes a \
-                VENDOR_BILL_MATCH_CANDIDATE_SELECT audit row.
-                Returns 200 with the bill read, 403 FORBIDDEN without accounting:ap:approve or \
-                accounting:ap:approve_over_limit, 404 AP_MATCH_CANDIDATE_NOT_FOUND, 409 \
-                AP_MATCH_CANDIDATE_ALREADY_RESOLVED when someone else resolved the set, 409 \
-                AP_BILL_NOT_APPROVABLE naming the chosen bill's status, and 409 AP_BILL_DUPLICATE when \
-                another live bill already holds the invoice number.
+                Emits ACCOUNTING_VENDOR_BILL_MATCH_CANDIDATE_SELECT and writes a VENDOR_BILL_MATCH_CANDIDATE_SELECT \
+                audit row, plus a VENDOR_BILL_MATCH_CANDIDATE_RELEASE row for a bill released; a replay is answered \
+                409 AP_MATCH_CANDIDATE_ALREADY_RESOLVED.
+                Returns 200 with the bill read, 401 without a valid token, 403 FORBIDDEN without \
+                accounting:ap:approve or accounting:ap:approve_over_limit, 404 AP_MATCH_CANDIDATE_NOT_FOUND, 409 \
+                AP_MATCH_CANDIDATE_ALREADY_RESOLVED when someone else resolved the set, 409 AP_BILL_NOT_APPROVABLE \
+                naming the chosen bill's status, 409 AP_BILL_AWAITING_INVOICE for a candidate that kept no invoice, \
+                and 409 AP_BILL_DUPLICATE when another live bill already holds the invoice number on the invoice \
+                date.
                 """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
             responseCode = "200",
             description = "Candidate selected; the bill awaits approval",
             content = @Content(schema = @Schema(implementation = VendorBillResponse.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Not authenticated: no valid bearer token",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = "FORBIDDEN",
@@ -388,7 +441,8 @@ public class VendorBillApprovalController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "AP_MATCH_CANDIDATE_ALREADY_RESOLVED, AP_BILL_NOT_APPROVABLE or AP_BILL_DUPLICATE",
+            description = "AP_MATCH_CANDIDATE_ALREADY_RESOLVED (a replay included), AP_BILL_NOT_APPROVABLE,"
+                    + " AP_BILL_AWAITING_INVOICE or AP_BILL_DUPLICATE",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<VendorBillResponse> selectMatchCandidate(
             @Parameter(description = "Match candidate identifier", example = "550e8400-e29b-41d4-a716-446655440030")
@@ -402,39 +456,50 @@ public class VendorBillApprovalController {
     @EmitEvent(id = "ACCOUNTING_VENDOR_BILL_VOID", apiVersion = "1")
     @SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"accounting:ap:reject", "accounting:ap:approve_over_limit"})
-    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_REJECT + "') and hasAnyAuthority('"
-            + AccountingPermissions.AP_APPROVE + "', '" + AccountingPermissions.AP_APPROVE_OVER_LIMIT + "')")
+            scopes = {"accounting:ap:reject"})
+    // Every void needs accounting:ap:reject; an approved bill's also needs the approval tier, which the service
+    // checks once it knows the bill's status (AW42, AW44).
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_REJECT + "')")
     @Operation(
-            operationId = "voidApprovedVendorBill",
-            summary = "Void Approved Vendor Bill",
+            operationId = "voidVendorBill",
+            summary = "Void Vendor Bill",
             description = """
-                Voids an APPROVED vendor bill while nothing is allocated to it: it moves to VOIDED and its \
-                entry is reversed through the journal-entry reversal (linked both ways), dated today in \
-                today's period, never back in the original period (AW42); 2100 is accrued again.
-                Use this tool to undo an approval that should not stand; do not use rejectVendorBill, which \
-                refuses a bill not yet approved, or resolveVendorBillMatchException with VOID, which voids a \
-                bill still in MATCH_EXCEPTION. A bill with payments allocated is corrected with a vendor \
-                credit note instead.
-                Preconditions: the bill is APPROVED with no allocation. Needs accounting:ap:reject plus the \
-                approval tier, accounting:ap:approve_over_limit until approval limits exist.
+                Voids a vendor bill: an APPROVED bill with nothing allocated moves to VOIDED and its entry is \
+                reversed through the journal-entry reversal (linked both ways), dated today in today's period and \
+                never back in the original period (AW42), so 2100 is accrued again; a goods-receipt bill in \
+                PENDING_RECEIPT_MATCH that no vendor invoice will match moves to VOIDED and nothing is posted \
+                (AW44), its receipt accrual staying in 2100 until the vendor's EDI bill classified GOODS clears it.
+                Use this tool to undo an approval that should not stand or to close a receipt placeholder; do not \
+                use rejectVendorBill, which refuses a bill not yet approved, or resolveVendorBillMatchException with \
+                VOID, which voids a bill still in MATCH_EXCEPTION, and correct a bill with payments allocated with a \
+                vendor credit note instead.
+                Preconditions: every void needs accounting:ap:reject and an approved bill's also the approval tier, \
+                accounting:ap:approve_over_limit until approval limits exist; only this void reverses a bill's entry \
+                (the journal-entry reversal refuses one with 409 AP_BILL_ENTRY_NOT_REVERSIBLE).
                 Required inputs: billId (UUID) as a path parameter and reason (at least 10 characters); \
-                overrideJustification (at least 10 characters) reverses into a CLOSED period with \
+                overrideJustification (at least 10 characters) reverses an approved bill into a CLOSED period with \
                 accounting:period:override.
-                Emits ACCOUNTING_VENDOR_BILL_VOID and writes a VENDOR_BILL_VOID audit row.
-                Returns 200 with the bill read, its posting's reversalReference included; 400 \
-                JUSTIFICATION_REQUIRED; 403 FORBIDDEN; 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_VOIDABLE \
-                when the bill is not APPROVED or has an allocation; 422 PERIOD_CLOSED or PERIOD_HARD_LOCKED \
-                for today's period, leaving the bill as it was.
+                Emits ACCOUNTING_VENDOR_BILL_VOID and writes a VENDOR_BILL_VOID audit row naming the action \
+                (VOID_APPROVED or VOID_UNMATCHED); a replay finds the bill VOIDED and is answered 409 \
+                AP_BILL_NOT_VOIDABLE.
+                Returns 200 with the bill read, an approved bill's posting with its reversalReference; 400 \
+                JUSTIFICATION_REQUIRED or ARGUMENT_NOT_VALID; 401 without a valid token; 403 FORBIDDEN without \
+                accounting:ap:reject, or without the approval tier for an approved bill; 404 VENDOR_BILL_NOT_FOUND; \
+                409 AP_BILL_NOT_VOIDABLE for any other status or an allocated bill; 422 PERIOD_CLOSED or \
+                PERIOD_HARD_LOCKED for today's period, leaving the bill as it was.
                 """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
             responseCode = "200",
-            description = "Voided; the entry is reversed",
+            description = "Voided; an approved bill's entry is reversed, a receipt placeholder posts nothing",
             content = @Content(schema = @Schema(implementation = VendorBillResponse.class)))
     @ApiResponse(
             responseCode = "400",
-            description = "JUSTIFICATION_REQUIRED",
+            description = "JUSTIFICATION_REQUIRED or ARGUMENT_NOT_VALID",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Not authenticated: no valid bearer token",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
@@ -446,17 +511,19 @@ public class VendorBillApprovalController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "AP_BILL_NOT_VOIDABLE",
+            description = "AP_BILL_NOT_VOIDABLE: not APPROVED nor a goods-receipt bill in PENDING_RECEIPT_MATCH,"
+                    + " allocated, or a replay",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
             description = "PERIOD_CLOSED or PERIOD_HARD_LOCKED; nothing is voided",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    public ResponseEntity<VendorBillResponse> voidApproved(
+    public ResponseEntity<VendorBillResponse> voidBill(
             @Parameter(description = BILL_ID, example = BILL_ID_EXAMPLE) @NonNull @PathVariable UUID billId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description =
-                                    "The reason the approved bill is voided (at least 10 characters) and an optional override justification for a CLOSED period.",
+                                    "The reason the bill is voided (at least 10 characters) and, for an approved bill,"
+                                            + " an optional override justification for a CLOSED period.",
                             required = true,
                             content =
                                     @Content(
@@ -468,8 +535,8 @@ public class VendorBillApprovalController {
                                                                     + " confirmed\"}")))
                     @Valid
                     @RequestBody
-                    VendorBillCommands.@NonNull VoidApproved request) {
-        return ResponseEntity.ok(approvalService.voidApproved(billId, request));
+                    VendorBillCommands.@NonNull VoidBill request) {
+        return ResponseEntity.ok(approvalService.voidBill(billId, request));
     }
 
     @GetMapping("/stages")
@@ -491,13 +558,22 @@ public class VendorBillApprovalController {
                 Preconditions: none beyond the caller holding accounting:ap:view.
                 Required inputs: none.
                 Emits an ACCOUNTING_VENDOR_BILL_STAGES_VIEW audit event; no state changes.
-                Returns 200 with the four counts and asOf.
+                Returns 200 with the four counts and asOf, 401 without a valid token, and 403 FORBIDDEN without \
+                accounting:ap:view.
                 """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
             responseCode = "200",
             description = "Stage counts",
             content = @Content(schema = @Schema(implementation = VendorBillReview.StageCounts.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Not authenticated: no valid bearer token",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "FORBIDDEN",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<VendorBillReview.StageCounts> stageCounts() {
         return ResponseEntity.ok(approvalService.stageCounts());
     }
@@ -522,13 +598,22 @@ public class VendorBillApprovalController {
                 Required inputs: stage (CHECK, APPROVE, PAY or DONE); page (from 0) and size (capped at \
                 100) are optional.
                 Emits an ACCOUNTING_VENDOR_BILL_STAGE_LIST audit event; no state changes.
-                Returns 200 with a page of rows, and 400 VALIDATION_ERROR for an unknown stage.
+                Returns 200 with a page of rows, 400 VALIDATION_ERROR for an unknown stage, 401 without a valid \
+                token, and 403 FORBIDDEN without accounting:ap:view.
                 """,
             tags = {"Vendor Bill API"})
     @ApiResponse(responseCode = "200", description = "One page of the stage")
     @ApiResponse(
             responseCode = "400",
             description = "VALIDATION_ERROR: unknown stage",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Not authenticated: no valid bearer token",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "FORBIDDEN",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Page<VendorBillReview.StageRow>> listByStage(
             @Parameter(description = "Stage", required = true, example = "APPROVE") @RequestParam @NonNull

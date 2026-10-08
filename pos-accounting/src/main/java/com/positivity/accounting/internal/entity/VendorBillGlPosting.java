@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
 import com.positivity.accounting.internal.enums.VendorBillDebitClass;
+import com.positivity.accounting.internal.enums.VendorBillDifferenceClass;
 import com.positivity.accounting.internal.enums.VendorBillPostingDateRule;
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.tenancy.TenantScopedEntity;
@@ -89,6 +90,21 @@ public class VendorBillGlPosting extends TenantScopedEntity {
     /** ISO 4217 code of {@link #grossAmount} (ADR-0067 R-1): the ledger currency (AW43). */
     @Column(name = "currency_code", length = 3, nullable = false, updatable = false)
     private String currencyCode;
+
+    /** The rounding plug put on the largest debit, within the tolerance (AW46); zero when the legs added up. */
+    @Column(name = "rounding_adjustment", precision = 19, scale = 4, nullable = false, updatable = false)
+    private BigDecimal roundingAdjustment;
+
+    /** How an unreconciled gross - (net + tax) posted (AW46); null when the vendor's totals added up. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "difference_class", length = 30, updatable = false)
+    private VendorBillDifferenceClass differenceClass;
+
+    @Column(name = "difference_amount", precision = 19, scale = 4, updatable = false)
+    private BigDecimal differenceAmount;
+
+    @Column(name = "difference_justification", length = 1000, updatable = false)
+    private String differenceJustification;
 
     @Column(name = "posted_at", nullable = false, updatable = false)
     private Instant postedAt;

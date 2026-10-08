@@ -24,6 +24,7 @@ import java.util.Optional;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -132,6 +133,7 @@ public class SupplierInvoiceEventsListener {
     private final KafkaFactIngestionRecorder ingestionRecorder;
     private final VendorBillDuplicateGuard duplicateGuard;
     private final VendorBillReissueRepository reissues;
+    private final VendorBillLocks locks;
 
     /** The handler plus its processed mark, or a failure's mark alone, per transaction; see the class doc. */
     private final TransactionTemplate handlerTransaction;
@@ -146,6 +148,7 @@ public class SupplierInvoiceEventsListener {
             KafkaFactIngestionRecorder ingestionRecorder,
             VendorBillDuplicateGuard duplicateGuard,
             VendorBillReissueRepository reissues,
+            VendorBillLocks locks,
             PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
@@ -156,6 +159,7 @@ public class SupplierInvoiceEventsListener {
         this.ingestionRecorder = ingestionRecorder;
         this.duplicateGuard = duplicateGuard;
         this.reissues = reissues;
+        this.locks = locks;
         this.handlerTransaction = new TransactionTemplate(transactionManager);
         this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -286,13 +290,21 @@ public class SupplierInvoiceEventsListener {
         bill.setBillDate(billDate);
         bill.setTotalAmount(signedTotal(fact));
         if (fact.totalGrossAmount() != null) {
-            // The net and tax as stated (AW39), signed like the total; none stated: net = gross, tax 0.
-            BigDecimal tax = signed(fact, fact.totalTaxAmount());
+            // The net and tax as stated (AW39), signed like the total (AW46): no net stated, net = gross - tax;
+            // a net and no tax, tax = gross - net; neither, net = gross and tax 0. Only a document stating all
+            // three can disagree with itself.
+            BigDecimal gross = bill.getTotalAmount();
+            BigDecimal net = fact.totalNetAmount() == null ? null : signed(fact, fact.totalNetAmount());
+            BigDecimal tax = fact.totalTaxAmount() == null ? null : signed(fact, fact.totalTaxAmount());
+            if (net == null) {
+                tax = tax == null ? BigDecimal.ZERO : tax;
+                net = gross.subtract(tax);
+            } else if (tax == null) {
+                tax = gross.subtract(net);
+            }
+            bill.setNetAmount(net);
             bill.setTaxAmount(tax);
-            bill.setNetAmount(
-                    fact.totalNetAmount() == null
-                            ? bill.getTotalAmount().subtract(tax)
-                            : signed(fact, fact.totalNetAmount()));
+            bill.setStatedLineCount(Math.max(1, fact.lines().size()));
         }
         // The figure is only a sum of money with its currency, so the bill keeps the one the vendor
         // stated (ADR-0067 DF-1).
@@ -312,6 +324,12 @@ public class SupplierInvoiceEventsListener {
                     fact.totalGrossAmount() == null
                             ? VendorBillStatus.MATCH_EXCEPTION
                             : VendorBillStatus.PENDING_RECEIPT_MATCH);
+            // AW46: a document whose gross is not its net + tax, beyond the rounding tolerance, waits for a person
+            // to say where the gap posts, to correct it or to void it.
+            VendorBillTotals.of(bill).filter(totals -> !totals.reconciled()).ifPresent(totals -> {
+                bill.setStatus(VendorBillStatus.MATCH_EXCEPTION);
+                bill.setRejectionReason(totals.explanation());
+            });
         }
         bill.setOriginEventId(UUID.fromString(eventId));
         bill.setOriginEventType(ORIGIN_EVENT_TYPE);
@@ -423,7 +441,14 @@ public class SupplierInvoiceEventsListener {
      *
      * @return whether the bill was flagged; {@code false} for a re-issue identical to the bill held
      */
-    private boolean flagReissue(VendorBill bill, SupplierInvoiceReceivedV1 fact, String billNumber, String eventId) {
+    private boolean flagReissue(VendorBill found, SupplierInvoiceReceivedV1 fact, String billNumber, String eventId) {
+        // The bill was found without a lock: lock it and see it as it is now. A decision that voided or rejected it
+        // meanwhile means it is no longer the original, so the event is retried and becomes a bill of its own.
+        VendorBill bill = locks.lock(found);
+        if (bill.getStatus() == VendorBillStatus.VOIDED || bill.getStatus() == VendorBillStatus.REJECTED) {
+            throw new ConcurrencyFailureException("Vendor bill " + bill.getBillNumber() + " became " + bill.getStatus()
+                    + " while its re-issue was being read; retried");
+        }
         BigDecimal incoming = signedTotal(fact);
         boolean amountChanged = bill.getTotalAmount() != null && incoming.compareTo(bill.getTotalAmount()) != 0;
         boolean currencyChanged =

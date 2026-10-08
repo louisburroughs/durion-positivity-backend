@@ -29,13 +29,23 @@ ALTER TABLE public.vendor_bill ADD COLUMN proposed_debit_class character varying
 ALTER TABLE public.vendor_bill ADD COLUMN proposed_expense_mapping_key character varying(100);
 ALTER TABLE public.vendor_bill ADD COLUMN net_amount numeric(19,4);
 ALTER TABLE public.vendor_bill ADD COLUMN tax_amount numeric(19,4);
+ALTER TABLE public.vendor_bill ADD COLUMN stated_line_count integer;
+ALTER TABLE public.vendor_bill ADD COLUMN difference_class character varying(30);
+ALTER TABLE public.vendor_bill ADD COLUMN difference_expense_mapping_key character varying(100);
+ALTER TABLE public.vendor_bill ADD COLUMN difference_justification character varying(1000);
 
 COMMENT ON COLUMN public.vendor_bill.net_amount IS
     'The net the vendor''s document states (EDI; AW39), signed like total_amount. Null on a bill whose source states '
     'no header amounts (a goods-receipt bill posts from its lines).';
 COMMENT ON COLUMN public.vendor_bill.tax_amount IS
     'The tax the vendor''s document states, never recalculated (AW39), signed like total_amount. US tax is part of '
-    'the cost when the bill posts.';
+    'the cost when the bill posts. With only the net stated it is gross - net; with neither, 0 (AW46).';
+COMMENT ON COLUMN public.vendor_bill.stated_line_count IS
+    'Lines the vendor''s document states (EDI), at least 1: the rounding tolerance of gross vs net + tax is 0.01 per '
+    'stated line, at most 0.05 per bill (AW46).';
+COMMENT ON COLUMN public.vendor_bill.difference_class IS
+    'How an unreconciled gross - (net + tax) posts, proposed at submission (AW46): FREIGHT, GOODS, EXPENSE or '
+    'PRICE_DIFFERENCE.';
 
 ALTER TABLE public.vendor_bill DROP CONSTRAINT vendor_bill_status_check;
 ALTER TABLE public.vendor_bill ADD CONSTRAINT vendor_bill_status_check CHECK (((status)::text = ANY (ARRAY[
@@ -82,6 +92,7 @@ CREATE TABLE public.vendor_bill_match_evidence (
     purchase_order_points integer NOT NULL,
     invoice_reference character varying(50) NOT NULL,
     invoice_date timestamp(6) without time zone NOT NULL,
+    received_date timestamp(6) without time zone NOT NULL,
     received_total numeric(19,4) NOT NULL,
     billed_total numeric(19,4) NOT NULL,
     currency_code character varying(3) NOT NULL,
@@ -164,6 +175,10 @@ CREATE TABLE public.vendor_bill_gl_posting (
     expense_mapping_key character varying(100),
     gross_amount numeric(19,4) NOT NULL,
     currency_code character varying(3) NOT NULL,
+    rounding_adjustment numeric(19,4) NOT NULL,
+    difference_class character varying(30),
+    difference_amount numeric(19,4),
+    difference_justification character varying(1000),
     posted_at timestamp(6) with time zone NOT NULL,
     posted_by character varying(50) NOT NULL,
     reversal_source_key character varying(80),
@@ -204,6 +219,10 @@ ALTER TABLE ONLY public.vendor_bill_gl_posting
     ADD CONSTRAINT vendor_bill_gl_posting_reversal_fk FOREIGN KEY (tenant_id, reversal_journal_entry_id)
         REFERENCES public.journal_entry(tenant_id, journal_entry_id);
 CREATE INDEX vendor_bill_gl_posting_tenant_idx ON public.vendor_bill_gl_posting USING btree (tenant_id);
+-- The reversal reaction finds a bill's posting by the entry being reversed, in either direction.
+CREATE INDEX vendor_bill_gl_posting_entry_idx ON public.vendor_bill_gl_posting USING btree (tenant_id, journal_entry_id);
+CREATE INDEX vendor_bill_gl_posting_reversal_entry_idx
+    ON public.vendor_bill_gl_posting USING btree (tenant_id, reversal_journal_entry_id);
 
 ALTER TABLE public.vendor_bill_gl_posting ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.vendor_bill_gl_posting FORCE ROW LEVEL SECURITY;
