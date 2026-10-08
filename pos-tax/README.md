@@ -156,18 +156,21 @@ consumers store the code as a string, so a new code needs no code change or migr
 ```yaml
 pos.tax:
   default-providers:
-    XX: XX_SELF                 # the self-hosted plug-in of a profiled country is <country>_SELF
+    XX: XX_SELF                 # the self-hosted plug-in of a profiled country is <country>_SELF; every profiled country needs one
   countries:
-    XX:
+    XX:                         # upper case; cannot be set through environment variables (they lower-case the key)
       currency: EUR             # ISO 4217; its minor-unit exponent is the rounding scale
-      tax-types:                # keys are tax-type codes; a key with "_" needs "[...]"
-        GST: { regime: R_1, jurisdiction-type: COUNTRY, input-tax-recoverable: true }
-        PST: { jurisdiction-type: PROVINCE, input-tax-recoverable: false }   # no regime
+      tax-types:                # a list with explicit codes (1-32 upper-case letters, digits or underscores)
+        - { code: ZZ_LEVY, regime: R_1, jurisdiction-type: COUNTRY, input-tax-recoverable: true }
+        - { code: ZZ_LOCAL, jurisdiction-type: PROVINCE, input-tax-recoverable: false }   # no regime
       regimes:                  # what a tenant registers under and recovery is keyed by
-        "[R_1]": { regions: [] }  # empty = the whole country; a key with "_" needs Spring's "[...]" map-key notation
+        - { code: R_1, regions: [] }   # empty = the whole country
       rates:                    # none ship; tests and dev use fixtures marked "not tax law"
-        - { region-code: X1, tax-type: GST, rate: 0.01, effective-from: 2026-01-01, effective-to: 2026-12-31 }
+        - { region-code: X1, tax-type: ZZ_LEVY, rate: 0.01, effective-from: 2026-01-01, effective-to: 2026-12-31 }
 ```
+
+Tax types and regimes are **lists with an explicit `code`**, not map keys: Spring's relaxed binding strips `_` from an
+unbracketed map key, so a code would be silently mangled. Country codes stay map keys and must be upper case.
 
 - **Routing.** An address whose country has a `default-providers` entry is answered by that plug-in for rate lookup,
   calculation (sale and refund), commit and void, in every provider mode. Every other country keeps the switch above. A plug-in
@@ -176,14 +179,16 @@ pos.tax:
   effect on the date answer, one per tax type; with none, 422 `TAX_JURISDICTION_NOT_CONFIGURED`. A calculation must state the
   profile's currency (rows round at its exponent and are never converted), otherwise 422 `CURRENCY_NOT_SUPPORTED`.
 - **Startup check** (`TaxCountryProfiles`). Startup fails, naming the property, when a country code is not ISO 3166-1 alpha-2
-  (assigned or user-assigned, so a fixture may use `ZZ`); a currency is missing or not ISO 4217; a `tax-types` key is not a
-  well-formed code (1–32 upper-case letters, digits or underscores); a tax type names an undeclared regime, lacks `jurisdiction-type` or `input-tax-recoverable`; a region code is not 1–3
+  (assigned or user-assigned, so a fixture may use `ZZ`) or is not upper case; a currency is missing or not ISO 4217; a
+  tax-type or regime `code` is missing, malformed (1–32 upper-case letters, digits or underscores) or declared twice; a tax type names an undeclared regime, lacks `jurisdiction-type` or `input-tax-recoverable`; a region code is not 1–3
   letters or digits; a rate row names an undeclared tax type, has a rate outside [0, 1), lacks `effective-from` or ends before it
   starts; two rows of one region and tax type, or of one region and regime, are in effect on the same date (one rate per regime);
-  or a `default-providers` entry names a plug-in other than its own country's `<country>_SELF`.
+  a `default-providers` key is not alpha-2 or names a plug-in other than its own country's `<country>_SELF` (or a country
+  with no profile); or a profiled country has no `default-providers` entry (it would otherwise fall through to the switch).
 - **Lifecycle log.** A committable calculation priced by a plug-in records an `ESTIMATED` row in `tax_provider_transaction`
   naming the plug-in (`provider`), so its commit and void reach the same plug-in as logged no-ops; the re-commit job ignores
-  `ESTIMATED` rows. A logged `<country>_SELF` keeps its documents even if its profile is later removed (its no-op commit
+  `ESTIMATED` rows. A re-price by another provider re-points only a row with no live provider document (`ESTIMATED`,
+  `VOIDED`); a `PENDING_COMMIT`, `FAILED` or `COMMITTED` row always stays with the provider that owns its document. A logged `<country>_SELF` keeps its documents even if its profile is later removed (its no-op commit
   and void need no profile); only rows priced by the switch fall back to it. No new column was needed: `provider` already names the provider that owns each document.
 - **Callers (ADR-0021 §3).** pos-order, pos-invoice and pos-accounting call computation and the tax-types read directly with the
   service authority; there is no gateway route.

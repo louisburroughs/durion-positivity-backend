@@ -251,6 +251,57 @@ class TaxProviderLifecycleServiceTest {
     }
 
     @Test
+    @DisplayName("S32a: a PENDING_COMMIT document of the switch is never re-pointed to a plug-in")
+    void pendingCommitIsNeverRepointed() {
+        UUID ref = UUID.randomUUID();
+        provider.failCommit = true;
+        service.commit(ref, "INVOICE");
+        assertThat(repository.findByReferenceId(ref).orElseThrow().getStatus())
+                .isEqualTo(TaxProviderTransactionStatus.PENDING_COMMIT);
+
+        // A committable calculation for a plug-in country reusing this referenceId.
+        service.recordPricing(ref, "INVOICE", PLUGIN);
+
+        TaxProviderTransaction row = repository.findByReferenceId(ref).orElseThrow();
+        assertThat(row.getProvider()).isEqualTo("FAKE");
+        // The re-commit job still reaches the real provider, not the no-op plug-in.
+        provider.failCommit = false;
+        service.recommitPending();
+        TaxProviderTransaction after = repository.findByReferenceId(ref).orElseThrow();
+        assertThat(after.getStatus()).isEqualTo(TaxProviderTransactionStatus.COMMITTED);
+        assertThat(after.getExternalTransactionId()).isEqualTo("ext-123");
+    }
+
+    @Test
+    @DisplayName("S32a: a FAILED void of the switch is never re-pointed to a plug-in")
+    void failedVoidIsNeverRepointed() {
+        UUID ref = UUID.randomUUID();
+        service.commit(ref, "INVOICE");
+        provider.failVoid = true;
+        service.voidTransaction(ref);
+        assertThat(repository.findByReferenceId(ref).orElseThrow().getStatus())
+                .isEqualTo(TaxProviderTransactionStatus.FAILED);
+
+        service.recordPricing(ref, "INVOICE", PLUGIN);
+
+        assertThat(repository.findByReferenceId(ref).orElseThrow().getProvider())
+                .isEqualTo("FAKE");
+    }
+
+    @Test
+    @DisplayName("S32a: a VOIDED document (no live provider document) re-priced by a plug-in is re-pointed")
+    void voidedDocumentIsRepointed() {
+        UUID ref = UUID.randomUUID();
+        service.commit(ref, "INVOICE");
+        service.voidTransaction(ref);
+
+        service.recordPricing(ref, "INVOICE", PLUGIN);
+
+        assertThat(repository.findByReferenceId(ref).orElseThrow().getProvider())
+                .isEqualTo(PLUGIN);
+    }
+
+    @Test
     @DisplayName("S32a: a committed document is never re-pointed")
     void committedDocumentIsNeverRepointed() {
         UUID ref = UUID.randomUUID();
@@ -281,6 +332,7 @@ class TaxProviderLifecycleServiceTest {
     /** Test double whose commit can be toggled to fail. */
     private static final class ControllableProvider implements TaxProviderClient {
         private boolean failCommit;
+        private boolean failVoid;
 
         @Override
         @NonNull
@@ -314,6 +366,9 @@ class TaxProviderLifecycleServiceTest {
         @Override
         @NonNull
         public TaxProviderTransactionResult voidTransaction(@NonNull UUID referenceId) {
+            if (failVoid) {
+                throw new TaxCalculationException("provider down");
+            }
             return new TaxProviderTransactionResult(referenceId, TaxProviderTransactionStatus.VOIDED, "ext-123", "ok");
         }
     }

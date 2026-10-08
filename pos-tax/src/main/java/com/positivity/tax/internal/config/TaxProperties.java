@@ -100,17 +100,17 @@ public class TaxProperties {
         private String currency;
 
         /**
-         * Declared tax types keyed by tax-type code (1-32 upper-case letters, digits or underscores; a
-         * key with "_" needs Spring's "[...]" map-key notation). The vocabulary is configuration only.
-         * Never {@code null}.
+         * Declared tax types, each with an explicit {@code code} (1-32 upper-case letters, digits or
+         * underscores). A list, not a map: map keys lose their underscores under relaxed binding. The
+         * vocabulary is configuration only. Never {@code null}.
          */
-        private Map<String, TaxTypeProfile> taxTypes = new LinkedHashMap<>();
+        private List<TaxTypeProfile> taxTypes = new ArrayList<>();
 
         /**
-         * Registration and recovery regimes keyed by regime name. Several tax types may share one
-         * regime. Never {@code null}.
+         * Registration and recovery regimes, each with an explicit {@code code}. Several tax types may
+         * share one regime. Never {@code null}.
          */
-        private Map<String, RegimeProfile> regimes = new LinkedHashMap<>();
+        private List<RegimeProfile> regimes = new ArrayList<>();
 
         /** Effective-dated rate rows. None ship; tests and dev use fixtures. Never {@code null}. */
         private List<RateRow> rates = new ArrayList<>();
@@ -121,6 +121,9 @@ public class TaxProperties {
      */
     @Data
     public static class TaxTypeProfile {
+        /** The tax-type code (1-32 upper-case letters, digits or underscores). */
+        private String code;
+
         /** The regime this tax type is registered and recovered under; blank for none. */
         private String regime;
 
@@ -136,6 +139,9 @@ public class TaxProperties {
      */
     @Data
     public static class RegimeProfile {
+        /** The regime code. */
+        private String code;
+
         /** Region codes the regime covers; empty means the whole country. Never {@code null}. */
         private List<String> regions = new ArrayList<>();
     }

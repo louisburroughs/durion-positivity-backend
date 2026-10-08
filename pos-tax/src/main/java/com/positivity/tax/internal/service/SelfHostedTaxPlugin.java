@@ -88,6 +88,7 @@ public class SelfHostedTaxPlugin implements TaxProviderClient {
     @Override
     @NonNull
     public TaxCalculationResponse estimate(@NonNull TaxCalculationRequest request) {
+        requireOwnCountry(request.getCountryCode());
         requireProfileCurrency(request.getCurrencyCode());
         LocalDate date = TaxTransactionDates.resolve(request.getTransactionDate(), clock);
         List<ConfiguredRate> rows = rowsFor(request.getStateCode(), date);
@@ -129,6 +130,8 @@ public class SelfHostedTaxPlugin implements TaxProviderClient {
                 .effectiveTaxRate(effectiveTaxRate)
                 .jurisdictions(jurisdictions(request, rows, jurisdictionTotals))
                 .lineItemTaxes(lineTaxes)
+                // testMode = true: the answer comes from configured placeholder rows (a stub, AW48), not
+                // from a real tax engine, whatever the deployment-wide provider mode is.
                 .testMode(true)
                 .calculatedAt(Instant.now(clock))
                 .referenceId(request.getReferenceId())
@@ -185,6 +188,17 @@ public class SelfHostedTaxPlugin implements TaxProviderClient {
                 components.stream().map(TaxRateComponent::rate).reduce(BigDecimal.ZERO, BigDecimal::add);
         return new TaxRateLookupResponse(
                 profile.countryCode(), regionCode, city, postalCode, asOf, components, combinedRate, SOURCE);
+    }
+
+    /**
+     * A plug-in prices only its own country (ADR-0071 §3). The selector routes by country, so this is a
+     * guard against a mis-wired caller, never a business outcome.
+     */
+    private void requireOwnCountry(@Nullable String countryCode) {
+        if (countryCode == null || !profile.countryCode().equalsIgnoreCase(countryCode.trim())) {
+            throw new IllegalStateException(
+                    "Tax plug-in " + providerName + " cannot price an address in country " + countryCode);
+        }
     }
 
     /**

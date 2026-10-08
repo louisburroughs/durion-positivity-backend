@@ -7,8 +7,10 @@ import com.positivity.tax.internal.repository.TaxProviderTransactionRepository;
 import com.positivity.tenancy.TenantIterator;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -40,6 +42,13 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Slf4j
 @Service
 public class TaxProviderLifecycleService {
+
+    /**
+     * Statuses whose row holds no provider document still owed to its owner, so a re-price by another
+     * provider may re-point it (CAP:550 S32a). Never PENDING_COMMIT, FAILED or COMMITTED.
+     */
+    private static final Set<TaxProviderTransactionStatus> REPOINTABLE =
+            EnumSet.of(TaxProviderTransactionStatus.ESTIMATED, TaxProviderTransactionStatus.VOIDED);
 
     /** Max stored length of {@code last_error} (matches the column width). */
     private static final int MAX_ERROR_LEN = 1024;
@@ -207,10 +216,15 @@ public class TaxProviderLifecycleService {
      * commit and void reach the same provider.
      * <p>
      * A document priced by a per-country plug-in gets an {@link TaxProviderTransactionStatus#ESTIMATED}
-     * row naming the plug-in; the re-commit job never picks it up. A not-yet-committed row re-priced
-     * by a different provider (the address moved between a plug-in country and the deployment-wide
-     * switch) is re-pointed to it. A document priced by the deployment-wide switch with no row keeps
-     * today's behaviour: no row until commit. A committed row is never changed.
+     * row naming the plug-in; the re-commit job never picks it up. A row with no live provider
+     * document — {@link TaxProviderTransactionStatus#ESTIMATED} or
+     * {@link TaxProviderTransactionStatus#VOIDED} — that is re-priced by a different provider (the
+     * address moved between a plug-in country and the deployment-wide switch) is re-pointed to it.
+     * A row whose document still needs its owner is <strong>never</strong> re-pointed:
+     * {@code COMMITTED}, {@code PENDING_COMMIT} (the re-commit job must reach the real provider) and
+     * {@code FAILED} (a void still owed to it). Otherwise a calculation reusing another document's
+     * {@code referenceId} could re-home that document to a no-op plug-in. A document priced by the
+     * deployment-wide switch with no row keeps today's behaviour: no row until commit.
      *
      * @param referenceId   the source document id
      * @param referenceType the source transaction type label; may be null
@@ -228,7 +242,7 @@ public class TaxProviderLifecycleService {
         }
         TaxProviderTransaction tx = existing.get();
         boolean rowNamesPlugin = selector.isSelfHosted(tx.getProvider());
-        if (tx.getStatus() != TaxProviderTransactionStatus.COMMITTED
+        if (REPOINTABLE.contains(tx.getStatus())
                 && !providerName.equals(tx.getProvider())
                 && (pricedByPlugin || rowNamesPlugin)) {
             tx.setProvider(providerName);

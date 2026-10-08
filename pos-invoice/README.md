@@ -316,12 +316,18 @@ per country in pos-tax; there is no enum, so a new code needs no code change or 
   the sum of its rows. pos-invoice never derives a type from the jurisdiction type, code, rate or country.
 - **Rollup.** The `invoice_tax_summary` key is `jurisdictionType|jurisdictionCode|taxType`, so two tax types sharing a
   jurisdiction are never merged.
-- **DRAFT only, no backfill.** The column is written only by the DRAFT re-price path, which rebuilds the rows wholesale; a
-  finalized invoice is never re-priced (the existing finalized-state guard), so its rows are frozen. Existing rows stay
+- **DRAFT only, no backfill.** The column is written only while the invoice is DRAFT (the re-price path and the
+  finalization-time committable calculation, both rebuilding the rows wholesale); a finalized invoice is never re-priced (the existing finalized-state guard), so its rows are frozen. Existing rows stay
   null permanently (all are US, where null is correct).
 - **Event.** `InvoiceUpdatedV1.taxBreakdown[].taxType` (`TaxBreakdownLine.taxType`, nullable String, last component) carries the
   stored code; additive within schema version 1, same topic, no dual-publish (ADR-0044 §3). A US invoice's rows carry null.
 - **No read contract change.** No invoice or receipt endpoint, DTO or SDK exposes the breakdown or the type.
+- **Known limitation (louisburroughs/durion-positivity-backend#2644).** The tax client still sends a hard-coded `USD`
+  (`InvoiceCurrencySource`), and pos-tax prices a profiled country only in that country's configured currency, so every
+  calculation for such a country is refused with 422 `CURRENCY_NOT_SUPPORTED` even once rates exist. `TaxServiceClient`
+  also does not yet translate pos-tax's 422s (`CURRENCY_NOT_SUPPORTED`, `TAX_JURISDICTION_NOT_CONFIGURED`). #2644 makes
+  the callers send the tenant's functional currency (ADR-0067 R-2/PC-2) and translate those 422s. No rate ships today, so
+  no live invoice is affected.
 
 ## Development
 

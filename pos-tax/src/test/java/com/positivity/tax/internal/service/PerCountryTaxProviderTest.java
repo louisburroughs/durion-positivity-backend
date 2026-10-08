@@ -252,6 +252,17 @@ class PerCountryTaxProviderTest {
         }
 
         @Test
+        @DisplayName("a plug-in refuses an address in another country (it serves only its own)")
+        void pluginRefusesAnotherCountry() {
+            SelfHostedTaxPlugin plugin =
+                    firstCountry().selector().pluginFor("CA").orElseThrow();
+            TaxCalculationRequest elsewhere = request("US", "BC", "2026-08-27", line("1", "10.00"));
+            elsewhere.setCurrencyCode("CAD");
+
+            assertThatThrownBy(() -> plugin.estimate(elsewhere)).isInstanceOf(IllegalStateException.class);
+        }
+
+        @Test
         @DisplayName("REFUND uses the same rows, priced at the supplied transaction date")
         void refundUsesTheSameRows() {
             TaxCalculationRequest refund = request("CA", "BC", "2026-06-30", line("1", "100.00"));

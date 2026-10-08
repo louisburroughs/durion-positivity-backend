@@ -66,7 +66,7 @@ public record TaxTypesResponse(
             @Schema(
                     description = "Tax-type code as the country profile declares it (1-32 upper-case letters, digits"
                             + " or underscores); the vocabulary is configuration only",
-                    example = "GST",
+                    example = "ZZ_LEVY",
                     pattern = "^[A-Z0-9_]{1,32}$",
                     requiredMode = Schema.RequiredMode.REQUIRED)
             String taxType,

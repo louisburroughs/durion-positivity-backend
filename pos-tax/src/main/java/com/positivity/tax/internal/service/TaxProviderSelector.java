@@ -117,6 +117,11 @@ public class TaxProviderSelector {
      * @return {@code true} for a self-hosted plug-in id
      */
     public boolean isSelfHosted(@Nullable String providerName) {
+        // Suffix, not registry: a document logged under a self-hosted plug-in whose profile was later
+        // removed must still reach a no-op lifecycle (RetiredSelfHostedPlugin), so the id cannot be
+        // looked up in the live registry. Hazard for ADR-0071 step 1 (#2629): a non-self-hosted
+        // provider must never be given an id ending in _SELF (e.g. renaming the test-mode calculator to
+        // US_SELF), or its logged documents would route here; see the comment on #2629.
         return providerName != null && providerName.endsWith(TaxCountryProfiles.SELF_PLUGIN_SUFFIX);
     }
 

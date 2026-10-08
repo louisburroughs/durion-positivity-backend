@@ -109,17 +109,19 @@ pos:
     # `rates` stays empty, so an address here answers 422 TAX_JURISDICTION_NOT_CONFIGURED until rates are
     # advised. Tests and dev use fixture rows marked "not tax law". Rows: {region-code, tax-type, rate,
     # effective-from, effective-to?}; adding a country is a block here plus a default-providers entry.
+    # Country keys must be upper case and cannot be set through environment variables (relaxed binding
+    # lower-cases them, and the startup check then refuses the key).
     countries:
       CA:
         currency: CAD
-        tax-types:
-          GST: { regime: GST_HST, jurisdiction-type: COUNTRY, input-tax-recoverable: true }
-          HST: { regime: GST_HST, jurisdiction-type: PROVINCE, input-tax-recoverable: true }
-          QST: { regime: QST, jurisdiction-type: PROVINCE, input-tax-recoverable: true }
-          PST: { jurisdiction-type: PROVINCE, input-tax-recoverable: false } # no regime
-        regimes: # empty regions = the whole country; a key with "_" needs Spring's "[...]" map-key notation
-          "[GST_HST]": { regions: [] }
-          QST: { regions: [QC] }
+        tax-types: # a list with explicit codes, so binding never mangles a code
+          - { code: GST, regime: GST_HST, jurisdiction-type: COUNTRY, input-tax-recoverable: true }
+          - { code: HST, regime: GST_HST, jurisdiction-type: PROVINCE, input-tax-recoverable: true }
+          - { code: QST, regime: QST, jurisdiction-type: PROVINCE, input-tax-recoverable: true }
+          - { code: PST, jurisdiction-type: PROVINCE, input-tax-recoverable: false } # no regime
+        regimes: # empty regions = the whole country
+          - { code: GST_HST, regions: [] }
+          - { code: QST, regions: [QC] }
         # rates: none shipped (OI-4)
 
 logging:

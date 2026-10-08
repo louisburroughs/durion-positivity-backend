@@ -7,7 +7,7 @@ permissions:
   - name: "tax:mode:view"
     description: "View current tax service mode (test or production)"
   - name: "tax:rates:view"
-    description: "View jurisdiction tax rates via the rate lookup endpoint"
+    description: "View jurisdiction tax rates via the rate lookup endpoint and a country's configured tax types via the tax-types read"
   - name: "tax:exemption:view"
     description: "View tax exemption certificates in the pos-tax exemption registry"
   - name: "tax:exemption:manage"

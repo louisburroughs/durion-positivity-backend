@@ -41,6 +41,11 @@ import org.springframework.stereotype.Component;
  * configuration held for expert advice (spec AW48, OI-4). The only plug-in id this story defines is
  * the self-hosted one, {@code <country>_SELF}, one per profiled country; a plug-in only ever serves
  * its own country, so a country's tax is never priced from another country's profile.
+ * <p>
+ * Country codes are map keys ({@code pos.tax.countries.<country>}, {@code pos.tax.default-providers.<country>})
+ * and must be upper case. They cannot be set through environment variables, whose relaxed binding
+ * lower-cases the key; such a key fails this check rather than being silently accepted. Tax-type and
+ * regime codes are list items with an explicit {@code code} field, so binding never mangles them.
  */
 @Component
 public class TaxCountryProfiles {
@@ -128,16 +133,9 @@ public class TaxCountryProfiles {
         CountryProfile source = profile == null ? new CountryProfile() : profile;
         int exponent = currencyExponent(prefix + ".currency", source.getCurrency());
 
-        Map<String, TaxTypeEntry> taxTypes = validateTaxTypes(prefix, source);
         List<RegimeEntry> regimes = validateRegimes(prefix, source.getRegimes());
         Set<String> regimeNames = regimes.stream().map(RegimeEntry::regime).collect(Collectors.toSet());
-        taxTypes.forEach((code, entry) -> {
-            if (entry.regime() != null && !regimeNames.contains(entry.regime())) {
-                throw invalid(
-                        prefix + ".tax-types." + code + ".regime",
-                        "regime " + entry.regime() + " is not declared under " + prefix + ".regimes");
-            }
-        });
+        Map<String, TaxTypeEntry> taxTypes = validateTaxTypes(prefix, source, regimeNames);
 
         List<ConfiguredRate> rates = validateRates(prefix, source.getRates(), taxTypes);
         rejectOverlaps(prefix, rates, ConfiguredRate::taxType, "tax type");
@@ -163,30 +161,44 @@ public class TaxCountryProfiles {
     }
 
     @NonNull
-    private static Map<String, TaxTypeEntry> validateTaxTypes(@NonNull String prefix, @NonNull CountryProfile source) {
+    private static Map<String, TaxTypeEntry> validateTaxTypes(
+            @NonNull String prefix, @NonNull CountryProfile source, @NonNull Set<String> regimeNames) {
         Map<String, TaxTypeEntry> entries = new LinkedHashMap<>();
-        source.getTaxTypes().forEach((code, profile) -> {
-            String property = prefix + ".tax-types." + code;
-            if (!TaxTypeCodes.isWellFormed(code)) {
-                throw invalid(
-                        property,
-                        "'" + code + "' is not a tax-type code of 1 to 32 upper-case letters, digits or underscores");
+        List<TaxTypeProfile> declared = source.getTaxTypes();
+        for (int i = 0; i < declared.size(); i++) {
+            String property = prefix + ".tax-types[" + i + "]";
+            TaxTypeProfile typeProfile = declared.get(i) == null ? new TaxTypeProfile() : declared.get(i);
+            String code = code(property + ".code", typeProfile.getCode(), "tax-type");
+            if (entries.containsKey(code)) {
+                throw invalid(property + ".code", "tax type " + code + " is declared twice");
             }
-            String taxType = code;
-            TaxTypeProfile typeProfile = profile == null ? new TaxTypeProfile() : profile;
             TaxJurisdictionType jurisdictionType = jurisdictionType(property, typeProfile.getJurisdictionType());
             if (typeProfile.getInputTaxRecoverable() == null) {
                 throw invalid(property + ".input-tax-recoverable", "a value is required for every declared tax type");
             }
-            entries.put(
-                    code,
-                    new TaxTypeEntry(
-                            taxType,
-                            blankToNull(typeProfile.getRegime()),
-                            jurisdictionType,
-                            typeProfile.getInputTaxRecoverable()));
-        });
+            String regime = blankToNull(typeProfile.getRegime());
+            if (regime != null && !regimeNames.contains(regime)) {
+                throw invalid(
+                        property + ".regime", "regime " + regime + " is not declared under " + prefix + ".regimes");
+            }
+            entries.put(code, new TaxTypeEntry(code, regime, jurisdictionType, typeProfile.getInputTaxRecoverable()));
+        }
         return entries;
+    }
+
+    /**
+     * A tax-type or regime code: 1-32 upper-case letters, digits or underscores, carried in an
+     * explicit {@code code} field so Spring's relaxed binding can never mangle it (a map key would
+     * lose its underscores).
+     */
+    @NonNull
+    private static String code(@NonNull String property, @Nullable String value, @NonNull String kind) {
+        if (!TaxTypeCodes.isWellFormed(value)) {
+            throw invalid(
+                    property,
+                    "'" + value + "' is not a " + kind + " code of 1 to 32 upper-case letters, digits or underscores");
+        }
+        return value;
     }
 
     @NonNull
@@ -203,18 +215,23 @@ public class TaxCountryProfiles {
     }
 
     @NonNull
-    private static List<RegimeEntry> validateRegimes(
-            @NonNull String prefix, @NonNull Map<String, RegimeProfile> regimes) {
-        List<RegimeEntry> entries = new ArrayList<>();
-        regimes.forEach((name, profile) -> {
-            List<String> regions = profile == null ? List.of() : profile.getRegions();
+    private static List<RegimeEntry> validateRegimes(@NonNull String prefix, @NonNull List<RegimeProfile> regimes) {
+        Map<String, RegimeEntry> entries = new LinkedHashMap<>();
+        for (int r = 0; r < regimes.size(); r++) {
+            String property = prefix + ".regimes[" + r + "]";
+            RegimeProfile profile = regimes.get(r) == null ? new RegimeProfile() : regimes.get(r);
+            String name = code(property + ".code", profile.getCode(), "regime");
+            if (entries.containsKey(name)) {
+                throw invalid(property + ".code", "regime " + name + " is declared twice");
+            }
+            List<String> regions = profile.getRegions();
             List<String> normalized = new ArrayList<>();
             for (int i = 0; i < regions.size(); i++) {
-                normalized.add(regionCode(prefix + ".regimes." + name + ".regions[" + i + "]", regions.get(i)));
+                normalized.add(regionCode(property + ".regions[" + i + "]", regions.get(i)));
             }
-            entries.add(new RegimeEntry(name, List.copyOf(normalized)));
-        });
-        return List.copyOf(entries);
+            entries.put(name, new RegimeEntry(name, List.copyOf(normalized)));
+        }
+        return List.copyOf(entries.values());
     }
 
     @NonNull
@@ -306,6 +323,17 @@ public class TaxCountryProfiles {
             }
             routes.put(country, pluginId);
         });
+        // Every profiled country must be routed: an unrouted profile would fall through to the
+        // deployment-wide switch (and its US rates) while the tax-types read still advertised it.
+        // ADR-0071 step 1 (#2629) replaces this with the tenant binding and its fallback.
+        for (String country : profiled) {
+            if (!routes.containsKey(country)) {
+                throw invalid(
+                        DEFAULT_PROVIDERS + country,
+                        "the profiled country " + country + " has no default provider; set it to "
+                                + selfPluginId(country));
+            }
+        }
         return Map.copyOf(routes);
     }
 

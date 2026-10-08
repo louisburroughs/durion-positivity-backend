@@ -39,7 +39,7 @@ public record TaxRateComponent(
         @Schema(
                 description = "Tax-type code of this component as the country profile configures it (1-32"
                         + " upper-case letters, digits or underscores); null for a country without a tax-type profile",
-                example = "GST",
+                example = "ZZ_LEVY",
                 pattern = "^[A-Z0-9_]{1,32}$",
                 nullable = true,
                 requiredMode = Schema.RequiredMode.NOT_REQUIRED)

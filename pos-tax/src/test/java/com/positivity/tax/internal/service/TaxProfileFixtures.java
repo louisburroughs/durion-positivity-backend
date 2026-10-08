@@ -48,19 +48,14 @@ final class TaxProfileFixtures {
         p.put("pos.tax.default-providers.CA", "CA_SELF");
         String c = "pos.tax.countries.CA.";
         p.put(c + "currency", "CAD");
-        p.put(c + "tax-types.GST.regime", "GST_HST");
-        p.put(c + "tax-types.GST.jurisdiction-type", "COUNTRY");
-        p.put(c + "tax-types.GST.input-tax-recoverable", "true");
-        p.put(c + "tax-types.HST.regime", "GST_HST");
-        p.put(c + "tax-types.HST.jurisdiction-type", "PROVINCE");
-        p.put(c + "tax-types.HST.input-tax-recoverable", "true");
-        p.put(c + "tax-types.QST.regime", "QST");
-        p.put(c + "tax-types.QST.jurisdiction-type", "PROVINCE");
-        p.put(c + "tax-types.QST.input-tax-recoverable", "true");
-        p.put(c + "tax-types.PST.jurisdiction-type", "PROVINCE");
-        p.put(c + "tax-types.PST.input-tax-recoverable", "false");
-        p.put(c + "regimes[GST_HST].regions", "");
-        p.put(c + "regimes.QST.regions[0]", "QC");
+        taxType(p, c, 0, "GST", "GST_HST", "COUNTRY", "true");
+        taxType(p, c, 1, "HST", "GST_HST", "PROVINCE", "true");
+        taxType(p, c, 2, "QST", "QST", "PROVINCE", "true");
+        taxType(p, c, 3, "PST", null, "PROVINCE", "false");
+        p.put(c + "regimes[0].code", "GST_HST");
+        p.put(c + "regimes[0].regions", "");
+        p.put(c + "regimes[1].code", "QST");
+        p.put(c + "regimes[1].regions[0]", "QC");
         // Fake rows, not tax law: a GST+PST region, a GST+QST region, an HST region, and a GST rate
         // that changes on a date.
         row(p, c, 0, "BC", "GST", "0.011", "2020-01-01", "2026-06-30");
@@ -77,14 +72,30 @@ final class TaxProfileFixtures {
         p.put("pos.tax.default-providers.ZZ", "ZZ_SELF");
         String c = "pos.tax.countries.ZZ.";
         p.put(c + "currency", "JPY");
-        // A tax-type code no other fixture uses: the vocabulary is configuration, not code. A key
-        // with "_" uses Spring's "[...]" map-key notation, exactly as application.yml must.
-        p.put(c + "tax-types[ZZ_LEVY].regime", "R1");
-        p.put(c + "tax-types[ZZ_LEVY].jurisdiction-type", "COUNTRY");
-        p.put(c + "tax-types[ZZ_LEVY].input-tax-recoverable", "false");
-        p.put(c + "regimes.R1.regions", "");
+        // A tax-type code no other fixture uses: the vocabulary is configuration, not code. The code
+        // keeps its "_" because it is a field value, not a map key.
+        taxType(p, c, 0, "ZZ_LEVY", "R_1", "COUNTRY", "false");
+        p.put(c + "regimes[0].code", "R_1");
+        p.put(c + "regimes[0].regions", "");
         row(p, c, 0, "Z1", "ZZ_LEVY", "0.07", "2020-01-01", null);
         return Map.copyOf(p);
+    }
+
+    static void taxType(
+            Map<String, String> p,
+            String prefix,
+            int index,
+            String code,
+            String regime,
+            String level,
+            String recoverable) {
+        String t = prefix + "tax-types[" + index + "].";
+        p.put(t + "code", code);
+        if (regime != null) {
+            p.put(t + "regime", regime);
+        }
+        p.put(t + "jurisdiction-type", level);
+        p.put(t + "input-tax-recoverable", recoverable);
     }
 
     static void row(

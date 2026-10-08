@@ -1,10 +1,8 @@
 package com.positivity.tax.internal.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import com.positivity.tax.common.dto.TaxCalculationRequest;
-import com.positivity.tax.common.dto.TaxCalculationResponse;
 import com.positivity.tax.common.dto.TaxLineItem;
 import com.positivity.tax.internal.config.TaxProperties;
 import java.math.BigDecimal;
@@ -13,12 +11,10 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.skyscreamer.jsonassert.JSONAssert;
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -81,35 +77,22 @@ class UsTaxContractTest {
                         .build())
                 .build();
 
-        TaxCalculationResponse response = calc.calculateTax(request);
-        JsonNode tree = MAPPER.readTree(MAPPER.writeValueAsString(response));
+        String json = MAPPER.writeValueAsString(calc.calculateTax(request));
 
-        List<String> topLevel =
-                tree.properties().stream().map(Map.Entry::getKey).toList();
-        assertThat(topLevel)
-                .containsExactlyInAnyOrder(
-                        "subtotal",
-                        "totalTax",
-                        "total",
-                        "effectiveTaxRate",
-                        "jurisdictions",
-                        "lineItemTaxes",
-                        "testMode",
-                        "calculatedAt",
-                        "referenceId",
-                        "referenceType",
-                        "externalTransactionId",
-                        "calculationType",
-                        "originalReferenceId");
-        JSONAssert.assertEquals(
-                """
-                {"jurisdictionType":"STATE","code":"STATE","rate":0.0725,"amount":7.25,"exempt":false,
-                 "exemptionReasonCode":null,"taxType":null,"inputTaxRecoverable":null}
-                """,
-                MAPPER.writeValueAsString(
-                        tree.get("lineItemTaxes").get(0).get("jurisdictions").get(0)),
-                true);
-        assertThat(tree.get("totalTax").decimalValue()).isEqualByComparingTo("7.25");
-        assertThat(tree.get("testMode").booleanValue()).isTrue();
+        // The whole /calculate body, strict: today's JSON plus the two null fields on the line row.
+        JSONAssert.assertEquals("""
+                {"subtotal":100.00,"totalTax":7.25,"total":107.25,"effectiveTaxRate":7.25,
+                 "jurisdictions":[{"countryCode":"US","regionCode":"CA","city":null,"postalCode":"90001",
+                                   "line1":null,"line2":null,"taxRate":7.25,"jurisdictionType":"STATE",
+                                   "jurisdictionTypeI18nKey":"tax.jurisdiction.type.state","taxAmount":7.25}],
+                 "lineItemTaxes":[{"lineItemId":"1","subtotal":100.00,"taxAmount":7.25,"total":107.25,
+                                   "taxExempt":false,"exemptionReasonCode":null,"exemptionDenied":false,
+                                   "jurisdictions":[{"jurisdictionType":"STATE","code":"STATE","rate":0.0725,
+                                                     "amount":7.25,"exempt":false,"exemptionReasonCode":null,
+                                                     "taxType":null,"inputTaxRecoverable":null}]}],
+                 "testMode":true,"calculatedAt":"2026-08-27T12:00:00Z","referenceId":null,
+                 "referenceType":null,"externalTransactionId":null,"calculationType":"SALE",
+                 "originalReferenceId":null}
+                """, json, true);
     }
 }

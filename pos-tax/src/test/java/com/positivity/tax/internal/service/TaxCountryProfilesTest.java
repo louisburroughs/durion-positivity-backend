@@ -3,6 +3,7 @@ package com.positivity.tax.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.tax.common.dto.TaxTypesResponse.RegimeEntry;
 import com.positivity.tax.common.enums.TaxJurisdictionType;
 import com.positivity.tax.internal.config.TaxProperties;
 import com.positivity.tax.internal.service.TaxCountryProfiles.CountryTaxProfile;
@@ -45,39 +46,56 @@ class TaxCountryProfilesTest {
                         "country code not ISO 3166-1 alpha-2",
                         fixtureWith(p -> p.put("pos.tax.countries.C1.currency", "CAD")),
                         "pos.tax.countries.C1"),
+                Arguments.of(
+                        "lower-case country key, as an environment variable binds it",
+                        lowerCaseCountryKeys(),
+                        "pos.tax.countries.ca"),
                 Arguments.of("currency not ISO 4217", fixtureWith(p -> p.put(CA + "currency", "CAX")), CA + "currency"),
                 Arguments.of("currency missing", fixtureWith(p -> p.remove(CA + "currency")), CA + "currency"),
                 Arguments.of(
-                        "tax-type key not a well-formed code (1-32 upper-case letters, digits or underscores)",
-                        fixtureWith(p -> {
-                            p.put(CA + "tax-types.vat.jurisdiction-type", "PROVINCE");
-                            p.put(CA + "tax-types.vat.input-tax-recoverable", "true");
-                        }),
-                        CA + "tax-types.vat"),
+                        "tax-type code not 1-32 upper-case letters, digits or underscores",
+                        fixtureWith(p -> p.put(CA + "tax-types[3].code", "pst")),
+                        CA + "tax-types[3].code"),
+                Arguments.of(
+                        "tax-type code missing",
+                        fixtureWith(p -> p.remove(CA + "tax-types[3].code")),
+                        CA + "tax-types[3].code"),
+                Arguments.of(
+                        "tax type declared twice",
+                        fixtureWith(p -> p.put(CA + "tax-types[3].code", "GST")),
+                        CA + "tax-types[3].code"),
+                Arguments.of(
+                        "regime code malformed",
+                        fixtureWith(p -> p.put(CA + "regimes[1].code", "Q-ST")),
+                        CA + "regimes[1].code"),
+                Arguments.of(
+                        "regime declared twice",
+                        fixtureWith(p -> p.put(CA + "regimes[1].code", "GST_HST")),
+                        CA + "regimes[1].code"),
                 Arguments.of(
                         "tax type names an undeclared regime",
-                        fixtureWith(p -> p.put(CA + "tax-types.PST.regime", "NO_SUCH_REGIME")),
-                        CA + "tax-types.PST.regime"),
+                        fixtureWith(p -> p.put(CA + "tax-types[3].regime", "NO_SUCH_REGIME")),
+                        CA + "tax-types[3].regime"),
                 Arguments.of(
                         "rate-row region code not 1-3 letters or digits",
                         fixtureWith(p -> p.put(CA + "rates[5].region-code", "ONTA")),
                         CA + "rates[5].region-code"),
                 Arguments.of(
                         "regime region code not 1-3 letters or digits",
-                        fixtureWith(p -> p.put(CA + "regimes.QST.regions[0]", "Q-C")),
-                        CA + "regimes.QST.regions[0]"),
+                        fixtureWith(p -> p.put(CA + "regimes[1].regions[0]", "Q-C")),
+                        CA + "regimes[1].regions[0]"),
                 Arguments.of(
                         "rate row names a tax type the country does not declare",
-                        fixtureWith(p -> {
-                            p.remove(CA + "tax-types.HST.regime");
-                            p.remove(CA + "tax-types.HST.jurisdiction-type");
-                            p.remove(CA + "tax-types.HST.input-tax-recoverable");
-                        }),
+                        fixtureWith(p -> p.put(CA + "tax-types[1].code", "XST")),
                         CA + "rates[5].tax-type"),
                 Arguments.of(
                         "rate equal to 1", fixtureWith(p -> p.put(CA + "rates[5].rate", "1")), CA + "rates[5].rate"),
                 Arguments.of(
                         "rate below 0", fixtureWith(p -> p.put(CA + "rates[5].rate", "-0.01")), CA + "rates[5].rate"),
+                Arguments.of(
+                        "effective-from missing",
+                        fixtureWith(p -> p.remove(CA + "rates[5].effective-from")),
+                        CA + "rates[5].effective-from"),
                 Arguments.of(
                         "effective-to before effective-from",
                         fixtureWith(p -> p.put(CA + "rates[5].effective-to", "2019-12-31")),
@@ -92,12 +110,12 @@ class TaxCountryProfilesTest {
                         CA + "rates[6]"),
                 Arguments.of(
                         "input-tax-recoverable missing for a declared tax type",
-                        fixtureWith(p -> p.remove(CA + "tax-types.PST.input-tax-recoverable")),
-                        CA + "tax-types.PST.input-tax-recoverable"),
+                        fixtureWith(p -> p.remove(CA + "tax-types[3].input-tax-recoverable")),
+                        CA + "tax-types[3].input-tax-recoverable"),
                 Arguments.of(
                         "jurisdiction type unknown",
-                        fixtureWith(p -> p.put(CA + "tax-types.PST.jurisdiction-type", "GALAXY")),
-                        CA + "tax-types.PST.jurisdiction-type"),
+                        fixtureWith(p -> p.put(CA + "tax-types[3].jurisdiction-type", "GALAXY")),
+                        CA + "tax-types[3].jurisdiction-type"),
                 Arguments.of(
                         "default-providers names an unknown plug-in",
                         fixtureWith(p -> p.put("pos.tax.default-providers.CA", "NO_SUCH_PLUGIN")),
@@ -105,7 +123,29 @@ class TaxCountryProfilesTest {
                 Arguments.of(
                         "default-providers routes a country to another country's plug-in",
                         fixtureWith(p -> p.put("pos.tax.default-providers.US", "CA_SELF")),
-                        "pos.tax.default-providers.US"));
+                        "pos.tax.default-providers.US"),
+                Arguments.of(
+                        "default-providers key not ISO 3166-1 alpha-2",
+                        fixtureWith(p -> p.put("pos.tax.default-providers.C1", "C1_SELF")),
+                        "pos.tax.default-providers.C1"),
+                Arguments.of(
+                        "default-providers entry for a country with no profile",
+                        fixtureWith(p -> p.put("pos.tax.default-providers.ZZ", "ZZ_SELF")),
+                        "pos.tax.default-providers.ZZ"),
+                Arguments.of(
+                        "a profiled country with no default provider (it would fall through to the switch)",
+                        fixtureWith(p -> p.remove("pos.tax.default-providers.CA")),
+                        "pos.tax.default-providers.CA"));
+    }
+
+    /** The first-country fixture with its country keys lower-cased, as environment-variable binding produces. */
+    private static Map<String, String> lowerCaseCountryKeys() {
+        Map<String, String> lowered = new LinkedHashMap<>();
+        TaxProfileFixtures.FIRST_COUNTRY.forEach((key, value) -> lowered.put(
+                key.replace("pos.tax.countries.CA.", "pos.tax.countries.ca.")
+                        .replace("pos.tax.default-providers.CA", "pos.tax.default-providers.ca"),
+                value));
+        return lowered;
     }
 
     @ParameterizedTest(name = "{0}")
@@ -184,12 +224,17 @@ class TaxCountryProfilesTest {
                 .allSatisfy(profile -> assertThat(profile.rates())
                         .as("no rate ships for %s (OI-4)", profile.countryCode())
                         .isEmpty());
-        // Every routed country has a profile, and the profile's regimes bind with their "_" keys.
+        // Every routed country has a profile.
         assertThat(shipped.getDefaultProviders())
                 .allSatisfy((country, plugin) ->
                         assertThat(profiles.profile(country)).isPresent());
         profiles.all()
                 .values()
                 .forEach(profile -> assertThat(profile.taxTypes()).isNotEmpty());
+        // Codes are list fields, so a code with "_" binds intact (a map key would lose the "_").
+        assertThat(profiles.all().values())
+                .flatExtracting(CountryTaxProfile::regimes)
+                .extracting(RegimeEntry::regime)
+                .anySatisfy(code -> assertThat(code).contains("_"));
     }
 }
