@@ -290,17 +290,15 @@ public class SupplierInvoiceEventsListener {
         bill.setBillDate(billDate);
         bill.setTotalAmount(signedTotal(fact));
         if (fact.totalGrossAmount() != null) {
-            // The net and tax as stated (AW39), signed like the total (AW47): no net stated, net = gross - tax;
-            // a net and no tax, tax = gross - net; neither, net = gross and tax 0. Only a document stating all
-            // three can disagree with itself.
+            // The net and tax as stated (AW39), signed like the total (AW47, ruling #2509 comment 6059252089): a
+            // missing tax is 0; no net stated, net = gross - tax, so a derived net never disagrees with the gross;
+            // neither, net = gross and tax 0. A net and a gross stated without a tax are checked as net + 0.
             BigDecimal gross = bill.getTotalAmount();
             BigDecimal net = fact.totalNetAmount() == null ? null : signed(fact, fact.totalNetAmount());
             BigDecimal tax = fact.totalTaxAmount() == null ? null : signed(fact, fact.totalTaxAmount());
+            tax = tax == null ? BigDecimal.ZERO : tax;
             if (net == null) {
-                tax = tax == null ? BigDecimal.ZERO : tax;
                 net = gross.subtract(tax);
-            } else if (tax == null) {
-                tax = gross.subtract(net);
             }
             bill.setNetAmount(net);
             bill.setTaxAmount(tax);
@@ -487,8 +485,11 @@ public class SupplierInvoiceEventsListener {
         if (bill.getStatus() == VendorBillStatus.CURRENCY_HOLD) {
             bill.setRejectionReason(currencyHoldReason(effectiveCurrency(bill.getCurrency())) + ". " + change);
         } else {
+            // Checked again from the start (#2509 review, L5): a bill that was awaiting approval keeps no submission,
+            // proposal or difference, as after a CORRECT.
             bill.setStatus(VendorBillStatus.MATCH_EXCEPTION);
             bill.setRejectionReason(change);
+            bill.clearSubmission();
         }
         vendorBillRepository.save(bill);
         // INFO: the one WARN for a flag is the duplicate guard's, which names the original (#2501).

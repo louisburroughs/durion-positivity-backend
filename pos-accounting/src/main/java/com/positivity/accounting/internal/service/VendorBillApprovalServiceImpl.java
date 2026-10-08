@@ -356,24 +356,22 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
     /**
      * Resolve-exception {@code CORRECT} (#2509 review, B-MAJ2): not an approval, no approval or rejection field is
      * written. A goods-receipt bill goes back to its receipt, as if no invoice had been matched: the billed lines and
-     * total are undone and the bill date is the receipt date again, so the next match compares the invoice with what
-     * was received. Whatever was proposed for approval is cleared with it.
+     * total are undone, and the bill date and number are the receipt's again (L-new-1: the invoice number the match
+     * gave it no longer names it, so an EDI fact under that number never finds this bill as its live original). The
+     * next match compares the invoice with what was received. Whatever was proposed for approval is cleared with it.
      */
     private void correct(VendorBill bill, String actor, String reason) {
         if (VendorBillReader.channelOf(bill) == VendorBillReview.Channel.GOODS_RECEIPT) {
             matcher.restoreReceived(bill);
             evidence.findFirstByVendorBillIdOrderByRecordedAtDescMatchEvidenceIdDesc(bill.getVendorBillId())
-                    .map(VendorBillMatchEvidence::getReceivedDate)
-                    .ifPresent(bill::setBillDate);
+                    .ifPresent(received -> {
+                        bill.setBillDate(received.getReceivedDate());
+                        bill.setBillNumber(received.getReceivedBillNumber());
+                    });
         }
         bill.setStatus(VendorBillStatus.PENDING_RECEIPT_MATCH);
         bill.setRejectionReason(null);
-        bill.setSubmittedAt(null);
-        bill.setSubmittedBy(null);
-        bill.setSubmissionJustification(null);
-        bill.setProposedDebitClass(null);
-        bill.setProposedExpenseMappingKey(null);
-        DifferenceDecision.clear(bill);
+        bill.clearSubmission();
         bill.setModifiedBy(actor);
         bills.save(bill);
         audit(bill, AUDIT_RESOLVE, actor, reason, "action=CORRECT");
@@ -588,6 +586,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
                 selected.getInvoiceDate(),
                 bill.getVendorBillId());
         LocalDateTime receivedDate = bill.getBillDate();
+        String receivedBillNumber = bill.getBillNumber();
         VendorBillInvoiceMatcher.Comparison comparison =
                 matcher.applyBilled(bill, VendorBillInvoiceMatcher.fromJson(selected.getInvoiceLines()));
         bill.setBillNumber(selected.getInvoiceReference());
@@ -608,6 +607,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
                 selected.getInvoiceReference(),
                 selected.getInvoiceDate(),
                 receivedDate,
+                receivedBillNumber,
                 comparison,
                 actor);
     }
@@ -725,12 +725,6 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
             bill.setDifferenceClass(difference.differenceClass());
             bill.setDifferenceExpenseMappingKey(difference.expenseMappingKey());
             bill.setDifferenceJustification(justification);
-        }
-
-        static void clear(VendorBill bill) {
-            bill.setDifferenceClass(null);
-            bill.setDifferenceExpenseMappingKey(null);
-            bill.setDifferenceJustification(null);
         }
     }
 

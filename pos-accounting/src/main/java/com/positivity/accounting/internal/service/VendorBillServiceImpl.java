@@ -375,6 +375,7 @@ public class VendorBillServiceImpl implements VendorBillService {
                     event.getInvoiceReference(),
                     event.getInvoiceDate(),
                     bill.getBillDate(),
+                    bill.getBillNumber(),
                     matcher.compare(bill, invoiceLines),
                     currentUser);
             auditRouted(bill, evidence, "AMBIGUOUS");
@@ -398,6 +399,7 @@ public class VendorBillServiceImpl implements VendorBillService {
         VendorBillInvoiceMatcher.Comparison comparison = matcher.compare(bill, invoiceLines);
         boolean hasDiscrepancy = !comparison.withinTolerance();
         LocalDateTime receivedDate = bill.getBillDate();
+        String receivedBillNumber = bill.getBillNumber();
 
         // The bill is about to take the vendor's invoice reference as its number and the invoice date as its date
         // (AW46), whatever the routing: the duplicate rule (#2501) is checked first on that number and date, the
@@ -454,6 +456,7 @@ public class VendorBillServiceImpl implements VendorBillService {
                 event.getInvoiceReference(),
                 event.getInvoiceDate(),
                 receivedDate,
+                receivedBillNumber,
                 comparison,
                 currentUser);
         auditRouted(bill, evidence, outcome);
@@ -534,11 +537,16 @@ public class VendorBillServiceImpl implements VendorBillService {
      */
     private BillMatchResult findBestMatchingBillWithConfidence(@NonNull VendorInvoiceReceivedEvent event) {
         // Receipt bills only: an EDI bill is the vendor's own invoice, never matched to one (#2509 review, B-MAJ2).
+        // A bill still named by an open ambiguous match waits for that selection: matching it to another invoice would
+        // send it for approval while its candidates are open, which no decision may then take (#2509 review, L-new-2).
         List<VendorBill> candidates =
                 billRepository
                         .findByVendorIdAndStatus(event.getVendorId(), VendorBillStatus.PENDING_RECEIPT_MATCH)
                         .stream()
                         .filter(bill -> !VendorBillReader.ORIGIN_SUPPLIER_INVOICE.equals(bill.getOriginEventType()))
+                        .filter(bill -> matchCandidateRepository
+                                .findByVendorBill_VendorBillIdAndResolvedFalse(bill.getVendorBillId())
+                                .isEmpty())
                         .toList();
 
         if (candidates.isEmpty()) {

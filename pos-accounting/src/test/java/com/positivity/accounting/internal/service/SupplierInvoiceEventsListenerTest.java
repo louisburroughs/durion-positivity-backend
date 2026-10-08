@@ -317,11 +317,18 @@ class SupplierInvoiceEventsListenerTest {
         }
 
         @Test
-        @DisplayName("L8: a net and no tax stated: the tax is gross - net, so the totals add up")
-        void taxIsDerivedFromTheNet() {
-            VendorBill noTax = created("1070.00", "1000.00", "null", "[]");
-            assertThat(noTax.getTaxAmount()).isEqualByComparingTo("70.00");
-            assertThat(noTax.getStatus()).isEqualTo(VendorBillStatus.PENDING_RECEIPT_MATCH);
+        @DisplayName(
+                "AW47 ruling (#2509 comment 6059252089): gross 1,085.00 and net 1,000.00 with no tax: the tax is 0,"
+                        + " the totals are checked, MATCH_EXCEPTION with a difference of 85.00")
+        void missingTaxIsZeroAndChecked() {
+            VendorBill noTax = created("1085.00", "1000.00", "null", "[]");
+
+            assertThat(noTax.getTaxAmount()).isEqualByComparingTo("0");
+            assertThat(noTax.getNetAmount()).isEqualByComparingTo("1000.00");
+            assertThat(noTax.getStatus()).isEqualTo(VendorBillStatus.MATCH_EXCEPTION);
+            assertThat(noTax.getRejectionReason())
+                    .isEqualTo("The vendor's totals don't add up: net 1000.00 + tax 0.00 ≠ total 1085.00");
+            assertThat(VendorBillTotals.of(noTax).orElseThrow().difference()).isEqualByComparingTo("85.00");
         }
 
         @Test
@@ -561,6 +568,32 @@ class SupplierInvoiceEventsListenerTest {
                     .isInstanceOf(org.springframework.dao.ConcurrencyFailureException.class);
             verify(reissueRepository, never()).save(any());
             verify(processedEventRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("L5: a bill awaiting approval re-issued at another amount goes to MATCH_EXCEPTION without its"
+                + " submission, proposal or difference")
+        void reissueOfABillAwaitingApprovalClearsItsSubmission() {
+            VendorBill original = held("100.00", VendorBillStatus.AWAITING_APPROVAL);
+            original.setSubmittedAt(NOW);
+            original.setSubmittedBy("clerk.ana");
+            original.setSubmissionJustification("Checked with the vendor");
+            original.setProposedDebitClass(com.positivity.accounting.internal.enums.VendorBillDebitClass.GOODS);
+            original.setProposedExpenseMappingKey("EXPENSE_SHOP_SUPPLIES");
+            original.setDifferenceClass(com.positivity.accounting.internal.enums.VendorBillDifferenceClass.FREIGHT);
+            original.setDifferenceJustification("Freight on the invoice");
+            liveOriginal("INV1", original);
+
+            listener.onSupplierEvent(event(EVENT_1, "inv-1", "INVOICE", "120.00"));
+
+            assertThat(original.getStatus()).isEqualTo(VendorBillStatus.MATCH_EXCEPTION);
+            assertThat(original.getSubmittedAt()).isNull();
+            assertThat(original.getSubmittedBy()).isNull();
+            assertThat(original.getSubmissionJustification()).isNull();
+            assertThat(original.getProposedDebitClass()).isNull();
+            assertThat(original.getProposedExpenseMappingKey()).isNull();
+            assertThat(original.getDifferenceClass()).isNull();
+            assertThat(original.getDifferenceJustification()).isNull();
         }
 
         @Test

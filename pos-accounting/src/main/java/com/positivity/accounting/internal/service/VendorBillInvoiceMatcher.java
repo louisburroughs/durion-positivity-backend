@@ -197,6 +197,7 @@ public class VendorBillInvoiceMatcher {
             @NonNull String invoiceReference,
             @NonNull LocalDateTime invoiceDate,
             @NonNull LocalDateTime receivedDate,
+            @NonNull String receivedBillNumber,
             @NonNull Comparison comparison,
             @NonNull String recordedBy) {
         VendorBillMatchEvidence row = new VendorBillMatchEvidence();
@@ -212,6 +213,7 @@ public class VendorBillInvoiceMatcher {
         row.setInvoiceReference(invoiceReference);
         row.setInvoiceDate(invoiceDate);
         row.setReceivedDate(receivedDate);
+        row.setReceivedBillNumber(receivedBillNumber);
         row.setReceivedTotal(comparison.receivedTotal());
         row.setBilledTotal(comparison.billedTotal());
         row.setCurrencyCode(currencyOf(bill));

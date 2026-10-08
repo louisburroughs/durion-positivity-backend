@@ -590,6 +590,7 @@ class VendorBillApprovalServiceTest {
                             eq("INV-77"),
                             eq(LocalDateTime.of(2026, 10, 1, 0, 0)),
                             eq(LocalDateTime.of(2026, 10, 1, 0, 0)),
+                            eq("INV-1"),
                             any(),
                             eq("clerk.ana"));
             verify(postingService, never()).post(any(), any(), any(), anyString());
@@ -929,8 +930,10 @@ class VendorBillApprovalServiceTest {
             bill.setProposedDebitClass(VendorBillDebitClass.GOODS);
             bill.setDifferenceClass(VendorBillDifferenceClass.FREIGHT);
             bill.setSubmissionJustification("Sent before the correction");
+            bill.setBillNumber("INV-88421");
             VendorBillMatchEvidence latest = new VendorBillMatchEvidence();
             latest.setReceivedDate(LocalDateTime.of(2026, 9, 28, 0, 0));
+            latest.setReceivedBillNumber("BILL_A1B2C3D4_20260928_0000001");
             when(evidence.findFirstByVendorBillIdOrderByRecordedAtDescMatchEvidenceIdDesc(BILL_ID))
                     .thenReturn(Optional.of(latest));
 
@@ -941,6 +944,10 @@ class VendorBillApprovalServiceTest {
             verify(matcher).restoreReceived(bill);
             assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.PENDING_RECEIPT_MATCH);
             assertThat(bill.getBillDate()).isEqualTo(LocalDateTime.of(2026, 9, 28, 0, 0));
+            assertThat(bill.getBillNumber())
+                    .as("L-new-1: the receipt's own number again, not the rejected match's invoice number")
+                    .isEqualTo("BILL_A1B2C3D4_20260928_0000001");
+            assertThat(bill.getBillNumberKey()).isEqualTo("BILLA1B2C3D4202609280000001");
             assertThat(bill.getProposedDebitClass()).isNull();
             assertThat(bill.getDifferenceClass()).isNull();
             assertThat(bill.getSubmissionJustification()).isNull();
@@ -999,6 +1006,7 @@ class VendorBillApprovalServiceTest {
         void selectionTakesTheInvoiceDateAndReleasesTheTopBill() {
             signIn("clerk.ana", APPROVE);
             goodsReceipt(VendorBillStatus.PENDING_RECEIPT_MATCH);
+            bill.setBillNumber("BILL_RECEIPT_1");
             bill.setBillDate(LocalDateTime.of(2026, 9, 28, 0, 0));
             LocalDateTime invoiceDate = LocalDateTime.of(2026, 10, 2, 0, 0);
             VendorBill top = new VendorBill(topBillId);
@@ -1038,6 +1046,7 @@ class VendorBillApprovalServiceTest {
                             eq("INV-1"),
                             eq(invoiceDate),
                             eq(LocalDateTime.of(2026, 9, 28, 0, 0)),
+                            eq("BILL_RECEIPT_1"),
                             any(),
                             eq("clerk.ana"));
             assertThat(top.getStatus()).isEqualTo(VendorBillStatus.PENDING_RECEIPT_MATCH);

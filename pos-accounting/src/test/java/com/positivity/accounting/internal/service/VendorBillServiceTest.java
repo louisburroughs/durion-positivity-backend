@@ -336,6 +336,10 @@ class VendorBillServiceTest {
             VendorBillMatchEvidence evidence = savedEvidence();
             assertThat(evidence.getInvoiceDate()).isEqualTo(INVOICE_DATE);
             assertThat(evidence.getReceivedDate()).isEqualTo(BILL_DATE_CLOSE);
+            assertThat(evidence.getReceivedBillNumber())
+                    .as("L-new-1: the number before the match, for CORRECT to put back")
+                    .isEqualTo("BILL-001");
+            assertThat(bill.getBillNumber()).isEqualTo("INV-2026-001");
             verify(duplicateGuard)
                     .refuseIfDuplicate(
                             VendorBillDuplicateGuard.Channel.MATCH,
@@ -363,6 +367,27 @@ class VendorBillServiceTest {
             assertThat(evidence.getAmountPoints()).isEqualTo(40);
             assertThat(evidence.getReceivedTotal()).isEqualByComparingTo("1300.00");
             assertThat(evidence.isWithinTolerance()).isTrue();
+        }
+
+        @Test
+        @DisplayName("L-new-2: a pending bill still named by an open ambiguous match is never matched to another"
+                + " invoice, so it is never sent for approval while its candidates are open")
+        void billWithOpenCandidatesIsSkipped() {
+            VendorBill bill = buildBill(
+                    testBillId, VendorBillStatus.PENDING_RECEIPT_MATCH, new BigDecimal("1300.00"), BILL_DATE_CLOSE);
+            bill.setPurchaseOrderId(UUID.randomUUID());
+            pending(bill);
+            when(billLineRepository.findByVendorBill_VendorBillIdOrderByLineNumber(testBillId))
+                    .thenReturn(receivedLines(testBillId));
+            when(matchCandidateRepository.findByVendorBill_VendorBillIdAndResolvedFalse(testBillId))
+                    .thenReturn(List.of(new VendorBillMatchCandidate()));
+
+            assertThatThrownBy(() -> vendorBillService.handleVendorInvoiceReceivedEvent(
+                            buildInvoiceEvent(testVendorId, new BigDecimal("1300.00"))))
+                    .isInstanceOf(VendorBillMatchNotFoundException.class);
+            assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.PENDING_RECEIPT_MATCH);
+            verify(billRepository, never()).save(any());
+            verify(evidenceRepository, never()).save(any());
         }
 
         @Test

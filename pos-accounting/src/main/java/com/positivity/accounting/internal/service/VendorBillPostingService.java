@@ -338,6 +338,16 @@ public class VendorBillPostingService {
             }
         } else {
             byLine(bill, lines, classification, debits);
+            BigDecimal residual = gross.subtract(debits.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add));
+            if (residual.abs().compareTo(VendorBillTotals.TOLERANCE_PER_BILL) > 0) {
+                // L-a: the lines' debits and the billed total are apart by more than rounding; never absorbed.
+                throw new VendorBillException(
+                        VendorBillException.Code.AP_BILL_TOTALS_UNRECONCILED,
+                        "Bill " + bill.getBillNumber() + " totals " + gross.toPlainString() + " but its lines post "
+                                + gross.subtract(residual).toPlainString() + " (difference " + residual.toPlainString()
+                                + ", more than the " + VendorBillTotals.TOLERANCE_PER_BILL.toPlainString()
+                                + " rounding allowed); correct the bill or void it");
+            }
         }
         BigDecimal rounding = balanceOnLargest(debits, gross);
         List<Leg> legs = new ArrayList<>();

@@ -145,6 +145,21 @@ class VendorBillPostingServiceTest {
         }
 
         @Test
+        @DisplayName("L-a: a goods-receipt bill whose lines post more than 0.05 away from its total is 422"
+                + " AP_BILL_TOTALS_UNRECONCILED, never absorbed; within 0.05 it is rounding")
+        void lineBillPlugIsCapped() {
+            List<VendorBillLine> lines = List.of(line(1, true, "4", "100.00", "4", "100.00"));
+            assertThatThrownBy(() -> VendorBillPostingService.legs(bill("400.06"), lines, NONE, null))
+                    .isInstanceOfSatisfying(
+                            VendorBillException.class,
+                            e -> assertThat(e.getCode())
+                                    .isEqualTo(VendorBillException.Code.AP_BILL_TOTALS_UNRECONCILED));
+            assertThat(VendorBillPostingService.entry(bill("400.05"), lines, NONE, null)
+                            .roundingAdjustment())
+                    .isEqualByComparingTo("0.05");
+        }
+
+        @Test
         @DisplayName("A bill never matched posts its received lines as billed")
         void unmatchedBillPostsReceivedAsBilled() {
             assertThat(legs(bill("400.00"), List.of(line(1, true, "4", "100.00", null, null)), NONE))
@@ -388,6 +403,21 @@ class VendorBillPostingServiceTest {
                     .containsExactly(
                             "GOODS_RECEIVED_NOT_BILLED Dr 1015.00",
                             "PURCHASE_PRICE_DIFFERENCE Dr 70.00",
+                            "ACCOUNTS_PAYABLE Cr 1085.00");
+        }
+
+        @Test
+        @DisplayName("AW47 ruling: gross 1,085.00 / net 1,000.00 / no tax with FREIGHT -> Dr 2100 1,000.00 / Dr 5060"
+                + " 85.00 / Cr 2000 1,085.00; no Dr 5050")
+        void missingTaxPostsNoPriceDifference() {
+            assertThat(legs(
+                            ediBill("1085.00", "1000.00", "0.00", 1),
+                            List.of(),
+                            GOODS,
+                            new VendorBillPostingService.Difference(VendorBillDifferenceClass.FREIGHT, null)))
+                    .containsExactly(
+                            "GOODS_RECEIVED_NOT_BILLED Dr 1000.00",
+                            "FREIGHT_IN Dr 85.00",
                             "ACCOUNTS_PAYABLE Cr 1085.00");
         }
 

@@ -39,7 +39,7 @@ COMMENT ON COLUMN public.vendor_bill.net_amount IS
     'no header amounts (a goods-receipt bill posts from its lines).';
 COMMENT ON COLUMN public.vendor_bill.tax_amount IS
     'The tax the vendor''s document states, never recalculated (AW39), signed like total_amount. US tax is part of '
-    'the cost when the bill posts. With only the net stated it is gross - net; with neither, 0 (AW47).';
+    'the cost when the bill posts. None stated is 0 (AW47).';
 COMMENT ON COLUMN public.vendor_bill.stated_line_count IS
     'Lines the vendor''s document states (EDI), at least 1: the rounding tolerance of gross vs net + tax is 0.01 per '
     'stated line, at most 0.05 per bill (AW47).';
@@ -93,6 +93,7 @@ CREATE TABLE public.vendor_bill_match_evidence (
     invoice_reference character varying(50) NOT NULL,
     invoice_date timestamp(6) without time zone NOT NULL,
     received_date timestamp(6) without time zone NOT NULL,
+    received_bill_number character varying(50) NOT NULL,
     received_total numeric(19,4) NOT NULL,
     billed_total numeric(19,4) NOT NULL,
     currency_code character varying(3) NOT NULL,

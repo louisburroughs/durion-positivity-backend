@@ -15,9 +15,9 @@ import org.jspecify.annotations.Nullable;
  * voids it.
  *
  * <p>Only a bill with the vendor's header totals has them: an EDI bill. Its net and tax are stored as stated, signed
- * like the gross; with only the gross and tax stated the net is gross - tax, with only the gross and net the tax is
- * gross - net, and with the gross alone the tax is 0 ({@link SupplierInvoiceEventsListener}), so the gap is non-zero
- * only when all three were stated.
+ * like the gross; a missing tax is 0, and a missing net is gross - tax ({@link SupplierInvoiceEventsListener}; AW47,
+ * ruling #2509 comment 6059252089). So a derived net never leaves a gap, while a stated net and gross without a tax
+ * are checked as net + 0.
  *
  * @param gross the billed gross, the payable
  * @param net the stated net

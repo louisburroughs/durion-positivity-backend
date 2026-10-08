@@ -156,8 +156,8 @@ public class VendorBill extends TenantScopedEntity {
     private BigDecimal netAmount;
 
     /**
-     * The tax the vendor's document states, never recalculated (AW39); with only the net stated, gross - net; with
-     * neither, zero (AW47). Null on a bill whose source states no header amounts.
+     * The tax the vendor's document states, never recalculated (AW39); none stated is zero (AW47). Null on a bill whose
+     * source states no header amounts.
      */
     @Column(name = "tax_amount", precision = 19, scale = 4)
     private BigDecimal taxAmount;
@@ -234,6 +234,22 @@ public class VendorBill extends TenantScopedEntity {
     public void setBillNumber(String billNumber) {
         this.billNumber = billNumber;
         this.billNumberKey = billNumber == null ? null : VendorBillNumbers.normalise(billNumber);
+    }
+
+    /**
+     * Clears what a send for approval proposed (#2509 review, L5): the submission, the proposed classification and the
+     * decided difference. A bill sent back to be checked again (CORRECT, or a re-issue moving it to MATCH_EXCEPTION)
+     * keeps none of it.
+     */
+    public void clearSubmission() {
+        this.submittedAt = null;
+        this.submittedBy = null;
+        this.submissionJustification = null;
+        this.proposedDebitClass = null;
+        this.proposedExpenseMappingKey = null;
+        this.differenceClass = null;
+        this.differenceExpenseMappingKey = null;
+        this.differenceJustification = null;
     }
 
     // Scalar compatibility accessors for journalEntryId

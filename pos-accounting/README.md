@@ -972,12 +972,12 @@ field (each field the approver gives wins; the vendor default arrives with S24),
 A header tax on a bill with lines is prorated by line net, the residual cent on the largest line.
 
 **The vendor's own totals (AW47).** An EDI bill keeps the vendor's `net_amount` and `tax_amount` as stated, signed
-like the gross: no net stated, net = gross - tax; a net and no tax, tax = gross - net; neither, net = gross and tax
-0, so only a document stating all three can disagree with itself. A gap `gross - (net + tax)` within 0.01 per
-stated line, at most 0.05 per bill (a header-only bill counts as one line), goes on the largest debit and is kept
-as `posting.roundingAdjustment`. A larger one creates the bill in `MATCH_EXCEPTION` with `statusExplanation` "The
-vendor's totals don't add up: net N + tax T ≠ total G" and `checks[]` `TOTALS_ADD_UP` = FAIL `{difference}`; submit,
-approve and `ACCEPT` then need `difference {class, expenseMappingKey?, justification}`: `FREIGHT` posts to
+like the gross. A missing tax is 0; a missing net is gross - tax, so a derived net never leaves a gap; neither stated,
+net = gross and tax 0. A stated net and gross without a tax are checked as net + 0 (ruling #2509 comment 6059252089).
+A gap `gross - (net + tax)` within 0.01 per stated line, at most 0.05 per bill (a header-only bill counts as one
+line), goes on the largest debit and is kept as `posting.roundingAdjustment`. A larger one creates the bill in
+`MATCH_EXCEPTION` with `statusExplanation` "The vendor's totals don't add up: net N + tax T ≠ total G" and
+`checks[]` `TOTALS_ADD_UP` = FAIL `{difference}`; submit, approve and `ACCEPT` then need `difference {class, expenseMappingKey?, justification}`: `FREIGHT` posts to
 `FREIGHT_IN` (5060), `GOODS` to 2100, `EXPENSE` to the `EXPENSE_<CODE>` key given, `PRICE_DIFFERENCE` to 5050, a
 negative gap as a credit. Without it: 422 `AP_BILL_TOTALS_UNRECONCILED`, nothing written; `CORRECT` and `VOID`
 remain. A difference given at submission is kept on the bill (`approval.proposedDifference`) and posts at approval

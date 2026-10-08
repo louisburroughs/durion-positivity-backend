@@ -109,6 +109,13 @@ public class VendorBillMatchEvidence extends TenantScopedEntity {
     @Column(name = "received_date", nullable = false, updatable = false)
     private LocalDateTime receivedDate;
 
+    /**
+     * The bill's number before the match: the receipt's own (#2509 review, L-new-1). A match gives the bill the
+     * invoice's number; CORRECT puts this one back, so a later EDI fact never finds the bill as its live original.
+     */
+    @Column(name = "received_bill_number", length = 50, nullable = false, updatable = false)
+    private String receivedBillNumber;
+
     /** What the receipt put on the bill before the match: the received lines' total. */
     @Column(name = "received_total", precision = 19, scale = 4, nullable = false, updatable = false)
     private BigDecimal receivedTotal;

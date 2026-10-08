@@ -804,8 +804,9 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
         UUID product = UUIDv7Generator.generate();
         LocalDate received = today().minusDays(3);
         signIn("receiving.dock", "accounting:ap:pay");
-        UUID billId = asTenant(tenant, () -> vendorBills.handleGoodsReceivedEvent(receipt(vendor, product, received)))
-                .getVendorBillId();
+        VendorBillResponse receipt =
+                asTenant(tenant, () -> vendorBills.handleGoodsReceivedEvent(receipt(vendor, product, received)));
+        UUID billId = receipt.getVendorBillId();
         VendorInvoiceReceivedEvent overpriced = invoice(vendor, product, today().minusDays(1));
         overpriced.getLineItems().get(0).setUnitPrice(new BigDecimal("110.00"));
         VendorBillResponse exception = asTenant(tenant, () -> vendorBills.handleVendorInvoiceReceivedEvent(overpriced));
@@ -822,6 +823,16 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
         assertThat(corrected.getStatus()).isEqualTo(VendorBillStatus.PENDING_RECEIPT_MATCH);
         assertThat(corrected.getTotalAmount()).isEqualByComparingTo("400.00");
         assertThat(corrected.getBillDate()).isEqualTo(received.atTime(9, 30));
+        assertThat(corrected.getBillNumber())
+                .as("L-new-1: the receipt's own number again; the rejected invoice number no longer names it")
+                .isEqualTo(receipt.getBillNumber());
+        assertThat(new JdbcTemplate(ownerDataSource())
+                        .queryForObject(
+                                "SELECT count(*) FROM vendor_bill WHERE tenant_id = ? AND bill_number = ?",
+                                Integer.class,
+                                tenant,
+                                overpriced.getInvoiceReference()))
+                .isZero();
         assertThat(corrected.getLines()).singleElement().satisfies(line -> {
             assertThat(line.billedQuantity()).isNull();
             assertThat(line.billedUnitPrice()).isNull();
