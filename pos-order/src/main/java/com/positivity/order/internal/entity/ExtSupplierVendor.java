@@ -4,6 +4,7 @@ import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
@@ -15,6 +16,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * pos-order's copy of one pos-supplier vendor (CAP:550 S24, #2517; ADR-0044 R3; ADR-0070 Decision 7).
@@ -25,6 +28,7 @@ import lombok.NoArgsConstructor;
  * a purchase order is created, approved, revised to another vendor or transmitted. No tax registration is copied.
  */
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "ext_supplier_vendor")
 @Data
 @NoArgsConstructor
@@ -59,6 +63,7 @@ public class ExtSupplierVendor extends TenantScopedEntity {
     @Column(name = "aggregate_version", nullable = false)
     private long aggregateVersion;
 
+    @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 

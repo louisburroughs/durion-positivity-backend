@@ -81,8 +81,11 @@ class VendorDirectoryServiceImplTest {
     void setUp() {
         service = new VendorDirectoryServiceImpl(
                 Clock.fixed(NOW, ZoneOffset.UTC), vendors, settings, bills, auditLogs, categories, keys);
-        SecurityContextHolder.getContext()
-                .setAuthentication(new UsernamePasswordAuthenticationToken("q.controller", "n/a", List.of()));
+        UsernamePasswordAuthenticationToken caller =
+                new UsernamePasswordAuthenticationToken("q.controller", "n/a", List.of());
+        caller.setDetails(java.util.Map.of(
+                com.positivity.security.common.GatewaySecurityConstants.DETAIL_USERNAME, "q.controller"));
+        SecurityContextHolder.getContext().setAuthentication(caller);
         when(vendors.findById(VENDOR)).thenReturn(Optional.of(vendor("ACTIVE", 3)));
         when(vendors.lockByVendorId(VENDOR)).thenReturn(Optional.of(vendor("ACTIVE", 3)));
         when(settings.findByVendorId(VENDOR)).thenReturn(Optional.empty());

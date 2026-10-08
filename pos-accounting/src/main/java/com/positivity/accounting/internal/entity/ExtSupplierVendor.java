@@ -4,6 +4,7 @@ import com.positivity.shared.id.AssignedIdentifier;
 import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
@@ -18,6 +19,8 @@ import lombok.Setter;
 import lombok.ToString;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Accounting's copy of a pos-supplier vendor (CAP:550 S24, #2517; SPEC-accounting-workspace §4.9 "Accounting's copy";
@@ -35,6 +38,7 @@ import org.hibernate.type.SqlTypes;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true, callSuper = false)
 @ToString(exclude = {"taxRegistrations", "remitTo"})
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "ext_supplier_vendor")
 public class ExtSupplierVendor extends TenantScopedEntity {
 
@@ -97,6 +101,7 @@ public class ExtSupplierVendor extends TenantScopedEntity {
     @Column(name = "aggregate_version", nullable = false)
     private long aggregateVersion;
 
+    @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 

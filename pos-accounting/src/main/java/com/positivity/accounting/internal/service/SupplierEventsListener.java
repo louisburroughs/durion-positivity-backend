@@ -456,10 +456,16 @@ public class SupplierEventsListener {
             try {
                 release(holdId, true);
             } catch (RuntimeException e) {
+                // The vendor fact is committed and marked: rethrowing would only redeliver a fact the event-id guard
+                // skips. Whether the failure is transient or not, the hold stays HELD and SupplierInvoiceHoldSweep (or
+                // the vendor's next fact) retries the release; the classification only says which it was.
+                boolean transientFailure = RetryableConsumerFailures.isRetryable(e);
                 log.warn(
-                        "Releasing held supplier invoice holdId={} of vendor {} failed; it stays held and is retried",
+                        "Releasing held supplier invoice holdId={} of vendor {} failed ({}); it stays held and is"
+                                + " retried",
                         holdId,
                         vendorId,
+                        transientFailure ? "transient" : "not transient",
                         e);
             }
         }
