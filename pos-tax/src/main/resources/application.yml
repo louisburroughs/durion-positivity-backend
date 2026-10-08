@@ -123,6 +123,25 @@ pos:
           - { code: GST_HST, regions: [] }
           - { code: QST, regions: [QC] }
         # rates: none shipped (OI-4)
+        # CAP:550 S32b. The regime whose shape a supplier's number must match (placeholder, OI-4).
+        supplier-registration-regime: GST_HST
+        # Evidence rules in the profile's currency (placeholder threshold and scope, OI-4; no $500 tier).
+        # Rows: {rule, from-amount, applies-to[], effective-from?, effective-to?}.
+        evidence-rules:
+          - { rule: SUPPLIER_REGISTRATION_NUMBER, from-amount: 100.00, applies-to: [DRAWER_RECEIPT, VENDOR_BILL] }
+    # Registration-number shapes (CAP:550 S32b; ADR-0072 Decision 1). A SECURITY CONTROL: shipped configuration,
+    # changed only by a reviewed commit, never per tenant, by a tenant, by a tax provider or at runtime (never
+    # bind these from the environment). `#` is one digit, A-Z stand for themselves; a shape must contain a letter.
+    # Every regime a country profile declares needs a shape, or startup fails. Placeholders held for expert
+    # advice (OI-4).
+    registration:
+      formats:
+        - { regime: GST_HST, shape: "#########RT####" }
+        - { regime: QST, shape: "##########TQ####" }
+    # Stated-tax plausibility (CAP:550 S32b, AW55): minor units added to each stated amount's maximum
+    # (placeholder, OI-4).
+    plausibility:
+      tolerance-minor-units: 5
 
 logging:
   level:

@@ -35,12 +35,20 @@ Tax calculation service for the Durion Positivity ETSMS platform. Supports two o
 - `GET /v1/tax/rates` — rate-only lookup for an address (`tax:rates:view`)
 - `GET /v1/tax/tax-types?countryCode=` — a country's configured tax types, regimes and currency (`tax:rates:view`, service
   authority; CAP:550 S32a)
+- `GET /v1/tax/evidence-rules?countryCode=&asOf=` — a country's evidence rules in effect on a date (`tax:rates:view`, service
+  authority; CAP:550 S32b)
+- `POST /v1/tax/plausibility-checks` — the stated-tax plausibility check of a receipt (`tax:rates:view`, service authority;
+  CAP:550 S32b); the supplier's registration number is never echoed or logged
 - `POST /v1/tax/transactions/{referenceId}/commit` and `/void` — provider document lifecycle (`tax:commit`)
 - `GET /v1/tax/mode` — returns current operating mode (`test` or `production`)
 
 Error codes beyond validation: 422 `TAX_JURISDICTION_NOT_CONFIGURED` (a profiled country has no rate row for the region on
 the date), 422 `CURRENCY_NOT_SUPPORTED` (a calculation for a profiled country states another currency than the profile's;
-ADR-0067 PC-9) and 501 `TAX_RATE_LOOKUP_UNSUPPORTED` (rate lookup on a deployment-wide provider other than test mode).
+ADR-0067 PC-9), 422 `TAX_AMOUNT_IMPLAUSIBLE` (a stated amount on a plausibility check is implausible; `fieldErrors` name each
+amount with its maximum) and 501 `TAX_RATE_LOOKUP_UNSUPPORTED` (rate lookup on a deployment-wide provider other than test mode).
+The plausibility check answers 400 `VALIDATION_ERROR` with `fieldErrors` for a country without a profile, a currency other than
+the profile's, an amount finer than the currency's minor unit, a negative amount, or a regime not declared for the country or
+stated twice; a field error never carries the rejected value.
 
 ## Provider plug-ins
 
@@ -54,7 +62,7 @@ switches and makes the default map its fallback.
 | --- | --- | --- |
 | `US_SELF` | The test-mode calculator: configured placeholder rates (stubs) | Exists, as test mode |
 | `<country>_SELF` | The configuration-driven self-hosted plug-in, one per country profiled under `pos.tax.countries` (`SelfHostedTaxPlugin`): typed placeholder rates from the profile's rows; commit and void are logged no-ops | Exists (CAP:550 S32a, #2636), routed by the per-country default |
-| `CA_SELF` | The first configured country's self-hosted plug-in (typed rates today; registration status, number shape, evidence rule and plausibility follow in S32b–S32c) | Exists (#2636), routed by the per-country default `pos.tax.default-providers.CA`; no rate ships |
+| `CA_SELF` | The first configured country's self-hosted plug-in (typed rates; number shape, evidence rule and plausibility from S32b; registration status follows in S32c) | Exists (#2636), routed by the per-country default `pos.tax.default-providers.CA`; no rate ships |
 | `AVALARA` | The AvaTax adapter (`AvalaraTaxProvider`) | Exists; no environment enables it |
 
 - **Binding.** A tenant-scoped `tax_provider_binding` names the plug-in per tenant and country (`countryCode`, `providerId`,
@@ -101,9 +109,9 @@ what the stub answers today, and which questions wait for expert advice.
 | Use tax (planned) | `/calculate` with `calculationType = USE` (AW44; louisburroughs/durion-positivity-backend#2604) | Priced exactly like `SALE`; test mode always answers | pos-accounting | Which purchases owe use tax, per-state rules, filing (louisburroughs/durion-positivity-backend#2599) |
 | Typed rates (per-country profile) | `GET /v1/tax/rates`, `POST /v1/tax/calculate` and `GET /v1/tax/tax-types` for a profiled country; rate rows and line rows carry `taxType` and `inputTaxRecoverable` (AW57; CAP:550 S32a, louisburroughs/durion-positivity-backend#2636) | Built. The country's plug-in answers in every provider mode from its configured rows, `source = STUB`: one typed component or row per tax type in effect for the region on the date, HALF_UP at the currency exponent per row; no row → 422 `TAX_JURISDICTION_NOT_CONFIGURED`, never another country's rates. An exemption claim is taxed and flagged. **No rate ships**: the first configured country (`CA`) has placeholder tax types, regimes and recoverability only. Other countries (the US) are unchanged, with both fields null | pos-accounting, pos-invoice (the `taxType` hand-off) | Rates, which supplies are taxable or exempt, what is recoverable, how taxes stack, the tax-type list and regime grouping |
 | Tax registration status (planned) | A tenant's registration per regime (`GST_HST`, `QST`) as of a date (AW49, AW57) | Effective-dated, overlap refused; written only by pos-accounting, the front door (AW59); published as `tax.registration.changed` by outbox (AW58) | pos-accounting, pos-order (replicas) | Registration rules |
-| Registration-number shape (planned) | `wellFormed` for a supplier's number (AW53, AW57) | A configurable pattern; by default any non-blank value is well formed | pos-accounting | Number formats |
-| Evidence rule (planned) | `GET /v1/tax/evidence-rules?countryCode=CA&asOf=` (AW53, AW57) | One configured row: from 100.00 CAD, `appliesTo` drawer receipts and vendor bills | pos-accounting, pos-order | The threshold, the $500 tier, what is compared, whether bills are in scope |
-| Receipt-tax plausibility (planned) | `POST /v1/tax/plausibility-checks` (AW55, AW57) | Per tax: maximum `T × r / (1 + r)` rounded up to the minor unit, plus a tolerance (default 5 minor units, configurable), `r` from the Canadian rates stub; no combined bound. A bookkeeping control against typing errors, not a tax rule | pos-order (drawer entry) | How taxes stack on one receipt |
+| Registration-number shape | `wellFormed(regime, number)`, reached through `POST /v1/tax/plausibility-checks` and the tenant-registration writes (`RegistrationNumberShapes`; CAP:550 S32b, louisburroughs/durion-positivity-backend#2637) | Configured template per regime (`#` digit, letters literal); no shape → startup fails; a shape without a letter → startup fails; nothing passes by default; shapes change only by a reviewed commit | pos-order (drawer entry), pos-tax registrations (via pos-accounting) | Number formats |
+| Evidence rule | `GET /v1/tax/evidence-rules?countryCode=&asOf=` (`tax:rates:view`, service authority; AW53; CAP:550 S32b, #2637) | Built. `pos.tax.countries.<country>.evidence-rules`, `source = STUB`: the rules in effect on `asOf` (default today), amounts in the profile's currency; a country with none → an empty list. The first configured country (`CA`) ships one placeholder row: `SUPPLIER_REGISTRATION_NUMBER` from 100.00, `appliesTo [DRAWER_RECEIPT, VENDOR_BILL]`, undated; no $500 tier. A caller that cannot obtain the rule retries or holds, never treats it as absent (AW49) | pos-accounting, pos-order | The threshold, the $500 tier, what is compared, whether bills are in scope |
+| Receipt-tax plausibility | `POST /v1/tax/plausibility-checks` (`tax:rates:view`, service authority; AW55; CAP:550 S32b, #2637) | Built, keyed by regime. Per stated amount: 422 `TAX_AMOUNT_IMPLAUSIBLE` when it, or the sum of all, reaches the total `T`, or when it is above `T × r / (1 + r)` rounded up to the minor unit plus `pos.tax.plausibility.tolerance-minor-units` (placeholder 5); `r` is the regime's one row in effect for the region on `asOf`, `0` for a regime the region does not levy; no combined bound. A region with no row → `RATE_UNAVAILABLE` (only the total check applies). Also answers `supplierRegistrationRequired` (the evidence rule for `DRAWER_RECEIPT`) and `supplierRegistrationNumberWellFormed` (the country's `supplier-registration-regime` shape, or null). Pure: no tenant data, no state, no event; the number is never echoed, logged or stored. A bookkeeping control against typing errors, not a tax rule | pos-order (drawer entry) | How taxes stack on one receipt |
 
 ## Configuration
 
@@ -111,6 +119,10 @@ what the stub answers today, and which questions wait for expert advice.
 | ---------------------------------------- | ---------------- | ---------------------------------------- |
 | `pos.tax.default-providers.<country>`    | `CA: CA_SELF`    | Interim per-country default plug-in (see below) |
 | `pos.tax.countries.<country>`            | `CA` placeholders, no rates | Per-country tax profile (see below) |
+| `pos.tax.countries.<country>.supplier-registration-regime` | `CA: GST_HST` | Regime whose shape a supplier's number must match (S32b) |
+| `pos.tax.countries.<country>.evidence-rules` | `CA`: one placeholder row | Evidence rules (S32b, see below) |
+| `pos.tax.registration.formats`           | `GST_HST`, `QST` placeholders | Registration-number shape per regime; shipped configuration only (S32b, see below) |
+| `pos.tax.plausibility.tolerance-minor-units` | `5` | Minor units added to each plausible maximum; required (S32b) |
 | `pos.tax.test-mode.enabled`              | `false`          | Enable flat-rate test mode               |
 | `pos.tax.test-mode.default-rates.STATE`  | `0.0725`         | State rate in test mode                  |
 | `pos.tax.test-mode.default-rates.COUNTY` | `0.01`           | County rate in test mode                 |
@@ -195,6 +207,43 @@ unbracketed map key, so a code would be silently mangled. Country codes stay map
   and void need no profile); only rows priced by the switch fall back to it. No new column was needed: `provider` already names the provider that owns each document.
 - **Callers (ADR-0021 §3).** pos-order, pos-invoice and pos-accounting call computation and the tax-types read directly with the
   service authority; there is no gateway route.
+
+### Registration shapes, evidence rules and plausibility (CAP:550 S32b)
+
+Every value is a **placeholder held for expert advice** (OI-4). Code names no country, regime or tax type; a new country is
+configuration only.
+
+```yaml
+pos.tax:
+  registration:
+    formats:                    # a list with an explicit regime code (a map key would lose its "_")
+      - { regime: R_1, shape: "XX#####" }   # '#' = one digit, A-Z literal; at least one letter
+  plausibility:
+    tolerance-minor-units: 5
+  countries:
+    XX:
+      supplier-registration-regime: R_1     # optional; a country without one answers wellFormed = null
+      evidence-rules:                       # in the profile's currency
+        - { rule: SUPPLIER_REGISTRATION_NUMBER, from-amount: 100.00, applies-to: [DRAWER_RECEIPT, VENDOR_BILL],
+            effective-from: 2026-01-01, effective-to: 2026-12-31 }   # dates optional, inclusive
+```
+
+- **Shapes are a security control** (ADR-0072 Decision 1, conditions (a) and (b); Security decision on durion#571). A number is
+  trimmed and upper-cased, spaces and hyphens are removed, and it must then equal the shape character for character. A regime
+  with no shape refuses every number. A shape is the service's shipped configuration, changed only by a reviewed commit: never
+  per tenant, by a tenant, by a tax provider or at runtime. Startup fails when `pos.tax.registration` is set by any source other
+  than a classpath `application*.yml` (an environment variable, a system property, a command-line argument or an external file).
+  pos-tax never logs, stores or returns a number that fails.
+- **Startup check, shapes** (`RegistrationNumberShapes`). Startup fails, naming the property, when a regime declared in any
+  country profile has no shape; a shape is blank, longer than 32, contains a character other than `#` or `A`–`Z`, or contains no
+  letter (the only kind that can match bare digits, so a nine-digit SSN/SIN/EIN/ITIN shape cannot be configured); a `regime` code
+  is malformed or has two shapes; or a `supplier-registration-regime` is not declared for its country.
+- **Startup check, evidence rules** (`TaxEvidenceRules`). Startup fails, naming the property, on an unknown `rule`
+  (`SUPPLIER_REGISTRATION_NUMBER`) or `applies-to` value (`DRAWER_RECEIPT`, `VENDOR_BILL`); a `from-amount` that is missing, not
+  above zero or finer than the currency's minor unit; an empty `applies-to`; an end before its start; or two rows of one rule
+  and document type in effect on the same date.
+- **Plausibility** (`TaxPlausibilityService`) also fails startup without a tolerance of zero or more. Its counter
+  `pos.tax.plausibility.outcome` is tagged by `outcome` only (`PLAUSIBLE`, `RATE_UNAVAILABLE`, `TAX_AMOUNT_IMPLAUSIBLE`).
 
 ### Rounding reconciliation
 

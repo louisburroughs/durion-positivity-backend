@@ -92,6 +92,59 @@ public class TaxProperties {
     private Map<String, CountryProfile> countries = new LinkedHashMap<>();
 
     /**
+     * Registration-number shapes (CAP:550 S32b). A shape is a security control (ADR-0072 Decision 1,
+     * conditions (a) and (b)): it is the service's shipped configuration, changed only by a reviewed
+     * commit, and never set per tenant, by a tenant, by a tax provider or at runtime.
+     */
+    private Registration registration = new Registration();
+
+    /**
+     * The stated-tax plausibility check (CAP:550 S32b, AW55): a bookkeeping control against typing
+     * errors, not a tax rule.
+     */
+    private Plausibility plausibility = new Plausibility();
+
+    /**
+     * Registration-number configuration (CAP:550 S32b).
+     */
+    @Data
+    public static class Registration {
+        /**
+         * One shape per regime, as a list with an explicit {@code regime} code (a map key would lose its
+         * underscores under relaxed binding). Every regime a country profile declares needs one, or
+         * startup fails. Never {@code null}.
+         */
+        private List<RegistrationFormat> formats = new ArrayList<>();
+    }
+
+    /**
+     * The shape a regime's registration numbers must match (CAP:550 S32b).
+     */
+    @Data
+    public static class RegistrationFormat {
+        /** The regime code, as declared under {@code pos.tax.countries.<country>.regimes}. */
+        private String regime;
+
+        /**
+         * A template: {@code #} stands for one digit and {@code A}-{@code Z} stand for themselves. It must
+         * contain at least one letter, so no shape can match bare digits.
+         */
+        private String shape;
+    }
+
+    /**
+     * Plausibility-check configuration (CAP:550 S32b).
+     */
+    @Data
+    public static class Plausibility {
+        /**
+         * Minor units added to each stated amount's maximum. A placeholder held for expert advice; no
+         * default in code, so startup fails when it is not configured.
+         */
+        private Integer toleranceMinorUnits;
+    }
+
+    /**
      * One country's tax profile (CAP:550 S32a).
      */
     @Data
@@ -114,6 +167,39 @@ public class TaxProperties {
 
         /** Effective-dated rate rows. None ship; tests and dev use fixtures. Never {@code null}. */
         private List<RateRow> rates = new ArrayList<>();
+
+        /**
+         * The regime whose shape a supplier's registration number must match (CAP:550 S32b); blank when
+         * the country accepts no supplier number.
+         */
+        private String supplierRegistrationRegime;
+
+        /**
+         * Effective-dated evidence rules (CAP:550 S32b, AW53), in the profile's currency. Placeholders
+         * held for expert advice. Never {@code null}.
+         */
+        private List<EvidenceRuleRow> evidenceRules = new ArrayList<>();
+    }
+
+    /**
+     * An evidence rule: from which amount a document type needs a piece of evidence (CAP:550 S32b).
+     */
+    @Data
+    public static class EvidenceRuleRow {
+        /** The evidence required, an {@code EvidenceRule} code. */
+        private String rule;
+
+        /** The amount, tax included, from which the rule applies; must be above zero. */
+        private BigDecimal fromAmount;
+
+        /** The document types the rule applies to, {@code EvidenceDocumentType} codes; never empty. */
+        private List<String> appliesTo = new ArrayList<>();
+
+        /** Inclusive first date the rule is in effect; {@code null} for always. */
+        private LocalDate effectiveFrom;
+
+        /** Inclusive last date the rule is in effect; {@code null} for open-ended. */
+        private LocalDate effectiveTo;
     }
 
     /**

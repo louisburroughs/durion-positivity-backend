@@ -14,13 +14,26 @@ import org.springframework.boot.context.properties.source.MapConfigurationProper
  * Fixtures are bound through Spring's {@link Binder} from flat property maps — exactly as
  * {@code application.yml} is — so a fixture proves a country works from configuration alone.
  */
-final class TaxProfileFixtures {
+public final class TaxProfileFixtures {
 
     /** First configured country fixture: four tax types, two regimes, fake rows. Not tax law. */
-    static final Map<String, String> FIRST_COUNTRY = firstCountry();
+    public static final Map<String, String> FIRST_COUNTRY = firstCountry();
 
     /** A made-up country ({@code ZZ}, ISO user-assigned) with a zero-decimal currency. Not tax law. */
-    static final Map<String, String> MADE_UP_COUNTRY = madeUpCountry();
+    public static final Map<String, String> MADE_UP_COUNTRY = madeUpCountry();
+
+    /**
+     * The CAP:550 S32b stubs of the first country: registration shapes for its two regimes, its supplier
+     * regime, one evidence rule (from 100.00, drawer receipts and vendor bills) and a 5-minor-unit
+     * plausibility tolerance. Placeholders, not tax law.
+     */
+    public static final Map<String, String> FIRST_COUNTRY_STUBS = firstCountryStubs();
+
+    /**
+     * The CAP:550 S32b stubs of the made-up country {@code ZZ}: a shape for its one regime (with the
+     * plausibility tolerance), its supplier regime and one evidence rule. Not tax law.
+     */
+    public static final Map<String, String> MADE_UP_COUNTRY_STUBS = madeUpCountryStubs();
 
     private TaxProfileFixtures() {}
 
@@ -31,7 +44,7 @@ final class TaxProfileFixtures {
      * @return the bound properties, test mode enabled with a placeholder US default rate
      */
     @SafeVarargs
-    static TaxProperties bind(Map<String, String>... sources) {
+    public static TaxProperties bind(Map<String, String>... sources) {
         Map<String, String> merged = new LinkedHashMap<>();
         merged.put("pos.tax.test-mode.enabled", "true");
         merged.put("pos.tax.test-mode.default-rates.STATE", "0.0725");
@@ -78,6 +91,37 @@ final class TaxProfileFixtures {
         p.put(c + "regimes[0].code", "R_1");
         p.put(c + "regimes[0].regions", "");
         row(p, c, 0, "Z1", "ZZ_LEVY", "0.07", "2020-01-01", null);
+        return Map.copyOf(p);
+    }
+
+    private static Map<String, String> firstCountryStubs() {
+        Map<String, String> p = new LinkedHashMap<>();
+        p.put("pos.tax.registration.formats[0].regime", "GST_HST");
+        p.put("pos.tax.registration.formats[0].shape", "#########RT####");
+        p.put("pos.tax.registration.formats[1].regime", "QST");
+        p.put("pos.tax.registration.formats[1].shape", "##########TQ####");
+        p.put("pos.tax.plausibility.tolerance-minor-units", "5");
+        String c = "pos.tax.countries.CA.";
+        p.put(c + "supplier-registration-regime", "GST_HST");
+        p.put(c + "evidence-rules[0].rule", "SUPPLIER_REGISTRATION_NUMBER");
+        p.put(c + "evidence-rules[0].from-amount", "100.00");
+        p.put(c + "evidence-rules[0].applies-to[0]", "DRAWER_RECEIPT");
+        p.put(c + "evidence-rules[0].applies-to[1]", "VENDOR_BILL");
+        return Map.copyOf(p);
+    }
+
+    private static Map<String, String> madeUpCountryStubs() {
+        Map<String, String> p = new LinkedHashMap<>();
+        // A made-up shape: two letters, five digits.
+        p.put("pos.tax.registration.formats[0].regime", "R_1");
+        p.put("pos.tax.registration.formats[0].shape", "ZZ#####");
+        p.put("pos.tax.plausibility.tolerance-minor-units", "5");
+        String c = "pos.tax.countries.ZZ.";
+        p.put(c + "supplier-registration-regime", "R_1");
+        p.put(c + "evidence-rules[0].rule", "SUPPLIER_REGISTRATION_NUMBER");
+        p.put(c + "evidence-rules[0].from-amount", "1000");
+        p.put(c + "evidence-rules[0].applies-to[0]", "DRAWER_RECEIPT");
+        p.put(c + "evidence-rules[0].effective-from", "2026-01-01");
         return Map.copyOf(p);
     }
 
