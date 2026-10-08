@@ -533,6 +533,7 @@ class APPaymentPostingPostgresIT extends PostgresTenancyTestBase {
             release.countDown();
             APPaymentResponse payment = inFlight.get(60, TimeUnit.SECONDS);
             assertThat(payment.getStatus()).isEqualTo(APPaymentStatus.GL_POST_PENDING);
+            verify(gateway, org.mockito.Mockito.times(1)).executePayment(any());
             assertThat(count(tenant, "ap_payment", "true")).isEqualTo(1);
             assertThat(billStatus(tenant, paying.getVendorBillId())).isEqualTo("APPROVED");
         } finally {

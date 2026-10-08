@@ -115,32 +115,36 @@ public class OutboxServiceImpl implements OutboxService {
      */
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void markAsFailed(@NonNull UUID outboxId, @NonNull String errorMsg, int maxRetries) {
-        outboxRepository.findById(outboxId).ifPresent(outbox -> {
-            outbox.setRetryCount(outbox.getRetryCount() + 1);
-            outbox.setLastError(errorMsg);
-            outbox.setLastAttemptAt(Instant.now(clock));
+    public boolean markAsFailed(@NonNull UUID outboxId, @NonNull String errorMsg, int maxRetries) {
+        return outboxRepository
+                .findById(outboxId)
+                .map(outbox -> {
+                    outbox.setRetryCount(outbox.getRetryCount() + 1);
+                    outbox.setLastError(errorMsg);
+                    outbox.setLastAttemptAt(Instant.now(clock));
 
-            if (outbox.getRetryCount() >= maxRetries) {
-                outbox.setStatus(OutboxStatus.FAILED);
-                log.error(
-                        "Event publication failed after {} retries | outboxId={} | eventId={} | error={}",
-                        maxRetries,
-                        outboxId,
-                        outbox.getEventId(),
-                        errorMsg);
-            } else {
-                log.warn(
-                        "Event publication failed (retry {}/{}) | outboxId={} | eventId={} | error={}",
-                        outbox.getRetryCount(),
-                        maxRetries,
-                        outboxId,
-                        outbox.getEventId(),
-                        errorMsg);
-            }
+                    if (outbox.getRetryCount() >= maxRetries) {
+                        outbox.setStatus(OutboxStatus.FAILED);
+                        log.error(
+                                "Event publication failed after {} retries | outboxId={} | eventId={} | error={}",
+                                maxRetries,
+                                outboxId,
+                                outbox.getEventId(),
+                                errorMsg);
+                    } else {
+                        log.warn(
+                                "Event publication failed (retry {}/{}) | outboxId={} | eventId={} | error={}",
+                                outbox.getRetryCount(),
+                                maxRetries,
+                                outboxId,
+                                outbox.getEventId(),
+                                errorMsg);
+                    }
 
-            outboxRepository.save(outbox);
-        });
+                    outboxRepository.save(outbox);
+                    return outbox.getStatus() == OutboxStatus.FAILED;
+                })
+                .orElse(false);
     }
 
     /**

@@ -354,10 +354,11 @@ public class ArchitectureTest {
             "com.positivity.accounting.internal.service.APPaymentPostingService",
             "com.positivity.accounting.internal.service.JournalEntryServiceImpl");
 
-    private static final DescribedPredicate<JavaCall<?>> RECORDED_OVERRIDE_CALL =
+    /** A call or a method reference (an access) to either entry point. */
+    private static final DescribedPredicate<com.tngtech.archunit.core.domain.JavaAccess<?>> RECORDED_OVERRIDE_CALL =
             new DescribedPredicate<>("post under an override recorded earlier") {
                 @Override
-                public boolean test(JavaCall<?> input) {
+                public boolean test(com.tngtech.archunit.core.domain.JavaAccess<?> input) {
                     return RECORDED_OVERRIDE_METHODS.contains(input.getName());
                 }
             };
@@ -378,7 +379,7 @@ public class ArchitectureTest {
                 }
             })
             .should()
-            .callMethodWhere(RECORDED_OVERRIDE_CALL)
+            .accessTargetWhere(RECORDED_OVERRIDE_CALL)
             .because("an override recorded on the AP pay command is the payer's authority; only the AP payment's"
                     + " outbox delivery applies it (ruling 5 of #2603; a retry never does, ruling 1 of 2026-10-08)");
 

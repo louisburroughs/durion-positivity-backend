@@ -174,11 +174,10 @@ public class AccountingPeriodGate {
 
         String periodCode = YearMonth.from(date).toString();
 
-        // Locked read (FOR UPDATE): holding the period row until the posting
-        // transaction ends closes the gate-vs-close window — a concurrent
-        // closePeriod updates this row and must wait for the in-flight
-        // posting (or, having committed first, is seen here as CLOSED). A
-        // missing row counts as OPEN; there is nothing to lock.
+        // The period read is the caller's: a posting reads it FOR UPDATE, holding the row until its transaction ends,
+        // which closes the gate-vs-close window (a concurrent closePeriod updates this row and waits for the posting,
+        // or, having committed first, is seen here as CLOSED); the AP pay command's check before the gateway reads it
+        // unlocked (assertPaymentDateAllowed). A missing row counts as OPEN; there is nothing to lock.
         boolean periodOpen = periodRead
                 .apply(periodCode)
                 .map(period -> period.getStatus() == AccountingPeriodStatus.OPEN)

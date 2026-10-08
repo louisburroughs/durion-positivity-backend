@@ -108,7 +108,9 @@ public class APPaymentResponse {
     @Nullable
     @Schema(
             description = "Why the posting was refused, as its code (GL_MAPPING_NOT_CONFIGURED, PERIOD_CLOSED,"
-                    + " PERIOD_HARD_LOCKED, ACCOUNTING_TIME_ZONE_UNSET) while the payment is GL_POST_FAILED",
+                    + " PERIOD_HARD_LOCKED, ACCOUNTING_TIME_ZONE_UNSET, GL_ACCOUNT_NOT_ACTIVE) or GL_POST_RETRIES_EXHAUSTED"
+                    + " (the outbox gave up on a transient failure) while the payment is GL_POST_FAILED; in every case"
+                    + " gl-posting-retry is the remedy once the cause is fixed",
             example = "GL_MAPPING_NOT_CONFIGURED")
     @JsonProperty("glPostError")
     private String glPostError;
