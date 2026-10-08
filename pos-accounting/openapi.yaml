@@ -523,7 +523,7 @@ paths:
 
         Emits an AP_PAYMENT_EXECUTE event; the call is idempotent on paymentRef, replaying the same ref with the same payload (the bank account compared as resolved) as a 200 instead of paying twice, and a gateway failure or timeout leaves no payment behind, so the same paymentRef is simply sent again.
 
-        Returns 400 VALIDATION_ERROR for a malformed body, an unknown currency code, a refused allocation or fieldErrors[bankAccountId], 403 AP_PAYMENT_SELF_APPROVED_BILL, 409 IDEMPOTENCY_CONFLICT, LOCK_TIMEOUT or VENDOR_PAYMENT_DETAILS_CHANGED (naming each bill and the vendor number), 422 AP_PAYMENT_METHOD_NOT_SUPPORTED, CURRENCY_NOT_SUPPORTED, VENDOR_NOT_FOUND, VENDOR_INACTIVE, ACCOUNTING_TIME_ZONE_UNSET, PERIOD_HARD_LOCKED, PERIOD_CLOSED or GL_MAPPING_NOT_CONFIGURED, and 500 PAYMENT_GATEWAY_FAILURE when the gateway fails or times out.
+        Returns 400 VALIDATION_ERROR for a malformed body, an unknown currency code, a refused allocation or fieldErrors[bankAccountId], 403 AP_PAYMENT_SELF_APPROVED_BILL, 409 IDEMPOTENCY_CONFLICT, LOCK_TIMEOUT or VENDOR_PAYMENT_DETAILS_CHANGED (naming each bill and the vendor number), 422 AP_PAYMENT_METHOD_NOT_SUPPORTED, CURRENCY_NOT_SUPPORTED, VENDOR_INACTIVE, ACCOUNTING_TIME_ZONE_UNSET, PERIOD_HARD_LOCKED, PERIOD_CLOSED or GL_MAPPING_NOT_CONFIGURED, and 500 PAYMENT_GATEWAY_FAILURE when the gateway fails or times out, and 503 VENDOR_REPLICATION_PENDING (Retry-After) when the vendor is not in the copy yet.
 
         '
       operationId: executeApPayment
@@ -584,13 +584,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'Refused before the gateway, in this order: AP_PAYMENT_METHOD_NOT_SUPPORTED (CREDIT_CARD, OTHER), CURRENCY_NOT_SUPPORTED (not the functional currency), VENDOR_NOT_FOUND (not in the pos-supplier vendor copy), VENDOR_INACTIVE, ACCOUNTING_TIME_ZONE_UNSET, PERIOD_HARD_LOCKED, PERIOD_CLOSED (no overrideJustification with accounting:period:override), GL_MAPPING_NOT_CONFIGURED (AP_PAYMENT/ACCOUNTS_PAYABLE, or PAYMENT_FEES with a fee); nothing is charged or persisted'
+          description: 'Refused before the gateway, in this order: AP_PAYMENT_METHOD_NOT_SUPPORTED (CREDIT_CARD, OTHER), CURRENCY_NOT_SUPPORTED (not the functional currency), VENDOR_INACTIVE, ACCOUNTING_TIME_ZONE_UNSET, PERIOD_HARD_LOCKED, PERIOD_CLOSED (no overrideJustification with accounting:period:override), GL_MAPPING_NOT_CONFIGURED (AP_PAYMENT/ACCOUNTS_PAYABLE, or PAYMENT_FEES with a fee); nothing is charged or persisted'
         '500':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: 'PAYMENT_GATEWAY_FAILURE: the gateway failed or timed out; the outcome is unknown, nothing was persisted, and the same paymentRef is sent again (its idempotency key replays the outcome)'
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VENDOR_REPLICATION_PENDING: the vendor is not in accounting''s copy of the pos-supplier vendor master yet. Not-yet, not no: retry after the Retry-After interval.'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
       security:
       - bearerAuth:
         - accounting:ap:pay
@@ -12431,7 +12443,7 @@ paths:
 
         Emits an ACCOUNTING_VENDOR_BILL_CREATE event and posts nothing (a bill posts once, at approval).
 
-        Returns 201 with the created (or already-existing) bill, 400 when the payload fails validation, and 422 VENDOR_NOT_FOUND (the vendor is not in the copy) or VENDOR_INACTIVE.
+        Returns 201 with the created (or already-existing) bill, 400 when the payload fails validation, 422 VENDOR_INACTIVE, and 503 VENDOR_REPLICATION_PENDING with Retry-After when the vendor is not in the copy yet.
 
         Returns 409 AP_BILL_DUPLICATE when a live bill (any status except VOIDED or REJECTED) already holds the same vendor, bill date and bill number, compared ignoring case, spacing, punctuation and leading zeros; referenceId is the existing bill''s vendorBillId and nothing is created. A replayed eventId is never a duplicate.
 
@@ -12483,7 +12495,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'VENDOR_NOT_FOUND: the vendor is not in the pos-supplier vendor copy; VENDOR_INACTIVE: the vendor is inactive and takes no new bill'
+          description: 'VENDOR_INACTIVE: the vendor is inactive and takes no new bill'
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VENDOR_REPLICATION_PENDING: the vendor is not in accounting''s copy of the pos-supplier vendor master yet. Not-yet, not no: retry after the Retry-After interval.'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
       security:
       - bearerAuth:
         - accounting:ap:pay
@@ -13455,13 +13479,6 @@ paths:
         required: false
         schema:
           type: string
-      - description: ACTIVE or INACTIVE; absent returns both
-        example: ACTIVE
-        in: query
-        name: status
-        required: false
-        schema:
-          type: string
       - description: Maximum results to return (server caps at 100)
         example: 20
         in: query
@@ -13471,6 +13488,13 @@ paths:
           default: 20
           format: int32
           type: integer
+      - description: ACTIVE or INACTIVE; absent returns both
+        example: ACTIVE
+        in: query
+        name: status
+        required: false
+        schema:
+          type: string
       responses:
         '200':
           content:
@@ -13506,7 +13530,7 @@ paths:
 
         Emits an ACCOUNTING_VENDOR_GET audit event; no state changes.
 
-        Returns 404 VENDOR_NOT_FOUND when the vendor is not in the copy.
+        Returns 503 VENDOR_REPLICATION_PENDING with Retry-After when the vendor is not in the copy yet.
 
         '
       operationId: getVendorById
@@ -13526,12 +13550,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/VendorResponse'
           description: Vendor found
-        '404':
+        '503':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'VENDOR_NOT_FOUND: the vendor is not in the copy'
+          description: 'VENDOR_REPLICATION_PENDING: the vendor is not in accounting''s copy of the pos-supplier vendor master yet. Not-yet, not no: retry after the Retry-After interval.'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
       security:
       - bearerAuth:
         - accounting:ap:view
@@ -13554,7 +13584,7 @@ paths:
 
         Emits ACCOUNTING_VENDOR_AP_SETTINGS_SET; the call is idempotent on requestId: a replay writes nothing and returns the vendor as it is.
 
-        Returns 200 with the vendor read; 400 VALIDATION_ERROR with fieldErrors or JUSTIFICATION_REQUIRED; 403 FORBIDDEN; 404 VENDOR_NOT_FOUND; nothing is written on a refusal.
+        Returns 200 with the vendor read; 400 VALIDATION_ERROR with fieldErrors or JUSTIFICATION_REQUIRED; 403 FORBIDDEN; 409 IDEMPOTENCY_CONFLICT for a requestId already used with another body; 503 VENDOR_REPLICATION_PENDING (Retry-After); nothing is written on a refusal.
 
         '
       operationId: setVendorApSettings
@@ -13601,12 +13631,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: FORBIDDEN without accounting:ap_approval_policy:manage
-        '404':
+        '409':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'VENDOR_NOT_FOUND: the vendor is not in the copy'
+          description: 'IDEMPOTENCY_CONFLICT: the requestId was already used for another vendor AP settings change'
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VENDOR_REPLICATION_PENDING: the vendor is not in accounting''s copy of the pos-supplier vendor master yet. Not-yet, not no: retry after the Retry-After interval.'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
       security:
       - bearerAuth:
         - accounting:ap_approval_policy:manage
@@ -13629,7 +13671,7 @@ paths:
 
         Emits ACCOUNTING_VENDOR_REMIT_TO_CONFIRM and writes a REMIT_TO_CONFIRM audit row.
 
-        Returns 200 with the vendor read; 400 VALIDATION_ERROR or JUSTIFICATION_REQUIRED; 404 VENDOR_NOT_FOUND; 409 VENDOR_PAYMENT_DETAILS_CHANGED when the version is not the current one.
+        Returns 200 with the vendor read; 400 VALIDATION_ERROR or JUSTIFICATION_REQUIRED; 403 VENDOR_REMIT_TO_SELF_CONFIRMATION when the caller requested this remit-to in pos-supplier; 409 VENDOR_PAYMENT_DETAILS_CHANGED when the version is not the current one; 503 VENDOR_REPLICATION_PENDING (Retry-After) when the vendor is not in the copy yet.
 
         '
       operationId: confirmVendorRemitTo
@@ -13673,19 +13715,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: FORBIDDEN without accounting:ap:approve
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: 'VENDOR_NOT_FOUND: the vendor is not in the copy'
+          description: FORBIDDEN without accounting:ap:approve; VENDOR_REMIT_TO_SELF_CONFIRMATION when the caller requested the vendor's current remit-to in pos-supplier (another approver confirms it)
         '409':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: 'VENDOR_PAYMENT_DETAILS_CHANGED: remitToVersion is not the vendor''s current version'
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VENDOR_REPLICATION_PENDING: the vendor is not in accounting''s copy of the pos-supplier vendor master yet. Not-yet, not no: retry after the Retry-After interval.'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
       security:
       - bearerAuth:
         - accounting:ap:approve
