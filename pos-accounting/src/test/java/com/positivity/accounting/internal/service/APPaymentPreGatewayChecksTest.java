@@ -71,6 +71,7 @@ class APPaymentPreGatewayChecksTest {
     private final AccountingConfigurationService configuration = mock(AccountingConfigurationService.class);
     private final AccountingAuditLogRepository auditLogs = mock(AccountingAuditLogRepository.class);
     private final GLMappingResolver mappings = mock(GLMappingResolver.class);
+    private final AccountingPeriodService periodService = mock(AccountingPeriodService.class);
 
     private final java.util.Map<UUID, GLAccount> accounts = new java.util.HashMap<>();
 
@@ -104,8 +105,8 @@ class APPaymentPreGatewayChecksTest {
     }
 
     private APPaymentPreGatewayChecks checks(AccountingCalendarZoneResolver zoneResolver) {
-        AccountingPeriodGate gate = new AccountingPeriodGate(
-                mock(AccountingPeriodService.class), periods, configuration, auditLogs, zoneResolver);
+        AccountingPeriodGate gate =
+                new AccountingPeriodGate(periodService, periods, configuration, auditLogs, zoneResolver);
         return new APPaymentPreGatewayChecks(
                 CLOCK, zoneResolver, glAccounts, bankAccountCurrencies, new LedgerCurrency("USD"), gate, mappings);
     }
@@ -354,6 +355,10 @@ class APPaymentPreGatewayChecksTest {
 
             assertThat(execution).isEqualTo(new APPaymentPreGatewayChecks.Execution(TODAY, true));
             verifyNoInteractions(auditLogs);
+            // The month is provisioned before it is share-locked, so a missing row cannot be closed mid-gateway.
+            org.mockito.InOrder order = org.mockito.Mockito.inOrder(periodService, periods);
+            order.verify(periodService).ensurePeriodExists(TODAY);
+            order.verify(periods).findWithShareLockByPeriodCode("2026-10");
         }
 
         @Test

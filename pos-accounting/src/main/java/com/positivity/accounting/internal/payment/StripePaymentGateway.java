@@ -9,6 +9,7 @@ import java.math.RoundingMode;
 import java.time.Duration;
 import java.util.Optional;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -129,7 +130,7 @@ public class StripePaymentGateway implements PaymentGatewayProvider {
         try {
             log.debug("Retrieving Stripe charge status. Charge ID: {}", transactionId);
 
-            Charge charge = Charge.retrieve(transactionId);
+            Charge charge = Charge.retrieve(transactionId, requestOptions(null));
             if (charge == null) {
                 return Optional.empty();
             }
@@ -151,11 +152,11 @@ public class StripePaymentGateway implements PaymentGatewayProvider {
     }
 
     /**
-     * The options of one call: its idempotency key, the Stripe Connect account (if any), and the configured connect and
-     * read timeouts (#2627).
+     * The options of one call: its idempotency key (a charge; none for a read), the Stripe Connect account (if any), and
+     * the configured connect and read timeouts (#2627).
      */
     @NonNull
-    RequestOptions requestOptions(@NonNull String idempotencyKey) {
+    RequestOptions requestOptions(@Nullable String idempotencyKey) {
         return RequestOptions.builder()
                 .setIdempotencyKey(idempotencyKey)
                 .setStripeAccount(connectAccount.orElse(null))

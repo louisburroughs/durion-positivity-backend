@@ -45,7 +45,8 @@ public interface AccountingPeriodRepository extends JpaRepository<AccountingPeri
      * active transaction.
      */
     @Lock(LockModeType.PESSIMISTIC_READ)
-    Optional<AccountingPeriod> findWithShareLockByPeriodCode(String periodCode);
+    @NonNull
+    Optional<AccountingPeriod> findWithShareLockByPeriodCode(@NonNull String periodCode);
 
     /**
      * List all periods, most recent first (period codes sort lexicographically

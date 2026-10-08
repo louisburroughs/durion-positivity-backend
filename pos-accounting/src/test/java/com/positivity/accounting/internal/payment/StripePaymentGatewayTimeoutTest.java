@@ -33,6 +33,12 @@ class StripePaymentGatewayTimeoutTest {
                 gateway(Duration.ofMillis(1_500), Duration.ofSeconds(8)).requestOptions("PAY-413");
         assertThat(tighter.getConnectTimeout()).isEqualTo(1_500);
         assertThat(tighter.getReadTimeout()).isEqualTo(8_000);
+
+        RequestOptions read =
+                gateway(Duration.ofSeconds(5), Duration.ofSeconds(20)).requestOptions(null);
+        assertThat(read.getConnectTimeout()).as("a status read is bounded too").isEqualTo(5_000);
+        assertThat(read.getReadTimeout()).isEqualTo(20_000);
+        assertThat(read.getIdempotencyKey()).isNull();
     }
 
     @Test
