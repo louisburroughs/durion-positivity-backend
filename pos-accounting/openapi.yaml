@@ -60,6 +60,8 @@ tags:
   name: Mapping Keys
 - description: Manage posting categories for GL mapping taxonomy
   name: Posting Categories
+- description: Approval limits and separation of duties for vendor bills
+  name: AP Approval Policy
 - description: 'Manual bank reconciliation: match statement lines to posted GL entries, record adjustments, and finalize when balanced.'
   name: Bank Reconciliation
 - description: Reconcilable bank accounts and their bank-account profiles.
@@ -303,6 +305,142 @@ paths:
       - Accounting Analytics
       x-required-permissions:
       - accounting:analytics:view
+  /v1/accounting/ap-approval-policy:
+    get:
+      description: 'Returns the tenant''s effective AP approval policy: clerkApprovalLimit and autoApprovalLimit (in the functional currency, currencyCode), allowCreatorApproval, allowApproverPayment and defaultTerms, with asOf and one page of the change history, newest first, each row naming who changed which setting, their roles, the old and new value and the justification.
+
+        A setting never written reads as its default: limits 0.00 (every bill goes to an over-limit approver, nothing is approved automatically), both switches false, defaultTerms NET30; a stored value that cannot be read shows as that default too.
+
+        Use this tool to see who may approve which bills and the policy''s history; use setApApprovalPolicy instead to change it, and getVendorBillById for one bill''s tier.
+
+        Preconditions: the caller holds accounting:ap_approval_policy:manage.
+
+        Required inputs: none; historyPage (from 0) and historySize (default 20, at most 100) are optional.
+
+        Emits ACCOUNTING_AP_APPROVAL_POLICY_VIEW; nothing is changed.
+
+        Returns 200 with the policy, 401 without a valid token, and 403 FORBIDDEN without the permission.
+
+        '
+      operationId: getApApprovalPolicy
+      parameters:
+      - description: History page, from 0
+        example: 0
+        in: query
+        name: historyPage
+        required: false
+        schema:
+          default: 0
+          format: int32
+          type: integer
+      - description: History page size, at most 100
+        example: 20
+        in: query
+        name: historySize
+        required: false
+        schema:
+          default: 20
+          format: int32
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApApprovalPolicyResponse'
+          description: The effective policy and one page of its history
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'Not authenticated: no valid bearer token'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: FORBIDDEN without accounting:ap_approval_policy:manage
+      security:
+      - bearerAuth:
+        - accounting:ap_approval_policy:manage
+      summary: Get AP Approval Policy
+      tags:
+      - AP Approval Policy
+      x-required-permissions:
+      - accounting:ap_approval_policy:manage
+    put:
+      description: 'Changes the settings the body gives, each optional (missing means unchanged): clerkApprovalLimit and autoApprovalLimit (amounts >= 0 in the functional currency, the automatic limit never above the clerk limit), allowCreatorApproval and allowApproverPayment (separation-of-duties exception switches), and defaultTerms (DUE_ON_RECEIPT or NET1 to NET120).
+
+        Only a setting whose effective value changes is written, with one AP_APPROVAL_POLICY_SET audit row recording old and new value, the caller and their roles, the justification and the requestId; a new limit applies to the next decision at once, waiting bills included, and approved bills are never re-evaluated.
+
+        Use this tool when a controller or general manager changes the approval limits, the switches or the default terms; do not use it to read the policy, use getApApprovalPolicy instead.
+
+        Preconditions: the caller holds accounting:ap_approval_policy:manage.
+
+        Required inputs: justification (at least 10 characters) and requestId (a UUID generated once per change); currencyCode (the functional currency) is required with either limit.
+
+        Emits ACCOUNTING_AP_APPROVAL_POLICY_SET; the call is idempotent: a requestId already recorded, or a body equal to the stored values, writes nothing and returns the current policy.
+
+        Returns 200 with the GET body; 400 JUSTIFICATION_REQUIRED or VALIDATION_ERROR with fieldErrors (a negative limit, an automatic limit above the clerk limit, terms outside the vocabulary, a missing currencyCode or requestId); 401; 403 FORBIDDEN; 422 CURRENCY_NOT_SUPPORTED for a currencyCode other than the functional currency, or AMOUNT_PRECISION_EXCEEDS_CURRENCY for a limit finer than its minor unit; nothing is written on a refusal.
+
+        '
+      operationId: setApApprovalPolicy
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Set the clerk limit:
+                description: Set the clerk limit
+                value:
+                  autoApprovalLimit: 500.0
+                  clerkApprovalLimit: 2500.0
+                  currencyCode: USD
+                  justification: Clerks approve routine parts bills up to 2,500
+                  requestId: 0199c0de-7a1b-7c2d-8e3f-4a5b6c7d8e9f
+            schema:
+              $ref: '#/components/schemas/ApApprovalPolicyRequest'
+        description: The settings to change, the justification and the request id.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApApprovalPolicyResponse'
+          description: The effective policy after the change, as the GET returns it
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: JUSTIFICATION_REQUIRED, or VALIDATION_ERROR with fieldErrors naming each invalid field
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'Not authenticated: no valid bearer token'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: FORBIDDEN without accounting:ap_approval_policy:manage
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: CURRENCY_NOT_SUPPORTED or AMOUNT_PRECISION_EXCEEDS_CURRENCY; nothing is written
+      security:
+      - bearerAuth:
+        - accounting:ap_approval_policy:manage
+      summary: Set AP Approval Policy
+      tags:
+      - AP Approval Policy
+      x-required-permissions:
+      - accounting:ap_approval_policy:manage
   /v1/accounting/ap/bills:
     get:
       description: 'Lists vendor bills eligible for payment, meaning those in APPROVED status, ordered by due date oldest first with nulls last, then bill date, then bill id.
@@ -379,13 +517,13 @@ paths:
 
         Use this tool to pay a vendor; do not use applyPayment, which is the AR-side application of customer payments to invoices, and use listApBills first to find APPROVED bills to allocate against.
 
-        Preconditions: every allocated bill must exist, be APPROVED and belong to the vendor, and the allocation total must not exceed the gross amount.
+        Preconditions: every allocated bill must exist, be APPROVED and belong to the vendor, the allocation total must not exceed the gross amount, and the payer must not be the person who approved any bill the payment allocates to, explicit or oldest due first (separation of duties, unless the tenant''s AP approval policy allows it; a system approval never blocks).
 
         Required inputs: vendorId (UUID), grossAmount (min 0.01), currency (3-char ISO code), paymentRef (max 100 chars, the idempotency key) and paymentMethod (e.g. ACH, CHECK); feeAmount, netAmount, paymentSource, memo and explicit allocations are optional.
 
         Emits an AP_PAYMENT_EXECUTE event; the call is idempotent on paymentRef, replaying the same ref with the same payload as a 200 instead of paying twice.
 
-        Returns 200 on an idempotent replay, 409 IDEMPOTENCY_CONFLICT when the paymentRef exists with a different payload, 400 when a bill is missing, unapproved or over-allocated, and 500 PAYMENT_GATEWAY_FAILURE when the gateway cannot be reached.
+        Returns 200 on an idempotent replay, 409 IDEMPOTENCY_CONFLICT when the paymentRef exists with a different payload, 400 when a bill is missing, unapproved or over-allocated, 403 AP_PAYMENT_SELF_APPROVED_BILL (fieldErrors name the bills by number) before any payment row is saved or the gateway is called, and 500 PAYMENT_GATEWAY_FAILURE when the gateway cannot be reached.
 
         '
       operationId: executeApPayment
@@ -427,6 +565,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: 'Validation error: negative amounts, invalid bills, etc.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'FORBIDDEN without accounting:ap:pay, or AP_PAYMENT_SELF_APPROVED_BILL: the payer approved a bill the payment would pay (fieldErrors[selfApprovedBillNumbers] name them); nothing is paid'
         '409':
           content:
             application/json:
@@ -12255,7 +12399,7 @@ paths:
       - accounting:ap:pay
   /v1/accounting/vendor-bills/by-stage:
     get:
-      description: 'Lists the vendor bills of one stage of Bills to pay, each with its bill number, vendor name, total, currency, bill and due dates, status, channel, submittedAt and open amount. The server sets the order: CHECK and APPROVE oldest first, PAY by due date with bills without one last, DONE newest paid first. There is no due-date window.
+      description: 'Lists the vendor bills of one stage of Bills to pay, each with its bill number, vendor name, total, currency, bill and due dates, status, channel, submittedAt, open amount and, in review, the requiredTier from the current clerk limit. The server sets the order: CHECK and APPROVE oldest first, PAY by due date with bills without one last, DONE newest paid first. There is no due-date window.
 
         Use this tool for the bills behind one count of getVendorBillStageCounts; use getVendorBillById instead for one bill''s full review read.
 
@@ -12381,7 +12525,7 @@ paths:
       - accounting:ap:view
   /v1/accounting/vendor-bills/match:
     post:
-      description: 'Runs the three-way match of a received vendor invoice against pending goods-received bills (never an EDI bill): a HIGH match (score 70 or more) within tolerance sends the bill to AWAITING_APPROVAL with submittedBy SYSTEM and never approves it, a MEDIUM score or a discrepancy parks it in MATCH_EXCEPTION, and an AMBIGUOUS match keeps the scored candidates for a person to select one; nothing is posted.
+      description: 'Runs the three-way match of a received vendor invoice against pending goods-received bills (never an EDI bill): a HIGH match (score 70 or more) within tolerance sends the bill to AWAITING_APPROVAL with submittedBy SYSTEM, and when its absolute total is within min(automatic, clerk) limit of the AP approval policy the system approves and posts it in the same transaction (approvedByKind SYSTEM, VENDOR_BILL_AUTO_APPROVE), unless it would need a person''s input or its posting is refused (it then stays AWAITING_APPROVAL, VENDOR_BILL_AUTO_APPROVE_SKIPPED); a MEDIUM score or a discrepancy parks it in MATCH_EXCEPTION, and an AMBIGUOUS match keeps the scored candidates for a person to select one.
 
         Every routed single match takes the invoice''s number and its invoiceDate as the bill date (AW46) and keeps what the vendor billed (the billed total and each line''s billed quantity and price) and an append-only evidence record with the receipt date, the score, the points per criterion (amount 40 against the received total, products 30, date 20, purchase order 5) and the line comparison.
 
@@ -12391,7 +12535,7 @@ paths:
 
         Required inputs: eventId, organizationId and vendorId (UUIDs), invoiceReference, invoiceDate and lineItems; dueDate is optional.
 
-        Emits an ACCOUNTING_VENDOR_BILL_MATCH event and writes a VENDOR_BILL_MATCH_ROUTED audit row; the returned bill''s status conveys the outcome.
+        Emits an ACCOUNTING_VENDOR_BILL_MATCH event and writes a VENDOR_BILL_MATCH_ROUTED audit row; the returned bill''s status conveys the outcome, APPROVED included.
 
         Returns 400 when no pending receipt matches the invoice or the payload fails validation (a missing invoiceDate included), 409 AP_BILL_DUPLICATE when another live bill (any status except VOIDED or REJECTED) of the vendor already holds the invoiceReference on the invoiceDate, compared ignoring case, spacing, punctuation and leading zeros (referenceId names it, and the receipt bill is left untouched), the generic 409 DUPLICATE_RESOURCE when a concurrent writer takes the number between the check and the commit, and 409 OPTIMISTIC_LOCK when the matched bill was decided meanwhile (send the invoice again).
 
@@ -12653,13 +12797,13 @@ paths:
 
         Use this tool for the approver''s decision on a bill sent for approval; do not use submitVendorBillForApproval, which only sends it, or resolveVendorBillMatchException with ACCEPT, which approves a bill still in MATCH_EXCEPTION.
 
-        Preconditions: the bill is AWAITING_APPROVAL (CURRENCY_HOLD bills never are), a goods-receipt bill has its invoice matched, and until approval limits exist every bill needs accounting:ap:approve_over_limit.
+        Preconditions, checked in this order: the bill is AWAITING_APPROVAL (CURRENCY_HOLD bills never are) and a goods-receipt bill has its invoice matched; a bill whose absolute total is over the clerk limit (requiredTier OVER_LIMIT) needs accounting:ap:approve_over_limit, one within it accounting:ap:approve; the caller did not create the bill unless the AP approval policy allows it with a justification; then the content checks and the posting.
 
         Required inputs: billId (UUID) as a path parameter; justification (at least 10 characters), classification {debitClass GOODS|EXPENSE, expenseMappingKey} (each field given wins over the one proposed at submission), difference (as submitVendorBillForApproval takes it) and overrideJustification (with accounting:period:override, to post into a CLOSED period) are optional.
 
         Emits ACCOUNTING_VENDOR_BILL_APPROVE and writes a VENDOR_BILL_APPROVE audit row; a refused posting writes one VENDOR_BILL_APPROVE_REFUSED row and changes nothing else, and a replayed approve finds the bill APPROVED and is answered 409 AP_BILL_NOT_APPROVABLE.
 
-        Returns 200 with the bill read, its posting included; 400 JUSTIFICATION_REQUIRED, VALIDATION_ERROR or ARGUMENT_NOT_VALID; 401 without a valid token; 403 FORBIDDEN; 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE or AP_BILL_AWAITING_INVOICE; 422 AP_BILL_UNCLASSIFIED, AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED (guided: referenceId CATEGORY/KEY and nextAction), each leaving the bill as it was.
+        Returns 200 with the bill read, its posting included; 400 JUSTIFICATION_REQUIRED (also a creator''s approval without one), VALIDATION_ERROR or ARGUMENT_NOT_VALID; 401 without a valid token; 403 FORBIDDEN, AP_APPROVAL_LIMIT_EXCEEDED (nextAction names accounting:ap:approve_over_limit) or AP_BILL_SELF_APPROVAL, each limit or creator refusal audited as VENDOR_BILL_APPROVE_REFUSED; 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE or AP_BILL_AWAITING_INVOICE; 422 AP_BILL_UNCLASSIFIED, AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED (guided: referenceId CATEGORY/KEY and nextAction), each leaving the bill as it was.
 
         '
       operationId: approveVendorBill
@@ -12685,7 +12829,7 @@ paths:
                   justification: Checked against the work order
             schema:
               $ref: '#/components/schemas/VendorBillApproveRequest'
-        description: The approver's optional justification, the classification the bill posts under, and an optional override justification for a CLOSED period.
+        description: The approver's optional justification (required, at least 10 characters, when the creator approves under the policy's exception), the classification the bill posts under, and an optional override justification for a CLOSED period.
         required: true
       responses:
         '200':
@@ -12711,7 +12855,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: FORBIDDEN
+          description: FORBIDDEN, AP_APPROVAL_LIMIT_EXCEEDED (over the clerk limit without accounting:ap:approve_over_limit) or AP_BILL_SELF_APPROVAL (the caller created the bill)
         '404':
           content:
             application/json:
@@ -12732,12 +12876,98 @@ paths:
           description: AP_BILL_UNCLASSIFIED, AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED; the approval is rolled back
       security:
       - bearerAuth:
+        - accounting:ap:approve
         - accounting:ap:approve_over_limit
       summary: Approve Vendor Bill
       tags:
       - Vendor Bill API
       x-required-permissions:
+      - accounting:ap:approve
       - accounting:ap:approve_over_limit
+  /v1/accounting/vendor-bills/{billId}/due-date:
+    put:
+      description: 'Enters a vendor bill''s real due date during approval review, as the vendor''s document states it: it is stored at the start of the day, replaces any estimate (estimates are never stored, AW11) and is audited old to new as VENDOR_BILL_DUE_DATE_SET.
+
+        A later invoice match or candidate selection whose invoice states a due date replaces it (the vendor''s document is the source); a date entered after the match stays.
+
+        Use this tool when a clerk reads the due date off the bill; do not use it on an approved bill, whose dates are locked, and use getVendorBillById instead to read the current one.
+
+        Preconditions: the bill is PENDING_RECEIPT_MATCH, MATCH_EXCEPTION or AWAITING_APPROVAL; the date is not tier-gated and separation of duties does not apply.
+
+        Required inputs: billId (UUID) as a path parameter and dueDate (YYYY-MM-DD); justification is optional, at least 10 characters when given, and an approvedBy or operatorId in the body is ignored because the actor is the caller.
+
+        Emits ACCOUNTING_VENDOR_BILL_DUE_DATE_SET; the same date again writes nothing.
+
+        Returns 200 with the bill read, 400 VALIDATION_ERROR or JUSTIFICATION_REQUIRED, 401 without a valid token, 403 FORBIDDEN without accounting:ap:approve, 404 VENDOR_BILL_NOT_FOUND, and 409 AP_BILL_NOT_APPROVABLE for any other status, CURRENCY_HOLD and APPROVED included.
+
+        '
+      operationId: setVendorBillDueDate
+      parameters:
+      - description: Vendor bill identifier
+        example: 550e8400-e29b-41d4-a716-446655440001
+        in: path
+        name: billId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Due date from the paper invoice:
+                description: Due date from the paper invoice
+                value:
+                  dueDate: '2026-11-07'
+            schema:
+              $ref: '#/components/schemas/VendorBillDueDateRequest'
+        description: The due date the vendor's document states and an optional justification.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorBillResponse'
+          description: Due date stored
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: VALIDATION_ERROR (no dueDate) or JUSTIFICATION_REQUIRED (one under 10 characters)
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'Not authenticated: no valid bearer token'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: FORBIDDEN
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: VENDOR_BILL_NOT_FOUND
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'AP_BILL_NOT_APPROVABLE: the bill is not in approval review'
+      security:
+      - bearerAuth:
+        - accounting:ap:approve
+      summary: Set Vendor Bill Due Date
+      tags:
+      - Vendor Bill API
+      x-required-permissions:
+      - accounting:ap:approve
   /v1/accounting/vendor-bills/{billId}/reject:
     post:
       description: 'Rejects a vendor bill in AWAITING_APPROVAL: it moves to REJECTED, terminal, with the caller as rejectedBy and the reason recorded.
@@ -12828,13 +13058,13 @@ paths:
 
         Use this tool for a quantity, price, medium-confidence or totals exception on one bill; do not use selectVendorBillMatchCandidate, which resolves an ambiguous match among several bills, or submitVendorBillForApproval, which sends the bill to another person''s approval.
 
-        Preconditions: the bill is MATCH_EXCEPTION, and each action needs its own permission: ACCEPT accounting:ap:approve_over_limit, CORRECT accounting:ap:approve or accounting:ap:approve_over_limit, VOID accounting:ap:reject; ACCEPT also needs what approveVendorBill needs (no open ambiguous match, a matched invoice for a goods-receipt bill, the vendor''s totals reconciled or a difference).
+        Preconditions: the bill is MATCH_EXCEPTION, and each action needs its own permission: ACCEPT and CORRECT accounting:ap:approve or accounting:ap:approve_over_limit, VOID accounting:ap:reject; ACCEPT is an approval and takes approveVendorBill''s checks in its order (no open ambiguous match, a matched invoice for a goods-receipt bill, the tier against the clerk limit, the caller not the bill''s creator with the reason as an exception''s justification, the vendor''s totals reconciled or a difference).
 
         Required inputs: billId (UUID) as a path parameter, resolutionAction (ACCEPT, CORRECT or VOID) and reason (at least 10 characters); ACCEPT also takes classification, difference and overrideJustification as approveVendorBill does, and an operatorId in the body is ignored because the actor is the caller.
 
         Emits ACCOUNTING_VENDOR_BILL_MATCH_EXCEPTION_RESOLVE and writes a VENDOR_BILL_MATCH_EXCEPTION_RESOLVE audit row; a replay finds the bill moved on and is answered 409 AP_BILL_NOT_APPROVABLE.
 
-        Returns 200 with the bill read; 400 VALIDATION_ERROR for an unknown action, JUSTIFICATION_REQUIRED for a missing or short reason, or ARGUMENT_NOT_VALID; 401 without a valid token; 403 FORBIDDEN without the action''s permission; 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE or, for ACCEPT, AP_BILL_AWAITING_INVOICE; for ACCEPT, 422 AP_BILL_UNCLASSIFIED, AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED, leaving the bill as it was.
+        Returns 200 with the bill read; 400 VALIDATION_ERROR for an unknown action, JUSTIFICATION_REQUIRED for a missing or short reason, or ARGUMENT_NOT_VALID; 401 without a valid token; 403 FORBIDDEN without the action''s permission, or for ACCEPT AP_APPROVAL_LIMIT_EXCEEDED or AP_BILL_SELF_APPROVAL (audited as VENDOR_BILL_MATCH_EXCEPTION_RESOLVE_REFUSED); 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE or, for ACCEPT, AP_BILL_AWAITING_INVOICE; for ACCEPT, 422 AP_BILL_UNCLASSIFIED, AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED, leaving the bill as it was.
 
         '
       operationId: resolveVendorBillMatchException
@@ -12884,7 +13114,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: FORBIDDEN
+          description: FORBIDDEN; for ACCEPT also AP_APPROVAL_LIMIT_EXCEEDED or AP_BILL_SELF_APPROVAL
         '404':
           content:
             application/json:
@@ -13016,13 +13246,13 @@ paths:
 
         Use this tool to undo an approval that should not stand or to close a receipt placeholder; do not use rejectVendorBill, which refuses a bill not yet approved, or resolveVendorBillMatchException with VOID, which voids a bill still in MATCH_EXCEPTION, and correct a bill with payments allocated with a vendor credit note instead.
 
-        Preconditions: every void needs accounting:ap:reject and an approved bill''s also the approval tier, accounting:ap:approve_over_limit until approval limits exist; only this void reverses a bill''s entry (the journal-entry reversal refuses one with 409 AP_BILL_ENTRY_NOT_REVERSIBLE).
+        Preconditions: every void needs accounting:ap:reject, and an approved bill''s also either approve permission and then its tier against the current clerk limit (an OVER_LIMIT bill needs accounting:ap:approve_over_limit; the creator rule does not apply); only this void reverses a bill''s entry (the journal-entry reversal refuses one with 409 AP_BILL_ENTRY_NOT_REVERSIBLE).
 
         Required inputs: billId (UUID) as a path parameter and reason (at least 10 characters); overrideJustification (at least 10 characters) reverses an approved bill into a CLOSED period with accounting:period:override.
 
         Emits ACCOUNTING_VENDOR_BILL_VOID and writes a VENDOR_BILL_VOID audit row naming the action (VOID_APPROVED or VOID_UNMATCHED); a replay finds the bill VOIDED and is answered 409 AP_BILL_NOT_VOIDABLE.
 
-        Returns 200 with the bill read, an approved bill''s posting with its reversalReference; 400 JUSTIFICATION_REQUIRED or ARGUMENT_NOT_VALID; 401 without a valid token; 403 FORBIDDEN without accounting:ap:reject, or without the approval tier for an approved bill; 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_VOIDABLE for any other status or an allocated bill; 422 PERIOD_CLOSED or PERIOD_HARD_LOCKED for today''s period, leaving the bill as it was.
+        Returns 200 with the bill read, an approved bill''s posting with its reversalReference; 400 JUSTIFICATION_REQUIRED or ARGUMENT_NOT_VALID; 401 without a valid token; 403 FORBIDDEN without accounting:ap:reject, or for an approved bill without an approve permission, or AP_APPROVAL_LIMIT_EXCEEDED over the clerk limit (audited as VENDOR_BILL_VOID_REFUSED); 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_VOIDABLE for any other status or an allocated bill; 422 PERIOD_CLOSED or PERIOD_HARD_LOCKED for today''s period, leaving the bill as it was.
 
         '
       operationId: voidVendorBill
@@ -13071,7 +13301,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: FORBIDDEN
+          description: FORBIDDEN, or AP_APPROVAL_LIMIT_EXCEEDED for an approved bill over the clerk limit
         '404':
           content:
             application/json:
@@ -13932,6 +14162,155 @@ components:
           example: 01936e5d-1234-7a3d-8b6e-3c4567890123
           format: uuid
           type: string
+      type: object
+    ApApprovalPolicyHistoryRow:
+      description: One change of one AP approval policy setting
+      properties:
+        changedAt:
+          description: When it changed
+          format: date-time
+          type: string
+        changedBy:
+          description: Who changed it
+          example: controller.cfo
+          type: string
+        changedByRoles:
+          description: The caller's roles at the time of the change
+          items:
+            example: CONTROLLER
+            type: string
+          type: array
+        justification:
+          description: Why it changed
+          example: Clerks approve routine parts bills up to 2,500
+          type: string
+        newValue:
+          description: The value after
+          example: '2500.00'
+          type: string
+        oldValue:
+          description: The effective value before
+          example: '0.00'
+          type: string
+        setting:
+          description: AP_CLERK_APPROVAL_LIMIT, AP_AUTO_APPROVAL_LIMIT, AP_ALLOW_CREATOR_APPROVAL, AP_ALLOW_APPROVER_PAYMENT or AP_DEFAULT_TERMS
+          example: AP_CLERK_APPROVAL_LIMIT
+          type: string
+      required:
+      - changedAt
+      - changedBy
+      - changedByRoles
+      - justification
+      - newValue
+      - setting
+      type: object
+    ApApprovalPolicyRequest:
+      description: The AP approval policy settings to change, with the justification and the request id
+      properties:
+        allowApproverPayment:
+          description: Whether a bill's approver may pay it (separation-of-duties exception, default false). Missing means unchanged
+          example: false
+          type: boolean
+        allowCreatorApproval:
+          description: Whether a bill's creator may approve it, with a justification (separation-of-duties exception, default false). Missing means unchanged
+          example: false
+          type: boolean
+        autoApprovalLimit:
+          description: Up to how much the system approves a strong (HIGH) goods-receipt match; at least 0 and at most the clerk limit. 0 turns automatic approval off. Missing means unchanged
+          example: 500.0
+          type: number
+        clerkApprovalLimit:
+          description: How much a clerk (accounting:ap:approve) may approve, the bill's absolute total including tax; at least 0, in the functional currency. 0 means every bill needs an over-limit approver. Missing means unchanged
+          example: 2500.0
+          type: number
+        currencyCode:
+          description: ISO 4217 code of the limits; required when a limit is given, and it must be the functional currency (422 CURRENCY_NOT_SUPPORTED otherwise)
+          example: USD
+          maxLength: 3
+          minLength: 3
+          type: string
+        defaultTerms:
+          description: 'The default AP terms: DUE_ON_RECEIPT or NET<n>, n an integer from 1 to 120, upper case, no spaces (default NET30). Missing means unchanged'
+          example: NET30
+          maxLength: 20
+          minLength: 0
+          type: string
+        justification:
+          description: Why the policy changes; at least 10 characters (400 JUSTIFICATION_REQUIRED otherwise), recorded on every AP_APPROVAL_POLICY_SET audit row
+          example: Clerks approve routine parts bills up to 2,500
+          maxLength: 1000
+          minLength: 0
+          type: string
+        requestId:
+          description: 'Generated once per user intent by the client (§8.2): a replay with a request id already recorded writes nothing and returns the current policy'
+          example: 0199c0de-7a1b-7c2d-8e3f-4a5b6c7d8e9f
+          format: uuid
+          type: string
+      required:
+      - justification
+      - requestId
+      type: object
+    ApApprovalPolicyResponse:
+      description: The effective AP approval policy and its change history
+      properties:
+        allowApproverPayment:
+          description: Whether a bill's approver may pay it
+          type: boolean
+        allowCreatorApproval:
+          description: Whether a bill's creator may approve it, with a justification
+          type: boolean
+        asOf:
+          description: When these values were read
+          format: date-time
+          type: string
+        autoApprovalLimit:
+          description: Up to how much the system approves a strong goods-receipt match, never above the clerk limit; 0.00 means off
+          example: 500.0
+          type: number
+        clerkApprovalLimit:
+          description: How much a clerk may approve (absolute total including tax); 0.00 means no clerk approves
+          example: 2500.0
+          type: number
+        currencyCode:
+          description: ISO 4217 functional currency of both limits
+          example: USD
+          type: string
+        defaultTerms:
+          description: The default AP terms
+          example: NET30
+          type: string
+        history:
+          description: The changes, newest first, one row per setting changed; one page
+          items:
+            $ref: '#/components/schemas/ApApprovalPolicyHistoryRow'
+          type: array
+        historyPage:
+          description: The history page returned, from 0
+          example: 0
+          format: int32
+          type: integer
+        historySize:
+          description: The history page size
+          example: 20
+          format: int32
+          type: integer
+        historyTotal:
+          description: How many history rows there are in all
+          example: 3
+          format: int64
+          type: integer
+      required:
+      - allowApproverPayment
+      - allowCreatorApproval
+      - asOf
+      - autoApprovalLimit
+      - clerkApprovalLimit
+      - currencyCode
+      - defaultTerms
+      - history
+      - historyPage
+      - historySize
+      - historyTotal
       type: object
     ApiError:
       description: Standard error response envelope returned by all Durion backend APIs
@@ -23833,12 +24212,27 @@ components:
         approvedBy:
           description: Who approved it; only on an approved bill
           type: string
+        approvedByKind:
+          description: PERSON or SYSTEM (automatic approval of a HIGH match); only on an approved bill
+          enum:
+          - PERSON
+          - SYSTEM
+          example: PERSON
+          type: string
+        clerkLimit:
+          description: The clerk approval limit in force now, in the functional currency; 0.00 means no clerk approves
+          example: 2500.0
+          type: number
+        currencyCode:
+          description: ISO 4217 code of clerkLimit
+          example: USD
+          type: string
         proposedClassification:
           $ref: '#/components/schemas/VendorBillClassification'
         proposedDifference:
           $ref: '#/components/schemas/VendorBillDifference'
         requiredTier:
-          description: The tier the approval needs
+          description: The tier the approval needs, from the current clerk limit (never stored)
           enum:
           - CLERK
           - OVER_LIMIT
@@ -23856,6 +24250,8 @@ components:
           example: clerk.ana
           type: string
       required:
+      - clerkLimit
+      - currencyCode
       - requiredTier
       type: object
     VendorBillApproveRequest:
@@ -23893,13 +24289,15 @@ components:
           - SELECT_CANDIDATE
           - VOID_APPROVED
           - VOID_UNMATCHED
+          - SET_DUE_DATE
           example: APPROVE
           type: string
         allowed:
           description: Whether it may be taken now
           type: boolean
         blockedReason:
-          description: Why not; reserved for S13's rule-based blocks
+          description: 'Why not, when allowed is false: AP_APPROVAL_LIMIT_EXCEEDED (the bill is over the clerk limit and the caller lacks accounting:ap:approve_over_limit), else AP_BILL_SELF_APPROVAL (the caller created the bill); null when allowed'
+          example: AP_APPROVAL_LIMIT_EXCEEDED
           type: string
         justificationRequired:
           description: Whether the command needs a justification of at least 10 characters
@@ -23974,6 +24372,23 @@ components:
       required:
       - class
       - justification
+      type: object
+    VendorBillDueDateRequest:
+      description: Enter a bill's real due date during approval review
+      properties:
+        dueDate:
+          description: The due date the vendor's document states, YYYY-MM-DD; stored at the start of the day and replacing any estimate
+          example: '2026-11-07'
+          format: date
+          type: string
+        justification:
+          description: Why it changes; optional, at least 10 characters when given
+          example: Due date read from the paper invoice
+          maxLength: 1000
+          minLength: 0
+          type: string
+      required:
+      - dueDate
       type: object
     VendorBillExceptionResolutionRequest:
       description: Resolve a bill in MATCH_EXCEPTION
@@ -24660,6 +25075,13 @@ components:
           description: Total less allocated payments
           example: 412.0
           type: number
+        requiredTier:
+          description: The tier an approval needs, from the current clerk limit; null outside PENDING_RECEIPT_MATCH, MATCH_EXCEPTION and AWAITING_APPROVAL
+          enum:
+          - CLERK
+          - OVER_LIMIT
+          example: CLERK
+          type: string
         status:
           description: Status
           enum:
