@@ -23,7 +23,8 @@ import org.springframework.data.domain.Pageable;
  * <ol>
  * <li>GoodsReceivedEvent creates bill in PENDING_RECEIPT_MATCH status; nothing posts (AW37)</li>
  * <li>VendorInvoiceReceivedEvent triggers three-way match validation</li>
- * <li>A HIGH match goes to AWAITING_APPROVAL (submitted by SYSTEM); it never approves (#2509, G12)</li>
+ * <li>A HIGH match goes to AWAITING_APPROVAL (submitted by SYSTEM); within the automatic limit the system then
+ * approves and posts it (#2510)</li>
  * <li>A MEDIUM match or a discrepancy goes to MATCH_EXCEPTION for a person to resolve</li>
  * </ol>
  * The decisions themselves (submit, approve, reject, resolve, select, void) are {@link VendorBillApprovalService}'s.

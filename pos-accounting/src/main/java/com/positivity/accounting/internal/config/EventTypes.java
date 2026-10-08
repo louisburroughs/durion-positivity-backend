@@ -16,7 +16,9 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 161 event types (includes +6 from the vendor-bill approval lifecycle and -1 for the retired
+     * Total: 164 event types (includes +3 from approval limits and separation of duties (CAP:550 S13, Issue #2510):
+     * ACCOUNTING_VENDOR_BILL_DUE_DATE_SET, ACCOUNTING_AP_APPROVAL_POLICY_VIEW, ACCOUNTING_AP_APPROVAL_POLICY_SET,
+     * +6 from the vendor-bill approval lifecycle and -1 for the retired
      * VENDOR_BILL_GL_POSTING (CAP:550 S12, Issue #2509): ACCOUNTING_VENDOR_BILL_SUBMIT, _APPROVE, _REJECT, _VOID,
      * _STAGES_VIEW, _STAGE_LIST, +4 from bank deposits of drawer cash (CAP:550 S18, Issue #2514):
      * ACCOUNTING_UNDEPOSITED_SESSIONS_VIEW, ACCOUNTING_DEPOSIT_CREATE, ACCOUNTING_DEPOSIT_VIEW,
@@ -368,6 +370,19 @@ public final class EventTypes {
                         .build(),
                 EventTypeRegistration.fastRead(
                                 "ACCOUNTING_VENDOR_BILL_STAGES_VIEW", "Count vendor bills in each Bills to pay stage")
+                        .build(),
+                // Approval limits and separation of duties - 3 events (CAP:550 S13, Issue #2510)
+                EventTypeRegistration.write(
+                                "ACCOUNTING_VENDOR_BILL_DUE_DATE_SET",
+                                "Enter a vendor bill's real due date during approval review")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_AP_APPROVAL_POLICY_VIEW",
+                                "View the AP approval policy (limits, switches, default terms) and its history")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "ACCOUNTING_AP_APPROVAL_POLICY_SET",
+                                "Change the AP approval policy (mandatory justification, idempotent on requestId)")
                         .build(),
                 EventTypeRegistration.search(
                                 "ACCOUNTING_VENDOR_BILL_STAGE_LIST", "List the vendor bills of one Bills to pay stage")

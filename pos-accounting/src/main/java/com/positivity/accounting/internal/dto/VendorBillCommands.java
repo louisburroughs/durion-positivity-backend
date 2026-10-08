@@ -6,6 +6,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
+import java.time.LocalDate;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -139,4 +140,26 @@ public final class VendorBillCommands {
                     requiredMode = NOT_REQUIRED)
             @Valid
             VendorBillReview.@Nullable Difference difference) {}
+
+    /**
+     * The bill's real due date, entered during approval review (CAP:550 S13, #2510; §4.2, AW11). The actor is the
+     * caller; a body field naming one ({@code approvedBy}, {@code operatorId}) is ignored.
+     */
+    @Schema(name = "VendorBillDueDateRequest", description = "Enter a bill's real due date during approval review")
+    public record SetDueDate(
+            @Schema(
+                    description = "The due date the vendor's document states, YYYY-MM-DD; stored at the start of the"
+                            + " day and replacing any estimate",
+                    example = "2026-11-07",
+                    requiredMode = REQUIRED)
+            @Nullable
+            LocalDate dueDate,
+
+            @Schema(
+                    description = "Why it changes; optional, at least 10 characters when given",
+                    example = "Due date read from the paper invoice",
+                    requiredMode = NOT_REQUIRED)
+            @Size(max = 1000)
+            @Nullable
+            String justification) {}
 }

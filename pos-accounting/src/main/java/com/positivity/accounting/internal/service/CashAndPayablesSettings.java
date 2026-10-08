@@ -7,6 +7,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -25,8 +27,11 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>{@value #CASH_SAFETY_CUSHION}: the cash the 30-day outlook keeps aside (S19); default unset.
  * </ul>
  *
- * <p>Only defaults are declared here. Who writes either key, the cushion's meaning (OI-6) and opening
- * bank balances (OI-10) are open questions of the specification, so there is no write contract.
+ * <p>{@value #AP_DEFAULT_TERMS} is written through the AP approval policy (CAP:550 S13, #2510; AW33,
+ * {@link ApApprovalPolicy}) in pos-supplier's vocabulary: {@code DUE_ON_RECEIPT} or {@code NET<n>}, n an
+ * integer from 1 to 120, upper case, no spaces. Any other stored value reads as {@value #DEFAULT_AP_TERMS} and
+ * logs a warning, so the outlook and the policy read one effective value. Who writes the cushion, and its
+ * meaning (OI-6), are still open questions of the specification.
  */
 @Slf4j
 @Component
@@ -42,6 +47,14 @@ public class CashAndPayablesSettings {
 
     /** The default of {@link #AP_DEFAULT_TERMS}. */
     public static final String DEFAULT_AP_TERMS = "NET30";
+
+    /** Terms due on receipt, the one value of the vocabulary that is not {@code NET<n>}. */
+    public static final String DUE_ON_RECEIPT = "DUE_ON_RECEIPT";
+
+    /** The longest {@code NET<n>} the vocabulary allows. */
+    public static final int MAX_NET_DAYS = 120;
+
+    private static final Pattern NET_TERMS = Pattern.compile("NET([1-9][0-9]{0,2})");
 
     private final AccountingConfigurationRepository configuration;
 
@@ -71,8 +84,36 @@ public class CashAndPayablesSettings {
         return Optional.ofNullable(settings().cashSafetyCushion());
     }
 
-    static @NonNull String parseTerms(@Nullable String value) {
-        return value == null || value.isBlank() ? DEFAULT_AP_TERMS : value.trim();
+    /**
+     * The effective terms of a stored value: the value itself when it is in the vocabulary ({@link #isTerms}),
+     * {@value #DEFAULT_AP_TERMS} when there is none, and {@value #DEFAULT_AP_TERMS} with a warning for anything else
+     * (ruling 9 of #2510): {@code NET 30}, {@code net30} and pos-invoice's {@code NET_30} are not terms here.
+     */
+    public static @NonNull String parseTerms(@Nullable String value) {
+        if (value == null) {
+            return DEFAULT_AP_TERMS;
+        }
+        if (isTerms(value)) {
+            return value;
+        }
+        log.warn(
+                "{} holds '{}', not DUE_ON_RECEIPT or NET1..NET120; using {}",
+                AP_DEFAULT_TERMS,
+                value,
+                DEFAULT_AP_TERMS);
+        return DEFAULT_AP_TERMS;
+    }
+
+    /** Whether {@code value} is in the vocabulary: {@code DUE_ON_RECEIPT}, or {@code NET1} to {@code NET120}. */
+    public static boolean isTerms(@Nullable String value) {
+        if (value == null) {
+            return false;
+        }
+        if (DUE_ON_RECEIPT.equals(value)) {
+            return true;
+        }
+        Matcher net = NET_TERMS.matcher(value);
+        return net.matches() && Integer.parseInt(net.group(1)) <= MAX_NET_DAYS;
     }
 
     static @NonNull Optional<BigDecimal> parseCushion(@Nullable String value) {

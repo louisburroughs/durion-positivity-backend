@@ -76,6 +76,8 @@ class VendorBillApprovalServiceTest {
     private static final String APPROVE = AccountingPermissions.AP_APPROVE;
     private static final String OVER_LIMIT = AccountingPermissions.AP_APPROVE_OVER_LIMIT;
     private static final String REJECT = AccountingPermissions.AP_REJECT;
+    static final ApApprovalPolicy.Settings DEFAULT_POLICY =
+            new ApApprovalPolicy.Settings(new BigDecimal("0.00"), new BigDecimal("0.00"), false, false, "NET30");
 
     private final VendorBillRepository bills = mock();
     private final VendorBillMatchCandidateRepository candidates = mock();
@@ -87,6 +89,7 @@ class VendorBillApprovalServiceTest {
     private final VendorBillDuplicateGuard duplicateGuard = mock();
     private final VendorBillReader reader = mock();
     private final VendorBillLocks locks = mock();
+    private final ApApprovalPolicy policy = mock();
     private VendorBillApprovalServiceImpl service;
     private VendorBill bill;
 
@@ -105,7 +108,11 @@ class VendorBillApprovalServiceTest {
                 reader,
                 locks,
                 new LedgerCurrency("USD"),
+                policy,
                 mock(PlatformTransactionManager.class));
+        // No policy rows: the defaults, a clerk limit of 0 (every bill OVER_LIMIT), both switches off (S13).
+        when(policy.settings()).thenReturn(DEFAULT_POLICY);
+        when(policy.forDecision()).thenReturn(DEFAULT_POLICY);
         bill = new VendorBill(BILL_ID);
         bill.setVendorId(UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a02"));
         bill.setBillNumber("INV-1");
@@ -294,18 +301,23 @@ class VendorBillApprovalServiceTest {
         }
 
         @Test
-        @DisplayName("AC7/AC10: approve needs accounting:ap:approve_over_limit in this story; ap:approve and ap:pay"
-                + " alone are 403")
-        void approveNeedsTheOverLimitTier() {
+        @DisplayName(
+                "AC1/AC10 (S13): the approve gate takes either approve permission; ap:pay alone is 403 FORBIDDEN, and"
+                        + " under the default limit of 0 ap:approve is 403 AP_APPROVAL_LIMIT_EXCEEDED")
+        void approveNeedsAnApprovePermissionAndTheTier() {
             in(VendorBillStatus.AWAITING_APPROVAL);
-            for (String[] held : List.of(
-                    new String[] {APPROVE}, new String[] {"accounting:ap:pay"}, new String[] {REJECT, APPROVE})) {
+            signIn("payer.pat", "accounting:ap:pay");
+            assertThatThrownBy(() -> service.approve(BILL_ID, new VendorBillCommands.Approve(null, null, null, null)))
+                    .isInstanceOf(AccessDeniedException.class);
+            for (String[] held : List.of(new String[] {APPROVE}, new String[] {REJECT, APPROVE})) {
                 signIn("clerk.ana", held);
                 assertThatThrownBy(
                                 () -> service.approve(BILL_ID, new VendorBillCommands.Approve(null, null, null, null)))
-                        .isInstanceOf(AccessDeniedException.class);
+                        .satisfies(e ->
+                                assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.AP_APPROVAL_LIMIT_EXCEEDED));
             }
             assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.AWAITING_APPROVAL);
+            verify(postingService, never()).post(any(), any(), any(), anyString());
         }
 
         @Test
@@ -415,7 +427,7 @@ class VendorBillApprovalServiceTest {
 
         static Stream<Arguments> permissionMatrix() {
             return Stream.of(
-                    Arguments.of("ACCEPT", new String[] {APPROVE}, false),
+                    Arguments.of("ACCEPT", new String[] {APPROVE, OVER_LIMIT}, true),
                     Arguments.of("ACCEPT", new String[] {REJECT}, false),
                     Arguments.of("ACCEPT", new String[] {OVER_LIMIT}, true),
                     Arguments.of("CORRECT", new String[] {APPROVE}, true),
@@ -664,16 +676,21 @@ class VendorBillApprovalServiceTest {
         }
 
         @Test
-        @DisplayName("The void needs ap:reject plus the approval tier; either alone is 403")
+        @DisplayName("The void needs ap:reject plus an approve permission (403 FORBIDDEN), then the tier: ap:reject and"
+                + " ap:approve over the limit is 403 AP_APPROVAL_LIMIT_EXCEEDED (S13 ruling 4)")
         void voidNeedsRejectAndTheTier() {
             in(VendorBillStatus.APPROVED);
-            for (String[] held :
-                    List.of(new String[] {REJECT}, new String[] {OVER_LIMIT}, new String[] {REJECT, APPROVE})) {
+            for (String[] held : List.of(new String[] {REJECT}, new String[] {OVER_LIMIT})) {
                 signIn("someone", held);
                 assertThatThrownBy(() -> service.voidBill(
                                 BILL_ID, new VendorBillCommands.VoidBill("Billed twice by mistake", null)))
                         .isInstanceOf(AccessDeniedException.class);
             }
+            signIn("someone", REJECT, APPROVE);
+            assertThatThrownBy(() ->
+                            service.voidBill(BILL_ID, new VendorBillCommands.VoidBill("Billed twice by mistake", null)))
+                    .satisfies(
+                            e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.AP_APPROVAL_LIMIT_EXCEEDED));
             verify(postingService, times(0)).reverse(any(), any(), anyString());
         }
 

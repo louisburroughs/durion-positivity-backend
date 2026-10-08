@@ -245,9 +245,12 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
         assertThat(submitted.getStatus()).isEqualTo(VendorBillStatus.AWAITING_APPROVAL);
         assertThat(submitted.getApproval().submittedBy()).isEqualTo(CLERK);
         assertThat(submitted.getAvailableActions())
-                .extracting(VendorBillReview.AvailableAction::action)
-                .as("AC12: the clerk may reject, never approve")
-                .containsExactly(VendorBillAction.REJECT);
+                .extracting(VendorBillReview.AvailableAction::action, VendorBillReview.AvailableAction::allowed)
+                .as("AC12: the clerk may reject; approve is listed blocked by the default limit of 0 (S13)")
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(VendorBillAction.APPROVE, false),
+                        org.assertj.core.groups.Tuple.tuple(VendorBillAction.REJECT, true),
+                        org.assertj.core.groups.Tuple.tuple(VendorBillAction.SET_DUE_DATE, true));
         assertThat(count(tenant, "journal_entry")).isZero();
 
         signIn(CONTROLLER, CONTROLLER_GRANTS);
@@ -840,7 +843,7 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
         assertThat(corrected.getAvailableActions())
                 .extracting(VendorBillReview.AvailableAction::action)
                 .as("AW45: back to waiting for its invoice")
-                .containsExactly(VendorBillAction.VOID_UNMATCHED);
+                .containsExactly(VendorBillAction.VOID_UNMATCHED, VendorBillAction.SET_DUE_DATE);
 
         signIn("receiving.dock", "accounting:ap:pay");
         VendorBillResponse rematched = asTenant(

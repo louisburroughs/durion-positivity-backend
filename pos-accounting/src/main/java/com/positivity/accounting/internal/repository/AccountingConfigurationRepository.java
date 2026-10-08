@@ -9,6 +9,8 @@ import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 /**
  * Repository for the org-level accounting configuration key/value store
@@ -35,4 +37,16 @@ public interface AccountingConfigurationRepository extends JpaRepository<Account
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<AccountingConfiguration> findWithLockByConfigKey(@NonNull String configKey);
+
+    /**
+     * The rows of several keys, share-locked ({@code SELECT ... FOR SHARE}): a decision reads the AP approval policy
+     * this way (CAP:550 S13, #2510), so a policy PUT, which locks each row {@code FOR UPDATE}, waits for the decisions
+     * in flight and a decision waits for a PUT in flight. The rows are locked in key order, the order the PUT locks
+     * them in, so the two never deadlock. Must run inside an active transaction.
+     */
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("SELECT c FROM AccountingConfiguration c WHERE c.configKey IN :configKeys ORDER BY c.configKey")
+    @NonNull
+    List<AccountingConfiguration> findWithShareLockByConfigKeyIn(
+            @Param("configKeys") @NonNull Collection<String> configKeys);
 }

@@ -63,6 +63,11 @@ public class APPaymentServiceImpl implements APPaymentService {
     private final PaymentGatewayProvider paymentGateway;
     private final OutboxService outboxService;
     private final APPaymentFailurePersistenceService paymentFailurePersistenceService;
+    private final VendorBillPayGuard payGuard;
+
+    /** One allocation of the plan: the bill, locked, and the amount applied to it. */
+    record PlannedAllocation(
+            @NonNull VendorBill bill, @NonNull BigDecimal appliedAmount) {}
 
     @Override
     @Transactional
@@ -78,6 +83,27 @@ public class APPaymentServiceImpl implements APPaymentService {
             validateIdempotency(existing, request);
             return toResponse(existing);
         }
+
+        // ---- The pre-gateway block (CAP:550 S13, #2510; ruling 6048398147 item 4) ----------------------------
+        // Every check that can refuse the payment runs here, in this order, before the payment row is saved and
+        // before the gateway is called; a refusal persists nothing but its own audit rows. Later stories add theirs
+        // at the numbered places:
+        //   1. the request checks: S42's method, currency and bank account; S24's vendor exists and is active;
+        //   2. the allocation plan, its bills locked in id order (explicit, or oldest due first);
+        //   3. the pay guard, approver is not payer (S13);
+        //   4. S24's remit-to check;
+        //   5. S42's period check.
+        // A refused allocation (a bill missing, not APPROVED or another vendor's; over-allocation) is refused here,
+        // before the gateway: nothing is charged, no ap_payment row is saved, and the same paymentRef may be sent
+        // again once corrected (ruling 6063520413 item 4).
+        // The plan's bill locks (FOR UPDATE; the automatic plan locks every APPROVED bill of the vendor) are held
+        // until this transaction ends, across the gateway call below: a void or another payment of those bills waits
+        // for it. The gateway client sets no timeout of its own (the Stripe SDK's defaults, 30 s connect and 80 s
+        // read), and no lock_timeout or statement_timeout is configured on the database, so the wait is bounded by
+        // the gateway call alone.
+        List<PlannedAllocation> plan = plan(request);
+        payGuard.check(plan.stream().map(PlannedAllocation::bill).toList(), currentUser, request.getPaymentRef());
+        // ---- end of the pre-gateway block -------------------------------------------------------------------
 
         // Create payment entity
         APPayment payment = new APPayment();
@@ -137,8 +163,8 @@ public class APPaymentServiceImpl implements APPaymentService {
 
             payment = paymentRepository.save(payment);
 
-            // Apply allocations (validation errors bubble up as IllegalArgumentException)
-            applyAllocations(payment, request);
+            // Apply the allocations the plan decided before the gateway call
+            applyAllocations(payment, plan);
 
             // Persist event to outbox for at-least-once delivery guarantee
             payment.setStatus(APPaymentStatus.GL_POST_PENDING);
@@ -200,10 +226,8 @@ public class APPaymentServiceImpl implements APPaymentService {
             return toResponse(payment);
 
         } catch (InvalidBillAllocationException e) {
-            // Bill-allocation validation errors should not mark payment as GATEWAY_FAILED —
-            // the gateway call already succeeded by the time applyAllocations() runs, so this
-            // is a post-authorization allocation failure, not a gateway error.
-            // Rollback the payment (transaction will roll back automatically)
+            // The plan is validated before the gateway call (S13); an allocation error raised here is still never
+            // a gateway failure: the payment rolls back and is not marked GATEWAY_FAILED.
             throw e;
         } catch (Exception e) {
             // Gateway-level failures: persist failure state in separate transaction for
@@ -260,24 +284,33 @@ public class APPaymentServiceImpl implements APPaymentService {
     }
 
     /**
-     * Applies payment allocations to vendor bills based on the request.
-     * Uses explicit allocations if provided, otherwise performs automatic
-     * allocation to oldest bills first.
-     *
-     * @param payment the payment to allocate
-     * @param request the payment request containing optional explicit allocations
+     * The allocation plan, built and checked before the payment row is saved and before the gateway call (CAP:550
+     * S13, #2510): explicit allocations when the request gives them, otherwise the vendor's approved bills oldest due
+     * first. Its bills are locked in id order (#2509 review, A3), every bill is validated and the total checked here,
+     * so a refusal moves no money.
      */
-    private void applyAllocations(@NonNull APPayment payment, @NonNull ExecuteAPPaymentRequest request) {
-        List<APPaymentAllocation> allocations = hasExplicitAllocations(request)
-                ? createExplicitAllocations(payment, request)
-                : createAutomaticAllocations(payment);
+    private @NonNull List<PlannedAllocation> plan(@NonNull ExecuteAPPaymentRequest request) {
+        List<PlannedAllocation> plan = hasExplicitAllocations(request) ? explicitPlan(request) : automaticPlan(request);
+        BigDecimal totalAllocated =
+                plan.stream().map(PlannedAllocation::appliedAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        validateTotalAllocations(totalAllocated, request.getGrossAmount());
+        return plan;
+    }
 
-        BigDecimal totalAllocated = allocations.stream()
-                .map(APPaymentAllocation::getAppliedAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        validateTotalAllocations(totalAllocated, payment.getGrossAmount());
-
+    /** Allocates the payment as {@code plan} decided, in its order. */
+    private void applyAllocations(@NonNull APPayment payment, @NonNull List<PlannedAllocation> plan) {
+        List<APPaymentAllocation> allocations = new ArrayList<>();
+        int sequence = 1;
+        BigDecimal totalAllocated = BigDecimal.ZERO;
+        for (PlannedAllocation planned : plan) {
+            APPaymentAllocation allocation = new APPaymentAllocation();
+            allocation.setPayment(payment);
+            allocation.setVendorBill(planned.bill());
+            allocation.setAppliedAmount(planned.appliedAmount());
+            allocation.setAllocationSequence(sequence++);
+            allocations.add(allocation);
+            totalAllocated = totalAllocated.add(planned.appliedAmount());
+        }
         payment.setUnappliedAmount(payment.getGrossAmount().subtract(totalAllocated));
         allocationRepository.saveAll(allocations);
         paymentRepository.save(payment);
@@ -288,10 +321,8 @@ public class APPaymentServiceImpl implements APPaymentService {
         return allocations != null && !allocations.isEmpty();
     }
 
-    private @NonNull List<APPaymentAllocation> createExplicitAllocations(
-            @NonNull APPayment payment, @NonNull ExecuteAPPaymentRequest request) {
-        List<APPaymentAllocation> allocations = new ArrayList<>();
-        int sequence = 1;
+    private @NonNull List<PlannedAllocation> explicitPlan(@NonNull ExecuteAPPaymentRequest request) {
+        List<PlannedAllocation> allocations = new ArrayList<>();
         // Every bill locked in id order before any status is read (#2509 review, A3): a void or another payment of
         // the same bills waits, and the status read here is the one the allocation commits against.
         Map<UUID, VendorBill> locked = billRepository
@@ -306,24 +337,20 @@ public class APPaymentServiceImpl implements APPaymentService {
             VendorBill bill = validateBillForAllocation(
                     allocationLine.getVendorBillId(),
                     locked.get(allocationLine.getVendorBillId()),
-                    payment.getVendorId());
-
-            APPaymentAllocation allocation = new APPaymentAllocation();
-            allocation.setPayment(payment);
-            allocation.setVendorBill(bill);
-            allocation.setAppliedAmount(allocationLine.getAppliedAmount());
-            allocation.setAllocationSequence(sequence++);
-            allocations.add(allocation);
+                    request.getVendorId());
+            if (allocationLine.getAppliedAmount().signum() != 0) {
+                // A line of 0.00 pays nothing: it is no allocation and blocks nothing (#2622 review LOW-3).
+                allocations.add(new PlannedAllocation(bill, allocationLine.getAppliedAmount()));
+            }
         }
 
         return allocations;
     }
 
-    private @NonNull List<APPaymentAllocation> createAutomaticAllocations(@NonNull APPayment payment) {
-        List<VendorBill> eligibleBills = getEligibleBillsSortedByDueDate(payment.getVendorId());
-        List<APPaymentAllocation> allocations = new ArrayList<>();
-        BigDecimal remaining = payment.getGrossAmount();
-        int sequence = 1;
+    private @NonNull List<PlannedAllocation> automaticPlan(@NonNull ExecuteAPPaymentRequest request) {
+        List<VendorBill> eligibleBills = getEligibleBillsSortedByDueDate(request.getVendorId());
+        List<PlannedAllocation> allocations = new ArrayList<>();
+        BigDecimal remaining = request.getGrossAmount();
 
         for (VendorBill bill : eligibleBills) {
             // Stop if no remaining amount to allocate
@@ -335,14 +362,7 @@ public class APPaymentServiceImpl implements APPaymentService {
             // Process only bills with positive open amount
             if (billOpen.compareTo(BigDecimal.ZERO) > 0) {
                 BigDecimal toApply = remaining.min(billOpen);
-
-                APPaymentAllocation allocation = new APPaymentAllocation();
-                allocation.setPayment(payment);
-                allocation.setVendorBill(bill);
-                allocation.setAppliedAmount(toApply);
-                allocation.setAllocationSequence(sequence++);
-                allocations.add(allocation);
-
+                allocations.add(new PlannedAllocation(bill, toApply));
                 remaining = remaining.subtract(toApply);
             }
         }

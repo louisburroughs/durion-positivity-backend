@@ -288,6 +288,32 @@ public class VendorBillPostingService {
         return new PostingDate(billDate, VendorBillPostingDateRule.BILL_DATE);
     }
 
+    /**
+     * Refuses, writing nothing, what the content of {@code bill} would get at its posting (CAP:550 S13 guard step 5):
+     * builds the entry's legs from the stored lines with {@code classification} and {@code difference}, so a bill
+     * without a needed class is 422 {@code AP_BILL_UNCLASSIFIED} (and a class the document cannot take 400 {@code
+     * VALIDATION_ERROR}) before the posting's period and mapping checks.
+     */
+    public void requirePostable(
+            @NonNull VendorBill bill, @Nullable Classification classification, @Nullable Difference difference) {
+        entry(
+                bill,
+                billLines.findByVendorBill_VendorBillIdOrderByLineNumber(bill.getVendorBillId()),
+                classification == null ? new Classification(null, null) : classification,
+                difference);
+    }
+
+    /**
+     * Resolves each leg's mapping on {@code date} as {@link #post} does, writing nothing: 422 {@code
+     * GL_MAPPING_NOT_CONFIGURED} for the first key with no active mapping. Automatic approval asks this before it
+     * posts (CAP:550 S13, #2510), in a transaction of its own, so a missing mapping never reaches the match's.
+     */
+    public void requireMapped(@NonNull VendorBill bill, @NonNull List<Leg> legs, @NonNull LocalDate date) {
+        for (Leg leg : legs) {
+            resolve(bill, leg.mappingKey(), date);
+        }
+    }
+
     /** The source event of a bill's entry, derived from its durable key {@code VENDOR_BILL:<billId>}. */
     public static @NonNull UUID sourceEventId(@NonNull UUID billId) {
         return UUID.nameUUIDFromBytes((SOURCE_KEY_PREFIX + billId).getBytes(StandardCharsets.UTF_8));

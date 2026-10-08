@@ -6,6 +6,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.positivity.accounting.internal.enums.MatchConfidence;
 import com.positivity.accounting.internal.enums.VendorBillAction;
+import com.positivity.accounting.internal.enums.VendorBillApproverKind;
 import com.positivity.accounting.internal.enums.VendorBillCheckOutcome;
 import com.positivity.accounting.internal.enums.VendorBillDebitClass;
 import com.positivity.accounting.internal.enums.VendorBillDifferenceClass;
@@ -36,8 +37,14 @@ public final class VendorBillReview {
         SUPPLIER_CONNECTION
     }
 
-    /** The approval tier a decision needs; derived, never stored. Always OVER_LIMIT until S13's limits exist. */
-    @Schema(name = "VendorBillApprovalTier", description = "The approval tier the bill needs")
+    /**
+     * The approval tier a decision needs (CAP:550 S13, #2510): CLERK when the clerk limit is above 0 and the absolute
+     * total is at most it, else OVER_LIMIT. Derived from the current limit on every read, never stored.
+     */
+    @Schema(
+            name = "VendorBillApprovalTier",
+            description = "The approval tier the bill needs: CLERK (accounting:ap:approve) within the clerk limit,"
+                    + " OVER_LIMIT (accounting:ap:approve_over_limit) above it")
     public enum RequiredTier {
         CLERK,
         OVER_LIMIT
@@ -108,8 +115,21 @@ public final class VendorBillReview {
             @Schema(description = "Why it was sent", requiredMode = NOT_REQUIRED) @Nullable
             String submissionJustification,
 
-            @Schema(description = "The tier the approval needs", example = "OVER_LIMIT", requiredMode = REQUIRED)
+            @Schema(
+                    description = "The tier the approval needs, from the current clerk limit (never stored)",
+                    example = "OVER_LIMIT",
+                    requiredMode = REQUIRED)
             RequiredTier requiredTier,
+
+            @Schema(
+                    description = "The clerk approval limit in force now, in the functional currency; 0.00 means no"
+                            + " clerk approves",
+                    example = "2500.00",
+                    requiredMode = REQUIRED)
+            BigDecimal clerkLimit,
+
+            @Schema(description = "ISO 4217 code of clerkLimit", example = "USD", requiredMode = REQUIRED)
+            String currencyCode,
 
             @Schema(description = "The classification proposed at submission", requiredMode = NOT_REQUIRED) @Nullable
             Classification proposedClassification,
@@ -129,7 +149,14 @@ public final class VendorBillReview {
 
             @Schema(description = "The approver's justification; only on an approved bill", requiredMode = NOT_REQUIRED)
             @Nullable
-            String approvalJustification) {}
+            String approvalJustification,
+
+            @Schema(
+                    description = "PERSON or SYSTEM (automatic approval of a HIGH match); only on an approved bill",
+                    example = "PERSON",
+                    requiredMode = NOT_REQUIRED)
+            @Nullable
+            VendorBillApproverKind approvedByKind) {}
 
     @Schema(name = "VendorBillRejection", description = "Who rejected or voided the bill, and why")
     public record Rejection(
@@ -294,7 +321,12 @@ public final class VendorBillReview {
             @Schema(description = "Whether it may be taken now", requiredMode = REQUIRED)
             boolean allowed,
 
-            @Schema(description = "Why not; reserved for S13's rule-based blocks", requiredMode = NOT_REQUIRED)
+            @Schema(
+                    description = "Why not, when allowed is false: AP_APPROVAL_LIMIT_EXCEEDED (the bill is over the"
+                            + " clerk limit and the caller lacks accounting:ap:approve_over_limit), else"
+                            + " AP_BILL_SELF_APPROVAL (the caller created the bill); null when allowed",
+                    example = "AP_APPROVAL_LIMIT_EXCEEDED",
+                    requiredMode = NOT_REQUIRED)
             @Nullable
             String blockedReason,
 
@@ -446,5 +478,13 @@ public final class VendorBillReview {
             Instant submittedAt,
 
             @Schema(description = "Total less allocated payments", example = "412.00", requiredMode = REQUIRED)
-            BigDecimal openAmount) {}
+            BigDecimal openAmount,
+
+            @Schema(
+                    description = "The tier an approval needs, from the current clerk limit; null outside"
+                            + " PENDING_RECEIPT_MATCH, MATCH_EXCEPTION and AWAITING_APPROVAL",
+                    example = "CLERK",
+                    requiredMode = NOT_REQUIRED)
+            @Nullable
+            RequiredTier requiredTier) {}
 }

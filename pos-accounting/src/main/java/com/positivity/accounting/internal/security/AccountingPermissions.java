@@ -21,15 +21,22 @@ public final class AccountingPermissions {
     public static final String ANALYTICS_VIEW = "accounting:analytics:view";
 
     /**
-     * Send a vendor bill for approval, correct a match exception and select a match candidate; approve within the
-     * clerk limit once S13 adds it (#2509; SPEC-accounting-workspace §4.3, AW4, AW5, AW31): ACCOUNTING_CLERK,
-     * CONTROLLER, GENERAL_MANAGER, ADMIN.
+     * Send a vendor bill for approval, correct a match exception, select a match candidate, enter its real due date,
+     * and approve or accept it within the clerk limit (#2509, #2510; SPEC-accounting-workspace §4.3, AW4, AW5, AW31):
+     * ACCOUNTING_CLERK, CONTROLLER, GENERAL_MANAGER, ADMIN.
      */
     public static final String AP_APPROVE = "accounting:ap:approve";
 
     /**
-     * Approve a vendor bill over the clerk limit, which until S13 is every bill, including ACCEPT of a match
-     * exception and the void of an approved bill (#2509; AW4, AW5): CONTROLLER, GENERAL_MANAGER, ADMIN.
+     * Read and change the AP approval policy: the clerk and automatic approval limits, the two separation-of-duties
+     * exception switches and the default AP terms (CAP:550 S13, #2510; SPEC-accounting-workspace §4.3, §5.5; AW4, AW5,
+     * AW33): CONTROLLER, GENERAL_MANAGER, ADMIN.
+     */
+    public static final String AP_APPROVAL_POLICY_MANAGE = "accounting:ap_approval_policy:manage";
+
+    /**
+     * Approve a vendor bill over the clerk limit, including ACCEPT of a match exception and the void of an approved
+     * bill (#2509, #2510; AW4, AW5): CONTROLLER, GENERAL_MANAGER, ADMIN.
      */
     public static final String AP_APPROVE_OVER_LIMIT = "accounting:ap:approve_over_limit";
 

@@ -14,11 +14,15 @@ import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
 import com.positivity.accounting.internal.dto.VendorBillSummaryResponse;
 import com.positivity.accounting.internal.entity.APPayment;
 import com.positivity.accounting.internal.entity.JournalEntry;
+import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
 import com.positivity.accounting.internal.enums.PaymentMethod;
+import com.positivity.accounting.internal.enums.VendorBillApproverKind;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.IdempotencyConflictException;
+import com.positivity.accounting.internal.exception.InvalidBillAllocationException;
 import com.positivity.accounting.internal.exception.PaymentGatewayException;
+import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.accounting.internal.payment.GatewayPaymentResponse;
 import com.positivity.accounting.internal.payment.PaymentGatewayProvider;
 import com.positivity.accounting.internal.repository.APPaymentAllocationRepository;
@@ -83,6 +87,9 @@ class APPaymentServiceTest {
 
     @Mock
     private APPaymentFailurePersistenceService paymentFailurePersistenceService;
+
+    @Mock
+    private VendorBillPayGuard payGuard;
 
     @InjectMocks
     private APPaymentServiceImpl service;
@@ -265,6 +272,114 @@ class APPaymentServiceTest {
     // ========================================
     // getPaymentById Tests
     // ========================================
+
+    // ========================================
+    // The pre-gateway block and the pay guard (CAP:550 S13, #2510)
+    // ========================================
+
+    private VendorBill approvedBill(String number, String total, String approvedBy) {
+        VendorBill bill = new VendorBill(UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4b0" + number.length()));
+        bill.setVendorId(testVendorId);
+        bill.setBillNumber(number);
+        bill.setTotalAmount(new BigDecimal(total));
+        bill.setStatus(VendorBillStatus.APPROVED);
+        bill.setApprovedBy(approvedBy);
+        bill.setApprovedByKind(VendorBillApproverKind.PERSON);
+        return bill;
+    }
+
+    private static VendorBillException selfApproved(String billNumber) {
+        return new VendorBillException(
+                VendorBillException.Code.AP_PAYMENT_SELF_APPROVED_BILL,
+                "You approved a bill this payment would pay",
+                List.of(new VendorBillException.FieldError("selfApprovedBillNumbers", billNumber)),
+                null);
+    }
+
+    @Test
+    @DisplayName("AC6 (S13): explicit allocations: the plan's locked bills go to the pay guard before any payment row"
+            + " is saved and before the gateway; a refusal persists nothing and calls no gateway")
+    void payGuardRefusesExplicitPlanBeforeTheGateway() {
+        VendorBill bill = approvedBill("INV-B", "400.00", "ana");
+        ExecuteAPPaymentRequest request =
+                buildRequest(testPaymentRef, testVendorId, new BigDecimal("400.00"), PaymentMethod.ACH);
+        request.setAllocations(List.of(
+                new ExecuteAPPaymentRequest.AllocationLineRequest(bill.getVendorBillId(), new BigDecimal("400.00"))));
+        when(paymentRepository.findByPaymentRef(testPaymentRef)).thenReturn(Optional.empty());
+        when(billRepository.lockByVendorBillIdIn(any())).thenReturn(List.of(bill));
+        org.mockito.Mockito.doThrow(selfApproved("INV-B"))
+                .when(payGuard)
+                .check(eq(List.of(bill)), eq("ana"), eq(testPaymentRef));
+
+        assertThatThrownBy(() -> service.executePayment(request, "ana"))
+                .isInstanceOf(VendorBillException.class)
+                .extracting(e -> ((VendorBillException) e).getCode())
+                .isEqualTo(VendorBillException.Code.AP_PAYMENT_SELF_APPROVED_BILL);
+        verify(payGuard).check(List.of(bill), "ana", testPaymentRef);
+        verify(paymentRepository, never()).save(any(APPayment.class));
+        verify(paymentGateway, never()).executePayment(any());
+        verify(allocationRepository, never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("AC6 (S13): oldest-due-first allocation hands the guard every bill it reaches; never skips one")
+    void payGuardSeesTheAutomaticPlan() {
+        VendorBill older = approvedBill("INV-OLD", "100.00", "ana");
+        older.setDueDate(java.time.LocalDateTime.of(2026, 10, 1, 0, 0));
+        VendorBill newer = approvedBill("INV-NEWER", "300.00", "bob");
+        newer.setDueDate(java.time.LocalDateTime.of(2026, 10, 20, 0, 0));
+        ExecuteAPPaymentRequest request =
+                buildRequest(testPaymentRef, testVendorId, new BigDecimal("150.00"), PaymentMethod.ACH);
+        when(paymentRepository.findByPaymentRef(testPaymentRef)).thenReturn(Optional.empty());
+        when(billRepository.lockByVendorIdAndStatus(testVendorId, VendorBillStatus.APPROVED))
+                .thenReturn(List.of(newer, older));
+        when(billRepository.findById(older.getVendorBillId())).thenReturn(Optional.of(older));
+        when(billRepository.findById(newer.getVendorBillId())).thenReturn(Optional.of(newer));
+        when(allocationRepository.sumAllocatedAmountByVendorBillId(any())).thenReturn(BigDecimal.ZERO);
+        org.mockito.Mockito.doThrow(selfApproved("INV-OLD")).when(payGuard).check(any(), eq("ana"), any());
+
+        assertThatThrownBy(() -> service.executePayment(request, "ana")).isInstanceOf(VendorBillException.class);
+        verify(payGuard).check(List.of(older, newer), "ana", testPaymentRef);
+        verify(paymentRepository, never()).save(any(APPayment.class));
+        verify(paymentGateway, never()).executePayment(any());
+    }
+
+    @Test
+    @DisplayName("S13 review: an explicit 0.00 line pays nothing, so its bill never reaches the pay guard")
+    void zeroAllocationIsNotPaid() {
+        VendorBill bill = approvedBill("INV-Z", "400.00", "ana");
+        ExecuteAPPaymentRequest request =
+                buildRequest(testPaymentRef, testVendorId, new BigDecimal("400.00"), PaymentMethod.ACH);
+        request.setAllocations(
+                List.of(new ExecuteAPPaymentRequest.AllocationLineRequest(bill.getVendorBillId(), BigDecimal.ZERO)));
+        when(paymentRepository.findByPaymentRef(testPaymentRef)).thenReturn(Optional.empty());
+        when(billRepository.lockByVendorBillIdIn(any())).thenReturn(List.of(bill));
+        when(paymentRepository.save(any(APPayment.class))).thenAnswer(inv -> inv.getArgument(0));
+        // The guard passes; the payment then reaches the gateway (stubbed to fail here, past the guard's point).
+        when(paymentGateway.executePayment(any())).thenThrow(new RuntimeException("gateway down"));
+
+        assertThatThrownBy(() -> service.executePayment(request, "ana")).isInstanceOf(PaymentGatewayException.class);
+
+        verify(payGuard).check(List.of(), "ana", testPaymentRef);
+    }
+
+    @Test
+    @DisplayName("S13: an allocation to an unapproved bill is refused before the payment row and the gateway")
+    void invalidPlanRefusedBeforeTheGateway() {
+        VendorBill bill = approvedBill("INV-C", "400.00", "bob");
+        bill.setStatus(VendorBillStatus.AWAITING_APPROVAL);
+        ExecuteAPPaymentRequest request =
+                buildRequest(testPaymentRef, testVendorId, new BigDecimal("400.00"), PaymentMethod.ACH);
+        request.setAllocations(List.of(
+                new ExecuteAPPaymentRequest.AllocationLineRequest(bill.getVendorBillId(), new BigDecimal("400.00"))));
+        when(paymentRepository.findByPaymentRef(testPaymentRef)).thenReturn(Optional.empty());
+        when(billRepository.lockByVendorBillIdIn(any())).thenReturn(List.of(bill));
+
+        assertThatThrownBy(() -> service.executePayment(request, "ana"))
+                .isInstanceOf(InvalidBillAllocationException.class);
+        verify(paymentRepository, never()).save(any(APPayment.class));
+        verify(paymentGateway, never()).executePayment(any());
+    }
 
     @Test
     @DisplayName("getPaymentById should return response when payment found")

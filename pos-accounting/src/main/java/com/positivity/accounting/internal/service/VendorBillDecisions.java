@@ -1,27 +1,25 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.dto.VendorBillReview;
 import com.positivity.accounting.internal.enums.VendorBillAction;
 import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.security.common.SecurityContextHelper;
+import java.util.List;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.security.access.AccessDeniedException;
 
 /**
- * Who may take which vendor-bill decision, and the justification rule (CAP:550 S12, #2509; SPEC-accounting-workspace
- * §4.3 "Permissions", AW4-AW6). The endpoints gate on any permission that could allow the call; each action is
- * checked again here, against the caller in the security context (ADR-0018).
+ * Who may take which vendor-bill decision, and the justification rule (CAP:550 S12, #2509, and S13, #2510;
+ * SPEC-accounting-workspace §4.3 "Permissions", AW4-AW6). The endpoints gate on any permission that could allow the
+ * call; each action is checked again here, against the caller in the security context (ADR-0018).
  *
- * <p>Until S13 adds the clerk limit (default 0) every bill is over it, so approving, and {@code ACCEPT} with it,
- * needs {@code accounting:ap:approve_over_limit}; S13 widens approval to {@code accounting:ap:approve} within the
- * limit. Voiding an approved bill needs {@code accounting:ap:reject} plus that same approval tier (AW42); voiding a
- * goods-receipt bill no invoice will match needs {@code accounting:ap:reject} alone (AW45).
- *
- * <p><b>For S13.</b> The tier is {@code OVER_LIMIT} for every bill here and in the read's {@code requiredTier}, and
- * the audit records the limit as 0: S13 replaces {@link #mayTake} for {@code APPROVE}, {@code ACCEPT_EXCEPTION} and
- * {@code VOID_APPROVED} with the bill's tier against the stored limit, fills {@code blockedReason} for the rule-based
- * blocks, and records the real limit in the audit row. Nothing else here depends on the limit.
+ * <p>{@link #mayTake} is the permission only. Approving, and {@code ACCEPT}, need either approve permission; voiding an
+ * approved bill needs {@code accounting:ap:reject} and either approve permission. The bill's tier ({@link
+ * ApApprovalPolicy#tier}) is then a bill-level guard ({@link #mayDecideTier}): an {@code OVER_LIMIT} bill needs {@code
+ * accounting:ap:approve_over_limit} (S13 guard order, step 2). Voiding a goods-receipt bill no invoice will match
+ * needs {@code accounting:ap:reject} alone (AW45). Entering the real due date needs {@code accounting:ap:approve}.
  */
 final class VendorBillDecisions {
 
@@ -30,6 +28,8 @@ final class VendorBillDecisions {
 
     static final String SYSTEM = "SYSTEM";
 
+    private static final String ROLE_PREFIX = "ROLE_";
+
     private VendorBillDecisions() {}
 
     /** Whether the caller holds the permission {@code action} needs. */
@@ -37,11 +37,44 @@ final class VendorBillDecisions {
         return switch (action) {
             case SUBMIT_FOR_APPROVAL, CORRECT_EXCEPTION, SELECT_CANDIDATE ->
                 has(AccountingPermissions.AP_APPROVE) || has(AccountingPermissions.AP_APPROVE_OVER_LIMIT);
-            case APPROVE, ACCEPT_EXCEPTION -> has(AccountingPermissions.AP_APPROVE_OVER_LIMIT);
+            case APPROVE, ACCEPT_EXCEPTION ->
+                has(AccountingPermissions.AP_APPROVE) || has(AccountingPermissions.AP_APPROVE_OVER_LIMIT);
             case REJECT, VOID_EXCEPTION, VOID_UNMATCHED -> has(AccountingPermissions.AP_REJECT);
             case VOID_APPROVED ->
-                has(AccountingPermissions.AP_REJECT) && has(AccountingPermissions.AP_APPROVE_OVER_LIMIT);
+                has(AccountingPermissions.AP_REJECT)
+                        && (has(AccountingPermissions.AP_APPROVE) || has(AccountingPermissions.AP_APPROVE_OVER_LIMIT));
+            case SET_DUE_DATE -> has(AccountingPermissions.AP_APPROVE);
         };
+    }
+
+    /**
+     * Whether the caller may decide a bill of {@code tier} (S13 guard order, step 2): a {@code CLERK}-tier bill takes
+     * either approve permission, which {@link #mayTake} already required; an {@code OVER_LIMIT} bill needs {@code
+     * accounting:ap:approve_over_limit}.
+     */
+    static boolean mayDecideTier(VendorBillReview.@NonNull RequiredTier tier) {
+        return tier == VendorBillReview.RequiredTier.CLERK || has(AccountingPermissions.AP_APPROVE_OVER_LIMIT);
+    }
+
+    /** The caller's name when there is one, else null: the reads' creator rule never throws for an unnamed caller. */
+    static @Nullable String callerOrNull() {
+        if (!SecurityContextHelper.isAuthenticated()) {
+            return null;
+        }
+        String name = SecurityContextHelper.getCurrentUsernameOrDefault("").trim();
+        return name.isEmpty() ? null : name;
+    }
+
+    /** The caller's roles (the {@code ROLE_} authorities, without the prefix), sorted, for an audit row. */
+    static @NonNull List<String> callerRoles() {
+        if (!SecurityContextHelper.isAuthenticated()) {
+            return List.of();
+        }
+        return SecurityContextHelper.getAuthorities().stream()
+                .filter(authority -> authority.startsWith(ROLE_PREFIX))
+                .map(authority -> authority.substring(ROLE_PREFIX.length()))
+                .sorted()
+                .toList();
     }
 
     /** Refuses with 403 {@code FORBIDDEN} when the caller does not hold the permission {@code action} needs. */
@@ -53,7 +86,7 @@ final class VendorBillDecisions {
 
     static boolean justificationRequired(@NonNull VendorBillAction action) {
         return switch (action) {
-            case APPROVE, SELECT_CANDIDATE -> false;
+            case APPROVE, SELECT_CANDIDATE, SET_DUE_DATE -> false;
             case SUBMIT_FOR_APPROVAL,
                     REJECT,
                     ACCEPT_EXCEPTION,
