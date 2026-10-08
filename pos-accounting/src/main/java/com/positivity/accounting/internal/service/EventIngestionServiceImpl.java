@@ -32,6 +32,7 @@ import com.positivity.accounting.internal.exception.EventNotFoundException;
 import com.positivity.accounting.internal.exception.EventNotRetryableException;
 import com.positivity.accounting.internal.exception.EventValidationException;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
+import com.positivity.domainevents.inventory.GoodsReceiptRecordedV1;
 import com.positivity.domainevents.payment.PaymentSettledV1;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -52,6 +53,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -115,6 +117,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
     private final AccountingSequenceLocker sequenceLocker;
     private final EventPayloadReferenceProjector eventPayloadReferenceProjector;
     private final AutomaticPaymentApplicationService automaticPaymentApplicationService;
+    private final GoodsReceiptReprocessor goodsReceiptReprocessor;
 
     /** Scope-key prefix for the per-month {@code accounting_event.eventReference} counter. */
     private static final String EVENT_REFERENCE_SCOPE_PREFIX = "AE-";
@@ -375,6 +378,22 @@ public class EventIngestionServiceImpl implements EventIngestionService {
             return reapplySettledPayment(event, triggeredByUserId);
         }
 
+        // A held goods receipt (CAP:550 S41, #2602) re-runs its own assessment and posting from the stored fact,
+        // never the posting engine: no rule set exists for it, and the engine would neither check its currency first
+        // nor post under the receipt's key.
+        if (GoodsReceiptRecordedV1.EVENT_TYPE.equals(event.getEventType())) {
+            try {
+                return reprocessGoodsReceipt(event, triggeredByUserId);
+            } catch (DataIntegrityViolationException | OptimisticLockingFailureException e) {
+                // Two reprocesses of the same receipt at once: the loser trips the posting key's unique constraint or
+                // the row's version. The same deterministic 409 as the engine branch below (ADR-0017).
+                String msg = "Concurrent reprocessing detected for event " + eventId
+                        + ". Another transaction has modified this event. Please retry.";
+                log.warn(msg, e);
+                throw new IllegalStateException(msg, e);
+            }
+        }
+
         // Increment attempt count
         Integer currentAttemptCount = event.getAttemptCount();
         int nextAttemptCount = (currentAttemptCount == null ? 0 : currentAttemptCount) + 1;
@@ -441,6 +460,52 @@ public class EventIngestionServiceImpl implements EventIngestionService {
                 .orElseThrow(() -> new EventNotFoundException("Event not found after reprocessing: " + eventId));
 
         return AccountingEventMapper.toEventResponse(event);
+    }
+
+    /**
+     * CAP:550 S41 (#2602; Accounting ruling 4): re-assess a held {@code goodsreceipt.recorded} row from its stored
+     * payload through {@link GoodsReceiptReprocessor}, in this transaction. Still invalid keeps the hold and its
+     * reason ({@code CURRENCY_NOT_SUPPORTED} or {@code VALIDATION_ERROR}); a fact that now passes posts once under its
+     * receipt key ({@code PROCESSED / NEW}), or closes {@code PROCESSED / DUPLICATE_IGNORED} when the key already
+     * posted. Never FAILED, never a posting-engine reason. Every attempt counts and writes its history row.
+     */
+    private AccountingEventResponse reprocessGoodsReceipt(
+            @NonNull AccountingEvent event, @NonNull String triggeredByUserId) {
+        GoodsReceiptReprocessor.Result result = goodsReceiptReprocessor.reprocess(event.getPayload());
+        event.setResolvedByUserId(triggeredByUserId);
+        event.setAttemptCount((event.getAttemptCount() == null ? 0 : event.getAttemptCount()) + 1);
+        event.setStatus(result.status());
+        event.setFailureReasonCode(result.reason());
+        if (result.status() == AccountingEventStatus.PROCESSED) {
+            event.setFailureDetails(null);
+            event.setErrorMessage(null);
+        } else {
+            event.setFailureDetails(result.detail());
+            event.setErrorMessage(result.detail());
+        }
+        if (result.resolved()) {
+            event.setProcessedAt(Instant.now(clock));
+            event.setIdempotencyOutcome(result.idempotencyOutcome().name());
+            event.setJournalEntryId(result.journalEntryId());
+        }
+
+        ReprocessingAttemptHistory attempt = new ReprocessingAttemptHistory();
+        attempt.setAccountingEvent(event);
+        attempt.setTriggeredByUserId(triggeredByUserId);
+        attempt.setAttemptedAt(Instant.now(clock));
+        attempt.setOutcome(
+                result.status() == AccountingEventStatus.PROCESSED
+                        ? ReprocessingOutcome.SUCCESS
+                        : ReprocessingOutcome.FAILURE);
+        attempt.setOutcomeDetails("Goods receipt reassessed: " + result.status()
+                + (result.reason() == null ? "" : " / " + result.reason()) + " (" + result.detail() + ")");
+        reprocessingAttemptHistoryRepository.save(attempt);
+        log.info(
+                "Reprocessed goods receipt event {} through its own path: {} {}",
+                event.getEventId(),
+                result.status(),
+                result.reason() == null ? "" : result.reason());
+        return AccountingEventMapper.toEventResponse(accountingEventRepository.save(event));
     }
 
     /**
@@ -790,7 +855,12 @@ public class EventIngestionServiceImpl implements EventIngestionService {
                         .sourceSystem(InventoryEventsListener.SOURCE_SYSTEM)
                         .eventTypes(InventoryEventsListener.RECORDED_EVENT_TYPES)
                         .postingKey("Deterministic sourceEventId derived from the scrapId, the adjustmentKind + "
-                                + "adjustmentId, or the revaluationId")
+                                + "adjustmentId, the revaluationId, or the receiptId (goodsreceipt.recorded, posting"
+                                + " key GOODS_RECEIPT_ACCRUAL:<receiptId>). A goods receipt that is not posted writes"
+                                + " SUSPENDED / CURRENCY_NOT_SUPPORTED (no currency, or not the ledger's), SUSPENDED /"
+                                + " VALIDATION_ERROR (malformed) or SKIPPED / UNCOSTED_FACT; a held receipt is recorded"
+                                + " once per reason, and reprocessing it re-runs the receipt's own assessment and"
+                                + " posting instead of the posting engine")
                         .postsJournalEntry(true)
                         .duplicateOutcome(IdempotencyOutcome.DUPLICATE_IGNORED)
                         .onDuplicate(jeDuplicate)

@@ -28,6 +28,7 @@ import com.positivity.accounting.internal.repository.VendorRepository;
 import com.positivity.accounting.internal.service.AccountingSequenceLocker;
 import com.positivity.accounting.internal.service.KafkaFactIngestionRecorder;
 import com.positivity.accounting.internal.service.SupplierInvoiceEventsListener;
+import com.positivity.accounting.internal.service.VendorBillAutoApproval;
 import com.positivity.accounting.internal.service.VendorBillDuplicateGuard;
 import com.positivity.accounting.internal.service.VendorBillInvoiceMatcher;
 import com.positivity.accounting.internal.service.VendorBillLocks;
@@ -105,6 +106,9 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
 
     @Autowired
     private VendorBillLocks locks;
+
+    @Autowired
+    private VendorBillAutoApproval autoApproval;
 
     @Autowired
     private Clock clock;
@@ -630,7 +634,8 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
                 matcher,
                 reader,
                 auditLogs,
-                locks);
+                locks,
+                autoApproval);
     }
 
     /**
@@ -784,7 +789,8 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
                 matcher,
                 reader,
                 auditLogs,
-                locks);
+                locks,
+                autoApproval);
     }
 
     private String create(VendorBillService service, UUID tenant, UUID vendorId) {

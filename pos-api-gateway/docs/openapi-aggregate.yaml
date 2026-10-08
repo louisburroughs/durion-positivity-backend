@@ -11,6 +11,8 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1analytics~1payment-lag-cohorts
   /v1/accounting/analytics/vendor-spend:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1analytics~1vendor-spend
+  /v1/accounting/ap-approval-policy:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1ap-approval-policy
   /v1/accounting/ap/bills:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1ap~1bills
   /v1/accounting/ap/payments:
@@ -345,6 +347,8 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1vendor-bills~1{billId}
   /v1/accounting/vendor-bills/{billId}/approve:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1vendor-bills~1{billId}~1approve
+  /v1/accounting/vendor-bills/{billId}/due-date:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1vendor-bills~1{billId}~1due-date
   /v1/accounting/vendor-bills/{billId}/reject:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1vendor-bills~1{billId}~1reject
   /v1/accounting/vendor-bills/{billId}/resolve-exception:

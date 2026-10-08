@@ -345,8 +345,8 @@ SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', 
 --     supplier:vendor_remit:approve  -> ADMIN, CONTROLLER, GENERAL_MANAGER (never the requester: the
 --                                       service refuses self-approval whatever the grant)
 --     supplier:fact:replay           -> ADMIN (the crm:fact:replay precedent)
--- * CAP:550 #2621 (Security ruling on #2617, ruling 4, 2026-10-08): supplier:vendor_tax_id:reveal, the only
---   way to see a vendor's full tax-registration number (every other read is masked); each reveal needs a
+-- * CAP:550 #2621 (Security ruling on #2617, ruling 4, 2026-10-08): supplier:vendor_tax_id:reveal (bit 560), the
+--   only way to see a vendor's full tax-registration number (every other read is masked); each reveal needs a
 --   reason and writes an audit row first. The action is reveal, not view, so SUPPORT's read-only ceiling
 --   keeps it off structurally.
 --     supplier:vendor_tax_id:reveal  -> ADMIN, CONTROLLER (ACCOUNTING_CLERK, GENERAL_MANAGER, SUPPORT and
@@ -369,8 +369,11 @@ SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', 
 --   enforced; accounting:ap:approve_over_limit is new (bit 558).
 --     accounting:ap:approve             -> ACCOUNTING_CLERK, ADMIN, CONTROLLER, GENERAL_MANAGER
 --     accounting:ap:reject              -> ACCOUNTING_CLERK, ADMIN, CONTROLLER, GENERAL_MANAGER
---     accounting:ap:approve_over_limit  -> ADMIN, CONTROLLER, GENERAL_MANAGER (until S13's clerk limit, every bill
---                                          is over it, so clerks send bills for approval and never approve)
+--     accounting:ap:approve_over_limit  -> ADMIN, CONTROLLER, GENERAL_MANAGER (a bill over the clerk limit; clerks
+--                                          approve within it, CAP:550 S13)
+-- * CAP:550 S13 (#2510, SPEC-accounting-workspace §4.3, §5.5, AW4/AW5/AW33, Security sign-off OI-5, AW31): the AP
+--   approval policy (clerk and automatic limits, separation-of-duties switches, default AP terms) is new (bit 559).
+--     accounting:ap_approval_policy:manage -> ADMIN, CONTROLLER, GENERAL_MANAGER
 --
 -- IDEMPOTENCY
 -- Every statement below is ON CONFLICT DO NOTHING, and role/permission ids are
@@ -418,6 +421,7 @@ FROM (VALUES
     ('accounting:ap:pay', 'accounting', 'ap', 'pay', 4),
     ('accounting:ap:reject', 'accounting', 'ap', 'reject', 263),
     ('accounting:ap:view', 'accounting', 'ap', 'view', 3),
+    ('accounting:ap_approval_policy:manage', 'accounting', 'ap_approval_policy', 'manage', 559),
     ('accounting:coa:create', 'accounting', 'coa', 'create', 6),
     ('accounting:coa:deactivate', 'accounting', 'coa', 'deactivate', 264),
     ('accounting:coa:edit', 'accounting', 'coa', 'edit', 7),
@@ -851,7 +855,7 @@ FROM (VALUES
     ('supplier:vendor:read', 'supplier', 'vendor', 'read', 550),
     ('supplier:vendor:write', 'supplier', 'vendor', 'write', 551),
     ('supplier:vendor_remit:approve', 'supplier', 'vendor_remit', 'approve', 552),
-    ('supplier:vendor_tax_id:reveal', 'supplier', 'vendor_tax_id', 'reveal', 559),
+    ('supplier:vendor_tax_id:reveal', 'supplier', 'vendor_tax_id', 'reveal', 560),
     ('supplier:workorderauth:request', 'supplier', 'workorderauth', 'request', 462),
     ('supplier:workorderauth:review', 'supplier', 'workorderauth', 'review', 463),
     ('tax:calculate', 'tax', '', 'calculate', 163),
@@ -998,6 +1002,7 @@ FROM (VALUES
     ('ADMIN', 'accounting:ap:pay'),
     ('ADMIN', 'accounting:ap:reject'),
     ('ADMIN', 'accounting:ap:view'),
+    ('ADMIN', 'accounting:ap_approval_policy:manage'),
     ('ADMIN', 'accounting:coa:create'),
     ('ADMIN', 'accounting:coa:deactivate'),
     ('ADMIN', 'accounting:coa:edit'),
@@ -1476,6 +1481,7 @@ FROM (VALUES
     ('CONTROLLER', 'accounting:ap:pay'),
     ('CONTROLLER', 'accounting:ap:reject'),
     ('CONTROLLER', 'accounting:ap:view'),
+    ('CONTROLLER', 'accounting:ap_approval_policy:manage'),
     ('CONTROLLER', 'accounting:coa:create'),
     ('CONTROLLER', 'accounting:coa:deactivate'),
     ('CONTROLLER', 'accounting:coa:edit'),
@@ -1565,6 +1571,7 @@ FROM (VALUES
     ('GENERAL_MANAGER', 'accounting:ap:pay'),
     ('GENERAL_MANAGER', 'accounting:ap:reject'),
     ('GENERAL_MANAGER', 'accounting:ap:view'),
+    ('GENERAL_MANAGER', 'accounting:ap_approval_policy:manage'),
     ('GENERAL_MANAGER', 'accounting:customer-credit:refund'),
     ('GENERAL_MANAGER', 'accounting:payment:apply'),
     ('GENERAL_MANAGER', 'appointments:reschedule:approve'),
@@ -1908,6 +1915,7 @@ BEGIN
         ('accounting:ap:pay'),
         ('accounting:ap:reject'),
         ('accounting:ap:view'),
+        ('accounting:ap_approval_policy:manage'),
         ('accounting:coa:create'),
         ('accounting:coa:deactivate'),
         ('accounting:coa:edit'),

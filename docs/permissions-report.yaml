@@ -1,9 +1,9 @@
-generatedAt: "2026-10-08T14:53:22.777592+00:00"
+generatedAt: "2026-10-08T17:10:39.535196+00:00"
 root: "."
 summary:
   manifestCount: 24
-  permissionCount: 526
-  uniquePermissionCount: 526
+  permissionCount: 527
+  uniquePermissionCount: 527
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -12,7 +12,7 @@ manifests:
     domain: "accounting"
     serviceName: "pos-accounting"
     version: "1.0"
-    permissionCount: 62
+    permissionCount: 63
     permissions:
       - name: "accounting:analytics:view"
         description: "View Wave 2 read-only accounting analytics (invoiced-vs-collected, payment-lag cohorts)"
@@ -22,6 +22,8 @@ manifests:
         description: "Approve vendor bills over the clerk limit"
       - name: "accounting:ap:pay"
         description: "Process payments"
+      - name: "accounting:ap_approval_policy:manage"
+        description: "Read and change the AP approval policy: approval limits, separation-of-duties switches and default AP terms (CAP:550 S13)"
       - name: "accounting:ap:reject"
         description: "Reject vendor bills and void match exceptions or approved bills"
       - name: "accounting:ap:view"
@@ -1260,6 +1262,12 @@ permissions:
     source: "pos-accounting/src/main/resources/permissions.yaml"
   - name: "accounting:ap:view"
     description: "View accounts payable"
+    domain: "accounting"
+    serviceName: "pos-accounting"
+    module: "pos-accounting"
+    source: "pos-accounting/src/main/resources/permissions.yaml"
+  - name: "accounting:ap_approval_policy:manage"
+    description: "Read and change the AP approval policy: approval limits, separation-of-duties switches and default AP terms (CAP:550 S13)"
     domain: "accounting"
     serviceName: "pos-accounting"
     module: "pos-accounting"

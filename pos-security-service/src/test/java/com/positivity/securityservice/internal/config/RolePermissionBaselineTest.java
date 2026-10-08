@@ -804,6 +804,15 @@ class RolePermissionBaselineTest {
         }
 
         @Test
+        @DisplayName(
+                "CAP:550 S13: ap_approval_policy:manage is held by exactly ADMIN, CONTROLLER and GENERAL_MANAGER, who"
+                        + " set the limits (AW4, AW31); never by the clerk")
+        void approvalPolicyHolders() {
+            assertThat(holdersOf("accounting:ap_approval_policy:manage"))
+                    .containsExactly("ADMIN", "CONTROLLER", "GENERAL_MANAGER");
+        }
+
+        @Test
         @DisplayName("GENERAL_MANAGER's SQL grants are the fixture's former set plus payment:apply, ap:pay and ap:view")
         void generalManagerGainsExactlyTheThree() {
             Set<String> sql = sqlSeededGrants.get("GENERAL_MANAGER");

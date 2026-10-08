@@ -246,7 +246,32 @@ public class AccountingExceptionHandler {
      */
     @ExceptionHandler(VendorBillException.class)
     public ResponseEntity<ApiError> handleVendorBill(VendorBillException ex, HttpServletRequest request) {
-        return build(ex.getCode().status(), ex.getCode().name(), ex.getMessage(), request);
+        if (ex.getFieldErrors().isEmpty() && ex.getNextAction() == null) {
+            return build(ex.getCode().status(), ex.getCode().name(), ex.getMessage(), request);
+        }
+        // CAP:550 S13 (#2510): fieldErrors naming the fields or bills (VALIDATION_ERROR of the AP approval policy,
+        // AP_PAYMENT_SELF_APPROVED_BILL) and a nextAction (AP_APPROVAL_LIMIT_EXCEEDED names the permission needed).
+        String correlationId = resolveCorrelationId(request);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        List<ApiError.FieldError> fieldErrors = ex.getFieldErrors().isEmpty()
+                ? null
+                : ex.getFieldErrors().stream()
+                        .map(error -> new ApiError.FieldError(error.field(), error.message()))
+                        .toList();
+        return new ResponseEntity<>(
+                new ApiError(
+                        ex.getCode().name(),
+                        ex.getMessage(),
+                        ex.getCode().status().value(),
+                        Instant.now(clock).toString(),
+                        correlationId,
+                        fieldErrors,
+                        null,
+                        ex.getNextAction(),
+                        null),
+                headers,
+                ex.getCode().status());
     }
 
     /**

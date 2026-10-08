@@ -7,7 +7,7 @@ package com.positivity.accounting.internal.enums;
 public enum MatchConfidence {
     /**
      * Single candidate with a score of 70 points or more. Sent for approval ({@code AWAITING_APPROVAL}, submitter
-     * {@code SYSTEM}); never approves on its own (#2509, G12).
+     * {@code SYSTEM}); approved by the system only within the AP approval policy's automatic limit (#2510).
      */
     HIGH_CONFIDENCE,
 

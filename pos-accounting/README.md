@@ -18,6 +18,7 @@ General-ledger accounting service for the Durion Positivity ETSMS platform. Mana
 - Apply or refund AR customer credits, relieving the customer-credit liability recognized at issuance
 - Post inventory shrinkage (Dr Inventory Shrinkage 5100 / Cr Inventory 1300) from `inventory.scrap.posted` facts on `inventory.events.v1`, exactly once per scrap; uncosted scraps (ADR-0048 interim `costSource=NONE`) are logged and skipped, never posted
 - Post inventory adjustments (cycle-count variances and manual adjustments) from `inventory.adjustment.posted` facts on `inventory.events.v1`, exactly once per adjustment: a loss posts Dr 5100 / Cr 1300 and a gain Dr 1300 / Cr 5100 for `abs(quantityDelta) × unitCost` through the `INVENTORY_ADJUSTMENT` posting category; uncosted facts are counted and recorded `SKIPPED`, never posted (see Inventory Posting Facts below)
+- Post a goods receipt's accrual from `goodsreceipt.recorded` facts on `inventory.events.v1` (CAP:550 S41, #2602; AW38), exactly once per receipt: Dr 1300 at inventory's value / Cr 2100 Goods Received Not Yet Billed at the accrued value / Dr or Cr 5050 the difference, through the `GOODS_RECEIPT` posting category; a fact with no currency or a foreign one is held `SUSPENDED / CURRENCY_NOT_SUPPORTED`, a malformed one `SUSPENDED / VALIDATION_ERROR`, an uncosted one `SKIPPED / UNCOSTED_FACT` (see Inventory Posting Facts below)
 - Post manual cost revaluations from `inventory.product-value.changed` facts on `inventory.events.v1`, exactly once per revaluation: a write-up posts Dr 1300 / Cr 5000 and a write-down Dr 5000 / Cr 1300 for `abs(totalValueDelta)` through the `INVENTORY_REVALUATION` posting category; a zero delta posts no entry but is still recorded `PROCESSED` (see Inventory Posting Facts below)
 - Manage monthly accounting periods (list, close, reopen)
 - Produce financial reports (income statement, balance sheet)
@@ -459,9 +460,10 @@ holder sets are:
 | `accounting:ap:view` | `ACCOUNTING_CLERK`, `ADMIN`, `CONTROLLER`, `GENERAL_MANAGER`, `SUPPORT` |
 | `accounting:reconciliation:adjust` | `ACCOUNTING_CLERK`, `ADMIN`, `CONTROLLER` (the preparer; `CONTROLLER` alone approves) |
 | `accounting:payment:assign-customer` | no role yet |
-| `accounting:ap:approve` | `ACCOUNTING_CLERK`, `ADMIN`, `CONTROLLER`, `GENERAL_MANAGER` — send a bill for approval, correct a match exception, select a candidate (S12, #2509; reinstated, bit 262) |
+| `accounting:ap:approve` | `ACCOUNTING_CLERK`, `ADMIN`, `CONTROLLER`, `GENERAL_MANAGER` — send a bill for approval, correct a match exception, select a candidate, enter the real due date, and approve or `ACCEPT` a bill within the clerk limit (S12, #2509; S13, #2510; reinstated, bit 262) |
 | `accounting:ap:reject` | `ACCOUNTING_CLERK`, `ADMIN`, `CONTROLLER`, `GENERAL_MANAGER` — reject, void a match exception; with the approval tier, void an approved bill (S12; reinstated, bit 263) |
-| `accounting:ap:approve_over_limit` | `ADMIN`, `CONTROLLER`, `GENERAL_MANAGER` — approve, `ACCEPT`; until S13's clerk limit (default 0) every bill needs it (S12, catalog v102, bit 558) |
+| `accounting:ap:approve_over_limit` | `ADMIN`, `CONTROLLER`, `GENERAL_MANAGER` — approve, `ACCEPT` or void an approved bill over the clerk limit (default 0: every bill) (S12, catalog v102, bit 558) |
+| `accounting:ap_approval_policy:manage` | `ADMIN`, `CONTROLLER`, `GENERAL_MANAGER` — read and change the AP approval policy (S13, #2510; catalog v103, bit 559) |
 
 `accounting:payment:assign-customer` (catalog v97, bit 548; `AccountingPermissions.PAYMENT_ASSIGN_CUSTOMER`)
 is registered ahead of its endpoint — assigning a customer, once and with a justification, to a payment
@@ -932,11 +934,12 @@ PENDING_RECEIPT_MATCH (goods receipt) ─void, posts nothing (AW45)─► VOIDED
 | Endpoint (`/v1/accounting/vendor-bills`) | Permission | Refusals |
 | --- | --- | --- |
 | `POST /{billId}/submit-for-approval` `{justification, classification?, difference?}` | `ap:approve` or `ap:approve_over_limit` | 400 `JUSTIFICATION_REQUIRED`, `VALIDATION_ERROR`, `ARGUMENT_NOT_VALID`; 404 `VENDOR_BILL_NOT_FOUND`; 409 `AP_BILL_NOT_APPROVABLE`, `AP_BILL_AWAITING_INVOICE`; 422 `AP_BILL_ZERO_TOTAL`, `AP_BILL_TOTALS_UNRECONCILED` |
-| `POST /{billId}/approve` `{justification?, classification?, difference?, overrideJustification?}` | `ap:approve_over_limit` (S13 widens) | 409 `AP_BILL_NOT_APPROVABLE`, `AP_BILL_AWAITING_INVOICE`; 422 `AP_BILL_UNCLASSIFIED`, `AP_BILL_TOTALS_UNRECONCILED`, `AP_BILL_ZERO_TOTAL`, `PERIOD_CLOSED`, `PERIOD_HARD_LOCKED`, `GL_MAPPING_NOT_CONFIGURED` |
+| `POST /{billId}/approve` `{justification?, classification?, difference?, overrideJustification?}` | `ap:approve` or `ap:approve_over_limit`, then the tier (S13) | 403 `AP_APPROVAL_LIMIT_EXCEEDED`, `AP_BILL_SELF_APPROVAL`; 400 `JUSTIFICATION_REQUIRED` (a creator's exception use without one); 409 `AP_BILL_NOT_APPROVABLE`, `AP_BILL_AWAITING_INVOICE`; 422 `AP_BILL_UNCLASSIFIED`, `AP_BILL_TOTALS_UNRECONCILED`, `AP_BILL_ZERO_TOTAL`, `PERIOD_CLOSED`, `PERIOD_HARD_LOCKED`, `GL_MAPPING_NOT_CONFIGURED` |
 | `POST /{billId}/reject` `{reason}` | `ap:reject` | 400 `JUSTIFICATION_REQUIRED`, 409 `AP_BILL_NOT_APPROVABLE` |
-| `POST /{billId}/resolve-exception` `{resolutionAction, reason, classification?, difference?, overrideJustification?}` | any of the three; per action: `ACCEPT` `ap:approve_over_limit`, `CORRECT` `ap:approve` or `ap:approve_over_limit`, `VOID` `ap:reject` | 400 `VALIDATION_ERROR` (unknown action), `JUSTIFICATION_REQUIRED`; 409; `ACCEPT` as approve |
+| `POST /{billId}/resolve-exception` `{resolutionAction, reason, classification?, difference?, overrideJustification?}` | any of the three; per action: `ACCEPT` and `CORRECT` `ap:approve` or `ap:approve_over_limit` (`ACCEPT` then the tier, S13), `VOID` `ap:reject` | 400 `VALIDATION_ERROR` (unknown action), `JUSTIFICATION_REQUIRED`; 409; `ACCEPT` as approve |
 | `POST /match-candidates/{candidateId}/select` (no body) | `ap:approve` or `ap:approve_over_limit` | 404 `AP_MATCH_CANDIDATE_NOT_FOUND`, 409 `AP_MATCH_CANDIDATE_ALREADY_RESOLVED`, `AP_BILL_NOT_APPROVABLE`, `AP_BILL_AWAITING_INVOICE` (a candidate that kept no invoice), `AP_BILL_DUPLICATE` |
-| `POST /{billId}/void` `{reason, overrideJustification?}` (`voidVendorBill`) | `ap:reject`; an `APPROVED` bill's also the approval tier (`ap:approve_over_limit`), checked by the service | 403; 409 `AP_BILL_NOT_VOIDABLE` (neither `APPROVED` nor a goods-receipt bill in `PENDING_RECEIPT_MATCH`, or anything allocated); 422 `PERIOD_CLOSED`, `PERIOD_HARD_LOCKED` |
+| `POST /{billId}/void` `{reason, overrideJustification?}` (`voidVendorBill`) | `ap:reject`; an `APPROVED` bill's also either approve permission and its tier against the current clerk limit (S13), checked by the service | 403 (`FORBIDDEN`, `AP_APPROVAL_LIMIT_EXCEEDED`); 409 `AP_BILL_NOT_VOIDABLE` (neither `APPROVED` nor a goods-receipt bill in `PENDING_RECEIPT_MATCH`, or anything allocated); 422 `PERIOD_CLOSED`, `PERIOD_HARD_LOCKED` |
+| `PUT /{billId}/due-date` `{dueDate, justification?}` (S13) | `ap:approve` | 400 `VALIDATION_ERROR`, `JUSTIFICATION_REQUIRED`; 404; 409 `AP_BILL_NOT_APPROVABLE` outside review |
 | `GET /{billId}` · `GET /stages` · `GET /by-stage?stage=&page=&size=` | `ap:view` | 404; 400 (unknown stage) |
 
 Every command also answers 401 without a valid token and 403 `FORBIDDEN` without the permission. Every
@@ -1029,17 +1032,20 @@ A re-issue of an `APPROVED` or `PAID` bill never reopens it: the bill keeps its 
 or rejected meanwhile retries the event, which then becomes a bill of its own.
 
 **Reads.** `GET /{billId}` adds `channel`, `netAmount`, `taxAmount`, `approval` (submission, `requiredTier`
-`OVER_LIMIT` until S13, the proposed classification and difference, and the approval only once approved),
+from the current clerk limit (S13), `clerkLimit` and its `currencyCode`, the proposed classification and difference,
+and the approval only once approved, with `approvedByKind` `PERSON` | `SYSTEM`),
 `rejection` (`REJECTED`, `VOIDED`), `statusExplanation` (`MATCH_EXCEPTION`, `CURRENCY_HOLD`), `openAmount`, `match`
 (latest evidence), `openCandidates[]` (each with `candidateId` and `invoiceEventId`), `reissues[]`, `lines[]`,
-`checks[]`, `availableActions[]` (only the decisions valid now whose permission the caller holds; `VOID_APPROVED`
-only with a posting and no allocation) and `posting`. The checks:
+`checks[]`, `availableActions[]` (the decisions valid now whose permission the caller holds; `VOID_APPROVED`
+only with a posting and no allocation; one the tier or the creator rule blocks is listed with `allowed = false` and
+its `blockedReason`, S13) and `posting`. The checks:
 
 | Code | Outcome |
 | --- | --- |
 | `MATCHED_TO_DELIVERY` | PASS once an invoice is matched (HIGH, MEDIUM, a selection; MEDIUM passes, its confidence in `args.confidence`); FAIL `reason` `PICK_A_MATCH` (open candidates), `INVOICE_NOT_MATCHED` (goods receipt) or `NO_DELIVERY_RECORDED` (EDI) |
 | `WITHIN_PRICE_TOLERANCE` | the matched invoice against the receipt; NOT_APPLICABLE before a match |
 | `TOTALS_ADD_UP` | bills with the vendor's header totals only; FAIL with `difference`, `netAmount`, `taxAmount`, `totalAmount`, `tolerance` |
+| `WITHIN_CLERK_LIMIT` | S13: in `PENDING_RECEIPT_MATCH`, `MATCH_EXCEPTION`, `AWAITING_APPROVAL`, PASS when the absolute total is within the clerk limit (above 0), else FAIL, with `totalAmount`, `clerkLimit`, `currencyCode`; NOT_APPLICABLE otherwise |
 | `OPEN_DELIVERIES_FROM_VENDOR` | EDI bills classified `GOODS` only; FAIL with `count` and `billNumbers` (up to 10) while the vendor has goods-receipt bills in `PENDING_RECEIPT_MATCH`, `MATCH_EXCEPTION` or `AWAITING_APPROVAL`; informational, blocks nothing |
 
 `GET /stages` counts `CHECK` (`PENDING_RECEIPT_MATCH`, `MATCH_EXCEPTION`, `CURRENCY_HOLD`), `APPROVE`
@@ -1049,10 +1055,105 @@ payables report `AWAITING_APPROVAL` bills under `unapproved`, never aged.
 
 **Audit and events.** One `accounting_audit_log` row per decision (entity `VENDOR_BILL`; `VENDOR_BILL_SUBMIT`,
 `_APPROVE`, `_REJECT`, `_VOID` (`action=VOID_APPROVED` or `VOID_UNMATCHED`), `_MATCH_EXCEPTION_RESOLVE`,
-`_MATCH_CANDIDATE_SELECT`, `_MATCH_CANDIDATE_RELEASE`, `_MATCH_ROUTED` by `SYSTEM`) with the tier, the limit (0),
-the total, currency, match score and evidence id, and on an approval the rounding adjustment and any difference.
+`_MATCH_CANDIDATE_SELECT`, `_MATCH_CANDIDATE_RELEASE`, `_MATCH_ROUTED` by `SYSTEM`) with the tier, the clerk
+(`limit`) and automatic (`autoLimit`) limits in force, `exception` (`CREATOR_APPROVAL` | `NONE`), the total,
+currency, match score and evidence id, and on an approval the rounding adjustment and any difference.
 `@EmitEvent` ids `ACCOUNTING_VENDOR_BILL_SUBMIT`, `_APPROVE`, `_REJECT`, `_VOID` (approval), `_STAGES_VIEW` (fast
 read), `_STAGE_LIST` (search).
+
+## Approval limits and separation of duties (CAP:550 S13, #2510; AW4-AW7, AW33, AW45-AW47)
+
+**The AP approval policy.** Five `accounting_configuration` keys, read in one snapshot by `ApApprovalPolicy`; an
+absent key reads as its default and an unreadable value as the stricter default, with a warning:
+
+| Key | Default | Value |
+| --- | --- | --- |
+| `AP_CLERK_APPROVAL_LIMIT` | 0 (no clerk approves) | amount >= 0, functional currency |
+| `AP_AUTO_APPROVAL_LIMIT` | 0 (off) | amount >= 0, never above the clerk limit |
+| `AP_ALLOW_CREATOR_APPROVAL` | false | boolean |
+| `AP_ALLOW_APPROVER_PAYMENT` | false | boolean |
+| `AP_DEFAULT_TERMS` | `NET30` | `DUE_ON_RECEIPT` or `NET1`..`NET120` (`CashAndPayablesSettings.parseTerms` reads the same vocabulary) |
+
+`GET /v1/accounting/ap-approval-policy?historyPage=&historySize=` returns the five effective values,
+`currencyCode`, `asOf` and `history[]` newest first (default page 20, at most 100): `changedAt`, `changedBy`,
+`changedByRoles`, `setting`, `oldValue`, `newValue`, `justification`. `PUT` takes any of the five (missing =
+unchanged), `currencyCode` (required with a limit, the functional currency: 422 `CURRENCY_NOT_SUPPORTED` otherwise;
+a limit finer than the minor unit is 422 `AMOUNT_PRECISION_EXCEEDS_CURRENCY`), `justification` (>= 10 characters,
+400 `JUSTIFICATION_REQUIRED`) and `requestId` (UUID). A negative limit, an automatic limit above the clerk limit,
+terms outside the vocabulary, a limit with more than 13 integer digits or a missing `requestId` is 400
+`VALIDATION_ERROR` with `fieldErrors`; the 400s answer before the 422s, and nothing is written on either. A clerk
+limit below the stored automatic limit, sent without an automatic limit, lowers the automatic limit to it (a clerk
+limit of 0 turns automatic approval off), on its own row tagged `cause=AP_CLERK_APPROVAL_LIMIT`; raising the clerk
+limit never raises the automatic limit, and an automatic limit sent above the clerk limit stays 400 (ruling
+6063520413 item 2).
+
+The audit log is the policy's history of record (ruling item 5): only a changed setting is written, with one
+`AP_APPROVAL_POLICY_SET` row (entity `ACCOUNTING_CONFIGURATION`, `old_value` the effective value before, `new_value`
+`setting=<KEY>;value=<NEW>;roles=<ROLES>[;cause=<KEY>];requestId=<UUID>`, every key and value percent-encoded for
+`%`, `;`, `=` and `,` so no role name can add or shadow a field; read first occurrence wins, and a row without escapes
+reads as it is). Idempotency: every PUT that passes validation also writes one `AP_APPROVAL_POLICY_REQUEST` row whose
+entity id is the `requestId`, a no-op PUT included, and `history[]` does not list it. A `requestId` already recorded
+writes nothing and returns the current policy, so a retried no-op never overwrites a change made since. The PUT takes a
+tenant-scoped transaction advisory lock first (two first PUTs on a fresh tenant serialize), then the rows `FOR
+UPDATE`. Both need `accounting:ap_approval_policy:manage`; events
+`ACCOUNTING_AP_APPROVAL_POLICY_VIEW` (fast read) and `_SET` (approval).
+
+**The tier.** A bill is `CLERK`-tier when the clerk limit is above 0 and the absolute value of its stored
+`totalAmount` (the billed gross: an EDI bill's stated gross, a goods-receipt bill's billed total after `/match`) is at
+most the limit; else `OVER_LIMIT`, which needs `accounting:ap:approve_over_limit`. A `difference` never changes it.
+It is derived on every read and decision, never stored, so a changed limit re-routes waiting bills at once. A
+decision reads the policy rows share-locked (in key order, as the PUT locks them), so a racing PUT applies wholly
+before or after it.
+
+**Guard order** on approve, `ACCEPT` and the void of an approved bill; the first failure answers and nothing is
+written: (1) the endpoint gate (403 `FORBIDDEN`); (2) the bill's state: status and open candidates (409
+`AP_BILL_NOT_APPROVABLE`), a goods-receipt bill's matched invoice (409 `AP_BILL_AWAITING_INVOICE`), a void's
+allocation (409 `AP_BILL_NOT_VOIDABLE`); (3) the tier (403 `AP_APPROVAL_LIMIT_EXCEEDED`, `nextAction` naming
+`accounting:ap:approve_over_limit`); (4) creator is not approver, approve and `ACCEPT` only (403
+`AP_BILL_SELF_APPROVAL`; under `AP_ALLOW_CREATOR_APPROVAL` it goes through with approve's `justification` or
+`ACCEPT`'s `reason`, audited `VENDOR_BILL_SOD_EXCEPTION`); (5) the content: 422 `AP_BILL_ZERO_TOTAL`,
+`AP_BILL_TOTALS_UNRECONCILED`, then `AP_BILL_UNCLASSIFIED` from a dry run of the entry's legs with the merged
+classification (audited `_REFUSED`; S43 adds `AP_BILL_TAX_ON_RESALE_GOODS` after it); (6) the posting
+(`PERIOD_CLOSED`, `PERIOD_HARD_LOCKED`, `GL_MAPPING_NOT_CONFIGURED`). Each 403 of (3) and (4) is audited as `<operation>_REFUSED` with `code=` in a transaction of its own. Submit runs (2) and (5) only.
+
+**Automatic approval.** Only on `/match`, a HIGH match within tolerance, and only when the automatic limit is above 0
+and the absolute total is at most min(automatic, clerk) limit: the system submits, approves (`approvedBy` and
+`submittedBy` `SYSTEM`, `approvedByKind` `SYSTEM`) and posts through `VendorBillPostingService` in the match
+transaction, with the lines' own classes and no override, dated on the invoice date when its period is open, else
+today (AW42). Whatever would need a person, or would refuse the posting (`AP_BILL_ZERO_TOTAL`,
+`AP_BILL_UNCLASSIFIED`, `PERIOD_CLOSED`, `PERIOD_HARD_LOCKED`, `GL_MAPPING_NOT_CONFIGURED`), leaves the bill
+`AWAITING_APPROVAL` with one `VENDOR_BILL_AUTO_APPROVE_SKIPPED` row naming the code; the match is kept. The posting is
+`MANDATORY` and the JPA dialect has no savepoints, so every refusal is asked first without writing (the legs in
+memory, then the period and the mappings in a `REQUIRES_NEW` transaction of its own, which takes a second pooled
+connection while the match holds its first). In the rare race where a period closes or a mapping changes between the
+pre-check and the posting, the posting's exception is never caught: the whole `/match` rolls back and answers 422
+`PERIOD_CLOSED`, `PERIOD_HARD_LOCKED` or `GL_MAPPING_NOT_CONFIGURED`. Nothing retries it (the REST controller is the
+only caller); resending the invoice is safe, and the resend's pre-check ends matched, `AWAITING_APPROVAL`, with one
+`VENDOR_BILL_AUTO_APPROVE_SKIPPED` row (ruling item 3).
+
+**Approver is not payer.** `POST /v1/accounting/ap/payments` builds its allocation plan (explicit, or oldest due
+first; an explicit 0.00 line is dropped, so it is neither allocated nor able to block a later void), locks its bills
+and validates it before the payment row is saved and before the gateway is called: a missing bill, one not
+`APPROVED`, another vendor's or an over-allocation is refused before the gateway, nothing is charged and no
+`ap_payment` row is saved, so the same `paymentRef` may be sent again once corrected (ruling item 4). The plan's bill
+locks are held across the gateway call (the automatic plan locks every `APPROVED` bill of the vendor), bounded by
+the gateway client's own timeouts (the Stripe SDK defaults); the database sets no `lock_timeout`. Then the
+pay guard refuses the whole payment when the payer (the security context's username) approved a bill of the plan
+(`approvedByKind` `PERSON`): 403 `AP_PAYMENT_SELF_APPROVED_BILL`, `fieldErrors[selfApprovedBillNumbers]` naming each,
+one `VENDOR_BILL_PAYMENT_REFUSED` row per bill surviving the rollback. Under `AP_ALLOW_APPROVER_PAYMENT` it pays and
+audits each as `VENDOR_BILL_SOD_EXCEPTION`. A system approval never blocks. The pre-gateway block in
+`APPaymentServiceImpl.executePayment` is ordered and commented: S42 adds its request and period checks, S24 its vendor
+and remit-to checks, at the numbered places. The payer, and so `ap_payment.created_by`, is the security context's
+username (`SecurityContextHelper`, ADR-0018), no longer `Authentication.getName()`.
+
+**The real due date.** `PUT /v1/accounting/vendor-bills/{billId}/due-date` `{dueDate, justification?}`
+(`ap:approve`; event `ACCOUNTING_VENDOR_BILL_DUE_DATE_SET`) in `PENDING_RECEIPT_MATCH`, `MATCH_EXCEPTION` or
+`AWAITING_APPROVAL` only (409 `AP_BILL_NOT_APPROVABLE` otherwise), stored at the start of the day and audited
+`VENDOR_BILL_DUE_DATE_SET` old to new. A later `/match` or selection whose invoice states a due date replaces it,
+recorded as `dueDate=OLD->NEW` on the match's audit row; one set after the match stays.
+
+**Data.** V18 adds `vendor_bill.approved_by_kind` (`PERSON` | `SYSTEM`, checked), backfilled `SYSTEM` where
+`approved_by = 'SYSTEM'` and `PERSON` for any other approver. No pos-tax function is used (AW48).
 
 ## Vendor bill duplicate rule (#2501, ADR-0070 Decision 4)
 
@@ -1150,6 +1251,9 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `AP_BILL_UNCLASSIFIED` | 422 | The bill (or a non-stock line) has no class and its vendor no default; the approval needs a `classification` (AW39, #2509) |
 | `AP_BILL_TOTALS_UNRECONCILED` | 422 | The vendor's gross differs from its net + tax beyond the rounding tolerance and the send, approval or acceptance gives no `difference`; nothing is written (AW47, #2509) |
 | `AP_BILL_ZERO_TOTAL` | 422 | A bill totalling 0.00 is sent, approved or accepted; correct it or void it (#2509) |
+| `AP_APPROVAL_LIMIT_EXCEEDED` | 403 | The bill's absolute total is over the clerk limit and the caller lacks `accounting:ap:approve_over_limit` (approve, `ACCEPT`, void of an approved bill); `nextAction` names the permission (#2510) |
+| `AP_BILL_SELF_APPROVAL` | 403 | The caller created the bill and the policy does not allow a creator to approve it (approve, `ACCEPT`) (#2510) |
+| `AP_PAYMENT_SELF_APPROVED_BILL` | 403 | The payer approved a bill the payment would pay; `fieldErrors[selfApprovedBillNumbers]` name them; nothing is paid (#2510) |
 | `UNAUTHENTICATED` | 401 | No usable authentication on the request |
 | `FORBIDDEN` | 403 | Caller lacks the required permission |
 | `AUTHORIZATION_DENIED` | 403 | Audit-trail event creation refused because the caller may not record that event |
@@ -1298,7 +1402,7 @@ unbound connection, through the repository and through raw SQL) and `TenancySche
 non-whitelisted table has `tenant_id`, RLS enabled and forced, and the `tenant_isolation` policy; the pool is
 `pos_app` with no bypass), both on Testcontainers Postgres (`./mvnw -pl pos-accounting verify`).
 
-## Inventory Posting Facts (issues #1043, #2191, #2193)
+## Inventory Posting Facts (issues #1043, #2191, #2193, #2602)
 
 `InventoryEventsListener` dispatches `inventory.events.v1` on `eventType`; every other type on the topic is
 ignored without recording its eventId.
@@ -1307,18 +1411,35 @@ ignored without recording its eventId.
 | --- | --- | --- |
 | `inventory.scrap.posted` (`ScrapPostedV1`) | `INVENTORY_SHRINKAGE`: `SHRINKAGE_EXPENSE` → 5100, `INVENTORY_ASSET` → 1300 | Dr 5100 / Cr 1300 for `quantity × unitCost` |
 | `inventory.adjustment.posted` (`InventoryAdjustedV1`, `adjustmentKind` `CYCLE_COUNT` or `MANUAL_ADJUSTMENT`) | `INVENTORY_ADJUSTMENT`: `ADJUSTMENT_LOSS` → 5100, `ADJUSTMENT_GAIN` → 5100, `INVENTORY_ASSET` → 1300 | loss (`quantityDelta < 0`): Dr `ADJUSTMENT_LOSS` / Cr `INVENTORY_ASSET`; gain: Dr `INVENTORY_ASSET` / Cr `ADJUSTMENT_GAIN`, for `abs(quantityDelta) × unitCost` |
+| `goodsreceipt.recorded` (`GoodsReceiptRecordedV1`, a delivery received into stock; CAP:550 S41, #2602) | `GOODS_RECEIPT`: `INVENTORY_ASSET` → 1300, `GOODS_RECEIVED_NOT_BILLED` → 2100, `PURCHASE_PRICE_DIFFERENCE` → 5050 | one entry per receipt, per costed line: Dr `INVENTORY_ASSET` at `inventoryValueMinor` / Cr `GOODS_RECEIVED_NOT_BILLED` at `accruedAmountMinor` / Dr or Cr `PURCHASE_PRICE_DIFFERENCE` for `accrued − value` (the `STANDARD` variance, pack-price rounding); an unpriced line (accrual 0, value > 0) credits 5050 at its value on its own journal line, described as unpriced. Every line description carries the receipt line, PO line or sku, `costSource` and `ledgerEntryId` |
 | `inventory.product-value.changed` (`ProductValueChangedV1`, manual cost revaluation) | `INVENTORY_REVALUATION`: `INVENTORY_ASSET` → 1300, `REVALUATION_OFFSET` → 5000 (#2186 D7, final) | write-up (`totalValueDelta > 0`): Dr `INVENTORY_ASSET` / Cr `REVALUATION_OFFSET`; write-down: Dr `REVALUATION_OFFSET` / Cr `INVENTORY_ASSET`, for `abs(totalValueDelta)` as delivered — inventory has already multiplied the cost delta by on-hand, accounting never recomputes it |
 
 - **Accounts** resolve through the mapping keys (seeded in `R__seed_reference_accounting.sql`), never hardcoded.
   A gain credits 5100 so count over/short nets in one account (#2186 D2); scrap and count corrections are
   separate categories so finance can remap either (D4). `reasonCode` rides into the entry description only.
 - **Date** — the fact's `occurredAt` (business time); the period gate applies.
+- **Goods receipts (AW38)** — the currency is checked first: no `currencyCode`, or one other than the ledger's,
+  is never booked at par and is held `SUSPENDED / CURRENCY_NOT_SUPPORTED` (ADR-0067 PC-9). Then the line rules,
+  over lines with a quantity: lines with zero quantity and no amount are ignored (the sum check still counts
+  them); a zero-quantity line that carries an amount is malformed. Accounting never fills in a value Inventory did
+  not state. A line without `receiptLineId`, a null `inventoryValueMinor` beside a non-zero accrual, an amount on a
+  zero-quantity line, a negative quantity (a receipt only adds stock; returns and corrections arrive as
+  `vendorreturn.recorded`), or line accruals that do not sum to `totalAccruedAmountMinor` hold the whole fact
+  `SUSPENDED / VALIDATION_ERROR` (excluded from auto-retry, recorded once per receipt, never a partial posting). A line with no value and no
+  accrual is uncosted and contributes nothing; when every line is, the fact is `SKIPPED / UNCOSTED_FACT`.
+  Nothing accrued and nothing valued is `PROCESSED` with no entry. Amounts convert from minor units by the
+  currency's exponent only, never rounded (PC-5 (a)). `costSource` and `ledgerEntryId` are description only:
+  never branched on, a missing `ledgerEntryId` never holds a posting. The ingestion record keeps the fact as its
+  `payload`, so each posted line (`receiptLineId`, `poLineId`, quantity, accrual, value) stays readable for bill
+  matching and 2100 reconciliation. A vendor bill never debits 1300; its approval clears 2100 (Vendor Bill
+  Approval above); a bill decision never reverses a receipt.
 - **Idempotency** — envelope `eventId` in `processed_events`, checked before any transaction; posting key
   `INVENTORY_SHRINKAGE_GL_POSTING:<scrapId>` / `INVENTORY_ADJUSTMENT_GL_POSTING:<kind>:<adjustmentId>` /
-  `INVENTORY_REVALUATION_GL_POSTING:<revaluationId>`; journal entry
+  `INVENTORY_REVALUATION_GL_POSTING:<revaluationId>` / `GOODS_RECEIPT_ACCRUAL:<receiptId>`; journal entry
   `sourceEventId = nameUUIDFromBytes("INVENTORY_SHRINKAGE:" + scrapId)` /
   `nameUUIDFromBytes("INVENTORY_ADJUSTMENT:" + kind + ":" + adjustmentId)` /
-  `nameUUIDFromBytes("INVENTORY_REVALUATION:" + revaluationId)`. A fact whose posting key has expired is still
+  `nameUUIDFromBytes("INVENTORY_REVALUATION:" + revaluationId)` /
+  `nameUUIDFromBytes("GOODS_RECEIPT_ACCRUAL:" + receiptId)` (source type `GOODS_RECEIPT_ACCRUAL`). A fact whose posting key has expired is still
   recognised as posted by its `sourceEventId`.
 - **Transaction shape** (ADR-0044 as amended by #2146; `OrderEventsListener` has the same shape) — the listener
   method is not transactional. The posting, posting key, ingestion record and processed mark commit together
@@ -1331,7 +1452,8 @@ ignored without recording its eventId.
   no uncosted case (`totalValueDelta` is always computed); a zero delta simply posts no journal entry and is
   recorded `PROCESSED`, not `SKIPPED`.
 - **Metrics** — `accounting.inventory.fact.posted{eventType}` (a journal entry was posted) and
-  `accounting.inventory.fact.skipped{eventType, reason=UNCOSTED}` (scrap and adjustment only).
+  `accounting.inventory.fact.skipped{eventType, reason=UNCOSTED}` (scrap, adjustment and goods receipt), and
+  `accounting.inventory.fact.held{eventType, reason=CURRENCY|VALIDATION}` (a goods receipt held, not posted).
 - **Ingestion records** (AD-007, #2186 D5) — each consumed fact writes one `AccountingEvent` row, terminal except a currency hold (below):
   `eventType` = the fact type, `sourceSystem = pos-inventory`, `domainKeyId` = `adjustmentId` / `scrapId` /
   `revaluationId`, `ingestionId` = envelope `eventId`, `transactionDate` = business date, `payload` = the fact,
@@ -1340,10 +1462,23 @@ ignored without recording its eventId.
   entry; an uncosted scrap or adjustment fact is `SKIPPED` with `failureReasonCode = UNCOSTED_FACT`. Look one up
   with `GET /v1/accounting/events?eventType=inventory.adjustment.posted&domainKeyId=<adjustmentId>` (or
   `eventType=inventory.product-value.changed&domainKeyId=<revaluationId>`).
-  **Kafka facts are not REST-retryable**: they never end `FAILED` or `SUSPENDED`, which are the only statuses
-  the retry scheduler and `retryAccountingEvent` select; a failed fact is replayed from the DLQ instead. The one
-  exception is a fact held for its currency (see Ledger currency above): `SUSPENDED / CURRENCY_NOT_SUPPORTED`,
-  skipped by the retry scheduler and released only through the audited reprocess.
+  **Kafka facts are not REST-retryable**: as recorded by their listener they never end `FAILED` or `SUSPENDED`,
+  which are the only statuses
+  the retry scheduler and `retryAccountingEvent` select; a failed fact is replayed from the DLQ instead. The
+  exceptions are a fact held for its currency (see Ledger currency above): `SUSPENDED / CURRENCY_NOT_SUPPORTED`,
+  skipped by the retry scheduler and released only through the audited reprocess; a malformed goods receipt,
+  `SUSPENDED / VALIDATION_ERROR`, also skipped by the retry scheduler (its payload never changes); and a settled
+  payment's automatic-application holds (#2503). A manual reprocess (`POST /v1/accounting/events/{id}/reprocess`)
+  of a held goods receipt never reaches the posting engine: `GoodsReceiptReprocessor` re-runs the receipt's own
+  assessment on the stored payload, currency first (a missing currency stays held as `CURRENCY_NOT_SUPPORTED`).
+  A fact still invalid keeps its hold and reason. One that now passes posts under
+  `GOODS_RECEIPT_ACCRUAL:<receiptId>` (`PROCESSED / NEW`), or closes `PROCESSED / DUPLICATE_IGNORED` when that key
+  already posted. A refusal is labelled as the engine labels one (`SUSPENDED / PERIOD_CLOSED`,
+  `ACCOUNTING_TIME_ZONE_UNSET`, or `UNMAPPED_EVENT_TYPE` for a missing `GOODS_RECEIPT` mapping; a hard-locked
+  period is worded as permanently blocked), and every attempt writes its history row. A held goods receipt can end
+  `FAILED` in one case: when an attempt by the retry job throws something unexpected, its `recordFailure` leaves the
+  row `FAILED / INTERNAL_ERROR`, until the job's next attempt routes it back through the reprocessor. Two
+  reprocesses of one receipt at once answer the loser with the engine's "Concurrent reprocessing detected" conflict.
 - **Event envelope contract** (`GET /v1/accounting/events/contract`, issue #2207) — `version`/`fields`/`examples`
   describe the submission envelope as before; four additive optional sections document the rest of the
   ingestion surface, each sourced from the real rules rather than a hand-typed list that could drift:
@@ -1370,7 +1505,7 @@ transaction as the posting and the `processed_events` mark:
 
 | Listener | `eventType` | `sourceSystem` | `domainKeyId` | Row |
 |---|---|---|---|---|
-| `InventoryEventsListener` | `inventory.scrap.posted`, `inventory.adjustment.posted`, `inventory.product-value.changed` | `pos-inventory` | scrap / adjustment / revaluation id | see Inventory Posting Facts above |
+| `InventoryEventsListener` | `inventory.scrap.posted`, `inventory.adjustment.posted`, `inventory.product-value.changed`, `goodsreceipt.recorded` | `pos-inventory` | scrap / adjustment / revaluation / receipt id | see Inventory Posting Facts above; a goods receipt can also be `SUSPENDED / CURRENCY_NOT_SUPPORTED` or `SUSPENDED / VALIDATION_ERROR` |
 | `InvoiceEventsListener` | `invoice.invoice.updated` | `pos-invoice` | invoice id | `PROCESSED / NEW` + `journalEntryId` when revenue (or its reversal) posts; `PROCESSED / DUPLICATE_IGNORED` + the earlier entry when the cycle was already posted (the `POSTED` fact after every `FINALIZED` one); `PROCESSED / NEW`, no entry, for a zero total or a revert with nothing open; `SKIPPED / NOT_POSTABLE` for a stale fact, a deposit-take invoice, no `finalizedAt`, or a status that neither recognizes nor reverses (`ERROR`) |
 | `OrderEventsListener` | `order.session.closed` | `pos-order` | session id | `PROCESSED / NEW` + an entry it posted (the over/short's, else the first drawer movement's; every movement entry carries the `sessionId` dimension, #2513); `PROCESSED / NEW`, no entry, when nothing posts (a zero variance and no movement to post); `PROCESSED / DUPLICATE_IGNORED` when every posting key of the session was already registered; a foreign-currency hold is the `SUSPENDED / CURRENCY_NOT_SUPPORTED` row (Ledger currency above) |
 | `SupplierInvoiceEventsListener` | `supplier.invoice.received` | `pos-supplier` | vendor bill id | `PROCESSED / NEW`, no entry (nothing posts on ingest; the bill posts at approval, #2509), for a new bill, a duplicate flagged on the live original and a re-issue of an approved bill recorded as an exception item; `PROCESSED / DUPLICATE_IGNORED` for a duplicate identical to the live bill held, under the duplicate rule above (#2501) |

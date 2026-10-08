@@ -55,6 +55,13 @@ public final class JournalEntrySourceTypes {
      */
     public static final String VENDOR_BILL = "VENDOR_BILL";
 
+    /**
+     * A goods receipt's accrual from {@code goodsreceipt.recorded} (CAP:550 S41, #2602; AW38): Dr 1300 / Cr 2100 / ±
+     * 5050; its source event id derives from the posting key ({@code nameUUIDFromBytes("GOODS_RECEIPT_ACCRUAL:" +
+     * receiptId)}).
+     */
+    public static final String GOODS_RECEIPT_ACCRUAL = "GOODS_RECEIPT_ACCRUAL";
+
     public static final String INVOICE_REVENUE = "INVOICE_REVENUE";
     public static final String INVOICE_REVENUE_REVERSAL = "INVOICE_REVENUE_REVERSAL";
 

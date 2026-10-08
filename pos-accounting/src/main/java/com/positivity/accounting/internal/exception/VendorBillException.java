@@ -1,13 +1,16 @@
 package com.positivity.accounting.internal.exception;
 
 import java.io.Serial;
+import java.util.List;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 
 /**
  * A refusal of a vendor-bill command (#2509; SPEC-accounting-workspace §4.3, §7.1; AW37-AW43): one stable code, one
  * HTTP status (ADR-0017 "one condition, one status"), a message in business words that names the bill by its number
- * and never echoes another tenant's identifier.
+ * and never echoes another tenant's identifier. The AP approval policy (CAP:550 S13, #2510) refuses with the same
+ * codes. A refusal may carry field errors (one per field or bill named) and a next action.
  */
 public class VendorBillException extends RuntimeException {
 
@@ -45,6 +48,22 @@ public class VendorBillException extends RuntimeException {
         AP_BILL_TOTALS_UNRECONCILED(HttpStatus.UNPROCESSABLE_CONTENT),
         /** A bill totalling 0.00 has nothing to send, approve or post: correct it or void it. */
         AP_BILL_ZERO_TOTAL(HttpStatus.UNPROCESSABLE_CONTENT),
+        /**
+         * The bill is over the clerk approval limit and the caller holds {@code accounting:ap:approve} but not {@code
+         * accounting:ap:approve_over_limit} (CAP:550 S13, #2510; AW4, AW5). 403: it concerns who the caller is
+         * (ADR-0017 §2). Checked after the bill's state and before its content.
+         */
+        AP_APPROVAL_LIMIT_EXCEEDED(HttpStatus.FORBIDDEN),
+        /**
+         * The caller created the bill and the tenant does not let a creator approve it (separation of duties 1, AW6):
+         * approve and {@code ACCEPT}. 403.
+         */
+        AP_BILL_SELF_APPROVAL(HttpStatus.FORBIDDEN),
+        /**
+         * The payer approved a bill the payment would pay and the tenant does not let an approver pay (separation of
+         * duties 2, AW6); the field errors name the bills by number. 403, before any payment row or gateway call.
+         */
+        AP_PAYMENT_SELF_APPROVED_BILL(HttpStatus.FORBIDDEN),
         /** A justification or reason absent, blank or under 10 characters. */
         JUSTIFICATION_REQUIRED(HttpStatus.BAD_REQUEST),
         /** A request field outside its contract (an unknown action, a class the document cannot take). */
@@ -61,14 +80,39 @@ public class VendorBillException extends RuntimeException {
         }
     }
 
+    /** One field error of a refusal: the field, or what is named, and why. */
+    public record FieldError(@NonNull String field, @NonNull String message) {}
+
     private final Code code;
+    private final transient List<FieldError> fieldErrors;
+    private final @Nullable String nextAction;
 
     public VendorBillException(@NonNull Code code, @NonNull String message) {
+        this(code, message, List.of(), null);
+    }
+
+    public VendorBillException(
+            @NonNull Code code,
+            @NonNull String message,
+            @NonNull List<FieldError> fieldErrors,
+            @Nullable String nextAction) {
         super(message);
         this.code = code;
+        this.fieldErrors = List.copyOf(fieldErrors);
+        this.nextAction = nextAction;
     }
 
     public @NonNull Code getCode() {
         return code;
+    }
+
+    /** The field errors; empty when the refusal names none. */
+    public @NonNull List<FieldError> getFieldErrors() {
+        return fieldErrors;
+    }
+
+    /** What the caller can do next; null when there is no single next step. */
+    public @Nullable String getNextAction() {
+        return nextAction;
     }
 }

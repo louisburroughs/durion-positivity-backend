@@ -300,6 +300,28 @@ What pos-order can do with a fact line depends on what the session could resolve
 | Order line found, unpriced or projected without a conversion factor | the order line | 0 (logged) | open quantity reduced, balance unchanged |
 | No order line (stale link and the SKU is on several lines, or not on the order) | null | 0 | nothing: the line is skipped |
 
+### What the receipt booked: currency and cost basis on `goodsreceipt.recorded` (CAP:550 S41, #2602)
+
+pos-accounting posts each receipt's accrual from the fact (Dr 1300 / Cr 2100 / ± 5050, AW38), so the fact
+states what inventory booked, not only what the order accrues. All fields below are additive within v1
+(`schemaVersion` stays 1, ADR-0044 §3) and boxed, so a fact published before them reads them as null.
+
+| Field | Rule |
+| --- | --- |
+| `currencyCode` (header) | The order's document currency from the replica (`ext_purchase_order.currency`), never defaulted (ADR-0067 R-2); null only when the order states none. Governs every amount on the fact |
+| `lines[].receiptLineId` | The saved `goods_receipt_line.receipt_line_id`; the fact is built after the receipt is saved |
+| `lines[].productId` | The product the ledger row posted against: the PO line's product, else the sku when it is a UUID; else null |
+| `lines[].inventoryValueMinor` | `quantityReceived` × the `unitCost` the costing engine stamped on the line's `GOODS_RECEIPT` row, HALF_UP to minor units of `currencyCode`. Null when the row is uncosted, or when the order is not in the functional currency (#2314: such rows take no document cost) |
+| `lines[].costSource` | `STANDARD` / `AVERAGE` (the SKU's costing method) when the row is costed, else `NONE` |
+| `lines[].ledgerEntryId` | The line's `GOODS_RECEIPT` row; on a cross-dock never the paired `GOODS_ISSUE` |
+
+Both publish paths (`AsnServiceImpl`, `SessionReceiptRecorder` for receive-into-staging and cross-dock) pass
+the posted rows through; no cost is derived for the fact. Rounding is HALF_UP per line, then summed (ADR-0067
+OP-11, PC-6): accruals (`AsnServiceImpl`, `SourceDocumentResolver`) and the 4-place base-unit cost
+(`ReceiptUnitCosts`), so a half-cent line accrues and values the same (2.5 × 1.01 = 2.53 both).
+`totalAccruedAmountMinor` is always the sum of the line accruals, and for an order in the functional currency a
+null value always sits beside a zero accrual, since both come from the same order line.
+
 ### Work-order linkage on the ledger, returns, and cross-dock search (#2206, #2211)
 
 `inventory_ledger_entry` carries nullable `workorder_id`/`workorder_line_id` columns, stamped by

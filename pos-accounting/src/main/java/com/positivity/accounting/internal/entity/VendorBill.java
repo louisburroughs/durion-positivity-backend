@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.entity;
 
+import com.positivity.accounting.internal.enums.VendorBillApproverKind;
 import com.positivity.accounting.internal.enums.VendorBillDebitClass;
 import com.positivity.accounting.internal.enums.VendorBillDifferenceClass;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
@@ -206,6 +207,11 @@ public class VendorBill extends TenantScopedEntity {
 
     @Column(name = "approval_justification", length = 1000)
     private String approvalJustification;
+
+    /** Who approved the bill (CAP:550 S13, #2510): PERSON or SYSTEM; set on every approval, null before. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "approved_by_kind", length = 10)
+    private VendorBillApproverKind approvedByKind;
 
     @Column(name = "rejected_at")
     private Instant rejectedAt;

@@ -1992,14 +1992,21 @@ class ReceivingServiceImplTest {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.GoodsReceiptLineFact>>
                 lines = ArgumentCaptor.forClass(List.class);
-        verify(goodsReceiptFactPublisher).publish(header.capture(), lines.capture(), any());
+        verify(goodsReceiptFactPublisher).publish(header.capture(), any(), lines.capture(), any());
         assertThat(header.getValue().getPurchaseOrderId()).isEqualTo(RECEIPT_PO_ID);
         assertThat(header.getValue().getLocationId()).isEqualTo(STAGING_LOCATION_ID);
         assertThat(header.getValue().getCreatedBy()).isEqualTo("receiver");
-        assertThat(lines.getValue())
-                .containsExactly(
-                        new com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.GoodsReceiptLineFact(
-                                RECEIPT_PO_LINE_ID, "PROD-001", new BigDecimal("4"), 4_000L));
+        ArgumentCaptor<InventoryLedgerEntry> posted = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
+        verify(ledgerPostingService).post(posted.capture());
+        assertThat(lines.getValue()).singleElement().satisfies(fact -> {
+            assertThat(fact.poLineId()).isEqualTo(RECEIPT_PO_LINE_ID);
+            assertThat(fact.sku()).isEqualTo("PROD-001");
+            assertThat(fact.quantityReceived()).isEqualByComparingTo("4");
+            assertThat(fact.accruedAmountMinor()).isEqualTo(4_000L);
+            // CAP:550 S41 (#2602): the line carries its posted GOODS_RECEIPT row, cost stamped there.
+            assertThat(fact.receiptRow()).isSameAs(posted.getValue());
+            assertThat(fact.receiptRow().getEventType()).isEqualTo(InventoryLedgerEventType.GOODS_RECEIPT);
+        });
     }
 
     /**
@@ -2034,7 +2041,7 @@ class ReceivingServiceImplTest {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.GoodsReceiptLineFact>>
                 lines = ArgumentCaptor.forClass(List.class);
-        verify(goodsReceiptFactPublisher).publish(any(GoodsReceiptEntity.class), lines.capture(), any());
+        verify(goodsReceiptFactPublisher).publish(any(GoodsReceiptEntity.class), any(), lines.capture(), any());
         assertThat(lines.getValue())
                 .extracting(
                         com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.GoodsReceiptLineFact
@@ -2067,7 +2074,7 @@ class ReceivingServiceImplTest {
                         UUID.fromString("00000000-0000-0000-0000-0000000000ff"), BigDecimal.ONE, null, null, null))),
                 "receiver");
 
-        verify(goodsReceiptFactPublisher, never()).publish(any(GoodsReceiptEntity.class), any(), any());
+        verify(goodsReceiptFactPublisher, never()).publish(any(GoodsReceiptEntity.class), any(), any(), any());
     }
 
     /** #2417: a session whose source document is not a purchase order has no order to advance. */
@@ -2088,7 +2095,7 @@ class ReceivingServiceImplTest {
                         List.of(new ReceiveLineRequest(lineId, new BigDecimal("10"), null, null, null))),
                 "receiver");
 
-        verify(goodsReceiptFactPublisher, never()).publish(any(GoodsReceiptEntity.class), any(), any());
+        verify(goodsReceiptFactPublisher, never()).publish(any(GoodsReceiptEntity.class), any(), any(), any());
     }
 
     /**
@@ -2123,13 +2130,18 @@ class ReceivingServiceImplTest {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.GoodsReceiptLineFact>>
                 lines = ArgumentCaptor.forClass(List.class);
-        verify(goodsReceiptFactPublisher).publish(header.capture(), lines.capture(), any());
+        verify(goodsReceiptFactPublisher).publish(header.capture(), any(), lines.capture(), any());
         assertThat(header.getValue().getPurchaseOrderId()).isEqualTo(RECEIPT_PO_ID);
         assertThat(header.getValue().getLocationId()).isEqualTo(CROSS_DOCK_LOCATION_ID);
-        assertThat(lines.getValue())
-                .containsExactly(
-                        new com.positivity.inventory.internal.service.GoodsReceiptFactPublisher.GoodsReceiptLineFact(
-                                RECEIPT_PO_LINE_ID, "PROD-001", new BigDecimal("3"), 300L));
+        assertThat(lines.getValue()).singleElement().satisfies(fact -> {
+            assertThat(fact.poLineId()).isEqualTo(RECEIPT_PO_LINE_ID);
+            assertThat(fact.sku()).isEqualTo("PROD-001");
+            assertThat(fact.quantityReceived()).isEqualByComparingTo("3");
+            assertThat(fact.accruedAmountMinor()).isEqualTo(300L);
+            // CAP:550 S41 (#2602): the cross-dock's GOODS_RECEIPT row, never the paired GOODS_ISSUE.
+            assertThat(fact.receiptRow().getEventType()).isEqualTo(InventoryLedgerEventType.GOODS_RECEIPT);
+            assertThat(fact.receiptRow().getChangeInQuantity()).isEqualByComparingTo("3");
+        });
     }
 
     // ─── #2455: over-receipt guard, idempotency, goods-receipt row ────────────
@@ -2169,7 +2181,7 @@ class ReceivingServiceImplTest {
 
         verify(ledgerPostingService, never()).post(any());
         verify(goodsReceiptRepository, never()).save(any(GoodsReceiptEntity.class));
-        verify(goodsReceiptFactPublisher, never()).publish(any(GoodsReceiptEntity.class), any(), any());
+        verify(goodsReceiptFactPublisher, never()).publish(any(GoodsReceiptEntity.class), any(), any(), any());
     }
 
     @Test
@@ -2188,7 +2200,7 @@ class ReceivingServiceImplTest {
             assertThat(variance.getVarianceType()).isEqualTo("OVERAGE");
             assertThat(variance.getVarianceQuantity()).isEqualByComparingTo("1");
         });
-        verify(goodsReceiptFactPublisher).publish(any(GoodsReceiptEntity.class), any(), any());
+        verify(goodsReceiptFactPublisher).publish(any(GoodsReceiptEntity.class), any(), any(), any());
     }
 
     @Test
@@ -2242,7 +2254,8 @@ class ReceivingServiceImplTest {
         verify(ledgerPostingService, times(1)).post(any());
         verify(goodsReceiptRepository, times(1)).save(any(GoodsReceiptEntity.class));
         ArgumentCaptor<java.util.UUID> eventId = ArgumentCaptor.forClass(java.util.UUID.class);
-        verify(goodsReceiptFactPublisher, times(1)).publish(any(GoodsReceiptEntity.class), any(), eventId.capture());
+        verify(goodsReceiptFactPublisher, times(1))
+                .publish(any(GoodsReceiptEntity.class), any(), any(), eventId.capture());
         // Ordinary UUIDv7 ids (ADR-0013), the event id kept on the row; the retry never publishes.
         assertThat(eventId.getValue().version()).isEqualTo(7);
         assertThat(recorded.get().getEventId()).isEqualTo(eventId.getValue());
@@ -2277,7 +2290,7 @@ class ReceivingServiceImplTest {
                         sessionId, receiveRequest(lineId, "3", "key-1"), "receiver"));
 
         verify(ledgerPostingService, times(1)).post(any());
-        verify(goodsReceiptFactPublisher, times(1)).publish(any(GoodsReceiptEntity.class), any(), any());
+        verify(goodsReceiptFactPublisher, times(1)).publish(any(GoodsReceiptEntity.class), any(), any(), any());
     }
 
     @Test
@@ -2298,7 +2311,7 @@ class ReceivingServiceImplTest {
                 "receiver");
 
         assertThat(session.getLines().get(0).getStatus()).isEqualTo(ReceivingLineStatus.RECEIVED_OVER);
-        verify(goodsReceiptFactPublisher).publish(any(GoodsReceiptEntity.class), any(), any());
+        verify(goodsReceiptFactPublisher).publish(any(GoodsReceiptEntity.class), any(), any(), any());
         ArgumentCaptor<com.positivity.inventory.internal.entity.InventoryVariance> variance =
                 ArgumentCaptor.forClass(com.positivity.inventory.internal.entity.InventoryVariance.class);
         verify(inventoryVarianceRepository).save(variance.capture());
@@ -2404,7 +2417,7 @@ class ReceivingServiceImplTest {
         assertThat(retry).isEqualTo(first);
         // One paired receipt + issue, once.
         verify(ledgerPostingService, times(2)).post(any());
-        verify(goodsReceiptFactPublisher, times(1)).publish(any(GoodsReceiptEntity.class), any(), any());
+        verify(goodsReceiptFactPublisher, times(1)).publish(any(GoodsReceiptEntity.class), any(), any(), any());
         assertThat(recorded.get().getLocationId()).isEqualTo(CROSS_DOCK_LOCATION_ID);
     }
 

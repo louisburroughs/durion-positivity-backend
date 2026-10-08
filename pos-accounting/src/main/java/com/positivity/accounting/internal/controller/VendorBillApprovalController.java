@@ -27,6 +27,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -146,8 +147,11 @@ public class VendorBillApprovalController {
     @EmitEvent(id = "ACCOUNTING_VENDOR_BILL_APPROVE", apiVersion = "1")
     @SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"accounting:ap:approve_over_limit"})
-    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_APPROVE_OVER_LIMIT + "')")
+            scopes = {"accounting:ap:approve", "accounting:ap:approve_over_limit"})
+    // Either approve permission passes the gate; the bill's tier is then checked against the current clerk limit
+    // (CAP:550 S13, #2510): an OVER_LIMIT bill needs accounting:ap:approve_over_limit.
+    @PreAuthorize("hasAnyAuthority('" + AccountingPermissions.AP_APPROVE + "', '"
+            + AccountingPermissions.AP_APPROVE_OVER_LIMIT + "')")
     @Operation(
             operationId = "approveVendorBill",
             summary = "Approve Vendor Bill",
@@ -164,9 +168,11 @@ public class VendorBillApprovalController {
                 Use this tool for the approver's decision on a bill sent for approval; do not use \
                 submitVendorBillForApproval, which only sends it, or resolveVendorBillMatchException with ACCEPT, \
                 which approves a bill still in MATCH_EXCEPTION.
-                Preconditions: the bill is AWAITING_APPROVAL (CURRENCY_HOLD bills never are), a goods-receipt bill \
-                has its invoice matched, and until approval limits exist every bill needs \
-                accounting:ap:approve_over_limit.
+                Preconditions: in this order, the bill is AWAITING_APPROVAL (CURRENCY_HOLD bills never \
+                are) and a goods-receipt bill has its invoice matched; a bill whose absolute total is over the \
+                clerk limit (requiredTier OVER_LIMIT) needs accounting:ap:approve_over_limit, one within it \
+                accounting:ap:approve; the caller did not create the bill unless the AP approval policy allows it \
+                with a justification; then the content checks and the posting.
                 Required inputs: billId (UUID) as a path parameter; justification (at least 10 characters), \
                 classification {debitClass GOODS|EXPENSE, expenseMappingKey} (each field given wins over the one \
                 proposed at submission), difference (as submitVendorBillForApproval takes it) and \
@@ -174,12 +180,14 @@ public class VendorBillApprovalController {
                 Emits ACCOUNTING_VENDOR_BILL_APPROVE and writes a VENDOR_BILL_APPROVE audit row; a refused posting \
                 writes one VENDOR_BILL_APPROVE_REFUSED row and changes nothing else, and a replayed approve finds \
                 the bill APPROVED and is answered 409 AP_BILL_NOT_APPROVABLE.
-                Returns 200 with the bill read, its posting included; 400 JUSTIFICATION_REQUIRED, VALIDATION_ERROR \
-                or ARGUMENT_NOT_VALID; 401 without a valid token; 403 FORBIDDEN; 404 VENDOR_BILL_NOT_FOUND; 409 \
-                AP_BILL_NOT_APPROVABLE or AP_BILL_AWAITING_INVOICE; 422 AP_BILL_UNCLASSIFIED, \
-                AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED or \
-                GL_MAPPING_NOT_CONFIGURED (guided: referenceId CATEGORY/KEY and nextAction), each leaving the bill \
-                as it was.
+                Returns 200 with the bill read, its posting included; 400 JUSTIFICATION_REQUIRED (also a creator's \
+                approval without one), VALIDATION_ERROR or ARGUMENT_NOT_VALID; 401 without a valid token; 403 \
+                FORBIDDEN, AP_APPROVAL_LIMIT_EXCEEDED (nextAction names accounting:ap:approve_over_limit) or \
+                AP_BILL_SELF_APPROVAL, each limit or creator refusal audited as VENDOR_BILL_APPROVE_REFUSED; 404 \
+                VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE or AP_BILL_AWAITING_INVOICE; 422 \
+                AP_BILL_UNCLASSIFIED, AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, \
+                PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED (guided: referenceId CATEGORY/KEY and nextAction), \
+                each leaving the bill as it was.
                 """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
@@ -196,7 +204,8 @@ public class VendorBillApprovalController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
-            description = "FORBIDDEN",
+            description = "FORBIDDEN, AP_APPROVAL_LIMIT_EXCEEDED (over the clerk limit without"
+                    + " accounting:ap:approve_over_limit) or AP_BILL_SELF_APPROVAL (the caller created the bill)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
@@ -214,9 +223,10 @@ public class VendorBillApprovalController {
     public ResponseEntity<VendorBillResponse> approve(
             @Parameter(description = BILL_ID, example = BILL_ID_EXAMPLE) @NonNull @PathVariable UUID billId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description =
-                                    "The approver's optional justification, the classification the bill posts under,"
-                                            + " and an optional override justification for a CLOSED period.",
+                            description = "The approver's optional justification (required, at least 10 characters,"
+                                    + " when the creator approves under the policy's exception), the classification"
+                                    + " the bill posts under, and an optional override justification for a CLOSED"
+                                    + " period.",
                             required = true,
                             content =
                                     @Content(
@@ -321,10 +331,12 @@ public class VendorBillApprovalController {
                 Use this tool for a quantity, price, medium-confidence or totals exception on one bill; do not use \
                 selectVendorBillMatchCandidate, which resolves an ambiguous match among several bills, or \
                 submitVendorBillForApproval, which sends the bill to another person's approval.
-                Preconditions: the bill is MATCH_EXCEPTION, and each action needs its own permission: ACCEPT \
-                accounting:ap:approve_over_limit, CORRECT accounting:ap:approve or accounting:ap:approve_over_limit, \
-                VOID accounting:ap:reject; ACCEPT also needs what approveVendorBill needs (no open ambiguous match, \
-                a matched invoice for a goods-receipt bill, the vendor's totals reconciled or a difference).
+                Preconditions: the bill is MATCH_EXCEPTION, and each action needs its own permission: ACCEPT and \
+                CORRECT accounting:ap:approve or accounting:ap:approve_over_limit, VOID accounting:ap:reject; ACCEPT \
+                is an approval and takes approveVendorBill's checks in its order (no open ambiguous match, a \
+                matched invoice for a goods-receipt bill, the tier against the clerk limit, the caller not the \
+                bill's creator with the reason as an exception's justification, the vendor's totals reconciled or \
+                a difference).
                 Required inputs: billId (UUID) as a path parameter, resolutionAction (ACCEPT, CORRECT or VOID) and \
                 reason (at least 10 characters); ACCEPT also takes classification, difference and \
                 overrideJustification as approveVendorBill does, and an operatorId in the body is ignored because \
@@ -334,7 +346,8 @@ public class VendorBillApprovalController {
                 AP_BILL_NOT_APPROVABLE.
                 Returns 200 with the bill read; 400 VALIDATION_ERROR for an unknown action, JUSTIFICATION_REQUIRED \
                 for a missing or short reason, or ARGUMENT_NOT_VALID; 401 without a valid token; 403 FORBIDDEN \
-                without the action's permission; 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE or, for \
+                without the action's permission, or for ACCEPT AP_APPROVAL_LIMIT_EXCEEDED or AP_BILL_SELF_APPROVAL \
+                (audited as VENDOR_BILL_MATCH_EXCEPTION_RESOLVE_REFUSED); 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE or, for \
                 ACCEPT, AP_BILL_AWAITING_INVOICE; for ACCEPT, 422 AP_BILL_UNCLASSIFIED, AP_BILL_TOTALS_UNRECONCILED, \
                 AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED, leaving the bill \
                 as it was.
@@ -354,7 +367,7 @@ public class VendorBillApprovalController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
-            description = "FORBIDDEN",
+            description = "FORBIDDEN; for ACCEPT also AP_APPROVAL_LIMIT_EXCEEDED or AP_BILL_SELF_APPROVAL",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
@@ -473,9 +486,10 @@ public class VendorBillApprovalController {
                 use rejectVendorBill, which refuses a bill not yet approved, or resolveVendorBillMatchException with \
                 VOID, which voids a bill still in MATCH_EXCEPTION, and correct a bill with payments allocated with a \
                 vendor credit note instead.
-                Preconditions: every void needs accounting:ap:reject and an approved bill's also the approval tier, \
-                accounting:ap:approve_over_limit until approval limits exist; only this void reverses a bill's entry \
-                (the journal-entry reversal refuses one with 409 AP_BILL_ENTRY_NOT_REVERSIBLE).
+                Preconditions: every void needs accounting:ap:reject, and an approved bill's also either approve \
+                permission and then its tier against the current clerk limit (an OVER_LIMIT bill needs \
+                accounting:ap:approve_over_limit; the creator rule does not apply); only this void reverses a \
+                bill's entry (the journal-entry reversal refuses one with 409 AP_BILL_ENTRY_NOT_REVERSIBLE).
                 Required inputs: billId (UUID) as a path parameter and reason (at least 10 characters); \
                 overrideJustification (at least 10 characters) reverses an approved bill into a CLOSED period with \
                 accounting:period:override.
@@ -484,7 +498,9 @@ public class VendorBillApprovalController {
                 AP_BILL_NOT_VOIDABLE.
                 Returns 200 with the bill read, an approved bill's posting with its reversalReference; 400 \
                 JUSTIFICATION_REQUIRED or ARGUMENT_NOT_VALID; 401 without a valid token; 403 FORBIDDEN without \
-                accounting:ap:reject, or without the approval tier for an approved bill; 404 VENDOR_BILL_NOT_FOUND; \
+                accounting:ap:reject, or for an approved bill without an approve permission, or \
+                AP_APPROVAL_LIMIT_EXCEEDED over the clerk limit (audited as VENDOR_BILL_VOID_REFUSED); 404 \
+                VENDOR_BILL_NOT_FOUND; \
                 409 AP_BILL_NOT_VOIDABLE for any other status or an allocated bill; 422 PERIOD_CLOSED or \
                 PERIOD_HARD_LOCKED for today's period, leaving the bill as it was.
                 """,
@@ -503,7 +519,7 @@ public class VendorBillApprovalController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
-            description = "FORBIDDEN",
+            description = "FORBIDDEN, or AP_APPROVAL_LIMIT_EXCEEDED for an approved bill over the clerk limit",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
@@ -537,6 +553,76 @@ public class VendorBillApprovalController {
                     @RequestBody
                     VendorBillCommands.@NonNull VoidBill request) {
         return ResponseEntity.ok(approvalService.voidBill(billId, request));
+    }
+
+    @PutMapping("/{billId}/due-date")
+    @EmitEvent(id = "ACCOUNTING_VENDOR_BILL_DUE_DATE_SET", apiVersion = "1")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:ap:approve"})
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_APPROVE + "')")
+    @Operation(
+            operationId = "setVendorBillDueDate",
+            summary = "Set Vendor Bill Due Date",
+            description = """
+                Enters a vendor bill's real due date during approval review, as the vendor's document states it: \
+                it is stored at the start of the day, replaces any estimate (estimates are never stored, AW11) and \
+                is audited old to new as VENDOR_BILL_DUE_DATE_SET.
+                A later invoice match or candidate selection whose invoice states a due date replaces it (the \
+                vendor's document is the source); a date entered after the match stays.
+                Use this tool when a clerk reads the due date off the bill; do not use it on an approved bill, \
+                whose dates are locked, and use getVendorBillById instead to read the current one.
+                Preconditions: the bill is PENDING_RECEIPT_MATCH, MATCH_EXCEPTION or AWAITING_APPROVAL; the date \
+                is not tier-gated and separation of duties does not apply.
+                Required inputs: billId (UUID) as a path parameter and dueDate (YYYY-MM-DD); justification is \
+                optional, at least 10 characters when given, and an approvedBy or operatorId in the body is ignored \
+                because the actor is the caller.
+                Emits ACCOUNTING_VENDOR_BILL_DUE_DATE_SET; the same date again writes nothing.
+                Returns 200 with the bill read, 400 VALIDATION_ERROR or JUSTIFICATION_REQUIRED, 401 without a \
+                valid token, 403 FORBIDDEN without accounting:ap:approve, 404 VENDOR_BILL_NOT_FOUND, and 409 \
+                AP_BILL_NOT_APPROVABLE for any other status, CURRENCY_HOLD and APPROVED included.
+                """,
+            tags = {"Vendor Bill API"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Due date stored",
+            content = @Content(schema = @Schema(implementation = VendorBillResponse.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "VALIDATION_ERROR (no dueDate) or JUSTIFICATION_REQUIRED (one under 10 characters)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Not authenticated: no valid bearer token",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "FORBIDDEN",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "VENDOR_BILL_NOT_FOUND",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "AP_BILL_NOT_APPROVABLE: the bill is not in approval review",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<VendorBillResponse> setDueDate(
+            @Parameter(description = BILL_ID, example = BILL_ID_EXAMPLE) @NonNull @PathVariable UUID billId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The due date the vendor's document states and an optional justification.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Due date from the paper invoice",
+                                                            value = "{\"dueDate\":\"2026-11-07\"}")))
+                    @Valid
+                    @RequestBody
+                    VendorBillCommands.@NonNull SetDueDate request) {
+        return ResponseEntity.ok(approvalService.setDueDate(billId, request));
     }
 
     @GetMapping("/stages")
@@ -589,7 +675,8 @@ public class VendorBillApprovalController {
             summary = "List Vendor Bills By Stage",
             description = """
                 Lists the vendor bills of one stage of Bills to pay, each with its bill number, vendor name, \
-                total, currency, bill and due dates, status, channel, submittedAt and open amount. The \
+                total, currency, bill and due dates, status, channel, submittedAt, open amount and, in review, the \
+                requiredTier from the current clerk limit. The \
                 server sets the order: CHECK and APPROVE oldest first, PAY by due date with bills without \
                 one last, DONE newest paid first. There is no due-date window.
                 Use this tool for the bills behind one count of getVendorBillStageCounts; use \

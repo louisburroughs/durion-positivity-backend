@@ -212,22 +212,16 @@ public class AsnServiceImpl implements AsnService {
                 persistReceipt(request, purchaseOrder, asn, computedLines, receiptTotalMinor);
 
         publishReceiptCreated(persistedReceipt, poId, computedLines, actorId);
-        postLedgerEntries(request, computedLines, persistedReceipt, purchaseOrder.getCurrency(), actorId);
+        List<InventoryLedgerEntry> receiptRows =
+                postLedgerEntries(request, computedLines, persistedReceipt, purchaseOrder.getCurrency(), actorId);
 
         // Receiving states what arrived; pos-order decides what that means for the order's
         // outstanding quantities and status (CAP-320 #1334). Writing the order here is what made
         // two modules writers of one aggregate, and is exactly what this split removes.
         goodsReceiptFactPublisher.publish(
                 persistedReceipt,
-                computedLines.stream()
-                        .map(computed -> new GoodsReceiptFactPublisher.GoodsReceiptLineFact(
-                                computed.poLine() == null
-                                        ? null
-                                        : computed.poLine().getLineId(),
-                                computed.request().getSku(),
-                                computed.baseQuantity(),
-                                computed.lineAccruedMinor()))
-                        .toList());
+                purchaseOrder.getCurrency(),
+                receiptLineFacts(computedLines, persistedReceipt, receiptRows));
 
         if (asn != null) {
             applyReceiptToAsn(asn, computedLines);
@@ -306,7 +300,8 @@ public class AsnServiceImpl implements AsnService {
     }
 
     /**
-     * Posts one base-UoM ledger row per received line and marks it for fact publication. Each row
+     * Posts one base-UoM ledger row per received line and marks it for fact publication, returning
+     * the posted rows in line order for {@code goodsreceipt.recorded} (CAP:550 S41 #2602). Each row
      * carries the line's document cost per base unit (#2203, ADR-0048 IMP-002): {@code unitCostMinor}
      * prices one document unit when a document UoM was keyed, so it is divided by the conversion
      * factor, then moved from minor to major units of the order's currency.
@@ -315,7 +310,7 @@ public class AsnServiceImpl implements AsnService {
      * any other the rows post their quantity with no document cost, entering at the running
      * average, and their notes say they are awaiting cost and why.
      */
-    private void postLedgerEntries(
+    private List<InventoryLedgerEntry> postLedgerEntries(
             @NonNull CreateGoodsReceiptRequest request,
             @NonNull List<ReceiptLineComputation> computedLines,
             @NonNull GoodsReceiptEntity persistedReceipt,
@@ -328,6 +323,7 @@ public class AsnServiceImpl implements AsnService {
                     persistedReceipt.getReceiptNumber(),
                     costHold);
         }
+        List<InventoryLedgerEntry> posted = new ArrayList<>(computedLines.size());
         for (ReceiptLineComputation computed : computedLines) {
             BigDecimal unitCost = costHold != null
                     ? null
@@ -364,7 +360,36 @@ public class AsnServiceImpl implements AsnService {
                     .build();
             ledgerPostingService.post(entry);
             inventoryFactPublisher.markEntry(entry);
+            // The posting stamps the method-derived cost on this same row; the fact reads it there.
+            posted.add(entry);
         }
+        return posted;
+    }
+
+    /**
+     * One fact line per received line (CAP:550 S41 #2602): the saved receipt line's id, and the line's
+     * posted {@code GOODS_RECEIPT} row, both in the order the lines were computed, persisted and posted.
+     */
+    private static List<GoodsReceiptFactPublisher.GoodsReceiptLineFact> receiptLineFacts(
+            @NonNull List<ReceiptLineComputation> computedLines,
+            @NonNull GoodsReceiptEntity persistedReceipt,
+            @NonNull List<InventoryLedgerEntry> receiptRows) {
+        List<GoodsReceiptLineEntity> savedLines = persistedReceipt.getLines();
+        List<GoodsReceiptFactPublisher.GoodsReceiptLineFact> facts = new ArrayList<>(computedLines.size());
+        for (int i = 0; i < computedLines.size(); i++) {
+            ReceiptLineComputation computed = computedLines.get(i);
+            facts.add(new GoodsReceiptFactPublisher.GoodsReceiptLineFact(
+                    computed.poLine() == null ? null : computed.poLine().getLineId(),
+                    computed.request().getSku(),
+                    computed.baseQuantity(),
+                    computed.lineAccruedMinor(),
+                    savedLines == null || savedLines.size() <= i
+                            ? null
+                            : savedLines.get(i).getReceiptLineId(),
+                    computed.productId(),
+                    receiptRows.get(i)));
+        }
+        return facts;
     }
 
     private void publishReceiptCreated(
@@ -465,8 +490,9 @@ public class AsnServiceImpl implements AsnService {
     /**
      * Per-line receipt derivation (odoo-parity B2, #1034): the resolved PO line, the optional
      * document-UoM conversion, the base quantity that posts to the ledger, the accrued
-     * amount computed from the costed (document-unit) quantity, and the lot resolved by the
-     * tracking-level gate (odoo-parity E1, #1038; null for untracked products).
+     * amount computed from the costed (document-unit) quantity, the lot resolved by the
+     * tracking-level gate (odoo-parity E1, #1038; null for untracked products), and the product the
+     * line resolves to (null when neither its PO line nor its sku names one).
      */
     private record ReceiptLineComputation(
             CreateGoodsReceiptLineRequest request,
@@ -474,7 +500,8 @@ public class AsnServiceImpl implements AsnService {
             DocumentQuantityConverter.DocumentConversion conversion,
             BigDecimal baseQuantity,
             long lineAccruedMinor,
-            UUID lotId) {}
+            UUID lotId,
+            UUID productId) {}
 
     private List<ReceiptLineComputation> computeReceiptLines(
             @NonNull List<CreateGoodsReceiptLineRequest> lines, UUID vendorId) {
@@ -500,16 +527,24 @@ public class AsnServiceImpl implements AsnService {
             baseQuantity = quantityScaleGuard.requirePostable(
                     resolveProductId(poLine, line.getSku()), line.getSku(), "quantityReceived", baseQuantity);
             // unitCostMinor refers to one document-UoM unit when a document UoM is keyed, so the
-            // money math is documentQuantity × unitCostMinor either way.
+            // money math is documentQuantity × unitCostMinor either way. HALF_UP per line, then summed
+            // (ADR-0067 OP-11, PC-6; CAP:550 S41 #2602), the rounding the line's inventory value takes.
             BigDecimal costedQuantity = conversion != null ? conversion.documentQuantity() : baseQuantity;
             long lineAccruedMinor = costedQuantity
                     .multiply(BigDecimal.valueOf(line.getUnitCostMinor()))
-                    .setScale(0, RoundingMode.HALF_EVEN)
+                    .setScale(0, RoundingMode.HALF_UP)
                     .longValue();
             // odoo-parity E1 (#1038): LOT-tracked SKUs require a lotNumber (422 otherwise) and
             // find-or-create the lot; untracked SKUs pass through with a null lot unchanged.
             UUID lotId = lotCaptureService.resolveReceiptLot(line.getSku(), line.getLotNumber(), vendorId);
-            computed.add(new ReceiptLineComputation(line, poLine, conversion, baseQuantity, lineAccruedMinor, lotId));
+            computed.add(new ReceiptLineComputation(
+                    line,
+                    poLine,
+                    conversion,
+                    baseQuantity,
+                    lineAccruedMinor,
+                    lotId,
+                    resolveProductId(poLine, line.getSku())));
         }
         return computed;
     }

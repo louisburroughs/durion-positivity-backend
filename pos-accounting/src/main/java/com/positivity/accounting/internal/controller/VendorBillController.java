@@ -169,9 +169,12 @@ public class VendorBillController {
             description = """
                 Runs the three-way match of a received vendor invoice against pending goods-received bills (never \
                 an EDI bill): a HIGH match (score 70 or more) within tolerance sends the bill to AWAITING_APPROVAL \
-                with submittedBy SYSTEM and never approves it, a MEDIUM score or a discrepancy parks it in \
-                MATCH_EXCEPTION, and an AMBIGUOUS match keeps the scored candidates for a person to select one; \
-                nothing is posted.
+                with submittedBy SYSTEM, and when its absolute total is within min(automatic, clerk) limit of the \
+                AP approval policy the system approves and posts it in the same transaction (approvedByKind \
+                SYSTEM, VENDOR_BILL_AUTO_APPROVE), unless it would need a person's input or its posting is refused \
+                (it then stays AWAITING_APPROVAL, VENDOR_BILL_AUTO_APPROVE_SKIPPED); a MEDIUM score or a \
+                discrepancy parks it in MATCH_EXCEPTION, and an AMBIGUOUS match keeps the scored candidates for a \
+                person to select one.
                 Every routed single match takes the invoice's number and its invoiceDate as the bill date (AW46) \
                 and keeps what the vendor billed (the billed total and each line's billed quantity and price) and \
                 an append-only evidence record with the receipt date, the score, the points per criterion (amount \
@@ -183,7 +186,7 @@ public class VendorBillController {
                 Required inputs: eventId, organizationId and vendorId (UUIDs), invoiceReference, invoiceDate and \
                 lineItems; dueDate is optional.
                 Emits an ACCOUNTING_VENDOR_BILL_MATCH event and writes a VENDOR_BILL_MATCH_ROUTED audit row; the \
-                returned bill's status conveys the outcome.
+                returned bill's status conveys the outcome, APPROVED included.
                 Returns 400 when no pending receipt matches the invoice or the payload fails validation (a missing \
                 invoiceDate included), 409 AP_BILL_DUPLICATE when another live bill (any status except VOIDED or \
                 REJECTED) of the vendor already holds the invoiceReference on the invoiceDate, compared ignoring \
@@ -191,6 +194,10 @@ public class VendorBillController {
                 untouched), the generic 409 DUPLICATE_RESOURCE when a concurrent writer takes the number between \
                 the check and the commit, and 409 OPTIMISTIC_LOCK when the matched bill was decided meanwhile (send \
                 the invoice again).
+                In the rare race where a period closes or a mapping changes after automatic approval's pre-check, \
+                it answers the posting's 422 PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED with \
+                nothing written; resending the invoice is safe and ends matched, AWAITING_APPROVAL, with a \
+                VENDOR_BILL_AUTO_APPROVE_SKIPPED row.
                 """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
@@ -207,6 +214,12 @@ public class VendorBillController {
                     + "on the invoice date; referenceId is that bill's vendorBillId. DUPLICATE_RESOURCE, with no "
                     + "referenceId, when a concurrent writer takes the number between the check and the commit. "
                     + "OPTIMISTIC_LOCK when the matched bill was decided meanwhile",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED, only when a period closes or"
+                    + " a mapping changes between automatic approval's pre-check and its posting; nothing is written,"
+                    + " and resending the invoice is safe (it ends AWAITING_APPROVAL with the skip row)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<VendorBillResponse> matchVendorInvoice(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(

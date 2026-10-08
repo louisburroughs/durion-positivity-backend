@@ -93,6 +93,9 @@ class VendorBillServiceTest {
     private VendorBillLocks locks;
 
     @Mock
+    private VendorBillAutoApproval autoApproval;
+
+    @Mock
     private VendorDirectoryService vendorDirectoryService;
 
     /** A mock answers "no duplicate"; the {@link DuplicateRule} tests build a service over a real guard. */
@@ -921,7 +924,8 @@ class VendorBillServiceTest {
                 new VendorBillInvoiceMatcher(clock, billLineRepository, evidenceRepository, new LedgerCurrency("USD")),
                 reader,
                 auditLogs,
-                locks);
+                locks,
+                autoApproval);
     }
 
     /** What the reader answers in these tests: the bill's own fields, enough to assert the routing. */
