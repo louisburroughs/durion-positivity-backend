@@ -15,6 +15,7 @@ import com.positivity.supplier.internal.exception.SupplierValidationException;
 import com.positivity.supplier.internal.repository.SupplierVendorRemitChangeRepository;
 import com.positivity.supplier.internal.repository.SupplierVendorRepository;
 import com.positivity.supplier.internal.service.model.PagedResponse;
+import com.positivity.supplier.internal.vendor.VendorTaxRegistrationShapes;
 import com.positivity.supplier.internal.vendor.service.model.RemitApprovalRequest;
 import com.positivity.supplier.internal.vendor.service.model.RemitChangeRequest;
 import com.positivity.supplier.internal.vendor.service.model.RemitChangeStatus;
@@ -477,7 +478,7 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
      * </ul>
      *
      * <p>Every entry that carries a number has its (already upper-cased) scheme and region checked against
-     * {@link TaxRegistrationDto#SCHEME_SHAPE} and {@link TaxRegistrationDto#REGION_SHAPE} (ADR-0072 Decision 2).
+     * {@link VendorTaxRegistrationShapes} (ADR-0072 Decision 2).
      *
      * <p>Every refusal is a 400 {@code VALIDATION_ERROR} naming {@code taxRegistrations[i].<field>} and never
      * carries the number, the scheme or the region.
@@ -525,13 +526,13 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
 
     /** The value is never echoed: the message names the rule only. */
     private static void requireShapes(TaxRegistrationDto entry, String field) {
-        if (!TaxRegistrationDto.SCHEME_SHAPE.matcher(entry.scheme()).matches()) {
+        if (!VendorTaxRegistrationShapes.SCHEME.matcher(entry.scheme()).matches()) {
             throw fieldInvalid(
                     field + "scheme",
                     "must be letters, spaces, _, / or -, start with a letter, at most 16 characters, and no digit");
         }
         if (entry.region() != null
-                && !TaxRegistrationDto.REGION_SHAPE.matcher(entry.region()).matches()) {
+                && !VendorTaxRegistrationShapes.REGION.matcher(entry.region()).matches()) {
             throw fieldInvalid(field + "region", "must be two letters, optionally - and one to three letters");
         }
     }

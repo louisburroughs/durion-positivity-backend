@@ -88,8 +88,14 @@ connection profile belongs to exactly one vendor. No endpoint deletes a vendor.
     outcome `REVEALED` | `UNREADABLE` | `REASON_REJECTED`; never the number or `last4`) is written in the same
     transaction before the number is returned: if it cannot be written, nothing is revealed. A reason that
     contains the number itself (separators and case ignored) is 400 `VALIDATION_ERROR`, reveals nothing, and
-    records `REASON_REJECTED` with a null reason; the reason is never logged. The rows are read through
-    `supplier:audit:read`, so a controller's reveals are reviewed by someone else. A 403 writes nothing.
+    records `REASON_REJECTED` with a null reason; the reason is never logged. An `UNREADABLE` row keeps no
+    reason either (it could not be checked against a number that could not be read); a CHECK constraint holds
+    `reason` NULL exactly on those two outcomes. The rows are read through `supplier:audit:read`, so a
+    controller's reveals are reviewed by someone else. A 403 or 404 writes nothing.
+  - **Never an agent tool** (ADR-0072 Decision 4, CHK-010). pos-mcp-server's discovery drops, in code and on
+    every method, any operation whose path ends in `/reveal` or whose `x-required-permissions` holds a
+    `…:reveal` permission. No configuration re-includes it: an agent cannot reveal a number even for a user who
+    holds the permission; the person uses the reveal dialog. The audit read (metadata only) stays a tool.
 - **`supplier.vendor.updated` schema version 2** (`SupplierVendorUpdatedV1`) on `supplier.events.v1`, key
   `vendorId`, `aggregateVersion` = the vendor's `@Version`: queued through the outbox in the transaction of
   every create, update, status change and remit-to approval. Version 2 (#2621) carries tax registrations as
@@ -662,6 +668,26 @@ The envelope and key policy are shared by both ciphers (`AesGcmEnvelopeCipher`);
 additionally binds `tenantId`, `vendorId` and `registrationId` into the AAD. `V4` (a Flyway **Java**
 migration, a Spring bean with the cipher injected, because SQL cannot hold the key) encrypted every
 number stored before #2621; it logs counts only.
+
+#### Deploying V4–V6: stop-the-world only
+
+- **V4 is a Java migration** (`internal.migration.VendorTaxRegistrationEncryptionMigration`, version `4`). Never
+  add a `V4__*.sql`; `VendorTaxRegistrationMigrationHygieneTest` fails if anyone does.
+- **Stop-the-world deploy only.** Stop pos-supplier, migrate, then start it: no old instance may write a clear
+  number after V4 has run, and none may publish a v1 fact after V5.
+- **Hard gate before the deploy: the counts.** Run the read-only counts (registrations per scheme, vendors with a
+  registration, and the two shape-break counts in PR #2624) through SSM as `pos_user`. Counts only, never values.
+  Any non-zero shape-break count stops the deploy.
+- **If V4 or V5 refuses** ("N stored vendor tax registration(s) …" or "N supplier.vendor.updated outbox
+  registration(s) …"): nothing was written; the migration rolled back and the previous release keeps running.
+  Never `SELECT` the offending values.
+  - A stored registration: correct it through the vendor form on the running (pre-#2621) release, re-entering it
+    with a conforming scheme and region.
+  - A queued outbox row: it is a v1 copy of a fact and is never needed again. Delete exactly those rows with the
+    shape-break predicate of the count (`DELETE FROM supplier_event_outbox o USING … WHERE <same predicate>`),
+    never by listing them, and re-emit the vendor's facts (`POST /v1/supplier/vendors/facts/replay`) after the
+    deploy.
+  - Re-run the counts until both are zero, then deploy again.
 
 To rotate: move the current key into `previous-keys`, set a new `key` and a new `key-id`. **A retired
 key must stay in `previous-keys` for the whole retention window** — remove it and every payload it

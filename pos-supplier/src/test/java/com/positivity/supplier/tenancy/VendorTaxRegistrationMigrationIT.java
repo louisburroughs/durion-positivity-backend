@@ -3,6 +3,7 @@ package com.positivity.supplier.tenancy;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.positivity.supplier.SupplierPostgresContainer;
+import com.positivity.supplier.internal.config.SupplierEncryptionKeySeparation;
 import com.positivity.supplier.internal.entity.VendorTaxIdCipher;
 import com.positivity.supplier.internal.migration.VendorTaxRegistrationEncryptionMigration;
 import java.sql.Connection;
@@ -89,7 +90,8 @@ class VendorTaxRegistrationMigrationIT {
         var configuration = Flyway.configure()
                 .dataSource(database)
                 .locations("classpath:db/migration")
-                .javaMigrations(new VendorTaxRegistrationEncryptionMigration(cipher));
+                .javaMigrations(new VendorTaxRegistrationEncryptionMigration(
+                        cipher, new SupplierEncryptionKeySeparation("", "", "", "")));
         if (target != null) {
             configuration = configuration.target(target);
         }
@@ -191,7 +193,8 @@ class VendorTaxRegistrationMigrationIT {
         // Idempotent: running the migration body again changes nothing.
         try (Connection connection = database.getConnection()) {
             connection.setAutoCommit(false);
-            new VendorTaxRegistrationEncryptionMigration(cipher).migrate(context(connection));
+            new VendorTaxRegistrationEncryptionMigration(cipher, new SupplierEncryptionKeySeparation("", "", "", ""))
+                    .migrate(context(connection));
             connection.commit();
         }
         assertThat(storedRegistrations()).isEqualTo(stored);

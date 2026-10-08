@@ -30,8 +30,9 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>The row holds the actor and roles from the security context (ADR-0018; pos-supplier stores no
  * {@code personId}, so ADR-0022's claim is not recorded here), the reason, the request's correlation id and
- * the outcome. Never the number and never {@code last4}; and no reason on a {@code REASON_REJECTED} row, whose
- * reason held the number.
+ * the outcome. Never the number and never {@code last4}. The reason is kept on {@code REVEALED} rows only: a
+ * {@code REASON_REJECTED} reason held the number, and an {@code UNREADABLE} reason could not be checked against a
+ * value that could not be read (Security ruling on #2621, 2026-10-08). V6 enforces it with a CHECK.
  */
 @Component
 @RequiredArgsConstructor
@@ -45,7 +46,8 @@ public class VendorTaxIdRevealRecorder {
     /**
      * Records one reveal of {@code registration} of {@code vendorId}. Deliberately catches nothing.
      *
-     * @param reason the reason given; {@code null} for {@code REASON_REJECTED} only, whose reason held the number
+     * @param reason the reason given on {@code REVEALED}; {@code null} for {@code REASON_REJECTED} and
+     *     {@code UNREADABLE}
      * @param outcome {@code REVEALED}; {@code UNREADABLE} when decryption failed; {@code REASON_REJECTED} when the
      *     reason contained the number. Nothing is returned for the last two
      */
@@ -58,8 +60,8 @@ public class VendorTaxIdRevealRecorder {
         Objects.requireNonNull(vendorId, "vendorId must not be null");
         Objects.requireNonNull(registration, "registration must not be null");
         Objects.requireNonNull(outcome, "outcome must not be null");
-        if ((outcome == TaxIdRevealOutcome.REASON_REJECTED) != (reason == null)) {
-            throw new IllegalArgumentException("reason is null exactly when the outcome is REASON_REJECTED");
+        if ((outcome == TaxIdRevealOutcome.REVEALED) == (reason == null)) {
+            throw new IllegalArgumentException("reason is kept on REVEALED rows only");
         }
         SupplierVendorTaxIdRevealEntity row = SupplierVendorTaxIdRevealEntity.builder()
                 .vendorId(vendorId)

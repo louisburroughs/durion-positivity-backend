@@ -59,7 +59,7 @@ public class SupplierVendorTaxIdRevealEntity extends TenantScopedEntity {
     @Column(name = "revealed_by_roles", nullable = false, updatable = false, length = 1000)
     private String revealedByRoles;
 
-    /** {@code null} on a {@code REASON_REJECTED} row only: that reason held the number, so it is not kept. */
+    /** Kept on {@code REVEALED} rows only; {@code null} on {@code REASON_REJECTED} and {@code UNREADABLE} (V6 CHECK). */
     @Column(name = "reason", updatable = false, length = 500)
     private String reason;
 

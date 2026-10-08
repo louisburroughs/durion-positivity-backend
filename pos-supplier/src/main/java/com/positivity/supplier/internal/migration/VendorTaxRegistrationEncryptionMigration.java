@@ -1,9 +1,10 @@
 package com.positivity.supplier.internal.migration;
 
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.supplier.internal.config.SupplierEncryptionKeySeparation;
 import com.positivity.supplier.internal.entity.VendorTaxIdCipher;
 import com.positivity.supplier.internal.entity.VendorTaxRegistration;
-import com.positivity.supplier.internal.vendor.service.model.TaxRegistrationDto;
+import com.positivity.supplier.internal.vendor.VendorTaxRegistrationShapes;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -11,7 +12,6 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
 import org.flywaydb.core.api.MigrationVersion;
@@ -54,7 +54,7 @@ import tools.jackson.databind.node.ObjectNode;
  *   <li><strong>Counts only.</strong> It logs how many vendors and registrations it touched, never a value.
  *       An element it cannot interpret fails the migration with its position, not its content.
  *   <li><strong>Shapes first, counts only.</strong> {@code scheme} and {@code region} are trimmed and upper-cased
- *       and must match {@link TaxRegistrationDto#SCHEME_SHAPE} and {@link TaxRegistrationDto#REGION_SHAPE}
+ *       and must match the {@link VendorTaxRegistrationShapes}
  *       (ADR-0072 Decision 2), because the publisher copies them onto the fact beside {@code last4}. If any
  *       stored registration breaks them, the migration fails before writing anything and reports how many, never
  *       which values: those registrations must be corrected before the number leaves the clear (Security
@@ -73,8 +73,14 @@ public class VendorTaxRegistrationEncryptionMigration implements JavaMigration {
 
     private final VendorTaxIdCipher cipher;
 
-    public VendorTaxRegistrationEncryptionMigration(@NonNull VendorTaxIdCipher cipher) {
+    /**
+     * @param keySeparation taken only so it has run first: V4 never seals a number under a key the exchange-audit
+     *     cipher also holds (#2621)
+     */
+    public VendorTaxRegistrationEncryptionMigration(
+            @NonNull VendorTaxIdCipher cipher, @NonNull SupplierEncryptionKeySeparation keySeparation) {
         this.cipher = Objects.requireNonNull(cipher, "cipher must not be null");
+        Objects.requireNonNull(keySeparation, "keySeparation must not be null");
     }
 
     @Override
@@ -173,16 +179,13 @@ public class VendorTaxRegistrationEncryptionMigration implements JavaMigration {
     /** Trimmed and upper-cased, as the API stores them; {@code null} for an absent or JSON-null value. */
     @Nullable
     static String normalise(@Nullable JsonNode value) {
-        return value == null || value.isNull() ? null : value.asString().strip().toUpperCase(Locale.ROOT);
+        return value == null || value.isNull() ? null : VendorTaxRegistrationShapes.normalise(value.asString());
     }
 
     static boolean conforms(JsonNode element) {
         String scheme = normalise(element.get("scheme"));
         String region = normalise(element.get("region"));
-        return scheme != null
-                && TaxRegistrationDto.SCHEME_SHAPE.matcher(scheme).matches()
-                && (region == null
-                        || TaxRegistrationDto.REGION_SHAPE.matcher(region).matches());
+        return VendorTaxRegistrationShapes.conforms(scheme, region);
     }
 
     private ObjectNode sealElement(UUID tenantId, UUID vendorId, JsonNode element) {

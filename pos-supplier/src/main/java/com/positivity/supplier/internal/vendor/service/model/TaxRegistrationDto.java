@@ -1,9 +1,8 @@
 package com.positivity.supplier.internal.vendor.service.model;
 
+import com.positivity.supplier.internal.vendor.VendorTaxRegistrationShapes;
 import io.swagger.v3.oas.annotations.media.Schema;
-import java.util.Locale;
 import java.util.UUID;
-import java.util.regex.Pattern;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -19,7 +18,7 @@ import org.jspecify.annotations.Nullable;
  * </ul>
  *
  * <p>{@code scheme} and {@code region} are trimmed and upper-cased here. The vendor service then checks every
- * entry that carries a number against {@link #SCHEME_SHAPE} and {@link #REGION_SHAPE} (ADR-0072 Decision 2,
+ * entry that carries a number against {@link VendorTaxRegistrationShapes} (ADR-0072 Decision 2,
  * Security confirmation on louisburroughs/durion#571), so an attribute stored beside {@code last4} can never
  * hold part of a number.
  *
@@ -59,18 +58,10 @@ public record TaxRegistrationDto(
     /** Longest accepted number once trimmed. */
     public static final int MAX_NUMBER_LENGTH = 64;
 
-    /** Letters, spaces, {@code _}, {@code /} and {@code -}, at most 16, starting with a letter; never a digit. */
-    public static final Pattern SCHEME_SHAPE = Pattern.compile("^[A-Z][A-Z _/-]{0,15}$");
-
-    /** Two letters, optionally {@code -} and one to three letters ({@code QC}, {@code CA-QC}); never a digit. */
-    public static final Pattern REGION_SHAPE = Pattern.compile("^[A-Z]{2}(-[A-Z]{1,3})?$");
-
     public TaxRegistrationDto {
-        scheme = VendorFields.required(scheme, "taxRegistrations[].scheme", 32)
-                .strip()
-                .toUpperCase(Locale.ROOT);
+        scheme = VendorTaxRegistrationShapes.normalise(VendorFields.required(scheme, "taxRegistrations[].scheme", 32));
         region = VendorFields.optional(region, "taxRegistrations[].region", 32);
-        region = region == null ? null : region.strip().toUpperCase(Locale.ROOT);
+        region = VendorTaxRegistrationShapes.normalise(region);
         if (number != null) {
             number = number.strip();
             // Lengths only: the value itself never reaches a message, a field error or a log.

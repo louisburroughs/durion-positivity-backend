@@ -97,12 +97,17 @@ public class VendorTaxIdRevealServiceImpl implements VendorTaxIdRevealService {
             throw new TaxIdRevealReasonRejectedException();
         }
 
-        // Before anything is returned, in this transaction, with no catch.
-        recorder.record(
-                vendorId,
-                registration,
-                Objects.requireNonNull(request.reason(), "reason"),
-                failure == null ? TaxIdRevealOutcome.REVEALED : TaxIdRevealOutcome.UNREADABLE);
+        // Before anything is returned, in this transaction, with no catch. An UNREADABLE row keeps no reason: it could
+        // not be checked against a number that could not be read (Security ruling on #2621, 2026-10-08).
+        if (failure == null) {
+            recorder.record(
+                    vendorId,
+                    registration,
+                    Objects.requireNonNull(request.reason(), "reason"),
+                    TaxIdRevealOutcome.REVEALED);
+        } else {
+            recorder.record(vendorId, registration, null, TaxIdRevealOutcome.UNREADABLE);
+        }
 
         if (failure != null) {
             // Vendor, registration and key id only: never ciphertext, never last4.

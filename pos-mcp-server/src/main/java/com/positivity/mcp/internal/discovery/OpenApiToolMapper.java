@@ -68,10 +68,11 @@ public class OpenApiToolMapper {
 
         String routingPrefix = "/" + routingDomain(serviceId);
         openApi.getPaths().forEach((path, pathItem) -> {
+            Map<HttpMethod, Operation> operations = withoutRevealOperations(routingPrefix + path, pathItem);
             if (!properties.includesPath(path)) {
                 return;
             }
-            operationsOf(pathItem).forEach((method, operation) -> {
+            operations.forEach((method, operation) -> {
                 if (properties.excludesWrite(routingPrefix + path, method)) {
                     LOGGER.debug(
                             "Per-service discovery of {} excluded write operation {} {} (#2370: audit/platform-event"
@@ -117,10 +118,11 @@ public class OpenApiToolMapper {
             return specs;
         }
         openApi.getPaths().forEach((path, pathItem) -> {
+            Map<HttpMethod, Operation> operations = withoutRevealOperations(path, pathItem);
             if (!properties.includesPath(path) || properties.excludesPath(path)) {
                 return;
             }
-            operationsOf(pathItem).forEach((method, operation) -> {
+            operations.forEach((method, operation) -> {
                 if (properties.excludesWrite(path, method)) {
                     return;
                 }
@@ -146,10 +148,11 @@ public class OpenApiToolMapper {
             return operations;
         }
         openApi.getPaths().forEach((path, pathItem) -> {
+            Map<HttpMethod, Operation> operations = withoutRevealOperations(path, pathItem);
             if (!properties.includesPath(path) || properties.excludesPath(path)) {
                 return;
             }
-            operationsOf(pathItem).forEach((method, operation) -> {
+            operations.forEach((method, operation) -> {
                 if (properties.excludesWrite(path, method)) {
                     // #2370: the one log line per excluded operation per discovery run (no body).
                     LOGGER.debug(
@@ -179,6 +182,11 @@ public class OpenApiToolMapper {
             return domains;
         }
         openApi.getPaths().forEach((path, pathItem) -> {
+            // A domain whose reveal operation was dropped was seen too: its previously-registered row is pruned.
+            if (operationsOf(pathItem).entrySet().stream()
+                    .anyMatch(entry -> isRevealOperation(path, entry.getValue()))) {
+                domains.add(extractDomain(path));
+            }
             if (!properties.includesPath(path) || properties.excludesPath(path)) {
                 return;
             }
@@ -188,6 +196,55 @@ public class OpenApiToolMapper {
                     .ifPresent(method -> domains.add(extractDomain(path)));
         });
         return domains;
+    }
+
+    // ── Reveal operations are never tools (#2621; Security ruling on #2617 / #2621, ADR-0072 Decision 4) ──
+
+    /** The permission marker: a {@code <domain>:<resource>:reveal} entry in {@code x-required-permissions}. */
+    private static final java.util.regex.Pattern REVEAL_PERMISSION =
+            java.util.regex.Pattern.compile("^[a-z_]+:[a-z_]+:reveal$");
+
+    /**
+     * Whether an operation returns a RESTRICTED value and so is never an agent tool (ADR-0072 Decision 4, CHK-010).
+     * Either marker is enough: an {@code x-required-permissions} entry whose action is {@code reveal}, or a path
+     * ending in {@code /reveal}. The action {@code reveal} is reserved for such operations.
+     *
+     * <p>This is code, deliberately, and not an entry in {@code excludedWritePathPatterns}: a configuration list
+     * can be edited or emptied, and a revealed value would enter the model's context, its provider's request, the
+     * conversation store and the tool-result logs. It applies to every HTTP method and runs before every include
+     * rule, so no configuration can re-include such an operation.
+     */
+    public static boolean isRevealOperation(@NonNull String path, @NonNull Operation operation) {
+        return hasRevealPath(path) || hasRevealPermission(operation);
+    }
+
+    /** The path marker: the path, with or without a routing prefix, ends in {@code /reveal}. */
+    public static boolean hasRevealPath(@NonNull String path) {
+        return path.endsWith("/reveal");
+    }
+
+    /** The permission marker: an {@code x-required-permissions} entry whose action is {@code reveal}. */
+    public static boolean hasRevealPermission(@NonNull Operation operation) {
+        return extractRequiredPermissions(operation).stream()
+                .anyMatch(code -> REVEAL_PERMISSION.matcher(code).matches());
+    }
+
+    /** The path item's operations minus every reveal operation, each logged once (no body, no value). */
+    private static @NonNull Map<HttpMethod, Operation> withoutRevealOperations(
+            @NonNull String path, @NonNull PathItem pathItem) {
+        Map<HttpMethod, Operation> operations = operationsOf(pathItem);
+        operations.entrySet().removeIf(entry -> {
+            if (!isRevealOperation(path, entry.getValue())) {
+                return false;
+            }
+            LOGGER.debug(
+                    "Discovery excluded reveal operation {} {} (ADR-0072 Decision 4: an operation returning a"
+                            + " RESTRICTED value is never an agent tool)",
+                    entry.getKey(),
+                    path);
+            return true;
+        });
+        return operations;
     }
 
     /** The operations a path item declares, in the order discovery has always visited them. */

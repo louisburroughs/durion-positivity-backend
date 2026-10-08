@@ -16,17 +16,25 @@ import org.jspecify.annotations.Nullable;
  */
 @Schema(description = "A revealed registration number. RESTRICTED: never cache, log, or put it in a URL.")
 public record TaxIdRevealView(
-        @Schema(description = "Registration identity (UUIDv7).", example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c")
+        @Schema(
+                description = "Registration identity (UUIDv7).",
+                example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         @NonNull
         UUID registrationId,
 
-        @Schema(description = "Registration scheme.", example = "GST_HST") @NonNull
+        @Schema(description = "Registration scheme.", example = "GST_HST", requiredMode = Schema.RequiredMode.REQUIRED)
+        @NonNull
         String scheme,
 
         @Schema(description = "Issuing region, where the scheme is regional.", example = "ON") @Nullable
         String region,
 
-        @Schema(description = "The full registration number as issued.", example = "000-00-0000") @NonNull
+        @Schema(
+                description = "The full registration number as issued.",
+                example = "000-00-0000",
+                requiredMode = Schema.RequiredMode.REQUIRED)
+        @NonNull
         String number) {
 
     /** Never prints the number. */

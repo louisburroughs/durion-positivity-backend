@@ -248,6 +248,23 @@ class VendorTaxIdRevealServiceTest extends PostgresSliceTestBase {
                         SupplierValidationException.class,
                         refused -> assertThat(refused.getCode())
                                 .isEqualTo(SupplierValidationException.JUSTIFICATION_REQUIRED));
+        // Counted in code points, as PostgreSQL counts them: 9 surrogate pairs are 18 chars but 9 characters.
+        String emoji = new String(Character.toChars(0x1F600));
+        assertThatThrownBy(() -> new TaxIdRevealRequest(emoji.repeat(9)))
+                .isInstanceOfSatisfying(
+                        SupplierValidationException.class,
+                        refused -> assertThat(refused.getCode())
+                                .isEqualTo(SupplierValidationException.JUSTIFICATION_REQUIRED));
+        assertThatThrownBy(() -> new TaxIdRevealRequest(emoji.repeat(501)))
+                .isInstanceOfSatisfying(
+                        SupplierValidationException.class,
+                        refused ->
+                                assertThat(refused.getCode()).isEqualTo(SupplierValidationException.VALIDATION_ERROR));
+        assertThat(new TaxIdRevealRequest(emoji.repeat(500)).reason()).hasSize(1000);
+        assertThat(new TaxIdRevealRequest("checking 000-00-1234 per W-9").toString())
+                .as("toString never prints the reason")
+                .doesNotContain("000-00-1234")
+                .contains("<redacted>");
         assertThatThrownBy(() -> new TaxIdRevealRequest("x".repeat(501)))
                 .isInstanceOfSatisfying(
                         SupplierValidationException.class,
@@ -299,9 +316,75 @@ class VendorTaxIdRevealServiceTest extends PostgresSliceTestBase {
                     assertThat(failure.getCode()).isEqualTo("SUPPLIER_VENDOR_TAX_ID_UNREADABLE");
                     assertThat(failure.getMessage()).as("number absent").doesNotContain(SSN);
                 });
-        assertThat(revealRows(target.vendorId()))
-                .singleElement()
-                .satisfies(row -> assertThat(row.get("outcome")).isEqualTo("UNREADABLE"));
+        assertThat(revealRows(target.vendorId())).singleElement().satisfies(row -> {
+            assertThat(row.get("outcome")).isEqualTo("UNREADABLE");
+            assertThat(row.get("reason"))
+                    .as("an UNREADABLE row keeps no reason (Security ruling on #2621)")
+                    .isNull();
+        });
+    }
+
+    /** V6's presence CHECK: the reason is NULL exactly on REASON_REJECTED and UNREADABLE rows. */
+    @Test
+    @DisplayName("V6 refuses a REVEALED row without a reason and an UNREADABLE row with one")
+    void reasonPresenceIsEnforcedBySchema() throws SQLException {
+        try (Connection connection = SupplierPostgresContainer.ownerDataSource().getConnection();
+                Statement statement = connection.createStatement()) {
+            for (String[] row : new String[][] {
+                {"REVEALED", "NULL"},
+                {"UNREADABLE", "'Verifying W-9 received today'"},
+                {"REASON_REJECTED", "'Verifying W-9 received today'"}
+            }) {
+                assertThatThrownBy(() -> statement.execute("INSERT INTO supplier_vendor_tax_id_reveal (tenant_id,"
+                                + " reveal_id, vendor_id, registration_id, scheme, revealed_by, revealed_by_roles,"
+                                + " reason, revealed_at, outcome) VALUES ('" + OTHER_TENANT + "', gen_random_uuid(),"
+                                + " gen_random_uuid(), gen_random_uuid(), 'SSN', 'x', '', " + row[1] + ", now(), '"
+                                + row[0] + "')"))
+                        .as(row[0] + " with reason " + row[1])
+                        .isInstanceOf(SQLException.class)
+                        .hasMessageContaining("chk_svtir_reason_presence");
+            }
+        }
+    }
+
+    /**
+     * AC 13, behavioural: when the audit insert itself fails (INSERT revoked from the application role for this
+     * test only), the reveal fails and no number is returned.
+     */
+    @Test
+    @DisplayName("AC 13: an audit insert that fails on the real schema returns no number")
+    void failedAuditInsertRevealsNothing() throws SQLException {
+        VendorView vendor = vendorWith("Sole Closed", SSN);
+        UUID registrationId = vendor.taxRegistrations().getFirst().registrationId();
+        entityManager.flush();
+        java.util.concurrent.atomic.AtomicReference<TaxIdRevealView> returned =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        grant("REVOKE");
+        try {
+            assertThatThrownBy(() -> returned.set(asController(() ->
+                            revealService.reveal(vendor.vendorId(), registrationId, new TaxIdRevealRequest(REASON)))))
+                    .satisfies(failure -> {
+                        StringBuilder chain = new StringBuilder();
+                        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+                            chain.append(cause.getMessage());
+                        }
+                        assertThat(chain.toString().contains(SSN)
+                                        || chain.toString().contains(SSN_BARE))
+                                .as("number absent from the failure")
+                                .isFalse();
+                    });
+            assertThat(returned.get()).as("nothing returned").isNull();
+        } finally {
+            grant("GRANT");
+        }
+    }
+
+    private static void grant(String verb) throws SQLException {
+        try (Connection connection = SupplierPostgresContainer.ownerDataSource().getConnection();
+                Statement statement = connection.createStatement()) {
+            statement.execute(verb + " INSERT ON supplier_vendor_tax_id_reveal "
+                    + ("GRANT".equals(verb) ? "TO" : "FROM") + " " + SupplierPostgresContainer.APP_ROLE);
+        }
     }
 
     @Test

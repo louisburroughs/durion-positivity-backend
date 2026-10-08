@@ -20,11 +20,13 @@ import org.jspecify.annotations.Nullable;
 public record TaxRegistrationView(
         @Schema(
                 description = "Registration identity (UUIDv7); send it back to keep the registration.",
-                example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c")
+                example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         @NonNull
         UUID registrationId,
 
-        @Schema(description = "Registration scheme.", example = "GST_HST") @NonNull
+        @Schema(description = "Registration scheme.", example = "GST_HST", requiredMode = Schema.RequiredMode.REQUIRED)
+        @NonNull
         String scheme,
 
         @Schema(description = "Issuing region, where the scheme is regional.", example = "ON") @Nullable
@@ -35,4 +37,12 @@ public record TaxRegistrationView(
                         + " 8, which a screen shows as on file.",
                 example = "0000")
         @Nullable
-        String last4) {}
+        String last4) {
+
+    /** Never prints {@code last4}: it is CONFIDENTIAL and never logged (Spring MVC's DEBUG "Writing" log calls this). */
+    @Override
+    public String toString() {
+        return "TaxRegistrationView[registrationId=" + registrationId + ", scheme=" + scheme + ", region=" + region
+                + ", last4=" + (last4 == null ? "null" : "<redacted>") + "]";
+    }
+}

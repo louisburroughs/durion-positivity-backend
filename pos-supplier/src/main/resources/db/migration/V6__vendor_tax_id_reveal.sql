@@ -1,7 +1,7 @@
 -- durion-positivity-backend#2621 (CAP:550; Security ruling on #2617, ruling 4): the reveal audit of vendor
 -- tax-registration numbers. One row per reveal through POST /v1/supplier/vendors/{vendorId}/tax-registrations/
 -- {registrationId}/reveal, written in the reveal's own transaction BEFORE the number is returned (no row, no
--- number), including a reveal whose ciphertext could not be decrypted (outcome UNREADABLE) and one refused
+-- number), including a reveal whose ciphertext could not be decrypted (outcome UNREADABLE, reason NULL) and one refused
 -- because its reason contained the number (outcome REASON_REJECTED, reason NULL: that reason held the
 -- number; Security confirmation on louisburroughs/durion#571). A 403 or 404 writes nothing. Read through GET /v1/supplier/vendors/{vendorId}/tax-id-reveals (supplier:audit:read).
 --
@@ -25,7 +25,11 @@ CREATE TABLE public.supplier_vendor_tax_id_reveal (
     revealed_at timestamp(6) with time zone NOT NULL,
     outcome character varying(16) NOT NULL,
     CONSTRAINT chk_svtir_outcome CHECK (((outcome)::text = ANY ((ARRAY['REVEALED'::character varying, 'UNREADABLE'::character varying, 'REASON_REJECTED'::character varying])::text[]))),
-    CONSTRAINT chk_svtir_reason CHECK (((((outcome)::text = 'REASON_REJECTED'::text) AND (reason IS NULL)) OR (((outcome)::text <> 'REASON_REJECTED'::text) AND (reason IS NOT NULL) AND (length(btrim((reason)::text)) >= 10))))
+    -- Security ruling on #2621 (2026-10-08): reason is NULL exactly on REASON_REJECTED (it held the number) and
+    -- UNREADABLE (it could not be checked against a value that could not be read), and kept on REVEALED.
+    CONSTRAINT chk_svtir_reason_presence CHECK ((((outcome)::text = ANY ((ARRAY['REASON_REJECTED'::character varying, 'UNREADABLE'::character varying])::text[])) = (reason IS NULL))),
+    -- A kept reason is 10 to 500 characters (the column bounds 500), counted as Java counts them: code points.
+    CONSTRAINT chk_svtir_reason CHECK (((reason IS NULL) OR (length(btrim((reason)::text)) >= 10)))
 );
 
 COMMENT ON TABLE public.supplier_vendor_tax_id_reveal IS

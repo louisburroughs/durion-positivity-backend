@@ -1,5 +1,6 @@
 package com.positivity.supplier;
 
+import com.positivity.supplier.internal.config.SupplierEncryptionKeySeparation;
 import com.positivity.supplier.internal.entity.VendorTaxIdCipher;
 import com.positivity.supplier.internal.migration.VendorTaxRegistrationEncryptionMigration;
 import com.positivity.tenancy.testing.TenantTestSupport;
@@ -43,7 +44,8 @@ import org.springframework.test.context.TestExecutionListeners;
  *
  * <p>Requires Docker.
  */
-@Import({VendorTaxIdCipher.class, VendorTaxRegistrationEncryptionMigration.class})
+@Import({VendorTaxIdCipher.class, SupplierEncryptionKeySeparation.class, VendorTaxRegistrationEncryptionMigration.class
+})
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("pg")
