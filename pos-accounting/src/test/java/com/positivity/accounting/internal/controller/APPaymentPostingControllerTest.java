@@ -206,7 +206,7 @@ class APPaymentPostingControllerTest extends BaseIntegrationTest {
 
         @Test
         @DisplayName("200 with no body: the payment GL_POSTED")
-        void postsWithoutABody() throws Exception {
+        void postsWithoutABody() throws Throwable {
             when(apPaymentService.retryGLPosting(PAYMENT_ID, null)).thenReturn(payment(APPaymentStatus.GL_POSTED));
 
             mockMvc.perform(withAuth(post(RETRY, PAYMENT_ID), "accounting:je:post"))
