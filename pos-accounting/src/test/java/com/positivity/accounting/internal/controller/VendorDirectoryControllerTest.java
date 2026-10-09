@@ -291,6 +291,74 @@ class VendorDirectoryControllerTest extends BaseIntegrationTest {
         }
 
         @Test
+        @DisplayName("#2615 AC9: an unknown key at the top level or inside apHold / informationReturn is 400"
+                + " VALIDATION_ERROR naming the key, never its value; the service is never reached")
+        void unknownKeysNamedNeverEchoed() throws Exception {
+            String secret = "123-45-6789";
+            String body = "{\"tin\":\"" + secret + "\",\"apHold\":{\"onHold\":true,\"reason\":\"Disputed delivery"
+                    + " 4471\",\"ssn\":\"" + secret + "\"},\"informationReturn\":{\"reportable\":true,"
+                    + "\"number\":{\"value\":\"" + secret + "\"}}," + TAIL + "}";
+
+            String response = set(MANAGE, body)
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                    .andExpect(jsonPath("$.fieldErrors[*].field")
+                            .value(org.hamcrest.Matchers.containsInAnyOrder(
+                                    "tin", "apHold.ssn", "informationReturn.number")))
+                    .andReturn()
+                    .getResponse()
+                    .getContentAsString();
+
+            assertThat(response).doesNotContain(secret).doesNotContain("6789");
+            verify(vendorDirectoryService, never()).setApSettings(any(), any());
+        }
+
+        @Test
+        @DisplayName("#2615: apHold and informationReturn bind with their presence; null objects reach the service as"
+                + " present and null (refused there)")
+        void nestedObjectsBind() throws Exception {
+            when(vendorDirectoryService.setApSettings(eq(VENDOR_ID), any())).thenReturn(acme());
+
+            set(
+                            MANAGE,
+                            "{\"apHold\":{\"onHold\":true,\"reason\":\"Disputed delivery 4471, awaiting credit\"},"
+                                    + "\"informationReturn\":{\"reportable\":true,\"form\":\"ZZ_FORM_A\",\"box\":\"1\"},"
+                                    + TAIL
+                                    + "}")
+                    .andExpect(status().isOk());
+            VendorApSettingsRequest request = sent();
+            assertThat(request.hasApHold()).isTrue();
+            assertThat(request.getApHold().getOnHold()).isTrue();
+            assertThat(request.getApHold().getReason()).isEqualTo("Disputed delivery 4471, awaiting credit");
+            assertThat(request.getInformationReturn().getForm()).isEqualTo("ZZ_FORM_A");
+            assertThat(request.getInformationReturn().hasPayeeTaxRegistrationScheme())
+                    .isFalse();
+            assertThat(request.unknownProperties()).isEmpty();
+
+            org.mockito.Mockito.clearInvocations(vendorDirectoryService);
+            set(MANAGE, "{\"apHold\":null,\"informationReturn\":null," + TAIL + "}")
+                    .andExpect(status().isOk());
+            VendorApSettingsRequest nulls = sent();
+            assertThat(nulls.hasApHold()).isTrue();
+            assertThat(nulls.getApHold()).isNull();
+            assertThat(nulls.hasInformationReturn()).isTrue();
+            assertThat(nulls.getInformationReturn()).isNull();
+        }
+
+        @Test
+        @DisplayName("#2615: 503 SERVICE_UNAVAILABLE with Retry-After when pos-tax cannot check the information return")
+        void posTaxUnavailable() throws Exception {
+            when(vendorDirectoryService.setApSettings(eq(VENDOR_ID), any()))
+                    .thenThrow(new com.positivity.accounting.internal.exception.TaxServiceUnavailableException(
+                            "The tax service is unavailable"));
+
+            set(MANAGE, "{" + TAIL + "}")
+                    .andExpect(status().isServiceUnavailable())
+                    .andExpect(header().string("Retry-After", "30"))
+                    .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"));
+        }
+
+        @Test
         @DisplayName("400 VALIDATION_ERROR with fieldErrors, 400 JUSTIFICATION_REQUIRED, 409, 503 not copied yet")
         void refusals() throws Exception {
             when(vendorDirectoryService.setApSettings(eq(VENDOR_ID), any()))

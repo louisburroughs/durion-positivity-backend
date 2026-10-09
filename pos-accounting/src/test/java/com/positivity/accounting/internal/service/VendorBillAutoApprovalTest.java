@@ -22,6 +22,7 @@ import com.positivity.accounting.internal.enums.VendorBillPostingDateRule;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
+import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.VendorBillLineRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
@@ -32,6 +33,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -362,5 +365,24 @@ class VendorBillAutoApprovalTest {
         assertThat(autoApproval.approveIfEligible(bill, evidence, 95)).isTrue();
 
         assertThat(onlyAudit().getNewValue()).contains("inputTaxRecovery=GST:12.50:NOT_RECOVERABLE");
+    }
+
+    @Test
+    @DisplayName("#2615 AC4 [M]: a HIGH /match of a held vendor's 200.00 stocked bill is still APPROVED by SYSTEM; the"
+            + " hold stops payment only")
+    void heldVendorIsStillApproved() {
+        billed("200.00", true);
+        when(vendorCopies.apHold(any()))
+                .thenReturn(Optional.of(new SupplierVendorCopies.ApHold(
+                        "V-002615", "Disputed delivery 4471, awaiting credit", CLOCK.instant())));
+        when(vendorCopies.heldVendors(any())).thenReturn(Map.of(UUID.randomUUID(), "held"));
+        doThrow(new VendorBillException(VendorBillException.Code.VENDOR_ON_AP_HOLD, "Vendor V-002615 is on AP hold"))
+                .when(vendorCopies)
+                .requireNotOnHold(any(), any());
+
+        assertThat(autoApproval.approveIfEligible(bill, evidence, 95)).isTrue();
+
+        assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.APPROVED);
+        assertThat(bill.getApprovedBy()).isEqualTo("SYSTEM");
     }
 }

@@ -149,8 +149,8 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1gl-accounts~1{glAccountId}~1balance
   /v1/accounting/gl-accounts/{glAccountId}/deactivate:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1gl-accounts~1{glAccountId}~1deactivate
-  /v1/accounting/input-tax-recovery:
-    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1input-tax-recovery
+  /v1/accounting/information-return-forms:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1information-return-forms
   /v1/accounting/invoice-revenue/reconcile:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1invoice-revenue~1reconcile
   /v1/accounting/invoice/invoices:
@@ -215,8 +215,6 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1petty-expense-categories~1{code}~1account
   /v1/accounting/petty-expense-categories/{code}/deactivate:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1petty-expense-categories~1{code}~1deactivate
-  /v1/accounting/petty-expense-categories/{code}/tax-recovery:
-    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1petty-expense-categories~1{code}~1tax-recovery
   /v1/accounting/posting-categories:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1posting-categories
   /v1/accounting/posting-categories/{postingCategoryId}:

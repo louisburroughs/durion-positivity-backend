@@ -85,7 +85,12 @@ class VendorBillApprovalLimitsTest {
     @BeforeEach
     void wire() {
         // The real vendor rules over mocked repositories (S24): the copy, the vendor's settings and the bills.
-        vendorCopies = new SupplierVendorCopies(vendorCopy, apSettings, bills);
+        vendorCopies = new SupplierVendorCopies(
+                vendorCopy,
+                apSettings,
+                bills,
+                new org.springframework.beans.factory.support.StaticListableBeanFactory()
+                        .getBeanProvider(io.micrometer.core.instrument.MeterRegistry.class));
         service = new VendorBillApprovalServiceImpl(
                 CLOCK,
                 bills,
@@ -677,6 +682,58 @@ class VendorBillApprovalLimitsTest {
             assertThatThrownBy(() -> service.setDueDate(
                             BILL_ID, new VendorBillCommands.SetDueDate(LocalDate.of(2026, 11, 7), null)))
                     .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("#2615 AC4: an AP hold stops payment only; approval and ACCEPT go ahead")
+    class ApHold {
+
+        @BeforeEach
+        void held() {
+            com.positivity.accounting.internal.entity.ApVendorSettings row =
+                    new com.positivity.accounting.internal.entity.ApVendorSettings();
+            row.setVendorId(bill.getVendorId());
+            row.setApHold(true);
+            row.setApHoldReason("Disputed delivery 4471, awaiting credit");
+            row.setApHoldSetBy("q.controller");
+            row.setApHoldSetAt(CLOCK.instant());
+            when(apSettings.findByVendorId(bill.getVendorId())).thenReturn(Optional.of(row));
+            com.positivity.accounting.internal.entity.ExtSupplierVendor vendor =
+                    new com.positivity.accounting.internal.entity.ExtSupplierVendor();
+            vendor.setVendorId(bill.getVendorId());
+            vendor.setVendorNumber("V-002615");
+            vendor.setStatus("ACTIVE");
+            vendor.setCreatedBy("u.creator");
+            when(vendorCopy.findById(bill.getVendorId())).thenReturn(Optional.of(vendor));
+            limits("1000.00", "500.00", false);
+        }
+
+        @Test
+        @DisplayName("[M] a clerk who did not create it approves the held vendor's 800.00 bill: APPROVED and posted")
+        void approveGoesAhead() {
+            signIn(CLERK, APPROVE, REJECT);
+            awaiting("800.00");
+
+            VendorBillResponse response = service.approve(BILL_ID, approve(null));
+
+            assertThat(response.getStatus()).isEqualTo(VendorBillStatus.APPROVED);
+            assertThat(bill.getApprovedBy()).isEqualTo(CLERK);
+            verify(postingService).post(eq(bill), any(), any(), eq(CLERK));
+            assertThat(auditRows()).extracting(AccountingAuditLog::getOperation).containsExactly("VENDOR_BILL_APPROVE");
+        }
+
+        @Test
+        @DisplayName("[M] ACCEPT of the held vendor's matching exception approves and posts it")
+        void acceptGoesAhead() {
+            signIn(CLERK, APPROVE, REJECT);
+            bill.setStatus(VendorBillStatus.MATCH_EXCEPTION);
+            bill.setTotalAmount(new BigDecimal("800.00"));
+
+            service.resolveException(BILL_ID, accept(null));
+
+            assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.APPROVED);
+            verify(postingService).post(eq(bill), any(), any(), eq(CLERK));
         }
     }
 }

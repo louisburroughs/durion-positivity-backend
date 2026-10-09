@@ -3,9 +3,9 @@ package com.positivity.accounting.internal.exception;
 import org.jspecify.annotations.NonNull;
 
 /**
- * pos-tax could not take a tax-registration write (CAP:550 S32c): it is unreachable, answered 5xx, or refused this
- * front door's secret. 503 {@code SERVICE_UNAVAILABLE} with {@code Retry-After}; nothing is stored. The message never
- * carries a registration number or a secret.
+ * pos-tax could not answer (CAP:550 S32c; #2615's reference reads too): it is unreachable, answered 5xx, refused this
+ * front door's secret, or its answer was unreadable. 503 {@code SERVICE_UNAVAILABLE} with {@code Retry-After};
+ * nothing is stored. The message never carries a registration number, a secret or a request body.
  */
 public class TaxServiceUnavailableException extends RuntimeException {
 

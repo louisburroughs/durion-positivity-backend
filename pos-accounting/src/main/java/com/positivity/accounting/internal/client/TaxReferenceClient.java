@@ -1,0 +1,165 @@
+package com.positivity.accounting.internal.client;
+
+import com.positivity.accounting.internal.dto.InformationReturnFormsResponse;
+import com.positivity.accounting.internal.exception.TaxServiceUnavailableException;
+import com.positivity.shared.error.ApiError;
+import com.positivity.tenancy.TenantContext;
+import com.positivity.tenancy.TenantHeaders;
+import java.time.Duration;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.regex.Pattern;
+import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
+import org.springframework.http.client.ClientHttpRequestFactory;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.stereotype.Component;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+import tools.jackson.databind.ObjectMapper;
+
+/**
+ * pos-accounting's utility client for pos-tax's configured references (CAP:550 #2615; ADR-0044 R2): today the
+ * information-return forms of a country. S43 (#2604) adds its own reads here.
+ *
+ * <p>pos-tax is internal-only and not on Eureka, so it is reached on a fixed base URL ({@code pos.accounting.tax.base-url},
+ * the S32c precedent) with bounded connect and read timeouts (defaults 2 s and 5 s). Each call is a service call:
+ * {@code X-User: pos-accounting} and {@code X-Authorities: tax:rates:view}, with the bound tenant ({@code
+ * X-Tenant-Id}) and the inbound {@code X-Correlation-Id} forwarded.
+ *
+ * <p>Anything that is not an answer is 503 {@code SERVICE_UNAVAILABLE} with {@code Retry-After} ({@link
+ * TaxServiceUnavailableException}): pos-tax unreachable, any 4xx or 5xx, or an unreadable body. A 4xx is not relayed:
+ * the country is the server's own setting, so it is never the caller's fault (ADR-0017); it is logged at WARN with
+ * pos-tax's status and code only. Nothing logs a response body.
+ */
+@Slf4j
+@Component
+public class TaxReferenceClient {
+
+    /** The service identity and authority of every call. */
+    public static final String SERVICE_USER = "pos-accounting";
+
+    public static final String SERVICE_AUTHORITY = "tax:rates:view";
+    public static final String CORRELATION_HEADER = "X-Correlation-Id";
+
+    static final String INFORMATION_RETURN_FORMS = "/v1/tax/information-return-forms";
+
+    /** The shape of an error code worth logging; anything else is logged as {@code "-"}. */
+    private static final Pattern ERROR_CODE = Pattern.compile("^[A-Z][A-Z0-9_]{0,63}$");
+
+    private final RestClient restClient;
+    private final ObjectMapper objectMapper;
+
+    /** The client Spring builds: its own request factory with the configured connect and read timeouts. */
+    @Autowired
+    public TaxReferenceClient(
+            RestClient.Builder restClientBuilder,
+            ObjectMapper objectMapper,
+            @Value("${pos.accounting.tax.base-url:http://pos-tax:8091}") String baseUrl,
+            @Value("${pos.accounting.tax.connect-timeout:2s}") Duration connectTimeout,
+            @Value("${pos.accounting.tax.read-timeout:5s}") Duration readTimeout) {
+        this(
+                restClientBuilder.clone().requestFactory(requestFactory(connectTimeout, readTimeout)),
+                objectMapper,
+                baseUrl);
+    }
+
+    /** A client on a builder whose request factory the caller has set (tests bind a mock server to it). */
+    TaxReferenceClient(RestClient.Builder restClientBuilder, ObjectMapper objectMapper, String baseUrl) {
+        this.restClient = restClientBuilder.clone().baseUrl(baseUrl).build();
+        this.objectMapper = objectMapper;
+    }
+
+    static ClientHttpRequestFactory requestFactory(Duration connectTimeout, Duration readTimeout) {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(connectTimeout);
+        factory.setReadTimeout(readTimeout);
+        return factory;
+    }
+
+    /**
+     * The information-return forms pos-tax configures for {@code countryCode}.
+     *
+     * @param countryCode an upper-case ISO 3166-1 alpha-2 code
+     * @return the forms; empty when the country configures none
+     */
+    public @NonNull InformationReturnFormsResponse informationReturnForms(@NonNull String countryCode) {
+        try {
+            RestClient.RequestHeadersSpec<?> request = restClient
+                    .get()
+                    .uri(uri -> uri.path(INFORMATION_RETURN_FORMS)
+                            .queryParam("countryCode", countryCode)
+                            .build())
+                    .accept(MediaType.APPLICATION_JSON)
+                    .header("X-User", SERVICE_USER)
+                    .header("X-Authorities", SERVICE_AUTHORITY);
+            Optional<UUID> tenant = TenantContext.current();
+            tenant.ifPresent(id -> request.header(TenantHeaders.HTTP_TENANT_ID, id.toString()));
+            String correlationId = correlationId();
+            if (correlationId != null) {
+                request.header(CORRELATION_HEADER, correlationId);
+            }
+            InformationReturnFormsResponse forms = request.retrieve().body(InformationReturnFormsResponse.class);
+            if (forms == null) {
+                throw new TaxServiceUnavailableException("The tax service returned no information-return forms");
+            }
+            return forms;
+        } catch (RestClientResponseException e) {
+            // The country is the server's own setting (TaxCountry), so no pos-tax answer here is the caller's fault: a
+            // 4xx (a rollout skew, a 404 before the stub is deployed, a refused service identity) is 503 like a 5xx,
+            // never relayed (ADR-0017). Only the status and pos-tax's code are logged, never a body or a value.
+            int status = e.getStatusCode().value();
+            if (e.getStatusCode().is4xxClientError()) {
+                log.warn(
+                        "pos-tax refused an information-return forms read: status {}, code {}; answering 503",
+                        status,
+                        errorCode(e));
+            } else {
+                log.error("pos-tax answered {} to an information-return forms read; answering 503", status);
+            }
+            throw new TaxServiceUnavailableException("The tax service is unavailable");
+        } catch (ResourceAccessException e) {
+            log.warn(
+                    "pos-tax is unreachable for an information-return forms read: {}",
+                    e.getClass().getSimpleName());
+            throw new TaxServiceUnavailableException("The tax service is unavailable");
+        } catch (RestClientException e) {
+            log.warn(
+                    "pos-tax's information-return forms answer was unreadable: {}",
+                    e.getClass().getSimpleName());
+            throw new TaxServiceUnavailableException("The tax service is unavailable");
+        }
+    }
+
+    /** The inbound request's correlation id, forwarded so pos-tax logs under the same id (ADR-0017 §4). */
+    private static @Nullable String correlationId() {
+        if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes) {
+            String header = attributes.getRequest().getHeader(CORRELATION_HEADER);
+            return header == null || header.isBlank() ? null : header.trim();
+        }
+        return null;
+    }
+
+    /** pos-tax's error code when its envelope carries a well-formed one, else {@code "-"}; never anything else. */
+    private String errorCode(RestClientResponseException e) {
+        try {
+            ApiError error = objectMapper.readValue(e.getResponseBodyAsByteArray(), ApiError.class);
+            if (error != null
+                    && error.code() != null
+                    && ERROR_CODE.matcher(error.code()).matches()) {
+                return error.code();
+            }
+        } catch (RuntimeException parse) {
+            // No readable envelope: the status alone is logged.
+        }
+        return "-";
+    }
+}

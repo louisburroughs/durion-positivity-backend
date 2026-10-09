@@ -238,6 +238,38 @@ class APPaymentPostingPostgresIT extends PostgresTenancyTestBase {
                 .containsExactly("2000 D250.00", "1000 C250.00");
     }
 
+    // ---- the AP hold (#2615) --------------------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("#2615 AC3: a held vendor's approved bill is refused 422 VENDOR_ON_AP_HOLD: no ap_payment row, no"
+            + " gateway call; released, the same paymentRef pays")
+    void heldVendorIsNotPaid() throws Exception {
+        UUID tenant = tenant();
+        VendorBillResponse bill = approvedBill(tenant, "120.00");
+        owner().update(
+                        "INSERT INTO ap_vendor_settings (tenant_id, ap_vendor_settings_id, vendor_id, version, created_at,"
+                                + " updated_at, ap_hold, ap_hold_reason, ap_hold_set_by, ap_hold_set_at)"
+                                + " VALUES (?, ?, ?, 0, now(), now(), TRUE, 'Disputed delivery 4471, awaiting credit',"
+                                + " 'q.controller', now())",
+                        tenant,
+                        UUIDv7Generator.generate(),
+                        bill.getVendorId());
+        ExecuteAPPaymentRequest request = request(bill, "120.00", "0.00", "120.00");
+
+        assertThatThrownBy(() -> pay(tenant, request)).isInstanceOfSatisfying(VendorBillException.class, e -> {
+            assertThat(e.getCode()).isEqualTo(VendorBillException.Code.VENDOR_ON_AP_HOLD);
+            assertThat(e.getMessage()).doesNotContain("4471");
+        });
+        assertThat(count(tenant, "ap_payment", "TRUE")).isZero();
+        verify(gateway, never()).executePayment(any());
+
+        owner().update(
+                        "UPDATE ap_vendor_settings SET ap_hold = FALSE, ap_hold_reason = NULL, ap_hold_set_by = NULL,"
+                                + " ap_hold_set_at = NULL WHERE tenant_id = ?",
+                        tenant);
+        assertThat(pay(tenant, request).getStatus()).isEqualTo(APPaymentStatus.GL_POST_PENDING);
+    }
+
     // ---- the bank account ---------------------------------------------------------------------------------------
 
     @Test

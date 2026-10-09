@@ -81,7 +81,14 @@ class VendorDirectoryServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new VendorDirectoryServiceImpl(
-                Clock.fixed(NOW, ZoneOffset.UTC), vendors, settings, bills, auditLogs, categories, keys);
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                vendors,
+                settings,
+                bills,
+                auditLogs,
+                categories,
+                keys,
+                org.mockito.Mockito.mock(InformationReturnFormsService.class));
         UsernamePasswordAuthenticationToken caller =
                 new UsernamePasswordAuthenticationToken("q.controller", "n/a", List.of());
         caller.setDetails(java.util.Map.of(

@@ -26,8 +26,9 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * What stays accounting's about a pos-supplier vendor (CAP:550 S24, #2517; SPEC-accounting-workspace §4.9 "What stays
- * accounting's"; AW23, AW39): the confirmation of a changed remit-to and the vendor's AP defaults. One row per vendor,
- * created on the first write; each change is an {@code accounting_audit_log} row (entity {@code VENDOR}).
+ * accounting's"; AW23, AW39): the confirmation of a changed remit-to, the vendor's AP defaults, its AP payment hold
+ * and its information-return reportable flag (#2615). One row per vendor, created on the first write; each change is
+ * an {@code accounting_audit_log} row (entity {@code VENDOR}).
  */
 @Getter
 @Setter
@@ -76,6 +77,42 @@ public class ApVendorSettings extends TenantScopedEntity {
     /** An active {@code VENDOR_BILL} key {@code EXPENSE_<CODE>}, for {@code EXPENSE} and non-stock lines. */
     @Column(name = "default_expense_mapping_key", length = 100)
     private String defaultExpenseMappingKey;
+
+    /**
+     * The AP payment hold (#2615): true refuses an AP payment to the vendor (422 {@code VENDOR_ON_AP_HOLD}); approval
+     * and posting go ahead. Independent of the vendor's status.
+     */
+    @Column(name = "ap_hold", nullable = false)
+    private boolean apHold;
+
+    /** Why the vendor is held, 10-500 characters; CONFIDENTIAL (ADR-0072), so it never reaches toString or a log. */
+    @ToString.Exclude
+    @Column(name = "ap_hold_reason", length = 500)
+    private String apHoldReason;
+
+    /** Who set the hold or last changed its reason (the principal name, ADR-0018). */
+    @Column(name = "ap_hold_set_by", length = 255)
+    private String apHoldSetBy;
+
+    /** When the hold was set or its reason last changed. */
+    @Column(name = "ap_hold_set_at")
+    private Instant apHoldSetAt;
+
+    /** Whether the vendor's payments are reportable on the tax country's information return (#2615). */
+    @Column(name = "information_return_reportable", nullable = false)
+    private boolean informationReturnReportable;
+
+    /** A form code of pos-tax's information-return configuration for the tax country; null when not reportable. */
+    @Column(name = "information_return_form", length = 32)
+    private String informationReturnForm;
+
+    /** A box code of that form; null when not reportable. */
+    @Column(name = "information_return_box", length = 10)
+    private String informationReturnBox;
+
+    /** The payee-id scheme the payee is reported under, one of the form's; never the number itself. */
+    @Column(name = "information_return_payee_scheme", length = 16)
+    private String informationReturnPayeeScheme;
 
     @Version
     @Column(name = "version", nullable = false)
