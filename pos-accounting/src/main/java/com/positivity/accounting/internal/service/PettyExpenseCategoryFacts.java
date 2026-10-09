@@ -52,7 +52,9 @@ public class PettyExpenseCategoryFacts {
                 PettyExpenseCategoryChangedV1.Status.valueOf(
                         category.getStatus().name()),
                 account.map(GLAccount::getAccountCode).orElse(null),
-                account.map(GLAccount::getAccountName).orElse(null));
+                account.map(GLAccount::getAccountName).orElse(null),
+                Boolean.FALSE,
+                null);
     }
 
     /** Queues the category's current state; must run inside the transaction that changed it. */

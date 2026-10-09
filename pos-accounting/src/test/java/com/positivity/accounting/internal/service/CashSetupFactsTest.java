@@ -87,7 +87,9 @@ class CashSetupFactsTest {
                         null,
                         PettyExpenseCategoryChangedV1.Status.ACTIVE,
                         "6295",
-                        "Staff Meals & Refreshments"));
+                        "Staff Meals & Refreshments",
+                        Boolean.FALSE,
+                        null));
     }
 
     @Test

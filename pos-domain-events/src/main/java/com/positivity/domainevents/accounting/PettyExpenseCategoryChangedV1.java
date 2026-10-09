@@ -1,5 +1,7 @@
 package com.positivity.domainevents.accounting;
 
+import java.math.BigDecimal;
+
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -22,6 +24,11 @@ import org.jspecify.annotations.Nullable;
  *     this for display only; posting always resolves the account through the category's mapping at the entry
  *     date.
  * @param accountName that account's name, or null when it has none
+ * @param taxRecoverable whether the tax stated on this category's receipts may be recovered (CAP:550
+ *     S32d item 4); null on a message produced before S32d, which a consumer reads as not recoverable
+ * @param recoverablePercent the share of the stated tax that is recovered, in (0, 100], when
+ *     recoverable; for display only, since pos-accounting reads the share in force from its own history
+ *     when it posts (AW52)
  */
 public record PettyExpenseCategoryChangedV1(
         @NonNull String code,
@@ -29,7 +36,9 @@ public record PettyExpenseCategoryChangedV1(
         @Nullable String examples,
         @NonNull Status status,
         @Nullable String accountCode,
-        @Nullable String accountName) {
+        @Nullable String accountName,
+        @Nullable Boolean taxRecoverable,
+        @Nullable BigDecimal recoverablePercent) {
 
     public static final String EVENT_TYPE = "accounting.petty-expense-category.changed";
     public static final int SCHEMA_VERSION = 1;
