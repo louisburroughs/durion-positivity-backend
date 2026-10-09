@@ -16,7 +16,8 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 164 event types (includes +1 ACCOUNTING_AP_PAYMENT_GL_POSTING_RETRY and -1 for the retired
+     * Total: 168 event types (includes +3 from the tax-registration front door (CAP:550 S32c, Issue #2638):
+     * ACCOUNTING_TAX_REGISTRATION_LIST, _CREATE, _UPDATE, +1 ACCOUNTING_AP_PAYMENT_GL_POSTING_RETRY and -1 for the retired
      * AP_PAYMENT_GL_POSTING (CAP:550 S42, Issue #2603), +3 from approval limits and separation of duties (CAP:550 S13, Issue #2510):
      * ACCOUNTING_VENDOR_BILL_DUE_DATE_SET, ACCOUNTING_AP_APPROVAL_POLICY_VIEW, ACCOUNTING_AP_APPROVAL_POLICY_SET,
      * +6 from the vendor-bill approval lifecycle and -1 for the retired
@@ -81,7 +82,8 @@ public final class EventTypes {
      * ACCOUNTING_REPORT_EXPORT_REQUEST, ACCOUNTING_REPORT_EXPORT_STATUS,
      * ACCOUNTING_REPORT_EXPORT_LIST, +2 from the vendor directory
      * (Issue #816): ACCOUNTING_VENDOR_SEARCH, ACCOUNTING_VENDOR_GET, +2 vendor commands (CAP:550 S24, #2517):
-     * ACCOUNTING_VENDOR_REMIT_TO_CONFIRM, ACCOUNTING_VENDOR_AP_SETTINGS_SET, +3
+     * ACCOUNTING_VENDOR_REMIT_TO_CONFIRM, ACCOUNTING_VENDOR_AP_SETTINGS_SET, +1 information-return forms read (CAP:550
+     * #2615): ACCOUNTING_INFORMATION_RETURN_FORMS_VIEW, +3
      * from accounting period lifecycle (Story B1, Issue #937):
      * ACCOUNTING_PERIOD_LIST, ACCOUNTING_PERIOD_CLOSE,
      * ACCOUNTING_PERIOD_REOPEN, +2 previously emitted but unregistered
@@ -460,7 +462,12 @@ public final class EventTypes {
                         .build(),
                 EventTypeRegistration.approval(
                                 "ACCOUNTING_VENDOR_AP_SETTINGS_SET",
-                                "Set a vendor's AP defaults (default debit class and expense key)")
+                                "Set a vendor's AP defaults, AP payment hold and information-return flag")
+                        .build(),
+                // InformationReturnFormsController — the tax country's information-return forms (CAP:550 #2615)
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_INFORMATION_RETURN_FORMS_VIEW",
+                                "List the tax country's information-return forms, boxes and payee-id schemes")
                         .build(),
 
                 // AccountingPeriodController — 3 events (Story B1, Issue #937)

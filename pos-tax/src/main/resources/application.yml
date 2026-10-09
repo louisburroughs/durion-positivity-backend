@@ -176,6 +176,37 @@ pos:
     # (placeholder, OI-4).
     plausibility:
       tolerance-minor-units: 5
+    # Information-return forms per country (CAP:550 #2615, AW48): the forms a vendor may be reported in, their
+    # boxes and the payee-id schemes. Every row is a PLACEHOLDER held for expert advice (OI-4), never tax law:
+    # which forms apply, their boxes, the schemes, thresholds and filing rules are all undecided. Country keys
+    # are upper case and cannot be set through environment variables (relaxed binding lower-cases them, and the
+    # startup check then refuses the key). Forms and boxes are lists with explicit codes; quote box codes so
+    # "020" stays text. Adding a country is a block here. Checked at startup by InformationReturnForms.
+    information-returns:
+      US:
+        forms:
+          - code: US_1099_NEC
+            label: "Form 1099-NEC (placeholder)"
+            boxes:
+              - { code: "1", label: "Box 1 (placeholder)" }
+            payee-id-schemes: [EIN, SSN, ITIN]
+          - code: US_1099_MISC
+            label: "Form 1099-MISC (placeholder)"
+            boxes:
+              - { code: "1", label: "Box 1 (placeholder)" }
+              - { code: "2", label: "Box 2 (placeholder)" }
+              - { code: "3", label: "Box 3 (placeholder)" }
+              - { code: "6", label: "Box 6 (placeholder)" }
+              - { code: "10", label: "Box 10 (placeholder)" }
+            payee-id-schemes: [EIN, SSN, ITIN]
+      CA:
+        forms:
+          - code: CA_T4A
+            label: "T4A (placeholder)"
+            boxes:
+              - { code: "020", label: "Box 020 (placeholder)" }
+              - { code: "048", label: "Box 048 (placeholder)" }
+            payee-id-schemes: [BN, SIN]
 
 logging:
   level:

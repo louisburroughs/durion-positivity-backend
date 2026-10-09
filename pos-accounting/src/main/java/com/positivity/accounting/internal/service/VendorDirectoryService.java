@@ -16,6 +16,27 @@ import org.jspecify.annotations.Nullable;
 public interface VendorDirectoryService {
 
     /**
+     * 400 {@code VALIDATION_ERROR} naming each unknown property of an AP-settings body (#2615), top-level or inside
+     * {@code apHold} or {@code informationReturn}; the value was dropped at binding, so it is never echoed or logged (a
+     * {@code tin} is refused like any other key). Called by the controller and again by {@link #setApSettings}.
+     *
+     * @param unknown the unknown property names
+     */
+    static void refuseUnknown(java.util.@NonNull List<String> unknown) {
+        if (unknown.isEmpty()) {
+            return;
+        }
+        throw new com.positivity.accounting.internal.exception.VendorBillException(
+                com.positivity.accounting.internal.exception.VendorBillException.Code.VALIDATION_ERROR,
+                "The vendor AP settings request has unknown properties: " + String.join(", ", unknown),
+                unknown.stream()
+                        .map(name -> new com.positivity.accounting.internal.exception.VendorBillException.FieldError(
+                                name, "is not a property of this request"))
+                        .toList(),
+                null);
+    }
+
+    /**
      * Vendors whose display name contains {@code name} (case-insensitive; null or blank: every vendor), of {@code
      * status} (null: either), ordered by name, at most {@code limit} (clamped to a server-side cap).
      */

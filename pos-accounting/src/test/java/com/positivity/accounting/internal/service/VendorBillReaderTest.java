@@ -579,4 +579,95 @@ class VendorBillReaderTest {
                 .as("ruling 8: null outside the review statuses")
                 .isNull();
     }
+
+    @Test
+    @DisplayName("#2615: VENDOR_AP_HOLD is FAIL {vendorNumber, reason, since} while held, PASS otherwise, and"
+            + " NOT_APPLICABLE on REJECTED, VOIDED and an APPROVED bill with nothing open (the hold is not read)")
+    void vendorApHoldCheck() {
+        java.time.Instant since = java.time.Instant.parse("2026-10-08T09:00:00Z");
+        java.util.Optional<SupplierVendorCopies.ApHold> held = java.util.Optional.of(
+                new SupplierVendorCopies.ApHold("V-000123", "Disputed delivery 4471, awaiting credit", since));
+
+        for (VendorBillStatus status : List.of(
+                VendorBillStatus.PENDING_RECEIPT_MATCH,
+                VendorBillStatus.MATCH_EXCEPTION,
+                VendorBillStatus.AWAITING_APPROVAL,
+                VendorBillStatus.CURRENCY_HOLD)) {
+            VendorBillReview.Check fail = VendorBillReader.vendorApHold(status, new BigDecimal("10.00"), () -> held);
+            assertThat(fail.code()).isEqualTo("VENDOR_AP_HOLD");
+            assertThat(fail.outcome()).as("%s", status).isEqualTo(VendorBillCheckOutcome.FAIL);
+            assertThat(fail.args())
+                    .containsEntry("vendorNumber", "V-000123")
+                    .containsEntry("reason", "Disputed delivery 4471, awaiting credit")
+                    .containsEntry("since", since.toString());
+        }
+        assertThat(VendorBillReader.vendorApHold(VendorBillStatus.APPROVED, new BigDecimal("0.01"), () -> held)
+                        .outcome())
+                .isEqualTo(VendorBillCheckOutcome.FAIL);
+        assertThat(VendorBillReader.vendorApHold(
+                                VendorBillStatus.AWAITING_APPROVAL, new BigDecimal("10.00"), java.util.Optional::empty)
+                        .outcome())
+                .isEqualTo(VendorBillCheckOutcome.PASS);
+        java.util.function.Supplier<java.util.Optional<SupplierVendorCopies.ApHold>> unread = () -> {
+            throw new AssertionError("the hold is not read when the check does not apply");
+        };
+        for (VendorBillStatus status :
+                List.of(VendorBillStatus.REJECTED, VendorBillStatus.VOIDED, VendorBillStatus.PAID)) {
+            assertThat(VendorBillReader.vendorApHold(status, new BigDecimal("10.00"), unread)
+                            .outcome())
+                    .isEqualTo(VendorBillCheckOutcome.NOT_APPLICABLE);
+        }
+        assertThat(VendorBillReader.vendorApHold(VendorBillStatus.APPROVED, BigDecimal.ZERO, unread)
+                        .outcome())
+                .isEqualTo(VendorBillCheckOutcome.NOT_APPLICABLE);
+    }
+
+    @Test
+    @DisplayName("#2615 AC13: stage rows carry vendorApHold from one settings query per page")
+    void stageRowHold() {
+        VendorBillRepository bills = mock();
+        APPaymentAllocationRepository allocations = mock();
+        ApApprovalPolicy approvalPolicy = mock();
+        SupplierVendorCopies copies = mock();
+        VendorBillReader reader = new VendorBillReader(
+                Clock.systemUTC(),
+                bills,
+                mock(VendorBillLineRepository.class),
+                mock(VendorBillMatchEvidenceRepository.class),
+                mock(VendorBillMatchCandidateRepository.class),
+                mock(VendorBillGlPostingRepository.class),
+                mock(VendorBillReissueRepository.class),
+                allocations,
+                mock(JournalEntryRepository.class),
+                mock(AccountingCalendarZoneResolver.class),
+                new LedgerCurrency("USD"),
+                approvalPolicy,
+                copies);
+        UUID heldVendor = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a71");
+        UUID freeVendor = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a72");
+        VendorBill heldBill = billOf("100.00", "clerk.ana");
+        heldBill.setVendorId(heldVendor);
+        heldBill.setStatus(VendorBillStatus.APPROVED);
+        heldBill.setBillNumber("INV-HELD");
+        heldBill.setBillDate(java.time.LocalDateTime.of(2026, 10, 1, 0, 0));
+        VendorBill freeBill = new VendorBill(UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a73"));
+        freeBill.setVendorId(freeVendor);
+        freeBill.setTotalAmount(new BigDecimal("50.00"));
+        freeBill.setStatus(VendorBillStatus.APPROVED);
+        freeBill.setBillNumber("INV-FREE");
+        freeBill.setBillDate(java.time.LocalDateTime.of(2026, 10, 1, 0, 0));
+        when(bills.findByStatusAndOpenAmountGreaterThan(any(), any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(heldBill, freeBill)));
+        when(allocations.sumAllocatedAmountByVendorBillIdIn(any())).thenReturn(List.of());
+        when(approvalPolicy.settings()).thenReturn(policy("2500.00", "0", false));
+        when(copies.heldVendors(java.util.Set.of(heldVendor, freeVendor)))
+                .thenReturn(java.util.Map.of(heldVendor, "Disputed delivery 4471, awaiting credit"));
+
+        assertThat(reader.byStage(VendorBillStage.PAY, 0, 20).getContent())
+                .extracting(VendorBillReview.StageRow::billNumber, VendorBillReview.StageRow::vendorApHold)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("INV-HELD", true),
+                        org.assertj.core.groups.Tuple.tuple("INV-FREE", false));
+        verify(copies, times(1)).heldVendors(any());
+    }
 }

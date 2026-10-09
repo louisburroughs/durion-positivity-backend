@@ -156,7 +156,9 @@ pos:
     # CAP:550 S32c (ADR-0071 §5-6): the tax-registration front door. pos-tax is internal-only and not on Eureka, so
     # it is reached on a fixed base URL. The secret is accounting's per-caller front-door secret, from the
     # environment or a secret store (POS_TAX_ACCOUNTING_SECRET, the value pos-tax expects); blank, every
-    # registration write answers 503 SERVICE_UNAVAILABLE.
+    # registration write answers 503 SERVICE_UNAVAILABLE. CAP:550 #2615's TaxReferenceClient reads pos-tax's
+    # configured references (the information-return forms) on the same base URL and bounds, as a service call with
+    # the authority tax:rates:view and no secret.
     tax:
       base-url: ${POS_TAX_BASE_URL:http://pos-tax:8091}
       front-door-secret: ${POS_TAX_ACCOUNTING_SECRET:}
@@ -225,6 +227,12 @@ springdoc:
 accounting:
   ledger:
     base-currency: USD
+  # The tenant's tax country (CAP:550 #2615), read through TaxCountry: the ISO 3166-1 alpha-2 country whose pos-tax
+  # configuration applies (its information-return forms). A Stage A, deployment-wide PLACEHOLDER beside the ledger
+  # currency; ADR-0067 step A5's tenant replica replaces both. Startup fails unless it is upper-case alpha-2 and, when
+  # the JDK maps the country to a currency, that currency is base-currency's (ADR-0067 PC-9).
+  tax:
+    country: US
   ap:
     # SET LOCAL lock_timeout on the AP pay command and the vendor-bill decisions (CAP:550 S42, #2627): a
     # wait for a bill or period row lock beyond it answers 409 LOCK_TIMEOUT and persists nothing.

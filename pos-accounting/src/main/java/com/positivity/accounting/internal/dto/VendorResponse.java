@@ -67,10 +67,19 @@ public class VendorResponse {
             requiredMode = REQUIRED)
     boolean paymentDetailsChanged;
 
+    /** Whether AP payments to the vendor are held (#2615); on list rows and the single-vendor read. */
+    @Schema(
+            description =
+                    "True while the vendor is on AP hold: paying it answers 422 VENDOR_ON_AP_HOLD, while its bills"
+                            + " are still approved and posted; the reason is in apSettings.apHold on getVendorById",
+            example = "false",
+            requiredMode = REQUIRED)
+    boolean apHold;
+
     /** The vendor's accounting-side settings; only on the single-vendor read. */
     @Schema(
-            description = "The vendor's accounting-side settings (AP defaults and remit-to confirmation); returned by"
-                    + " getVendorById and the ap-settings PUT, null in a search",
+            description = "The vendor's accounting-side settings (AP defaults, remit-to confirmation, AP hold and"
+                    + " information-return flag); returned by getVendorById and the ap-settings PUT, null in a search",
             requiredMode = NOT_REQUIRED)
     VendorApSettingsResponse apSettings;
 }

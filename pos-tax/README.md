@@ -46,6 +46,9 @@ Tax calculation service for the Durion Positivity ETSMS platform. Supports two o
   authority; CAP:550 S32b)
 - `POST /v1/tax/plausibility-checks` — the stated-tax plausibility check of a receipt (`tax:rates:view`, service authority;
   CAP:550 S32b); the supplier's registration number is never echoed or logged
+- `GET /v1/tax/information-return-forms?countryCode=` — a country's configured information-return forms, boxes and payee-id
+  schemes (`tax:rates:view`, service authority; CAP:550 #2615); pos-accounting relays it as
+  `GET /v1/accounting/information-return-forms`
 - `POST /v1/tax/transactions/{referenceId}/commit` and `/void` — provider document lifecycle (`tax:commit`)
 - `GET /v1/tax/mode` — returns current operating mode (`test` or `production`)
 - `POST /v1/tax/registrations` and `PUT /v1/tax/registrations/{registrationId}` — record or change a tenant's
@@ -146,6 +149,7 @@ what the stub answers today, and which questions wait for expert advice.
 | Registration-number shape | `wellFormed(regime, number)`, reached through `POST /v1/tax/plausibility-checks` and the tenant-registration writes (`RegistrationNumberShapes`; CAP:550 S32b, louisburroughs/durion-positivity-backend#2637) | Configured template per regime (`#` digit, letters literal); no shape → startup fails; a shape without a letter → startup fails; nothing passes by default; shapes change only by a reviewed commit | pos-order (drawer entry), pos-tax registrations (via pos-accounting) | Number formats |
 | Evidence rule | `GET /v1/tax/evidence-rules?countryCode=&asOf=` (`tax:rates:view`, service authority; AW53; CAP:550 S32b, #2637) | Built. `pos.tax.countries.<country>.evidence-rules`, `source = STUB`: the rules in effect on `asOf` (default today), amounts in the profile's currency; a country with none → an empty list. The first configured country (`CA`) ships one placeholder row: `SUPPLIER_REGISTRATION_NUMBER` from 100.00, `appliesTo [DRAWER_RECEIPT, VENDOR_BILL]`, undated; no $500 tier. A caller that cannot obtain the rule retries or holds, never treats it as absent (AW49) | pos-accounting, pos-order | The threshold, the $500 tier, what is compared, whether bills are in scope |
 | Receipt-tax plausibility | `POST /v1/tax/plausibility-checks` (`tax:rates:view`, service authority; AW55; CAP:550 S32b, #2637) | Built, keyed by regime. Per stated amount: 422 `TAX_AMOUNT_IMPLAUSIBLE` when it, or the sum of all, reaches the total `T`, or when it is above `T × r / (1 + r)` rounded up to the minor unit plus `pos.tax.plausibility.tolerance-minor-units` (placeholder 5); `r` is decided per regime (Accounting ruling on #2637, comment 6071110619): **rated** — a row of the regime's tax types is in effect in the region on `asOf`, use its rate; **not levied** — no row and the regime does not cover the region (its `regions` are neither empty nor contain it), `r = 0`, so the maximum is the tolerance; **unrated** — no row but the regime covers the region, no rate bound, and the regime is in neither `ratesUsed` nor `maximums`. The total check always applies; no combined bound. `RATE_UNAVAILABLE` when at least one stated amount above zero is unrated, otherwise `PLAUSIBLE` (zero or absent amounts included). Refusals in order: 400 shape (including a repeated regime), 422 `TAX_JURISDICTION_NOT_CONFIGURED`, `CURRENCY_NOT_SUPPORTED`, `AMOUNT_PRECISION_EXCEEDS_CURRENCY`, `TAX_REGIME_NOT_DECLARED`, `TAX_AMOUNT_IMPLAUSIBLE`. Also answers `supplierRegistrationRequired` (the evidence rule for `DRAWER_RECEIPT`) and `supplierRegistrationNumberWellFormed` (the country's `supplier-registration-regime` shape, or null). Pure: no tenant data, no state, no event; the number is never echoed, logged or stored. A bookkeeping control against typing errors, not a tax rule | pos-order (drawer entry) | How taxes stack on one receipt |
+| Information-return forms | `GET /v1/tax/information-return-forms?countryCode=` (`tax:rates:view`, service authority; CAP:550 louisburroughs/durion-positivity-backend#2615) | Built. `pos.tax.information-returns.<country>.forms[]`, `source = STUB`: configured forms, boxes and payee-id schemes per country; a country with none → an empty list; a missing or malformed `countryCode` → 400. US and CA rows are placeholders (`US_1099_NEC`, `US_1099_MISC`, `CA_T4A`) | pos-accounting (#2615) | Which forms and boxes apply per country, payee ids, thresholds, filing |
 
 ## Configuration
 
@@ -287,6 +291,31 @@ pos.tax:
   and document type in effect on the same date.
 - **Plausibility** (`TaxPlausibilityService`) also fails startup without a tolerance of zero or more. Its counter
   `pos.tax.plausibility.outcome` is tagged by `outcome` only (`PLAUSIBLE`, `RATE_UNAVAILABLE`, `TAX_AMOUNT_IMPLAUSIBLE`).
+
+### Information-return forms (CAP:550 #2615)
+
+```yaml
+pos.tax:
+  information-returns:
+    ZZ:                                # fixture shape; placeholders held for expert advice, never tax law
+      forms:
+        - code: ZZ_FORM_A
+          label: "Form A"
+          boxes:
+            - { code: "1", label: "Box one" }
+          payee-id-schemes: [ZZ_BUSINESS_ID, ZZ_PERSON_ID]
+```
+
+- The country is a map key in upper case (an environment-variable key is lower-cased by relaxed binding and refused);
+  forms and boxes are lists with explicit codes. Quote box codes so `"020"` stays text.
+- The shipped `US` (`US_1099_NEC` box 1; `US_1099_MISC` boxes 1, 2, 3, 6, 10; schemes `EIN`, `SSN`, `ITIN`) and `CA`
+  (`CA_T4A` boxes 020, 048; schemes `BN`, `SIN`) rows are placeholders (OI-4). No code names a country, form, box or scheme.
+- **Startup check** (`InformationReturnForms`). Startup fails, naming the property, when a country key is not an upper-case ISO
+  3166-1 alpha-2 code (assigned or user-assigned, so fixtures may use `ZZ`); a form `code` does not match
+  `^[A-Z][A-Z0-9_]{0,31}$` or repeats in a country; a form has no box; a box `code` does not match `^[A-Z0-9]{1,10}$` or repeats
+  in a form; a label is blank or longer than 100 characters; or a payee-id scheme does not match `^[A-Z][A-Z_]{1,15}$` (#2623's
+  code pattern) or repeats in a form. When #2623's scheme vocabulary is on `main`, each scheme must also be a scheme of the same
+  country in it; whichever lands later adds that check.
 
 ### Rounding reconciliation
 

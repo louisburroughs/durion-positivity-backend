@@ -105,6 +105,56 @@ public class TaxProperties {
     private Plausibility plausibility = new Plausibility();
 
     /**
+     * Information-return forms per country (CAP:550 #2615), keyed by upper-case ISO 3166-1 alpha-2 country
+     * code. A configuration-driven stub (AW48): which forms exist in a country, their boxes and the
+     * payee-id schemes a payee may be reported under are placeholders held for expert advice (OI-4).
+     * Validated at startup by {@code InformationReturnForms}. Never {@code null}.
+     */
+    private Map<String, InformationReturnCountry> informationReturns = new LinkedHashMap<>();
+
+    /**
+     * One country's information-return configuration (CAP:550 #2615).
+     */
+    @Data
+    public static class InformationReturnCountry {
+        /**
+         * The forms, each with an explicit {@code code} (a list, not a map: map keys lose their
+         * underscores under relaxed binding). Never {@code null}.
+         */
+        private List<InformationReturnForm> forms = new ArrayList<>();
+    }
+
+    /**
+     * One information-return form (CAP:550 #2615).
+     */
+    @Data
+    public static class InformationReturnForm {
+        /** The form code, {@code ^[A-Z][A-Z0-9_]{0,31}$}, unique in its country. */
+        private String code;
+
+        /** The form's label, 1-100 characters. */
+        private String label;
+
+        /** The form's boxes, at least one, each with an explicit {@code code}. Never {@code null}. */
+        private List<InformationReturnBox> boxes = new ArrayList<>();
+
+        /** The tax-registration schemes a payee may be reported under. Never {@code null}. */
+        private List<String> payeeIdSchemes = new ArrayList<>();
+    }
+
+    /**
+     * One box of an information-return form (CAP:550 #2615).
+     */
+    @Data
+    public static class InformationReturnBox {
+        /** The box code, {@code ^[A-Z0-9]{1,10}$}, unique in its form; quote it in YAML so {@code 020} stays text. */
+        private String code;
+
+        /** The box's label, 1-100 characters. */
+        private String label;
+    }
+
+    /**
      * Registration-number configuration (CAP:550 S32b).
      */
     @Data

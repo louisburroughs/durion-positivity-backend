@@ -8,14 +8,20 @@ import com.positivity.accounting.internal.repository.ApVendorSettingsRepository;
 import com.positivity.accounting.internal.repository.ExtSupplierVendorRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.web.common.ReplicationPendingException;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import java.time.Instant;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 /**
@@ -31,19 +37,63 @@ import org.springframework.stereotype.Component;
  *   <li>The remit-to check at payment ({@link #requireRemitToUnchanged}, rule 6).
  *   <li>The vendor creator's first bill ({@link #isCreatorsFirstBill}, rule 9).
  *   <li>The vendor's AP defaults ({@link #apDefaults}, rule 10; AW39).
+ *   <li>The AP payment hold (#2615): the check at payment ({@link #requireNotOnHold}, slot 1e) and the reads ({@link
+ *       #apHold}, {@link #heldVendors}). The hold reason is CONFIDENTIAL (ADR-0072): no log line, message or metric tag
+ *       here carries it.
  * </ul>
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class SupplierVendorCopies {
 
     /** 503: the vendor is not in the copy yet (ADR-0017 §1). */
     public static final String VENDOR_REPLICATION_PENDING = "VENDOR_REPLICATION_PENDING";
 
+    /**
+     * Counter of AP payments refused at the pay command, tagged with the refusal code (#2615). Today it counts only
+     * {@code VENDOR_ON_AP_HOLD}; the other refusals of the pay command are not counted here.
+     */
+    public static final String PAYMENT_REFUSED_COUNTER = "accounting.ap_payment.refused";
+
     private final ExtSupplierVendorRepository vendors;
     private final ApVendorSettingsRepository settings;
     private final VendorBillRepository bills;
+    private final @Nullable Counter refusedOnHold;
+
+    public SupplierVendorCopies(
+            ExtSupplierVendorRepository vendors,
+            ApVendorSettingsRepository settings,
+            VendorBillRepository bills,
+            ObjectProvider<MeterRegistry> meterRegistry) {
+        this.vendors = vendors;
+        this.settings = settings;
+        this.bills = bills;
+        MeterRegistry registry = meterRegistry.getIfAvailable();
+        this.refusedOnHold = registry == null
+                ? null
+                : Counter.builder(PAYMENT_REFUSED_COUNTER)
+                        .description("AP payments refused at the pay command, by refusal code")
+                        .tag("code", VendorBillException.Code.VENDOR_ON_AP_HOLD.name())
+                        .register(registry);
+    }
+
+    /**
+     * A vendor's AP payment hold, as a bill read shows it.
+     *
+     * @param vendorNumber the vendor's number, null when the vendor is not in the copy
+     * @param reason       why the vendor is held (CONFIDENTIAL, ADR-0072)
+     * @param since        when the hold was set or its reason last changed
+     */
+    public record ApHold(
+            @Nullable String vendorNumber,
+            @NonNull String reason,
+            @Nullable Instant since) {
+
+        @Override
+        public @NonNull String toString() {
+            return "ApHold[vendorNumber=" + vendorNumber + ", since=" + since + "]";
+        }
+    }
 
     /** The vendor as the copy holds it, in either status. */
     public @NonNull Optional<ExtSupplierVendor> find(@NonNull UUID vendorId) {
@@ -67,6 +117,77 @@ public class SupplierVendorCopies {
                             + " new bills or payments until pos-supplier reactivates it");
         }
         return vendor;
+    }
+
+    /**
+     * Slot 1e of the pay command (#2615): a vendor on AP hold is refused with 422 {@code VENDOR_ON_AP_HOLD}, before the
+     * plan, any payment row or the gateway. The settings row is read in the payment's transaction without a lock: the
+     * hold is forward-looking, so a payment already past this check completes. The refusal is logged at INFO with the
+     * payment reference, the vendor number and the code, and counted ({@value #PAYMENT_REFUSED_COUNTER}); the hold
+     * reason is in none of them, nor in the message, which points to the vendor read instead (ADR-0072).
+     *
+     * @param vendor     the vendor slot 1d returned
+     * @param paymentRef the payment's reference, for the log line
+     */
+    public void requireNotOnHold(@NonNull ExtSupplierVendor vendor, @Nullable String paymentRef) {
+        boolean held = settings.findByVendorId(vendor.getVendorId())
+                .map(ApVendorSettings::isApHold)
+                .orElse(false);
+        if (!held) {
+            return;
+        }
+        log.info(
+                "AP payment {} refused: vendor {} is on AP hold ({})",
+                paymentRef,
+                vendor.getVendorNumber(),
+                VendorBillException.Code.VENDOR_ON_AP_HOLD);
+        if (refusedOnHold != null) {
+            refusedOnHold.increment();
+        }
+        throw new VendorBillException(
+                VendorBillException.Code.VENDOR_ON_AP_HOLD,
+                "Vendor " + vendor.getVendorNumber() + " is on AP hold; nothing was paid. The reason is on the vendor"
+                        + " (GET /v1/accounting/vendors/" + vendor.getVendorId() + ")",
+                List.of(),
+                "Release the hold (PUT /v1/accounting/vendors/" + vendor.getVendorId() + "/ap-settings with"
+                        + " apHold.onHold false) when the matter is settled, then pay again");
+    }
+
+    /**
+     * The vendor's AP payment hold, when it is held (#2615): the bill read's {@code VENDOR_AP_HOLD} check.
+     *
+     * @param vendorId the vendor
+     * @return the hold, or empty when the vendor is not held
+     */
+    public @NonNull Optional<ApHold> apHold(@NonNull UUID vendorId) {
+        return settings.findByVendorId(vendorId)
+                .filter(ApVendorSettings::isApHold)
+                .map(row -> new ApHold(
+                        vendors.findById(vendorId)
+                                .map(ExtSupplierVendor::getVendorNumber)
+                                .orElse(null),
+                        row.getApHoldReason(),
+                        row.getApHoldSetAt()));
+    }
+
+    /**
+     * The held vendors among {@code vendorIds} and their hold reasons, in one settings query (#2615): a list page's
+     * {@code vendorApHold} flags.
+     *
+     * @param vendorIds the page's vendors
+     * @return vendor id to hold reason, held vendors only
+     */
+    public @NonNull Map<UUID, String> heldVendors(@NonNull Collection<UUID> vendorIds) {
+        if (vendorIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, String> held = new LinkedHashMap<>();
+        for (ApVendorSettings row : settings.findByVendorIdIn(vendorIds)) {
+            if (row.isApHold()) {
+                held.put(row.getVendorId(), row.getApHoldReason());
+            }
+        }
+        return held;
     }
 
     /**

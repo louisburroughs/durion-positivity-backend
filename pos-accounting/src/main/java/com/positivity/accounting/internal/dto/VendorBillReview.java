@@ -301,8 +301,10 @@ public final class VendorBillReview {
     @Schema(name = "VendorBillCheck", description = "One check the review shows")
     public record Check(
             @Schema(
-                    description = "MATCHED_TO_DELIVERY, WITHIN_PRICE_TOLERANCE, TOTALS_ADD_UP or"
-                            + " OPEN_DELIVERIES_FROM_VENDOR",
+                    description = "MATCHED_TO_DELIVERY, WITHIN_PRICE_TOLERANCE, TOTALS_ADD_UP,"
+                            + " OPEN_DELIVERIES_FROM_VENDOR, WITHIN_CLERK_LIMIT or VENDOR_AP_HOLD (informational: FAIL"
+                            + " with vendorNumber, reason and since while the vendor is on AP hold, which blocks"
+                            + " payment only)",
                     example = "MATCHED_TO_DELIVERY",
                     requiredMode = REQUIRED)
             String code,
@@ -486,5 +488,12 @@ public final class VendorBillReview {
                     example = "CLERK",
                     requiredMode = NOT_REQUIRED)
             @Nullable
-            RequiredTier requiredTier) {}
+            RequiredTier requiredTier,
+
+            @Schema(
+                    description = "True while the bill's vendor is on AP hold (#2615): it is not paid until released,"
+                            + " but it is still approved and posted",
+                    example = "false",
+                    requiredMode = REQUIRED)
+            boolean vendorApHold) {}
 }

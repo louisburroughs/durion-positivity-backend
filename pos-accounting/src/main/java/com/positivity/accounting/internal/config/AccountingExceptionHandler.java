@@ -130,7 +130,7 @@ public class AccountingExceptionHandler {
     }
 
     /**
-     * pos-tax cannot take a tax-registration write (CAP:550 S32c): 503 {@code SERVICE_UNAVAILABLE} with
+     * pos-tax cannot answer (CAP:550 S32c; #2615's reference reads too): 503 {@code SERVICE_UNAVAILABLE} with
      * {@code Retry-After} (ADR-0017); nothing was stored.
      */
     @ExceptionHandler(TaxServiceUnavailableException.class)

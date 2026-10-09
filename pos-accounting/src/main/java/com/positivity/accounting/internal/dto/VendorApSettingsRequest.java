@@ -9,18 +9,24 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Size;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Sets a vendor's AP defaults (CAP:550 S24, #2517, rule 10; AW39). A field left out of the body is unchanged; a field
- * sent as JSON {@code null} clears it. The actor is the caller (ADR-0018); no body field names one. S43 adds {@code
- * acceptTaxOnResaleGoods} here.
+ * Sets a vendor's AP defaults (CAP:550 S24, #2517, rule 10; AW39), its AP payment hold and its information-return
+ * reportable flag (#2615). A field left out of the body is unchanged; a default sent as JSON {@code null} clears it,
+ * while {@code apHold} and {@code informationReturn} are objects that clear through their own fields ({@code null} is
+ * refused). The actor is the caller (ADR-0018); no body field names one. S43 adds {@code acceptTaxOnResaleGoods} here,
+ * as another optional field with its presence flag and its own fingerprint entry.
  */
 @JsonIgnoreProperties(ignoreUnknown = false)
 @Schema(
-        description = "The vendor's AP defaults to change, the justification and the request id. A field left out is"
-                + " unchanged; a field sent as null clears it.")
+        description = "The vendor's AP settings to change (defaults, AP hold, information-return flag), the"
+                + " justification and the request id. A field left out is unchanged; a default sent as null clears"
+                + " it.")
 public class VendorApSettingsRequest {
 
     @Schema(
@@ -48,7 +54,8 @@ public class VendorApSettingsRequest {
     private boolean defaultExpenseMappingKeyPresent;
 
     @Schema(
-            description = "Why the defaults change, at least 10 characters; recorded on the audit row",
+            description = "Why the settings change, at least 10 characters; recorded on every audit row, and the record"
+                    + " of why a hold is released",
             example = "Shop supplies vendor: header-only bills post to shop supplies",
             requiredMode = REQUIRED)
     @Size(max = 1000)
@@ -61,19 +68,88 @@ public class VendorApSettingsRequest {
             requiredMode = REQUIRED)
     private @Nullable UUID requestId;
 
+    @Schema(
+            description = "Optional: sets (onHold true, with a reason of 10-500 characters) or clears (onHold false)"
+                    + " the vendor's AP payment hold; absent leaves it unchanged, null is refused",
+            requiredMode = NOT_REQUIRED)
+    private @Nullable VendorApHoldRequest apHold;
+
+    @JsonIgnore
+    private boolean apHoldPresent;
+
+    @Schema(
+            description = "Optional: whether the vendor is reportable on the tax country's information return, and in"
+                    + " which configured form and box; absent leaves it unchanged, null is refused. When sent, the"
+                    + " object replaces the stored flag as a whole: a form, box or scheme left out is stored as null",
+            requiredMode = NOT_REQUIRED)
+    private @Nullable VendorInformationReturnRequest informationReturn;
+
+    @JsonIgnore
+    private boolean informationReturnPresent;
+
+    @JsonIgnore
+    private final List<String> unknownProperties = new ArrayList<>();
+
     @JsonCreator
     public VendorApSettingsRequest() {
         // Bound through the setters, so a key's presence is seen.
     }
 
     /**
-     * Refuses any other key (400): {@code ignoreUnknown = false} only defers to the mapper, which Spring configures not
-     * to fail on unknown properties, so a misspelt or not-yet-supported field (e.g. S43's) would otherwise be dropped
-     * silently.
+     * Records any other key by name, its value dropped unread, so the PUT refuses it with 400 naming the key and never
+     * its value (#2615: a {@code tin} is refused, never echoed). {@code ignoreUnknown = false} only defers to the
+     * mapper, which Spring configures not to fail on unknown properties, so a misspelt or not-yet-supported field
+     * (e.g. S43's) would otherwise be dropped silently.
      */
     @JsonAnySetter
     void refuseUnknown(String name, Object value) {
-        throw new IllegalArgumentException("Unknown property '" + name + "' in a vendor AP settings request");
+        unknownProperties.add(name);
+    }
+
+    /**
+     * Every unknown key the body carried, by name: the top level's, then {@code apHold.<key>} and {@code
+     * informationReturn.<key>}. Never a value.
+     */
+    @JsonIgnore
+    public @NonNull List<String> unknownProperties() {
+        List<String> all = new ArrayList<>(unknownProperties);
+        if (apHold != null) {
+            apHold.unknownProperties().forEach(name -> all.add("apHold." + name));
+        }
+        if (informationReturn != null) {
+            informationReturn.unknownProperties().forEach(name -> all.add("informationReturn." + name));
+        }
+        return List.copyOf(all);
+    }
+
+    public @Nullable VendorApHoldRequest getApHold() {
+        return apHold;
+    }
+
+    public void setApHold(@Nullable VendorApHoldRequest apHold) {
+        this.apHold = apHold;
+        this.apHoldPresent = true;
+    }
+
+    /** Whether the body named {@code apHold}, null included. */
+    @JsonIgnore
+    public boolean hasApHold() {
+        return apHoldPresent;
+    }
+
+    public @Nullable VendorInformationReturnRequest getInformationReturn() {
+        return informationReturn;
+    }
+
+    public void setInformationReturn(@Nullable VendorInformationReturnRequest informationReturn) {
+        this.informationReturn = informationReturn;
+        this.informationReturnPresent = true;
+    }
+
+    /** Whether the body named {@code informationReturn}, null included. */
+    @JsonIgnore
+    public boolean hasInformationReturn() {
+        return informationReturnPresent;
     }
 
     public @Nullable String getDefaultDebitClass() {

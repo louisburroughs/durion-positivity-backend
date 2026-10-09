@@ -80,6 +80,12 @@ public class VendorBillException extends RuntimeException {
          */
         VENDOR_INACTIVE(HttpStatus.UNPROCESSABLE_CONTENT),
         /**
+         * An AP payment names a vendor on AP hold (CAP:550 #2615): the hold stops money leaving for the vendor, never a
+         * bill's approval or posting. 422, slot 1e of the pay command, before any payment row or gateway call. The
+         * message names the vendor number only, never the hold reason (ADR-0072).
+         */
+        VENDOR_ON_AP_HOLD(HttpStatus.UNPROCESSABLE_CONTENT),
+        /**
          * A bill the payment would pay was approved at another remit-to version than the vendor's current one, and no
          * one other than the payer confirmed the current version; or a confirmation names a version that is not the
          * current one (CAP:550 S24, #2517, rules 6 and 7). 409, before any payment row or gateway call.

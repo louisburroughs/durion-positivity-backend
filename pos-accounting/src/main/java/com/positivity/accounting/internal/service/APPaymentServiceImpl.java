@@ -105,6 +105,9 @@ public class APPaymentServiceImpl implements APPaymentService {
         //        1d. the vendor: not in the copy -> 503 VENDOR_REPLICATION_PENDING, INACTIVE -> 422 VENDOR_INACTIVE
         // (S24, AW23;
         //            an inactive vendor's existing bills are not paid either, ruling 3 of #2517);
+        //        1e. the AP hold: the vendor on hold -> 422 VENDOR_ON_AP_HOLD (#2615, ruling 6072661753 item 4); after
+        //            1d, so an inactive vendor that is also held answers VENDOR_INACTIVE; no plan is needed, since one
+        //            payment pays one vendor; the settings row is read unlocked (the hold is forward-looking);
         //   2. the allocation plan, its bills locked in id order (explicit, or oldest due first; S13);
         //   3. the pay guard, approver is not payer -> 403 AP_PAYMENT_SELF_APPROVED_BILL (S13);
         //   4. the remit-to check: a planned bill approved at another remit-to version than the copy's current one,
@@ -126,6 +129,7 @@ public class APPaymentServiceImpl implements APPaymentService {
         Optional<LocalDate> businessDate = preGatewayChecks.businessDate();
         UUID bankAccountId = preGatewayChecks.checkRequest(request, businessDate); // slot 1, 1a-1c
         ExtSupplierVendor vendor = vendorCopies.requireForNewBusiness(request.getVendorId(), "A payment"); // 1d
+        vendorCopies.requireNotOnHold(vendor, request.getPaymentRef()); // 1e
         List<PlannedAllocation> plan = plan(request); // slot 2
         List<VendorBill> plannedBills =
                 plan.stream().map(PlannedAllocation::bill).toList();
@@ -473,8 +477,11 @@ public class APPaymentServiceImpl implements APPaymentService {
         if (billsPage == null) {
             billsPage = Page.empty(pageable);
         }
+        // Held vendors' bills stay listed, flagged (#2615); one settings query per page.
+        Map<UUID, String> heldVendors = vendorCopies.heldVendors(
+                billsPage.getContent().stream().map(VendorBill::getVendorId).collect(Collectors.toSet()));
 
-        return billsPage.map(this::toBillSummary);
+        return billsPage.map(bill -> toBillSummary(bill, heldVendors));
     }
 
     @Override
@@ -573,9 +580,11 @@ public class APPaymentServiceImpl implements APPaymentService {
                 .build();
     }
 
-    private @NonNull VendorBillSummaryResponse toBillSummary(@NonNull VendorBill bill) {
+    private @NonNull VendorBillSummaryResponse toBillSummary(
+            @NonNull VendorBill bill, @NonNull Map<UUID, String> heldVendors) {
         // Calculate actual openAmount (totalAmount - sum of allocations)
         BigDecimal openAmount = calculateOpenAmount(bill.getVendorBillId());
+        String holdReason = heldVendors.get(bill.getVendorId());
 
         return VendorBillSummaryResponse.builder()
                 .vendorBillId(bill.getVendorBillId())
@@ -587,6 +596,8 @@ public class APPaymentServiceImpl implements APPaymentService {
                 .totalAmount(bill.getTotalAmount())
                 .openAmount(openAmount)
                 .status(bill.getStatus())
+                .vendorApHold(holdReason != null)
+                .vendorApHoldReason(holdReason)
                 .build();
     }
 

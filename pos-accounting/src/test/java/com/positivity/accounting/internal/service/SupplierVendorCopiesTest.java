@@ -5,6 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.positivity.accounting.internal.entity.ApVendorSettings;
 import com.positivity.accounting.internal.entity.ExtSupplierVendor;
 import com.positivity.accounting.internal.entity.VendorBill;
@@ -13,8 +16,13 @@ import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.accounting.internal.repository.ApVendorSettingsRepository;
 import com.positivity.accounting.internal.repository.ExtSupplierVendorRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -24,6 +32,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 
 /** The vendor rules read from the copy (CAP:550 S24, #2517): AC 5 (requests), 6, 7 and 8's rule. */
 @ExtendWith(MockitoExtension.class)
@@ -46,9 +56,13 @@ class SupplierVendorCopiesTest {
 
     private SupplierVendorCopies copies;
 
+    private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
+
     @BeforeEach
     void setUp() {
-        copies = new SupplierVendorCopies(vendors, settings, bills);
+        StaticListableBeanFactory beans = new StaticListableBeanFactory();
+        beans.addBean("meterRegistry", meters);
+        copies = new SupplierVendorCopies(vendors, settings, bills, beans.getBeanProvider(MeterRegistry.class));
         when(settings.findByVendorId(VENDOR)).thenReturn(Optional.empty());
     }
 
@@ -185,5 +199,93 @@ class SupplierVendorCopiesTest {
         assertThat(copies.apDefaults(VENDOR))
                 .isEqualTo(new VendorBillPostingService.Classification(
                         VendorBillDebitClass.EXPENSE, "EXPENSE_SHOP_SUPPLIES"));
+    }
+
+    private ApVendorSettings held(String reason) {
+        ApVendorSettings row = new ApVendorSettings();
+        row.setVendorId(VENDOR);
+        row.setApHold(true);
+        row.setApHoldReason(reason);
+        row.setApHoldSetBy("q.controller");
+        row.setApHoldSetAt(Instant.parse("2026-10-08T09:00:00Z"));
+        return row;
+    }
+
+    @Test
+    @DisplayName("#2615 slot 1e: a held vendor is 422 VENDOR_ON_AP_HOLD naming the vendor number only; logged at INFO"
+            + " with the paymentRef and counted by code; the reason is in neither message, log nor tag")
+    void heldVendorIsRefused() {
+        String reason = "Disputed delivery 4471, awaiting credit";
+        when(settings.findByVendorId(VENDOR)).thenReturn(Optional.of(held(reason)));
+        Logger logger = (Logger) LoggerFactory.getLogger(SupplierVendorCopies.class);
+        ListAppender<ILoggingEvent> logs = new ListAppender<>();
+        logs.start();
+        logger.addAppender(logs);
+        try {
+            assertThatThrownBy(() -> copies.requireNotOnHold(vendor("ACTIVE", 1), "PAY-2615-1"))
+                    .isInstanceOfSatisfying(VendorBillException.class, e -> {
+                        assertThat(e.getCode()).isEqualTo(VendorBillException.Code.VENDOR_ON_AP_HOLD);
+                        assertThat(e.getCode().status().value()).isEqualTo(422);
+                        assertThat(e.getMessage())
+                                .contains("V-000123", "/v1/accounting/vendors/" + VENDOR)
+                                .doesNotContain("4471")
+                                .doesNotContain("{vendorId}");
+                        assertThat(e.getNextAction())
+                                .contains("/v1/accounting/vendors/" + VENDOR + "/ap-settings")
+                                .doesNotContain("4471")
+                                .doesNotContain("{vendorId}");
+                    });
+        } finally {
+            logger.detachAppender(logs);
+        }
+        assertThat(logs.list).singleElement().satisfies(event -> {
+            assertThat(event.getFormattedMessage())
+                    .contains("PAY-2615-1", "V-000123", "VENDOR_ON_AP_HOLD")
+                    .doesNotContain("4471");
+        });
+        assertThat(meters.get(SupplierVendorCopies.PAYMENT_REFUSED_COUNTER)
+                        .tag("code", "VENDOR_ON_AP_HOLD")
+                        .counter()
+                        .count())
+                .isEqualTo(1.0);
+        assertThat(meters.getMeters())
+                .allSatisfy(
+                        meter -> assertThat(meter.getId().getTags().toString()).doesNotContain("4471"));
+    }
+
+    @Test
+    @DisplayName("#2615: no settings row, or a row not held, passes slot 1e")
+    void notHeldPasses() {
+        assertThatCode(() -> copies.requireNotOnHold(vendor("ACTIVE", 1), "PAY-1"))
+                .doesNotThrowAnyException();
+        ApVendorSettings row = new ApVendorSettings();
+        row.setVendorId(VENDOR);
+        when(settings.findByVendorId(VENDOR)).thenReturn(Optional.of(row));
+        assertThatCode(() -> copies.requireNotOnHold(vendor("ACTIVE", 1), "PAY-1"))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("#2615: the hold read for a bill check, and a page's held vendors from one settings query")
+    void holdReads() {
+        when(settings.findByVendorId(VENDOR)).thenReturn(Optional.of(held("Missing W-9 equivalent document")));
+        when(vendors.findById(VENDOR)).thenReturn(Optional.of(vendor("ACTIVE", 1)));
+        assertThat(copies.apHold(VENDOR)).hasValueSatisfying(hold -> {
+            assertThat(hold.vendorNumber()).isEqualTo("V-000123");
+            assertThat(hold.reason()).isEqualTo("Missing W-9 equivalent document");
+            assertThat(hold.since()).isEqualTo(Instant.parse("2026-10-08T09:00:00Z"));
+            assertThat(hold.toString()).doesNotContain("W-9");
+        });
+
+        UUID notHeld = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f8a09");
+        ApVendorSettings released = new ApVendorSettings();
+        released.setVendorId(notHeld);
+        when(settings.findByVendorIdIn(Set.of(VENDOR, notHeld)))
+                .thenReturn(List.of(held("Missing W-9 equivalent document"), released));
+        assertThat(copies.heldVendors(Set.of(VENDOR, notHeld)))
+                .isEqualTo(Map.of(VENDOR, "Missing W-9 equivalent document"));
+        assertThat(copies.heldVendors(Set.of())).isEmpty();
+        org.mockito.Mockito.verify(settings, org.mockito.Mockito.times(1))
+                .findByVendorIdIn(org.mockito.ArgumentMatchers.any());
     }
 }
