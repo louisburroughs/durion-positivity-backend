@@ -586,6 +586,33 @@ public class GLPostingServiceImpl implements GLPostingService {
                 "register cash movement");
     }
 
+    @Override
+    public @NonNull UUID postRegisterCashMovementLines(
+            @NonNull UUID sourceEventId,
+            @NonNull List<DebitLine> debits,
+            @NonNull UUID creditAccountId,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description,
+            @NonNull Map<String, String> dimensions) {
+        List<JournalEntryCreateRequest.JournalEntryLineRequest> lines = new ArrayList<>();
+        BigDecimal total = BigDecimal.ZERO;
+        String creditLabel = null;
+        for (DebitLine debit : debits) {
+            lines.add(dimensionedLine(debit.accountId(), debit.amount(), BigDecimal.ZERO, debit.label(), dimensions));
+            total = total.add(debit.amount());
+            creditLabel = creditLabel == null ? debit.label() : creditLabel;
+        }
+        lines.add(dimensionedLine(
+                creditAccountId, BigDecimal.ZERO, total, creditLabel == null ? description : creditLabel, dimensions));
+        return createAndPost(
+                JournalEntrySourceTypes.REGISTER_CASH_MOVEMENT,
+                sourceEventId,
+                transactionDate,
+                description,
+                lines,
+                "register cash movement");
+    }
+
     private static JournalEntryCreateRequest.JournalEntryLineRequest dimensionedLine(
             @NonNull UUID accountId,
             @NonNull BigDecimal debitAmount,

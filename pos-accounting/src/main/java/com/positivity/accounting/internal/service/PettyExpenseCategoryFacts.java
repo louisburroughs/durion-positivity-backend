@@ -4,7 +4,9 @@ import com.positivity.accounting.internal.config.OutboxEventWriter;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.entity.GLMapping;
 import com.positivity.accounting.internal.entity.PettyExpenseCategory;
+import com.positivity.accounting.internal.entity.PettyExpenseCategoryTaxSetting;
 import com.positivity.accounting.internal.repository.GLMappingRepository;
+import com.positivity.accounting.internal.repository.PettyExpenseCategoryTaxSettingRepository;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.DomainTopics;
 import com.positivity.domainevents.accounting.PettyExpenseCategoryChangedV1;
@@ -39,12 +41,15 @@ public class PettyExpenseCategoryFacts {
 
     private final ObjectProvider<OutboxEventWriter> outboxEventWriter;
     private final GLMappingRepository glMappings;
+    private final PettyExpenseCategoryTaxSettingRepository taxSettings;
     private final AccountingCalendarZoneResolver zoneResolver;
     private final Clock clock;
 
     /** The fact a category's current state makes. */
     public @NonNull PettyExpenseCategoryChangedV1 factOf(@NonNull PettyExpenseCategory category) {
         Optional<GLAccount> account = currentAccount(category);
+        // CAP:550 S32d item 4: the category's tax recovery; a category never set is not recoverable.
+        Optional<PettyExpenseCategoryTaxSetting> taxSetting = taxSettings.findByCode(category.getCode());
         return new PettyExpenseCategoryChangedV1(
                 category.getCode(),
                 category.getLabel(),
@@ -53,8 +58,10 @@ public class PettyExpenseCategoryFacts {
                         category.getStatus().name()),
                 account.map(GLAccount::getAccountCode).orElse(null),
                 account.map(GLAccount::getAccountName).orElse(null),
-                Boolean.FALSE,
-                null);
+                taxSetting.map(PettyExpenseCategoryTaxSetting::isTaxRecoverable).orElse(Boolean.FALSE),
+                taxSetting
+                        .map(PettyExpenseCategoryTaxSetting::getRecoverablePercent)
+                        .orElse(null));
     }
 
     /** Queues the category's current state; must run inside the transaction that changed it. */

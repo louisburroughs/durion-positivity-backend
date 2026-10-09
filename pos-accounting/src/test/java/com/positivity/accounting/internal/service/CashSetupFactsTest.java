@@ -11,12 +11,14 @@ import com.positivity.accounting.internal.config.OutboxEventWriter;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.entity.GLMapping;
 import com.positivity.accounting.internal.entity.PettyExpenseCategory;
+import com.positivity.accounting.internal.entity.PettyExpenseCategoryTaxSetting;
 import com.positivity.accounting.internal.entity.RegisterFloat;
 import com.positivity.accounting.internal.entity.RegisterFloatChange;
 import com.positivity.accounting.internal.enums.PettyExpenseCategoryStatus;
 import com.positivity.accounting.internal.enums.RegisterFloatChangeKind;
 import com.positivity.accounting.internal.repository.GLMappingRepository;
 import com.positivity.accounting.internal.repository.PettyExpenseCategoryRepository;
+import com.positivity.accounting.internal.repository.PettyExpenseCategoryTaxSettingRepository;
 import com.positivity.accounting.internal.repository.RegisterFloatChangeRepository;
 import com.positivity.accounting.internal.repository.RegisterFloatRepository;
 import com.positivity.domainevents.DomainEventEnvelope;
@@ -49,6 +51,8 @@ class CashSetupFactsTest {
     private final AccountingCalendarZoneResolver zoneResolver = mock(AccountingCalendarZoneResolver.class);
     private final PettyExpenseCategoryRepository categories = mock(PettyExpenseCategoryRepository.class);
     private final RegisterFloatRepository floats = mock(RegisterFloatRepository.class);
+    private final PettyExpenseCategoryTaxSettingRepository taxSettings =
+            mock(PettyExpenseCategoryTaxSettingRepository.class);
     private final RegisterFloatChangeRepository floatChanges = mock(RegisterFloatChangeRepository.class);
     private PettyExpenseCategoryFacts categoryFacts;
     private RegisterFloatFacts floatFacts;
@@ -58,7 +62,7 @@ class CashSetupFactsTest {
     void setUp() {
         ObjectProvider<OutboxEventWriter> writers = mock(ObjectProvider.class);
         when(writers.getIfAvailable()).thenReturn(writer);
-        categoryFacts = new PettyExpenseCategoryFacts(writers, glMappings, zoneResolver, CLOCK);
+        categoryFacts = new PettyExpenseCategoryFacts(writers, glMappings, taxSettings, zoneResolver, CLOCK);
         floatFacts = new RegisterFloatFacts(writers, CLOCK, mock(ObjectProvider.class));
         when(zoneResolver.find()).thenReturn(Optional.of(ZoneOffset.UTC));
     }
@@ -90,6 +94,31 @@ class CashSetupFactsTest {
                         "Staff Meals & Refreshments",
                         Boolean.FALSE,
                         null));
+    }
+
+    @Test
+    @DisplayName("CAP:550 S32d AC 14: the category fact carries the category's tax recovery")
+    void categoryFactCarriesTaxRecovery() {
+        PettyExpenseCategory category = category("STAFF_MEALS", "Staff meals and coffee");
+        PettyExpenseCategoryTaxSetting setting = new PettyExpenseCategoryTaxSetting();
+        setting.setCode("STAFF_MEALS");
+        setting.setTaxRecoverable(true);
+        setting.setRecoverablePercent(new BigDecimal("50.00"));
+        when(taxSettings.findByCode("STAFF_MEALS")).thenReturn(Optional.of(setting));
+
+        PettyExpenseCategoryChangedV1 fact = categoryFacts.factOf(category);
+
+        assertThat(fact.taxRecoverable()).isTrue();
+        assertThat(fact.recoverablePercent()).isEqualByComparingTo("50.00");
+    }
+
+    @Test
+    @DisplayName("CAP:550 S32d item 4: a category never set is not recoverable on its fact")
+    void categoryFactWithoutSettingIsNotRecoverable() {
+        PettyExpenseCategoryChangedV1 fact = categoryFacts.factOf(category("SMALL_TOOLS", "Small tools"));
+
+        assertThat(fact.taxRecoverable()).isFalse();
+        assertThat(fact.recoverablePercent()).isNull();
     }
 
     @Test

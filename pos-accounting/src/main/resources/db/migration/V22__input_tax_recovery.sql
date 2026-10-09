@@ -137,7 +137,8 @@ CREATE POLICY tenant_isolation ON public.petty_expense_category_tax_setting_chan
     WITH CHECK (tenant_id = public.app_current_tenant());
 
 -- 5. Per-regime recovery of a petty expense posted at close (item 9): what was stated, what was recovered and why
---    nothing was, with the supplier's number as the claim's evidence (INTERNAL under ADR-0072 Decision 1; never
+--    nothing was (CATEGORY_NOT_RECOVERABLE when the category's share was off when the movement was recorded), with
+--    the supplier's number as the claim's evidence (INTERNAL under ADR-0072 Decision 1; never
 --    logged). One row per movement and stated regime, written with the movement's entry.
 CREATE TABLE public.register_cash_movement_tax_recovery (
     tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,
@@ -156,9 +157,10 @@ CREATE TABLE public.register_cash_movement_tax_recovery (
     CONSTRAINT register_cash_movement_tax_recovery_amounts_check CHECK (
         stated_amount > 0 AND recovered_amount >= 0 AND recovered_amount <= stated_amount),
     CONSTRAINT register_cash_movement_tax_recovery_reason_check CHECK (
-        (recovery_withheld_reason IS NULL AND recovered_amount > 0)
-        OR ((recovery_withheld_reason)::text = ANY (ARRAY['NOT_REGISTERED'::text, 'RATE_UNAVAILABLE'::text,
-            'EVIDENCE_MISSING'::text, 'SUPPLIER_REGISTRATION_MISSING'::text]) AND recovered_amount = 0))
+        recovery_withheld_reason IS NULL
+        OR ((recovery_withheld_reason)::text = ANY (ARRAY['NOT_REGISTERED'::text, 'CATEGORY_NOT_RECOVERABLE'::text,
+            'RATE_UNAVAILABLE'::text, 'EVIDENCE_MISSING'::text, 'SUPPLIER_REGISTRATION_MISSING'::text])
+            AND recovered_amount = 0))
 );
 
 ALTER TABLE ONLY public.register_cash_movement_tax_recovery

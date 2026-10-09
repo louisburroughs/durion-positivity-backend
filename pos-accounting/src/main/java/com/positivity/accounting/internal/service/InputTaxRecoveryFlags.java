@@ -11,6 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -76,14 +77,24 @@ public class InputTaxRecoveryFlags {
      */
     public @NonNull List<RegimeFlag> regimes(@NonNull LocalDate date) {
         Map<String, Boolean> currencyMatches = new HashMap<>();
+        return regimes(date, country -> currencyMatches.computeIfAbsent(country, this::countryUsesFunctionalCurrency));
+    }
+
+    /**
+     * {@link #regimes} without asking pos-tax: every row's {@code enabled} is false and must be read as unknown. For a
+     * read that must answer while the tax configuration cannot be obtained; never for a posting.
+     */
+    public @NonNull List<RegimeFlag> regimesUnchecked(@NonNull LocalDate date) {
+        return regimes(date, country -> false);
+    }
+
+    private List<RegimeFlag> regimes(LocalDate date, Predicate<String> currencyMatches) {
         Map<String, RegimeFlag> byRegime = new LinkedHashMap<>();
         for (ExtTaxRegistration registration :
                 registrations.findAllByOrderByCountryCodeAscRegimeAscEffectiveFromAsc()) {
             String key = registration.getCountryCode() + "/" + registration.getRegime();
             boolean inEffect = registration.inEffectOn(date);
-            boolean enabled = inEffect
-                    && currencyMatches.computeIfAbsent(
-                            registration.getCountryCode(), this::countryUsesFunctionalCurrency);
+            boolean enabled = inEffect && currencyMatches.test(registration.getCountryCode());
             RegimeFlag known = byRegime.get(key);
             if (known == null || (inEffect && known.registration() == null)) {
                 byRegime.put(

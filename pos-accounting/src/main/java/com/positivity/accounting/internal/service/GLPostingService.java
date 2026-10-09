@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import com.positivity.accounting.internal.dto.SettlementPostingCommand;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -381,6 +382,41 @@ public interface GLPostingService {
             @NonNull LocalDateTime transactionDate,
             @NonNull String description,
             @Nullable String overrideJustification);
+
+    /**
+     * Post one drawer petty expense whose stated tax is partly recovered (CAP:550 S32d item 9): {@code Dr} each of
+     * {@code debits} / {@code Cr creditAccount} of their sum, source type {@link
+     * JournalEntrySourceTypes#REGISTER_CASH_MOVEMENT}, every line carrying {@code dimensions}. Posted at once; a CLOSED
+     * period propagates for the caller's retry.
+     *
+     * @param sourceEventId deterministic JE source id derived from the movement id
+     * @param debits the debit lines, in order: the expense, then each recovered regime; every amount positive
+     * @param creditAccountId account to credit (register cash clearing) with the debits' sum
+     * @param transactionDate business transaction date (the session's close time)
+     * @param description entry description, naming the movement by its business references
+     * @param dimensions the lines' dimensions
+     * @return posted journal entry's id
+     */
+    @NonNull
+    UUID postRegisterCashMovementLines(
+            @NonNull UUID sourceEventId,
+            @NonNull List<DebitLine> debits,
+            @NonNull UUID creditAccountId,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description,
+            @NonNull Map<String, String> dimensions);
+
+    /**
+     * One debit line of {@link #postRegisterCashMovementLines}.
+     *
+     * @param accountId the account
+     * @param amount the positive amount
+     * @param label the line's label
+     */
+    record DebitLine(
+            @NonNull UUID accountId,
+            @NonNull BigDecimal amount,
+            @NonNull String label) {}
 
     /**
      * Post one drawer cash movement of a closed register session (CAP:550 S17, #2513; spec §4.6, §7.1 "Drawer

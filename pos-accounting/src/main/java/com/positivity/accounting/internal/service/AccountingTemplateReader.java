@@ -1,23 +1,29 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.entity.AccountingTemplateCurrencyEntry;
 import com.positivity.accounting.internal.entity.DefaultGLMapping;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.entity.GLMapping;
 import com.positivity.accounting.internal.entity.MappingKey;
 import com.positivity.accounting.internal.entity.PettyExpenseCategory;
+import com.positivity.accounting.internal.entity.PettyExpenseCategoryTaxSetting;
 import com.positivity.accounting.internal.entity.PostingCategory;
 import com.positivity.accounting.internal.entity.StatementLineMapping;
+import com.positivity.accounting.internal.repository.AccountingTemplateCurrencyEntryRepository;
 import com.positivity.accounting.internal.repository.DefaultGLMappingRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.GLMappingRepository;
 import com.positivity.accounting.internal.repository.MappingKeyRepository;
 import com.positivity.accounting.internal.repository.PettyExpenseCategoryRepository;
+import com.positivity.accounting.internal.repository.PettyExpenseCategoryTaxSettingRepository;
 import com.positivity.accounting.internal.repository.PostingCategoryRepository;
 import com.positivity.accounting.internal.repository.StatementLineMappingRepository;
 import com.positivity.tenancy.PlatformTenant;
 import com.positivity.tenancy.TenantContext;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -53,8 +59,11 @@ public class AccountingTemplateReader implements AccountingTemplateSource {
     private final DefaultGLMappingRepository defaultGlMappings;
     private final StatementLineMappingRepository statementLines;
     private final PettyExpenseCategoryRepository pettyExpenseCategories;
+    private final PettyExpenseCategoryTaxSettingRepository pettyExpenseTaxSettings;
+    private final AccountingTemplateCurrencyEntryRepository currencyEntries;
     private final TransactionTemplate readOnly;
     private final AtomicReference<AccountingTemplate> loaded = new AtomicReference<>();
+    private final AtomicReference<Map<String, String>> loadedCurrencies = new AtomicReference<>(Map.of());
 
     public AccountingTemplateReader(
             GLAccountRepository accounts,
@@ -64,6 +73,8 @@ public class AccountingTemplateReader implements AccountingTemplateSource {
             DefaultGLMappingRepository defaultGlMappings,
             StatementLineMappingRepository statementLines,
             PettyExpenseCategoryRepository pettyExpenseCategories,
+            PettyExpenseCategoryTaxSettingRepository pettyExpenseTaxSettings,
+            AccountingTemplateCurrencyEntryRepository currencyEntries,
             PlatformTransactionManager transactionManager) {
         this.accounts = accounts;
         this.categories = categories;
@@ -72,6 +83,8 @@ public class AccountingTemplateReader implements AccountingTemplateSource {
         this.defaultGlMappings = defaultGlMappings;
         this.statementLines = statementLines;
         this.pettyExpenseCategories = pettyExpenseCategories;
+        this.pettyExpenseTaxSettings = pettyExpenseTaxSettings;
+        this.currencyEntries = currencyEntries;
         this.readOnly = new TransactionTemplate(transactionManager);
         this.readOnly.setReadOnly(true);
     }
@@ -90,6 +103,9 @@ public class AccountingTemplateReader implements AccountingTemplateSource {
         if (read == null || read.isEmpty()) {
             throw new EmptyAccountingTemplateException();
         }
+        Map<String, String> currencies =
+                TenantContext.callAs(PlatformTenant.ID, () -> readOnly.execute(status -> readCurrencies()));
+        loadedCurrencies.set(currencies == null ? Map.of() : currencies);
         loaded.set(read);
         log.info(
                 "Accounting template read from the platform tenant: {} entries, fingerprint {}",
@@ -108,9 +124,18 @@ public class AccountingTemplateReader implements AccountingTemplateSource {
         return "generic";
     }
 
+    /**
+     * The currency-conditional entries an earlier {@link #snapshot()} read (CAP:550 S32d item 3): entry key to the
+     * functional currency a tenant must have to receive it. Empty before the first read.
+     */
+    public @NonNull Map<String, String> currencyEntries() {
+        return loadedCurrencies.get();
+    }
+
     @Override
     public boolean owns(AccountingTemplate.@NonNull Entry entry) {
-        return !RetreadPlantAddOnSource.ENTRY_KEYS.contains(entry.entryKey());
+        return !RetreadPlantAddOnSource.ENTRY_KEYS.contains(entry.entryKey())
+                && !currencyEntries().containsKey(entry.entryKey());
     }
 
     @Override
@@ -175,6 +200,18 @@ public class AccountingTemplateReader implements AccountingTemplateSource {
             entries.add(new AccountingTemplate.PettyExpenseCategory(
                     category.getCode(), category.getLabel(), category.getExamples()));
         }
+        for (PettyExpenseCategoryTaxSetting setting : pettyExpenseTaxSettings.findAllByOrderByCodeAsc()) {
+            entries.add(new AccountingTemplate.PettyExpenseTaxRecovery(
+                    setting.getCode(), setting.isTaxRecoverable(), setting.getRecoverablePercent()));
+        }
         return AccountingTemplate.of(entries);
+    }
+
+    private Map<String, String> readCurrencies() {
+        Map<String, String> currencies = new HashMap<>();
+        for (AccountingTemplateCurrencyEntry entry : currencyEntries.findAll()) {
+            currencies.put(entry.getEntryKey(), entry.getCurrencyCode());
+        }
+        return Map.copyOf(currencies);
     }
 }

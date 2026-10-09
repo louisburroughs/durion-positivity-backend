@@ -6,6 +6,8 @@ import com.positivity.accounting.internal.entity.GLMapping;
 import com.positivity.accounting.internal.entity.MappingKey;
 import com.positivity.accounting.internal.entity.PettyExpenseCategory;
 import com.positivity.accounting.internal.entity.PettyExpenseCategoryChange;
+import com.positivity.accounting.internal.entity.PettyExpenseCategoryTaxSetting;
+import com.positivity.accounting.internal.entity.PettyExpenseCategoryTaxSettingChange;
 import com.positivity.accounting.internal.entity.PostingCategory;
 import com.positivity.accounting.internal.entity.StatementLineMapping;
 import com.positivity.accounting.internal.enums.GLAccountStatus;
@@ -18,9 +20,14 @@ import com.positivity.accounting.internal.repository.GLMappingRepository;
 import com.positivity.accounting.internal.repository.MappingKeyRepository;
 import com.positivity.accounting.internal.repository.PettyExpenseCategoryChangeRepository;
 import com.positivity.accounting.internal.repository.PettyExpenseCategoryRepository;
+import com.positivity.accounting.internal.repository.PettyExpenseCategoryTaxSettingChangeRepository;
+import com.positivity.accounting.internal.repository.PettyExpenseCategoryTaxSettingRepository;
 import com.positivity.accounting.internal.repository.PostingCategoryRepository;
 import com.positivity.accounting.internal.repository.StatementLineMappingRepository;
 import com.positivity.shared.id.UUIDv7Generator;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Comparator;
@@ -47,6 +54,9 @@ public class JpaTenantChart implements TenantChart {
     /** The history row's justification for a category the template created. */
     static final String TEMPLATE_JUSTIFICATION = "Provisioned from the accounting tenant template";
 
+    /** The template's effective date: accounts are active and mappings effective from it. */
+    static final Instant TEMPLATE_EFFECTIVE_FROM = Instant.parse("2020-01-01T00:00:00Z");
+
     private final GLAccountRepository accounts;
     private final PostingCategoryRepository categories;
     private final MappingKeyRepository mappingKeys;
@@ -56,6 +66,9 @@ public class JpaTenantChart implements TenantChart {
     private final PettyExpenseCategoryRepository pettyExpenseCategories;
     private final PettyExpenseCategoryChangeRepository pettyExpenseCategoryChanges;
     private final PettyExpenseCategoryFacts pettyExpenseCategoryFacts;
+    private final PettyExpenseCategoryTaxSettingRepository pettyExpenseTaxSettings;
+    private final PettyExpenseCategoryTaxSettingChangeRepository pettyExpenseTaxSettingChanges;
+    private final EntityManager entityManager;
     private final Clock clock;
 
     @Override
@@ -251,6 +264,44 @@ public class JpaTenantChart implements TenantChart {
 
         pettyExpenseCategoryFacts.changed(saved, ACTOR);
         return saved.getPettyExpenseCategoryId();
+    }
+
+    @Override
+    public Optional<UUID> findPettyExpenseTaxRecovery(@NonNull String code) {
+        return pettyExpenseTaxSettings.findByCode(code).map(PettyExpenseCategoryTaxSetting::getTaxSettingId);
+    }
+
+    @Override
+    public UUID createPettyExpenseTaxRecovery(
+            @NonNull UUID pettyExpenseCategoryId, AccountingTemplate.@NonNull PettyExpenseTaxRecovery template) {
+        PettyExpenseCategory category = pettyExpenseCategories
+                .findById(pettyExpenseCategoryId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Petty-expense category " + template.code() + " vanished while its tax recovery was applied"));
+        BigDecimal percent = template.taxRecoverable() ? template.recoverablePercent() : null;
+        PettyExpenseCategoryTaxSetting setting = new PettyExpenseCategoryTaxSetting();
+        setting.setPettyExpenseCategoryId(pettyExpenseCategoryId);
+        setting.setCode(template.code());
+        setting.setTaxRecoverable(template.taxRecoverable());
+        setting.setRecoverablePercent(percent);
+        setting.setCreatedBy(ACTOR);
+        setting.setModifiedBy(ACTOR);
+        PettyExpenseCategoryTaxSetting saved = pettyExpenseTaxSettings.saveAndFlush(setting);
+
+        PettyExpenseCategoryTaxSettingChange change = new PettyExpenseCategoryTaxSettingChange();
+        change.setPettyExpenseCategoryId(pettyExpenseCategoryId);
+        change.setCode(template.code());
+        // In force from the template's date, so a movement recorded before provisioning finds it too.
+        change.setEffectiveFrom(TEMPLATE_EFFECTIVE_FROM);
+        change.setNewTaxRecoverable(template.taxRecoverable());
+        change.setNewRecoverablePercent(percent);
+        change.setActor(ACTOR);
+        change.setJustification(TEMPLATE_JUSTIFICATION);
+        pettyExpenseTaxSettingChanges.save(change);
+
+        entityManager.lock(category, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
+        pettyExpenseCategoryFacts.changed(category, ACTOR);
+        return saved.getTaxSettingId();
     }
 
     private static LineRow lineRow(StatementLineMapping line) {

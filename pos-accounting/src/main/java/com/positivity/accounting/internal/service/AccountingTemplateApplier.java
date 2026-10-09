@@ -246,6 +246,7 @@ public class AccountingTemplateApplier {
                 case AccountingTemplate.DefaultGlMapping mapping -> evaluate(mapping);
                 case AccountingTemplate.StatementLine line -> evaluate(line);
                 case AccountingTemplate.PettyExpenseCategory category -> evaluate(category);
+                case AccountingTemplate.PettyExpenseTaxRecovery recovery -> evaluate(recovery);
             };
         }
 
@@ -331,6 +332,24 @@ public class AccountingTemplateApplier {
                 return Verdict.withheld(TemplateEntryReason.DEPENDS_ON_CONFLICT, mappingRecord.getTenantValue());
             }
             return Verdict.created(chart.createPettyExpenseCategory(keyId, category));
+        }
+
+        /**
+         * A category's tax recovery (CAP:550 S32d): adopted when the tenant has set its own, withheld while the
+         * category itself waits on a clash, else set from the template.
+         */
+        private Verdict evaluate(AccountingTemplate.PettyExpenseTaxRecovery recovery) {
+            Optional<UUID> existing = chart.findPettyExpenseTaxRecovery(recovery.code());
+            if (existing.isPresent()) {
+                return Verdict.adopted(existing.get());
+            }
+            AccountingTemplateEntry categoryRecord = recorded.get(recovery.categoryEntryKey());
+            if (categoryRecord != null && categoryRecord.getOutcome().needsAttention()) {
+                return Verdict.withheld(TemplateEntryReason.DEPENDS_ON_CONFLICT, categoryRecord.getTenantValue());
+            }
+            UUID categoryId =
+                    chart.findPettyExpenseCategory(recovery.code()).orElseThrow(() -> danglingReference(recovery));
+            return Verdict.created(chart.createPettyExpenseTaxRecovery(categoryId, recovery));
         }
 
         /**

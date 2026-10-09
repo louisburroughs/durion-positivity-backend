@@ -166,6 +166,15 @@ public final class EventTypes {
                                 "ACCOUNTING_PETTY_EXPENSE_CATEGORY_REMAP", "Change a petty-expense category's account")
                         .build(),
 
+                // Input-tax recovery - 2 events (CAP:550 S32d, #2639)
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_INPUT_TAX_RECOVERY_VIEW", "View the input-tax recovery settings")
+                        .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_PETTY_CATEGORY_TAX_RECOVERY_UPDATE",
+                                "Set a petty-expense category's tax recovery")
+                        .build(),
+
                 // TaxRegistrationController - 3 events (CAP:550 S32c, #2638)
                 EventTypeRegistration.fastRead("ACCOUNTING_TAX_REGISTRATION_LIST", "List tax registrations")
                         .build(),
