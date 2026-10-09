@@ -300,6 +300,11 @@ class DiscoveryAuditWriteExclusionRealSpecsTest {
                 .as("the configured pattern matches a concrete confirmation path")
                 .isTrue();
         assertThat(properties.excludesWrite(
+                        "/v1/accounting/vendors/0199c0de-7a1b-7c2d-8e3f-4a5b6c7d8e9f/remit-to-confirmation",
+                        org.springframework.http.HttpMethod.POST))
+                .as("and the same path without the routing prefix")
+                .isTrue();
+        assertThat(properties.excludesWrite(
                         "/accounting/v1/accounting/vendors/0199c0de-7a1b-7c2d-8e3f-4a5b6c7d8e9f/ap-settings",
                         org.springframework.http.HttpMethod.PUT))
                 .as("the AP-settings PUT is not caught by the confirmation pattern")

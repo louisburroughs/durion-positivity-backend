@@ -210,7 +210,8 @@ class SupplierVendorCopyIT extends PostgresTenancyTestBase {
                 .as("a WARN or ERROR line from the refused insert is captured (the scan is not vacuous)")
                 .anyMatch(event -> event.getLevel().isGreaterOrEqual(ch.qos.logback.classic.Level.WARN));
         // The driver's "Failing row contains (...)" detail is in no line; the JDBC error path (WARN / ERROR) names no
-        // column value. Spring Data's DEBUG "Touched <entity>" may name the display name, which is not confidential.
+        // column value. The display name is CONFIDENTIAL for a sole proprietor (ADR-0072 D1): Spring Data's DEBUG
+        // "Touched <entity>" may name it, INFO and above may not.
         assertThat(logs.list.stream()
                         .filter(event -> (event.getFormattedMessage()
                                         + (event.getThrowableProxy() == null

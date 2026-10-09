@@ -55,7 +55,7 @@ class McpServerPropertiesDefaultsTest {
                                     "^/mcp-server/v1/(mcp|nlt)/audit(/|$)",
                                     "/v1/supplier/vendors/[^/]+/tax-registrations/[^/]+/reveal$",
                                     // S24 (#2517): a separation-of-duties confirmation is a person's
-                                    "^/accounting/v1/accounting/vendors/[^/]+/remit-to-confirmation$");
+                                    "/v1/accounting/vendors/[^/]+/remit-to-confirmation$");
                     // #2621: the vendor tax-registration reveal, with or without the routing prefix
                     assertThat(props.excludesWrite(
                                     "/supplier/v1/supplier/vendors/v1/tax-registrations/r1/reveal", HttpMethod.POST))

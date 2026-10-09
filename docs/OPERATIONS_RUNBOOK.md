@@ -1550,9 +1550,13 @@ Caveats:
   change) makes the delete fail and the transaction roll back: nothing is half-deleted.
 - Journal entry numbers are not reused, so the reset leaves gaps in the numbering. Audit rows
   (`accounting_audit_log`) are kept: they are the history of what happened.
-- Deleting the processed marks of the bills' EDI facts (step 4) makes them replayable. The next
-  `supplier.manifest.v1` window that covers them reports drift and requests a replay, so EDI invoices of the
-  last 30 days (`pos.supplier.outbox.replay.max-lookback`) come back on their own, keyed on `vendorId` or held.
+- Deleting the processed marks of the bills' EDI facts (step 4) makes them replayable, but nothing replays them
+  by itself: pos-supplier's `ManifestPublisher` publishes each window's manifest once, and on boot only the latest
+  closed window, so past windows never report drift again. To bring those EDI invoices back, the operator either
+  sends `supplier.outbox.replay-requested` on `supplier.commands.v1` for the affected windows
+  (`{"commandType":"supplier.outbox.replay-requested","payload":{"since":…,"until":…}}`, the tenant on the record
+  header, `since` no older than `pos.supplier.outbox.replay.max-lookback`, 30 days), after which they are keyed on
+  `vendorId` or held, or re-creates those invoices by hand.
 
 ```sql
 -- pos_accounting_db, as the owner. One tenant per run. Ends in ROLLBACK: run it, read the counts, then run it

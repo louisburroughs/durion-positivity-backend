@@ -384,8 +384,9 @@ class SupplierVendorCopyPostgresIT extends PostgresTenancyTestBase {
         assertThat(thrown).isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
         assertThat(chainOf(thrown)).noneMatch(m -> m.contains(LAST4) || m.contains(PAYEE_MARKER));
         // last4 in no line at all (Hibernate's entity listing is pinned to INFO); the driver's detail in none either.
-        // The display name is not confidential: Spring Data's DEBUG "Touched <entity>" may name it, but no line of the
-        // JDBC error path (WARN / ERROR) may, which is where "Failing row contains (...)" would carry it.
+        // The display name is CONFIDENTIAL for a sole proprietor (ADR-0072 D1): DEBUG may carry it (Spring Data's
+        // "Touched <entity>"), INFO and above may not; the JDBC error path (WARN / ERROR) is where "Failing row
+        // contains (...)" would carry it.
         assertThat(rootLinesCarrying(root, LAST4, "Failing row"))
                 .as("ROOT lines carrying last4 or a failing row")
                 .isZero();
