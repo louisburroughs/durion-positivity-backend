@@ -299,7 +299,7 @@ class VendorBillTaxRecoveryPostgresIT extends PostgresTenancyTestBase {
         owner.update(
                 "INSERT INTO gl_account (tenant_id, gl_account_id, account_code, account_name, account_type,"
                         + " account_subtype, reconcilable, activation_date, version, created_at, created_by, modified_at,"
-                        + " modified_by) VALUES (?, ?, ?, 'Recoverable tax (fixture)', 'ASSET', 'TAX_RECOVERABLE', FALSE,"
+                        + " modified_by) VALUES (?, ?, ?, 'Recoverable tax (fixture)', 'ASSET', 'CURRENT_ASSET', FALSE,"
                         + " TIMESTAMP '2020-01-01 00:00:00', 0, now(), 'test', now(), 'test')",
                 tenant,
                 account,
