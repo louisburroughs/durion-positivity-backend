@@ -178,6 +178,20 @@ class RegisterCashMovementPostingPostgresIT extends PostgresTenancyTestBase {
         assertThat(net(lines, "1095")).isEqualByComparingTo("-40.40");
         assertThat(lines).noneMatch(line -> "2200".equals(line.get("account_code")));
         assertThat(entryCount(tenant)).isEqualTo(2);
+        // CAP:550 S32d AC 1: a USD tenant receives none of the currency-conditional template data.
+        assertThat(new JdbcTemplate(ownerDataSource())
+                        .queryForObject(
+                                "SELECT count(*) FROM gl_account WHERE tenant_id = ? AND account_subtype ="
+                                        + " 'TAX_RECOVERABLE'",
+                                Integer.class,
+                                tenant))
+                .isZero();
+        assertThat(new JdbcTemplate(ownerDataSource())
+                        .queryForObject(
+                                "SELECT count(*) FROM petty_expense_category_tax_setting WHERE tenant_id = ?",
+                                Integer.class,
+                                tenant))
+                .isZero();
 
         // The fact's one record links an entry it posted.
         List<Map<String, Object>> records = records(tenant, session);

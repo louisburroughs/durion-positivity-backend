@@ -74,7 +74,10 @@ class InputTaxRecoveryFlagsTest {
     @DisplayName("AC 1 [M]: a USD tenant holding a CA registration recovers nothing (the currency guard)")
     void currencyGuard() {
         caProfile();
-        inEffect(FROM, registration("GST_HST", FROM, null));
+        ExtTaxRegistration registration = registration("GST_HST", FROM, null);
+        inEffect(FROM, registration);
+        when(registrations.findAllByOrderByCountryCodeAscRegimeAscEffectiveFromAsc())
+                .thenReturn(List.of(registration));
 
         assertThat(flags("USD").inputTaxRecovery(FROM, "GST_HST")).isFalse();
         assertThat(flags("USD").anyEnabled(FROM)).isFalse();
