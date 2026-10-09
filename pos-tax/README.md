@@ -49,6 +49,9 @@ Tax calculation service for the Durion Positivity ETSMS platform. Supports two o
 - `GET /v1/tax/information-return-forms?countryCode=` — a country's configured information-return forms, boxes and payee-id
   schemes (`tax:rates:view`, service authority; CAP:550 #2615); pos-accounting relays it as
   `GET /v1/accounting/information-return-forms`
+- `GET /v1/tax/purchase-rules?countryCode=&asOf=` — a country's purchase-tax rules (`tax:rates:view`, service authority;
+  CAP:550 S43): `{countryCode, asOf, source: STUB, configured, taxOnResaleGoods: HOLD|ALLOW, selfAssessUntaxedExpenses}`;
+  a country without rules answers `configured: false, ALLOW, false`; a missing or malformed `countryCode` or `asOf` → 400
 - `POST /v1/tax/transactions/{referenceId}/commit` and `/void` — provider document lifecycle (`tax:commit`)
 - `GET /v1/tax/mode` — returns current operating mode (`test` or `production`)
 - `POST /v1/tax/registrations` and `PUT /v1/tax/registrations/{registrationId}` — record or change a tenant's
@@ -73,7 +76,9 @@ Tax calculation service for the Durion Positivity ETSMS platform. Supports two o
 
 Error codes beyond validation: 422 `TAX_JURISDICTION_NOT_CONFIGURED` (a profiled country has no rate row for the region on
 the date), 422 `CURRENCY_NOT_SUPPORTED` (a calculation for a profiled country states another currency than the profile's;
-ADR-0067 PC-9) and 501 `TAX_RATE_LOOKUP_UNSUPPORTED` (rate lookup on a deployment-wide provider other than test mode).
+ADR-0067 PC-9), 501 `TAX_RATE_LOOKUP_UNSUPPORTED` (rate lookup on a deployment-wide provider other than test mode) and 501
+`TAX_CALCULATION_TYPE_UNSUPPORTED` (`calculationType = USE` on the `EXTERNAL` or `AVALARA` provider; CAP:550 S43). Both 501s
+move to 422 `TAX_CAPABILITY_UNSUPPORTED` when the capability binding (#2629) lands.
 
 The plausibility check (CAP:550 S32b) refuses in this order (ADR-0017); the first step that fails answers and lists all of
 its own field errors in `fieldErrors`, never with the rejected value:
@@ -143,7 +148,8 @@ what the stub answers today, and which questions wait for expert advice.
 | Rate lookup | `GET /v1/tax/rates` (`tax:rates:view`) | A country routed by `pos.tax.default-providers` is answered by its plug-in in every mode (typed rows, below). Otherwise test mode answers from the configured rates, and any other provider answers 501 `TAX_RATE_LOOKUP_UNSUPPORTED` | none in code | Real rates |
 | Provider document lifecycle | `POST /v1/tax/transactions/{referenceId}/commit` and `/void` (`tax:commit`) | Test mode: a no-op that always succeeds, logged in `tax_provider_transaction`. The AvaTax adapter exists, but no environment enables it | pos-invoice | Filing and the provider choice |
 | Exemption certificates | `/v1/tax/exemption-certificates` (`tax:exemption:view`, `tax:exemption:manage`) | A tenant registry. A claim without an active certificate is taxed and flagged, never refused | none outside pos-tax; pos-customer becomes its front door (ADR-0071, no story yet) | Which exemptions are valid, and what evidence they need |
-| Use tax (planned) | `/calculate` with `calculationType = USE` (AW44; louisburroughs/durion-positivity-backend#2604) | Priced exactly like `SALE`; test mode always answers | pos-accounting | Which purchases owe use tax, per-state rules, filing (louisburroughs/durion-positivity-backend#2599) |
+| Use tax | `/calculate` with `calculationType = USE` (AW44; CAP:550 S43, louisburroughs/durion-positivity-backend#2604) | Built. Priced exactly like `SALE` in test mode and by every `<country>_SELF` plug-in (same rows, rates and rounding), the type echoed. The external providers (`EXTERNAL`, `AVALARA`) answer 501 `TAX_CALCULATION_TYPE_UNSUPPORTED` before any provider call (→ 422 `TAX_CAPABILITY_UNSUPPORTED` with #2629). pos-accounting sends `committable = false`, the ledger currency, the posting date and the bill id | pos-accounting (self-assessed tax accrued at a vendor bill's approval) | Which purchases owe use tax, which jurisdiction's rates apply, rules by region and expense type, filing (louisburroughs/durion-positivity-backend#2599) |
+| Purchase-tax rules | `GET /v1/tax/purchase-rules?countryCode=&asOf=` (`tax:rates:view`, service authority; AW44; CAP:550 S43, #2604) | Built. `pos.tax.purchase-rules.<country>` (`tax-on-resale-goods: HOLD\|ALLOW`, `self-assess-untaxed-expenses: true\|false`), `source = STUB`, undated (`asOf` defaults to today and is echoed); a country without rules → `configured: false, ALLOW, false`, a defined answer. The shipped `US` row (`HOLD`, `true`) is a placeholder, and no other country is configured. A caller that cannot obtain the rules holds its decision, never treats them as off (AW49) | pos-accounting (the vendor-bill hold for tax on resale goods, the use-tax accrual) | Whether tax on goods for resale is ever correct (resale certificates), which purchases owe self-assessed tax, rules by region and expense type |
 | Typed rates (per-country profile) | `GET /v1/tax/rates`, `POST /v1/tax/calculate` and `GET /v1/tax/tax-types` for a profiled country; rate rows and line rows carry `taxType` and `inputTaxRecoverable` (AW57; CAP:550 S32a, louisburroughs/durion-positivity-backend#2636) | Built. The country's plug-in answers in every provider mode from its configured rows, `source = STUB`: one typed component or row per tax type in effect for the region on the date, HALF_UP at the currency exponent per row; no row → 422 `TAX_JURISDICTION_NOT_CONFIGURED`, never another country's rates. An exemption claim is taxed and flagged. **No rate ships**: the first configured country (`CA`) has placeholder tax types, regimes and recoverability only. Other countries (the US) are unchanged, with both fields null | pos-accounting, pos-invoice (the `taxType` hand-off) | Rates, which supplies are taxable or exempt, what is recoverable, how taxes stack, the tax-type list and regime grouping |
 | Tax registration status | `POST`/`PUT /v1/tax/registrations` (front door only, per-caller secret; CAP:550 S32c, louisburroughs/durion-positivity-backend#2638), facts `tax.registration.changed` v1 on `tax.events.v1` | Built. `tax_registration` (+ `tax_registration_history`, RLS) keyed by tenant, country and regime from the configured profiles, any configured country with no code change; the number is stored only after `wellFormed` and only normalised; the jurisdiction is the regime's single region, else the country. Effective-dated, both ends inclusive, never deleted (ended by `effectiveTo`); an overlap is 409 `TAX_REGISTRATION_OVERLAP` (exclusion-constraint backstop); `requestId` replay; optimistic `version`. Written only by pos-accounting, the front door (AW59), with the forwarded actor; each change queues one outbox fact, re-sent by the `tax.manifest.v1` replay (AW58) | pos-accounting, pos-order (`ext_tax_registration` replicas) | Registration rules: who must register, from what threshold, what a registration covers (OI-4) |
 | Registration-number shape | `wellFormed(regime, number)`, reached through `POST /v1/tax/plausibility-checks` and the tenant-registration writes (`RegistrationNumberShapes`; CAP:550 S32b, louisburroughs/durion-positivity-backend#2637) | Configured template per regime (`#` digit, letters literal); no shape → startup fails; a shape without a letter → startup fails; nothing passes by default; shapes change only by a reviewed commit | pos-order (drawer entry), pos-tax registrations (via pos-accounting) | Number formats |
@@ -316,6 +322,23 @@ pos.tax:
   in a form; a label is blank or longer than 100 characters; or a payee-id scheme does not match `^[A-Z][A-Z_]{1,15}$` (#2623's
   code pattern) or repeats in a form. When #2623's scheme vocabulary is on `main`, each scheme must also be a scheme of the same
   country in it; whichever lands later adds that check.
+
+### Purchase-tax rules (CAP:550 S43)
+
+```yaml
+pos.tax:
+  purchase-rules:
+    ZZ:                                # fixture shape; placeholders held for expert advice, never tax law
+      tax-on-resale-goods: HOLD        # HOLD or ALLOW
+      self-assess-untaxed-expenses: true
+```
+
+- Its own tree, not under `pos.tax.countries`: a country needs no calculation profile to have purchase rules (adding a US
+  profile would route US calculation to a self-hosted plug-in that ships no rates).
+- The shipped `US` row (`HOLD`, `true`) is a placeholder (OI-4), and no other country is configured. No code names a country.
+- **Startup check** (`PurchaseTaxRules`). Startup fails, naming the property, when a country key is not an upper-case ISO
+  3166-1 alpha-2 code (assigned or user-assigned, so fixtures may use `ZZ`), a value is missing, or `tax-on-resale-goods` is
+  not `HOLD` or `ALLOW`.
 
 ### Rounding reconciliation
 

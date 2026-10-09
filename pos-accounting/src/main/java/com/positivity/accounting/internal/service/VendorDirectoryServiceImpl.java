@@ -221,6 +221,10 @@ public class VendorDirectoryServiceImpl implements VendorDirectoryService {
         String key = expenseKey(request, errors);
         HoldChange hold = holdChange(request, errors);
         InformationReturnChange informationReturn = informationReturnChange(request, errors);
+        if (request.hasAcceptTaxOnResaleGoods() && request.getAcceptTaxOnResaleGoods() == null) {
+            // CAP:550 S43: a boolean; the column is NOT NULL, so null has no meaning to store.
+            errors.add(new VendorBillException.FieldError("acceptTaxOnResaleGoods", "must be true or false"));
+        }
         refuse(errors);
         if (hold != null && hold.onHold() && hold.reason() == null) {
             // Never echoes the reason: only its field and the bounds.
@@ -285,6 +289,22 @@ public class VendorDirectoryServiceImpl implements VendorDirectoryService {
         }
         if (informationReturn != null) {
             changed += applyInformationReturn(row, informationReturn, vendorId, actor, justification, requestId);
+        }
+        Boolean acceptTaxOnResaleGoods = request.getAcceptTaxOnResaleGoods();
+        if (request.hasAcceptTaxOnResaleGoods()
+                && acceptTaxOnResaleGoods != null
+                && acceptTaxOnResaleGoods != row.isAcceptTaxOnResaleGoods()) {
+            // CAP:550 S43: honoured at the next decision; a bill already approved is untouched.
+            auditSetting(
+                    vendorId,
+                    actor,
+                    justification,
+                    requestId,
+                    "acceptTaxOnResaleGoods",
+                    row.isAcceptTaxOnResaleGoods(),
+                    acceptTaxOnResaleGoods);
+            row.setAcceptTaxOnResaleGoods(acceptTaxOnResaleGoods);
+            changed++;
         }
         if (changed > 0) {
             settings.save(row);
@@ -524,8 +544,8 @@ public class VendorDirectoryServiceImpl implements VendorDirectoryService {
     /**
      * What a settings PUT asked for, normalised: the vendor and each field as absent ({@code ~}), null ({@code -}) or
      * its value. Recorded on the request row so a reused requestId with another body is 409, not a silent replay. The
-     * hold reason enters as its SHA-256 hex, so free text never reaches the {@code ;}-separated form or the row. S43
-     * appends its own field the same way.
+     * hold reason enters as its SHA-256 hex, so free text never reaches the {@code ;}-separated form or the row. S43's
+     * {@code acceptTaxOnResaleGoods} comes last.
      */
     private static String fingerprint(
             UUID vendorId,
@@ -562,6 +582,13 @@ public class VendorDirectoryServiceImpl implements VendorDirectoryService {
                     .append(";informationReturn.payeeTaxRegistrationScheme=")
                     .append(given(informationReturn.schemeGiven(), informationReturn.scheme()));
         }
+        // CAP:550 S43: absent ~, else its value (null is refused before the fingerprint is taken).
+        fingerprint
+                .append(";acceptTaxOnResaleGoods=")
+                .append(
+                        request.hasAcceptTaxOnResaleGoods()
+                                ? String.valueOf(request.getAcceptTaxOnResaleGoods())
+                                : "~");
         return fingerprint.toString();
     }
 
@@ -622,7 +649,8 @@ public class VendorDirectoryServiceImpl implements VendorDirectoryService {
                                 ? new VendorApSettingsResponse.ApHold(
                                         true, r.getApHoldReason(), r.getApHoldSetBy(), r.getApHoldSetAt())
                                 : VendorApSettingsResponse.ApHold.NONE,
-                        informationReturn(r, vendor)))
+                        informationReturn(r, vendor),
+                        r.isAcceptTaxOnResaleGoods()))
                 .orElse(VendorApSettingsResponse.NONE);
         return toResponse(vendor, changed, apSettings.apHold().onHold(), apSettings);
     }

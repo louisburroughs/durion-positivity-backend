@@ -114,6 +114,13 @@ public class ApVendorSettings extends TenantScopedEntity {
     @Column(name = "information_return_payee_scheme", length = 16)
     private String informationReturnPayeeScheme;
 
+    /**
+     * Whether a bill of this vendor charging tax on goods for resale is approved without a per-bill override where
+     * the tax country's purchase-tax rule holds such bills (CAP:550 S43, AW44). Honoured at the next decision.
+     */
+    @Column(name = "accept_tax_on_resale_goods", nullable = false)
+    private boolean acceptTaxOnResaleGoods;
+
     @Version
     @Column(name = "version", nullable = false)
     private long version;

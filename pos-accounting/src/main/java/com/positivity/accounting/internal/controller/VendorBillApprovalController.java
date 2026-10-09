@@ -10,6 +10,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -172,11 +173,15 @@ public class VendorBillApprovalController {
                 are) and a goods-receipt bill has its invoice matched; a bill whose absolute total is over the \
                 clerk limit (requiredTier OVER_LIMIT) needs accounting:ap:approve_over_limit, one within it \
                 accounting:ap:approve; the caller did not create the bill unless the AP approval policy allows it \
-                with a justification; then the content checks and the posting.
+                with a justification; then the content checks, the last of them the hold for tax on goods for \
+                resale where the tax country's purchase-tax rules (read from pos-tax) hold such tax, and the \
+                posting, whose first act is the self-assessed use-tax quote where those rules accrue it.
                 Required inputs: billId (UUID) as a path parameter; justification (at least 10 characters), \
                 classification {debitClass GOODS|EXPENSE, expenseMappingKey} (each field given wins over the one \
                 proposed at submission), difference (as submitVendorBillForApproval takes it) and \
-                overrideJustification (with accounting:period:override, to post into a CLOSED period) are optional.
+                overrideJustification (with accounting:period:override, to post into a CLOSED period) and \
+                taxOnResaleOverrideJustification (10-1000 characters, accepting the bill's tax on goods for resale \
+                for this bill only) are optional.
                 Emits ACCOUNTING_VENDOR_BILL_APPROVE and writes a VENDOR_BILL_APPROVE audit row; a refused posting \
                 writes one VENDOR_BILL_APPROVE_REFUSED row and changes nothing else, and a replayed approve finds \
                 the bill APPROVED and is answered 409 AP_BILL_NOT_APPROVABLE.
@@ -187,9 +192,11 @@ public class VendorBillApprovalController {
                 VENDOR_CREATOR_FIRST_BILL), each limit or creator refusal audited as VENDOR_BILL_APPROVE_REFUSED; 404 \
                 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE or AP_BILL_AWAITING_INVOICE; 422 \
                 AP_BILL_UNCLASSIFIED (only when neither the classification, the proposal nor the vendor's AP \
-                defaults give a class), AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, \
-                PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED (guided: referenceId CATEGORY/KEY and nextAction), \
-                each leaving the bill as it was.
+                defaults give a class), AP_BILL_TAX_ON_RESALE_GOODS (audited as VENDOR_BILL_APPROVE_REFUSED), \
+                AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED or \
+                GL_MAPPING_NOT_CONFIGURED (guided: referenceId CATEGORY/KEY and nextAction); 503 \
+                SERVICE_UNAVAILABLE with Retry-After when pos-tax cannot give the rules or the quote; each leaving \
+                the bill as it was.
                 """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
@@ -219,8 +226,20 @@ public class VendorBillApprovalController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description = "AP_BILL_UNCLASSIFIED, AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED,"
-                    + " PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED; the approval is rolled back",
+            description = "AP_BILL_UNCLASSIFIED, AP_BILL_TAX_ON_RESALE_GOODS (the tax country's rules hold the bill's"
+                    + " tax on goods for resale; override with taxOnResaleOverrideJustification),"
+                    + " AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED or"
+                    + " GL_MAPPING_NOT_CONFIGURED; the approval is rolled back",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "SERVICE_UNAVAILABLE: pos-tax cannot give the purchase-tax rules or the use-tax quote;"
+                    + " nothing is written. Retry after the Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<VendorBillResponse> approve(
             @Parameter(description = BILL_ID, example = BILL_ID_EXAMPLE) @NonNull @PathVariable UUID billId,
@@ -340,8 +359,9 @@ public class VendorBillApprovalController {
                 bill's creator with the reason as an exception's justification, the vendor's totals reconciled or \
                 a difference).
                 Required inputs: billId (UUID) as a path parameter, resolutionAction (ACCEPT, CORRECT or VOID) and \
-                reason (at least 10 characters); ACCEPT also takes classification, difference and \
-                overrideJustification as approveVendorBill does, and an operatorId in the body is ignored because \
+                reason (at least 10 characters); ACCEPT also takes classification, difference, \
+                overrideJustification and taxOnResaleOverrideJustification as approveVendorBill does, with its \
+                purchase-tax hold and use-tax quote, and an operatorId in the body is ignored because \
                 the actor is the caller.
                 Emits ACCOUNTING_VENDOR_BILL_MATCH_EXCEPTION_RESOLVE and writes a \
                 VENDOR_BILL_MATCH_EXCEPTION_RESOLVE audit row; a replay finds the bill moved on and is answered 409 \
@@ -352,9 +372,9 @@ public class VendorBillApprovalController {
                 (also the vendor's creator on its first bill, reason VENDOR_CREATOR_FIRST_BILL; audited as \
                 VENDOR_BILL_MATCH_EXCEPTION_RESOLVE_REFUSED); 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE or, for \
                 ACCEPT, AP_BILL_AWAITING_INVOICE; for ACCEPT, 422 AP_BILL_UNCLASSIFIED (no class given, proposed or \
-                defaulted for the vendor), AP_BILL_TOTALS_UNRECONCILED, \
-                AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED, leaving the bill \
-                as it was.
+                defaulted for the vendor), AP_BILL_TAX_ON_RESALE_GOODS, AP_BILL_TOTALS_UNRECONCILED, \
+                AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED, and 503 \
+                SERVICE_UNAVAILABLE with Retry-After when pos-tax cannot answer, leaving the bill as it was.
                 """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
@@ -383,8 +403,19 @@ public class VendorBillApprovalController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description = "ACCEPT only: AP_BILL_UNCLASSIFIED, AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL,"
-                    + " PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED; the approval is rolled back",
+            description = "ACCEPT only: AP_BILL_UNCLASSIFIED, AP_BILL_TAX_ON_RESALE_GOODS, AP_BILL_TOTALS_UNRECONCILED,"
+                    + " AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED; the"
+                    + " approval is rolled back",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "ACCEPT only: SERVICE_UNAVAILABLE: pos-tax cannot give the purchase-tax rules or the use-tax"
+                    + " quote; nothing is written. Retry after the Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<VendorBillResponse> resolveMatchException(
             @Parameter(description = BILL_ID, example = BILL_ID_EXAMPLE) @NonNull @PathVariable UUID billId,

@@ -207,6 +207,17 @@ pos:
               - { code: "020", label: "Box 020 (placeholder)" }
               - { code: "048", label: "Box 048 (placeholder)" }
             payee-id-schemes: [BN, SIN]
+    # Purchase-tax rules per country (CAP:550 S43, AW44, AW48): whether a vendor bill charging tax on goods for
+    # resale is held for a person (HOLD or ALLOW) and whether a bill stating no tax self-assesses (use) tax on its
+    # expense lines. Every row is a PLACEHOLDER held for expert advice (OI-4), never tax law: resale certificates,
+    # which purchases owe self-assessed tax and the rules by region are undecided. A country without a row answers
+    # configured false, ALLOW, false. Its own tree, not under countries: a country needs no calculation profile to
+    # have purchase rules. Country keys are upper case (not settable through environment variables). Checked at
+    # startup by PurchaseTaxRules.
+    purchase-rules:
+      US:
+        tax-on-resale-goods: HOLD
+        self-assess-untaxed-expenses: true
 
 logging:
   level:

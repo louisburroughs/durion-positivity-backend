@@ -205,4 +205,11 @@ public class VendorBillResponse {
     @Schema(description = "The entry posted at approval; null until approved", requiredMode = NOT_REQUIRED)
     @JsonProperty("posting")
     private VendorBillReview.@Nullable Posting posting;
+
+    @Schema(
+            description = "What let the bill through its tax country's hold for tax on goods for resale at approval"
+                    + " (CAP:550 S43); null when the hold did not apply",
+            requiredMode = NOT_REQUIRED)
+    @JsonProperty("taxOnResaleOverride")
+    private VendorBillReview.@Nullable TaxOnResaleOverride taxOnResaleOverride;
 }

@@ -1,13 +1,16 @@
 package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.config.LedgerCurrency;
+import com.positivity.accounting.internal.dto.TaxPurchaseRules;
 import com.positivity.accounting.internal.entity.AccountingAuditLog;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.entity.VendorBillGlPosting;
 import com.positivity.accounting.internal.entity.VendorBillLine;
 import com.positivity.accounting.internal.entity.VendorBillMatchEvidence;
+import com.positivity.accounting.internal.enums.TaxOnResaleOverrideSource;
 import com.positivity.accounting.internal.enums.VendorBillApproverKind;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
+import com.positivity.accounting.internal.exception.TaxServiceUnavailableException;
 import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.VendorBillLineRepository;
@@ -38,11 +41,19 @@ import org.springframework.transaction.support.TransactionTemplate;
  * ambiguous, discrepancy and {@code MATCH_EXCEPTION} matches, and EDI bills, never reach here.
  *
  * <p><b>No person's input.</b> The bill posts with the class of its lines (stocked lines {@code RECEIPT_MATCHED}),
- * the vendor's AP defaults for its non-stock lines (CAP:550 S24, AW39), no difference and no override. Whatever would need one, and every refusal of the posting, skips
- * the approval: the bill stays {@code AWAITING_APPROVAL} with no approval field and one {@value #AUDIT_SKIPPED} row
- * carries the code ({@code AP_BILL_ZERO_TOTAL}, {@code AP_BILL_UNCLASSIFIED}, {@code AP_BILL_TOTALS_UNRECONCILED},
- * {@code PERIOD_CLOSED}, {@code PERIOD_HARD_LOCKED}, {@code GL_MAPPING_NOT_CONFIGURED}; S43 adds the tax-on-resale
- * hold). The match itself is kept.
+ * the vendor's AP defaults for its non-stock lines (CAP:550 S24, AW39), no difference and no override. Whatever would
+ * need one, and every refusal of the posting, skips the approval: the bill stays {@code AWAITING_APPROVAL} with no
+ * approval field and one {@value #AUDIT_SKIPPED} row carries the code ({@code AP_BILL_ZERO_TOTAL}, {@code
+ * AP_BILL_UNCLASSIFIED}, {@code AP_BILL_TOTALS_UNRECONCILED}, {@code AP_BILL_TAX_ON_RESALE_GOODS}, {@code
+ * PERIOD_CLOSED}, {@code PERIOD_HARD_LOCKED}, {@code GL_MAPPING_NOT_CONFIGURED}, {@code SERVICE_UNAVAILABLE}). The match
+ * itself is kept.
+ *
+ * <p><b>Purchase tax (CAP:550 S43, AW44).</b> When the bill could qualify, the tax country's purchase-tax rules are read
+ * from pos-tax on the posting date and, for a self-assessing rule, the {@code USE} quote is asked once, before the legs
+ * are built; the same answer builds the pre-check's legs and the posted ones. The hold for tax on goods for resale is
+ * checked after the legs and before the pre-check transaction: the vendor setting {@code acceptTaxOnResaleGoods} is
+ * honoured, but no person can override for the bill here, so a held bill is skipped with {@code
+ * AP_BILL_TAX_ON_RESALE_GOODS}. pos-tax giving no answer skips with {@code SERVICE_UNAVAILABLE} (AW49).
  *
  * <p><b>The savepoint.</b> {@link VendorBillPostingService#post} is {@code MANDATORY}: a refusal crossing it would
  * mark the match transaction rollback-only. The JPA dialect in use offers no savepoints ({@code PROPAGATION_NESTED}),
@@ -78,6 +89,7 @@ public class VendorBillAutoApproval {
     private final AccountingAuditLogRepository auditLogs;
     private final LedgerCurrency ledgerCurrency;
     private final SupplierVendorCopies vendorCopies;
+    private final VendorBillPurchaseTax purchaseTax;
     private final TransactionTemplate precheckTransaction;
 
     public VendorBillAutoApproval(
@@ -90,6 +102,7 @@ public class VendorBillAutoApproval {
             AccountingAuditLogRepository auditLogs,
             LedgerCurrency ledgerCurrency,
             SupplierVendorCopies vendorCopies,
+            VendorBillPurchaseTax purchaseTax,
             PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.policy = policy;
@@ -100,6 +113,7 @@ public class VendorBillAutoApproval {
         this.auditLogs = auditLogs;
         this.ledgerCurrency = ledgerCurrency;
         this.vendorCopies = vendorCopies;
+        this.purchaseTax = purchaseTax;
         this.precheckTransaction = new TransactionTemplate(transactionManager);
         this.precheckTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -121,7 +135,8 @@ public class VendorBillAutoApproval {
         VendorBillApprovalServiceImpl.Decision decision =
                 new VendorBillApprovalServiceImpl.Decision(settings.tier(bill.getTotalAmount()), settings, null);
         BigDecimal limit = settings.automaticLimitApplied();
-        Optional<RuntimeException> refusal = refusal(bill);
+        Precheck precheck = precheck(bill);
+        Optional<RuntimeException> refusal = precheck.refusal();
         if (refusal.isPresent()) {
             String code = VendorBillApprovalServiceImpl.codeOf(refusal.get());
             audit(
@@ -144,7 +159,7 @@ public class VendorBillAutoApproval {
         // Never caught (ruling 6063520413 item 3): a refusal here, in the pre-check's race, rolls the whole /match
         // back;
         // the caller must resend, and the resend's pre-check ends in the skipped state.
-        VendorBillGlPosting posting = postingService.post(bill, classification(bill), null, SYSTEM);
+        VendorBillGlPosting posting = postingService.post(bill, classification(bill), null, SYSTEM, precheck.useTax());
         String justification = "Approved automatically: match score " + score + " (strong >= " + STRONG_SCORE
                 + "), total " + bill.getTotalAmount().toPlainString() + " <= automatic limit " + limit.toPlainString();
         bill.setStatus(VendorBillStatus.APPROVED);
@@ -155,6 +170,7 @@ public class VendorBillAutoApproval {
         bill.setApprovalJustification(justification);
         // The remit-to the approval was given against (CAP:550 S24, rule 5): payment re-checks it.
         bill.setApprovedRemitToVersion(vendorCopies.remitToVersion(bill.getVendorId()));
+        bill.setTaxOnResaleOverride(precheck.override());
         bill.setModifiedBy(SYSTEM);
         bills.save(bill);
         audit(
@@ -166,7 +182,8 @@ public class VendorBillAutoApproval {
                 "limitApplied=" + limit.toPlainString() + ";journalEntryId=" + posting.getJournalEntryId()
                         + ";postingDate=" + posting.getPostingDate() + ";postingDateRule="
                         + posting.getPostingDateRule() + ";roundingAdjustment="
-                        + posting.getRoundingAdjustment().toPlainString());
+                        + posting.getRoundingAdjustment().toPlainString()
+                        + VendorBillApprovalServiceImpl.purchaseTaxDetails(precheck.override(), precheck.useTax()));
         log.info(
                 "Vendor bill {} approved automatically | billId={} | score={} | limit={} | entry={}",
                 bill.getBillNumber(),
@@ -178,24 +195,68 @@ public class VendorBillAutoApproval {
     }
 
     /**
-     * The refusal the posting would answer, asked without writing anything (guard steps 5 and 6 of #2510): the
-     * currency, the entry's legs with the lines' own classes (a 0.00 total, a non-stock line without a key, the lines
-     * apart from the billed total), then, in a transaction of its own, the posting date's period and each leg's
-     * mapping. Empty when the posting would go through.
+     * The outcome of the pre-check: the refusal, or none; and for a bill that goes through, the self-assessed tax quoted
+     * once for this decision and the override that let it through a {@code HOLD} rule (CAP:550 S43).
      */
-    Optional<RuntimeException> refusal(@NonNull VendorBill bill) {
+    record Precheck(
+            @NonNull Optional<RuntimeException> refusal,
+            VendorBillPostingService.@Nullable UseTax useTax,
+            @Nullable TaxOnResaleOverrideSource override) {
+
+        static Precheck refused(RuntimeException refusal) {
+            return new Precheck(Optional.of(refusal), null, null);
+        }
+    }
+
+    /**
+     * The refusal the posting would answer, asked without writing anything (guard steps 5 and 6 of #2510): the
+     * currency; the purchase-tax rules and the {@code USE} quote when the bill could qualify (S43); the entry's legs
+     * with the lines' own classes (a 0.00 total, a non-stock line without a key, the lines apart from the billed
+     * total); the hold for tax on goods for resale (S43); then, in a transaction of its own, the posting date's period
+     * and each leg's mapping. No refusal when the posting would go through.
+     */
+    Precheck precheck(@NonNull VendorBill bill) {
         if (ledgerCurrency.isForeign(bill.getCurrency())) {
-            return Optional.of(new VendorBillException(
+            return Precheck.refused(new VendorBillException(
                     VendorBillException.Code.AP_BILL_NOT_APPROVABLE,
                     "Bill " + bill.getBillNumber() + " is not in the ledger currency " + ledgerCurrency.code()));
         }
         List<VendorBillLine> lines = billLines.findByVendorBill_VendorBillIdOrderByLineNumber(bill.getVendorBillId());
+        VendorBillPostingService.Classification classification = classification(bill);
+        VendorBillPostingService.PurchaseTaxBasis basis =
+                VendorBillPostingService.purchaseTaxBasis(bill, lines, classification);
+        TaxPurchaseRules rules = null;
+        VendorBillPostingService.UseTax useTax = null;
+        if (basis.mayHold() || basis.mayAccrue()) {
+            try {
+                LocalDate asOf = postingService.postingDate(bill).date();
+                rules = purchaseTax.rules(asOf);
+                if (basis.mayAccrue() && rules.selfAssessesUntaxedExpenses()) {
+                    useTax = purchaseTax.quote(bill, basis, asOf);
+                }
+            } catch (TaxServiceUnavailableException unavailable) {
+                return Precheck.refused(unavailable);
+            }
+        }
         List<VendorBillPostingService.Leg> legs;
         try {
             legs = VendorBillPostingService.legs(
-                    bill, lines, classification(bill), VendorBillPostingService.difference(bill));
+                    bill, lines, classification, VendorBillPostingService.difference(bill), useTax);
         } catch (VendorBillException refused) {
-            return Optional.of(refused);
+            return Precheck.refused(refused);
+        }
+        TaxOnResaleOverrideSource override = null;
+        if (rules != null && basis.mayHold() && rules.holdsTaxOnResaleGoods()) {
+            if (!purchaseTax.vendorAccepts(bill)) {
+                // No person can override for the bill here: it waits for one (S43).
+                return Precheck.refused(new VendorBillException(
+                        VendorBillException.Code.AP_BILL_TAX_ON_RESALE_GOODS,
+                        "Bill " + bill.getBillNumber() + " states tax of "
+                                + basis.statedTax().toPlainString()
+                                + " on goods for resale, which the tax country's purchase-tax rules hold for a"
+                                + " person"));
+            }
+            override = TaxOnResaleOverrideSource.VENDOR_SETTING;
         }
         try {
             precheckTransaction.executeWithoutResult(_ -> {
@@ -211,11 +272,11 @@ public class VendorBillAutoApproval {
                 throw new Skip(null, "pre-check passed");
             });
         } catch (Skip skip) {
-            return skip.code == null ? Optional.empty() : Optional.of(skip);
+            return skip.code == null ? new Precheck(Optional.empty(), useTax, override) : Precheck.refused(skip);
         } catch (RuntimeException refused) {
-            return Optional.of(refused);
+            return Precheck.refused(refused);
         }
-        return Optional.empty();
+        return new Precheck(Optional.empty(), useTax, override);
     }
 
     /**

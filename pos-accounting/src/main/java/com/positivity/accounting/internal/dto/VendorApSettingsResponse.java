@@ -10,7 +10,8 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * What stays accounting's about a vendor (CAP:550 S24, #2517; AW23, AW39): its AP defaults, the confirmation of a
- * changed remit-to, its AP payment hold and its information-return reportable flag (#2615). Every default is null
+ * changed remit-to, its AP payment hold, its information-return reportable flag (#2615) and whether it accepts tax on
+ * goods for resale (S43). Every default is null
  * until written; without a row the vendor is not held and not reportable.
  */
 @Schema(
@@ -58,11 +59,19 @@ public record VendorApSettingsResponse(
         @Schema(
                 description = "The information-return reportable flag; reportable false when not set",
                 requiredMode = REQUIRED)
-        InformationReturn informationReturn) {
+        InformationReturn informationReturn,
+
+        @Schema(
+                description = "Whether a bill of this vendor charging tax on goods for resale is approved without a"
+                        + " per-bill override where the tax country's purchase-tax rules hold such bills (CAP:550"
+                        + " S43); false when not set",
+                example = "false",
+                requiredMode = REQUIRED)
+        boolean acceptTaxOnResaleGoods) {
 
     /** Nothing written yet: no defaults, not held, not reportable. */
     public static final VendorApSettingsResponse NONE =
-            new VendorApSettingsResponse(null, null, null, null, null, ApHold.NONE, InformationReturn.NONE);
+            new VendorApSettingsResponse(null, null, null, null, null, ApHold.NONE, InformationReturn.NONE, false);
 
     /**
      * The AP payment hold (#2615). The reason is staff free text handled as CONFIDENTIAL (ADR-0072): served here, never

@@ -278,6 +278,28 @@ class PerCountryTaxProviderTest {
         }
 
         @Test
+        @DisplayName("S43: USE is priced exactly like SALE by the self-hosted plug-in, the type echoed")
+        void usePricedLikeSale() {
+            TaxCalculationRequest sale = request("CA", "BC", "2026-06-30", line("1", "100.00"), line("2", "40.00"));
+            TaxCalculationRequest use = request("CA", "BC", "2026-06-30", line("1", "100.00"), line("2", "40.00"));
+            use.setCalculationType(TaxCalculationType.USE);
+
+            TaxCalculationResponse saleResponse = firstCountry().calc().calculateTax(sale);
+            TaxCalculationResponse useResponse = firstCountry().calc().calculateTax(use);
+
+            assertThat(useResponse.getCalculationType()).isEqualTo(TaxCalculationType.USE);
+            assertThat(useResponse.getTotalTax()).isEqualByComparingTo(saleResponse.getTotalTax());
+            assertThat(useResponse.getTotalTax()).isPositive();
+            assertThat(useResponse.getLineItemTaxes())
+                    .extracting(LineItemTax::getTaxAmount)
+                    .usingComparatorForType(BigDecimal::compareTo, BigDecimal.class)
+                    .containsExactlyElementsOf(saleResponse.getLineItemTaxes().stream()
+                            .map(LineItemTax::getTaxAmount)
+                            .toList());
+            assertThat(useResponse.getOriginalReferenceId()).isNull();
+        }
+
+        @Test
         @DisplayName("an exemption claim is taxed and flagged; a bare taxExempt line is taxed zero")
         void exemptionClaimIsTaxedAndFlagged() {
             TaxLineItem claimed = line("1", "100.00");

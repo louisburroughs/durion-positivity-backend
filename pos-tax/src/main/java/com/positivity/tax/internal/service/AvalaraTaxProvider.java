@@ -117,6 +117,8 @@ public class AvalaraTaxProvider implements TaxProviderClient {
     @Override
     @NonNull
     public TaxCalculationResponse estimate(@NonNull TaxCalculationRequest request) {
+        // CAP:550 S43: USE (self-assessed tax) is not priced by AvaTax here; 501 before any call.
+        ExternalTaxProvider.refuseUse(request, PROVIDER_NAME);
         // #985 Option A: a committable calculation must leave a PERSISTED provider document
         // behind under code == referenceId, or the later commit(referenceId) resolves nothing
         // (AvaTax never persists a SalesOrder). SalesInvoice + commit=false is that persisted,

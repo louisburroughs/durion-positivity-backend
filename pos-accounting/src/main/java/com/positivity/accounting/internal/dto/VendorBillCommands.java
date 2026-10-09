@@ -71,7 +71,27 @@ public final class VendorBillCommands {
                             + " gross - (net + tax) exceeds the rounding tolerance",
                     requiredMode = NOT_REQUIRED)
             @Valid
-            VendorBillReview.@Nullable Difference difference) {}
+            VendorBillReview.@Nullable Difference difference,
+
+            @Schema(
+                    description = "Accepts, for this bill only, tax the vendor charged on goods for resale where the"
+                            + " tax country's purchase-tax rules hold such bills (check TAX_ON_RESALE_GOODS FAIL): why"
+                            + " it is accepted, 10-1000 characters; looked at only when the hold applies (CAP:550 S43)",
+                    example = "Vendor resale certificate pending; tax recovered on the next statement",
+                    requiredMode = NOT_REQUIRED)
+            @Size(max = 1000)
+            @Nullable
+            String taxOnResaleOverrideJustification) {
+
+        /** An approval without a tax-on-resale override. */
+        public Approve(
+                @Nullable String justification,
+                VendorBillReview.@Nullable Classification classification,
+                @Nullable String overrideJustification,
+                VendorBillReview.@Nullable Difference difference) {
+            this(justification, classification, overrideJustification, difference, null);
+        }
+    }
 
     @Schema(name = "VendorBillRejectRequest", description = "Reject a bill awaiting approval")
     public record Reject(
@@ -139,7 +159,28 @@ public final class VendorBillCommands {
                             + " gross - (net + tax) exceeds the rounding tolerance",
                     requiredMode = NOT_REQUIRED)
             @Valid
-            VendorBillReview.@Nullable Difference difference) {}
+            VendorBillReview.@Nullable Difference difference,
+
+            @Schema(
+                    description = "ACCEPT only: accepts, for this bill only, tax the vendor charged on goods for"
+                            + " resale where the tax country's purchase-tax rules hold such bills, 10-1000 characters"
+                            + " (CAP:550 S43)",
+                    example = "Vendor resale certificate pending; tax recovered on the next statement",
+                    requiredMode = NOT_REQUIRED)
+            @Size(max = 1000)
+            @Nullable
+            String taxOnResaleOverrideJustification) {
+
+        /** A resolution without a tax-on-resale override. */
+        public ResolveException(
+                @Nullable String resolutionAction,
+                @Nullable String reason,
+                VendorBillReview.@Nullable Classification classification,
+                @Nullable String overrideJustification,
+                VendorBillReview.@Nullable Difference difference) {
+            this(resolutionAction, reason, classification, overrideJustification, difference, null);
+        }
+    }
 
     /**
      * The bill's real due date, entered during approval review (CAP:550 S13, #2510; §4.2, AW11). The actor is the

@@ -5,6 +5,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.positivity.accounting.internal.enums.MatchConfidence;
+import com.positivity.accounting.internal.enums.TaxOnResaleOverrideSource;
 import com.positivity.accounting.internal.enums.VendorBillAction;
 import com.positivity.accounting.internal.enums.VendorBillApproverKind;
 import com.positivity.accounting.internal.enums.VendorBillCheckOutcome;
@@ -158,6 +159,25 @@ public final class VendorBillReview {
             @Nullable
             VendorBillApproverKind approvedByKind) {}
 
+    @Schema(
+            name = "VendorBillTaxOnResaleOverride",
+            description = "What let an approved bill charging tax on goods for resale through its tax country's hold"
+                    + " (CAP:550 S43)")
+    public record TaxOnResaleOverride(
+            @Schema(
+                    description = "BILL (the approver, with a justification) or VENDOR_SETTING (the vendor accepts"
+                            + " such tax)",
+                    example = "BILL",
+                    requiredMode = REQUIRED)
+            TaxOnResaleOverrideSource source,
+
+            @Schema(
+                    description = "The approver's justification of a BILL override; null for VENDOR_SETTING",
+                    example = "Vendor resale certificate pending",
+                    requiredMode = NOT_REQUIRED)
+            @Nullable
+            String justification) {}
+
     @Schema(name = "VendorBillRejection", description = "Who rejected or voided the bill, and why")
     public record Rejection(
             @Schema(description = "When", requiredMode = REQUIRED)
@@ -302,9 +322,12 @@ public final class VendorBillReview {
     public record Check(
             @Schema(
                     description = "MATCHED_TO_DELIVERY, WITHIN_PRICE_TOLERANCE, TOTALS_ADD_UP,"
-                            + " OPEN_DELIVERIES_FROM_VENDOR, WITHIN_CLERK_LIMIT or VENDOR_AP_HOLD (informational: FAIL"
+                            + " OPEN_DELIVERIES_FROM_VENDOR, WITHIN_CLERK_LIMIT, VENDOR_AP_HOLD (informational: FAIL"
                             + " with vendorNumber, reason and since while the vendor is on AP hold, which blocks"
-                            + " payment only)",
+                            + " payment only) or TAX_ON_RESALE_GOODS (FAIL with taxAmount and currencyCode while the"
+                            + " tax country's rules hold the bill's tax on goods for resale; PASS with acceptedBy"
+                            + " VENDOR_SETTING or BILL; NOT_APPLICABLE, with rulesUnavailable true when the rules"
+                            + " cannot be read)",
                     example = "MATCHED_TO_DELIVERY",
                     requiredMode = REQUIRED)
             String code,

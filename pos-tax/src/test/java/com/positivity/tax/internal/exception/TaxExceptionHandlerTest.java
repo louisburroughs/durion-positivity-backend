@@ -89,6 +89,18 @@ class TaxExceptionHandlerTest {
         assertThat(unprocessable.getBody().fieldErrors()).isEqualTo(errors);
     }
 
+    @Test
+    @DisplayName("S43: TaxCalculationTypeUnsupportedException answers 501 TAX_CALCULATION_TYPE_UNSUPPORTED")
+    void calculationTypeUnsupportedIs501() {
+        ResponseEntity<ApiError> response = sut.handleCalculationTypeUnsupported(
+                new TaxCalculationTypeUnsupportedException("The EXTERNAL tax provider does not price USE"),
+                requestWithHeader());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_IMPLEMENTED);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().code()).isEqualTo("TAX_CALCULATION_TYPE_UNSUPPORTED");
+    }
+
     @Nested
     @DisplayName("handleRateLookupUnsupported")
     class HandleRateLookupUnsupported {

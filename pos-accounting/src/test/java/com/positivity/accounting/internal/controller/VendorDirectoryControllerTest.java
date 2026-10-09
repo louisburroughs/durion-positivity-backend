@@ -286,7 +286,7 @@ class VendorDirectoryControllerTest extends BaseIntegrationTest {
         @Test
         @DisplayName("an unknown property is 400 and never reaches the service")
         void unknownProperty() throws Exception {
-            set(MANAGE, "{\"acceptTaxOnResaleGoods\":true," + TAIL + "}").andExpect(status().isBadRequest());
+            set(MANAGE, "{\"acceptTaxOnServices\":true," + TAIL + "}").andExpect(status().isBadRequest());
             verify(vendorDirectoryService, never()).setApSettings(any(), any());
         }
 

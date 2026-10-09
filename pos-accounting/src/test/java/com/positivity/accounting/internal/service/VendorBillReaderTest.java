@@ -545,7 +545,8 @@ class VendorBillReaderTest {
                 mock(AccountingCalendarZoneResolver.class),
                 new LedgerCurrency("USD"),
                 approvalPolicy,
-                mock(SupplierVendorCopies.class));
+                mock(SupplierVendorCopies.class),
+                mock(VendorBillPurchaseTax.class));
         VendorBill over = billOf("3000.00", "clerk.ana");
         over.setStatus(VendorBillStatus.AWAITING_APPROVAL);
         over.setBillNumber("INV-OVER");
@@ -642,7 +643,8 @@ class VendorBillReaderTest {
                 mock(AccountingCalendarZoneResolver.class),
                 new LedgerCurrency("USD"),
                 approvalPolicy,
-                copies);
+                copies,
+                mock(VendorBillPurchaseTax.class));
         UUID heldVendor = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a71");
         UUID freeVendor = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a72");
         VendorBill heldBill = billOf("100.00", "clerk.ana");

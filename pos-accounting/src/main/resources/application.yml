@@ -233,6 +233,17 @@ accounting:
   # the JDK maps the country to a currency, that currency is base-currency's (ADR-0067 PC-9).
   tax:
     country: US
+    # Where purchases are taxed for self-assessed (use) tax (CAP:550 S43, AW44), read through PurchasePlace: the region
+    # and postal code sent to pos-tax with the country above. A Stage A, deployment-wide PLACEHOLDER until bills carry a
+    # location; which jurisdiction's tax applies is held for expert advice (OI-4). Startup fails without a postal code
+    # (at most 20 characters) or with a region that is not 1-3 letters or digits.
+    purchase-place:
+      region-code: ${ACCOUNTING_TAX_PURCHASE_REGION:}
+      postal-code: ${ACCOUNTING_TAX_PURCHASE_POSTAL_CODE:00000}
+    # The bill read's TAX_ON_RESALE_GOODS check reads the tax country's purchase-tax rules from pos-tax through a cache
+    # of this lifetime (S43); a decision (approve, ACCEPT, automatic approval) always asks pos-tax.
+    purchase-rules:
+      cache-ttl: ${ACCOUNTING_TAX_PURCHASE_RULES_CACHE_TTL:PT5M}
   ap:
     # SET LOCAL lock_timeout on the AP pay command and the vendor-bill decisions (CAP:550 S42, #2627): a
     # wait for a bill or period row lock beyond it answers 409 LOCK_TIMEOUT and persists nothing.

@@ -511,7 +511,7 @@ class VendorBillPostingServiceTest {
         void postsOnTheBillDate() {
             VendorBill bill = bill("412.00");
 
-            VendorBillGlPosting posting = service.post(bill, null, null, "controller.cfo");
+            VendorBillGlPosting posting = service.post(bill, null, null, "controller.cfo", null);
 
             ArgumentCaptor<JournalEntryCreateRequest> request =
                     ArgumentCaptor.forClass(JournalEntryCreateRequest.class);
@@ -541,7 +541,7 @@ class VendorBillPostingServiceTest {
             edi.setDifferenceClass(VendorBillDifferenceClass.FREIGHT);
             edi.setDifferenceJustification("Freight on the invoice, not stated");
 
-            VendorBillGlPosting posting = service.post(edi, GOODS, null, "controller.cfo");
+            VendorBillGlPosting posting = service.post(edi, GOODS, null, "controller.cfo", null);
 
             ArgumentCaptor<JournalEntryCreateRequest> request =
                     ArgumentCaptor.forClass(JournalEntryCreateRequest.class);
@@ -561,7 +561,7 @@ class VendorBillPostingServiceTest {
                             eq("VENDOR_BILL"), eq("PURCHASE_PRICE_DIFFERENCE"), any(LocalDateTime.class)))
                     .thenThrow(new GLMappingNotConfiguredException("No mapping for key PURCHASE_PRICE_DIFFERENCE"));
 
-            assertThatThrownBy(() -> service.post(bill("412.00"), null, null, "controller.cfo"))
+            assertThatThrownBy(() -> service.post(bill("412.00"), null, null, "controller.cfo", null))
                     .isInstanceOfSatisfying(GLMappingNotConfiguredException.class, e -> {
                         assertThat(e.getReferenceId()).isEqualTo("VENDOR_BILL/PURCHASE_PRICE_DIFFERENCE");
                         assertThat(e.getNextAction())
@@ -582,7 +582,7 @@ class VendorBillPostingServiceTest {
                     .when(accounts)
                     .validateAccountForPosting(eq(inactive), any(LocalDateTime.class));
 
-            assertThatThrownBy(() -> service.post(bill("412.00"), null, null, "controller.cfo"))
+            assertThatThrownBy(() -> service.post(bill("412.00"), null, null, "controller.cfo", null))
                     .isInstanceOfSatisfying(GLMappingNotConfiguredException.class, e -> {
                         assertThat(e.getReferenceId()).isEqualTo("VENDOR_BILL/GOODS_RECEIVED_NOT_BILLED");
                         assertThat(e.getMessage())
@@ -622,7 +622,7 @@ class VendorBillPostingServiceTest {
                             .journalEntryId(entryId)
                             .build()));
 
-            assertThatThrownBy(() -> service.post(bill("412.00"), null, null, "controller.cfo"))
+            assertThatThrownBy(() -> service.post(bill("412.00"), null, null, "controller.cfo", null))
                     .isInstanceOfSatisfying(
                             VendorBillException.class,
                             e -> assertThat(e.getCode()).isEqualTo(VendorBillException.Code.AP_BILL_NOT_APPROVABLE));
@@ -635,7 +635,7 @@ class VendorBillPostingServiceTest {
             VendorBill bill = bill("412.00");
             bill.setCurrency("EUR");
 
-            assertThatThrownBy(() -> service.post(bill, null, null, "controller.cfo"))
+            assertThatThrownBy(() -> service.post(bill, null, null, "controller.cfo", null))
                     .isInstanceOf(VendorBillException.class);
             verify(journalEntries, never()).createJournalEntry(any());
         }
@@ -646,7 +646,7 @@ class VendorBillPostingServiceTest {
             when(journalEntries.postJournalEntry(eq(entryId), any()))
                     .thenThrow(new AccountingPeriodHardLockedException(TODAY.plusDays(1), "hard-locked"));
 
-            assertThatThrownBy(() -> service.post(bill("412.00"), null, null, "controller.cfo"))
+            assertThatThrownBy(() -> service.post(bill("412.00"), null, null, "controller.cfo", null))
                     .isInstanceOf(AccountingPeriodHardLockedException.class);
             verify(postings, never()).saveAndFlush(any());
         }

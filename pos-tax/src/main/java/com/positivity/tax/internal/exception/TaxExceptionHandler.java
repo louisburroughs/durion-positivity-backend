@@ -52,6 +52,16 @@ public class TaxExceptionHandler {
     }
 
     /**
+     * A calculation type the active provider does not support (CAP:550 S43: {@code USE} on an external
+     * provider): an honest 501, never a synthetic price.
+     */
+    @ExceptionHandler(TaxCalculationTypeUnsupportedException.class)
+    public ResponseEntity<ApiError> handleCalculationTypeUnsupported(
+            TaxCalculationTypeUnsupportedException ex, HttpServletRequest request) {
+        return build(HttpStatus.NOT_IMPLEMENTED, "TAX_CALCULATION_TYPE_UNSUPPORTED", ex.getMessage(), request);
+    }
+
+    /**
      * An address in a profiled country with no configured rate row for its region and date
      * (CAP:550 S32a): 422, never a price from another country's rates.
      */

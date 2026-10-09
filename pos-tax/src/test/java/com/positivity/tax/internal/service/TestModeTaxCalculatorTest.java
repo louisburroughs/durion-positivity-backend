@@ -916,6 +916,42 @@ class TestModeTaxCalculatorTest {
     }
 
     @Test
+    @DisplayName("S43: USE returns the same rates and amounts as SALE for the same request, the type echoed")
+    void shouldPriceUseExactlyLikeSale() {
+        TaxCalculationRequest sale = TaxCalculationRequest.builder()
+                .lineItems(List.of(
+                        createLineItem("1", "Shop supplies", "1", "200.00"), createLineItem("2", "Rags", "3", "4.99")))
+                .destinationAddress(createAddress(TEST_POSTAL_CODE, "CA", "Los Angeles", "US"))
+                .transactionDate("2026-10-01")
+                .build();
+        TaxCalculationRequest use = TaxCalculationRequest.builder()
+                .lineItems(sale.getLineItems())
+                .destinationAddress(sale.getDestinationAddress())
+                .transactionDate("2026-10-01")
+                .calculationType(TaxCalculationType.USE)
+                .build();
+
+        TaxCalculationResponse saleResponse = calculator.calculate(sale);
+        TaxCalculationResponse useResponse = calculator.calculate(use);
+
+        assertThat(useResponse.getCalculationType()).isEqualTo(TaxCalculationType.USE);
+        assertThat(useResponse.getTotalTax()).isPositive().isEqualByComparingTo(saleResponse.getTotalTax());
+        assertThat(useResponse.getEffectiveTaxRate()).isEqualByComparingTo(saleResponse.getEffectiveTaxRate());
+        assertThat(useResponse.getLineItemTaxes()).hasSameSizeAs(saleResponse.getLineItemTaxes());
+        for (int i = 0; i < saleResponse.getLineItemTaxes().size(); i++) {
+            assertThat(useResponse.getLineItemTaxes().get(i).getTaxAmount())
+                    .isEqualByComparingTo(saleResponse.getLineItemTaxes().get(i).getTaxAmount());
+        }
+        assertThat(useResponse.getJurisdictions())
+                .extracting(j -> j.getTaxRate().stripTrailingZeros())
+                .containsExactlyElementsOf(saleResponse.getJurisdictions().stream()
+                        .map(j -> j.getTaxRate().stripTrailingZeros())
+                        .toList());
+        assertThat(useResponse.getOriginalReferenceId()).isNull();
+        assertSigmaInvariant(useResponse);
+    }
+
+    @Test
     @DisplayName("T4: calculationType defaults to SALE and is echoed on the response")
     void shouldDefaultCalculationTypeToSale() {
         TaxCalculationRequest request = TaxCalculationRequest.builder()

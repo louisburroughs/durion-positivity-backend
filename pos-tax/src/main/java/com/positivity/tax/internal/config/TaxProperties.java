@@ -113,6 +113,27 @@ public class TaxProperties {
     private Map<String, InformationReturnCountry> informationReturns = new LinkedHashMap<>();
 
     /**
+     * Purchase-tax rules per country (CAP:550 S43, AW44), keyed by upper-case ISO 3166-1 alpha-2 country
+     * code. A configuration-driven stub (AW48): whether tax a vendor charges on goods for resale holds the
+     * bill, and whether an untaxed expense bill self-assesses (use) tax, are placeholders held for expert
+     * advice (OI-4). Its own tree, not under {@link #countries}: a country needs no calculation profile to
+     * have purchase rules. Validated at startup by {@code PurchaseTaxRules}. Never {@code null}.
+     */
+    private Map<String, PurchaseRules> purchaseRules = new LinkedHashMap<>();
+
+    /**
+     * One country's purchase-tax rules (CAP:550 S43). Both values are required; the stub does not date them.
+     */
+    @Data
+    public static class PurchaseRules {
+        /** {@code HOLD} or {@code ALLOW}: whether a bill charging tax on goods for resale is held for a person. */
+        private String taxOnResaleGoods;
+
+        /** Whether a bill that states no tax self-assesses (use) tax on its expense lines. */
+        private Boolean selfAssessUntaxedExpenses;
+    }
+
+    /**
      * One country's information-return configuration (CAP:550 #2615).
      */
     @Data

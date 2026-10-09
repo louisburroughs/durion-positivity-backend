@@ -74,8 +74,9 @@ public class TaxController {
                     certificate must already exist in the registry and be ACTIVE for the destination state on the
                     transaction date, otherwise tax is calculated as taxable.
                     Required inputs: lineItems (at least one) and destinationAddress with countryCode and postalCode;
-                    currencyCode defaults to USD, calculationType defaults to SALE, and referenceId should carry the
-                    source document id so the result can later be committed.
+                    currencyCode defaults to USD, calculationType defaults to SALE (USE, a buyer's self-assessed tax,
+                    is priced exactly like SALE), and referenceId should carry the source document id so the result
+                    can later be committed.
                     Emits a TAX_CALCULATE event and, in production mode, calls the configured external tax provider;
                     no provider document is created until commitTaxDocument is called.
                     A destination whose country the per-country default routes to a plug-in is priced by that plug-in
@@ -84,7 +85,8 @@ public class TaxController {
                     Returns 400 when line items or the destination address are missing or malformed, 422
                     TAX_JURISDICTION_NOT_CONFIGURED when such a country has no rate row for the region on the
                     transaction date or CURRENCY_NOT_SUPPORTED when currencyCode is not that country's configured
-                    currency, and 500 when the provider is unreachable in production mode.
+                    currency, 501 TAX_CALCULATION_TYPE_UNSUPPORTED when calculationType USE reaches an external
+                    provider, and 500 when the provider is unreachable in production mode.
                     """)
     @ApiResponse(responseCode = "200", description = "Tax calculated successfully")
     @ApiResponse(
@@ -95,6 +97,10 @@ public class TaxController {
             responseCode = "422",
             description = "No rate row is configured for the destination region (TAX_JURISDICTION_NOT_CONFIGURED), or"
                     + " currencyCode is not the destination country's configured currency (CURRENCY_NOT_SUPPORTED)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "501",
+            description = "calculationType USE on an external provider (TAX_CALCULATION_TYPE_UNSUPPORTED)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "500",

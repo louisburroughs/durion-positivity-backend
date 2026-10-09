@@ -34,6 +34,8 @@ SET TIME ZONE 'UTC';
 -- posting category and mapping key below. 2100, 5050 and 5060 are AW38's (CAP:550 S12 #2509 and S41 #2602,
 -- whichever lands first): what a delivery put on the books and its bill has not yet cleared, the difference
 -- between a receipt's price and the billed price (and US tax on goods, AW39), and freight on purchases.
+-- 2240 Use Tax Payable is S43's (#2604, AW44): self-assessed tax accrued at a bill's approval, only by a tenant whose
+-- tax country's pos-tax purchase rule says so (no per-country chart template exists yet).
 INSERT INTO gl_account (gl_account_id, account_code, account_name, account_type, account_subtype, reconcilable, activation_date, version, created_at, created_by, modified_at, modified_by)
 SELECT md5('accounting-template:01900000-0000-7000-8000-000000000000:ACCOUNT:' || t.code)::uuid, t.code, t.name, t.type, t.subtype, t.reconcilable, TIMESTAMP '2020-01-01 00:00:00', 0, NOW(), 'seed-generator', NOW(), 'seed-generator'
 FROM (VALUES
@@ -46,6 +48,7 @@ FROM (VALUES
     ('2000', 'Accounts Payable', 'LIABILITY', 'PAYABLE', TRUE),
     ('2100', 'Goods Received Not Yet Billed', 'LIABILITY', 'CURRENT_LIABILITY', FALSE),
     ('2200', 'Sales Tax Payable', 'LIABILITY', 'TAX_PAYABLE', FALSE),
+    ('2240', 'Use Tax Payable', 'LIABILITY', 'TAX_PAYABLE', FALSE),
     ('2300', 'Customer Credit Liability', 'LIABILITY', 'CURRENT_LIABILITY', FALSE),
     ('2350', 'Settlement Suspense', 'LIABILITY', 'CURRENT_LIABILITY', FALSE),
     ('2360', 'Bank Reconciliation Adjustments', 'LIABILITY', 'CURRENT_LIABILITY', FALSE),
@@ -218,6 +221,7 @@ FROM (VALUES
     ('VENDOR_BILL', 'GOODS_RECEIVED_NOT_BILLED', 'Receipt-matched and unmatched goods lines (2100, AW39)'),
     ('VENDOR_BILL', 'PURCHASE_PRICE_DIFFERENCE', 'Billed minus received price, US tax on goods, price allowances (5050, AW39)'),
     ('VENDOR_BILL', 'FREIGHT_IN', 'Freight stated separately on a bill (5060, AW39)'),
+    ('VENDOR_BILL', 'USE_TAX_PAYABLE', 'Self-assessed (use) tax accrued on an untaxed expense bill where the tax country''s rule says so (2240, AW44)'),
     ('VENDOR_BILL', 'EXPENSE_SHOP_SUPPLIES', 'Shop supplies (AW18, AW30)'),
     ('VENDOR_BILL', 'EXPENSE_SMALL_TOOLS', 'Small tools (AW18, AW30)'),
     ('VENDOR_BILL', 'EXPENSE_OFFICE_SUPPLIES', 'Office supplies (AW18, AW30)'),
@@ -296,6 +300,7 @@ FROM (VALUES
     ('VENDOR_BILL', 'GOODS_RECEIVED_NOT_BILLED', 'ACCOUNTING', 'VENDOR_BILL_GOODS_RECEIVED_NOT_BILLED', '2100'),
     ('VENDOR_BILL', 'PURCHASE_PRICE_DIFFERENCE', 'ACCOUNTING', 'VENDOR_BILL_PURCHASE_PRICE_DIFFERENCE', '5050'),
     ('VENDOR_BILL', 'FREIGHT_IN', 'ACCOUNTING', 'VENDOR_BILL_FREIGHT_IN', '5060'),
+    ('VENDOR_BILL', 'USE_TAX_PAYABLE', 'ACCOUNTING', 'VENDOR_BILL_USE_TAX_PAYABLE', '2240'),
     ('VENDOR_BILL', 'EXPENSE_SHOP_SUPPLIES', 'ACCOUNTING', 'VENDOR_BILL_EXPENSE_SHOP_SUPPLIES', '6340'),
     ('VENDOR_BILL', 'EXPENSE_SMALL_TOOLS', 'ACCOUNTING', 'VENDOR_BILL_EXPENSE_SMALL_TOOLS', '6430'),
     ('VENDOR_BILL', 'EXPENSE_OFFICE_SUPPLIES', 'ACCOUNTING', 'VENDOR_BILL_EXPENSE_OFFICE_SUPPLIES', '6370'),

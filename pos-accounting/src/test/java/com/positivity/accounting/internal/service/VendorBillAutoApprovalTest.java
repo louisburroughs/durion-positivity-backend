@@ -77,6 +77,7 @@ class VendorBillAutoApprovalTest {
                 auditLogs,
                 new LedgerCurrency("USD"),
                 vendorCopies,
+                PurchaseTaxFixtures.off(),
                 mock(PlatformTransactionManager.class));
         bill = new VendorBill(UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4d01"));
         bill.setBillNumber("INV-7");
@@ -90,7 +91,7 @@ class VendorBillAutoApprovalTest {
         when(postingService.postingDate(any()))
                 .thenReturn(
                         new VendorBillPostingService.PostingDate(INVOICE_DATE, VendorBillPostingDateRule.BILL_DATE));
-        when(postingService.post(any(), any(), any(), anyString())).thenAnswer(inv -> posting());
+        when(postingService.post(any(), any(), any(), anyString(), any())).thenAnswer(inv -> posting());
         when(bills.save(any(VendorBill.class))).thenAnswer(inv -> inv.getArgument(0));
     }
 
@@ -144,7 +145,12 @@ class VendorBillAutoApprovalTest {
                 .isEqualTo("Approved automatically: match score 95 (strong >= 70), total 250.00 <= automatic limit"
                         + " 300.00");
         verify(postingService)
-                .post(eq(bill), eq(new VendorBillPostingService.Classification(null, null)), eq(null), eq("SYSTEM"));
+                .post(
+                        eq(bill),
+                        eq(new VendorBillPostingService.Classification(null, null)),
+                        eq(null),
+                        eq("SYSTEM"),
+                        any());
         AccountingAuditLog audit = onlyAudit();
         assertThat(audit.getOperation()).isEqualTo("VENDOR_BILL_AUTO_APPROVE");
         assertThat(audit.getUserId()).isEqualTo("SYSTEM");
@@ -176,7 +182,7 @@ class VendorBillAutoApprovalTest {
 
         assertThat(autoApproval.approveIfEligible(bill, evidence, 95)).isTrue();
 
-        verify(postingService).post(eq(bill), eq(defaults), eq(null), eq("SYSTEM"));
+        verify(postingService).post(eq(bill), eq(defaults), eq(null), eq("SYSTEM"), any());
     }
 
     @Test
@@ -188,7 +194,7 @@ class VendorBillAutoApprovalTest {
 
         assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.AWAITING_APPROVAL);
         assertThat(bill.getApprovedBy()).isNull();
-        verify(postingService, never()).post(any(), any(), any(), anyString());
+        verify(postingService, never()).post(any(), any(), any(), anyString(), any());
         verify(auditLogs, never()).save(any());
     }
 
@@ -198,7 +204,7 @@ class VendorBillAutoApprovalTest {
         limits("0.00", "0.00");
         billed("10.00", true);
         assertThat(autoApproval.approveIfEligible(bill, evidence, 95)).isFalse();
-        verify(postingService, never()).post(any(), any(), any(), anyString());
+        verify(postingService, never()).post(any(), any(), any(), anyString(), any());
     }
 
     @Test
@@ -214,7 +220,7 @@ class VendorBillAutoApprovalTest {
         assertThat(bill.getSubmittedBy()).isEqualTo("SYSTEM");
         assertThat(bill.getApprovedBy()).isNull();
         assertThat(bill.getApprovedByKind()).isNull();
-        verify(postingService, never()).post(any(), any(), any(), anyString());
+        verify(postingService, never()).post(any(), any(), any(), anyString(), any());
         AccountingAuditLog audit = onlyAudit();
         assertThat(audit.getOperation()).isEqualTo("VENDOR_BILL_AUTO_APPROVE_SKIPPED");
         assertThat(audit.getNewValue()).contains("code=AP_BILL_UNCLASSIFIED");
@@ -235,11 +241,11 @@ class VendorBillAutoApprovalTest {
         assertThat(onlyAudit().getNewValue()).contains("code=PERIOD_CLOSED");
 
         when(periodGate.isHardLocked(today)).thenReturn(true);
-        assertThat(autoApproval.refusal(bill))
+        assertThat(autoApproval.precheck(bill).refusal())
                 .get()
                 .satisfies(
                         e -> assertThat(VendorBillApprovalServiceImpl.codeOf(e)).isEqualTo("PERIOD_HARD_LOCKED"));
-        verify(postingService, never()).post(any(), any(), any(), anyString());
+        verify(postingService, never()).post(any(), any(), any(), anyString(), any());
     }
 
     @Test
@@ -254,7 +260,7 @@ class VendorBillAutoApprovalTest {
         assertThat(autoApproval.approveIfEligible(bill, evidence, 95)).isFalse();
 
         assertThat(onlyAudit().getNewValue()).contains("code=GL_MAPPING_NOT_CONFIGURED");
-        verify(postingService, never()).post(any(), any(), any(), anyString());
+        verify(postingService, never()).post(any(), any(), any(), anyString(), any());
     }
 
     @Test
@@ -273,7 +279,7 @@ class VendorBillAutoApprovalTest {
     @DisplayName("The pre-check passes: refusal() is empty and writes nothing")
     void precheckPasses() {
         billed("250.00", true);
-        assertThat(autoApproval.refusal(bill)).isEmpty();
+        assertThat(autoApproval.precheck(bill).refusal()).isEmpty();
         verify(auditLogs, never()).save(any());
         LocalDateTime unchanged = bill.getBillDate();
         assertThat(unchanged).isEqualTo(INVOICE_DATE.atStartOfDay());
@@ -285,7 +291,7 @@ class VendorBillAutoApprovalTest {
     void raceRefusalPropagates() {
         billed("250.00", true);
         AccountingPeriodClosedException closed = new AccountingPeriodClosedException("2026-10", "closed meanwhile");
-        when(postingService.post(any(), any(), any(), anyString())).thenThrow(closed);
+        when(postingService.post(any(), any(), any(), anyString(), any())).thenThrow(closed);
 
         assertThatThrownBy(() -> autoApproval.approveIfEligible(bill, evidence, 95))
                 .isSameAs(closed);
