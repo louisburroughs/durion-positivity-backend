@@ -1,7 +1,6 @@
 package com.positivity.domainevents.accounting;
 
 import java.math.BigDecimal;
-
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
