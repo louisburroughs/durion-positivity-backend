@@ -1013,8 +1013,8 @@ class APPaymentServiceTest {
     }
 
     @Test
-    @DisplayName("#2615 AC5 [M]: held, and the bill approved by the payer: VENDOR_ON_AP_HOLD; the pay guard never runs,"
-            + " so no VENDOR_BILL_PAYMENT_REFUSED row")
+    @DisplayName("#2615 AC5 [M]: held, and the bill approved by the payer: VENDOR_ON_AP_HOLD before the plan locks a"
+            + " bill; the pay guard never runs, so no VENDOR_BILL_PAYMENT_REFUSED row")
     void holdBeforeThePayGuard() {
         VendorBill bill = approvedBill("INV-SELF", "100.00", "gm.gary");
         ExecuteAPPaymentRequest request =
@@ -1031,6 +1031,7 @@ class APPaymentServiceTest {
                         VendorBillException.class,
                         e -> assertThat(e.getCode()).isEqualTo(VendorBillException.Code.VENDOR_ON_AP_HOLD));
         verify(payGuard, never()).check(any(), any(), any());
+        verify(billRepository, never()).lockByVendorBillIdIn(any());
     }
 
     @Test
