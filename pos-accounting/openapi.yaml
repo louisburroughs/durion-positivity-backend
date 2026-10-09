@@ -5549,6 +5549,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Caller lacks accounting:mapping-key:view
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'ACCOUNTING_TIME_ZONE_UNSET: the tenant''s accounting time zone is not set, so today cannot be dated'
       security:
       - bearerAuth:
         - accounting:mapping-key:view
