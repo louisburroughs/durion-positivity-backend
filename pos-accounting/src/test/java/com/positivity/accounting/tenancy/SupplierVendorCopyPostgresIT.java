@@ -396,6 +396,29 @@ class SupplierVendorCopyPostgresIT extends PostgresTenancyTestBase {
                 .isEmpty();
     }
 
+    @Autowired
+    private javax.sql.DataSource dataSource;
+
+    @Test
+    @DisplayName("ADR-0072: the application pool's driver keeps the server's DETAIL out of exception messages")
+    void driverKeepsServerDetailOutOfMessages() {
+        // On a row-level-security table Postgres never sends a non-owner role the failing row, so the vendor copy is
+        // safe whatever the driver does; logServerErrorDetail=false covers every other table and connection. A unique
+        // violation on the global processed_events table carries "Key (event_id)=(...)" in its DETAIL: proof the
+        // pool's driver drops it.
+        String marker = "DETAIL-" + UUIDv7Generator.generate().toString().substring(0, 20);
+        JdbcTemplate app = new JdbcTemplate(dataSource);
+        String insert = "INSERT INTO processed_events (event_id, owner, processed_at) VALUES (?, 'it', now())";
+        try {
+            app.update(insert, marker);
+            Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(() -> app.update(insert, marker));
+            assertThat(thrown).isInstanceOf(org.springframework.dao.DuplicateKeyException.class);
+            assertThat(chainOf(thrown)).noneMatch(m -> m.contains(marker));
+        } finally {
+            new JdbcTemplate(ownerDataSource()).update("DELETE FROM processed_events WHERE event_id = ?", marker);
+        }
+    }
+
     // ---- item 6: AC 4 on Postgres --------------------------------------------------------------------------------
 
     @Test

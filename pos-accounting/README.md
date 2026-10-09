@@ -1335,7 +1335,9 @@ Bills, AP payments and the vendor reads name a vendor by its **pos-supplier vend
   logged or tagged, `ExtSupplierVendor.toString` leaves the registrations out, and a constraint refusal of the
   copy propagates with the constraint's name only (Postgres would quote the failing row), and the datasource sets
   pgjdbc's `logServerErrorDetail: false` so no driver message (which Hibernate logs at ERROR) carries a
-  `Failing row contains (…)` detail. Nothing here reads
+  `Failing row contains (…)` detail. (On the copy's row-level-security tables Postgres never sends the application role the failing
+  row anyway; the flag covers every other table and connection.) Hibernate's DEBUG entity listing
+  (`org.hibernate.orm.core`, `EntityPrinter`) is pinned to INFO, since it prints every flushed value, `last4` included. Nothing here reads
   or validates the registrations (AW48; pos-tax is not called).
 - **Seeding.** On first deployment the operator calls pos-supplier's `POST /v1/supplier/vendors/facts/replay`
   per tenant until it reports `complete` (`docs/OPERATIONS_RUNBOOK.md`). Until then bills and payments for
