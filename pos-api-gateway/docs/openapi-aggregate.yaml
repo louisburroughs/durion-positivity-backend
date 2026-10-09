@@ -329,6 +329,8 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1settlements~1lines~1{lineId}~1write-off
   /v1/accounting/settlements/{settlementId}/lines:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1settlements~1{settlementId}~1lines
+  /v1/accounting/tax-regimes:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1tax-regimes
   /v1/accounting/tax-registrations:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1tax-registrations
   /v1/accounting/tax-registrations/{registrationId}:
