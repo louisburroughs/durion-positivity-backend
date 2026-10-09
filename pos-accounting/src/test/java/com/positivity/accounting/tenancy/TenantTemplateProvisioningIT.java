@@ -822,13 +822,16 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
         // adds 2100, 5050 and 5060, the GOODS_RECEIPT and VENDOR_BILL categories with their 3 + 13 keys and
         // mappings, and the statement lines of 2100, 5050 and 5060. #2603 (S42, AW40-AW41) adds the AP_PAYMENT
         // category with its ACCOUNTS_PAYABLE and PAYMENT_FEES keys and mappings (2000, 6030).
-        assertThat(platformBefore.get("gl_account")).isEqualTo(71);
-        assertThat(platformBefore.get("posting_category")).isEqualTo(20);
-        assertThat(platformBefore.get("mapping_key")).isEqualTo(65);
-        assertThat(platformBefore.get("gl_mapping")).isEqualTo(65);
+        // #2639 (S32d) adds the CAD data: 1250, 1260, 2210, 2220, 2230 and 6050, the CASH_ROUNDING category, nine
+        // keys and mappings, and the balance-sheet lines of 1250, 1260, 2210, 2220 and 2230. Only a CAD tenant
+        // receives them (CurrencyTemplateSource).
+        assertThat(platformBefore.get("gl_account")).isEqualTo(77);
+        assertThat(platformBefore.get("posting_category")).isEqualTo(21);
+        assertThat(platformBefore.get("mapping_key")).isEqualTo(74);
+        assertThat(platformBefore.get("gl_mapping")).isEqualTo(74);
         assertThat(platformBefore.get("default_gl_mapping")).isEqualTo(1);
-        // 42 L&O + 12 (#2524) + 3 (#2511) + 3 (#2509)
-        assertThat(platformBefore.get("statement_line_mappings")).isEqualTo(60);
+        // 42 L&O + 12 (#2524) + 3 (#2511) + 3 (#2509) + 5 (#2639, CAD)
+        assertThat(platformBefore.get("statement_line_mappings")).isEqualTo(65);
     }
 
     // ------------------------------------------------------------------------------------------
