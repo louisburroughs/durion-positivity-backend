@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -96,6 +97,13 @@ class CreditMemoServiceTest {
     @Mock
     private DisplayReferenceResolver displayReferenceResolver;
 
+    /** CAP:550 S32d: output tax by type; untyped (every USD tenant) unless a test says otherwise. */
+    @Mock
+    private TypedOutputTax typedOutputTax;
+
+    @Mock
+    private com.positivity.accounting.internal.repository.JournalEntryRepository journalEntryRepository;
+
     @InjectMocks
     private CreditMemoServiceImpl service;
 
@@ -170,6 +178,9 @@ class CreditMemoServiceTest {
         // Mock period service (lenient - not all tests reach period checks)
         lenient().when(periodService.isPriorPeriod(any())).thenReturn(false);
         lenient().when(periodService.getCurrentPeriodId()).thenReturn("2026-02");
+
+        lenient().when(typedOutputTax.planCredit(any(), any(), any())).thenReturn(new TypedOutputTax.Plan.Untyped());
+        lenient().when(typedOutputTax.typedAccounts(any())).thenReturn(Map.of());
     }
 
     @Test
@@ -837,6 +848,106 @@ class CreditMemoServiceTest {
             memo.setCreditMemoId(testCreditMemoId);
             return memo;
         });
+    }
+
+    // ===== CAP:550 S32d item 11 (AW50): credit memos by tax type =====
+
+    @Test
+    @DisplayName("S32d AC 12: a typed tenant's credit reverses its tax by type, never to the configured tax account")
+    void typedTenantReversesByType() {
+        stubReplica(testInvoice, "110.00");
+        when(creditMemoRepository.save(any(CreditMemo.class))).thenReturn(testCreditMemo);
+        UUID gst = UUID.randomUUID();
+        UUID pst = UUID.randomUUID();
+        when(typedOutputTax.planCredit(eq(testInvoiceId), eq(new BigDecimal("5.00")), any()))
+                .thenReturn(new TypedOutputTax.Plan.Typed(List.of(
+                        new TypedOutputTax.Leg("GST", gst, new BigDecimal("2.08")),
+                        new TypedOutputTax.Leg("PST", pst, new BigDecimal("2.92")))));
+
+        service.createCreditMemo(testRequest, "test-user");
+
+        verify(glPostingService)
+                .postCreditMemoReversalByTaxType(
+                        eq(testCreditMemoId),
+                        eq(testRevenueAccountId),
+                        eq(testArAccountId),
+                        eq(new BigDecimal("50.00")),
+                        eq(List.of(
+                                new GLPostingService.TaxLeg(gst, new BigDecimal("2.08"), "GST"),
+                                new GLPostingService.TaxLeg(pst, new BigDecimal("2.92"), "PST"))),
+                        anyString(),
+                        eq(false),
+                        any());
+        verify(glPostingService, org.mockito.Mockito.never())
+                .postCreditMemoReversal(any(), any(), any(), any(), any(), any(), anyString(), anyBoolean(), any());
+    }
+
+    @Test
+    @DisplayName("S32d AC 13: a credit whose tax cannot be reversed by type is 422 TAX_TYPE_MISSING; nothing stored")
+    void untypedTaxRefusesTheCredit() {
+        stubReplica(testInvoice, "110.00");
+        when(typedOutputTax.planCredit(any(), any(), any()))
+                .thenReturn(new TypedOutputTax.Plan.TaxTypeMissing("untyped tax"));
+
+        assertThatThrownBy(() -> service.createCreditMemo(testRequest, "test-user"))
+                .isInstanceOf(com.positivity.accounting.internal.exception.TaxTypeMissingException.class)
+                .hasMessage("untyped tax");
+
+        verify(creditMemoRepository, org.mockito.Mockito.never()).save(any());
+        verify(creditMemoTaxAttributionService, org.mockito.Mockito.never())
+                .attribute(any(), any(), any(), anyBoolean());
+        verify(glPostingService, org.mockito.Mockito.never())
+                .postCreditMemoReversalByTaxType(any(), any(), any(), any(), any(), anyString(), anyBoolean(), any());
+    }
+
+    @Test
+    @DisplayName("S32d: a typed tenant's void restores exactly the memo's own reversal lines (ADR-0047)")
+    void typedTenantVoidMirrorsTheReversal() {
+        when(creditMemoRepository.findWithLockByCreditMemoId(testCreditMemoId))
+                .thenReturn(java.util.Optional.of(testCreditMemo));
+        when(creditMemoRepository.save(any(CreditMemo.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(invoiceBalanceCalculator.findInvoice(testInvoiceId)).thenReturn(java.util.Optional.of(testInvoice));
+        when(invoiceBalanceCalculator.balanceDue(testInvoice)).thenReturn(new BigDecimal("110.00"));
+        UUID gst = UUID.randomUUID();
+        when(typedOutputTax.typedAccounts(any())).thenReturn(Map.of("GST", gst));
+        com.positivity.accounting.internal.entity.JournalEntry reversal =
+                new com.positivity.accounting.internal.entity.JournalEntry();
+        reversal.setSourceEventType(JournalEntrySourceTypes.CREDIT_MEMO_REVERSAL);
+        reversal.getLines().add(memoLine(testRevenueAccountId, "50.00", "0"));
+        reversal.getLines().add(memoLine(gst, "5.00", "0"));
+        reversal.getLines().add(memoLine(testArAccountId, "0", "55.00"));
+        when(journalEntryRepository.findBySourceEvent(testCreditMemoId)).thenReturn(List.of(reversal));
+
+        service.voidCreditMemo(testCreditMemoId, "Wrong invoice", "void-user");
+
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<List<GLPostingService.PostedLine>> lines =
+                org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(glPostingService)
+                .postMirror(
+                        eq(JournalEntrySourceTypes.CREDIT_MEMO_VOID),
+                        eq(testCreditMemoId),
+                        lines.capture(),
+                        any(),
+                        anyString());
+        assertThat(lines.getValue())
+                .extracting(GLPostingService.PostedLine::accountId)
+                .containsExactly(testRevenueAccountId, gst, testArAccountId);
+        verify(glPostingService, org.mockito.Mockito.never())
+                .postCreditMemoVoid(any(), any(), any(), any(), any(), any(), anyString());
+    }
+
+    private static com.positivity.accounting.internal.entity.JournalEntryLine memoLine(
+            UUID account, String debit, String credit) {
+        com.positivity.accounting.internal.entity.GLAccount gl =
+                new com.positivity.accounting.internal.entity.GLAccount();
+        gl.setGlAccountId(account);
+        com.positivity.accounting.internal.entity.JournalEntryLine line =
+                new com.positivity.accounting.internal.entity.JournalEntryLine();
+        line.setGlAccount(gl);
+        line.setDebitAmount(new BigDecimal(debit));
+        line.setCreditAmount(new BigDecimal(credit));
+        return line;
     }
 
     // ===== Void (issue #997 symmetry) =====

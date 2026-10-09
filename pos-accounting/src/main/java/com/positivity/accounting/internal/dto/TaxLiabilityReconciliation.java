@@ -13,9 +13,10 @@ import org.jspecify.annotations.NonNull;
  *
  * <p>Under D-4 (single Sales-Tax-Payable GL account, report-time aggregation) the
  * report's total net tax is reconciled against the credit-normal period activity of
- * the Sales-Tax Payable account (code {@code 2200}). Invoice finalization posts
- * {@code Cr 2200}; a POSTED credit memo posts {@code Dr 2200}. On a clean ledger the
- * platform-calculated net tax equals the 2200 net activity and {@link #drift} is zero;
+ * the tax-payable accounts its mapping keys reach in the period ({@code SALES_TAX_PAYABLE}, 2200 in the template, and
+ * each {@code SALES_TAX_PAYABLE_<taxType>} a currency template maps; CAP:550 S32d). Invoice finalization credits them;
+ * a POSTED credit memo debits them. On a clean ledger the
+ * platform-calculated net tax equals their net activity and {@link #drift} is zero;
  * a non-zero drift flags a mismatch between calculated and posted tax.
  */
 @Data
@@ -23,12 +24,14 @@ import org.jspecify.annotations.NonNull;
 @NoArgsConstructor
 @AllArgsConstructor
 @Schema(
-        description =
-                "Reconciliation of report net tax against the Sales-Tax Payable (2200) GL account period activity")
+        description = "Reconciliation of report net tax against the period activity of the tax-payable GL accounts its"
+                + " mapping keys reach")
 public class TaxLiabilityReconciliation {
 
     @Schema(
-            description = "Sales-Tax Payable GL account code being reconciled against",
+            description = "The tax-payable GL account codes reconciled against, comma-separated in code order: every"
+                    + " account a tax-payable mapping key (SALES_TAX_PAYABLE and each SALES_TAX_PAYABLE_<taxType>)"
+                    + " maps to in the period; empty when none is mapped",
             example = "2200",
             requiredMode = REQUIRED)
     @NonNull
@@ -36,7 +39,7 @@ public class TaxLiabilityReconciliation {
 
     @Schema(
             description =
-                    "Credit-normal net activity of account 2200 in the period (Σ credit - Σ debit of POSTED lines); zero when the account has no activity or is not seeded",
+                    "Credit-normal net activity of the tax-payable accounts in the period (Σ credit - Σ debit of POSTED lines); zero when the account has no activity or is not seeded",
             example = "948.75",
             requiredMode = REQUIRED)
     @NonNull

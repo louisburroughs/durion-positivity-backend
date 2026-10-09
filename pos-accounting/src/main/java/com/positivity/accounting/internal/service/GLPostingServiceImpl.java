@@ -701,6 +701,105 @@ public class GLPostingServiceImpl implements GLPostingService {
                 "invoice revenue reversal");
     }
 
+    @Override
+    public UUID postInvoiceRevenueByTaxType(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID invoiceId,
+            @NonNull UUID arAccountId,
+            @NonNull UUID revenueAccountId,
+            @NonNull BigDecimal revenueAmount,
+            @NonNull List<TaxLeg> taxLegs,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description) {
+        BigDecimal taxAmount = taxLegs.stream().map(TaxLeg::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalAmount = revenueAmount.add(taxAmount);
+        log.info(
+                "Posting invoice revenue GL entry {} by tax type: debit AR {}, credit revenue {}, credit {} tax leg(s) {}",
+                sourceEventId,
+                totalAmount,
+                revenueAmount,
+                taxLegs.size(),
+                taxAmount);
+        List<JournalEntryCreateRequest.JournalEntryLineRequest> lines = new ArrayList<>();
+        addDebit(lines, arAccountId, totalAmount, "Accounts Receivable - INV#" + invoiceId);
+        addCredit(lines, revenueAccountId, revenueAmount, "Revenue Recognition - INV#" + invoiceId);
+        for (TaxLeg leg : taxLegs) {
+            addCredit(lines, leg.accountId(), leg.amount(), "Tax Payable " + leg.taxType() + " - INV#" + invoiceId);
+        }
+        return createAndPost(
+                JournalEntrySourceTypes.INVOICE_REVENUE,
+                sourceEventId,
+                transactionDate,
+                description,
+                lines,
+                "invoice revenue by tax type");
+    }
+
+    @Override
+    public UUID postCreditMemoReversalByTaxType(
+            @NonNull UUID creditMemoId,
+            @NonNull UUID revenueAccountId,
+            @NonNull UUID arAccountId,
+            @NonNull BigDecimal creditAmount,
+            @NonNull List<TaxLeg> taxLegs,
+            @NonNull String description,
+            boolean isPriorPeriod,
+            @Nullable String originalPeriodId) {
+        BigDecimal taxReversed = taxLegs.stream().map(TaxLeg::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalAmount = creditAmount.add(taxReversed);
+        log.info(
+                "Posting Credit Memo GL entry {} by tax type: debit revenue {}, debit {} tax leg(s) {}, credit AR {}",
+                creditMemoId,
+                creditAmount,
+                taxLegs.size(),
+                taxReversed,
+                totalAmount);
+        List<JournalEntryCreateRequest.JournalEntryLineRequest> lines = new ArrayList<>();
+        lines.add(
+                lineRequest(revenueAccountId, creditAmount, BigDecimal.ZERO, "Revenue Reversal - CM#" + creditMemoId));
+        for (TaxLeg leg : taxLegs) {
+            if (leg.amount().signum() != 0) {
+                lines.add(lineRequest(
+                        leg.accountId(),
+                        leg.amount(),
+                        BigDecimal.ZERO,
+                        "Tax Reversal " + leg.taxType() + " - CM#" + creditMemoId));
+            }
+        }
+        lines.add(lineRequest(arAccountId, BigDecimal.ZERO, totalAmount, "AR Reduction - CM#" + creditMemoId));
+        return createAndPost(
+                JournalEntrySourceTypes.CREDIT_MEMO_REVERSAL,
+                creditMemoId,
+                zoneResolver.postingDateTime(clock.instant()),
+                description + (isPriorPeriod ? " [PRIOR PERIOD: " + originalPeriodId + "]" : ""),
+                lines,
+                "credit memo reversal by tax type");
+    }
+
+    @Override
+    public UUID postMirror(
+            @NonNull String sourceEventType,
+            @NonNull UUID sourceEventId,
+            @NonNull List<PostedLine> original,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description) {
+        if (original.isEmpty()) {
+            throw new IllegalStateException("No lines to mirror for " + sourceEventType + " " + sourceEventId);
+        }
+        List<JournalEntryCreateRequest.JournalEntryLineRequest> lines = new ArrayList<>();
+        for (PostedLine line : original) {
+            String label = line.description() == null ? "Reversal" : "Reversal - " + line.description();
+            lines.add(JournalEntryCreateRequest.JournalEntryLineRequest.builder()
+                    .glAccountId(line.accountId())
+                    .debitAmount(line.credit())
+                    .creditAmount(line.debit())
+                    .description(label.length() <= 500 ? label : label.substring(0, 500))
+                    .dimensions(line.dimensions() == null ? null : Map.copyOf(line.dimensions()))
+                    .build());
+        }
+        return createAndPost(sourceEventType, sourceEventId, transactionDate, description, lines, "mirror");
+    }
+
     /** Create and post an entry from prepared lines (period gate applies inside post, B2). */
     private UUID createAndPost(
             @NonNull String sourceEventType,

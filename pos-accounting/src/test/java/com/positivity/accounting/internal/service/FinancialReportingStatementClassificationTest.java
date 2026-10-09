@@ -127,7 +127,8 @@ class FinancialReportingStatementClassificationTest {
                 databaseDialectSupport,
                 displayReferenceResolver,
                 Clock.fixed(Instant.parse("2026-09-01T12:00:00Z"), ZoneOffset.UTC),
-                new LedgerCurrency("USD"));
+                new LedgerCurrency("USD"),
+                org.mockito.Mockito.mock(TypedOutputTax.class));
         // The chart lookup answers for whichever ids the service asks about.
         lenient().when(glAccountRepository.findAllById(any())).thenAnswer(invocation -> {
             Collection<UUID> ids = new ArrayList<>();

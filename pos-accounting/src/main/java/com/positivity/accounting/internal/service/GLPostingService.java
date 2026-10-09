@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import com.positivity.accounting.internal.dto.SettlementPostingCommand;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -497,6 +498,83 @@ public interface GLPostingService {
             @NonNull UUID taxPayableAccountId,
             @NonNull BigDecimal revenueAmount,
             @NonNull BigDecimal taxAmount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description);
+
+    /**
+     * One tax leg of an entry posted by tax type (CAP:550 S32d item 11, AW50).
+     *
+     * @param accountId the account the type's {@code SALES_TAX_PAYABLE_<taxType>} key maps to
+     * @param amount the leg's amount, at the currency's exponent
+     * @param taxType the tax type, for the line's label
+     */
+    record TaxLeg(
+            @NonNull UUID accountId,
+            @NonNull BigDecimal amount,
+            @NonNull String taxType) {}
+
+    /**
+     * One line of a posted entry, as {@link #postMirror} reverses it.
+     *
+     * @param accountId the line's account
+     * @param debit its debit
+     * @param credit its credit
+     * @param description its label
+     * @param dimensions its dimensions, or null
+     */
+    record PostedLine(
+            @NonNull UUID accountId,
+            @NonNull BigDecimal debit,
+            @NonNull BigDecimal credit,
+            @Nullable String description,
+            @Nullable Map<String, String> dimensions) {}
+
+    /**
+     * {@link #postInvoiceRevenue} for a tenant that posts output tax by type (CAP:550 S32d item 11): {@code Dr AR
+     * (revenue + Σ legs) / Cr Service Revenue (revenue) / Cr each type's tax-payable account (its leg)}; a zero leg is
+     * omitted.
+     */
+    UUID postInvoiceRevenueByTaxType(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID invoiceId,
+            @NonNull UUID arAccountId,
+            @NonNull UUID revenueAccountId,
+            @NonNull BigDecimal revenueAmount,
+            @NonNull List<TaxLeg> taxLegs,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description);
+
+    /**
+     * {@link #postCreditMemoReversal} for a tenant that posts output tax by type (CAP:550 S32d item 11): {@code Dr
+     * Revenue (credit) / Dr each type's tax-payable account (its leg) / Cr AR (credit + Σ legs)}, dated now in the
+     * accounting calendar.
+     */
+    UUID postCreditMemoReversalByTaxType(
+            @NonNull UUID creditMemoId,
+            @NonNull UUID revenueAccountId,
+            @NonNull UUID arAccountId,
+            @NonNull BigDecimal creditAmount,
+            @NonNull List<TaxLeg> taxLegs,
+            @NonNull String description,
+            boolean isPriorPeriod,
+            @Nullable String originalPeriodId);
+
+    /**
+     * Post the exact mirror of an earlier entry's lines, each debit a credit and each credit a debit, on the same
+     * accounts (ADR-0047: an entry is never edited, it is reversed as booked). Used where an entry posted by tax type
+     * is reversed (CAP:550 S32d): the reversal follows the accounts the original reached, never today's mapping.
+     *
+     * @param sourceEventType the reversal's source event type
+     * @param sourceEventId the reversal's deterministic source event id
+     * @param original the original entry's lines
+     * @param transactionDate the reversal's business date
+     * @param description the reversal's description
+     * @return the posted reversal's id
+     */
+    UUID postMirror(
+            @NonNull String sourceEventType,
+            @NonNull UUID sourceEventId,
+            @NonNull List<PostedLine> original,
             @NonNull LocalDateTime transactionDate,
             @NonNull String description);
 }

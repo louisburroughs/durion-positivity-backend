@@ -401,6 +401,7 @@ public class InvoiceEventsListener {
                         .taxAmount(line.taxAmount())
                         .exempt(line.exempt())
                         .exemptionReasonCode(line.exemptionReasonCode())
+                        .taxType(line.taxType())
                         .aggregateVersion(aggregateVersion)
                         .updatedAt(now)
                         .build())
