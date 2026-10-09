@@ -57,7 +57,8 @@ import tools.jackson.databind.ObjectMapper;
  * shape, the 400 shapes, the route against {@code GET /v1/roles/{id}} and the {@code ApiError}
  * bodies. The real {@link PermissionHolderServiceImpl} runs over mocked repositories, so the D2 scope
  * check is exercised through the authorities the request actually carries; callers are built from
- * authorities, never from role names.
+ * authorities, never from role names. A request with no token is answered 401 by the gateway and the
+ * token filter, which this slice mocks, so it is not asserted here.
  */
 @WebMvcTest(RoleController.class)
 @Import(PermissionHolderServiceImpl.class)
@@ -189,12 +190,6 @@ class PermissionHoldersControllerTest {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("FORBIDDEN"));
         verifyNoInteractions(roleRepository, permissionRepository);
-    }
-
-    @Test
-    @DisplayName("unauthenticated → 401")
-    void anUnauthenticatedCallerIsRejected() throws Exception {
-        mockMvc.perform(holders(List.of("accounting:ap:approve"))).andExpect(status().isUnauthorized());
     }
 
     @Test
