@@ -3,10 +3,12 @@ package com.positivity.accounting.internal.service;
 import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.entity.ExtInvoiceTax;
 import com.positivity.accounting.internal.entity.GLMapping;
+import com.positivity.accounting.internal.entity.InvoiceGlPosting;
 import com.positivity.accounting.internal.entity.MappingKey;
 import com.positivity.accounting.internal.entity.PostingCategory;
 import com.positivity.accounting.internal.repository.ExtInvoiceTaxRepository;
 import com.positivity.accounting.internal.repository.GLMappingRepository;
+import com.positivity.accounting.internal.repository.InvoiceGlPostingRepository;
 import com.positivity.accounting.internal.repository.MappingKeyRepository;
 import com.positivity.accounting.internal.repository.PostingCategoryRepository;
 import java.math.BigDecimal;
@@ -61,6 +63,7 @@ public class TypedOutputTax {
     private final MappingKeyRepository mappingKeys;
     private final GLMappingRepository glMappings;
     private final ExtInvoiceTaxRepository invoiceTaxRows;
+    private final InvoiceGlPostingRepository invoiceGlPostings;
     private final LedgerCurrency ledgerCurrency;
 
     /** How an invoice's tax posts. */
@@ -117,14 +120,26 @@ public class TypedOutputTax {
     }
 
     /**
-     * How {@code taxReversed} of a credit against {@code invoiceId} reverses by tax type on {@code postingDate}: split
-     * over the invoice's typed tax by {@link TaxCreditAllocator} (rounded at the currency's exponent, residual on the
-     * largest type), so a credit reverses each type in the share it was collected.
+     * How {@code taxReversed} of a credit against {@code invoiceId} reverses on {@code postingDate} (Accounting ruling
+     * R3.1 on #2639): it follows how the invoice's own {@code INVOICE_REVENUE} entry posted its tax, never the tenant's
+     * keys today. An invoice posted untyped is credited untyped. An invoice posted by type is credited by type, split
+     * over its typed tax by {@link TaxCreditAllocator} (rounded at the currency's exponent, residual on the largest
+     * type), so a credit reverses each type in the share it was collected. An invoice without a posted entry, for a
+     * tenant that posts by type, is held (AW50): the credit waits too ({@link Plan.TaxTypeMissing}).
      */
     public @NonNull Plan planCredit(
             @NonNull UUID invoiceId, @NonNull BigDecimal taxReversed, @NonNull LocalDateTime postingDate) {
+        Optional<InvoiceGlPosting> posting =
+                invoiceGlPostings.findByInvoiceIdAndReversalJournalEntryIdIsNull(invoiceId);
         Map<String, UUID> accounts = typedAccounts(postingDate);
-        if (accounts.isEmpty()) {
+        if (posting.isEmpty()) {
+            if (accounts.isEmpty()) {
+                return new Plan.Untyped();
+            }
+            return new Plan.TaxTypeMissing("Invoice " + invoiceId + " has no posted revenue entry: its revenue waits"
+                    + " until its tax is typed, and a credit against it waits too (AW50)");
+        }
+        if (!posting.get().isTaxPostedByType()) {
             return new Plan.Untyped();
         }
         BigDecimal reversed = scaled(taxReversed);

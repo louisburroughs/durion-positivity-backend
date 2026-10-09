@@ -54,8 +54,9 @@ public class InputTaxRecoveryController {
                     set (422 ACCOUNTING_TIME_ZONE_UNSET otherwise). Read-only and idempotent.
                     Required inputs: none. A tenant without a registration, every USD tenant today, gets an empty \
                     regimes list.
-                    The read never fails because of the tax service: evidenceRules is then null and enabled is null \
-                    (unknown, never off). Emits an ACCOUNTING_INPUT_TAX_RECOVERY_VIEW event and returns 200.
+                    The read never fails because of the tax service: evidenceRules is then null and enabled is null, \
+                    meaning it cannot be determined now, never false. Emits an ACCOUNTING_INPUT_TAX_RECOVERY_VIEW \
+                    event and returns 200.
                     """,
             tags = {"Accounting Input-Tax Recovery"})
     @ApiResponse(responseCode = "200", description = "The settings")

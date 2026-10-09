@@ -141,6 +141,44 @@ class PettyExpenseRecoveryDeciderTest {
         assertThat(decider.decide(eligible("4.60")).getFirst().withheldReason()).isEqualTo("CATEGORY_NOT_RECOVERABLE");
     }
 
+    @Test
+    @DisplayName("ruling 4: pos-order's copy offered the regime (recoverable) but accounting's history says not at"
+            + " recording: CATEGORY_NOT_RECOVERABLE, and the stated amount still gets its row")
+    void accountingHistoryDecidesNotTheOrderCopy() {
+        when(flags.inputTaxRecovery(DATE, "GST_HST")).thenReturn(true);
+        // The fact carries no recoverability: pos-order offered GST_HST from its copy, but accounting's own history
+        // has the category off when the movement was recorded (AW52).
+        when(settings.shareInForce("STAFF_MEALS", RECORDED)).thenReturn(Optional.empty());
+
+        assertThat(decider.decide(eligible("4.60"))).singleElement().satisfies(d -> {
+            assertThat(d.withheldReason()).isEqualTo("CATEGORY_NOT_RECOVERABLE");
+            assertThat(d.recovered()).isZero();
+            assertThat(d.stated()).isEqualByComparingTo("4.60");
+        });
+    }
+
+    @Test
+    @DisplayName("ruling 4: the reasons are decided in their fixed order; the first that applies is recorded")
+    void reasonsInFixedOrder() {
+        // Every condition fails at once: no registration, category off, not checked, no evidence, number missing.
+        when(flags.inputTaxRecovery(DATE, "GST_HST")).thenReturn(false);
+        when(settings.shareInForce(anyString(), any())).thenReturn(Optional.empty());
+        Movement worst = movement("150.00", "7.14", null, null, null, null, true, RECORDED);
+        assertThat(decider.decide(worst).getFirst().withheldReason()).isEqualTo("NOT_REGISTERED");
+
+        when(flags.inputTaxRecovery(DATE, "GST_HST")).thenReturn(true);
+        assertThat(decider.decide(worst).getFirst().withheldReason()).isEqualTo("CATEGORY_NOT_RECOVERABLE");
+
+        when(settings.shareInForce(anyString(), any())).thenReturn(Optional.of(new BigDecimal("100.00")));
+        assertThat(decider.decide(worst).getFirst().withheldReason()).isEqualTo("RATE_UNAVAILABLE");
+
+        Movement checked = movement("150.00", "7.14", null, null, null, Movement.PLAUSIBLE, true, RECORDED);
+        assertThat(decider.decide(checked).getFirst().withheldReason()).isEqualTo("EVIDENCE_MISSING");
+
+        Movement evidenced = movement("150.00", "7.14", "Supplier", "R-1", null, Movement.PLAUSIBLE, true, RECORDED);
+        assertThat(decider.decide(evidenced).getFirst().withheldReason()).isEqualTo("SUPPLIER_REGISTRATION_MISSING");
+    }
+
     @ParameterizedTest(name = "plausibility {0} -> RATE_UNAVAILABLE")
     @CsvSource(
             value = {"RATE_UNAVAILABLE", "NULL"},

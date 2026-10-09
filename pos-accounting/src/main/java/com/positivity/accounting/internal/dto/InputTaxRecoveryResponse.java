@@ -60,7 +60,7 @@ public record InputTaxRecoveryResponse(
      *
      * @param countryCode the registration's country
      * @param regime the regime
-     * @param enabled whether recovery under it is on today; null when the tax service could not say
+     * @param enabled whether recovery under it is on today; null when it cannot be determined now, never false
      * @param registration the registration in effect today, or null
      * @param account the account its recovered tax posts to today, or null when unmapped
      */
@@ -78,7 +78,8 @@ public record InputTaxRecoveryResponse(
 
             @Schema(
                     description = "Whether recovery is on today: a registration in effect and the country's currency"
-                            + " equal to the functional currency; null when the tax service could not say",
+                            + " equal to the functional currency. Null means it cannot be determined now (the tax"
+                            + " service did not answer), never false: read it as unknown, not off",
                     nullable = true,
                     requiredMode = REQUIRED)
             @Nullable

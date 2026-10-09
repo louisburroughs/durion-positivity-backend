@@ -208,6 +208,7 @@ public class InvoiceRevenuePostingService {
                 .postedAt(finalizedAt)
                 .revenueAmount(revenue)
                 .taxAmount(tax)
+                .taxPostedByType(plan instanceof TypedOutputTax.Plan.Typed)
                 .build());
 
         publishFact(new InvoiceGlPostedV1(

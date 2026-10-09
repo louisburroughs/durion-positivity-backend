@@ -354,7 +354,8 @@ public class PettyExpenseCategoryController {
                     do not use updatePettyExpenseCategory, which changes only the label and examples.
                     Preconditions: caller holds accounting:mapping-key:edit; the category exists (404); recovery \
                     under at least one regime is on today (422 INPUT_TAX_RECOVERY_NOT_ENABLED); version is the one \
-                    last read, 0 for a category never set (409 OPTIMISTIC_LOCK).
+                    last read, 0 for a category never set (409 OPTIMISTIC_LOCK); the tax service answers whether a \
+                    regime's recovery is on (503 SERVICE_UNAVAILABLE with Retry-After when it cannot).
                     Required inputs: code (path), taxRecoverable, recoverablePercent in (0, 100] when recoverable \
                     and absent otherwise, version, \
                     """ + JUSTIFICATION_RULE + """
@@ -384,6 +385,16 @@ public class PettyExpenseCategoryController {
     @ApiResponse(
             responseCode = "422",
             description = "INPUT_TAX_RECOVERY_NOT_ENABLED or ACCOUNTING_TIME_ZONE_UNSET",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "SERVICE_UNAVAILABLE: whether a regime's recovery is on cannot be determined now (the tax"
+                    + " service did not answer); nothing was changed, retry after Retry-After seconds",
+            headers =
+                    @io.swagger.v3.oas.annotations.headers.Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer", example = "30")),
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_PETTY_CATEGORY_TAX_RECOVERY_UPDATE", apiVersion = "1")
     public ResponseEntity<PettyExpenseCategoryTaxRecoveryResponse> setTaxRecovery(

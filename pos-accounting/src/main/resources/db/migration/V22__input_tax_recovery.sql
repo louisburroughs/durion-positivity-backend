@@ -182,6 +182,10 @@ CREATE POLICY tenant_isolation ON public.register_cash_movement_tax_recovery
 --    on a row written before S32d or on a fact without it.
 ALTER TABLE public.ext_invoice_tax ADD COLUMN tax_type character varying(32);
 
+-- How an invoice's revenue entry posted its tax: a credit against the invoice follows it, never the tenant's keys
+-- today (Accounting ruling R3.1 on #2639). Every posting made before S32d was untyped.
+ALTER TABLE public.invoice_gl_posting ADD COLUMN tax_posted_by_type boolean DEFAULT false NOT NULL;
+
 -- The tax-liability snapshot freezes the codes of every account the tax-payable keys map to, comma-joined (a typed
 -- tenant has several), never a literal 2200: the column the entity already declares at 200 characters.
 ALTER TABLE public.tax_liability_snapshot ALTER COLUMN tax_payable_account_code TYPE character varying(200);

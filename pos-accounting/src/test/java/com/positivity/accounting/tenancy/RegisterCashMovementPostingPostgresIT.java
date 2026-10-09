@@ -4,6 +4,7 @@ import static com.positivity.tenancy.testing.TenantTestSupport.asTenant;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.accounting.internal.client.TaxProfileClient;
 import com.positivity.accounting.internal.dto.PettyExpenseCategoryDeactivateRequest;
 import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
@@ -41,6 +42,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
@@ -93,6 +95,10 @@ class RegisterCashMovementPostingPostgresIT extends PostgresTenancyTestBase {
 
     @Autowired
     private PettyExpenseCategoryService categories;
+
+    /** pos-tax's CA profile answers CAD: the fixture a USD tenant's CA registration is checked against (S32d D1). */
+    @MockitoBean
+    private TaxProfileClient taxProfiles;
 
     private final List<UUID> tenants = new ArrayList<>();
 
@@ -419,6 +425,63 @@ class RegisterCashMovementPostingPostgresIT extends PostgresTenancyTestBase {
         List<Map<String, Object>> lines = lines(tenant);
         assertThat(net(lines, "6250")).isEqualByComparingTo("31.00");
         assertThat(net(lines, "1095")).isEqualByComparingTo("-31.00");
+    }
+
+    @Test
+    @DisplayName("CAP:550 S32d AC 1 [M] (D1): a USD tenant holding an in-effect CA registration recovers nothing;"
+            + " the currency guard, not a missing registration, withholds it")
+    void usdTenantWithCaRegistrationRecoversNothing() {
+        UUID tenant = tenant();
+        org.mockito.Mockito.when(taxProfiles.taxTypes("CA"))
+                .thenReturn(new TaxProfileClient.TaxTypes("CA", "CAD", List.of(), List.of()));
+        new JdbcTemplate(ownerDataSource())
+                .update(
+                        "INSERT INTO ext_tax_registration (tenant_id, registration_id, country_code, regime,"
+                                + " registration_number, jurisdiction_code, effective_from, aggregate_version,"
+                                + " changed_at, synced_at) VALUES (?, ?, 'CA', 'GST_HST', '123456789RT0001', 'CA',"
+                                + " DATE '2020-01-01', 1, TIMESTAMPTZ '2026-01-01 00:00:00+00',"
+                                + " TIMESTAMPTZ '2026-01-01 00:00:00+00')",
+                        tenant,
+                        UUIDv7Generator.generate());
+        Movement stated = new Movement(
+                UUIDv7Generator.generate(),
+                "PETTY_EXPENSE",
+                "OUT",
+                new BigDecimal("40.00"),
+                "USD",
+                "SHOP_SUPPLIES",
+                null,
+                null,
+                "R-D1",
+                "clerk-1",
+                null,
+                null,
+                closedAt.minusSeconds(3600),
+                "Corner Hardware",
+                List.of(new RegisterSessionClosedV1.StatedTax("GST_HST", new BigDecimal("4.60"))),
+                "123456789RT0001",
+                Movement.PLAUSIBLE,
+                Boolean.FALSE);
+
+        asTenant(
+                tenant,
+                () -> listener.onOrderEvent(envelope(
+                        UUID.randomUUID().toString(), fact(UUIDv7Generator.generate(), "0.00", "USD", stated))));
+
+        // The registration is in effect, so only the currency guard can withhold: CA's currency is not USD's.
+        org.mockito.Mockito.verify(taxProfiles, org.mockito.Mockito.atLeastOnce())
+                .taxTypes("CA");
+        List<Map<String, Object>> lines = lines(tenant);
+        assertThat(net(lines, "6340")).isEqualByComparingTo("40.00");
+        assertThat(net(lines, "1095")).isEqualByComparingTo("-40.00");
+        assertThat(new JdbcTemplate(ownerDataSource())
+                        .queryForObject(
+                                "SELECT recovery_withheld_reason FROM register_cash_movement_tax_recovery"
+                                        + " WHERE tenant_id = ? AND movement_id = ?",
+                                String.class,
+                                tenant,
+                                stated.movementId()))
+                .isEqualTo("NOT_REGISTERED");
     }
 
     // ---- fixtures -------------------------------------------------------------------------------------------------

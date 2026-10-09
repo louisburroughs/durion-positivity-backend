@@ -502,24 +502,14 @@ public class CreditMemoServiceImpl implements CreditMemoService {
 
         try {
             LocalDateTime voidDate = zoneResolver.postingDateTime(clock.instant());
-            if (!typedOutputTax.typedAccounts(voidDate).isEmpty()) {
-                // A tenant posting output tax by type restores exactly what the memo reversed (ADR-0047).
-                glPostingService.postMirror(
-                        JournalEntrySourceTypes.CREDIT_MEMO_VOID,
-                        creditMemo.getCreditMemoId(),
-                        reversalLines(creditMemo.getCreditMemoId()),
-                        voidDate,
-                        "Void Credit Memo " + creditMemo.getCreditMemoId() + " - " + voidReason);
-            } else {
-                glPostingService.postCreditMemoVoid(
-                        creditMemo.getCreditMemoId(),
-                        glConfig.getRevenueAccountId(),
-                        glConfig.getTaxPayableAccountId(),
-                        glConfig.getArAccountId(),
-                        creditMemo.getCreditAmount(),
-                        creditMemo.getTaxAmountReversed(),
-                        "Void Credit Memo " + creditMemo.getCreditMemoId() + " - " + voidReason);
-            }
+            // Accounting ruling R3.2 on #2639: a void restores exactly what the memo's own reversal posted
+            // (ADR-0047), typed or not, whatever the tenant's keys are today.
+            glPostingService.postMirror(
+                    JournalEntrySourceTypes.CREDIT_MEMO_VOID,
+                    creditMemo.getCreditMemoId(),
+                    reversalLines(creditMemo.getCreditMemoId()),
+                    voidDate,
+                    "Void Credit Memo " + creditMemo.getCreditMemoId() + " - " + voidReason);
         } catch (Exception e) {
             log.error(
                     "Failed to post VOID GL entries for Credit Memo {}: {}",

@@ -67,6 +67,7 @@ class TypedOutputTaxTest {
     private final MappingKeyRepository keys = mock(MappingKeyRepository.class);
     private final GLMappingRepository mappings = mock(GLMappingRepository.class);
     private final ExtInvoiceTaxRepository rows = mock(ExtInvoiceTaxRepository.class);
+    private final InvoiceGlPostingRepository invoicePostings = mock(InvoiceGlPostingRepository.class);
     private final List<MappingKey> tenantKeys = new ArrayList<>();
     private final Map<UUID, List<GLMapping>> tenantMappings = new java.util.HashMap<>();
 
@@ -86,7 +87,8 @@ class TypedOutputTaxTest {
         });
         when(mappings.findByMappingKey_MappingKeyId(any()))
                 .thenAnswer(call -> tenantMappings.getOrDefault(call.<UUID>getArgument(0), List.of()));
-        typedOutputTax = new TypedOutputTax(categories, keys, mappings, rows, new LedgerCurrency("CAD"));
+        typedOutputTax =
+                new TypedOutputTax(categories, keys, mappings, rows, invoicePostings, new LedgerCurrency("CAD"));
         map("SERVICE_REVENUE", REVENUE, TEMPLATE_START, null);
         map("SALES_TAX_PAYABLE", A2200, TEMPLATE_START, null);
     }
@@ -214,10 +216,58 @@ class TypedOutputTaxTest {
                 .containsExactly(new BigDecimal("1.00"), new BigDecimal("1.01"));
     }
 
+    /** The invoice's open revenue posting, made by type or not. */
+    private void invoicePosted(boolean byType) {
+        when(invoicePostings.findByInvoiceIdAndReversalJournalEntryIdIsNull(INVOICE))
+                .thenReturn(Optional.of(InvoiceGlPosting.builder()
+                        .invoiceId(INVOICE)
+                        .journalEntryId(UUID.randomUUID())
+                        .taxPostedByType(byType)
+                        .build()));
+    }
+
+    @Test
+    @DisplayName("R3.1: an invoice posted untyped earlier is credited untyped, though the tenant has typed keys now")
+    void creditFollowsAnUntypedPosting() {
+        mapTypedKeys();
+        rows(row("GST", "50.00"), row("PST", "70.00"));
+        invoicePosted(false);
+
+        assertThat(typedOutputTax.planCredit(INVOICE, new BigDecimal("12.00"), DATE))
+                .isInstanceOf(TypedOutputTax.Plan.Untyped.class);
+    }
+
+    @Test
+    @DisplayName("AC 13 [M] / R3.1: a credit against a held invoice is TAX_TYPE_MISSING; after its reprocess it splits")
+    void creditAgainstAHeldInvoiceWaitsForItsReprocess() {
+        mapTypedKeys();
+        rows(row("GST", "50.00"), row("PST", "70.00"));
+        when(invoicePostings.findByInvoiceIdAndReversalJournalEntryIdIsNull(INVOICE))
+                .thenReturn(Optional.empty());
+
+        assertThat(typedOutputTax.planCredit(INVOICE, new BigDecimal("12.00"), DATE))
+                .isInstanceOf(TypedOutputTax.Plan.TaxTypeMissing.class);
+
+        invoicePosted(true);
+        assertThat(typedOutputTax.planCredit(INVOICE, new BigDecimal("12.00"), DATE))
+                .isInstanceOf(TypedOutputTax.Plan.Typed.class);
+    }
+
+    @Test
+    @DisplayName("R3.1: a tenant without typed keys credits an unposted invoice untyped, as before S32d")
+    void untypedTenantCreditsAnUnpostedInvoiceUntyped() {
+        when(invoicePostings.findByInvoiceIdAndReversalJournalEntryIdIsNull(INVOICE))
+                .thenReturn(Optional.empty());
+
+        assertThat(typedOutputTax.planCredit(INVOICE, new BigDecimal("12.00"), DATE))
+                .isInstanceOf(TypedOutputTax.Plan.Untyped.class);
+    }
+
     @Test
     @DisplayName("A credit reverses each type in the share the invoice collected it")
     void creditSplitsByCollectedShare() {
         mapTypedKeys();
+        invoicePosted(true);
         rows(row("GST", "50.00"), row("PST", "70.00"));
 
         TypedOutputTax.Plan plan = typedOutputTax.planCredit(INVOICE, new BigDecimal("12.00"), DATE);
@@ -232,6 +282,7 @@ class TypedOutputTaxTest {
     @DisplayName("AC 13: a credit against an invoice with untyped tax is refused alike")
     void creditAgainstUntypedTaxIsMissing() {
         mapTypedKeys();
+        invoicePosted(true);
         rows(row(null, "120.00"));
 
         assertThat(typedOutputTax.planCredit(INVOICE, new BigDecimal("12.00"), DATE))

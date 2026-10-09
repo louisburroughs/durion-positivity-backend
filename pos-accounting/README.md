@@ -804,21 +804,26 @@ exactly as before.
   `supplierRegistrationRegime`, compared on scheme and `last4` only), nothing is recovered
   (`SUPPLIER_REGISTRATION_MISSING`) and automatic approval is held. Each type's outcome is kept in
   `vendor_bill_tax_recovery`; the bill read gains `taxByType[]` and `inputTaxRecovery[]`, and the approval audit
-  records both. A tenant without recovery (every USD tenant) books the gross as before and never calls pos-tax. The
-  `BillIntakePort` channel waits on S25 (#2518).
+  records both. A tenant without recovery (every USD tenant) books the gross as before and never calls pos-tax. Tax by
+  type from the bill-intake channel (`BillIntakePort`, the S25 draft) arrives with S25 (#2518).
 - **Output tax by type (item 11, AW50).** `ext_invoice_tax.tax_type` is filled from S32a's
   `TaxBreakdownLine.taxType`. A tenant that has any `SALES_TAX_PAYABLE_<taxType>` key mapped under `INVOICE_REVENUE`
   (`TypedOutputTax`) posts one tax leg per type to that key, HALF_UP per leg with any cent on the largest, and its
   reversals mirror the original lines. An invoice whose typed rows do not account for its whole tax, or whose type
   has no mapped key, posts nothing (AR, revenue and tax wait together): it is held `SUSPENDED` / `TAX_TYPE_MISSING`
   and posted by the audited reprocess (`InvoiceRevenueReprocessor`). No default account is used and no type is
-  inferred. A credit memo against such an invoice is refused with 422 `TAX_TYPE_MISSING` before anything is stored;
-  a typed tenant's credit splits its tax across the types pro rata. A tenant without typed keys (USD) posts exactly
+  inferred. A credit memo follows how the invoice's own entry posted its tax (`invoice_gl_posting.tax_posted_by_type`),
+  never the tenant's keys today: an invoice posted untyped is credited untyped, one posted by type is split across
+  its types pro rata, and a memo against a held invoice is refused with 422 `TAX_TYPE_MISSING` before anything is
+  stored (it succeeds once the invoice's reprocess posts it). A memo's void always mirrors the memo's own reversal
+  lines. A tenant without typed keys (USD) posts exactly
   as before. The tax-liability reconciliation compares against every account the `SALES_TAX_PAYABLE` and
   `SALES_TAX_PAYABLE_*` keys map to in the period, never a literal code (`taxPayableAccountCode` lists them,
   comma-joined; still `2200` for a USD tenant).
-- **Cash rounding (item 12).** The CAD data provisions 6050 and `CASH_ROUNDING_DIFFERENCE`; the posting waits on
-  ADR-0067 step A8, which adds the settled amount and the signed rounding to the cash `PaymentSettledV1`.
+- **Cash rounding (item 12).** The CAD data provisions 6050 and `CASH_ROUNDING_DIFFERENCE`; the posting waits for
+  ADR-0067 step A8 (its own story), which adds the settled amount and the signed rounding to the cash
+  `PaymentSettledV1`. Release gate: no production tenant whose currency has a cash-rounding increment (CAD first)
+  takes cash until A8 merges.
 - **Flyway.** `V22__input_tax_recovery.sql`.
 
 ## Location scope (ADR-0061, #1885)

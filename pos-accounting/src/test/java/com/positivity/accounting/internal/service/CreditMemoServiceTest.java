@@ -901,7 +901,7 @@ class CreditMemoServiceTest {
     }
 
     @Test
-    @DisplayName("S32d: a typed tenant's void restores exactly the memo's own reversal lines (ADR-0047)")
+    @DisplayName("R3.2: a typed memo voided after its key is unmapped restores exactly its own reversal lines")
     void typedTenantVoidMirrorsTheReversal() {
         when(creditMemoRepository.findWithLockByCreditMemoId(testCreditMemoId))
                 .thenReturn(java.util.Optional.of(testCreditMemo));
@@ -909,7 +909,8 @@ class CreditMemoServiceTest {
         when(invoiceBalanceCalculator.findInvoice(testInvoiceId)).thenReturn(java.util.Optional.of(testInvoice));
         when(invoiceBalanceCalculator.balanceDue(testInvoice)).thenReturn(new BigDecimal("110.00"));
         UUID gst = UUID.randomUUID();
-        when(typedOutputTax.typedAccounts(any())).thenReturn(Map.of("GST", gst));
+        // R3.2: the GST key is unmapped by the time of the void; the void still mirrors the memo's own lines.
+        when(typedOutputTax.typedAccounts(any())).thenReturn(Map.of());
         com.positivity.accounting.internal.entity.JournalEntry reversal =
                 new com.positivity.accounting.internal.entity.JournalEntry();
         reversal.setSourceEventType(JournalEntrySourceTypes.CREDIT_MEMO_REVERSAL);
@@ -961,6 +962,14 @@ class CreditMemoServiceTest {
         when(invoiceBalanceCalculator.findInvoice(testInvoiceId)).thenReturn(java.util.Optional.of(testInvoice));
         when(invoiceBalanceCalculator.balanceDue(testInvoice)).thenReturn(new BigDecimal("110.00"));
 
+        com.positivity.accounting.internal.entity.JournalEntry reversal =
+                new com.positivity.accounting.internal.entity.JournalEntry();
+        reversal.setSourceEventType(JournalEntrySourceTypes.CREDIT_MEMO_REVERSAL);
+        reversal.getLines().add(memoLine(testRevenueAccountId, "50.00", "0"));
+        reversal.getLines().add(memoLine(testTaxAccountId, "5.00", "0"));
+        reversal.getLines().add(memoLine(testArAccountId, "0", "55.00"));
+        when(journalEntryRepository.findBySourceEvent(testCreditMemoId)).thenReturn(List.of(reversal));
+
         CreditMemoResponse response = service.voidCreditMemo(testCreditMemoId, "Wrong invoice", "void-user");
 
         assertThat(response.getStatus()).isEqualTo(CreditMemoStatus.VOIDED);
@@ -968,16 +977,20 @@ class CreditMemoServiceTest {
         assertThat(response.getVoidedByUserId()).isEqualTo("void-user");
         assertThat(response.getVoidReason()).isEqualTo("Wrong invoice");
         assertThat(response.getInvoiceBalanceAfter()).isEqualByComparingTo("110.00");
-        // Mirror entry: Dr AR total / Cr Revenue creditAmount + Cr Tax taxReversed.
+        // R3.2: the mirror of the memo's own reversal: Dr AR total / Cr Revenue creditAmount + Cr Tax taxReversed.
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<List<GLPostingService.PostedLine>> lines =
+                org.mockito.ArgumentCaptor.forClass(List.class);
         verify(glPostingService)
-                .postCreditMemoVoid(
+                .postMirror(
+                        eq(JournalEntrySourceTypes.CREDIT_MEMO_VOID),
                         eq(testCreditMemoId),
-                        eq(testRevenueAccountId),
-                        eq(testTaxAccountId),
-                        eq(testArAccountId),
-                        eq(new BigDecimal("50.00")),
-                        eq(new BigDecimal("5.00")),
+                        lines.capture(),
+                        any(),
                         anyString());
+        assertThat(lines.getValue())
+                .extracting(GLPostingService.PostedLine::accountId)
+                .containsExactly(testRevenueAccountId, testTaxAccountId, testArAccountId);
     }
 
     @Test
