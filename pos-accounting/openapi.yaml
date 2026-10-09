@@ -12332,6 +12332,70 @@ paths:
       - Settlement Reconciliation
       x-required-permissions:
       - accounting:reconciliation:view
+  /v1/accounting/tax-regimes:
+    get:
+      description: 'Returns the indirect-tax regimes configured for a country, each with the region codes it covers and the tax types registered and recovered under it, relayed from pos-tax''s configuration.
+
+        Use this tool to offer the regime choices of a tax registration; do not use it to read the company''s registrations, use listTaxRegistrations instead.
+
+        Preconditions: the caller holds accounting:tax_registration:view; the values are placeholders held for expert advice, so source is STUB.
+
+        Required inputs: none; countryCode (two upper-case letters) picks a country, otherwise the deployment''s tax country (accounting.tax.country) applies.
+
+        Emits an ACCOUNTING_TAX_REGIMES_VIEW audit event; no state changes, and nothing is cached.
+
+        Returns 200 with an empty regimes list when the country configures none, 400 VALIDATION_ERROR for a malformed countryCode, and 503 SERVICE_UNAVAILABLE with Retry-After when pos-tax cannot answer.
+
+        '
+      operationId: listTaxRegimes
+      parameters:
+      - description: Country code in ISO 3166-1 alpha-2 format; omit it for the tax country
+        example: ZZ
+        in: query
+        name: countryCode
+        required: false
+        schema:
+          pattern: ^[A-Z]{2}$
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxRegimesResponse'
+          description: The configured regimes (empty when the country configures none)
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VALIDATION_ERROR: countryCode is not two upper-case letters'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: FORBIDDEN without accounting:tax_registration:view
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'SERVICE_UNAVAILABLE: pos-tax is unreachable, failing, refusing the read or answering unreadably (any 4xx or 5xx; the country is validated here first, so nothing is relayed); retry after the Retry-After interval'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
+      security:
+      - bearerAuth:
+        - accounting:tax_registration:view
+      summary: List Configured Tax Regimes
+      tags:
+      - Accounting Tax Registrations
+      x-required-permissions:
+      - accounting:tax_registration:view
   /v1/accounting/tax-registrations:
     get:
       description: 'Lists the company''s indirect-tax registrations from accounting''s copy of pos-tax''s registry: per registration its country, regime, number, jurisdiction, effective dates (both inclusive), status and version.
@@ -24879,6 +24943,73 @@ components:
       - snapshotContentHash
       - snapshotId
       - verifiedAt
+      type: object
+    TaxRegime:
+      description: One configured tax regime, its regions and its tax types
+      properties:
+        regime:
+          description: The regime code, as a tax registration names it
+          example: ZZ_REGIME_1
+          type: string
+        regions:
+          description: The region codes the regime covers; empty means the whole country
+          items:
+            example: R1
+            type: string
+          type: array
+        taxTypes:
+          description: The tax types registered and recovered under the regime
+          items:
+            $ref: '#/components/schemas/TaxRegimeTaxType'
+          type: array
+      required:
+      - regime
+      - regions
+      - taxTypes
+      type: object
+    TaxRegimeTaxType:
+      description: One tax type registered and recovered under a regime
+      properties:
+        jurisdictionType:
+          description: The jurisdiction level the tax type is levied at
+          enum:
+          - COUNTRY
+          - STATE
+          - PROVINCE
+          - COUNTY
+          - CITY
+          - DISTRICT
+          - SPECIAL
+          example: COUNTRY
+          type: string
+        taxType:
+          description: The configured tax-type code
+          example: ZZ_LEVY
+          type: string
+      required:
+      - jurisdictionType
+      - taxType
+      type: object
+    TaxRegimesResponse:
+      description: The tax regimes configured for one country, with their regions and tax types
+      properties:
+        countryCode:
+          description: The country, ISO 3166-1 alpha-2
+          example: ZZ
+          type: string
+        regimes:
+          description: The configured regimes in configured order; empty when the country configures none, so no registration can be recorded there
+          items:
+            $ref: '#/components/schemas/TaxRegime'
+          type: array
+        source:
+          description: Where the lists come from; STUB while they are placeholders held for expert advice
+          example: STUB
+          type: string
+      required:
+      - countryCode
+      - regimes
+      - source
       type: object
     TaxRegistrationListResponse:
       description: The tenant's tax registrations
