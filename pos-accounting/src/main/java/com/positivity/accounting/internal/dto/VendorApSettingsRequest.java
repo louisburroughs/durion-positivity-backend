@@ -79,7 +79,8 @@ public class VendorApSettingsRequest {
 
     @Schema(
             description = "Optional: whether the vendor is reportable on the tax country's information return, and in"
-                    + " which configured form and box; absent leaves it unchanged, null is refused",
+                    + " which configured form and box; absent leaves it unchanged, null is refused. When sent, the"
+                    + " object replaces the stored flag as a whole: a form, box or scheme left out is stored as null",
             requiredMode = NOT_REQUIRED)
     private @Nullable VendorInformationReturnRequest informationReturn;
 

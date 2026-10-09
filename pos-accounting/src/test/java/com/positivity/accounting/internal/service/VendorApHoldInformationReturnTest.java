@@ -374,6 +374,50 @@ class VendorApHoldInformationReturnTest {
         }
 
         @Test
+        @DisplayName("lengths count code points of the stripped reason, as V22's char_length(btrim()) does: 5 emoji"
+                + " (10 UTF-16 units) and 10 no-break spaces are refused; 10 emoji and 500 emoji are accepted")
+        void reasonLengthInCodePoints() {
+            String emoji = "\uD83D\uDE9A";
+            for (String reason : new String[] {emoji.repeat(5), "\u00A0".repeat(10), "\u2003\u00A0\u202F".repeat(4)}) {
+                assertThatThrownBy(() -> service.setApSettings(VENDOR, hold(true, reason)))
+                        .satisfies(thrown -> {
+                            assertThat(code(thrown)).isEqualTo(VendorBillException.Code.JUSTIFICATION_REQUIRED);
+                            assertThat(fields(thrown)).containsExactly("apHold.reason");
+                        });
+            }
+            assertThat(saved).isEmpty();
+            assertThatThrownBy(() -> service.setApSettings(VENDOR, hold(true, emoji.repeat(501))))
+                    .satisfies(thrown -> assertThat(code(thrown)).isEqualTo(VendorBillException.Code.VALIDATION_ERROR));
+
+            service.setApSettings(VENDOR, hold(true, "  " + emoji.repeat(10) + "\n"));
+            assertThat(row.getApHoldReason()).isEqualTo(emoji.repeat(10));
+            VendorApSettingsRequest longest = hold(true, emoji.repeat(500));
+            longest.setRequestId(UUID.randomUUID());
+            service.setApSettings(VENDOR, longest);
+            assertThat(row.getApHoldReason()
+                            .codePointCount(0, row.getApHoldReason().length()))
+                    .isEqualTo(500);
+        }
+
+        @Test
+        @DisplayName("an unknown key is refused by the service too, naming the key and never its value")
+        void serviceRefusesUnknownKeys() throws Exception {
+            VendorApSettingsRequest request = new tools.jackson.databind.ObjectMapper()
+                    .readValue(
+                            "{\"tin\":\"123-45-6789\",\"apHold\":{\"onHold\":true,\"pin\":\"0000\"},"
+                                    + "\"justification\":\"Vendor dispute raised\",\"requestId\":\"" + REQUEST + "\"}",
+                            VendorApSettingsRequest.class);
+
+            assertThatThrownBy(() -> service.setApSettings(VENDOR, request)).satisfies(thrown -> {
+                assertThat(code(thrown)).isEqualTo(VendorBillException.Code.VALIDATION_ERROR);
+                assertThat(fields(thrown)).containsExactly("tin", "apHold.pin");
+                assertThat(thrown.getMessage()).doesNotContain("6789").doesNotContain("0000");
+            });
+            assertThat(saved).isEmpty();
+            verify(vendors, never()).lockByVendorId(any());
+        }
+
+        @Test
         @DisplayName("AC2: apHold null, or onHold missing or null, is 400 VALIDATION_ERROR naming the field")
         void nullShapes() {
             VendorApSettingsRequest nullHold = put(REQUEST);
@@ -561,6 +605,16 @@ class VendorApHoldInformationReturnTest {
                             "informationReturnBox=2",
                             "informationReturnPayeeScheme=ZZ_PERSON_ID");
             verify(forms, never()).forms();
+        }
+
+        @Test
+        @DisplayName("the object replaces the stored flag as a whole: a scheme left out of a later PUT is cleared")
+        void replacedAsAWhole() {
+            service.setApSettings(VENDOR, informationReturn(true, "ZZ_FORM_A", "1", "ZZ_BUSINESS_ID"));
+            service.setApSettings(VENDOR, informationReturn(true, "ZZ_FORM_A", "2", null));
+
+            assertThat(row.getInformationReturnBox()).isEqualTo("2");
+            assertThat(row.getInformationReturnPayeeScheme()).isNull();
         }
 
         @Test

@@ -8,8 +8,11 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.positivity.accounting.internal.dto.InformationReturnFormsResponse;
-import com.positivity.accounting.internal.exception.TaxReferenceRelayException;
 import com.positivity.accounting.internal.exception.TaxServiceUnavailableException;
 import com.positivity.tenancy.TenantContext;
 import java.io.IOException;
@@ -20,6 +23,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -32,8 +36,8 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * CAP:550 #2615 at the wire: the pos-tax utility client sends the service identity, the tenant and the correlation id;
- * reads the information-return forms; relays a 400 unchanged; answers 503 when pos-tax is unreachable, failing or
- * silent past the read timeout.
+ * reads the information-return forms; answers 503 when pos-tax refuses (any 4xx), is unreachable, failing or silent
+ * past the read timeout.
  */
 @DisplayName("TaxReferenceClient — pos-accounting's reads of pos-tax's configured references (#2615)")
 class TaxReferenceClientTest {
@@ -97,22 +101,39 @@ class TaxReferenceClientTest {
     }
 
     @Test
-    @DisplayName("pos-tax's 400 is relayed with its code and field errors")
-    void relaysA400() {
-        server.expect(requestTo(URL))
-                .andRespond(withStatus(HttpStatus.BAD_REQUEST)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body("""
-                                {"code":"VALIDATION_ERROR","message":"countryCode must be two upper-case letters",
-                                 "status":400,"fieldErrors":[{"field":"countryCode","message":"is malformed"}]}
-                                """));
+    @DisplayName("ADR-0017: any pos-tax 4xx (400, 404, 422, 403) is 503, never relayed; WARN with status and code only")
+    void a4xxIsUnavailable() {
+        Logger logger = (Logger) LoggerFactory.getLogger(TaxReferenceClient.class);
+        ListAppender<ILoggingEvent> logs = new ListAppender<>();
+        logs.start();
+        logger.addAppender(logs);
+        try {
+            for (HttpStatus status :
+                    new HttpStatus[] {HttpStatus.BAD_REQUEST, HttpStatus.NOT_FOUND, HttpStatus.UNPROCESSABLE_CONTENT}) {
+                client = client();
+                server.expect(requestTo(URL))
+                        .andRespond(withStatus(status)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .body("""
+                                        {"code":"VALIDATION_ERROR","message":"countryCode ZZ secret-detail",
+                                         "status":%d,"fieldErrors":[{"field":"countryCode","message":"ZZ is bad"}]}
+                                        """.formatted(status.value())));
 
-        assertThatThrownBy(() -> client.informationReturnForms("ZZ"))
-                .isInstanceOfSatisfying(TaxReferenceRelayException.class, e -> {
-                    assertThat(e.getStatus()).isEqualTo(400);
-                    assertThat(e.getError().code()).isEqualTo("VALIDATION_ERROR");
-                    assertThat(e.getError().fieldErrors()).isNotEmpty();
-                });
+                assertThatThrownBy(() -> client.informationReturnForms("ZZ"))
+                        .as("%s", status)
+                        .isInstanceOf(TaxServiceUnavailableException.class);
+            }
+        } finally {
+            logger.detachAppender(logs);
+        }
+        assertThat(logs.list).hasSize(3).allSatisfy(event -> {
+            assertThat(event.getLevel()).isEqualTo(Level.WARN);
+            assertThat(event.getFormattedMessage())
+                    .contains("code VALIDATION_ERROR")
+                    .doesNotContain("secret-detail")
+                    .doesNotContain("ZZ");
+        });
+        assertThat(logs.list.getFirst().getFormattedMessage()).contains("status 400");
     }
 
     @Test

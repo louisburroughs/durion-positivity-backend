@@ -598,7 +598,7 @@ public class VendorBillReader {
 
     /**
      * {@code VENDOR_AP_HOLD} (#2615): FAIL with {@code vendorNumber}, {@code reason} and {@code since} while the bill's
-     * vendor is on AP hold, PASS otherwise; NOT_APPLICABLE on a {@code REJECTED} or {@code VOIDED} bill and on an
+     * vendor is on AP hold, PASS otherwise; NOT_APPLICABLE on a {@code REJECTED}, {@code VOIDED} or {@code PAID} bill and on an
      * {@code APPROVED} bill with nothing open, which no payment will touch. Informational: a hold stops payment only,
      * so it blocks no action and sets no {@code blockedReason}; the settings row is not read when not applicable.
      *
@@ -610,6 +610,7 @@ public class VendorBillReader {
             @NonNull Supplier<Optional<SupplierVendorCopies.ApHold>> hold) {
         boolean closed = status == VendorBillStatus.REJECTED
                 || status == VendorBillStatus.VOIDED
+                || status == VendorBillStatus.PAID
                 || (status == VendorBillStatus.APPROVED && openAmount.signum() <= 0);
         if (closed) {
             return new VendorBillReview.Check(CHECK_VENDOR_AP_HOLD, VendorBillCheckOutcome.NOT_APPLICABLE, Map.of());

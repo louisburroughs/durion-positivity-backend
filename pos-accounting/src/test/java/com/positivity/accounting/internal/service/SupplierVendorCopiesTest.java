@@ -226,8 +226,14 @@ class SupplierVendorCopiesTest {
                     .isInstanceOfSatisfying(VendorBillException.class, e -> {
                         assertThat(e.getCode()).isEqualTo(VendorBillException.Code.VENDOR_ON_AP_HOLD);
                         assertThat(e.getCode().status().value()).isEqualTo(422);
-                        assertThat(e.getMessage()).contains("V-000123").doesNotContain("4471");
-                        assertThat(String.valueOf(e.getNextAction())).doesNotContain("4471");
+                        assertThat(e.getMessage())
+                                .contains("V-000123", "/v1/accounting/vendors/" + VENDOR)
+                                .doesNotContain("4471")
+                                .doesNotContain("{vendorId}");
+                        assertThat(e.getNextAction())
+                                .contains("/v1/accounting/vendors/" + VENDOR + "/ap-settings")
+                                .doesNotContain("4471")
+                                .doesNotContain("{vendorId}");
                     });
         } finally {
             logger.detachAppender(logs);

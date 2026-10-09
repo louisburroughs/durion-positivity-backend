@@ -3,7 +3,6 @@ package com.positivity.accounting.internal.controller;
 import com.positivity.accounting.internal.dto.VendorApSettingsRequest;
 import com.positivity.accounting.internal.dto.VendorRemitToConfirmationRequest;
 import com.positivity.accounting.internal.dto.VendorResponse;
-import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.VendorDirectoryService;
 import com.positivity.events.EmitEvent;
@@ -322,25 +321,7 @@ public class VendorDirectoryController {
                     @RequestBody
                     @NonNull
                     VendorApSettingsRequest request) {
-        refuseUnknown(request.unknownProperties());
+        VendorDirectoryService.refuseUnknown(request.unknownProperties());
         return ResponseEntity.ok(vendorDirectoryService.setApSettings(vendorId, request));
-    }
-
-    /**
-     * 400 {@code VALIDATION_ERROR} naming each unknown property of the body (#2615), top-level or inside {@code apHold}
-     * or {@code informationReturn}; its value was dropped at binding, so it is never echoed or logged (a {@code tin}
-     * is refused like any other key).
-     */
-    static void refuseUnknown(List<String> unknown) {
-        if (unknown.isEmpty()) {
-            return;
-        }
-        throw new VendorBillException(
-                VendorBillException.Code.VALIDATION_ERROR,
-                "The vendor AP settings request has unknown properties: " + String.join(", ", unknown),
-                unknown.stream()
-                        .map(name -> new VendorBillException.FieldError(name, "is not a property of this request"))
-                        .toList(),
-                null);
     }
 }

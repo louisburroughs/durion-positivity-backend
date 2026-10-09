@@ -611,7 +611,8 @@ class VendorBillReaderTest {
         java.util.function.Supplier<java.util.Optional<SupplierVendorCopies.ApHold>> unread = () -> {
             throw new AssertionError("the hold is not read when the check does not apply");
         };
-        for (VendorBillStatus status : List.of(VendorBillStatus.REJECTED, VendorBillStatus.VOIDED)) {
+        for (VendorBillStatus status :
+                List.of(VendorBillStatus.REJECTED, VendorBillStatus.VOIDED, VendorBillStatus.PAID)) {
             assertThat(VendorBillReader.vendorApHold(status, new BigDecimal("10.00"), unread)
                             .outcome())
                     .isEqualTo(VendorBillCheckOutcome.NOT_APPLICABLE);

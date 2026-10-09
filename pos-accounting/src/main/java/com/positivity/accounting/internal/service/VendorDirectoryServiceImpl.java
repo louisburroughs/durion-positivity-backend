@@ -60,7 +60,9 @@ import org.springframework.transaction.annotation.Transactional;
  * the justification and the {@code requestId}. Each changed information-return field writes an {@value
  * #AUDIT_SETTINGS_SET} row. The hold reason is CONFIDENTIAL (ADR-0072): it reaches the audit rows and the reads, never
  * a log line, an exception message or the request fingerprint, which carries its SHA-256 instead. pos-tax is called
- * only when the information return changes to a reportable value; a refusal of either writes nothing.
+ * only when the information return changes to a reportable value; a refusal of either writes nothing. That call is
+ * made under the vendor copy's row lock, because whether anything changed is known only from the locked settings
+ * row; the client's connect and read timeouts (2 s, 5 s) bound how long the lock is held for it.
  */
 @Slf4j
 @Service
@@ -207,6 +209,7 @@ public class VendorDirectoryServiceImpl implements VendorDirectoryService {
     @Override
     @Transactional
     public @NonNull VendorResponse setApSettings(@NonNull UUID vendorId, @NonNull VendorApSettingsRequest request) {
+        VendorDirectoryService.refuseUnknown(request.unknownProperties());
         String actor = VendorBillDecisions.actor();
         String justification = VendorBillDecisions.required(request.getJustification(), "justification");
         List<VendorBillException.FieldError> errors = new ArrayList<>();
@@ -398,14 +401,27 @@ public class VendorDirectoryServiceImpl implements VendorDirectoryService {
             errors.add(new VendorBillException.FieldError("apHold.onHold", "is required: true or false"));
             return null;
         }
-        String trimmed = hold.getReason() == null ? null : hold.getReason().trim();
-        if (hold.getOnHold() && trimmed != null && trimmed.length() > MAX_HOLD_REASON) {
+        // Counted as V22's CHECK and varchar(500) count it: code points of the stripped text (char_length(btrim(...)));
+        // strip() removes what btrim's spaces would, so the stored reason has the same length here and there. Text
+        // made only of whitespace or space separators (no-break spaces included) is no reason at all.
+        String trimmed = hold.getReason() == null ? null : hold.getReason().strip();
+        if (trimmed != null
+                && (trimmed.isBlank() || trimmed.codePoints().allMatch(VendorDirectoryServiceImpl::space))) {
+            trimmed = "";
+        }
+        int length = trimmed == null ? 0 : trimmed.codePointCount(0, trimmed.length());
+        if (hold.getOnHold() && length > MAX_HOLD_REASON) {
             errors.add(new VendorBillException.FieldError(
                     "apHold.reason", "must be at most " + MAX_HOLD_REASON + " characters"));
             return null;
         }
-        String reason = trimmed != null && trimmed.length() >= MIN_HOLD_REASON ? trimmed : null;
+        String reason = length >= MIN_HOLD_REASON ? trimmed : null;
         return new HoldChange(hold.getOnHold(), reason, hold.hasReason(), trimmed == null ? null : sha256(trimmed));
+    }
+
+    /** Whether a code point is whitespace or a space separator (U+00A0 and U+202F included). */
+    private static boolean space(int codePoint) {
+        return Character.isWhitespace(codePoint) || Character.isSpaceChar(codePoint);
     }
 
     /** The {@code informationReturn} object's shape (#2615), before pos-tax is asked. */

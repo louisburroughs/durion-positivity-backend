@@ -49,7 +49,10 @@ public class SupplierVendorCopies {
     /** 503: the vendor is not in the copy yet (ADR-0017 §1). */
     public static final String VENDOR_REPLICATION_PENDING = "VENDOR_REPLICATION_PENDING";
 
-    /** Counter of AP payments refused at the pay command, tagged with the refusal code (#2615). */
+    /**
+     * Counter of AP payments refused at the pay command, tagged with the refusal code (#2615). Today it counts only
+     * {@code VENDOR_ON_AP_HOLD}; the other refusals of the pay command are not counted here.
+     */
     public static final String PAYMENT_REFUSED_COUNTER = "accounting.ap_payment.refused";
 
     private final ExtSupplierVendorRepository vendors;
@@ -144,10 +147,10 @@ public class SupplierVendorCopies {
         throw new VendorBillException(
                 VendorBillException.Code.VENDOR_ON_AP_HOLD,
                 "Vendor " + vendor.getVendorNumber() + " is on AP hold; nothing was paid. The reason is on the vendor"
-                        + " (GET /v1/accounting/vendors/{vendorId})",
+                        + " (GET /v1/accounting/vendors/" + vendor.getVendorId() + ")",
                 List.of(),
-                "Release the hold (PUT /v1/accounting/vendors/{vendorId}/ap-settings with apHold.onHold false) when"
-                        + " the matter is settled, then pay again");
+                "Release the hold (PUT /v1/accounting/vendors/" + vendor.getVendorId() + "/ap-settings with"
+                        + " apHold.onHold false) when the matter is settled, then pay again");
     }
 
     /**

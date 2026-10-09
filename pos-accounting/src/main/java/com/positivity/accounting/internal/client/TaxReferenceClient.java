@@ -1,15 +1,14 @@
 package com.positivity.accounting.internal.client;
 
 import com.positivity.accounting.internal.dto.InformationReturnFormsResponse;
-import com.positivity.accounting.internal.exception.TaxReferenceRelayException;
 import com.positivity.accounting.internal.exception.TaxServiceUnavailableException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.tenancy.TenantContext;
 import com.positivity.tenancy.TenantHeaders;
 import java.time.Duration;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -36,9 +35,10 @@ import tools.jackson.databind.ObjectMapper;
  * {@code X-User: pos-accounting} and {@code X-Authorities: tax:rates:view}, with the bound tenant ({@code
  * X-Tenant-Id}) and the inbound {@code X-Correlation-Id} forwarded.
  *
- * <p>A pos-tax 400, 404 or 422 is relayed unchanged ({@link TaxReferenceRelayException}). Anything else that is not
- * an answer is 503 {@code SERVICE_UNAVAILABLE} ({@link TaxServiceUnavailableException}): pos-tax unreachable, a 5xx, a
- * 401 or 403 (this service's identity), or an unreadable body. Nothing logs a response body.
+ * <p>Anything that is not an answer is 503 {@code SERVICE_UNAVAILABLE} with {@code Retry-After} ({@link
+ * TaxServiceUnavailableException}): pos-tax unreachable, any 4xx or 5xx, or an unreadable body. A 4xx is not relayed:
+ * the country is the server's own setting, so it is never the caller's fault (ADR-0017); it is logged at WARN with
+ * pos-tax's status and code only. Nothing logs a response body.
  */
 @Slf4j
 @Component
@@ -52,8 +52,8 @@ public class TaxReferenceClient {
 
     static final String INFORMATION_RETURN_FORMS = "/v1/tax/information-return-forms";
 
-    /** pos-tax refusals of the request itself, relayed; a 401 or 403 (this service's identity) is 503 instead. */
-    private static final Set<Integer> RELAYED = Set.of(400, 404, 422);
+    /** The shape of an error code worth logging; anything else is logged as {@code "-"}. */
+    private static final Pattern ERROR_CODE = Pattern.compile("^[A-Z][A-Z0-9_]{0,63}$");
 
     private final RestClient restClient;
     private final ObjectMapper objectMapper;
@@ -113,11 +113,18 @@ public class TaxReferenceClient {
             }
             return forms;
         } catch (RestClientResponseException e) {
+            // The country is the server's own setting (TaxCountry), so no pos-tax answer here is the caller's fault: a
+            // 4xx (a rollout skew, a 404 before the stub is deployed, a refused service identity) is 503 like a 5xx,
+            // never relayed (ADR-0017). Only the status and pos-tax's code are logged, never a body or a value.
             int status = e.getStatusCode().value();
-            if (RELAYED.contains(status)) {
-                throw new TaxReferenceRelayException(status, readError(e, status));
+            if (e.getStatusCode().is4xxClientError()) {
+                log.warn(
+                        "pos-tax refused an information-return forms read: status {}, code {}; answering 503",
+                        status,
+                        errorCode(e));
+            } else {
+                log.error("pos-tax answered {} to an information-return forms read; answering 503", status);
             }
-            log.error("pos-tax answered {} to an information-return forms read; answering 503", status);
             throw new TaxServiceUnavailableException("The tax service is unavailable");
         } catch (ResourceAccessException e) {
             log.warn(
@@ -141,15 +148,18 @@ public class TaxReferenceClient {
         return null;
     }
 
-    private ApiError readError(RestClientResponseException e, int status) {
+    /** pos-tax's error code when its envelope carries a well-formed one, else {@code "-"}; never anything else. */
+    private String errorCode(RestClientResponseException e) {
         try {
             ApiError error = objectMapper.readValue(e.getResponseBodyAsByteArray(), ApiError.class);
-            if (error != null && error.code() != null) {
-                return error;
+            if (error != null
+                    && error.code() != null
+                    && ERROR_CODE.matcher(error.code()).matches()) {
+                return error.code();
             }
         } catch (RuntimeException parse) {
-            log.warn("pos-tax's {} carried no readable error envelope", status);
+            // No readable envelope: the status alone is logged.
         }
-        throw new TaxServiceUnavailableException("The tax service is unavailable");
+        return "-";
     }
 }

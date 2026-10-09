@@ -1432,7 +1432,8 @@ another remit-to version and nobody confirmed the current one; S19's work item r
 Two more settings on `ap_vendor_settings` (V22), set through the same `PUT …/ap-settings` under
 `accounting:ap_approval_policy:manage`. No new permission bit.
 
-- **AP hold.** `apHold {onHold, reason?}`: `onHold: true` needs a reason of 10-500 characters once trimmed
+- **AP hold.** `apHold {onHold, reason?}`: `onHold: true` needs a reason of 10-500 characters (code points, once
+  stripped, as V22's `char_length(btrim(...))` counts them; text of only whitespace or no-break spaces is none)
   (shorter, blank or missing: 400 `JUSTIFICATION_REQUIRED` naming `apHold.reason`; longer: 400 `VALIDATION_ERROR`);
   `onHold: false` releases it, the PUT's `justification` recording why (a reason sent with it is ignored).
   `apHold: null`, or `onHold` missing or null, is 400 `VALIDATION_ERROR`. Audit: `AP_VENDOR_HOLD_SET` (old → new
@@ -1442,21 +1443,25 @@ Two more settings on `ap_vendor_settings` (V22), set through the same `PUT …/a
   pre-gateway block, right after 1d (the vendor in the copy and active) and before the plan, so nothing is saved
   and the gateway is not called; an inactive vendor that is also held answers `VENDOR_INACTIVE`, and a payment
   replayed by `paymentRef` still returns its first result. The refusal is logged at INFO (payment reference,
-  vendor number, code) and counted as `accounting.ap_payment.refused{code="VENDOR_ON_AP_HOLD"}`. Submit, approve,
+  vendor number, code) and counted as `accounting.ap_payment.refused{code="VENDOR_ON_AP_HOLD"}`; the counter counts
+  this refusal only (the pay command's other refusals are not counted there). Submit, approve,
   `ACCEPT`, automatic approval at `/match`, EDI and goods-receipt bill creation, reject, void and the due-date PUT
   all go ahead: approval records a debt that exists (AW37). The hold is independent of the vendor's status, takes
   no lock (a payment past its check completes), posts nothing and changes no aged payables.
 - **Reads.** `VendorResponse.apHold` on the list and the detail read; `apSettings.apHold {onHold, reason, setBy,
   setAt}` on the detail read; `vendorApHold` on stage rows; `vendorApHold` and `vendorApHoldReason` on
   `GET /v1/accounting/ap/bills` rows; the informational bill check `VENDOR_AP_HOLD` (FAIL `{vendorNumber, reason,
-  since}` while held, PASS otherwise, NOT_APPLICABLE on `REJECTED`, `VOIDED` and an `APPROVED` bill with nothing
+  since}` while held, PASS otherwise, NOT_APPLICABLE on `REJECTED`, `VOIDED`, `PAID` and an `APPROVED` bill with nothing
   open). It blocks no action and sets no `blockedReason`. Each list page reads its vendors' settings in one query.
 - **Information return.** `informationReturn {reportable, form?, box?, payeeTaxRegistrationScheme?}`:
   `reportable: true` needs a `form` and `box` configured for the tax country and an optional scheme among the
-  form's `payeeIdSchemes`; `reportable: false` needs the three absent or null and clears them. Each violation is
+  form's `payeeIdSchemes`; `reportable: false` needs the three absent or null and clears them. The object replaces
+  the stored flag as a whole: a form, box or scheme left out of it is stored as null (there is no partial update). Each violation is
   400 `VALIDATION_ERROR` with `fieldErrors[informationReturn.*]`; a country that configures no form refuses
   `reportable: true`. pos-tax is called only when the information return changes to a reportable value; when it
-  cannot answer, the PUT is 503 `SERVICE_UNAVAILABLE` with `Retry-After` and nothing is written. Each changed
+  cannot answer (unreachable, slow, or any 4xx or 5xx), the PUT is 503 `SERVICE_UNAVAILABLE` with `Retry-After` and
+  nothing is written. That call is made while the PUT holds the vendor copy's row lock (it needs the stored flag to
+  know whether anything changed), so it is bounded by the client's 2 s connect and 5 s read timeouts. Each changed
   field writes an `AP_VENDOR_SETTINGS_SET` row (`informationReturnReportable`, `informationReturnForm`,
   `informationReturnBox`, `informationReturnPayeeScheme`).
 - **Taxpayer numbers.** pos-accounting has no field, column or parameter for one: an unknown key such as `tin`
@@ -1473,8 +1478,10 @@ Two more settings on `ap_vendor_settings` (V22), set through the same `PUT …/a
   country, `{countryCode, source, forms: [{form, label, boxes: [{box, label}], payeeIdSchemes}]}` (ADR-0071,
   AW59). `TaxReferenceClient` calls pos-tax on `pos.accounting.tax.base-url` as `X-User: pos-accounting`,
   `X-Authorities: tax:rates:view`, with the tenant and `X-Correlation-Id` forwarded and bounded timeouts
-  (`pos.accounting.tax.connect-timeout` 2 s, `read-timeout` 5 s); a pos-tax 400, 404 or 422 is relayed, anything
-  else is 503 `SERVICE_UNAVAILABLE`. The forms are placeholders held for expert advice (OI-4).
+  (`pos.accounting.tax.connect-timeout` 2 s, `read-timeout` 5 s). Any pos-tax 4xx or 5xx, an unreachable pos-tax
+  or an unreadable answer is 503 `SERVICE_UNAVAILABLE` with `Retry-After`, never relayed: the country is the server's
+  own setting, so a refusal is never the caller's fault (ADR-0017); a 4xx is logged at WARN with pos-tax's status
+  and code only. The forms are placeholders held for expert advice (OI-4).
 
 | Method | Path | Permission | Codes |
 | --- | --- | --- | --- |

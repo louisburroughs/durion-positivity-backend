@@ -67,8 +67,9 @@ public class InformationReturnFormsController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "503",
-            description =
-                    "SERVICE_UNAVAILABLE: pos-tax is unreachable or failing; retry after the Retry-After" + " interval",
+            description = "SERVICE_UNAVAILABLE: pos-tax is unreachable, failing or refusing the read (any 4xx or 5xx;"
+                    + " the country is the server's own setting, so nothing is relayed); retry after the"
+                    + " Retry-After interval",
             headers =
                     @Header(
                             name = "Retry-After",
