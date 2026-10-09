@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -1048,6 +1049,68 @@ class RegisterSessionStatedTaxTest {
             assertThat(replay.replayed()).isTrue();
             assertThat(replay.movement().supplierRegistrationNumberProvided()).isTrue();
             assertThat(taxPort.calls).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("[M] OPEN before the lock but CLOSING under it: 409, nothing recorded, the token unspent")
+        void closingUnderTheLockRefuses() {
+            managerApproves();
+            taxPort.answer = new TaxPlausibilityPort.Checked("PLAUSIBLE", false, null);
+            RegisterSession closing = RegisterSession.builder()
+                    .sessionId(SESSION_ID)
+                    .version(2L)
+                    .terminalId("T-1")
+                    .locationId(LOCATION)
+                    .openedByClerkId("opener")
+                    .status(RegisterSessionStatus.CLOSING)
+                    .currencyCode("CAD")
+                    .openingFloat(new BigDecimal("200.0000"))
+                    .openedAt(Instant.parse("2026-10-15T08:00:00Z"))
+                    .build();
+            // A concurrent beginClose ran while pos-tax was asked: the row under the lock is CLOSING.
+            when(sessions.findByIdForUpdate(SESSION_ID)).thenReturn(Optional.of(closing));
+
+            assertThatThrownBy(() -> service.recordCashMovement(petty(
+                            UUIDv7Generator.generate(),
+                            "40.00",
+                            "token-1",
+                            SUPPLIER,
+                            List.of(tax("GST_HST", "4.60")),
+                            null)))
+                    .isInstanceOf(com.positivity.order.internal.exception.RegisterSessionConflictException.class);
+
+            assertThat(taxPort.calls).hasSize(1);
+            assertThat(recorded).isEmpty();
+            assertThat(recordedTaxes).isEmpty();
+            verify(movements, never()).saveAndFlush(any());
+            verify(approvalService, never()).use(any(), any(), any(), any(), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("a replay found only under the lock returns the first result, and records nothing twice")
+        void replayFoundOnlyUnderTheLock() {
+            taxPort.answer = new TaxPlausibilityPort.Checked("PLAUSIBLE", false, null);
+            UUID requestId = UUIDv7Generator.generate();
+            CashMovementCommand command =
+                    petty(requestId, "40.00", null, SUPPLIER, List.of(tax("GST_HST", "4.60")), null);
+            CashMovementResult first = service.recordCashMovement(command);
+            assertThat(recorded).hasSize(1);
+            // The concurrent request's movement is not visible before the lock, only once this one holds it.
+            when(movements.findByRequestId(requestId))
+                    .thenReturn(Optional.empty())
+                    .thenAnswer(_ -> recorded.stream()
+                            .filter(m -> requestId.equals(m.getRequestId()))
+                            .findFirst());
+
+            CashMovementResult second = service.recordCashMovement(command);
+
+            assertThat(second.replayed()).isTrue();
+            assertThat(second.movement().movementId())
+                    .isEqualTo(first.movement().movementId());
+            assertThat(recorded).hasSize(1);
+            assertThat(recordedTaxes).hasSize(1);
+            verify(movements, times(1)).saveAndFlush(any());
+            verify(sessions, times(2)).findByIdForUpdate(SESSION_ID);
         }
 
         @Test

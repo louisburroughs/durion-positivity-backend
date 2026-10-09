@@ -931,9 +931,19 @@ class CreditMemoServiceTest {
                         lines.capture(),
                         any(),
                         anyString());
+        // The memo's reversal as posted (Dr revenue 50.00 / Dr GST 5.00 / Cr AR 55.00): postMirror swaps each one.
         assertThat(lines.getValue())
-                .extracting(GLPostingService.PostedLine::accountId)
-                .containsExactly(testRevenueAccountId, gst, testArAccountId);
+                .extracting(
+                        GLPostingService.PostedLine::accountId,
+                        line -> line.debit().stripTrailingZeros(),
+                        line -> line.credit().stripTrailingZeros())
+                .containsExactly(
+                        org.assertj.core.api.Assertions.tuple(
+                                testRevenueAccountId, new BigDecimal("50.00").stripTrailingZeros(), BigDecimal.ZERO),
+                        org.assertj.core.api.Assertions.tuple(
+                                gst, new BigDecimal("5.00").stripTrailingZeros(), BigDecimal.ZERO),
+                        org.assertj.core.api.Assertions.tuple(
+                                testArAccountId, BigDecimal.ZERO, new BigDecimal("55.00").stripTrailingZeros()));
         verify(glPostingService, org.mockito.Mockito.never())
                 .postCreditMemoVoid(any(), any(), any(), any(), any(), any(), anyString());
         verify(typedOutputTax, org.mockito.Mockito.never()).typedAccounts(any());
@@ -989,9 +999,22 @@ class CreditMemoServiceTest {
                         lines.capture(),
                         any(),
                         anyString());
+        // The pins of the pre-S32d void: revenue 50.00 and tax 5.00 restored against AR 55.00. The mirror of the
+        // reversal (Dr revenue 50.00 / Dr tax 5.00 / Cr AR 55.00) credits revenue and tax and debits AR.
         assertThat(lines.getValue())
-                .extracting(GLPostingService.PostedLine::accountId)
-                .containsExactly(testRevenueAccountId, testTaxAccountId, testArAccountId);
+                .extracting(
+                        GLPostingService.PostedLine::accountId,
+                        line -> line.debit().stripTrailingZeros(),
+                        line -> line.credit().stripTrailingZeros())
+                .containsExactly(
+                        org.assertj.core.api.Assertions.tuple(
+                                testRevenueAccountId, new BigDecimal("50.00").stripTrailingZeros(), BigDecimal.ZERO),
+                        org.assertj.core.api.Assertions.tuple(
+                                testTaxAccountId, new BigDecimal("5.00").stripTrailingZeros(), BigDecimal.ZERO),
+                        org.assertj.core.api.Assertions.tuple(
+                                testArAccountId, BigDecimal.ZERO, new BigDecimal("55.00").stripTrailingZeros()));
+        assertThat(testCreditMemo.getCreditAmount()).isEqualByComparingTo("50.00");
+        assertThat(testCreditMemo.getTaxAmountReversed()).isEqualByComparingTo("5.00");
     }
 
     @Test
