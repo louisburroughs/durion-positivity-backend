@@ -250,6 +250,7 @@ class VendorDirectoryControllerTest extends BaseIntegrationTest {
             VendorApSettingsRequest request = sent();
             assertThat(request.hasDefaultDebitClass()).isFalse();
             assertThat(request.hasDefaultExpenseMappingKey()).isFalse();
+            assertThat(request.hasAcceptTaxOnResaleGoods()).as("S43").isFalse();
         }
 
         @Test
@@ -257,7 +258,10 @@ class VendorDirectoryControllerTest extends BaseIntegrationTest {
         void explicitNull() throws Exception {
             when(vendorDirectoryService.setApSettings(eq(VENDOR_ID), any())).thenReturn(acme());
 
-            set(MANAGE, "{\"defaultDebitClass\":null,\"defaultExpenseMappingKey\":null," + TAIL + "}")
+            set(
+                            MANAGE,
+                            "{\"defaultDebitClass\":null,\"defaultExpenseMappingKey\":null,"
+                                    + "\"acceptTaxOnResaleGoods\":null," + TAIL + "}")
                     .andExpect(status().isOk());
 
             VendorApSettingsRequest request = sent();
@@ -265,6 +269,9 @@ class VendorDirectoryControllerTest extends BaseIntegrationTest {
             assertThat(request.getDefaultDebitClass()).isNull();
             assertThat(request.hasDefaultExpenseMappingKey()).isTrue();
             assertThat(request.getDefaultExpenseMappingKey()).isNull();
+            // S43: present and null reaches the service, which refuses it with fieldErrors[acceptTaxOnResaleGoods].
+            assertThat(request.hasAcceptTaxOnResaleGoods()).isTrue();
+            assertThat(request.getAcceptTaxOnResaleGoods()).isNull();
         }
 
         @Test
@@ -275,18 +282,21 @@ class VendorDirectoryControllerTest extends BaseIntegrationTest {
             set(
                             MANAGE,
                             "{\"defaultDebitClass\":\"EXPENSE\",\"defaultExpenseMappingKey\":\"EXPENSE_SHOP_SUPPLIES\","
-                                    + TAIL + "}")
+                                    + "\"acceptTaxOnResaleGoods\":true," + TAIL + "}")
                     .andExpect(status().isOk());
 
             VendorApSettingsRequest request = sent();
             assertThat(request.getDefaultDebitClass()).isEqualTo("EXPENSE");
             assertThat(request.getDefaultExpenseMappingKey()).isEqualTo("EXPENSE_SHOP_SUPPLIES");
+            assertThat(request.hasAcceptTaxOnResaleGoods()).isTrue();
+            assertThat(request.getAcceptTaxOnResaleGoods()).isTrue();
+            assertThat(request.unknownProperties()).isEmpty();
         }
 
         @Test
         @DisplayName("an unknown property is 400 and never reaches the service")
         void unknownProperty() throws Exception {
-            set(MANAGE, "{\"acceptTaxOnResaleGoods\":true," + TAIL + "}").andExpect(status().isBadRequest());
+            set(MANAGE, "{\"acceptTaxOnServices\":true," + TAIL + "}").andExpect(status().isBadRequest());
             verify(vendorDirectoryService, never()).setApSettings(any(), any());
         }
 

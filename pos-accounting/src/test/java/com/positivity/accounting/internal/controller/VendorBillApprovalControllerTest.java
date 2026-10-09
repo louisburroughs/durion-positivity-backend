@@ -184,6 +184,7 @@ class VendorBillApprovalControllerTest extends BaseControllerSliceTest {
                 Arguments.of(VendorBillException.Code.AP_BILL_UNCLASSIFIED, 422),
                 Arguments.of(VendorBillException.Code.AP_BILL_TOTALS_UNRECONCILED, 422),
                 Arguments.of(VendorBillException.Code.AP_BILL_ZERO_TOTAL, 422),
+                Arguments.of(VendorBillException.Code.AP_BILL_TAX_ON_RESALE_GOODS, 422),
                 Arguments.of(VendorBillException.Code.AP_APPROVAL_LIMIT_EXCEEDED, 403),
                 Arguments.of(VendorBillException.Code.AP_BILL_SELF_APPROVAL, 403),
                 Arguments.of(VendorBillException.Code.JUSTIFICATION_REQUIRED, 400),
@@ -199,6 +200,85 @@ class VendorBillApprovalControllerTest extends BaseControllerSliceTest {
         mockMvc.perform(withAuth(json(post(BASE + "/" + BILL_ID + "/approve"), "{}"), OVER_LIMIT))
                 .andExpect(status().is(httpStatus))
                 .andExpect(jsonPath("$.code").value(code.name()));
+    }
+
+    @Test
+    @DisplayName("S43: the approve and ACCEPT bodies bind taxOnResaleOverrideJustification; pos-tax down answers 503"
+            + " SERVICE_UNAVAILABLE with Retry-After")
+    void taxOnResaleOverrideBindsAndPosTaxDownIs503() throws Exception {
+        when(approvalService.approve(eq(BILL_ID), any())).thenReturn(awaiting());
+        when(approvalService.resolveException(eq(BILL_ID), any())).thenReturn(awaiting());
+
+        mockMvc.perform(withAuth(
+                        json(
+                                post(BASE + "/" + BILL_ID + "/approve"),
+                                "{\"taxOnResaleOverrideJustification\":\"Vendor resale certificate pending\"}"),
+                        OVER_LIMIT))
+                .andExpect(status().isOk());
+        ArgumentCaptor<VendorBillCommands.Approve> approve = ArgumentCaptor.forClass(VendorBillCommands.Approve.class);
+        verify(approvalService).approve(eq(BILL_ID), approve.capture());
+        org.assertj.core.api.Assertions.assertThat(approve.getValue().taxOnResaleOverrideJustification())
+                .isEqualTo("Vendor resale certificate pending");
+
+        mockMvc.perform(withAuth(
+                        json(
+                                post(BASE + "/" + BILL_ID + "/resolve-exception"),
+                                "{\"resolutionAction\":\"ACCEPT\",\"reason\":\"Price agreed by phone\","
+                                        + "\"taxOnResaleOverrideJustification\":\"Vendor resale certificate pending\"}"),
+                        OVER_LIMIT))
+                .andExpect(status().isOk());
+        ArgumentCaptor<VendorBillCommands.ResolveException> accept =
+                ArgumentCaptor.forClass(VendorBillCommands.ResolveException.class);
+        verify(approvalService).resolveException(eq(BILL_ID), accept.capture());
+        org.assertj.core.api.Assertions.assertThat(accept.getValue().taxOnResaleOverrideJustification())
+                .isEqualTo("Vendor resale certificate pending");
+
+        when(approvalService.approve(eq(BILL_ID), any()))
+                .thenThrow(new com.positivity.accounting.internal.exception.TaxServiceUnavailableException(
+                        "The tax service is unavailable"));
+        mockMvc.perform(withAuth(json(post(BASE + "/" + BILL_ID + "/approve"), "{}"), OVER_LIMIT))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .exists("Retry-After"));
+    }
+
+    @Test
+    @DisplayName("S43 B5: a taxOnResaleOverrideJustification of 1001 characters is 400 VALIDATION_ERROR with"
+            + " fieldErrors[taxOnResaleOverrideJustification] on approve and ACCEPT, the text never echoed; the service is"
+            + " never called")
+    void overlongTaxOnResaleOverrideIsRefused() throws Exception {
+        String text = "Z".repeat(1001);
+        for (var request : List.of(
+                json(
+                        post(BASE + "/" + BILL_ID + "/approve"),
+                        "{\"taxOnResaleOverrideJustification\":\"" + text + "\"}"),
+                json(
+                        post(BASE + "/" + BILL_ID + "/resolve-exception"),
+                        "{\"resolutionAction\":\"ACCEPT\",\"reason\":\"Price agreed by phone\","
+                                + "\"taxOnResaleOverrideJustification\":\"" + text + "\"}"))) {
+            mockMvc.perform(withAuth(request, OVER_LIMIT))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                    .andExpect(jsonPath("$.fieldErrors[0].field").value("taxOnResaleOverrideJustification"))
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
+                            .string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("ZZZZZZZZZZ"))));
+        }
+        verifyNoInteractions(approvalService);
+    }
+
+    @Test
+    @DisplayName("S43 (#2604 ruling 4 amended): a relayed pos-tax configuration refusal answers 422 with its code")
+    void relayedTaxRefusalIs422() throws Exception {
+        when(approvalService.approve(eq(BILL_ID), any()))
+                .thenThrow(new com.positivity.accounting.internal.exception.TaxQuoteRefusedException(
+                        "CURRENCY_NOT_SUPPORTED", "Bill INV-1 cannot be quoted its self-assessed (use) tax"));
+
+        mockMvc.perform(withAuth(json(post(BASE + "/" + BILL_ID + "/approve"), "{}"), OVER_LIMIT))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("CURRENCY_NOT_SUPPORTED"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .doesNotExist("Retry-After"));
     }
 
     @Test

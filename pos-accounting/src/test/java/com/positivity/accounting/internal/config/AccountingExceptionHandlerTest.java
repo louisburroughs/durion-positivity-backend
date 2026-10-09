@@ -153,6 +153,11 @@ class AccountingExceptionHandlerTest {
                                                     "2026-10-08T12:00:00Z",
                                                     "pos-tax-correlation")),
                                     request)),
+                    Named.of("handleTaxQuoteRefused", (HandlerInvocation) request -> handler.handleTaxQuoteRefused(
+                            new com.positivity.accounting.internal.exception.TaxQuoteRefusedException(
+                                    "TAX_JURISDICTION_NOT_CONFIGURED",
+                                    "Bill INV-43 cannot be quoted its self-assessed (use) tax"),
+                            request)),
                     Named.of("handleTaxServiceUnavailable", (HandlerInvocation)
                             request -> handler.handleTaxServiceUnavailable(
                                     new com.positivity.accounting.internal.exception.TaxServiceUnavailableException(

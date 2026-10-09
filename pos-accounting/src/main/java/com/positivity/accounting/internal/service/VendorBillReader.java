@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.config.LedgerCurrency;
+import com.positivity.accounting.internal.dto.TaxPurchaseRules;
 import com.positivity.accounting.internal.dto.VendorBillResponse;
 import com.positivity.accounting.internal.dto.VendorBillReview;
 import com.positivity.accounting.internal.entity.GLAccount;
@@ -12,6 +13,7 @@ import com.positivity.accounting.internal.entity.VendorBillMatchCandidate;
 import com.positivity.accounting.internal.entity.VendorBillMatchEvidence;
 import com.positivity.accounting.internal.entity.VendorBillTaxRecovery;
 import com.positivity.accounting.internal.enums.MatchConfidence;
+import com.positivity.accounting.internal.enums.TaxOnResaleOverrideSource;
 import com.positivity.accounting.internal.enums.VendorBillAction;
 import com.positivity.accounting.internal.enums.VendorBillCheckOutcome;
 import com.positivity.accounting.internal.enums.VendorBillDebitClass;
@@ -79,6 +81,7 @@ public class VendorBillReader {
     static final String CHECK_OPEN_DELIVERIES_FROM_VENDOR = "OPEN_DELIVERIES_FROM_VENDOR";
     static final String CHECK_WITHIN_CLERK_LIMIT = "WITHIN_CLERK_LIMIT";
     static final String CHECK_VENDOR_AP_HOLD = "VENDOR_AP_HOLD";
+    static final String CHECK_TAX_ON_RESALE_GOODS = "TAX_ON_RESALE_GOODS";
 
     /** {@code blockedReason} values of an action the rules block (S13, #2510); the tier wins when both apply. */
     static final String BLOCKED_LIMIT = "AP_APPROVAL_LIMIT_EXCEEDED";
@@ -120,6 +123,7 @@ public class VendorBillReader {
     private final VendorBillTaxRecoveryRepository taxRecoveries;
     private final GLMappingResolver glMappingResolver;
     private final GLAccountRepository glAccounts;
+    private final VendorBillPurchaseTax purchaseTax;
 
     /** The full read of one bill, for the caller in the security context. */
     @Transactional(readOnly = true)
@@ -148,6 +152,7 @@ public class VendorBillReader {
         // The limits are the functional currency's (ADR-0067 R-6), whatever the bill's.
         checks.add(withinClerkLimit(bill.getStatus(), bill.getTotalAmount(), settings, ledgerCurrency.code()));
         checks.add(vendorApHold(bill.getStatus(), openAmount, () -> vendorCopies.apHold(bill.getVendorId())));
+        checks.add(taxOnResaleGoods(bill, stored));
 
         return VendorBillResponse.builder()
                 .vendorBillId(billId)
@@ -199,6 +204,11 @@ public class VendorBillReader {
                                 tax.getSource().name()))
                         .toList())
                 .inputTaxRecovery(inputTaxRecovery(billId, posting.orElse(null)))
+                .taxOnResaleOverride(
+                        bill.getTaxOnResaleOverride() == null
+                                ? null
+                                : new VendorBillReview.TaxOnResaleOverride(
+                                        bill.getTaxOnResaleOverride(), bill.getTaxOnResaleOverrideJustification()))
                 .build();
     }
 
@@ -641,6 +651,57 @@ public class VendorBillReader {
                 })
                 .orElseGet(
                         () -> new VendorBillReview.Check(CHECK_VENDOR_AP_HOLD, VendorBillCheckOutcome.PASS, Map.of()));
+    }
+
+    /**
+     * {@code TAX_ON_RESALE_GOODS} (CAP:550 S43, AW44): PASS with {@code acceptedBy} on a bill an override let through
+     * (stored at its approval); in the review statuses, for a bill charging tax on goods for resale (the class it would
+     * post with: the proposal, else the vendor's default), FAIL with {@code taxAmount} and {@code currencyCode} while
+     * the tax country's rule is {@code HOLD} and the vendor does not accept such tax, PASS with {@code acceptedBy
+     * VENDOR_SETTING} when it does; NOT_APPLICABLE otherwise, and with {@code rulesUnavailable true} when pos-tax gives
+     * no rules (the read still succeeds). The rules come from a cache (5 minutes by default); pos-tax is asked only for
+     * a qualifying bill in review. Informational: {@code APPROVE} stays allowed, because the approver can override.
+     */
+    VendorBillReview.@NonNull Check taxOnResaleGoods(@NonNull VendorBill bill, @NonNull List<VendorBillLine> stored) {
+        if (bill.getTaxOnResaleOverride() != null) {
+            return new VendorBillReview.Check(
+                    CHECK_TAX_ON_RESALE_GOODS,
+                    VendorBillCheckOutcome.PASS,
+                    Map.of("acceptedBy", bill.getTaxOnResaleOverride().name()));
+        }
+        if (!REVIEW_STATUSES.contains(bill.getStatus())) {
+            return notApplicable(Map.of());
+        }
+        VendorBillPostingService.Classification classification = VendorBillApprovalServiceImpl.merge(
+                null, bill, bill.getVendorId() == null ? null : vendorCopies.apDefaults(bill.getVendorId()));
+        VendorBillPostingService.PurchaseTaxBasis basis = VendorBillPostingService.purchaseTaxBasis(
+                bill,
+                stored,
+                classification == null ? new VendorBillPostingService.Classification(null, null) : classification);
+        if (!basis.mayHold()) {
+            return notApplicable(Map.of());
+        }
+        Optional<TaxPurchaseRules> rules = purchaseTax.cachedRules(zoneResolver.today());
+        if (rules.isEmpty()) {
+            return notApplicable(Map.of("rulesUnavailable", "true"));
+        }
+        if (!rules.get().holdsTaxOnResaleGoods()) {
+            return notApplicable(Map.of());
+        }
+        if (purchaseTax.vendorAccepts(bill)) {
+            return new VendorBillReview.Check(
+                    CHECK_TAX_ON_RESALE_GOODS,
+                    VendorBillCheckOutcome.PASS,
+                    Map.of("acceptedBy", TaxOnResaleOverrideSource.VENDOR_SETTING.name()));
+        }
+        Map<String, String> args = new LinkedHashMap<>();
+        args.put("taxAmount", basis.statedTax().toPlainString());
+        args.put("currencyCode", currencyOf(bill));
+        return new VendorBillReview.Check(CHECK_TAX_ON_RESALE_GOODS, VendorBillCheckOutcome.FAIL, args);
+    }
+
+    private static VendorBillReview.Check notApplicable(Map<String, String> args) {
+        return new VendorBillReview.Check(CHECK_TAX_ON_RESALE_GOODS, VendorBillCheckOutcome.NOT_APPLICABLE, args);
     }
 
     /**

@@ -117,6 +117,19 @@ class AvalaraTaxProviderTest {
     }
 
     @Test
+    @DisplayName("S43: USE answers 501 TAX_CALCULATION_TYPE_UNSUPPORTED before any AvaTax call")
+    void useIsUnsupported() {
+        Fixture f = fixture();
+        TaxCalculationRequest use = sampleRequest();
+        use.setCalculationType(TaxCalculationType.USE);
+
+        assertThatThrownBy(() -> f.provider().estimate(use))
+                .isInstanceOf(com.positivity.tax.internal.exception.TaxCalculationTypeUnsupportedException.class)
+                .hasMessageContaining("USE");
+        f.server().verify();
+    }
+
+    @Test
     @DisplayName("providerName is the stable AVALARA label")
     void providerName() {
         assertThat(fixture().provider().providerName()).isEqualTo("AVALARA");

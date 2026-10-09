@@ -278,6 +278,17 @@ public class SupplierVendorCopies {
     }
 
     /**
+     * Whether the vendor accepts tax charged on goods for resale (CAP:550 S43, AW44): its AP setting {@code
+     * acceptTaxOnResaleGoods}, false without a settings row or a vendor.
+     */
+    public boolean acceptsTaxOnResaleGoods(@Nullable UUID vendorId) {
+        return vendorId != null
+                && settings.findByVendorId(vendorId)
+                        .map(ApVendorSettings::isAcceptTaxOnResaleGoods)
+                        .orElse(false);
+    }
+
+    /**
      * The vendor's AP defaults as a classification (rule 10, AW39): the default debit class and expense key, either
      * null; null when the vendor has none.
      */

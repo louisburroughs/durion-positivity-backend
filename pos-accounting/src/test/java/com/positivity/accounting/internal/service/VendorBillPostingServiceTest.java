@@ -314,6 +314,80 @@ class VendorBillPostingServiceTest {
             new VendorBillPostingService.Classification(VendorBillDebitClass.GOODS, null);
 
     @Nested
+    @DisplayName("S43: the self-assessed (use) tax accrual (AW44)")
+    class UseTaxAccrual {
+
+        private final VendorBillPostingService.Classification shopSupplies =
+                new VendorBillPostingService.Classification(VendorBillDebitClass.EXPENSE, "EXPENSE_SHOP_SUPPLIES");
+
+        private List<String> withUseTax(VendorBill bill, List<VendorBillLine> lines, String amount) {
+            List<String> out = new ArrayList<>();
+            for (VendorBillPostingService.Leg leg : VendorBillPostingService.legs(
+                    bill,
+                    lines,
+                    shopSupplies,
+                    null,
+                    java.util.Map.of(),
+                    amount == null
+                            ? null
+                            : new VendorBillPostingService.UseTax("EXPENSE_SHOP_SUPPLIES", new BigDecimal(amount)))) {
+                BigDecimal signed = leg.signedAmount();
+                out.add(leg.mappingKey()
+                        + (signed.signum() > 0 ? " Dr " : " Cr ")
+                        + signed.abs().toPlainString());
+            }
+            return out;
+        }
+
+        @Test
+        @DisplayName("AC4: a header-only EXPENSE bill of 200.00 with 17.00 use tax: Dr EXPENSE 217.00 / Cr AP 200.00 /"
+                + " Cr USE_TAX_PAYABLE 17.00; accounts payable stays the billed gross")
+        void headerOnlyAccrual() {
+            VendorBill bill = bill("200.00");
+            bill.setNetAmount(new BigDecimal("200.00"));
+            bill.setTaxAmount(new BigDecimal("0.00"));
+            bill.setStatedLineCount(1);
+
+            assertThat(withUseTax(bill, List.of(), "17.00"))
+                    .containsExactly(
+                            "EXPENSE_SHOP_SUPPLIES Dr 217.00",
+                            "ACCOUNTS_PAYABLE Cr 200.00",
+                            "USE_TAX_PAYABLE Cr 17.00");
+            assertThat(withUseTax(bill, List.of(), null))
+                    .containsExactly("EXPENSE_SHOP_SUPPLIES Dr 200.00", "ACCOUNTS_PAYABLE Cr 200.00");
+        }
+
+        @Test
+        @DisplayName("A2: the accrual posts as returned, never rounded again: 1.235 stays 1.235")
+        void accrualIsNotRounded() {
+            VendorBill bill = bill("200.00");
+            bill.setNetAmount(new BigDecimal("200.00"));
+            bill.setTaxAmount(new BigDecimal("0.00"));
+            bill.setStatedLineCount(1);
+
+            assertThat(withUseTax(bill, List.of(), "1.235"))
+                    .containsExactly(
+                            "EXPENSE_SHOP_SUPPLIES Dr 201.235",
+                            "ACCOUNTS_PAYABLE Cr 200.00",
+                            "USE_TAX_PAYABLE Cr 1.235");
+        }
+
+        @Test
+        @DisplayName("A goods-receipt bill: the accrual joins the expense lines' key; the goods line is untouched")
+        void byLineAccrual() {
+            List<VendorBillLine> lines =
+                    List.of(line(1, true, "1", "100.00", "1", "100.00"), line(2, false, "0", "50.00", "1", "50.00"));
+
+            assertThat(withUseTax(bill("150.00"), lines, "4.25"))
+                    .containsExactly(
+                            "GOODS_RECEIVED_NOT_BILLED Dr 100.00",
+                            "EXPENSE_SHOP_SUPPLIES Dr 54.25",
+                            "ACCOUNTS_PAYABLE Cr 150.00",
+                            "USE_TAX_PAYABLE Cr 4.25");
+        }
+    }
+
+    @Nested
     @DisplayName("The vendor's own totals: gross vs net + tax (AW47)")
     class Totals {
 
@@ -519,7 +593,7 @@ class VendorBillPostingServiceTest {
         void postsOnTheBillDate() {
             VendorBill bill = bill("412.00");
 
-            VendorBillGlPosting posting = service.post(bill, null, null, "controller.cfo");
+            VendorBillGlPosting posting = service.post(bill, null, null, "controller.cfo", null);
 
             ArgumentCaptor<JournalEntryCreateRequest> request =
                     ArgumentCaptor.forClass(JournalEntryCreateRequest.class);
@@ -560,7 +634,7 @@ class VendorBillPostingServiceTest {
                                             null,
                                             VendorBillTaxSplit.Withheld.NOT_RECOVERABLE))));
 
-            service.post(edi, GOODS, null, "controller.cfo");
+            service.post(edi, GOODS, null, "controller.cfo", null);
 
             ArgumentCaptor<JournalEntryCreateRequest> request =
                     ArgumentCaptor.forClass(JournalEntryCreateRequest.class);
@@ -591,7 +665,7 @@ class VendorBillPostingServiceTest {
         @Test
         @DisplayName("S32d AC 1 (bills): a tenant without recovery writes no recovery row")
         void noRecoveryNoRows() {
-            service.post(bill("412.00"), null, null, "controller.cfo");
+            service.post(bill("412.00"), null, null, "controller.cfo", null);
 
             verify(taxRecoveries, never()).saveAll(any());
         }
@@ -604,7 +678,7 @@ class VendorBillPostingServiceTest {
             edi.setDifferenceClass(VendorBillDifferenceClass.FREIGHT);
             edi.setDifferenceJustification("Freight on the invoice, not stated");
 
-            VendorBillGlPosting posting = service.post(edi, GOODS, null, "controller.cfo");
+            VendorBillGlPosting posting = service.post(edi, GOODS, null, "controller.cfo", null);
 
             ArgumentCaptor<JournalEntryCreateRequest> request =
                     ArgumentCaptor.forClass(JournalEntryCreateRequest.class);
@@ -624,7 +698,7 @@ class VendorBillPostingServiceTest {
                             eq("VENDOR_BILL"), eq("PURCHASE_PRICE_DIFFERENCE"), any(LocalDateTime.class)))
                     .thenThrow(new GLMappingNotConfiguredException("No mapping for key PURCHASE_PRICE_DIFFERENCE"));
 
-            assertThatThrownBy(() -> service.post(bill("412.00"), null, null, "controller.cfo"))
+            assertThatThrownBy(() -> service.post(bill("412.00"), null, null, "controller.cfo", null))
                     .isInstanceOfSatisfying(GLMappingNotConfiguredException.class, e -> {
                         assertThat(e.getReferenceId()).isEqualTo("VENDOR_BILL/PURCHASE_PRICE_DIFFERENCE");
                         assertThat(e.getNextAction())
@@ -645,7 +719,7 @@ class VendorBillPostingServiceTest {
                     .when(accounts)
                     .validateAccountForPosting(eq(inactive), any(LocalDateTime.class));
 
-            assertThatThrownBy(() -> service.post(bill("412.00"), null, null, "controller.cfo"))
+            assertThatThrownBy(() -> service.post(bill("412.00"), null, null, "controller.cfo", null))
                     .isInstanceOfSatisfying(GLMappingNotConfiguredException.class, e -> {
                         assertThat(e.getReferenceId()).isEqualTo("VENDOR_BILL/GOODS_RECEIVED_NOT_BILLED");
                         assertThat(e.getMessage())
@@ -685,7 +759,7 @@ class VendorBillPostingServiceTest {
                             .journalEntryId(entryId)
                             .build()));
 
-            assertThatThrownBy(() -> service.post(bill("412.00"), null, null, "controller.cfo"))
+            assertThatThrownBy(() -> service.post(bill("412.00"), null, null, "controller.cfo", null))
                     .isInstanceOfSatisfying(
                             VendorBillException.class,
                             e -> assertThat(e.getCode()).isEqualTo(VendorBillException.Code.AP_BILL_NOT_APPROVABLE));
@@ -698,7 +772,7 @@ class VendorBillPostingServiceTest {
             VendorBill bill = bill("412.00");
             bill.setCurrency("EUR");
 
-            assertThatThrownBy(() -> service.post(bill, null, null, "controller.cfo"))
+            assertThatThrownBy(() -> service.post(bill, null, null, "controller.cfo", null))
                     .isInstanceOf(VendorBillException.class);
             verify(journalEntries, never()).createJournalEntry(any());
         }
@@ -709,7 +783,7 @@ class VendorBillPostingServiceTest {
             when(journalEntries.postJournalEntry(eq(entryId), any()))
                     .thenThrow(new AccountingPeriodHardLockedException(TODAY.plusDays(1), "hard-locked"));
 
-            assertThatThrownBy(() -> service.post(bill("412.00"), null, null, "controller.cfo"))
+            assertThatThrownBy(() -> service.post(bill("412.00"), null, null, "controller.cfo", null))
                     .isInstanceOf(AccountingPeriodHardLockedException.class);
             verify(postings, never()).saveAndFlush(any());
         }

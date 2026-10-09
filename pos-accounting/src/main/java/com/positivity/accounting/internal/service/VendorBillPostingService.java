@@ -66,6 +66,11 @@ import org.springframework.transaction.annotation.Transactional;
  * A credit note posts the mirror: Dr {@code ACCOUNTS_PAYABLE} / Cr its {@code EXPENSE_<CODE>} key ({@code EXPENSE})
  * or {@code PURCHASE_PRICE_DIFFERENCE} ({@code PRICE_ALLOWANCE}). A bill never debits 1300 (ADR-0048 §1).
  *
+ * <p><b>Self-assessed (use) tax (CAP:550 S43, AW44).</b> When the tax country's purchase-tax rule self-assesses
+ * untaxed expenses, a bill (never a credit note) that states no tax accrues the tax pos-tax quotes for its expense
+ * lines ({@link UseTax}): Dr the expense key, Cr {@code USE_TAX_PAYABLE} (2240), in addition to AW39's legs, so accounts
+ * payable stays the billed gross. The amounts are those returned; the void's reversal mirrors them.
+ *
  * <p><b>The vendor's own totals (AW47).</b> A bill with the vendor's header totals (EDI) debits its class at the
  * stated net, and the stated tax as above: GOODS is Dr 2100 net / Dr 5050 tax, EXPENSE is Dr {@code EXPENSE_<CODE>}
  * net + tax. Accounts payable is always the gross. A gap {@code gross - (net + tax)} within the rounding tolerance
@@ -100,6 +105,9 @@ public class VendorBillPostingService {
     static final String GOODS_RECEIVED_NOT_BILLED_KEY = "GOODS_RECEIVED_NOT_BILLED";
     static final String PURCHASE_PRICE_DIFFERENCE_KEY = "PURCHASE_PRICE_DIFFERENCE";
     static final String FREIGHT_IN_KEY = "FREIGHT_IN";
+
+    /** The credit of a self-assessed (use) tax accrual (CAP:550 S43, AW44): 2240 Use Tax Payable. */
+    static final String USE_TAX_PAYABLE_KEY = "USE_TAX_PAYABLE";
 
     /** Prefix of the {@code VENDOR_BILL} expense keys: {@code EXPENSE_<CODE>}, the nine AW18 codes. */
     public static final String EXPENSE_KEY_PREFIX = "EXPENSE_";
@@ -141,6 +149,50 @@ public class VendorBillPostingService {
             @NonNull VendorBillDifferenceClass differenceClass,
             @Nullable String expenseMappingKey) {}
 
+    /**
+     * A self-assessed (use) tax accrual (CAP:550 S43): the expense key the bill's expense lines post to, and the sum of
+     * the tax pos-tax returned for them, above 0.00.
+     */
+    public record UseTax(
+            @NonNull String expenseMappingKey, @NonNull BigDecimal amount) {}
+
+    /**
+     * What a bill offers the purchase-tax rules (CAP:550 S43, AW44), decided at bill level from the class it would post
+     * with. A credit note offers nothing.
+     *
+     * @param statedTax the tax the bill states, 0.00 when none
+     * @param taxOnGoods the stated tax prorated (AW39) onto its {@code RECEIPT_MATCHED} or {@code GOODS} lines, or all
+     *     of it on a header-only {@code GOODS} bill: above 0.00 makes the bill subject to a {@code HOLD} rule
+     * @param untaxedExpense when the bill states no tax, its {@code EXPENSE} lines with a net above 0.00 (one line at
+     *     the header net for a header-only {@code EXPENSE} bill): the lines a self-assessing rule accrues on
+     * @param expenseMappingKey the key the expense lines post to; null when none is known (the bill then refuses as
+     *     unclassified before any accrual)
+     */
+    public record PurchaseTaxBasis(
+            @NonNull BigDecimal statedTax,
+            @NonNull BigDecimal taxOnGoods,
+            @NonNull List<UntaxedLine> untaxedExpense,
+            @Nullable String expenseMappingKey) {
+
+        /** Nothing for the purchase-tax rules. */
+        public static final PurchaseTaxBasis NONE =
+                new PurchaseTaxBasis(BigDecimal.ZERO.setScale(SCALE), BigDecimal.ZERO.setScale(SCALE), List.of(), null);
+
+        /** Whether a {@code HOLD} rule would hold the bill: tax on goods for resale above 0.00. */
+        public boolean mayHold() {
+            return taxOnGoods.signum() > 0;
+        }
+
+        /** Whether a self-assessing rule would accrue: an untaxed expense line and its key. */
+        public boolean mayAccrue() {
+            return !untaxedExpense.isEmpty() && expenseMappingKey != null;
+        }
+    }
+
+    /** One untaxed expense line a use-tax quote prices: its id and its net. */
+    public record UntaxedLine(
+            @NonNull String lineItemId, @NonNull BigDecimal net) {}
+
     /** The entry's legs, the rounding put on the largest debit, and the unreconciled difference posted. */
     record Entry(
             @NonNull List<Leg> legs,
@@ -153,6 +205,7 @@ public class VendorBillPostingService {
      * approval back with it (AW42).
      *
      * @param overrideJustification honoured by the period gate only for a holder of {@code accounting:period:override}
+     * @param useTax the self-assessed tax quoted for this decision (CAP:550 S43), or null when none accrues
      * @return the posting row, entry and date included
      * @throws VendorBillException 409 {@code AP_BILL_NOT_APPROVABLE} when the bill is already posted or is held for
      *     its currency; 422 {@code AP_BILL_ZERO_TOTAL} for a bill of 0.00, {@code AP_BILL_UNCLASSIFIED} without a
@@ -165,7 +218,8 @@ public class VendorBillPostingService {
             @NonNull VendorBill bill,
             @Nullable Classification classification,
             @Nullable String overrideJustification,
-            @NonNull String actor) {
+            @NonNull String actor,
+            @Nullable UseTax useTax) {
         UUID billId = bill.getVendorBillId();
         if (ledgerCurrency.isForeign(bill.getCurrency())) {
             // AW43: never posted at par. The status guard refuses CURRENCY_HOLD first; this holds the line for any
@@ -191,7 +245,8 @@ public class VendorBillPostingService {
                 billLines.findByVendorBill_VendorBillIdOrderByLineNumber(billId),
                 effective,
                 difference(bill),
-                plan.recoveredByKey());
+                plan.recoveredByKey(),
+                useTax);
 
         PostingDate postingDate = postingDate(bill);
         List<JournalEntryCreateRequest.JournalEntryLineRequest> lines = new ArrayList<>();
@@ -383,6 +438,64 @@ public class VendorBillPostingService {
     }
 
     /**
+     * What {@code bill}, posted with {@code classification}, offers the purchase-tax rules (CAP:550 S43, AW44), from
+     * its stored {@code lines}; writes nothing and refuses nothing. It mirrors {@link #entry}: a bill with the
+     * vendor's header totals or without lines is decided by its one class, a goods-receipt bill line by line with the
+     * stated tax prorated by line net (AW39). A credit note, or a bill of 0.00, offers nothing.
+     */
+    static @NonNull PurchaseTaxBasis purchaseTaxBasis(
+            @NonNull VendorBill bill, @NonNull List<VendorBillLine> lines, @NonNull Classification classification) {
+        BigDecimal gross = gross(bill);
+        if (gross.signum() <= 0) {
+            return PurchaseTaxBasis.NONE;
+        }
+        BigDecimal tax = scaled(bill.getTaxAmount()).abs();
+        String key = classification.expenseMappingKey() == null
+                        || classification.expenseMappingKey().isBlank()
+                ? null
+                : classification.expenseMappingKey().trim();
+        Optional<VendorBillTotals> totals = VendorBillTotals.of(bill);
+        BigDecimal taxOnGoods = BigDecimal.ZERO.setScale(SCALE);
+        List<UntaxedLine> untaxed = new ArrayList<>();
+        if (totals.isPresent() || lines.isEmpty()) {
+            BigDecimal net = totals.map(VendorBillTotals::net).orElseGet(() -> gross.subtract(tax));
+            if (classification.debitClass() == VendorBillDebitClass.GOODS) {
+                taxOnGoods = tax;
+            } else if (classification.debitClass() == VendorBillDebitClass.EXPENSE
+                    && tax.signum() == 0
+                    && net.signum() > 0) {
+                untaxed.add(new UntaxedLine("1", net));
+            }
+        } else {
+            List<VendorBillLine> billed = new ArrayList<>();
+            List<BigDecimal> nets = new ArrayList<>();
+            for (VendorBillLine line : lines) {
+                BigDecimal net = round(line.effectiveBilledQuantity().multiply(line.effectiveBilledUnitPrice()));
+                if (net.signum() != 0) {
+                    billed.add(line);
+                    nets.add(net);
+                }
+            }
+            List<BigDecimal> shares = prorate(tax, nets);
+            for (int i = 0; i < billed.size(); i++) {
+                VendorBillLine line = billed.get(i);
+                if (classOf(line) == VendorBillDebitClass.EXPENSE) {
+                    if (tax.signum() == 0 && nets.get(i).signum() > 0) {
+                        untaxed.add(new UntaxedLine(
+                                line.getLineNumber() == null
+                                        ? String.valueOf(i + 1)
+                                        : line.getLineNumber().toString(),
+                                nets.get(i)));
+                    }
+                } else if (shares.get(i).signum() > 0) {
+                    taxOnGoods = taxOnGoods.add(shares.get(i));
+                }
+            }
+        }
+        return new PurchaseTaxBasis(tax, taxOnGoods, List.copyOf(untaxed), key);
+    }
+
+    /**
      * Resolves each leg's mapping on {@code date} as {@link #post} does, writing nothing: 422 {@code
      * GL_MAPPING_NOT_CONFIGURED} for the first key with no active mapping. Automatic approval asks this before it
      * posts (CAP:550 S13, #2510), in a transaction of its own, so a missing mapping never reaches the match's.
@@ -415,16 +528,12 @@ public class VendorBillPostingService {
             @NonNull List<VendorBillLine> lines,
             @NonNull Classification classification,
             @Nullable Difference difference) {
-        return entry(bill, lines, classification, difference, Map.of());
+        return entry(bill, lines, classification, difference, Map.of(), null);
     }
 
     /**
      * {@link #entry(VendorBill, List, Classification, Difference)} for a recovery-enabled tenant (CAP:550 S32d item
-     * 10): each recovered amount debits its {@code TAX_RECOVERABLE_<regime>} key (a credit note credits it), and only
-     * the tax not recovered goes into the class, prorated by line net on a bill with lines. Recoverable tax never
-     * reaches 2100, 5050 or inventory cost.
-     *
-     * @param recovered the recovered amounts by mapping key, positive; empty books the gross as before
+     * 10), without a self-assessed tax accrual.
      */
     static @NonNull Entry entry(
             @NonNull VendorBill bill,
@@ -432,6 +541,27 @@ public class VendorBillPostingService {
             @NonNull Classification classification,
             @Nullable Difference difference,
             @NonNull Map<String, BigDecimal> recovered) {
+        return entry(bill, lines, classification, difference, recovered, null);
+    }
+
+    /**
+     * {@link #entry(VendorBill, List, Classification, Difference)} for a recovery-enabled tenant (CAP:550 S32d item
+     * 10): each recovered amount debits its {@code TAX_RECOVERABLE_<regime>} key (a credit note credits it), and only
+     * the tax not recovered goes into the class, prorated by line net on a bill with lines. Recoverable tax never
+     * reaches 2100, 5050 or inventory cost. With a self-assessed tax accrual (CAP:550 S43): Dr its expense key, Cr
+     * {@code USE_TAX_PAYABLE}, after the legs balance on the gross. The two never meet on one bill: recovery takes
+     * stated tax, the accrual applies only to a bill stating none; either way the accrual's two legs are equal.
+     *
+     * @param recovered the recovered amounts by mapping key, positive; empty books the gross as before
+     * @param useTax the accrual, or null when none
+     */
+    static @NonNull Entry entry(
+            @NonNull VendorBill bill,
+            @NonNull List<VendorBillLine> lines,
+            @NonNull Classification classification,
+            @Nullable Difference difference,
+            @NonNull Map<String, BigDecimal> recovered,
+            @Nullable UseTax useTax) {
         BigDecimal gross = gross(bill);
         BigDecimal sign = gross.signum() < 0 ? BigDecimal.ONE.negate() : BigDecimal.ONE;
         BigDecimal recoveredTotal = recovered.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -488,6 +618,11 @@ public class VendorBillPostingService {
             }
         }
         BigDecimal rounding = balanceOnLargest(debits, gross, recovered.keySet());
+        boolean accrues = useTax != null && useTax.amount().signum() > 0 && gross.signum() > 0;
+        if (accrues) {
+            // As returned, at the ledger currency's exponent (PC-6): never rounded again here.
+            add(debits, useTax.expenseMappingKey(), useTax.amount());
+        }
         List<Leg> legs = new ArrayList<>();
         debits.forEach((key, amount) -> {
             if (amount.signum() != 0) {
@@ -495,6 +630,9 @@ public class VendorBillPostingService {
             }
         });
         legs.add(new Leg(ACCOUNTS_PAYABLE_KEY, gross.negate()));
+        if (accrues) {
+            legs.add(new Leg(USE_TAX_PAYABLE_KEY, useTax.amount().negate()));
+        }
         return new Entry(legs, rounding, posted, differenceAmount);
     }
 
@@ -515,6 +653,17 @@ public class VendorBillPostingService {
             @Nullable Difference difference,
             @NonNull Map<String, BigDecimal> recovered) {
         return entry(bill, lines, classification, difference, recovered).legs();
+    }
+
+    /** The legs alone, with the recovered tax and a self-assessed tax accrual; see {@link #entry}. */
+    static @NonNull List<Leg> legs(
+            @NonNull VendorBill bill,
+            @NonNull List<VendorBillLine> lines,
+            @NonNull Classification classification,
+            @Nullable Difference difference,
+            @NonNull Map<String, BigDecimal> recovered,
+            @Nullable UseTax useTax) {
+        return entry(bill, lines, classification, difference, recovered, useTax).legs();
     }
 
     /**
@@ -777,6 +926,7 @@ public class VendorBillPostingService {
                     case GOODS_RECEIVED_NOT_BILLED_KEY -> "Goods received, now billed";
                     case PURCHASE_PRICE_DIFFERENCE_KEY -> "Purchase price difference and tax on goods";
                     case FREIGHT_IN_KEY -> "Freight on the vendor's bill";
+                    case USE_TAX_PAYABLE_KEY -> "Self-assessed use tax";
                     default ->
                         mappingKey.startsWith(VendorBillTaxSplit.RECOVERABLE_KEY_PREFIX)
                                 ? "Recoverable tax "

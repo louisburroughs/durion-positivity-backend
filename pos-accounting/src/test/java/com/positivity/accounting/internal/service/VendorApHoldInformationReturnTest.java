@@ -671,4 +671,75 @@ class VendorApHoldInformationReturnTest {
         registration.put("last4", last4);
         return registration;
     }
+
+    @Nested
+    @DisplayName("S43 AC10: acceptTaxOnResaleGoods on the settings PUT and the vendor read")
+    class AcceptTaxOnResaleGoods {
+
+        private VendorApSettingsRequest accept(Boolean value) {
+            VendorApSettingsRequest request = put(REQUEST);
+            request.setAcceptTaxOnResaleGoods(value);
+            return request;
+        }
+
+        @Test
+        @DisplayName("true writes one AP_VENDOR_SETTINGS_SET row old -> new with the requestId, and the vendor read"
+                + " shows it")
+        void setsAndReads() {
+            var read = service.setApSettings(VENDOR, accept(true));
+
+            assertThat(read.getApSettings().acceptTaxOnResaleGoods()).isTrue();
+            assertThat(row.isAcceptTaxOnResaleGoods()).isTrue();
+            assertThat(rows("AP_VENDOR_SETTINGS_SET")).singleElement().satisfies(r -> {
+                assertThat(r.getOldValue()).isEqualTo("acceptTaxOnResaleGoods=false");
+                assertThat(r.getNewValue()).isEqualTo("acceptTaxOnResaleGoods=true;requestId=" + REQUEST);
+                assertThat(r.getJustification()).isEqualTo(JUSTIFICATION);
+            });
+            assertThat(rows("AP_VENDOR_SETTINGS_REQUEST").getFirst().getNewValue())
+                    .contains(";acceptTaxOnResaleGoods=true;changed=1");
+        }
+
+        @Test
+        @DisplayName("absent leaves it unchanged (~ in the fingerprint); the same value again writes no setting row")
+        void absentOrUnchanged() {
+            service.setApSettings(VENDOR, put(REQUEST));
+            assertThat(rows("AP_VENDOR_SETTINGS_REQUEST").getFirst().getNewValue())
+                    .contains(";acceptTaxOnResaleGoods=~");
+            assertThat(rows("AP_VENDOR_SETTINGS_SET")).isEmpty();
+
+            saved.clear();
+            service.setApSettings(VENDOR, accept(false));
+            assertThat(rows("AP_VENDOR_SETTINGS_SET")).isEmpty();
+        }
+
+        @Test
+        @DisplayName("null is 400 VALIDATION_ERROR with fieldErrors[acceptTaxOnResaleGoods]; nothing is written")
+        void nullIsRefused() {
+            assertThatThrownBy(() -> service.setApSettings(VENDOR, accept(null)))
+                    .isInstanceOfSatisfying(VendorBillException.class, e -> {
+                        assertThat(e.getCode()).isEqualTo(VendorBillException.Code.VALIDATION_ERROR);
+                        assertThat(e.getFieldErrors())
+                                .extracting(VendorBillException.FieldError::field)
+                                .containsExactly("acceptTaxOnResaleGoods");
+                    });
+            assertThat(saved).isEmpty();
+        }
+
+        @Test
+        @DisplayName("a reused requestId with another value is 409 IDEMPOTENCY_CONFLICT; the same value replays")
+        void reusedRequestId() {
+            service.setApSettings(VENDOR, accept(true));
+            AccountingAuditLog marker = rows("AP_VENDOR_SETTINGS_REQUEST").getFirst();
+            when(auditLogs.findFirstByOperationAndEntityId("AP_VENDOR_SETTINGS_REQUEST", REQUEST))
+                    .thenReturn(Optional.of(marker));
+            saved.clear();
+
+            service.setApSettings(VENDOR, accept(true));
+            assertThat(saved).isEmpty();
+            assertThatThrownBy(() -> service.setApSettings(VENDOR, accept(false)))
+                    .isInstanceOf(IdempotencyConflictException.class);
+            assertThatThrownBy(() -> service.setApSettings(VENDOR, put(REQUEST)))
+                    .isInstanceOf(IdempotencyConflictException.class);
+        }
+    }
 }

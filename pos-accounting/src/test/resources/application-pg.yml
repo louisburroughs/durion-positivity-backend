@@ -42,6 +42,13 @@ pos:
     deposit-gauge:
       enabled: false
 
+# CAP:550 S43: the bill read's purchase-tax rules are not cached across tests, so each test's stubbed pos-tax answer
+# (TaxReferenceClient is a mock, PostgresTenancyTestBase) is the one its read sees.
+accounting:
+  tax:
+    purchase-rules:
+      cache-ttl: PT0S
+
 eureka:
   client:
     enabled: false

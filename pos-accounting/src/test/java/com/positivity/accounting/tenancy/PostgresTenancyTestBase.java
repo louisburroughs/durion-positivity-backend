@@ -1,6 +1,11 @@
 package com.positivity.accounting.tenancy;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
+
 import com.positivity.accounting.AccountingPostgresContainer;
+import com.positivity.accounting.internal.client.TaxReferenceClient;
+import com.positivity.accounting.internal.dto.TaxPurchaseRules;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.service.AccountingTemplate;
 import com.positivity.accounting.internal.service.AccountingTemplateReader;
@@ -15,6 +20,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
  * The tenancy tests' view of the shared {@link AccountingPostgresContainer}: the container's
@@ -61,6 +67,20 @@ public abstract class PostgresTenancyTestBase {
     @DynamicPropertySource
     static void datasource(DynamicPropertyRegistry registry) {
         AccountingPostgresContainer.registerDataSourceProperties(registry);
+    }
+
+    /**
+     * pos-tax, which no test container runs (CAP:550 S43): by default it answers that the tax country configures no
+     * purchase-tax rules, so no vendor-bill decision holds or accrues purchase tax unless a test stubs it otherwise.
+     */
+    @MockitoBean
+    protected TaxReferenceClient taxReferenceClient;
+
+    @BeforeEach
+    void noPurchaseTaxRules() {
+        when(taxReferenceClient.purchaseRules(any(), any()))
+                .thenAnswer(inv ->
+                        new TaxPurchaseRules(inv.getArgument(0), inv.getArgument(1), "STUB", false, "ALLOW", false));
     }
 
     @Autowired

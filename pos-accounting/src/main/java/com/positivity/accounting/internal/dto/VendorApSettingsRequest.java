@@ -16,17 +16,17 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Sets a vendor's AP defaults (CAP:550 S24, #2517, rule 10; AW39), its AP payment hold and its information-return
- * reportable flag (#2615). A field left out of the body is unchanged; a default sent as JSON {@code null} clears it,
- * while {@code apHold} and {@code informationReturn} are objects that clear through their own fields ({@code null} is
- * refused). The actor is the caller (ADR-0018); no body field names one. S43 adds {@code acceptTaxOnResaleGoods} here,
- * as another optional field with its presence flag and its own fingerprint entry.
+ * Sets a vendor's AP defaults (CAP:550 S24, #2517, rule 10; AW39), its AP payment hold, its information-return
+ * reportable flag (#2615) and whether it accepts tax charged on goods for resale (S43, {@code acceptTaxOnResaleGoods}).
+ * A field left out of the body is unchanged; a default sent as JSON {@code null} clears it, while {@code apHold} and
+ * {@code informationReturn} are objects that clear through their own fields, and {@code acceptTaxOnResaleGoods} is a
+ * boolean ({@code null} is refused for all three). The actor is the caller (ADR-0018); no body field names one.
  */
 @JsonIgnoreProperties(ignoreUnknown = false)
 @Schema(
-        description = "The vendor's AP settings to change (defaults, AP hold, information-return flag), the"
-                + " justification and the request id. A field left out is unchanged; a default sent as null clears"
-                + " it.")
+        description = "The vendor's AP settings to change (defaults, AP hold, information-return flag, tax-on-resale"
+                + " acceptance), the justification and the request id. A field left out is unchanged; a default sent"
+                + " as null clears it.")
 public class VendorApSettingsRequest {
 
     @Schema(
@@ -86,6 +86,17 @@ public class VendorApSettingsRequest {
 
     @JsonIgnore
     private boolean informationReturnPresent;
+
+    @Schema(
+            description = "Optional: whether a bill of this vendor charging tax on goods for resale is approved without"
+                    + " a per-bill override where the tax country's purchase-tax rules hold such bills (CAP:550 S43);"
+                    + " absent leaves it unchanged, null is refused",
+            example = "true",
+            requiredMode = NOT_REQUIRED)
+    private @Nullable Boolean acceptTaxOnResaleGoods;
+
+    @JsonIgnore
+    private boolean acceptTaxOnResaleGoodsPresent;
 
     @JsonIgnore
     private final List<String> unknownProperties = new ArrayList<>();
@@ -150,6 +161,21 @@ public class VendorApSettingsRequest {
     @JsonIgnore
     public boolean hasInformationReturn() {
         return informationReturnPresent;
+    }
+
+    public @Nullable Boolean getAcceptTaxOnResaleGoods() {
+        return acceptTaxOnResaleGoods;
+    }
+
+    public void setAcceptTaxOnResaleGoods(@Nullable Boolean acceptTaxOnResaleGoods) {
+        this.acceptTaxOnResaleGoods = acceptTaxOnResaleGoods;
+        this.acceptTaxOnResaleGoodsPresent = true;
+    }
+
+    /** Whether the body named {@code acceptTaxOnResaleGoods}, null included. */
+    @JsonIgnore
+    public boolean hasAcceptTaxOnResaleGoods() {
+        return acceptTaxOnResaleGoodsPresent;
     }
 
     public @Nullable String getDefaultDebitClass() {

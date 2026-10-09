@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.entity;
 
+import com.positivity.accounting.internal.enums.TaxOnResaleOverrideSource;
 import com.positivity.accounting.internal.enums.VendorBillApproverKind;
 import com.positivity.accounting.internal.enums.VendorBillDebitClass;
 import com.positivity.accounting.internal.enums.VendorBillDifferenceClass;
@@ -50,7 +51,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Setter
 @NoArgsConstructor
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
-@ToString(exclude = {"journalEntry"})
+@ToString(exclude = {"journalEntry", "taxOnResaleOverrideJustification"})
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(
@@ -229,6 +230,21 @@ public class VendorBill extends TenantScopedEntity {
 
     @Column(name = "rejection_reason", length = 1000)
     private String rejectionReason;
+
+    /**
+     * What let the bill through its tax country's hold for tax on goods for resale at approval (CAP:550 S43, AW44);
+     * null when the hold did not apply.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tax_on_resale_override", length = 20)
+    private TaxOnResaleOverrideSource taxOnResaleOverride;
+
+    /**
+     * The approver's justification of a {@code BILL} override, 10-1000 characters; null otherwise. Staff free text
+     * handled as CONFIDENTIAL (ADR-0072): never in toString or a log.
+     */
+    @Column(name = "tax_on_resale_override_justification", length = 1000)
+    private String taxOnResaleOverrideJustification;
 
     @Column(name = "paid_at")
     private Instant paidAt;

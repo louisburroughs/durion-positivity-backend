@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.config.LedgerCurrency;
+import com.positivity.accounting.internal.dto.TaxPurchaseRules;
 import com.positivity.accounting.internal.dto.VendorBillCommands;
 import com.positivity.accounting.internal.dto.VendorBillResponse;
 import com.positivity.accounting.internal.dto.VendorBillReview;
@@ -10,6 +11,7 @@ import com.positivity.accounting.internal.entity.VendorBillGlPosting;
 import com.positivity.accounting.internal.entity.VendorBillMatchCandidate;
 import com.positivity.accounting.internal.entity.VendorBillMatchEvidence;
 import com.positivity.accounting.internal.enums.MatchConfidence;
+import com.positivity.accounting.internal.enums.TaxOnResaleOverrideSource;
 import com.positivity.accounting.internal.enums.VendorBillAction;
 import com.positivity.accounting.internal.enums.VendorBillApproverKind;
 import com.positivity.accounting.internal.enums.VendorBillDebitClass;
@@ -19,6 +21,7 @@ import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
 import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
+import com.positivity.accounting.internal.exception.TaxQuoteRefusedException;
 import com.positivity.accounting.internal.exception.TaxServiceUnavailableException;
 import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.accounting.internal.repository.APPaymentAllocationRepository;
@@ -30,6 +33,7 @@ import com.positivity.accounting.internal.security.AccountingPermissions;
 import java.io.Serial;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.EnumSet;
 import java.util.List;
@@ -68,16 +72,23 @@ import org.springframework.transaction.support.TransactionTemplate;
  *   <li>creator is not approver ({@link #creatorRule}), approve and {@code ACCEPT} only (403 {@code
  *       AP_BILL_SELF_APPROVAL}, or 400 {@code JUSTIFICATION_REQUIRED} for an exception use without one); the vendor's
  *       creator on its first bill is refused the same way, reason {@code VENDOR_CREATOR_FIRST_BILL} (CAP:550 S24);
- *   <li>the bill's content ({@link #readyContent}, {@link #requireClassified}): 422 {@code AP_BILL_ZERO_TOTAL},
- *       {@code AP_BILL_TOTALS_UNRECONCILED} (AW47), {@code AP_BILL_UNCLASSIFIED}; S43 adds {@code
- *       AP_BILL_TAX_ON_RESALE_GOODS} at the end of this step;
- *   <li>the posting ({@link VendorBillPostingService#post}): {@code PERIOD_CLOSED}, {@code PERIOD_HARD_LOCKED}, {@code
+ *   <li>the bill's content ({@link #readyContent}, {@link #requireClassified}, {@link #purchaseTax}): 422 {@code
+ *       AP_BILL_ZERO_TOTAL}, {@code AP_BILL_TOTALS_UNRECONCILED} (AW47), {@code AP_BILL_UNCLASSIFIED}, S32d's {@code
+ *       AP_BILL_TAX_SPLIT_MISMATCH}, then, last, the hold for tax on goods for resale, {@code AP_BILL_TAX_ON_RESALE_GOODS} (CAP:550
+ *       S43, AW44), whose purchase-tax rules are read from pos-tax inside this step;
+ *   <li>the posting: first the self-assessed ({@code USE}) tax quote, once per decision (S43), then {@link
+ *       VendorBillPostingService#post}: {@code PERIOD_CLOSED}, {@code PERIOD_HARD_LOCKED}, {@code
  *       GL_MAPPING_NOT_CONFIGURED}.
  * </ol>
  *
  * The identity guards come before the content guards, so someone who may not decide is never asked for a {@code
  * difference}. Each 403 of steps 3 and 4, {@code AP_BILL_UNCLASSIFIED} and every refused posting is audited in its own
- * transaction ({@code <operation>_REFUSED}). Submit runs steps 2 and 5 only: the limit applies at decision time, never at submission.
+ * transaction ({@code <operation>_REFUSED}), and so is {@code AP_BILL_TAX_ON_RESALE_GOODS}. pos-tax giving no answer, for the
+ * rules or the quote, is 503 {@code SERVICE_UNAVAILABLE} with {@code Retry-After}, and pos-tax refusing the quote for a
+ * configuration state is 422 with its relayed code ({@code TAX_JURISDICTION_NOT_CONFIGURED}, {@code
+ * CURRENCY_NOT_SUPPORTED}, {@code TAX_CAPABILITY_UNSUPPORTED}; #2604 ruling 4 amended); either writes nothing, not even
+ * a refusal row (AW49). Submit runs steps 2 and 5 only, without the purchase-tax check: the limit applies at decision time, never at
+ * submission.
  *
  * <p><b>Audit.</b> One {@code accounting_audit_log} row per decision (entity type {@value #AUDIT_ENTITY_TYPE}): the
  * actor, the tier from the policy in force, the clerk ({@code limit}) and automatic ({@code autoLimit}) limits, the
@@ -139,6 +150,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
     private final ApApprovalPolicy policy;
     private final ApLockTimeout lockTimeout;
     private final SupplierVendorCopies vendorCopies;
+    private final VendorBillPurchaseTax purchaseTax;
     private final VendorBillStatedTax statedTax;
     private final TransactionTemplate commandTransaction;
     private final TransactionTemplate refusalTransaction;
@@ -159,6 +171,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
             ApApprovalPolicy policy,
             ApLockTimeout lockTimeout,
             SupplierVendorCopies vendorCopies,
+            VendorBillPurchaseTax purchaseTax,
             VendorBillStatedTax statedTax,
             PlatformTransactionManager transactionManager) {
         this.clock = clock;
@@ -176,6 +189,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
         this.policy = policy;
         this.lockTimeout = lockTimeout;
         this.vendorCopies = vendorCopies;
+        this.purchaseTax = purchaseTax;
         this.statedTax = statedTax;
         this.commandTransaction = new TransactionTemplate(transactionManager);
         this.refusalTransaction = new TransactionTemplate(transactionManager);
@@ -234,11 +248,14 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
             ApApprovalPolicy.Settings settings = policy.forDecision();
             VendorBillReview.RequiredTier tier = requireTier(bill, settings, actor);
             String exception = creatorRule(bill, settings, actor, command.justification(), "justification");
-            // 5. content, 6. the posting
+            // 5. content (the purchase-tax hold last), 6. the posting
             readyContent(bill, difference);
             requireClassified(bill, classification, difference, actor);
             // S32d item 10 (AW51): the tax by type copied from the document replaces what the bill states.
             statedTax.replaceFromApproval(bill, command.taxByType());
+            // The purchase-tax hold stays the last content check (S43, after S32d's split check).
+            PurchaseTaxDecision tax =
+                    purchaseTax(bill, classification, actor, command.taxOnResaleOverrideJustification());
             Decision decision = new Decision(tier, settings, exception);
             approveAndPost(
                     bill,
@@ -250,7 +267,8 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
                     AUDIT_APPROVE,
                     null,
                     VendorBillStatedTax.auditOf(command.taxByType()),
-                    decision);
+                    decision,
+                    tax);
             return reader.read(bill);
         });
     }
@@ -305,6 +323,9 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
                     requireClassified(bill, classification, difference, actor);
                     // S32d item 10 (AW51): the tax by type copied from the document replaces what the bill states.
                     statedTax.replaceFromApproval(bill, command.taxByType());
+                    // The purchase-tax hold stays the last content check (S43, after S32d's split check).
+                    PurchaseTaxDecision tax =
+                            purchaseTax(bill, classification, actor, command.taxOnResaleOverrideJustification());
                     approveAndPost(
                             bill,
                             actor,
@@ -315,7 +336,8 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
                             AUDIT_RESOLVE,
                             "ACCEPT",
                             VendorBillStatedTax.auditOf(command.taxByType()),
-                            new Decision(tier, settings, exception));
+                            new Decision(tier, settings, exception),
+                            tax);
                 }
                 case CORRECT -> correct(bill, actor, reason);
                 case VOID -> {
@@ -595,7 +617,13 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
             String operation,
             @Nullable String resolution,
             @Nullable String taxByType,
-            Decision decision) {
+            Decision decision,
+            PurchaseTaxDecision tax) {
+        // 6. the posting's first act (CAP:550 S43): the self-assessed tax quote, once per decision. pos-tax giving no
+        // answer (503) or refusing for a configuration state (relayed 422) writes nothing: it propagates as it is,
+        // never as a refused posting.
+        VendorBillPostingService.UseTax useTax =
+                tax.accrual() == null ? null : purchaseTax.quote(bill, tax.accrual(), tax.asOf());
         VendorBillPostingService.Classification effective =
                 requireExpenseKey(merge(classification, bill, vendorCopies.apDefaults(bill.getVendorId())));
         if (difference != null) {
@@ -603,7 +631,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
         }
         VendorBillGlPosting posting;
         try {
-            posting = postingService.post(bill, effective, override, actor);
+            posting = postingService.post(bill, effective, override, actor, useTax);
         } catch (RuntimeException refused) {
             throw new PostingRefused(bill.getVendorBillId(), bill.getBillNumber(), actor, refused);
         }
@@ -615,6 +643,10 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
         bill.setApprovalJustification(justification);
         // The remit-to the approval was given against (CAP:550 S24, rule 5): payment re-checks it. Never cleared.
         bill.setApprovedRemitToVersion(vendorCopies.remitToVersion(bill.getVendorId()));
+        // What let a bill charging tax on goods for resale through a HOLD rule (S43); the justification stays on the
+        // bill, never in the audit row's text.
+        bill.setTaxOnResaleOverride(tax.override());
+        bill.setTaxOnResaleOverrideJustification(tax.justification());
         bill.setModifiedBy(actor);
         bills.save(bill);
         String details = differenceDetails(bill);
@@ -632,7 +664,8 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
                         + posting.getRoundingAdjustment().toPlainString()
                         + (details == null ? "" : ";" + details)
                         + (recovery == null ? "" : ";" + recovery)
-                        + (override == null ? "" : ";periodOverride=true"),
+                        + (override == null ? "" : ";periodOverride=true")
+                        + purchaseTaxDetails(tax.override(), useTax),
                 decision);
         if (decision.exception() != null) {
             audit(bill, AUDIT_SOD_EXCEPTION, actor, justification, "operation=" + operation, decision);
@@ -664,8 +697,8 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
     /**
      * Guard step 5, the bill's content (#2509 review; AW47), refused with 422 before anything is written: a total that
      * is not 0.00, and the vendor's totals adding up or a {@code difference} decided. On a decision {@link
-     * #requireClassified} follows; S43 adds the tax-on-resale check ({@code AP_BILL_TAX_ON_RESALE_GOODS}) at the end of
-     * this step.
+     * #requireClassified} follows, and after it S43's tax-on-resale check ({@link #purchaseTax}, {@code
+     * AP_BILL_TAX_ON_RESALE_GOODS}).
      */
     private void readyContent(VendorBill bill, @Nullable DifferenceDecision difference) {
         if (bill.getTotalAmount() == null || bill.getTotalAmount().signum() == 0) {
@@ -682,7 +715,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
      * Guard step 5's last content check (#2622 review LOW-4; ruling 1's order): the classification the decision would
      * post with (the one given merged with the proposal) builds the entry's legs, writing nothing, so a bill without a
      * needed class is 422 {@code AP_BILL_UNCLASSIFIED} before the posting, audited as {@code <operation>_REFUSED} as
-     * the posting's refusals are. S43's {@code AP_BILL_TAX_ON_RESALE_GOODS} comes after it.
+     * the posting's refusals are. S43's {@code AP_BILL_TAX_ON_RESALE_GOODS} ({@link #purchaseTax}) comes after it.
      */
     private void requireClassified(
             VendorBill bill,
@@ -699,6 +732,82 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
         } catch (VendorBillException refused) {
             throw new PostingRefused(bill.getVendorBillId(), bill.getBillNumber(), actor, refused);
         }
+    }
+
+    /**
+     * Guard step 5's last check (CAP:550 S43, AW44; S13 ruling 1), after {@link #requireClassified}: the tax country's
+     * purchase-tax rules, read from pos-tax on the posting date, only when the bill could qualify. A bill charging tax on
+     * goods for resale under a {@code HOLD} rule is 422 {@code AP_BILL_TAX_ON_RESALE_GOODS}, audited as {@code
+     * <operation>_REFUSED}, unless its vendor accepts the tax ({@code VENDOR_SETTING}) or the approver gives {@value
+     * VendorBillPurchaseTax#OVERRIDE_FIELD} of 10-1000 characters ({@code BILL}; under 10 is 400 {@code
+     * JUSTIFICATION_REQUIRED}). The justification is looked at only when the hold applies; otherwise it is ignored and
+     * not stored. A bill a self-assessing rule accrues on is returned for the posting's quote.
+     *
+     * @throws com.positivity.accounting.internal.exception.TaxServiceUnavailableException 503 when pos-tax gives no
+     *     answer: nothing is written
+     */
+    private PurchaseTaxDecision purchaseTax(
+            VendorBill bill,
+            VendorBillPostingService.@Nullable Classification given,
+            String actor,
+            @Nullable String justification) {
+        VendorBillPostingService.PurchaseTaxBasis basis =
+                purchaseTax.basis(bill, merge(given, bill, vendorCopies.apDefaults(bill.getVendorId())));
+        if (!basis.mayHold() && !basis.mayAccrue()) {
+            return PurchaseTaxDecision.NONE;
+        }
+        LocalDate asOf = postingService.postingDate(bill).date();
+        TaxPurchaseRules rules = purchaseTax.rules(asOf);
+        TaxOnResaleOverrideSource override = null;
+        String stored = null;
+        if (basis.mayHold() && rules.holdsTaxOnResaleGoods()) {
+            if (purchaseTax.vendorAccepts(bill)) {
+                override = TaxOnResaleOverrideSource.VENDOR_SETTING;
+            } else if (justification != null && !justification.isBlank()) {
+                VendorBillPurchaseTax.requireOverrideLength(justification);
+                stored = VendorBillDecisions.required(justification, VendorBillPurchaseTax.OVERRIDE_FIELD);
+                override = TaxOnResaleOverrideSource.BILL;
+            } else {
+                String currency = currencyOf(bill);
+                String taxAmount = basis.statedTax().toPlainString();
+                throw new PostingRefused(
+                        bill.getVendorBillId(),
+                        bill.getBillNumber(),
+                        actor,
+                        new VendorBillException(
+                                VendorBillException.Code.AP_BILL_TAX_ON_RESALE_GOODS,
+                                "Bill " + bill.getBillNumber() + " states tax of " + taxAmount + " " + currency
+                                        + " on goods for resale, which the tax country's purchase-tax rules hold for"
+                                        + " a person",
+                                List.of(),
+                                "Approve it with " + VendorBillPurchaseTax.OVERRIDE_FIELD + " saying why the tax is"
+                                        + " accepted, have the vendor correct the bill, or set the vendor's AP setting"
+                                        + " acceptTaxOnResaleGoods"),
+                        "taxAmount=" + taxAmount + ";currencyCode=" + currency);
+            }
+        }
+        boolean accrues = basis.mayAccrue() && rules.selfAssessesUntaxedExpenses();
+        return new PurchaseTaxDecision(override, stored, accrues ? basis : null, asOf);
+    }
+
+    /**
+     * The purchase-tax outcome of a decision (CAP:550 S43): the override that let a held bill through, with its
+     * justification ({@code BILL} only), and the basis the posting quotes self-assessed tax for, on {@code asOf}.
+     */
+    record PurchaseTaxDecision(
+            @Nullable TaxOnResaleOverrideSource override,
+            @Nullable String justification,
+            VendorBillPostingService.@Nullable PurchaseTaxBasis accrual,
+            @Nullable LocalDate asOf) {
+
+        static final PurchaseTaxDecision NONE = new PurchaseTaxDecision(null, null, null, null);
+    }
+
+    /** {@code ;taxOnResaleOverride=<source>} and {@code ;useTaxAmount=<amount>} of an approval row, when they apply. */
+    static String purchaseTaxDetails(
+            @Nullable TaxOnResaleOverrideSource override, VendorBillPostingService.@Nullable UseTax useTax) {
+        return (override == null ? "" : ";taxOnResaleOverride=" + override)
+                + (useTax == null ? "" : ";useTaxAmount=" + useTax.amount().toPlainString());
     }
 
     /**
@@ -784,6 +893,9 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
         }
         if (cause instanceof TaxServiceUnavailableException) {
             return TaxServiceUnavailableException.CODE;
+        }
+        if (cause instanceof TaxQuoteRefusedException refused) {
+            return refused.getCode();
         }
         return cause.getClass().getSimpleName();
     }
@@ -1036,10 +1148,11 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
         String total =
                 bill.getTotalAmount() == null ? "0.00" : bill.getTotalAmount().toPlainString();
         String limit = settings.clerkApprovalLimit().toPlainString();
+        // The limit is the functional currency's (ADR-0067 R-6; S13 note), whatever the bill's.
         VendorBillException refusal = new VendorBillException(
                 VendorBillException.Code.AP_APPROVAL_LIMIT_EXCEEDED,
                 "Bill " + bill.getBillNumber() + " totals " + total + " " + currency + ", over the clerk approval limit"
-                        + " of " + limit + " " + currency + "; an approver over the limit decides it",
+                        + " of " + limit + " " + ledgerCurrency.code() + "; an approver over the limit decides it",
                 List.of(),
                 "Ask a holder of " + AccountingPermissions.AP_APPROVE_OVER_LIMIT + " (a CONTROLLER or GENERAL_MANAGER)"
                         + " to decide this bill");

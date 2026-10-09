@@ -111,8 +111,12 @@ class VendorBillApprovalServiceTest {
                 policy,
                 mock(ApLockTimeout.class),
                 mock(SupplierVendorCopies.class),
+                PurchaseTaxFixtures.off(),
                 mock(VendorBillStatedTax.class),
                 mock(PlatformTransactionManager.class));
+        when(postingService.postingDate(any()))
+                .thenReturn(new VendorBillPostingService.PostingDate(
+                        LocalDate.of(2026, 10, 1), VendorBillPostingDateRule.BILL_DATE));
         // No policy rows: the defaults, a clerk limit of 0 (every bill OVER_LIMIT), both switches off (S13).
         when(policy.settings()).thenReturn(DEFAULT_POLICY);
         when(policy.forDecision()).thenReturn(DEFAULT_POLICY);
@@ -131,7 +135,7 @@ class VendorBillApprovalServiceTest {
                         .vendorBillId(inv.getArgument(0, VendorBill.class).getVendorBillId())
                         .status(inv.getArgument(0, VendorBill.class).getStatus())
                         .build());
-        when(postingService.post(any(), any(), any(), anyString())).thenAnswer(inv -> posting());
+        when(postingService.post(any(), any(), any(), anyString(), any())).thenAnswer(inv -> posting());
         when(locks.lockAll(any())).thenAnswer(inv -> List.of(bill));
     }
 
@@ -207,7 +211,7 @@ class VendorBillApprovalServiceTest {
             assertThat(bill.getProposedDebitClass()).isEqualTo(VendorBillDebitClass.EXPENSE);
             assertThat(bill.getProposedExpenseMappingKey()).isEqualTo("EXPENSE_SHOP_SUPPLIES");
             assertNoApprovalField(bill);
-            verify(postingService, never()).post(any(), any(), any(), anyString());
+            verify(postingService, never()).post(any(), any(), any(), anyString(), any());
             AccountingAuditLog audit = onlyAudit();
             assertThat(audit.getOperation()).isEqualTo("VENDOR_BILL_SUBMIT");
             assertThat(audit.getEntityType()).isEqualTo("VENDOR_BILL");
@@ -281,7 +285,7 @@ class VendorBillApprovalServiceTest {
             assertThat(bill.getApprovalJustification()).isEqualTo("Checked against delivery");
             ArgumentCaptor<VendorBillPostingService.Classification> classification =
                     ArgumentCaptor.forClass(VendorBillPostingService.Classification.class);
-            verify(postingService).post(eq(bill), classification.capture(), eq(null), eq("controller.cfo"));
+            verify(postingService).post(eq(bill), classification.capture(), eq(null), eq("controller.cfo"), any());
             assertThat(classification.getValue().debitClass())
                     .as("the classification proposed at submission")
                     .isEqualTo(VendorBillDebitClass.GOODS);
@@ -301,7 +305,7 @@ class VendorBillApprovalServiceTest {
                             service.approve(BILL_ID, new VendorBillCommands.Approve(null, null, null, null, null)))
                     .hasMessageContaining("APPROVED")
                     .satisfies(e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.AP_BILL_NOT_APPROVABLE));
-            verify(postingService, never()).post(any(), any(), any(), anyString());
+            verify(postingService, never()).post(any(), any(), any(), anyString(), any());
         }
 
         @Test
@@ -322,7 +326,7 @@ class VendorBillApprovalServiceTest {
                                 assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.AP_APPROVAL_LIMIT_EXCEEDED));
             }
             assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.AWAITING_APPROVAL);
-            verify(postingService, never()).post(any(), any(), any(), anyString());
+            verify(postingService, never()).post(any(), any(), any(), anyString(), any());
         }
 
         @Test
@@ -331,7 +335,7 @@ class VendorBillApprovalServiceTest {
         void refusedPostingRollsTheApprovalBack() {
             signIn("controller.cfo", OVER_LIMIT);
             in(VendorBillStatus.AWAITING_APPROVAL);
-            when(postingService.post(any(), any(), any(), anyString()))
+            when(postingService.post(any(), any(), any(), anyString(), any()))
                     .thenThrow(new AccountingPeriodHardLockedException(LocalDate.of(2026, 11, 1), "hard-locked"));
 
             assertThatThrownBy(() ->
@@ -381,7 +385,7 @@ class VendorBillApprovalServiceTest {
             assertThatThrownBy(() ->
                             service.approve(BILL_ID, new VendorBillCommands.Approve(null, null, null, null, null)))
                     .satisfies(e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.AP_BILL_NOT_APPROVABLE));
-            verify(postingService, never()).post(any(), any(), any(), anyString());
+            verify(postingService, never()).post(any(), any(), any(), anyString(), any());
         }
     }
 
@@ -403,7 +407,7 @@ class VendorBillApprovalServiceTest {
             assertThat(bill.getRejectedAt()).isEqualTo(CLOCK.instant());
             assertThat(bill.getRejectionReason()).isEqualTo("Wrong vendor");
             assertNoApprovalField(bill);
-            verify(postingService, never()).post(any(), any(), any(), anyString());
+            verify(postingService, never()).post(any(), any(), any(), anyString(), any());
             assertThat(onlyAudit().getOperation()).isEqualTo("VENDOR_BILL_REJECT");
         }
 
@@ -485,7 +489,7 @@ class VendorBillApprovalServiceTest {
             assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.APPROVED);
             assertThat(bill.getApprovedBy()).isEqualTo("controller.cfo");
             assertThat(bill.getApprovalJustification()).isEqualTo("Price rise agreed");
-            verify(postingService).post(eq(bill), any(), eq(null), eq("controller.cfo"));
+            verify(postingService).post(eq(bill), any(), eq(null), eq("controller.cfo"), any());
             assertThat(onlyAudit().getNewValue()).contains("action=ACCEPT");
         }
 
@@ -503,7 +507,7 @@ class VendorBillApprovalServiceTest {
             assertNoApprovalField(bill);
             assertThat(bill.getRejectedBy()).isNull();
             assertThat(bill.getRejectedAt()).isNull();
-            verify(postingService, never()).post(any(), any(), any(), anyString());
+            verify(postingService, never()).post(any(), any(), any(), anyString(), any());
         }
 
         @Test
@@ -519,7 +523,7 @@ class VendorBillApprovalServiceTest {
             assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.VOIDED);
             assertThat(bill.getRejectedBy()).isEqualTo("clerk.ana");
             assertThat(bill.getRejectionReason()).isEqualTo("Duplicate of INV-0");
-            verify(postingService, never()).post(any(), any(), any(), anyString());
+            verify(postingService, never()).post(any(), any(), any(), anyString(), any());
             verify(postingService, never()).reverse(any(), any(), anyString());
         }
 
@@ -618,7 +622,7 @@ class VendorBillApprovalServiceTest {
                             eq("INV-1"),
                             any(),
                             eq("clerk.ana"));
-            verify(postingService, never()).post(any(), any(), any(), anyString());
+            verify(postingService, never()).post(any(), any(), any(), anyString(), any());
             assertThat(onlyAudit().getOperation()).isEqualTo("VENDOR_BILL_MATCH_CANDIDATE_SELECT");
         }
 
@@ -766,7 +770,7 @@ class VendorBillApprovalServiceTest {
                     .satisfies(e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.AP_BILL_AWAITING_INVOICE));
 
             verify(bills, never()).save(any());
-            verify(postingService, never()).post(any(), any(), any(), anyString());
+            verify(postingService, never()).post(any(), any(), any(), anyString(), any());
             verify(auditLogs, never()).save(any());
         }
 
@@ -814,7 +818,7 @@ class VendorBillApprovalServiceTest {
                     .hasMessageContaining("pick the match first")
                     .satisfies(e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.AP_BILL_NOT_APPROVABLE));
             assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.MATCH_EXCEPTION);
-            verify(postingService, never()).post(any(), any(), any(), anyString());
+            verify(postingService, never()).post(any(), any(), any(), anyString(), any());
         }
 
         @Test
@@ -845,7 +849,7 @@ class VendorBillApprovalServiceTest {
                             e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.AP_BILL_TOTALS_UNRECONCILED));
             assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.AWAITING_APPROVAL);
             assertThat(bill.getDifferenceClass()).isNull();
-            verify(postingService, never()).post(any(), any(), any(), anyString());
+            verify(postingService, never()).post(any(), any(), any(), anyString(), any());
             verify(auditLogs, never()).save(any());
         }
 
@@ -867,7 +871,7 @@ class VendorBillApprovalServiceTest {
             assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.APPROVED);
             assertThat(bill.getDifferenceClass()).isEqualTo(VendorBillDifferenceClass.FREIGHT);
             assertThat(bill.getDifferenceJustification()).isEqualTo("Freight on the invoice, not stated");
-            verify(postingService).post(eq(bill), any(), eq(null), eq("controller.cfo"));
+            verify(postingService).post(eq(bill), any(), eq(null), eq("controller.cfo"), any());
             assertThat(onlyAudit().getNewValue()).contains("differenceClass=FREIGHT", "difference=15.00");
         }
 
@@ -944,7 +948,7 @@ class VendorBillApprovalServiceTest {
 
             ArgumentCaptor<VendorBillPostingService.Classification> classification =
                     ArgumentCaptor.forClass(VendorBillPostingService.Classification.class);
-            verify(postingService).post(eq(bill), classification.capture(), eq(null), eq("controller.cfo"));
+            verify(postingService).post(eq(bill), classification.capture(), eq(null), eq("controller.cfo"), any());
             assertThat(classification.getValue())
                     .isEqualTo(new VendorBillPostingService.Classification(
                             VendorBillDebitClass.EXPENSE, "EXPENSE_EQUIPMENT_REPAIRS"));
@@ -1006,7 +1010,7 @@ class VendorBillApprovalServiceTest {
             assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.VOIDED);
             assertThat(bill.getRejectedBy()).isEqualTo("clerk.ana");
             verify(postingService, never()).reverse(any(), any(), anyString());
-            verify(postingService, never()).post(any(), any(), any(), anyString());
+            verify(postingService, never()).post(any(), any(), any(), anyString(), any());
             assertThat(onlyAudit().getNewValue()).contains("action=VOID_UNMATCHED", "posted=none");
         }
 

@@ -247,9 +247,13 @@ public class VendorDirectoryController {
             description = """
                     Sets the vendor's AP settings: defaultDebitClass and defaultExpenseMappingKey (a field left out \
                     is unchanged, null clears it), apHold {onHold, reason} (a hold stops AP payments to the vendor \
-                    with 422 VENDOR_ON_AP_HOLD, never approval or posting) and informationReturn {reportable, form, \
-                    box, payeeTaxRegistrationScheme} (codes from listInformationReturnForms).
-                    Each change writes an audit row: AP_VENDOR_SETTINGS_SET per default or information-return field, \
+                    with 422 VENDOR_ON_AP_HOLD, never approval or posting), informationReturn {reportable, form, \
+                    box, payeeTaxRegistrationScheme} (codes from listInformationReturnForms) and \
+                    acceptTaxOnResaleGoods (true lets the vendor's bills charging tax on goods for resale be approved \
+                    without a per-bill override where the tax country's purchase-tax rules hold them, from the next \
+                    decision).
+                    Each change writes an audit row: AP_VENDOR_SETTINGS_SET per default, information-return field or \
+                    tax-on-resale acceptance, \
                     AP_VENDOR_HOLD_SET or AP_VENDOR_HOLD_CLEARED for the hold; nothing posts.
                     Use this tool when a controller sets a vendor's defaults, holds or releases its payments, or \
                     marks it reportable; do not use it to classify one bill, use the approval's classification \
@@ -257,8 +261,8 @@ public class VendorDirectoryController {
                     Preconditions: the caller holds accounting:ap_approval_policy:manage and the vendor is in the \
                     copy; an inactive vendor may be set, held or released.
                     Required inputs: justification (at least 10 characters) and requestId (a UUID generated once \
-                    per change); a hold needs a reason of 10-500 characters; reportable needs form and box; apHold \
-                    or informationReturn sent as null, and any unknown property, is refused.
+                    per change); a hold needs a reason of 10-500 characters; reportable needs form and box; apHold, \
+                    informationReturn or acceptTaxOnResaleGoods sent as null, and any unknown property, is refused.
                     Emits ACCOUNTING_VENDOR_AP_SETTINGS_SET; idempotent on requestId: a replay writes nothing and \
                     returns the vendor as it is.
                     Returns 200 with the vendor read; 400 VALIDATION_ERROR with fieldErrors or \
@@ -274,8 +278,8 @@ public class VendorDirectoryController {
     @ApiResponse(
             responseCode = "400",
             description = "VALIDATION_ERROR with fieldErrors (a class outside GOODS/EXPENSE, a key that is not an"
-                    + " active VENDOR_BILL key EXPENSE_<CODE>, EXPENSE without a key, no requestId, apHold or"
-                    + " informationReturn null or malformed, a hold reason over 500 characters, a form, box or scheme"
+                    + " active VENDOR_BILL key EXPENSE_<CODE>, EXPENSE without a key, no requestId, apHold,"
+                    + " informationReturn or acceptTaxOnResaleGoods null, apHold or informationReturn malformed, a hold reason over 500 characters, a form, box or scheme"
                     + " the tax country does not configure, an unknown property named but never echoed) or"
                     + " JUSTIFICATION_REQUIRED (the justification, or apHold.reason under 10 characters)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))

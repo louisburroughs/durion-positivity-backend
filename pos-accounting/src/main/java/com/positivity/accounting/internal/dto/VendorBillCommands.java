@@ -92,7 +92,28 @@ public final class VendorBillCommands {
                     schema = @Schema(implementation = TaxAmount.class))
             @Valid
             @Nullable
-            List<@NonNull TaxAmount> taxByType) {}
+            List<@NonNull TaxAmount> taxByType,
+
+            @Schema(
+                    description = "Accepts, for this bill only, tax the vendor charged on goods for resale where the"
+                            + " tax country's purchase-tax rules hold such bills (check TAX_ON_RESALE_GOODS FAIL): why"
+                            + " it is accepted, 10-1000 characters; looked at only when the hold applies (CAP:550 S43)",
+                    example = "Vendor resale certificate pending; tax recovered on the next statement",
+                    maxLength = 1000,
+                    requiredMode = NOT_REQUIRED)
+            @Nullable
+            String taxOnResaleOverrideJustification) {
+
+        /** An approval without a tax-on-resale override. */
+        public Approve(
+                @Nullable String justification,
+                VendorBillReview.@Nullable Classification classification,
+                @Nullable String overrideJustification,
+                VendorBillReview.@Nullable Difference difference,
+                @Nullable List<@NonNull TaxAmount> taxByType) {
+            this(justification, classification, overrideJustification, difference, taxByType, null);
+        }
+    }
 
     @Schema(name = "VendorBillRejectRequest", description = "Reject a bill awaiting approval")
     public record Reject(
@@ -174,7 +195,29 @@ public final class VendorBillCommands {
                     schema = @Schema(implementation = TaxAmount.class))
             @Valid
             @Nullable
-            List<@NonNull TaxAmount> taxByType) {}
+            List<@NonNull TaxAmount> taxByType,
+
+            @Schema(
+                    description = "ACCEPT only: accepts, for this bill only, tax the vendor charged on goods for"
+                            + " resale where the tax country's purchase-tax rules hold such bills, 10-1000 characters"
+                            + " (CAP:550 S43)",
+                    example = "Vendor resale certificate pending; tax recovered on the next statement",
+                    maxLength = 1000,
+                    requiredMode = NOT_REQUIRED)
+            @Nullable
+            String taxOnResaleOverrideJustification) {
+
+        /** A resolution without a tax-on-resale override. */
+        public ResolveException(
+                @Nullable String resolutionAction,
+                @Nullable String reason,
+                VendorBillReview.@Nullable Classification classification,
+                @Nullable String overrideJustification,
+                VendorBillReview.@Nullable Difference difference,
+                @Nullable List<@NonNull TaxAmount> taxByType) {
+            this(resolutionAction, reason, classification, overrideJustification, difference, taxByType, null);
+        }
+    }
 
     /**
      * One tax type a vendor's document states, with its amount, copied by the person approving or accepting the bill

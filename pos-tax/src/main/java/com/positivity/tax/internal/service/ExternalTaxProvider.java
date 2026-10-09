@@ -3,7 +3,9 @@ package com.positivity.tax.internal.service;
 import com.positivity.tax.common.dto.TaxCalculationRequest;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
 import com.positivity.tax.common.dto.TaxProviderTransactionResult;
+import com.positivity.tax.common.enums.TaxCalculationType;
 import com.positivity.tax.common.enums.TaxProviderTransactionStatus;
+import com.positivity.tax.internal.exception.TaxCalculationTypeUnsupportedException;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Component;
@@ -39,7 +41,19 @@ public class ExternalTaxProvider implements TaxProviderClient {
     @Override
     @NonNull
     public TaxCalculationResponse estimate(@NonNull TaxCalculationRequest request) {
+        refuseUse(request, PROVIDER_NAME);
         return client.calculateTax(request);
+    }
+
+    /**
+     * An external provider prices no self-assessed tax yet (CAP:550 S43): {@code USE} answers 501 {@code
+     * TAX_CALCULATION_TYPE_UNSUPPORTED} before any provider call. Test mode and the self-hosted plug-ins price it.
+     */
+    static void refuseUse(@NonNull TaxCalculationRequest request, @NonNull String provider) {
+        if (request.getCalculationType() == TaxCalculationType.USE) {
+            throw new TaxCalculationTypeUnsupportedException("The " + provider + " tax provider does not price"
+                    + " calculationType USE (self-assessed tax); only test mode and the self-hosted plug-ins do");
+        }
     }
 
     @Override

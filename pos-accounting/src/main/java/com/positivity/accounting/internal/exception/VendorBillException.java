@@ -47,6 +47,13 @@ public class VendorBillException extends RuntimeException {
          */
         AP_BILL_TOTALS_UNRECONCILED(HttpStatus.UNPROCESSABLE_CONTENT),
         /**
+         * The bill charges tax on goods for resale, its tax country's purchase-tax rule holds such bills, its vendor
+         * does not accept the tax and no {@code taxOnResaleOverrideJustification} was given (CAP:550 S43, AW44). 422:
+         * a well-formed request refused by a documented rule on an attribute of the bill (ADR-0017 §2); the bill's
+         * status is fine. Checked after {@code AP_BILL_UNCLASSIFIED}.
+         */
+        AP_BILL_TAX_ON_RESALE_GOODS(HttpStatus.UNPROCESSABLE_CONTENT),
+        /**
          * The {@code taxByType[]} an approval or {@code ACCEPT} copied from the document does not add up to the bill's
          * stated tax (CAP:550 S32d, AW51); nothing is written.
          */

@@ -15,10 +15,17 @@ package com.positivity.tax.common.enums;
  * breakdown and must never be recomputed; {@code REFUND} mode is only for
  * partial/line-level refunds where a fresh proration is genuinely needed and for
  * provider-side refund documents (freeze-after-finalize).
+ * <p>
+ * {@link #USE} is the self-assessed (use) tax a buyer owes on an untaxed purchase (CAP:550 S43, AW44): a
+ * stub priced exactly like {@code SALE} by test mode and every self-hosted plug-in, so the caller can
+ * accrue it; the external providers answer 501 {@code TAX_CALCULATION_TYPE_UNSUPPORTED}. Which purchases
+ * owe it and at which jurisdiction's rates is held for expert advice (OI-4).
  */
 public enum TaxCalculationType {
     /** Forward sale calculation (default). */
     SALE,
     /** Refund/credit calculation: positive amounts priced at the original sale date. */
-    REFUND
+    REFUND,
+    /** Self-assessed (use) tax on a purchase, priced like {@link #SALE} (CAP:550 S43; a stub, AW48). */
+    USE
 }

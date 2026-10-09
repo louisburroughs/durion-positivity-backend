@@ -35,9 +35,11 @@ paths:
 
         Required inputs: lineItems (at least one) and destinationAddress with countryCode and postalCode;
 
-        currencyCode defaults to USD, calculationType defaults to SALE, and referenceId should carry the
+        currencyCode defaults to USD, calculationType defaults to SALE (USE, a buyer''s self-assessed tax,
 
-        source document id so the result can later be committed.
+        is priced exactly like SALE), and referenceId should carry the source document id so the result
+
+        can later be committed.
 
         Emits a TAX_CALCULATE event and, in production mode, calls the configured external tax provider;
 
@@ -55,7 +57,9 @@ paths:
 
         transaction date or CURRENCY_NOT_SUPPORTED when currencyCode is not that country''s configured
 
-        currency, and 500 when the provider is unreachable in production mode.
+        currency, 501 TAX_CALCULATION_TYPE_UNSUPPORTED when calculationType USE reaches an external
+
+        provider, and 500 when the provider is unreachable in production mode.
 
         '
       operationId: calculateTax
@@ -111,6 +115,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Tax calculation failed
+        '501':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: calculationType USE on an external provider (TAX_CALCULATION_TYPE_UNSUPPORTED)
       security:
       - bearerAuth:
         - tax:calculate
@@ -605,6 +615,71 @@ paths:
       - bearerAuth:
         - tax:rates:view
       summary: Check a receipt's stated tax
+      tags:
+      - Tax
+      x-required-permissions:
+      - tax:rates:view
+  /v1/tax/purchase-rules:
+    get:
+      description: 'Returns a country''s purchase-tax rules on a date: whether a vendor bill charging tax on goods for
+
+        resale is held for a person (HOLD or ALLOW), and whether a bill stating no tax self-assesses use
+
+        tax on its expense lines.
+
+        Use this tool when pos-accounting decides or shows a vendor bill''s purchase tax; do not use it to
+
+        price the self-assessed tax, which is calculateTax with calculationType USE instead.
+
+        Preconditions: this endpoint is internal-only (ADR-0021/ADR-0014), reached by direct in-cluster
+
+        calls from pos-accounting with the service authority, never through pos-api-gateway.
+
+        Required inputs: countryCode, two upper-case letters; asOf (ISO-8601 date) defaults to today.
+
+        No events are emitted, no state changes and no tenant data is read; every rule is configuration
+
+        held for expert advice, so source is always STUB, and a country without rules answers configured
+
+        false with ALLOW and false.
+
+        Returns 200 for every well-formed country, and 400 VALIDATION_ERROR when countryCode or asOf is
+
+        missing or malformed.
+
+        '
+      operationId: getTaxPurchaseRules
+      parameters:
+      - in: query
+        name: countryCode
+        required: true
+        schema:
+          minLength: 1
+          pattern: ^[A-Z]{2}$
+          type: string
+      - in: query
+        name: asOf
+        required: false
+        schema:
+          format: date
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxPurchaseRulesResponse'
+          description: Rules resolved (configured false for a country without any)
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Missing or malformed countryCode or asOf
+      security:
+      - bearerAuth:
+        - tax:rates:view
+      summary: Read a country's purchase-tax rules
       tags:
       - Tax
       x-required-permissions:
@@ -1477,6 +1552,7 @@ components:
           enum:
           - SALE
           - REFUND
+          - USE
           example: SALE
           type: string
         city:
@@ -1556,6 +1632,7 @@ components:
           enum:
           - SALE
           - REFUND
+          - USE
           example: SALE
           type: string
         effectiveTaxRate:
@@ -2061,6 +2138,45 @@ components:
       required:
       - referenceId
       - status
+      type: object
+    TaxPurchaseRulesResponse:
+      description: The purchase-tax rules configured for one country on a date
+      properties:
+        asOf:
+          description: The date the rules apply on, ISO-8601; today when the request gave none
+          example: '2026-10-08'
+          format: date
+          type: string
+        configured:
+          description: Whether the country configures purchase-tax rules; false answers ALLOW and false
+          example: true
+          type: boolean
+        countryCode:
+          description: Country code in ISO 3166-1 alpha-2 format, echoed from the request
+          example: ZZ
+          type: string
+        selfAssessUntaxedExpenses:
+          description: Whether a vendor bill that states no tax self-assesses (use) tax on its expense lines
+          example: true
+          type: boolean
+        source:
+          description: Origin of the answer; always STUB, because every value is a placeholder
+          example: STUB
+          type: string
+        taxOnResaleGoods:
+          description: HOLD when a vendor bill charging tax on goods for resale is held for a person, else ALLOW
+          enum:
+          - HOLD
+          - ALLOW
+          example: HOLD
+          type: string
+      required:
+      - asOf
+      - configured
+      - countryCode
+      - selfAssessUntaxedExpenses
+      - source
+      - taxOnResaleGoods
       type: object
     TaxRateComponent:
       description: A single per-jurisdiction tax rate, expressed as a decimal fraction
