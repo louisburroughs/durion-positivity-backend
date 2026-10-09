@@ -373,7 +373,30 @@ class DomainEventContractTest {
      * {@code main} the only match was {@code SupplierVendorUpdatedV1.TaxRegistration.number}, which #2621
      * removed. Adding an entry is a Security decision, never a way to make the build pass.
      */
-    private static final Map<String, String> ALLOWED = Map.of();
+    private static final Map<String, String> ALLOWED = Map.of(
+            // CAP:550 S32c (#2638): pos-tax stores and publishes a tenant's registration number only after it
+            // matches its regime's closed, configured shape.
+            "com.positivity.domainevents.tax.TaxRegistrationChangedV1#registrationNumber",
+            "closed indirect-tax shape (conditions a-c), INTERNAL under ADR-0072 Decision 1. Sign-off:"
+                    + " https://github.com/louisburroughs/durion/pull/571#issuecomment-6062991022 (Security"
+                    + " confirmation) and https://github.com/louisburroughs/durion/pull/571#issuecomment-6063855576"
+                    + " (Security decision)");
+
+    @Test
+    @DisplayName("CAP:550 S32c AC 5: TaxRegistrationChangedV1 passes the guard only through its ALLOWED entry")
+    void taxRegistrationNumberPassesOnlyThroughItsAllowedEntry() {
+        Class<?> fact = com.positivity.domainevents.tax.TaxRegistrationChangedV1.class;
+        assertThat(restrictedFieldPaths(fact))
+                .as("the guard sees the number, so without the entry noRestrictedFieldNames fails")
+                .containsExactly("registrationNumber");
+        assertThat(ALLOWED)
+                .containsKey(fact.getName() + "#registrationNumber")
+                .allSatisfy((key, reason) -> assertThat(reason)
+                        .contains("closed indirect-tax shape (conditions a-c), INTERNAL under ADR-0072 Decision 1")
+                        .contains("6062991022")
+                        .contains("6063855576"));
+        assertThat(eventRecords()).as("the fact is in the swept set").contains(fact);
+    }
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("eventRecords")

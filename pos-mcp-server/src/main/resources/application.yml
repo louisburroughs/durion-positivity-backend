@@ -134,6 +134,10 @@ mcp:
       # through a tool. The vendor reads and the AP-settings PUT stay discoverable. Unanchored (find()), like the
       # reveal, so it matches with or without the routing prefix.
       - /v1/accounting/vendors/[^/]+/remit-to-confirmation$
+      # CAP:550 S32c (#2638): pos-tax's tax-registration writes accept only the pos-accounting front door, by its
+      # per-caller secret (ADR-0071 §6). They are never a tool: an agent cannot hold that secret, and the person's path
+      # is /v1/accounting/tax-registrations. Unanchored (find()), so it matches with or without a routing prefix.
+      - /v1/tax/registrations(/|$)
   sitemap:
     # Origin of the frontend SSR server (NOT the API gateway). The SSR server defaults to port 4000.
     base-url: ${FRONTEND_BASE_URL:http://localhost:4000}

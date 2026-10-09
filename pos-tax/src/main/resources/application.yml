@@ -23,6 +23,20 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+  # CAP:550 S32c: pos-tax's Kafka rails (ADR-0044 §4): tax.registration.changed from the outbox, the
+  # tax.manifest.v1 manifest and the tax.commands.v1 replay listener. Tier-1 and always on in deployed
+  # profiles (@KafkaRails); the broker-less dev/test/pg profiles run without them.
+  kafka:
+    bootstrap-servers:
+      - ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      group-id: pos-tax-commands
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
 
 server:
   port: 8091
@@ -138,6 +152,26 @@ pos:
       formats:
         - { regime: GST_HST, shape: "#########RT####" }
         - { regime: QST, shape: "##########TQ####" }
+    # CAP:550 S32c (ADR-0071 §6): per-caller front-door secrets. The tax-registration writes accept only
+    # pos-accounting, with this secret in X-Pos-Tax-Front-Door-Secret. From the environment or a secret store,
+    # never from code or a shipped file. Unset (blank), every registration write answers 401.
+    front-doors:
+      accounting-secret: ${POS_TAX_ACCOUNTING_SECRET:}
+    # CAP:550 S32c: tax.registration.changed by outbox, per-tenant manifests and replay (ADR-0044 §4).
+    kafka:
+      events-topic: ${POS_TAX_EVENTS_TOPIC:tax.events.v1}
+      commands-topic: ${POS_TAX_COMMANDS_TOPIC:tax.commands.v1}
+      commands-consumer-group: ${POS_TAX_COMMANDS_CONSUMER_GROUP:pos-tax-commands}
+    outbox:
+      poll-interval-ms: ${POS_TAX_OUTBOX_POLL_INTERVAL_MS:1000}
+      send-timeout-ms: ${POS_TAX_OUTBOX_SEND_TIMEOUT_MS:10000}
+      replay:
+        max-lookback: ${POS_TAX_OUTBOX_REPLAY_MAX_LOOKBACK:P30D}
+    manifest:
+      topic: ${POS_TAX_MANIFEST_TOPIC:tax.manifest.v1}
+      window: ${POS_TAX_MANIFEST_WINDOW:PT1H}
+      grace: ${POS_TAX_MANIFEST_GRACE:PT5M}
+      poll-interval-ms: ${POS_TAX_MANIFEST_POLL_INTERVAL_MS:300000}
     # Stated-tax plausibility (CAP:550 S32b, AW55): minor units added to each stated amount's maximum
     # (placeholder, OI-4).
     plausibility:

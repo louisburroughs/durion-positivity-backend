@@ -1,9 +1,9 @@
-generatedAt: "2026-10-09T01:47:46.139179+00:00"
+generatedAt: "2026-10-09T02:16:01.618033+00:00"
 root: "."
 summary:
   manifestCount: 24
-  permissionCount: 527
-  uniquePermissionCount: 527
+  permissionCount: 529
+  uniquePermissionCount: 529
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -12,7 +12,7 @@ manifests:
     domain: "accounting"
     serviceName: "pos-accounting"
     version: "1.0"
-    permissionCount: 63
+    permissionCount: 65
     permissions:
       - name: "accounting:analytics:view"
         description: "View Wave 2 read-only accounting analytics (invoiced-vs-collected, payment-lag cohorts)"
@@ -138,6 +138,10 @@ manifests:
         description: "Export report"
       - name: "accounting:tax-snapshot:freeze"
         description: "Freeze the sales-tax liability report for a closed accounting period"
+      - name: "accounting:tax_registration:manage"
+        description: "Record and change the tenant's indirect-tax registrations, written to pos-tax through the accounting front door (CAP:550 S32c)"
+      - name: "accounting:tax_registration:view"
+        description: "View the tenant's indirect-tax registrations from accounting's replica (CAP:550 S32c)"
       - name: "reporting:view:financial-statements"
         description: "View financial statements and download rendered report exports"
   - module: "pos-bulk-loader"
@@ -1598,6 +1602,18 @@ permissions:
     source: "pos-accounting/src/main/resources/permissions.yaml"
   - name: "accounting:tax-snapshot:freeze"
     description: "Freeze the sales-tax liability report for a closed accounting period"
+    domain: "accounting"
+    serviceName: "pos-accounting"
+    module: "pos-accounting"
+    source: "pos-accounting/src/main/resources/permissions.yaml"
+  - name: "accounting:tax_registration:manage"
+    description: "Record and change the tenant's indirect-tax registrations, written to pos-tax through the accounting front door (CAP:550 S32c)"
+    domain: "accounting"
+    serviceName: "pos-accounting"
+    module: "pos-accounting"
+    source: "pos-accounting/src/main/resources/permissions.yaml"
+  - name: "accounting:tax_registration:view"
+    description: "View the tenant's indirect-tax registrations from accounting's replica (CAP:550 S32c)"
     domain: "accounting"
     serviceName: "pos-accounting"
     module: "pos-accounting"

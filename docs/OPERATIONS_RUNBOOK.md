@@ -129,7 +129,8 @@ green build (`pos-reference-mock`, #1646). Behaviour is covered by
 Compose interpolates the service-to-service secrets from the on-box env file
 (`${ALPHA_ROOT}/.env`); `deploy-backend.sh` writes only `BACKEND_TAG`, `ECR_REGISTRY`,
 `SECURITY_SEED_ADMIN_PASSWORD_HASH`, `SUPPLIER_AUDIT_ENC_KEY` and `SUPPLIER_VENDOR_TAXID_ENC_KEY`
-(#2621; pos-supplier's two encryption keys, from the repository secrets of the same names) there
+(#2621; pos-supplier's two encryption keys, from the repository secrets of the same names), and
+`POS_TAX_ACCOUNTING_SECRET` (CAP:550 S32c, from the repository secret of that name) there
 itself. Every other secret
 is an entry an operator adds once, by hand, before the service that needs it is deployed; a
 missing entry interpolates to empty and the receiving service fails closed (a 401 on the guarded
@@ -141,6 +142,7 @@ path), it does not fall back.
 | `POS_SECURITY_API_SECRET` | `pos-security-service` and every registering module; `pos-order` for the cash-movement step-up | `X-Permissions-Api-Secret` on `/v1/permissions/register`, and `X-Internal-Api-Secret` on `POST /internal/v1/auth/step-up` (CAP:550 S16: the manager's credential check behind a drawer cash-movement approval, pos-security-service's internal chain). Unset in pos-order, every approval answers 503 `CASH_MOVEMENT_APPROVAL_UNAVAILABLE` |
 | `POS_TENANT_REGISTRY_API_SECRET` | `pos-tenant`, and any module with `pos.tenancy.registry.mode=REMOTE` (as `pos.tenancy.registry.secret`) | `X-Tenant-Registry-Secret` on `GET /internal/v1/tenants` (ADR-0062 plan WS4-2) |
 | `POS_PLATFORM_SENDER_API_SECRET` | `pos-platform-sender`, and `pos-marketing` (as `pos.marketing.sender.api-secret`) | `X-Pos-Sender-Secret` on `POST /platform-sender/v1/messages` (FI-2) |
+| `POS_TAX_ACCOUNTING_SECRET` | `pos-tax` (as `pos.tax.front-doors.accounting-secret`) and `pos-accounting` (as `pos.accounting.tax.front-door-secret`) | `X-Pos-Tax-Front-Door-Secret` on `POST`/`PUT /v1/tax/registrations` (CAP:550 S32c, ADR-0071 §6). Set from the repository secret of the same name: `deploy-backend.sh` persists it into the on-box env file (a new value replaces the old one; both services restart with the deploy), keeps the box's copy when the secret is unset, and only warns when neither exists. Unset, pos-tax refuses every registration write (401) and pos-accounting answers 503 `SERVICE_UNAVAILABLE` |
 
 The root `docker-compose.yml` passes `POS_TENANT_REGISTRY_API_SECRET` through from the environment
 with no default (like the other service secrets): unset, `pos-tenant` refuses every registry call

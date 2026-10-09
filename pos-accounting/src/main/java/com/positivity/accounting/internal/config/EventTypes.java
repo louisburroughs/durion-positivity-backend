@@ -16,7 +16,7 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 165 event types (includes +1 ACCOUNTING_AP_PAYMENT_GL_POSTING_RETRY and -1 for the retired
+     * Total: 168 event types (includes +1 ACCOUNTING_AP_PAYMENT_GL_POSTING_RETRY and -1 for the retired
      * AP_PAYMENT_GL_POSTING (CAP:550 S42, Issue #2603), +3 from approval limits and separation of duties (CAP:550 S13, Issue #2510):
      * ACCOUNTING_VENDOR_BILL_DUE_DATE_SET, ACCOUNTING_AP_APPROVAL_POLICY_VIEW, ACCOUNTING_AP_APPROVAL_POLICY_SET,
      * +6 from the vendor-bill approval lifecycle and -1 for the retired
@@ -165,6 +165,14 @@ public final class EventTypes {
                         .build(),
                 EventTypeRegistration.write(
                                 "ACCOUNTING_PETTY_EXPENSE_CATEGORY_REMAP", "Change a petty-expense category's account")
+                        .build(),
+
+                // TaxRegistrationController - 3 events (CAP:550 S32c, #2638)
+                EventTypeRegistration.fastRead("ACCOUNTING_TAX_REGISTRATION_LIST", "List tax registrations")
+                        .build(),
+                EventTypeRegistration.write("ACCOUNTING_TAX_REGISTRATION_CREATE", "Record a tax registration")
+                        .build(),
+                EventTypeRegistration.write("ACCOUNTING_TAX_REGISTRATION_UPDATE", "Change a tax registration")
                         .build(),
 
                 // GLAccountController - 6 events

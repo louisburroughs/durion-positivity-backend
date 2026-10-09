@@ -19,6 +19,8 @@ Tax calculation service for the Durion Positivity ETSMS platform. Supports two o
 - Handle tax-exempt line items
 - Proxy requests to an external tax API in production mode with Resilience4j retry
 - Emit audit events for all calculations via `pos-events`
+- Own the tenant tax-registration registry, written only through the pos-accounting front door, and publish each
+  change as `tax.registration.changed` by transactional outbox (CAP:550 S32c; ADR-0071 §6-7)
 
 ## Key Classes
 
@@ -28,6 +30,11 @@ Tax calculation service for the Durion Positivity ETSMS platform. Supports two o
 - `TaxTotalsReconciler` — package-private helper that enforces the rounding invariant across line, jurisdiction, and total amounts
 - `ExternalTaxServiceClient` — `RestClient`-based client for the external tax provider with retry
 - `TaxController` — REST controller at `/v1/tax`
+- `TaxRegistrationController` / `TaxRegistrationService` — the tenant tax-registration writes (CAP:550 S32c)
+- `FrontDoorSecretFilter` — the registration writes' own security chain: pos-accounting's per-caller secret, the
+  forwarded `X-User-Id` bound as the principal
+- `OutboxEventWriter`, `OutboxPublisher`, `ManifestPublisher`, `TaxCommandListener` — the `tax.events.v1` outbox, the
+  `tax.manifest.v1` manifest and the `tax.commands.v1` replay (ADR-0044 §4)
 
 ## API Endpoints
 
@@ -44,6 +51,25 @@ Tax calculation service for the Durion Positivity ETSMS platform. Supports two o
   `GET /v1/accounting/information-return-forms`
 - `POST /v1/tax/transactions/{referenceId}/commit` and `/void` — provider document lifecycle (`tax:commit`)
 - `GET /v1/tax/mode` — returns current operating mode (`test` or `production`)
+- `POST /v1/tax/registrations` and `PUT /v1/tax/registrations/{registrationId}` — record or change a tenant's
+  registration for one country's regime (CAP:550 S32c). **Front door only:** each accepts exactly one caller,
+  pos-accounting, authenticated by its per-caller secret in `X-Pos-Tax-Front-Door-Secret`
+  (`pos.tax.front-doors.accounting-secret`, env `POS_TAX_ACCOUNTING_SECRET`); a missing or wrong secret, a blank
+  configured secret, or a request without the forwarded `X-User-Id` and `X-Tenant-Id` is 401. No `tax:registration:*`
+  permission exists: the person's permission is checked at the front door (`accounting:tax_registration:manage`).
+  Refusals in this order (ADR-0017): 400 `VALIDATION_ERROR` (a missing or malformed field); 422
+  `TAX_JURISDICTION_NOT_CONFIGURED` (a country without a profile) and `TAX_REGIME_NOT_DECLARED` (a regime the profile
+  does not declare); on a change, 404 `TAX_REGISTRATION_NOT_FOUND`; 400 `VALIDATION_ERROR` with
+  `fieldErrors[registrationNumber]` for a number that does not match the regime's shape (never echoed or logged,
+  nothing stored or queued). Then the `requestId` (ADR-0017 §2): the same request again returns 200 with the
+  **first result** (the registration as that write left it, from its history row); the id reused for another
+  operation, registration, number, dates or justification is 409 `IDEMPOTENCY_CONFLICT`. Two identical requests at
+  the same moment are settled before the request id is: two creates by the exclusion constraint (409
+  `TAX_REGISTRATION_OVERLAP`), two changes by the version (409 `OPTIMISTIC_LOCK`); resent afterwards, either returns the
+  first result. The request-id key itself answers 409 `IDEMPOTENCY_CONFLICT` only when one id is used for two different
+  registrations at the same moment. Last, 409 `OPTIMISTIC_LOCK` and 409 `TAX_REGISTRATION_OVERLAP`. Success: 201
+  on create, 200 on change. These endpoints are kept out of the gateway aggregate (`AGGREGATE_EXCLUDED_MODULES`) and
+  pos-mcp-server's tools (`excluded-write-path-patterns`).
 
 Error codes beyond validation: 422 `TAX_JURISDICTION_NOT_CONFIGURED` (a profiled country has no rate row for the region on
 the date), 422 `CURRENCY_NOT_SUPPORTED` (a calculation for a profiled country states another currency than the profile's;
@@ -73,7 +99,7 @@ switches and makes the default map its fallback.
 | --- | --- | --- |
 | `US_SELF` | The test-mode calculator: configured placeholder rates (stubs) | Exists, as test mode |
 | `<country>_SELF` | The configuration-driven self-hosted plug-in, one per country profiled under `pos.tax.countries` (`SelfHostedTaxPlugin`): typed placeholder rates from the profile's rows; commit and void are logged no-ops | Exists (CAP:550 S32a, #2636), routed by the per-country default |
-| `CA_SELF` | The first configured country's self-hosted plug-in (typed rates; number shape, evidence rule and plausibility from S32b; registration status follows in S32c) | Exists (#2636), routed by the per-country default `pos.tax.default-providers.CA`; no rate ships |
+| `CA_SELF` | The first configured country's self-hosted plug-in (typed rates; number shape, evidence rule and plausibility from S32b; the tenant registration registry from S32c) | Exists (#2636), routed by the per-country default `pos.tax.default-providers.CA`; no rate ships |
 | `AVALARA` | The AvaTax adapter (`AvalaraTaxProvider`) | Exists; no environment enables it |
 
 - **Binding.** A tenant-scoped `tax_provider_binding` names the plug-in per tenant and country (`countryCode`, `providerId`,
@@ -119,7 +145,7 @@ what the stub answers today, and which questions wait for expert advice.
 | Exemption certificates | `/v1/tax/exemption-certificates` (`tax:exemption:view`, `tax:exemption:manage`) | A tenant registry. A claim without an active certificate is taxed and flagged, never refused | none outside pos-tax; pos-customer becomes its front door (ADR-0071, no story yet) | Which exemptions are valid, and what evidence they need |
 | Use tax (planned) | `/calculate` with `calculationType = USE` (AW44; louisburroughs/durion-positivity-backend#2604) | Priced exactly like `SALE`; test mode always answers | pos-accounting | Which purchases owe use tax, per-state rules, filing (louisburroughs/durion-positivity-backend#2599) |
 | Typed rates (per-country profile) | `GET /v1/tax/rates`, `POST /v1/tax/calculate` and `GET /v1/tax/tax-types` for a profiled country; rate rows and line rows carry `taxType` and `inputTaxRecoverable` (AW57; CAP:550 S32a, louisburroughs/durion-positivity-backend#2636) | Built. The country's plug-in answers in every provider mode from its configured rows, `source = STUB`: one typed component or row per tax type in effect for the region on the date, HALF_UP at the currency exponent per row; no row → 422 `TAX_JURISDICTION_NOT_CONFIGURED`, never another country's rates. An exemption claim is taxed and flagged. **No rate ships**: the first configured country (`CA`) has placeholder tax types, regimes and recoverability only. Other countries (the US) are unchanged, with both fields null | pos-accounting, pos-invoice (the `taxType` hand-off) | Rates, which supplies are taxable or exempt, what is recoverable, how taxes stack, the tax-type list and regime grouping |
-| Tax registration status (planned) | A tenant's registration per regime (`GST_HST`, `QST`) as of a date (AW49, AW57) | Effective-dated, overlap refused; written only by pos-accounting, the front door (AW59); published as `tax.registration.changed` by outbox (AW58) | pos-accounting, pos-order (replicas) | Registration rules |
+| Tax registration status | `POST`/`PUT /v1/tax/registrations` (front door only, per-caller secret; CAP:550 S32c, louisburroughs/durion-positivity-backend#2638), facts `tax.registration.changed` v1 on `tax.events.v1` | Built. `tax_registration` (+ `tax_registration_history`, RLS) keyed by tenant, country and regime from the configured profiles, any configured country with no code change; the number is stored only after `wellFormed` and only normalised; the jurisdiction is the regime's single region, else the country. Effective-dated, both ends inclusive, never deleted (ended by `effectiveTo`); an overlap is 409 `TAX_REGISTRATION_OVERLAP` (exclusion-constraint backstop); `requestId` replay; optimistic `version`. Written only by pos-accounting, the front door (AW59), with the forwarded actor; each change queues one outbox fact, re-sent by the `tax.manifest.v1` replay (AW58) | pos-accounting, pos-order (`ext_tax_registration` replicas) | Registration rules: who must register, from what threshold, what a registration covers (OI-4) |
 | Registration-number shape | `wellFormed(regime, number)`, reached through `POST /v1/tax/plausibility-checks` and the tenant-registration writes (`RegistrationNumberShapes`; CAP:550 S32b, louisburroughs/durion-positivity-backend#2637) | Configured template per regime (`#` digit, letters literal); no shape → startup fails; a shape without a letter → startup fails; nothing passes by default; shapes change only by a reviewed commit | pos-order (drawer entry), pos-tax registrations (via pos-accounting) | Number formats |
 | Evidence rule | `GET /v1/tax/evidence-rules?countryCode=&asOf=` (`tax:rates:view`, service authority; AW53; CAP:550 S32b, #2637) | Built. `pos.tax.countries.<country>.evidence-rules`, `source = STUB`: the rules in effect on `asOf` (default today), amounts in the profile's currency; a country with none → an empty list. The first configured country (`CA`) ships one placeholder row: `SUPPLIER_REGISTRATION_NUMBER` from 100.00, `appliesTo [DRAWER_RECEIPT, VENDOR_BILL]`, undated; no $500 tier. A caller that cannot obtain the rule retries or holds, never treats it as absent (AW49) | pos-accounting, pos-order | The threshold, the $500 tier, what is compared, whether bills are in scope |
 | Receipt-tax plausibility | `POST /v1/tax/plausibility-checks` (`tax:rates:view`, service authority; AW55; CAP:550 S32b, #2637) | Built, keyed by regime. Per stated amount: 422 `TAX_AMOUNT_IMPLAUSIBLE` when it, or the sum of all, reaches the total `T`, or when it is above `T × r / (1 + r)` rounded up to the minor unit plus `pos.tax.plausibility.tolerance-minor-units` (placeholder 5); `r` is decided per regime (Accounting ruling on #2637, comment 6071110619): **rated** — a row of the regime's tax types is in effect in the region on `asOf`, use its rate; **not levied** — no row and the regime does not cover the region (its `regions` are neither empty nor contain it), `r = 0`, so the maximum is the tolerance; **unrated** — no row but the regime covers the region, no rate bound, and the regime is in neither `ratesUsed` nor `maximums`. The total check always applies; no combined bound. `RATE_UNAVAILABLE` when at least one stated amount above zero is unrated, otherwise `PLAUSIBLE` (zero or absent amounts included). Refusals in order: 400 shape (including a repeated regime), 422 `TAX_JURISDICTION_NOT_CONFIGURED`, `CURRENCY_NOT_SUPPORTED`, `AMOUNT_PRECISION_EXCEEDS_CURRENCY`, `TAX_REGIME_NOT_DECLARED`, `TAX_AMOUNT_IMPLAUSIBLE`. Also answers `supplierRegistrationRequired` (the evidence rule for `DRAWER_RECEIPT`) and `supplierRegistrationNumberWellFormed` (the country's `supplier-registration-regime` shape, or null). Pure: no tenant data, no state, no event; the number is never echoed, logged or stored. A bookkeeping control against typing errors, not a tax rule | pos-order (drawer entry) | How taxes stack on one receipt |
@@ -306,7 +332,7 @@ excluded from the denominator). An all-exempt or zero-base cart yields `0.00`.
 
 ## Multitenancy (ADR-0062, WS3 wave 11)
 
-This module runs on the ADR-0062 runtime: it depends on `pos-tenancy-common`, and every entity extends `TenantScopedEntity` (there are no global tables). The request tenant is
+This module runs on the ADR-0062 runtime: it depends on `pos-tenancy-common`, and every entity extends `TenantScopedEntity` except the global `event_outbox` (CAP:550 S32c). The request tenant is
 bound by `TenantContextFilter` from `X-Tenant-Id` (the gateway injects it from the token's `tid`), and every
 connection checkout binds `app.current_tenant` for row-level security. `pos.tenancy.default-tenant-id` still binds
 the alpha default tenant on every unbound path.
@@ -315,7 +341,17 @@ The application pool connects as the non-owner `pos_app` role (Compose: `SPRING_
 / `POS_APP_PASSWORD`); Flyway alone uses the owner credential (`SPRING_FLYWAY_USER` /
 `SPRING_FLYWAY_PASSWORD`, `FlywayConfig`).
 
-There is no outbox, no consumer and no scheduled job. The one native statement,
+**Outbox and replay (CAP:550 S32c).** `event_outbox` is the one global table (`db/tenancy-global-tables.txt`): the
+unbound `OutboxPublisher` drains every tenant's rows and stamps each row's tenant on the Kafka header. The
+`ManifestPublisher` publishes one `ReconciliationManifestV1` per tenant per closed window on `tax.manifest.v1`, and
+`TaxCommandListener` re-queues a window of the commanding tenant's facts on `tax.outbox.replay-requested` (ADR-0044
+§4). The manifest job keeps its last published window in memory, like the other modules' publishers: after a
+restart it publishes the latest closed window and continues from there, so a window missed while the service was
+down is not re-announced (consumers can still alert on a missing manifest). A status on a fact or a response is
+derived on the UTC date of the change; a reader acting as of a business date uses the effective dates. `OutboxEventWriter` is not `@KafkaRails`: a registration change always writes its fact row, and in a broker-less
+profile the row waits unpublished. The publisher, the manifest and the listener are `@KafkaRails`.
+
+The one native statement,
 `TaxProviderTransactionRepository.insertIfAbsent`, names the tenant explicitly from the caller's resolved tenant and
 carries `@TenantAudited`, so the lifecycle row is the bound tenant's on Postgres and on the H2 slices alike.
 
@@ -328,6 +364,8 @@ non-whitelisted table has `tenant_id`, RLS enabled and forced, and the `tenant_i
 
 - `pos-events` — `@EmitEvent` annotation and event registration
 - `pos-tax-common` — `TaxCalculationRequest` and `TaxCalculationResponse` DTOs
+- `pos-domain-events` — `TaxRegistrationChangedV1`, the envelope and the reconciliation manifest
+- `pos-kafka-common` / `spring-boot-starter-kafka` — the outbox publisher, manifest and replay listener (`@KafkaRails`)
 
 ## Deployment Modes
 

@@ -325,6 +325,10 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1settlements~1lines~1{lineId}~1write-off
   /v1/accounting/settlements/{settlementId}/lines:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1settlements~1{settlementId}~1lines
+  /v1/accounting/tax-registrations:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1tax-registrations
+  /v1/accounting/tax-registrations/{registrationId}:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1tax-registrations~1{registrationId}
   /v1/accounting/tenant-template/add-ons/retread-plant:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1tenant-template~1add-ons~1retread-plant
   /v1/accounting/tenant-template/status:
@@ -1649,26 +1653,6 @@ paths:
     $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1vendors~1{vendorId}~1tax-id-reveals
   /v1/supplier/vendors/{vendorId}/tax-registrations/{registrationId}/reveal:
     $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1vendors~1{vendorId}~1tax-registrations~1{registrationId}~1reveal
-  /v1/tax/calculate:
-    $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1calculate
-  /v1/tax/evidence-rules:
-    $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1evidence-rules
-  /v1/tax/exemption-certificates:
-    $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1exemption-certificates
-  /v1/tax/exemption-certificates/{id}:
-    $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1exemption-certificates~1{id}
-  /v1/tax/mode:
-    $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1mode
-  /v1/tax/plausibility-checks:
-    $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1plausibility-checks
-  /v1/tax/rates:
-    $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1rates
-  /v1/tax/tax-types:
-    $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1tax-types
-  /v1/tax/transactions/{referenceId}/commit:
-    $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1transactions~1{referenceId}~1commit
-  /v1/tax/transactions/{referenceId}/void:
-    $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1transactions~1{referenceId}~1void
   /v1/platform/accounts:
     $ref: ../../pos-tenant/openapi.yaml#/paths/~1v1~1platform~1accounts
   /v1/platform/accounts/{id}:
@@ -2014,8 +1998,6 @@ tags:
   description: Operations served by pos-shop-manager
 - name: pos-supplier
   description: Operations served by pos-supplier
-- name: pos-tax
-  description: Operations served by pos-tax
 - name: pos-tenant
   description: Operations served by pos-tenant
 - name: pos-vehicle-fitment
@@ -2048,7 +2030,6 @@ x-aggregated-modules:
 - pos-security-service
 - pos-shop-manager
 - pos-supplier
-- pos-tax
 - pos-tenant
 - pos-vehicle-fitment
 - pos-vehicle-inventory

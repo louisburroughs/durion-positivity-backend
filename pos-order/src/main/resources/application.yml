@@ -112,6 +112,13 @@ pos:
       accounting-manifest-topic: ${POS_ORDER_ACCOUNTING_MANIFEST_TOPIC:accounting.manifest.v1}
       accounting-manifest-consumer-group: ${POS_ORDER_ACCOUNTING_MANIFEST_CONSUMER_GROUP:pos-order-accounting-manifests}
       accounting-commands-topic: ${POS_ORDER_ACCOUNTING_COMMANDS_TOPIC:accounting.commands.v1}
+      # CAP:550 S32c: pos-tax's tax.registration.changed into ext_tax_registration (the drawer's as-of read), its
+      # per-tenant manifest and the tax.outbox.replay-requested command a drifted window sends (ADR-0044 section 4).
+      tax-events-topic: ${POS_ORDER_TAX_EVENTS_TOPIC:tax.events.v1}
+      tax-events-consumer-group: ${POS_ORDER_TAX_EVENTS_CONSUMER_GROUP:pos-order-tax-events}
+      tax-manifest-topic: ${POS_ORDER_TAX_MANIFEST_TOPIC:tax.manifest.v1}
+      tax-manifest-consumer-group: ${POS_ORDER_TAX_MANIFEST_CONSUMER_GROUP:pos-order-tax-manifests}
+      tax-commands-topic: ${POS_ORDER_TAX_COMMANDS_TOPIC:tax.commands.v1}
       # pos-supplier's reconciliation manifest of supplier.events.v1 (CAP:550 S24, #2517): the vendor copy and the
       # purchase-order results; drift sends supplier.outbox.replay-requested on supplier.commands.v1.
       supplier-manifest-topic: ${POS_ORDER_SUPPLIER_MANIFEST_TOPIC:supplier.manifest.v1}

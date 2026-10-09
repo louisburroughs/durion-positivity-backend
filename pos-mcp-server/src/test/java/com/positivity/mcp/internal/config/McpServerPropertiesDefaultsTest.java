@@ -55,7 +55,16 @@ class McpServerPropertiesDefaultsTest {
                                     "^/mcp-server/v1/(mcp|nlt)/audit(/|$)",
                                     "/v1/supplier/vendors/[^/]+/tax-registrations/[^/]+/reveal$",
                                     // S24 (#2517): a separation-of-duties confirmation is a person's
-                                    "/v1/accounting/vendors/[^/]+/remit-to-confirmation$");
+                                    "/v1/accounting/vendors/[^/]+/remit-to-confirmation$",
+                                    // S32c (#2638): pos-tax's front-door-only registration writes
+                                    "/v1/tax/registrations(/|$)");
+                    // S32c: both writes, with or without a routing prefix; the person's front door stays
+                    assertThat(props.excludesWrite("/tax/v1/tax/registrations", HttpMethod.POST))
+                            .isTrue();
+                    assertThat(props.excludesWrite("/v1/tax/registrations/r1", HttpMethod.PUT))
+                            .isTrue();
+                    assertThat(props.excludesWrite("/accounting/v1/accounting/tax-registrations", HttpMethod.POST))
+                            .isFalse();
                     // #2621: the vendor tax-registration reveal, with or without the routing prefix
                     assertThat(props.excludesWrite(
                                     "/supplier/v1/supplier/vendors/v1/tax-registrations/r1/reveal", HttpMethod.POST))
@@ -129,7 +138,7 @@ class McpServerPropertiesDefaultsTest {
                 .withUserConfiguration(Config.class)
                 .run(ctx -> {
                     McpServerProperties props = ctx.getBean(McpServerProperties.class);
-                    assertThat(props.excludedWritePathPatterns()).hasSize(8);
+                    assertThat(props.excludedWritePathPatterns()).hasSize(9);
                     assertThat(props.excludesWrite("/security-service/v1/audit/events", HttpMethod.POST))
                             .isTrue();
                 });

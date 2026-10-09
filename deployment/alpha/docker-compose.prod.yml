@@ -217,6 +217,9 @@ services:
     image: ${ECR_REGISTRY}/durion/pos-tax:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
+    # No Kafka flag: pos-tax's registration outbox and replay listener are tier-1, always on (ADR-0044 §4,
+    # CAP:550 S32c). POS_TAX_ACCOUNTING_SECRET comes from the repository secret of that name: deploy-backend.sh
+    # persists it into the on-box .env on each deploy (docs/OPERATIONS_RUNBOOK.md).
 
   pos-tenant:
     image: ${ECR_REGISTRY}/durion/pos-tenant:${BACKEND_TAG}
