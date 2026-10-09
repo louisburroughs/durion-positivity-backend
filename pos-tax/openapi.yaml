@@ -675,8 +675,19 @@ paths:
       requestBody:
         content:
           application/json:
+            examples:
+              Registered from January:
+                description: Registered from January
+                value:
+                  countryCode: ZZ
+                  effectiveFrom: '2026-01-01'
+                  justification: Registered with the tax authority
+                  regime: REGIME_1
+                  registrationNumber: ZZ 12345
+                  requestId: 019a0000-0000-7000-8000-000000000301
             schema:
               $ref: '#/components/schemas/TaxRegistrationCreateRequest'
+        description: The country's regime, the number as printed, its dates and why
         required: true
       responses:
         '200':
@@ -751,8 +762,19 @@ paths:
       requestBody:
         content:
           application/json:
+            examples:
+              Ended in May:
+                description: Ended in May
+                value:
+                  effectiveFrom: '2026-01-01'
+                  effectiveTo: '2026-05-31'
+                  justification: Deregistered at the end of May
+                  registrationNumber: ZZ 12345
+                  requestId: 019a0000-0000-7000-8000-000000000302
+                  version: 0
             schema:
               $ref: '#/components/schemas/TaxRegistrationUpdateRequest'
+        description: The registration's new number or dates, the version read, and why
         required: true
       responses:
         '200':
