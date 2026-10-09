@@ -57,6 +57,13 @@ public class RevisePurchaseOrderRequest {
             requiredMode = NOT_REQUIRED)
     private String comment;
 
+    @Schema(
+            description = "Identifier of the pos-supplier vendor the order is placed with instead; only while the order"
+                    + " is DRAFT, and the vendor must be active in pos-order's vendor copy. Absent keeps the vendor",
+            example = "01960003-0000-7000-8000-000000000001",
+            requiredMode = NOT_REQUIRED)
+    private UUID vendorId;
+
     @Schema(description = "Order lines replacing the existing purchase order lines", requiredMode = REQUIRED)
     @NotNull
     @NotEmpty

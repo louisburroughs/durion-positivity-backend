@@ -13,6 +13,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -84,18 +85,20 @@ public class VendorBillController {
             summary = "Create Vendor Bill From Goods Received",
             description = """
                 Creates a vendor bill in PENDING_RECEIPT_MATCH status from a goods-received event, \
-                totaling the received line items and syncing the vendor into the AP vendor directory.
+                totaling the received line items and naming the vendor as accounting's copy of the pos-supplier \
+                vendor master holds it (vendorName is the copy's display name, never the payload's).
                 Use this tool when goods arrive against a purchase order; do not use matchVendorInvoice, \
                 which is the later step that matches the vendor's invoice against this pending bill.
-                Preconditions: none; a duplicate eventId is ignored and the existing bill is returned \
-                instead of creating a second one.
+                Preconditions: vendorId is an ACTIVE pos-supplier vendor in the copy; a duplicate eventId is \
+                ignored and the existing bill is returned instead of creating a second one.
                 Required inputs: eventId, organizationId, purchaseOrderId and vendorId (UUIDs), \
                 receivedDate, and lineItems each with productId, description, quantity and unitPrice; \
                 vendorName and dimensions are optional.
                 Emits an ACCOUNTING_VENDOR_BILL_CREATE event and posts nothing (a bill posts once, at \
-                approval); a vendor-directory sync failure is logged and never fails bill creation.
-                Returns 201 with the created (or already-existing) bill, and 400 when the payload fails \
-                validation.
+                approval).
+                Returns 201 with the created (or already-existing) bill, 400 when the payload fails \
+                validation, 422 VENDOR_INACTIVE, and 503 VENDOR_REPLICATION_PENDING with Retry-After when \
+                the vendor is not in the copy yet.
                 Returns 409 AP_BILL_DUPLICATE when a live bill (any status except VOIDED or REJECTED) \
                 already holds the same vendor, bill date and bill number, compared ignoring case, \
                 spacing, punctuation and leading zeros; referenceId is the existing bill's vendorBillId \
@@ -109,6 +112,21 @@ public class VendorBillController {
     @ApiResponse(
             responseCode = "400",
             description = "Invalid request payload",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "VENDOR_INACTIVE: the vendor is inactive and takes no new bill",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description =
+                    "VENDOR_REPLICATION_PENDING: the vendor is not in accounting's copy of the pos-supplier vendor"
+                            + " master yet. Not-yet, not no: retry after the Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",

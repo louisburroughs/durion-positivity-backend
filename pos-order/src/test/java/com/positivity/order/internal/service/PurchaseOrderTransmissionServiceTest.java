@@ -13,13 +13,16 @@ import com.positivity.domainevents.supplier.SupplierOrderRequestedV1;
 import com.positivity.order.internal.config.OutboxEventWriter;
 import com.positivity.order.internal.entity.ExtProductCode;
 import com.positivity.order.internal.entity.ExtSupplierArticleCode;
+import com.positivity.order.internal.entity.ExtSupplierVendor;
 import com.positivity.order.internal.entity.PurchaseOrderEntity;
 import com.positivity.order.internal.entity.PurchaseOrderLineEntity;
 import com.positivity.order.internal.enums.PurchaseOrderStatus;
 import com.positivity.order.internal.enums.TransmissionState;
 import com.positivity.order.internal.exception.PurchaseOrderNotTransmittableException;
+import com.positivity.order.internal.exception.PurchaseOrderVendorException;
 import com.positivity.order.internal.repository.ExtProductCodeRepository;
 import com.positivity.order.internal.repository.ExtSupplierArticleCodeRepository;
+import com.positivity.order.internal.repository.ExtSupplierVendorRepository;
 import com.positivity.order.internal.repository.PurchaseOrderRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -72,6 +75,9 @@ class PurchaseOrderTransmissionServiceTest {
     private OutboxEventWriter outboxEventWriter;
 
     @Mock
+    private ExtSupplierVendorRepository vendorRepository;
+
+    @Mock
     private org.springframework.beans.factory.ObjectProvider<OutboxEventWriter> outboxProvider;
 
     private PurchaseOrderTransmissionService service;
@@ -83,7 +89,11 @@ class PurchaseOrderTransmissionServiceTest {
                 extProductCodeRepository,
                 extSupplierArticleCodeRepository,
                 outboxProvider,
-                Clock.fixed(NOW, ZoneOffset.UTC));
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                new SupplierVendorGuard(vendorRepository));
+        when(vendorRepository.findById(any()))
+                .thenAnswer(
+                        invocation -> Optional.of(vendor(invocation.getArgument(0), ExtSupplierVendor.Status.ACTIVE)));
         when(outboxProvider.getIfAvailable()).thenReturn(outboxEventWriter);
         when(extProductCodeRepository.findAllById(List.of(SKU_ID)))
                 .thenReturn(List.of(ExtProductCode.builder()
@@ -95,6 +105,46 @@ class PurchaseOrderTransmissionServiceTest {
                         .build()));
         when(extSupplierArticleCodeRepository.findBySupplierRefAndProductIdIn(any(), any()))
                 .thenReturn(List.of());
+    }
+
+    private static ExtSupplierVendor vendor(UUID vendorId, ExtSupplierVendor.Status status) {
+        return ExtSupplierVendor.builder()
+                .vendorId(vendorId)
+                .vendorNumber("V-000123")
+                .displayName("Acme Parts")
+                .status(status)
+                .aggregateVersion(1L)
+                .updatedAt(NOW)
+                .build();
+    }
+
+    @Test
+    @DisplayName(
+            "an approved order whose vendor is not in the copy yet is not sent (503 VENDOR_REPLICATION_PENDING, S24)")
+    void vendorMissingFromCopyIsNotSent() {
+        PurchaseOrderEntity po = order(PurchaseOrderStatus.APPROVED, TransmissionState.NOT_TRANSMITTED);
+        when(vendorRepository.findById(po.getVendorId())).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.requestTransmission(PO_ID, ACTOR))
+                .isInstanceOfSatisfying(
+                        com.positivity.web.common.ReplicationPendingException.class,
+                        e -> assertThat(e.getCode()).isEqualTo("VENDOR_REPLICATION_PENDING"));
+        verify(outboxEventWriter, never()).publish(any(), any());
+        assertThat(po.getTransmissionState()).isEqualTo(TransmissionState.NOT_TRANSMITTED);
+    }
+
+    @Test
+    @DisplayName("an approved order whose vendor is inactive is not sent (VENDOR_INACTIVE, S24)")
+    void inactiveVendorIsNotSent() {
+        PurchaseOrderEntity po = order(PurchaseOrderStatus.APPROVED, TransmissionState.NOT_TRANSMITTED);
+        when(vendorRepository.findById(po.getVendorId()))
+                .thenReturn(Optional.of(vendor(po.getVendorId(), ExtSupplierVendor.Status.INACTIVE)));
+
+        assertThatThrownBy(() -> service.requestTransmission(PO_ID, ACTOR))
+                .isInstanceOfSatisfying(
+                        PurchaseOrderVendorException.class,
+                        e -> assertThat(e.getCode()).isEqualTo(PurchaseOrderVendorException.Code.VENDOR_INACTIVE));
+        verify(outboxEventWriter, never()).publish(any(), any());
     }
 
     private PurchaseOrderEntity order(PurchaseOrderStatus status, TransmissionState transmissionState) {

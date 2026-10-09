@@ -31,12 +31,12 @@ prior AS (
     GROUP BY b.vendor_id
 )
 SELECT c.vendor_id,
-       v.name,
+       v.display_name AS name,
        p.avg_issued_bill                                    AS avg_issued_bill_prior_year,
        c.avg_issued_bill                                    AS avg_issued_bill_current,
        ROUND(100 * (c.avg_issued_bill - p.avg_issued_bill) / NULLIF(p.avg_issued_bill, 0), 2) AS yoy_increase_pct,
        (100 * (c.avg_issued_bill - p.avg_issued_bill) / NULLIF(p.avg_issued_bill, 0)) > 10    AS exceeds_10_pct
 FROM cur c
 JOIN prior p ON p.vendor_id = c.vendor_id
-LEFT JOIN ap_vendor v ON v.vendor_id = c.vendor_id
+LEFT JOIN ext_supplier_vendor v ON v.vendor_id = c.vendor_id
 ORDER BY yoy_increase_pct DESC NULLS LAST, c.vendor_id;

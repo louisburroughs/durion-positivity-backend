@@ -5,6 +5,7 @@ import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.service.AccountingTemplate;
 import com.positivity.accounting.internal.service.AccountingTemplateReader;
 import com.positivity.accounting.internal.service.AccountingTenantProvisioner;
+import com.positivity.tenancy.TenantContext;
 import com.positivity.tenancy.testing.TenantTestSupport;
 import java.util.UUID;
 import javax.sql.DataSource;
@@ -32,6 +33,28 @@ public abstract class PostgresTenancyTestBase {
     /** The container superuser: owns every table, runs Flyway, and bypasses RLS like the alpha owner does. */
     static DataSource ownerDataSource() {
         return AccountingPostgresContainer.ownerDataSource();
+    }
+
+    /**
+     * Puts {@code vendorId} in the copy of the pos-supplier vendor master of the tenant bound to this thread, active,
+     * at remit-to version 0, unless it is there already (CAP:550 S24): a goods-receipt bill and an AP payment must name
+     * a vendor in the copy. Written by the owner, as the vendor-fact consumer's row would be.
+     *
+     * @return {@code vendorId}, so a call can stand where the id is used
+     */
+    static UUID copiedVendor(UUID vendorId) {
+        UUID tenant = TenantContext.current()
+                .orElseThrow(() -> new IllegalStateException("copiedVendor needs a bound tenant"));
+        new org.springframework.jdbc.core.JdbcTemplate(ownerDataSource())
+                .update(
+                        "INSERT INTO ext_supplier_vendor (tenant_id, vendor_id, vendor_number, display_name, status,"
+                                + " remit_to_version, tax_registrations, created_by, aggregate_version, updated_at)"
+                                + " VALUES (?, ?, ?, 'Acme Parts Co', 'ACTIVE', 0, '[]'::jsonb, 'buyer.ben', 1, now())"
+                                + " ON CONFLICT (vendor_id) DO NOTHING",
+                        tenant,
+                        vendorId,
+                        "V-" + vendorId.toString().substring(0, 8));
+        return vendorId;
     }
 
     /** Runs once the container is up and before the Spring context starts, so the role exists for Flyway and the pool. */

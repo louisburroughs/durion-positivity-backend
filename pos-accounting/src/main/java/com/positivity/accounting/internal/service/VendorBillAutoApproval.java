@@ -38,7 +38,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * ambiguous, discrepancy and {@code MATCH_EXCEPTION} matches, and EDI bills, never reach here.
  *
  * <p><b>No person's input.</b> The bill posts with the class of its lines (stocked lines {@code RECEIPT_MATCHED}),
- * no classification, no difference and no override. Whatever would need one, and every refusal of the posting, skips
+ * the vendor's AP defaults for its non-stock lines (CAP:550 S24, AW39), no difference and no override. Whatever would need one, and every refusal of the posting, skips
  * the approval: the bill stays {@code AWAITING_APPROVAL} with no approval field and one {@value #AUDIT_SKIPPED} row
  * carries the code ({@code AP_BILL_ZERO_TOTAL}, {@code AP_BILL_UNCLASSIFIED}, {@code AP_BILL_TOTALS_UNRECONCILED},
  * {@code PERIOD_CLOSED}, {@code PERIOD_HARD_LOCKED}, {@code GL_MAPPING_NOT_CONFIGURED}; S43 adds the tax-on-resale
@@ -77,6 +77,7 @@ public class VendorBillAutoApproval {
     private final VendorBillLineRepository billLines;
     private final AccountingAuditLogRepository auditLogs;
     private final LedgerCurrency ledgerCurrency;
+    private final SupplierVendorCopies vendorCopies;
     private final TransactionTemplate precheckTransaction;
 
     public VendorBillAutoApproval(
@@ -88,6 +89,7 @@ public class VendorBillAutoApproval {
             VendorBillLineRepository billLines,
             AccountingAuditLogRepository auditLogs,
             LedgerCurrency ledgerCurrency,
+            SupplierVendorCopies vendorCopies,
             PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.policy = policy;
@@ -97,6 +99,7 @@ public class VendorBillAutoApproval {
         this.billLines = billLines;
         this.auditLogs = auditLogs;
         this.ledgerCurrency = ledgerCurrency;
+        this.vendorCopies = vendorCopies;
         this.precheckTransaction = new TransactionTemplate(transactionManager);
         this.precheckTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -141,7 +144,7 @@ public class VendorBillAutoApproval {
         // Never caught (ruling 6063520413 item 3): a refusal here, in the pre-check's race, rolls the whole /match
         // back;
         // the caller must resend, and the resend's pre-check ends in the skipped state.
-        VendorBillGlPosting posting = postingService.post(bill, NO_CLASSIFICATION, null, SYSTEM);
+        VendorBillGlPosting posting = postingService.post(bill, classification(bill), null, SYSTEM);
         String justification = "Approved automatically: match score " + score + " (strong >= " + STRONG_SCORE
                 + "), total " + bill.getTotalAmount().toPlainString() + " <= automatic limit " + limit.toPlainString();
         bill.setStatus(VendorBillStatus.APPROVED);
@@ -150,6 +153,8 @@ public class VendorBillAutoApproval {
         bill.setApprovedByKind(VendorBillApproverKind.SYSTEM);
         bill.setApprovedAt(Instant.now(clock));
         bill.setApprovalJustification(justification);
+        // The remit-to the approval was given against (CAP:550 S24, rule 5): payment re-checks it.
+        bill.setApprovedRemitToVersion(vendorCopies.remitToVersion(bill.getVendorId()));
         bill.setModifiedBy(SYSTEM);
         bills.save(bill);
         audit(
@@ -188,7 +193,7 @@ public class VendorBillAutoApproval {
         List<VendorBillPostingService.Leg> legs;
         try {
             legs = VendorBillPostingService.legs(
-                    bill, lines, NO_CLASSIFICATION, VendorBillPostingService.difference(bill));
+                    bill, lines, classification(bill), VendorBillPostingService.difference(bill));
         } catch (VendorBillException refused) {
             return Optional.of(refused);
         }
@@ -211,6 +216,17 @@ public class VendorBillAutoApproval {
             return Optional.of(refused);
         }
         return Optional.empty();
+    }
+
+    /**
+     * The classification an automatic approval posts with: no person's choice, so the vendor's AP defaults when it has
+     * them (CAP:550 S24 rule 10, ruling 1 of #2517), else none. Stocked lines matched to a receipt always class
+     * themselves; the default key reaches the non-stock lines.
+     */
+    private VendorBillPostingService.Classification classification(VendorBill bill) {
+        VendorBillPostingService.Classification defaults =
+                VendorBillApprovalServiceImpl.merge(null, bill, vendorCopies.apDefaults(bill.getVendorId()));
+        return defaults == null ? NO_CLASSIFICATION : defaults;
     }
 
     private void audit(

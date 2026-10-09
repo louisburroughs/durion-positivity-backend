@@ -17,8 +17,8 @@ import com.positivity.accounting.internal.dto.VendorSpendRow;
 import com.positivity.accounting.internal.entity.APPayment;
 import com.positivity.accounting.internal.entity.CustomerCreditTransaction;
 import com.positivity.accounting.internal.entity.ExtInvoice;
+import com.positivity.accounting.internal.entity.ExtSupplierVendor;
 import com.positivity.accounting.internal.entity.PaymentApplication;
-import com.positivity.accounting.internal.entity.Vendor;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
 import com.positivity.accounting.internal.enums.CustomerCreditTransactionType;
@@ -29,11 +29,11 @@ import com.positivity.accounting.internal.repository.CustomerCreditTransactionRe
 import com.positivity.accounting.internal.repository.ExtInvoiceDepositCreditApplicationRepository;
 import com.positivity.accounting.internal.repository.ExtInvoicePaymentReversalRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
+import com.positivity.accounting.internal.repository.ExtSupplierVendorRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
-import com.positivity.accounting.internal.repository.VendorRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -90,7 +90,7 @@ class AccountingAnalyticsServiceImplTest {
     private VendorBillRepository vendorBillRepository;
 
     @Mock
-    private VendorRepository vendorRepository;
+    private ExtSupplierVendorRepository vendorRepository;
 
     @Mock
     private InvoiceBalanceCalculator invoiceBalanceCalculator;
@@ -1275,10 +1275,12 @@ class AccountingAnalyticsServiceImplTest {
         }
 
         @Test
-        @DisplayName("Vendor directory name takes precedence over the payment/bill snapshot name")
+        @DisplayName("The vendor copy's display name takes precedence over the payment/bill snapshot name (S24)")
         void directoryNameTakesPrecedence() {
             UUID vendorId = UUID.randomUUID();
-            Vendor vendor = new Vendor(vendorId, "Acme Parts Company (canonical)");
+            ExtSupplierVendor vendor = new ExtSupplierVendor();
+            vendor.setVendorId(vendorId);
+            vendor.setDisplayName("Acme Parts Company (canonical)");
             when(apPaymentRepository.findByStatusInAndPaymentDateBetween(any(), any(), any()))
                     .thenReturn(List.of(settledPayment(
                             vendorId, "Acme Parts Co (stale)", LocalDateTime.of(2026, 6, 10, 0, 0), "1000.00")));

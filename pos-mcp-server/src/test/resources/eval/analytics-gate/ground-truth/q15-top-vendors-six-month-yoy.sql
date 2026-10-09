@@ -58,7 +58,7 @@ merged AS (
     FROM paid p
     FULL OUTER JOIN bills b ON (b.window_label, b.vendor_id) = (p.window_label, p.vendor_id)
 )
-SELECT m.window_label, m.vendor_id, v.name, m.paid_amount, m.bills_issued_in_window, m.avg_issued_bill_amount
+SELECT m.window_label, m.vendor_id, v.display_name AS name, m.paid_amount, m.bills_issued_in_window, m.avg_issued_bill_amount
 FROM merged m
-LEFT JOIN ap_vendor v ON v.vendor_id = m.vendor_id
+LEFT JOIN ext_supplier_vendor v ON v.vendor_id = m.vendor_id
 ORDER BY m.window_label, m.paid_amount DESC, m.vendor_id;

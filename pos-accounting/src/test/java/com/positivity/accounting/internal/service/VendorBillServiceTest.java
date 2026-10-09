@@ -14,6 +14,7 @@ import com.positivity.accounting.internal.dto.GoodsReceivedEvent;
 import com.positivity.accounting.internal.dto.VendorBillResponse;
 import com.positivity.accounting.internal.dto.VendorInvoiceReceivedEvent;
 import com.positivity.accounting.internal.entity.AccountingSequence;
+import com.positivity.accounting.internal.entity.ExtSupplierVendor;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.entity.VendorBillLine;
 import com.positivity.accounting.internal.entity.VendorBillMatchCandidate;
@@ -95,8 +96,9 @@ class VendorBillServiceTest {
     @Mock
     private VendorBillAutoApproval autoApproval;
 
+    /** Accounting's copy of the vendor master (S24): every vendor named here is in it and active. */
     @Mock
-    private VendorDirectoryService vendorDirectoryService;
+    private SupplierVendorCopies vendorCopies;
 
     /** A mock answers "no duplicate"; the {@link DuplicateRule} tests build a service over a real guard. */
     @Mock
@@ -130,6 +132,14 @@ class VendorBillServiceTest {
         // The lock re-reads the bill as it is now; unchanged unless a test says otherwise.
         when(locks.lock(any(VendorBill.class))).thenAnswer(inv -> inv.getArgument(0));
         when(evidenceRepository.save(any(VendorBillMatchEvidence.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(vendorCopies.requireForNewBusiness(any(UUID.class), any())).thenAnswer(inv -> {
+            ExtSupplierVendor vendor = new ExtSupplierVendor();
+            vendor.setVendorId(inv.getArgument(0));
+            vendor.setVendorNumber("V-000003");
+            vendor.setDisplayName("Test Vendor");
+            vendor.setStatus(ExtSupplierVendor.ACTIVE);
+            return vendor;
+        });
         vendorBillService = service(duplicateGuard);
         testVendorId = UUID.fromString("00000000-0000-0000-0000-000000000003");
         testBillId = UUID.fromString("00000000-0000-0000-0000-000000000004");
@@ -742,7 +752,6 @@ class VendorBillServiceTest {
             verify(billRepository, never()).saveAndFlush(any());
             verify(billRepository, never()).save(any());
             verify(billLineRepository, never()).save(any());
-            verify(vendorDirectoryService, never()).recordVendorInCurrentTransaction(any(), any());
             // The number was drawn from the tenant's counter in the same transaction as the refused
             // bill; that transaction rolls back, and the increment with it (Postgres IT).
             assertThat(counter.getNextValue()).isEqualTo(8L);
@@ -778,8 +787,6 @@ class VendorBillServiceTest {
                     .isInstanceOfSatisfying(
                             VendorBillDuplicateException.class,
                             refused -> assertThat(refused.getOriginalBillId()).isEqualTo(originalId));
-
-            verify(vendorDirectoryService, never()).recordVendorInCurrentTransaction(any(), any());
         }
 
         @Test
@@ -916,7 +923,7 @@ class VendorBillServiceTest {
                 billRepository,
                 billLineRepository,
                 matchCandidateRepository,
-                vendorDirectoryService,
+                vendorCopies,
                 guard,
                 sequenceLocker,
                 transactionManager,

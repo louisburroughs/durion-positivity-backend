@@ -8,6 +8,7 @@ import com.positivity.accounting.internal.dto.VendorBillResponse;
 import com.positivity.accounting.internal.dto.VendorInvoiceReceivedEvent;
 import com.positivity.accounting.internal.entity.AccountingAuditLog;
 import com.positivity.accounting.internal.entity.AccountingSequence;
+import com.positivity.accounting.internal.entity.ExtSupplierVendor;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.entity.VendorBillLine;
 import com.positivity.accounting.internal.entity.VendorBillMatchCandidate;
@@ -84,7 +85,7 @@ public class VendorBillServiceImpl implements VendorBillService {
     private final VendorBillRepository billRepository;
     private final VendorBillLineRepository billLineRepository;
     private final VendorBillMatchCandidateRepository matchCandidateRepository;
-    private final VendorDirectoryService vendorDirectoryService;
+    private final SupplierVendorCopies vendorCopies;
     private final VendorBillDuplicateGuard duplicateGuard;
     private final AccountingSequenceLocker sequenceLocker;
     private final VendorBillInvoiceMatcher matcher;
@@ -108,7 +109,7 @@ public class VendorBillServiceImpl implements VendorBillService {
             VendorBillRepository billRepository,
             VendorBillLineRepository billLineRepository,
             VendorBillMatchCandidateRepository matchCandidateRepository,
-            VendorDirectoryService vendorDirectoryService,
+            SupplierVendorCopies vendorCopies,
             VendorBillDuplicateGuard duplicateGuard,
             AccountingSequenceLocker sequenceLocker,
             PlatformTransactionManager transactionManager,
@@ -123,7 +124,7 @@ public class VendorBillServiceImpl implements VendorBillService {
         this.billRepository = billRepository;
         this.billLineRepository = billLineRepository;
         this.matchCandidateRepository = matchCandidateRepository;
-        this.vendorDirectoryService = vendorDirectoryService;
+        this.vendorCopies = vendorCopies;
         this.duplicateGuard = duplicateGuard;
         this.sequenceLocker = sequenceLocker;
         this.matcher = matcher;
@@ -164,10 +165,7 @@ public class VendorBillServiceImpl implements VendorBillService {
      * therefore asks for no second connection: on a small pool the holder would wait for one behind
      * the very writers waiting for its lock, until the pool's timeout, and for that long no tenant
      * would get a connection at all (the defect #2342 removed from the counter's own bootstrap). The
-     * vendor-directory write, which used to run in a {@code REQUIRES_NEW} transaction of its own, is
-     * made on the bill's connection with a conflict-tolerant insert
-     * ({@link VendorDirectoryService#recordVendorInCurrentTransaction}), so it commits with the bill
-     * and a refused or rolled-back create writes no directory row. Nothing else between the number
+     * vendor is read from the copy before the number is drawn (CAP:550 S24, #2517). Nothing else between the number
      * and the commit leaves the bill's connection: the duplicate check, the bill and its lines all join this
      * transaction. Nothing is posted (AW37).
      *
@@ -237,10 +235,15 @@ public class VendorBillServiceImpl implements VendorBillService {
             return reader.read(existingBill.get());
         }
 
+        // Step 1b: The vendor (CAP:550 S24, #2517): a pos-supplier vendor in the copy (503 VENDOR_REPLICATION_PENDING)
+        // that is
+        // ACTIVE (422 VENDOR_INACTIVE). The bill keeps the copy's display name, never the caller's.
+        ExtSupplierVendor vendor = vendorCopies.requireForNewBusiness(event.getVendorId(), "A bill");
+
         // Step 2: Create vendor bill
         VendorBill bill = new VendorBill();
         bill.setVendorId(event.getVendorId());
-        bill.setVendorName(event.getVendorName());
+        bill.setVendorName(vendor.getDisplayName());
         bill.setBillDate(event.getReceivedDate());
         bill.setStatus(VendorBillStatus.PENDING_RECEIPT_MATCH);
         bill.setOriginEventId(event.getEventId());
@@ -276,12 +279,6 @@ public class VendorBillServiceImpl implements VendorBillService {
             }
             throw e;
         }
-
-        // Keep the AP vendor directory (name typeahead) in sync (Issue #816), on this connection:
-        // the counter row lock is held, so no second connection may be requested here
-        // (handleGoodsReceivedEvent). The insert tolerates an existing row, so it cannot fail the
-        // bill for the reason the former REQUIRES_NEW write was isolated against.
-        vendorDirectoryService.recordVendorInCurrentTransaction(event.getVendorId(), event.getVendorName());
 
         // Step 5: Save line items for three-way matching
         int lineNumber = 1;

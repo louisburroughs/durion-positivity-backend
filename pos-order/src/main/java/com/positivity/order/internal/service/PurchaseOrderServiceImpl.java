@@ -91,6 +91,9 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     private final DocumentQuantityConverter documentQuantityConverter;
     private final Clock clock;
 
+    /** The vendor guard of create, approve and a vendor-changing revision (CAP:550 S24, #2517). */
+    private final SupplierVendorGuard vendorGuard;
+
     @Value("${pos.order.default-tax-rate:0.10}")
     private double defaultTaxRate = 0.10d;
 
@@ -117,6 +120,9 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     @Transactional
     public @NonNull PurchaseOrderResponse createPurchaseOrder(
             @NonNull CreatePurchaseOrderRequest request, @NonNull String actorId) {
+        // Only an active vendor of the copy takes a new order (S24, #2517). A requested order (createRequested) is
+        // not checked here: it lands in DRAFT and approval stops it.
+        vendorGuard.requireActive(request.getVendorId());
         TotalsAndLines totalsAndLines = buildLineEntities(request.getLines());
         long subtotalMinor = totalsAndLines.subtotalMinor();
         long taxMinor = totalsAndLines.taxMinor();
@@ -357,6 +363,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         if (po.getStatus() != PurchaseOrderStatus.DRAFT) {
             throw new PurchaseOrderStateConflictException("Only DRAFT purchase orders can be approved");
         }
+        // The guard that stops a requested order naming a vendor outside the copy, or an inactive one (S24, #2517).
+        vendorGuard.requireActive(po.getVendorId());
 
         // Approval is the moment the order becomes a commitment, and the moment its open
         // quantities start counting as incoming supply everywhere downstream.
@@ -375,6 +383,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     public @NonNull PurchaseOrderResponse revisePurchaseOrder(
             @NonNull UUID poId, @NonNull RevisePurchaseOrderRequest request, @NonNull String actorId) {
         PurchaseOrderEntity po = getPoOrThrow(poId);
+        reviseVendor(po, request.getVendorId());
         int priorVersion = po.getVersionNumber() == null ? 1 : po.getVersionNumber();
 
         po.setVersionNumber(priorVersion + 1);
@@ -420,6 +429,24 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         // domain, rather than pos-order emitting an inventory fact it does not own.
         purchaseOrderFactPublisher.publish(saved, saved.getLines());
         return toResponse(saved);
+    }
+
+    /**
+     * A revision may name another vendor while the order is a {@code DRAFT} (S24, #2517): how a buyer fixes a
+     * requested order that named a feed id or an inactive vendor. The new vendor passes the same guard as a create.
+     * An absent {@code vendorId}, or the order's own, keeps the vendor; another vendor on an order past {@code DRAFT}
+     * is refused, because an approved order is a commitment to the vendor it names.
+     */
+    private void reviseVendor(@NonNull PurchaseOrderEntity po, @Nullable UUID vendorId) {
+        if (vendorId == null || vendorId.equals(po.getVendorId())) {
+            return;
+        }
+        if (po.getStatus() != PurchaseOrderStatus.DRAFT) {
+            throw new PurchaseOrderStateConflictException(
+                    "Only a DRAFT purchase order can change its vendor; this order is " + po.getStatus());
+        }
+        vendorGuard.requireActive(vendorId);
+        po.setVendorId(vendorId);
     }
 
     private PurchaseOrderEntity getPoOrThrow(UUID poId) {

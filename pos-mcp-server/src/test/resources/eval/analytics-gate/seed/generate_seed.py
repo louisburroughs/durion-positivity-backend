@@ -9,7 +9,7 @@ Emits one SQL file per target database into seed/sql/:
     pos_accounting_db.sql   ext_invoice, receivable_payment, payment_application(+reversal),
                             credit_memo, customer_credit(+transaction),
                             ext_invoice_payment_reversal, ext_invoice_deposit_credit_application,
-                            ap_vendor, vendor_bill, ap_payment, ap_payment_allocation
+                            ext_supplier_vendor, vendor_bill, ap_payment, ap_payment_allocation
     pos_workorder_db.sql    workorder, workorder_service, work_order_state_transitions,
                             workorder_labor_entry, ext_invoice, ext_customer_party,
                             ext_people_contact_person, ext_people_contact_user_link
@@ -843,7 +843,7 @@ def gen_accounting_db():
           "(SELECT payment_id FROM ap_payment WHERE payment_ref LIKE '%s-%%');" % MARK)
     f.raw("DELETE FROM ap_payment WHERE payment_ref LIKE '%s-%%';" % MARK)
     f.raw("DELETE FROM vendor_bill WHERE bill_number LIKE '%s-%%';" % MARK)
-    f.raw("DELETE FROM ap_vendor WHERE vendor_number LIKE '%s-%%';" % MARK)
+    f.raw("DELETE FROM ext_supplier_vendor WHERE vendor_number LIKE '%s-%%';" % MARK)
 
     inv_by_key = {i["key"]: i for i in INVOICES}
 
@@ -965,10 +965,12 @@ def gen_accounting_db():
     for vk, name in VENDORS.items():
         n += 1
         f.insert(
-            "ap_vendor",
-            ["vendor_id", "name", "vendor_number", "status", "created_at", "updated_at"],
-            [q(VENDOR_ID[vk]), q(name), q("%s-V%d" % (MARK, n)), q("ACTIVE"),
-             q(DIM_TS), q(DIM_TS)],
+            # The pos-supplier vendor copy (CAP:550 S24 retired ap_vendor).
+            "ext_supplier_vendor",
+            ["vendor_id", "vendor_number", "display_name", "status", "remit_to_version", "tax_registrations",
+             "created_by", "aggregate_version", "updated_at"],
+            [q(VENDOR_ID[vk]), q("%s-V%d" % (MARK, n)), q(name), q("ACTIVE"), "0", "'[]'::jsonb",
+             q("trackb-seed"), "1", q(DIM_TS)],
         )
     for key, vk, amt, bd, dd, paid in BILLS:
         bill_id = uid(key)
@@ -1018,7 +1020,7 @@ def gen_accounting_db():
         ("credit_memo", "created_by_user_id = %s" % q(SEED_USER)),
         ("customer_credit", "created_by = %s" % q(SEED_USER)),
         ("customer_credit_transaction", "request_id LIKE '%s-%%'" % MARK),
-        ("ap_vendor", "vendor_number LIKE '%s-%%'" % MARK),
+        ("ext_supplier_vendor", "vendor_number LIKE '%s-%%'" % MARK),
         ("vendor_bill", "bill_number LIKE '%s-%%'" % MARK),
         ("ap_payment", "payment_ref LIKE '%s-%%'" % MARK),
         ("ap_payment_allocation",

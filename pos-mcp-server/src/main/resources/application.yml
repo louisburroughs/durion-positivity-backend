@@ -128,6 +128,12 @@ mcp:
       # so it matches with or without the routing prefix. GET .../tax-id-reveals stays: it is metadata only
       # (actor, roles, reason, correlation id, outcome), never the number or last4.
       - /v1/supplier/vendors/[^/]+/tax-registrations/[^/]+/reveal$
+      # CAP:550 S24 (#2517): confirming a vendor's changed remit-to is a separation-of-duties control (the
+      # confirmer may be neither the payer nor the remit-to requester, AW6). It attests that a person verified the
+      # new payment address with the vendor; an agent cannot verify anything, so it must be done by a person, never
+      # through a tool. The vendor reads and the AP-settings PUT stay discoverable. Unanchored (find()), like the
+      # reveal, so it matches with or without the routing prefix.
+      - /v1/accounting/vendors/[^/]+/remit-to-confirmation$
   sitemap:
     # Origin of the frontend SSR server (NOT the API gateway). The SSR server defaults to port 4000.
     base-url: ${FRONTEND_BASE_URL:http://localhost:4000}

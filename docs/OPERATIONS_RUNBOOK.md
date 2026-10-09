@@ -1493,6 +1493,190 @@ A deletion cannot be replayed — a deleted row is gone, so its tombstone exists
 stream. A freshly seeded replica therefore holds what the catalog currently has, which is what
 resolution needs; it will not learn about items removed before the seed.
 
+#### pos-supplier: seeding the vendor copies (CAP:550 S24, #2517)
+
+pos-accounting and pos-order each keep a copy of the pos-supplier vendor master (`ext_supplier_vendor`),
+written only by their `supplier.vendor.updated` consumers. Both copies start empty after V20 (pos-accounting)
+and V7 (pos-order). Seed them per tenant with a token of that tenant holding `supplier:fact:replay`. Each call
+re-emits one page (`limit` 1–1000, default 200) of the tenant's vendors at their current version; pass the
+response's `nextAfterVendorId` as `afterVendorId` until the response says `complete: true` (the cursor is then
+null):
+
+```bash
+# Vendors (supplier.vendor.updated, schema version 2). First page: no afterVendorId.
+curl -X POST "https://<gateway>/supplier/v1/supplier/vendors/facts/replay?limit=200" \
+  -H "Authorization: Bearer $TOKEN" -H "X-API-Version: 1"
+# Next pages: the previous response's nextAfterVendorId.
+curl -X POST "https://<gateway>/supplier/v1/supplier/vendors/facts/replay?limit=200&afterVendorId=<nextAfterVendorId>" \
+  -H "Authorization: Bearer $TOKEN" -H "X-API-Version: 1"
+```
+
+Until a vendor is copied, a goods-receipt bill, an AP payment or a purchase order naming it is answered 503
+`VENDOR_REPLICATION_PENDING` with `Retry-After` (the copy is event-fed, so a missing row means "not copied
+yet", never "does not exist", ADR-0017 §1), and its EDI invoices are held (`supplier_invoice_hold`, reason
+`VENDOR_NOT_IN_COPY`). Consumers apply only schema version 2 or later; a version 1 vendor fact still on the
+broker is marked and counted (`accounting.supplier_vendor.skipped`), never applied.
+
+**Holds and the copy race.** An invoice fact and its vendor's fact travel on different partitions of
+`supplier.events.v1`, so the invoice may arrive first. It is then held (`VENDOR_NOT_IN_COPY`) in the same
+transaction as its processed mark and released, through the same bill creation and with its ingestion record,
+when the vendor's fact is copied. A release that fails leaves the hold `HELD`; `SupplierInvoiceHoldSweep`
+retries it hourly (`pos.accounting.supplier-invoice-hold.sweep-interval`, default `PT1H`), refreshes the
+gauge `accounting.supplier_invoice.held{reason}`, and WARN-logs holds older than 24 hours once a day. The sweep
+has no cluster lock (no ShedLock): every pos-accounting instance runs it. That is safe because each release
+locks its hold row and re-checks `released_at` under the lock, so concurrent sweeps release a hold once; the
+loser only logs contention. A `VENDOR_ID_MISSING` hold (a fact with no `vendorId`) waits for a person (S25).
+
+**Alpha AP data is reseeded, not migrated (ADR-0070 Consequences).** Bills and AP payments created before S24
+name vendor-profile ids or caller-supplied ids that are not pos-supplier vendor ids, and their bills carry no
+approved remit-to version. Reset them together with the journal entries they posted, so the ledger stays
+whole (ADR-0047 forbids deleting entries alone), then seed the copies and re-create test bills through the new
+paths (goods receipt with a copied vendor, EDI with a `vendorId`).
+
+**The platform owner runs this, on alpha only, one tenant per run; review the counts before committing.**
+Run it as the database owner in `pos_accounting_db`. `FORCE ROW LEVEL SECURITY` applies to the owner too, so
+the script binds the tenant first (`app.current_tenant`, the setting `app_current_tenant()` reads); every
+tenant-scoped statement then sees only that tenant's rows. The two global tables (`event_outbox`,
+`processed_events`) are filtered on `tenant_id` explicitly.
+
+Caveats:
+
+- **Closed and hard-locked periods.** Deleting an entry dated in a `CLOSED` period, or before the tenant's
+  `HARD_LOCK_DATE`, rewrites a period that was closed. The guard in step 2 stops the run if any doomed entry is
+  dated there; reopen the period (or move the hard lock) deliberately first, or leave that tenant alone.
+- **Bank reconciliation.** The guard also stops the run if a doomed entry line is matched or carried as an
+  outstanding item by a bank reconciliation; those rows have no foreign key and would dangle.
+- Any other row that references a doomed entry through a foreign key (a deposit, an opening balance, a float
+  change) makes the delete fail and the transaction roll back: nothing is half-deleted.
+- Journal entry numbers are not reused, so the reset leaves gaps in the numbering. Audit rows
+  (`accounting_audit_log`) are kept: they are the history of what happened.
+- Deleting the processed marks of the bills' EDI facts (step 4) makes them replayable, but nothing replays them
+  by itself: pos-supplier's `ManifestPublisher` publishes each window's manifest once, and on boot only the latest
+  closed window, so past windows never report drift again. To bring those EDI invoices back, the operator either
+  sends `supplier.outbox.replay-requested` on `supplier.commands.v1` for the affected windows
+  (`{"commandType":"supplier.outbox.replay-requested","payload":{"since":…,"until":…}}`, the tenant on the record
+  header, `since` no older than `pos.supplier.outbox.replay.max-lookback`, 30 days), after which they are keyed on
+  `vendorId` or held, or re-creates those invoices by hand.
+
+```sql
+-- pos_accounting_db, as the owner. One tenant per run. Ends in ROLLBACK: run it, read the counts, then run it
+-- again with ROLLBACK replaced by COMMIT.
+BEGIN;
+SET LOCAL app.current_tenant = '<tenant-uuid>';
+
+-- 1. What goes: every vendor bill and AP payment of the tenant, the entries they posted (and the reversals of
+--    those entries, both ways), their EDI ingestion records and the processed marks of their EDI facts.
+CREATE TEMP TABLE s24_bill ON COMMIT DROP AS
+    SELECT vendor_bill_id, origin_event_id, origin_event_type FROM vendor_bill;
+CREATE TEMP TABLE s24_payment ON COMMIT DROP AS
+    SELECT payment_id FROM ap_payment;
+CREATE TEMP TABLE s24_entry (journal_entry_id uuid PRIMARY KEY) ON COMMIT DROP;
+INSERT INTO s24_entry
+    SELECT journal_entry_id FROM journal_entry WHERE source_event_type IN ('VENDOR_BILL', 'AP_PAYMENT')
+    UNION SELECT journal_entry_id FROM vendor_bill_gl_posting
+    UNION SELECT reversal_journal_entry_id FROM vendor_bill_gl_posting WHERE reversal_journal_entry_id IS NOT NULL
+    UNION SELECT journal_entry_id FROM vendor_bill WHERE journal_entry_id IS NOT NULL
+    UNION SELECT gl_journal_entry_id FROM ap_payment WHERE gl_journal_entry_id IS NOT NULL
+ON CONFLICT DO NOTHING;
+INSERT INTO s24_entry
+    SELECT je.reversal_journal_entry_id FROM journal_entry je
+        WHERE je.journal_entry_id IN (SELECT journal_entry_id FROM s24_entry) AND je.reversal_journal_entry_id IS NOT NULL
+    UNION SELECT je.reversed_by_journal_entry_id FROM journal_entry je
+        WHERE je.journal_entry_id IN (SELECT journal_entry_id FROM s24_entry) AND je.reversed_by_journal_entry_id IS NOT NULL
+    UNION SELECT je.journal_entry_id FROM journal_entry je
+        WHERE je.reversal_journal_entry_id IN (SELECT journal_entry_id FROM s24_entry)
+           OR je.reversed_by_journal_entry_id IN (SELECT journal_entry_id FROM s24_entry)
+ON CONFLICT DO NOTHING;
+CREATE TEMP TABLE s24_event ON COMMIT DROP AS
+    SELECT event_id FROM accounting_event
+     WHERE (source_system = 'pos-supplier' AND event_type = 'supplier.invoice.received')
+        OR journal_entry_id IN (SELECT journal_entry_id FROM s24_entry)
+        OR domain_key_id IN (SELECT vendor_bill_id::text FROM s24_bill)
+        OR domain_key_id IN (SELECT payment_id::text FROM s24_payment);
+CREATE TEMP TABLE s24_fact ON COMMIT DROP AS
+    SELECT origin_event_id::text AS event_id FROM s24_bill
+     WHERE origin_event_type = 'SUPPLIER_INVOICE_RECEIVED' AND origin_event_id IS NOT NULL
+    UNION SELECT event_id::text FROM supplier_invoice_hold;
+
+-- 2. Guards: stop on a closed or hard-locked period, or a bank reconciliation that points at a doomed line.
+DO $$
+DECLARE
+    v_lock date;
+    v_bad  bigint;
+BEGIN
+    SELECT config_value::date INTO v_lock FROM accounting_configuration WHERE config_key = 'HARD_LOCK_DATE';
+    SELECT count(*) INTO v_bad
+      FROM journal_entry je JOIN s24_entry e USING (journal_entry_id)
+     WHERE (v_lock IS NOT NULL AND je.transaction_date::date < v_lock)
+        OR EXISTS (SELECT 1 FROM accounting_period p
+                    WHERE p.status = 'CLOSED' AND je.transaction_date::date BETWEEN p.start_date AND p.end_date);
+    IF v_bad > 0 THEN
+        RAISE EXCEPTION 'S24 AP reset stopped: % entries fall before the hard lock (%) or in a CLOSED period',
+            v_bad, v_lock;
+    END IF;
+    SELECT (SELECT count(*) FROM bank_reconciliation_gl_match m
+              JOIN journal_entry_line l ON l.line_id = m.gl_line_id
+             WHERE l.journal_entry_id IN (SELECT journal_entry_id FROM s24_entry))
+         + (SELECT count(*) FROM bank_reconciliation_outstanding_item o
+              JOIN journal_entry_line l ON l.line_id = o.gl_line_id
+             WHERE l.journal_entry_id IN (SELECT journal_entry_id FROM s24_entry))
+      INTO v_bad;
+    IF v_bad > 0 THEN
+        RAISE EXCEPTION 'S24 AP reset stopped: % bank reconciliation rows reference AP entry lines', v_bad;
+    END IF;
+END $$;
+
+-- 3. The counts to review.
+SELECT 'vendor_bill' AS rows_of, count(*) FROM s24_bill
+UNION ALL SELECT 'ap_payment', count(*) FROM s24_payment
+UNION ALL SELECT 'ap_payment_allocation', count(*) FROM ap_payment_allocation
+UNION ALL SELECT 'vendor_bill_line', count(*) FROM vendor_bill_line
+UNION ALL SELECT 'vendor_bill_gl_posting', count(*) FROM vendor_bill_gl_posting
+UNION ALL SELECT 'vendor_bill_match_evidence', count(*) FROM vendor_bill_match_evidence
+UNION ALL SELECT 'vendor_bill_match_candidate', count(*) FROM vendor_bill_match_candidate
+UNION ALL SELECT 'vendor_bill_reissue', count(*) FROM vendor_bill_reissue
+UNION ALL SELECT 'supplier_invoice_hold', count(*) FROM supplier_invoice_hold
+UNION ALL SELECT 'journal_entry', count(*) FROM s24_entry
+UNION ALL SELECT 'journal_entry_line', count(*) FROM journal_entry_line
+                  WHERE journal_entry_id IN (SELECT journal_entry_id FROM s24_entry)
+UNION ALL SELECT 'accounting_event', count(*) FROM s24_event
+UNION ALL SELECT 'event_outbox (AP payment postings)', count(*) FROM event_outbox
+                  WHERE tenant_id = app_current_tenant() AND aggregate_type = 'APPayment'
+                    AND aggregate_id IN (SELECT payment_id FROM s24_payment)
+UNION ALL SELECT 'processed_events (EDI facts)', count(*) FROM processed_events
+                  WHERE tenant_id = app_current_tenant() AND event_id IN (SELECT event_id FROM s24_fact);
+
+-- 4. The deletes, children first.
+DELETE FROM reprocessing_attempt_history WHERE event_id IN (SELECT event_id FROM s24_event);
+DELETE FROM accounting_event WHERE event_id IN (SELECT event_id FROM s24_event);
+DELETE FROM ap_payment_allocation
+ WHERE payment_id IN (SELECT payment_id FROM s24_payment)
+    OR vendor_bill_id IN (SELECT vendor_bill_id FROM s24_bill);
+DELETE FROM event_outbox
+ WHERE tenant_id = app_current_tenant() AND aggregate_type = 'APPayment'
+   AND aggregate_id IN (SELECT payment_id FROM s24_payment);
+DELETE FROM ap_payment WHERE payment_id IN (SELECT payment_id FROM s24_payment);
+DELETE FROM vendor_bill_gl_posting WHERE vendor_bill_id IN (SELECT vendor_bill_id FROM s24_bill);
+DELETE FROM vendor_bill_match_evidence WHERE vendor_bill_id IN (SELECT vendor_bill_id FROM s24_bill);
+DELETE FROM vendor_bill_match_candidate WHERE vendor_bill_id IN (SELECT vendor_bill_id FROM s24_bill);
+DELETE FROM vendor_bill_reissue WHERE vendor_bill_id IN (SELECT vendor_bill_id FROM s24_bill);
+DELETE FROM vendor_bill_line WHERE vendor_bill_id IN (SELECT vendor_bill_id FROM s24_bill);
+DELETE FROM vendor_bill WHERE vendor_bill_id IN (SELECT vendor_bill_id FROM s24_bill);
+DELETE FROM supplier_invoice_hold;
+-- Lines, then the reversal links between doomed entries, then the entries. The deferred balance trigger exempts
+-- an entry deleted in the same transaction.
+DELETE FROM journal_entry_line WHERE journal_entry_id IN (SELECT journal_entry_id FROM s24_entry);
+UPDATE journal_entry SET reversal_journal_entry_id = NULL, reversed_by_journal_entry_id = NULL
+ WHERE journal_entry_id IN (SELECT journal_entry_id FROM s24_entry);
+DELETE FROM journal_entry WHERE journal_entry_id IN (SELECT journal_entry_id FROM s24_entry);
+DELETE FROM processed_events
+ WHERE tenant_id = app_current_tenant() AND event_id IN (SELECT event_id FROM s24_fact);
+
+ROLLBACK;  -- replace with COMMIT once the counts above are the ones you expect
+```
+
+Then seed the copies (above) and re-create the test bills through the new paths.
+
 #### Issue #1514: rehydrating the putaway replica columns
 
 Category-based putaway matches a received line against the item's catalog category/subcategory and

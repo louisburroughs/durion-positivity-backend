@@ -57,6 +57,7 @@ class VendorBillAutoApprovalTest {
     private final VendorBillRepository bills = mock();
     private final VendorBillLineRepository billLines = mock();
     private final AccountingAuditLogRepository auditLogs = mock();
+    private final SupplierVendorCopies vendorCopies = mock();
     private VendorBillAutoApproval autoApproval;
     private VendorBill bill;
     private VendorBillMatchEvidence evidence;
@@ -72,6 +73,7 @@ class VendorBillAutoApprovalTest {
                 billLines,
                 auditLogs,
                 new LedgerCurrency("USD"),
+                vendorCopies,
                 mock(PlatformTransactionManager.class));
         bill = new VendorBill(UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4d01"));
         bill.setBillNumber("INV-7");
@@ -145,6 +147,33 @@ class VendorBillAutoApprovalTest {
         assertThat(audit.getUserId()).isEqualTo("SYSTEM");
         assertThat(audit.getNewValue())
                 .contains("limit=300.00", "autoLimit=500.00", "limitApplied=300.00", "matchScore=95", "postingDate=");
+    }
+
+    @Test
+    @DisplayName("S24 AC 9: the automatic approval stamps the vendor's current remit-to version")
+    void stampsTheRemitToVersion() {
+        billed("250.00", true);
+        bill.setVendorId(UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4d02"));
+        when(vendorCopies.remitToVersion(bill.getVendorId())).thenReturn(4);
+
+        assertThat(autoApproval.approveIfEligible(bill, evidence, 95)).isTrue();
+
+        assertThat(bill.getApprovedRemitToVersion()).isEqualTo(4);
+    }
+
+    @Test
+    @DisplayName("S24 ruling 1: a non-stock line is approved automatically once its vendor has a default key")
+    void vendorDefaultKeyClassesNonStockLines() {
+        limits("500.00", "500.00");
+        billed("200.00", false);
+        bill.setVendorId(UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4d02"));
+        VendorBillPostingService.Classification defaults =
+                new VendorBillPostingService.Classification(null, "EXPENSE_SHOP_SUPPLIES");
+        when(vendorCopies.apDefaults(bill.getVendorId())).thenReturn(defaults);
+
+        assertThat(autoApproval.approveIfEligible(bill, evidence, 95)).isTrue();
+
+        verify(postingService).post(eq(bill), eq(defaults), eq(null), eq("SYSTEM"));
     }
 
     @Test
