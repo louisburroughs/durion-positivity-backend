@@ -1,0 +1,6 @@
+# CAP:550 S32b test fixture (RegistrationNumberShapesTest): a classpath file not named application*.yml.
+pos:
+  tax:
+    registration:
+      formats:
+        - { regime: R_1, shape: "A#########" }
