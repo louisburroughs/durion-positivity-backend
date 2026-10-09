@@ -160,6 +160,18 @@ public final class AccountingPermissions {
     /** View mapping key. */
     public static final String MAPPING_KEY_VIEW = "accounting:mapping-key:view";
 
+    /**
+     * Record and change the tenant's indirect-tax registrations through the front door to pos-tax (CAP:550 S32c;
+     * ADR-0071 §5). Granted to the roles that hold {@link #MAPPING_KEY_EDIT}.
+     */
+    public static final String TAX_REGISTRATION_MANAGE = "accounting:tax_registration:manage";
+
+    /**
+     * Read the tenant's indirect-tax registrations from accounting's copy (CAP:550 S32c). Granted to the roles that
+     * hold {@link #MAPPING_KEY_VIEW}.
+     */
+    public static final String TAX_REGISTRATION_VIEW = "accounting:tax_registration:view";
+
     /** Apply payment. */
     public static final String PAYMENT_APPLY = "accounting:payment:apply";
 

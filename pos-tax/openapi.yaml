@@ -12,6 +12,8 @@ servers:
 tags:
 - description: Registry of customer tax exemption certificates
   name: Tax Exemption Certificates
+- description: A tenant's indirect-tax registrations, written by pos-accounting
+  name: Tax Registrations
 - description: Tax calculation API
   name: Tax
 paths:
@@ -652,6 +654,166 @@ paths:
       - Tax
       x-required-permissions:
       - tax:rates:view
+  /v1/tax/registrations:
+    post:
+      description: 'Records a tenant''s registration for one country''s indirect-tax regime from a date, and queues tax.registration.changed on the outbox in the same transaction.
+
+        Use this tool only as the pos-accounting front door; do not use it from a screen or another service, which call POST /v1/accounting/tax-registrations instead.
+
+        Preconditions: the call carries pos-accounting''s front-door secret and the forwarded X-User-Id and X-Tenant-Id (401 otherwise); the country has a tax profile (422 TAX_JURISDICTION_NOT_CONFIGURED) that declares the regime (422 TAX_REGIME_NOT_DECLARED).
+
+        Required inputs: countryCode, regime, registrationNumber, effectiveFrom, justification (at least 10 characters) and requestId; effectiveTo is optional and inclusive.
+
+        The number must match the regime''s configured shape (400 VALIDATION_ERROR with fieldErrors[registrationNumber]); it is never echoed or logged, and nothing is stored when it fails.
+
+        Emits a TAX_REGISTRATION_CREATE event, writes a history row naming the forwarded actor, and returns 201, or 200 with the first result when the same request is replayed with its requestId.
+
+        Returns 409 TAX_REGISTRATION_OVERLAP when another registration of the same country and regime is in effect on any date this one covers, and 409 IDEMPOTENCY_CONFLICT when the requestId was used for another request.
+
+        '
+      operationId: createTaxRegistration
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Registered from January:
+                description: Registered from January
+                value:
+                  countryCode: ZZ
+                  effectiveFrom: '2026-01-01'
+                  justification: Registered with the tax authority
+                  regime: REGIME_1
+                  registrationNumber: ZZ 12345
+                  requestId: 019a0000-0000-7000-8000-000000000301
+            schema:
+              $ref: '#/components/schemas/TaxRegistrationCreateRequest'
+        description: The country's regime, the number as printed, its dates and why
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxRegistrationResponse'
+          description: 'A replayed requestId: the first result'
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxRegistrationResponse'
+          description: The registration was recorded
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VALIDATION_ERROR: a missing or malformed field or a malformed number'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Missing or wrong front-door secret, or no forwarded actor or tenant
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: TAX_REGISTRATION_OVERLAP or IDEMPOTENCY_CONFLICT
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: TAX_JURISDICTION_NOT_CONFIGURED or TAX_REGIME_NOT_DECLARED
+      security:
+      - accountingFrontDoorSecret: []
+      summary: Record a tax registration
+      tags:
+      - Tax Registrations
+      x-required-permissions:
+      - AUTHENTICATED
+  /v1/tax/registrations/{registrationId}:
+    put:
+      description: 'Changes a tax registration''s number or dates, ending it by setting effectiveTo, and queues tax.registration.changed on the outbox in the same transaction; a registration is never deleted.
+
+        Use this tool only as the pos-accounting front door; do not use it to register another regime, which is createTaxRegistration instead.
+
+        Preconditions: the call carries pos-accounting''s front-door secret and the forwarded X-User-Id and X-Tenant-Id (401 otherwise); the registration exists for the tenant (404); version is the current one (409 OPTIMISTIC_LOCK).
+
+        Required inputs: registrationId (path), registrationNumber, effectiveFrom, version, justification (at least 10 characters) and requestId; effectiveTo is optional and inclusive.
+
+        The number must match the regime''s configured shape (400 VALIDATION_ERROR with fieldErrors[registrationNumber]); it is never echoed or logged, and nothing changes when it fails.
+
+        Emits a TAX_REGISTRATION_UPDATE event, writes a history row naming the forwarded actor, and returns 200, also with the first result when the same change is replayed with its requestId.
+
+        Returns 409 TAX_REGISTRATION_OVERLAP when the new dates overlap another registration of the same country and regime, and 409 IDEMPOTENCY_CONFLICT when the requestId was used for another request; back-dating never changes an entry already posted.
+
+        '
+      operationId: updateTaxRegistration
+      parameters:
+      - description: Registration id
+        in: path
+        name: registrationId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Ended in May:
+                description: Ended in May
+                value:
+                  effectiveFrom: '2026-01-01'
+                  effectiveTo: '2026-05-31'
+                  justification: Deregistered at the end of May
+                  registrationNumber: ZZ 12345
+                  requestId: 019a0000-0000-7000-8000-000000000302
+                  version: 0
+            schema:
+              $ref: '#/components/schemas/TaxRegistrationUpdateRequest'
+        description: The registration's new number or dates, the version read, and why
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxRegistrationResponse'
+          description: The registration was changed, or a replayed requestId
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VALIDATION_ERROR: a missing or malformed field or a malformed number'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Missing or wrong front-door secret, or no forwarded actor or tenant
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: TAX_REGISTRATION_NOT_FOUND
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: TAX_REGISTRATION_OVERLAP, OPTIMISTIC_LOCK or IDEMPOTENCY_CONFLICT
+      security:
+      - accountingFrontDoorSecret: []
+      summary: Change a tax registration
+      tags:
+      - Tax Registrations
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/tax/tax-types:
     get:
       description: 'Returns the tax types a country''s configured profile declares, with the regime each is registered
@@ -1869,6 +2031,151 @@ components:
       - regime
       - regions
       type: object
+    TaxRegistrationCreateRequest:
+      description: A tenant's new registration for an indirect-tax regime
+      properties:
+        countryCode:
+          description: ISO 3166-1 alpha-2 country
+          example: ZZ
+          type: string
+        effectiveFrom:
+          description: Inclusive first day in effect
+          example: '2026-01-01'
+          format: date
+          type: string
+        effectiveTo:
+          description: Inclusive last day in effect; absent while open-ended
+          format: date
+          type: string
+        justification:
+          description: Why the registration is recorded (at least 10 characters); kept in its history
+          maxLength: 1000
+          minLength: 10
+          type: string
+        regime:
+          description: A regime the country's tax profile declares
+          example: REGIME_1
+          type: string
+        registrationNumber:
+          description: The number as printed; spaces and hyphens are ignored, letters are upper-cased. Never echoed in an error
+          maxLength: 128
+          type: string
+        requestId:
+          description: Caller-generated UUIDv7 naming this request; a replay returns the first result
+          format: uuid
+          type: string
+      required:
+      - countryCode
+      - effectiveFrom
+      - justification
+      - regime
+      - registrationNumber
+      - requestId
+      type: object
+    TaxRegistrationResponse:
+      description: A tenant's registration for an indirect-tax regime
+      properties:
+        countryCode:
+          description: ISO 3166-1 alpha-2 country
+          example: ZZ
+          type: string
+        createdAt:
+          description: When it was created
+          format: date-time
+          type: string
+        createdBy:
+          description: Who created it (user id)
+          type: string
+        effectiveFrom:
+          description: Inclusive first day in effect
+          format: date
+          type: string
+        effectiveTo:
+          description: Inclusive last day in effect; absent while open-ended
+          format: date
+          type: string
+        jurisdictionCode:
+          description: The regime's single region when it lists exactly one, else the country
+          example: ZZ
+          type: string
+        regime:
+          description: The regime
+          example: REGIME_1
+          type: string
+        registrationId:
+          description: Registration id
+          format: uuid
+          type: string
+        registrationNumber:
+          description: The normalised number
+          type: string
+        status:
+          description: SCHEDULED, ACTIVE or ENDED on today's UTC date, derived from the dates
+          example: ACTIVE
+          type: string
+        updatedAt:
+          description: When it last changed
+          format: date-time
+          type: string
+        updatedBy:
+          description: Who last changed it (user id)
+          type: string
+        version:
+          description: Version, for optimistic locking
+          example: 0
+          format: int64
+          type: integer
+      required:
+      - countryCode
+      - createdAt
+      - createdBy
+      - effectiveFrom
+      - jurisdictionCode
+      - regime
+      - registrationId
+      - registrationNumber
+      - status
+      - updatedAt
+      - updatedBy
+      - version
+      type: object
+    TaxRegistrationUpdateRequest:
+      description: A tax registration's new number or dates
+      properties:
+        effectiveFrom:
+          description: Inclusive first day in effect
+          example: '2026-01-01'
+          format: date
+          type: string
+        effectiveTo:
+          description: Inclusive last day in effect; absent while open-ended
+          format: date
+          type: string
+        justification:
+          description: Why the registration changes (at least 10 characters); kept in its history
+          maxLength: 1000
+          minLength: 10
+          type: string
+        registrationNumber:
+          description: The number as printed; spaces and hyphens are ignored, letters are upper-cased. Never echoed in an error
+          maxLength: 128
+          type: string
+        requestId:
+          description: Caller-generated UUIDv7 naming this request; a replay returns the first result
+          format: uuid
+          type: string
+        version:
+          description: The version the caller read; another one is 409 OPTIMISTIC_LOCK
+          example: 0
+          format: int64
+          type: integer
+      required:
+      - effectiveFrom
+      - justification
+      - registrationNumber
+      - requestId
+      - version
+      type: object
     TaxStatedTax:
       description: One tax amount stated on a receipt, keyed by regime
       properties:
@@ -1956,6 +2263,11 @@ components:
       - taxTypes
       type: object
   securitySchemes:
+    accountingFrontDoorSecret:
+      description: pos-accounting's front-door secret, pos.tax.front-doors.accounting-secret
+      in: header
+      name: X-Pos-Tax-Front-Door-Secret
+      type: apiKey
     bearerAuth:
       bearerFormat: JWT
       scheme: bearer

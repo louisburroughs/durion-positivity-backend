@@ -166,6 +166,14 @@ public final class EventTypes {
                                 "ACCOUNTING_PETTY_EXPENSE_CATEGORY_REMAP", "Change a petty-expense category's account")
                         .build(),
 
+                // TaxRegistrationController - 3 events (CAP:550 S32c, #2638)
+                EventTypeRegistration.fastRead("ACCOUNTING_TAX_REGISTRATION_LIST", "List tax registrations")
+                        .build(),
+                EventTypeRegistration.write("ACCOUNTING_TAX_REGISTRATION_CREATE", "Record a tax registration")
+                        .build(),
+                EventTypeRegistration.write("ACCOUNTING_TAX_REGISTRATION_UPDATE", "Change a tax registration")
+                        .build(),
+
                 // GLAccountController - 6 events
                 EventTypeRegistration.search("ACCOUNTING_GL_ACCOUNT_LIST", "List GL accounts with pagination")
                         .build(),

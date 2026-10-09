@@ -222,6 +222,9 @@ jobs:
           # pos-supplier's vendor tax-registration number key (#2621): same rules as the audit key,
           # and a different key. deploy-backend.sh persists it on first use and refuses a change.
           SUPPLIER_VENDOR_TAXID_ENC_KEY: ${{ secrets.SUPPLIER_VENDOR_TAXID_ENC_KEY }}
+          # CAP:550 S32c: pos-accounting's front-door secret for pos-tax's registration writes (ADR-0071 §6).
+          # deploy-backend.sh persists it; unset, the copy already on the box stays.
+          POS_TAX_ACCOUNTING_SECRET: ${{ secrets.POS_TAX_ACCOUNTING_SECRET }}
         run: |
           # See build-push-ecr.yml for why these two are handled this way: a newline in the
           # base64 breaks the --parameters JSON, and an empty export on the host shadows the
@@ -234,6 +237,10 @@ jobs:
           SUPPLIER_VENDOR_TAXID_ENC_KEY="$(printf '%s' "${SUPPLIER_VENDOR_TAXID_ENC_KEY}" | tr -d '[:space:]')"
           if [[ -n "${SUPPLIER_VENDOR_TAXID_ENC_KEY}" ]]; then
             SUPPLIER_KEY_ASSIGNMENT+="SUPPLIER_VENDOR_TAXID_ENC_KEY='${SUPPLIER_VENDOR_TAXID_ENC_KEY}' "
+          fi
+          POS_TAX_ACCOUNTING_SECRET="$(printf '%s' "${POS_TAX_ACCOUNTING_SECRET}" | tr -d '[:space:]')"
+          if [[ -n "${POS_TAX_ACCOUNTING_SECRET}" ]]; then
+            SUPPLIER_KEY_ASSIGNMENT+="POS_TAX_ACCOUNTING_SECRET='${POS_TAX_ACCOUNTING_SECRET}' "
           fi
           # deploy-backend.sh re-checks the anchors before it touches the host: their shape, a
           # gap of at least one day, and the scale. It also writes them into the

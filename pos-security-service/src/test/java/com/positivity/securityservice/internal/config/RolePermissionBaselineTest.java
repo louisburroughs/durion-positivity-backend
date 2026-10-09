@@ -813,6 +813,29 @@ class RolePermissionBaselineTest {
         }
 
         @Test
+        @DisplayName("CAP:550 S32c: tax_registration:view goes to the mapping-key:view holders and :manage to the"
+                + " mapping-key:edit holders, in the SQL seed too (SUPPORT is hand-added there, #2625)")
+        void taxRegistrationHolders() {
+            assertThat(holdersOf("accounting:tax_registration:view"))
+                    .containsExactlyElementsOf(holdersOf("accounting:mapping-key:view"))
+                    .containsExactly("ADMIN", "CONTROLLER", "SUPPORT");
+            assertThat(holdersOf("accounting:tax_registration:manage"))
+                    .containsExactlyElementsOf(holdersOf("accounting:mapping-key:edit"))
+                    .containsExactly("ADMIN", "CONTROLLER");
+            for (String role : List.of("ADMIN", "CONTROLLER", "SUPPORT")) {
+                assertThat(sqlSeededGrants.get(role))
+                        .as("%s's SQL grants", role)
+                        .contains("accounting:tax_registration:view");
+            }
+            for (String role : List.of("ADMIN", "CONTROLLER")) {
+                assertThat(sqlSeededGrants.get(role))
+                        .as("%s's SQL grants", role)
+                        .contains("accounting:tax_registration:manage");
+            }
+            assertThat(sqlSeededGrants.get("SUPPORT")).doesNotContain("accounting:tax_registration:manage");
+        }
+
+        @Test
         @DisplayName("GENERAL_MANAGER's SQL grants are the fixture's former set plus payment:apply, ap:pay and ap:view")
         void generalManagerGainsExactlyTheThree() {
             Set<String> sql = sqlSeededGrants.get("GENERAL_MANAGER");

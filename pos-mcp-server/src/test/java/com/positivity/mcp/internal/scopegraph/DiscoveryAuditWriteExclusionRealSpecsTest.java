@@ -103,7 +103,9 @@ class DiscoveryAuditWriteExclusionRealSpecsTest {
             // #2621: the vendor tax-registration reveal returns a RESTRICTED number.
             || REVEAL.test(path)
             // CAP:550 S24: the remit-to confirmation is done by a person.
-            || REMIT_TO_CONFIRMATION.test(path);
+            || REMIT_TO_CONFIRMATION.test(path)
+            // CAP:550 S32c: pos-tax's registration writes accept only the pos-accounting front door.
+            || path.contains("/v1/tax/registrations");
 
     /** Write operations the specs carry today under the in-scope paths; each must be gone. */
     private static final Set<String> KNOWN_EXCLUDED_WRITES = Set.of(
