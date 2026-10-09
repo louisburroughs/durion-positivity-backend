@@ -792,6 +792,20 @@ exactly as before.
   `NOT_REGISTERED`, `CATEGORY_NOT_RECOVERABLE`, `RATE_UNAVAILABLE`, `EVIDENCE_MISSING` or
   `SUPPLIER_REGISTRATION_MISSING`), with the supplier's number as the claim's evidence (INTERNAL, ADR-0072 Decision 1;
   never logged).
+- **Vendor bills (item 10; AW37-AW43, AW51, AW53).** Every bill stores the tax its document states by type in
+  `vendor_bill_tax` (`VendorBillStatedTax`): the EDI fact's taxes (S23), or the optional `taxByType[]` on approve and
+  resolve-exception `ACCEPT`, copied from the document; it must sum to the stated tax, else 422
+  `AP_BILL_TAX_SPLIT_MISMATCH` (`fieldErrors[taxByType]`). At approval (`VendorBillTaxSplit`), for a tenant with a
+  regime enabled, each typed amount's regime and recoverability come from pos-tax's tax types; a recoverable type
+  whose regime's flag is on at the bill date debits `TAX_RECOVERABLE_<regime>` (a credit note credits it), and
+  anything else goes into its line's class, never into inventory cost. A bill with tax but no split recovers nothing
+  (`TAX_SPLIT_MISSING`) and automatic approval leaves it `AWAITING_APPROVAL`. Evidence (AW53): when the gross reaches
+  the `VENDOR_BILL` evidence rule and the vendor copy holds no registration of the country's supplier regime (pos-tax's
+  `supplierRegistrationRegime`, compared on scheme and `last4` only), nothing is recovered
+  (`SUPPLIER_REGISTRATION_MISSING`) and automatic approval is held. Each type's outcome is kept in
+  `vendor_bill_tax_recovery`; the bill read gains `taxByType[]` and `inputTaxRecovery[]`, and the approval audit
+  records both. A tenant without recovery (every USD tenant) books the gross as before and never calls pos-tax. The
+  `BillIntakePort` channel waits on S25 (#2518).
 - **Output tax by type (item 11, AW50).** `ext_invoice_tax.tax_type` is filled from S32a's
   `TaxBreakdownLine.taxType`. A tenant that has any `SALES_TAX_PAYABLE_<taxType>` key mapped under `INVOICE_REVENUE`
   (`TypedOutputTax`) posts one tax leg per type to that key, HALF_UP per leg with any cent on the largest, and its
