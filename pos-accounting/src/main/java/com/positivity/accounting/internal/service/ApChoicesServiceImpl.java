@@ -70,7 +70,8 @@ public class ApChoicesServiceImpl implements ApChoicesService {
                         .collect(Collectors.toMap(GLAccount::getGlAccountId, Function.identity()));
         List<VendorBillExpenseCategoryListResponse.Category> categories = keys.stream()
                 .map(key -> {
-                    GLAccount account = accounts.get(resolved.get(key.getKeyName()));
+                    UUID accountId = resolved.get(key.getKeyName());
+                    GLAccount account = accountId == null ? null : accounts.get(accountId);
                     return new VendorBillExpenseCategoryListResponse.Category(
                             key.getKeyName(),
                             key.getDescription(),
