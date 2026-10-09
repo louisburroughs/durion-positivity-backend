@@ -16,6 +16,7 @@ import ch.qos.logback.core.read.ListAppender;
 import com.positivity.accounting.internal.dto.InformationReturnFormsResponse;
 import com.positivity.accounting.internal.dto.TaxPurchaseRules;
 import com.positivity.accounting.internal.dto.TaxUseQuote;
+import com.positivity.accounting.internal.exception.TaxQuoteRefusedException;
 import com.positivity.accounting.internal.exception.TaxServiceUnavailableException;
 import com.positivity.tenancy.TenantContext;
 import java.io.IOException;
@@ -236,7 +237,7 @@ class TaxReferenceClientTest {
 
     @Test
     @DisplayName("S43: the use-tax quote posts calculationType USE with tax:calculate, and reads the line taxes; a 422"
-            + " or a 501 from pos-tax is 503, never relayed")
+            + " from the closed list is relayed with its code; any other 422, a 400 or a 501 is 503")
     void quotesUseTax() {
         TaxUseQuote.Request request = new TaxUseQuote.Request(
                 List.of(new TaxUseQuote.Line("1", "Bill INV-43 line 1", BigDecimal.ONE, new BigDecimal("200.00"))),
@@ -273,15 +274,48 @@ class TaxReferenceClientTest {
         });
         server.verify();
 
-        for (HttpStatus status : new HttpStatus[] {HttpStatus.UNPROCESSABLE_CONTENT, HttpStatus.NOT_IMPLEMENTED}) {
+        // #2604 ruling 4 (amended): the closed list of configuration 422s is relayed with its code, never pos-tax's
+        // message; any other 422, a 400 and a 501 are 503.
+        for (String code :
+                new String[] {"TAX_JURISDICTION_NOT_CONFIGURED", "CURRENCY_NOT_SUPPORTED", "TAX_CAPABILITY_UNSUPPORTED"
+                }) {
             client = client();
             server.expect(requestTo(BASE + "/v1/tax/calculate"))
-                    .andRespond(withStatus(status)
+                    .andRespond(withStatus(HttpStatus.UNPROCESSABLE_CONTENT)
                             .contentType(MediaType.APPLICATION_JSON)
-                            .body("{\"code\":\"TAX_JURISDICTION_NOT_CONFIGURED\"}"));
+                            .body("{\"code\":\"" + code + "\",\"message\":\"pos-tax secret-detail ZZ 00000\"}"));
             assertThatThrownBy(() -> client.useTax(request))
-                    .as("%s", status)
+                    .as(code)
+                    .isInstanceOfSatisfying(TaxQuoteRefusedException.class, e -> {
+                        assertThat(e.getCode()).isEqualTo(code);
+                        assertThat(TaxQuoteRefusedException.STATUS.value()).isEqualTo(422);
+                        assertThat(e.getMessage()).doesNotContain("secret-detail");
+                    });
+        }
+        record Answer(HttpStatus status, String code) {}
+        for (Answer answer : new Answer[] {
+            new Answer(HttpStatus.UNPROCESSABLE_CONTENT, "AMOUNT_PRECISION_EXCEEDS_CURRENCY"),
+            new Answer(HttpStatus.UNPROCESSABLE_CONTENT, null),
+            new Answer(HttpStatus.BAD_REQUEST, "TAX_JURISDICTION_NOT_CONFIGURED"),
+            new Answer(HttpStatus.NOT_IMPLEMENTED, "TAX_CALCULATION_TYPE_UNSUPPORTED")
+        }) {
+            client = client();
+            server.expect(requestTo(BASE + "/v1/tax/calculate"))
+                    .andRespond(withStatus(answer.status())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .body(answer.code() == null ? "not json" : "{\"code\":\"" + answer.code() + "\"}"));
+            assertThatThrownBy(() -> client.useTax(request))
+                    .as("%s", answer)
                     .isInstanceOf(TaxServiceUnavailableException.class);
         }
+
+        // The purchase-rules read never relays: a configuration 422 there is 503 like any other refusal.
+        client = client();
+        server.expect(requestTo(BASE + "/v1/tax/purchase-rules?countryCode=ZZ&asOf=2026-10-01"))
+                .andRespond(withStatus(HttpStatus.UNPROCESSABLE_CONTENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"code\":\"TAX_JURISDICTION_NOT_CONFIGURED\"}"));
+        assertThatThrownBy(() -> client.purchaseRules("ZZ", LocalDate.of(2026, 10, 1)))
+                .isInstanceOf(TaxServiceUnavailableException.class);
     }
 }

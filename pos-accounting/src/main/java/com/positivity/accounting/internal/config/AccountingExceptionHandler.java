@@ -50,6 +50,7 @@ import com.positivity.accounting.internal.exception.SettlementLineNotFoundExcept
 import com.positivity.accounting.internal.exception.SettlementLineNotUnmatchedException;
 import com.positivity.accounting.internal.exception.SettlementNotPostedException;
 import com.positivity.accounting.internal.exception.SettlementWriteOffThresholdExceededException;
+import com.positivity.accounting.internal.exception.TaxQuoteRefusedException;
 import com.positivity.accounting.internal.exception.TaxRegistrationRelayException;
 import com.positivity.accounting.internal.exception.TaxServiceUnavailableException;
 import com.positivity.accounting.internal.exception.TaxSnapshotConflictException;
@@ -127,6 +128,15 @@ public class AccountingExceptionHandler {
                 relayed.conflicts(),
                 relayed.suggestedAlternatives());
         return new ResponseEntity<>(error, headers, HttpStatus.valueOf(ex.getStatus()));
+    }
+
+    /**
+     * pos-tax refused a vendor bill's use-tax quote with a configuration 422 from the closed list (CAP:550 S43; #2604
+     * ruling 4 amended): 422 with the relayed code and accounting's own message; nothing was written.
+     */
+    @ExceptionHandler(TaxQuoteRefusedException.class)
+    public ResponseEntity<ApiError> handleTaxQuoteRefused(TaxQuoteRefusedException ex, HttpServletRequest request) {
+        return build(TaxQuoteRefusedException.STATUS, ex.getCode(), ex.getMessage(), request);
     }
 
     /**

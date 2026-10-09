@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.client;
 import com.positivity.accounting.internal.dto.InformationReturnFormsResponse;
 import com.positivity.accounting.internal.dto.TaxPurchaseRules;
 import com.positivity.accounting.internal.dto.TaxUseQuote;
+import com.positivity.accounting.internal.exception.TaxQuoteRefusedException;
 import com.positivity.accounting.internal.exception.TaxServiceUnavailableException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.tenancy.TenantContext;
@@ -42,9 +43,10 @@ import tools.jackson.databind.ObjectMapper;
  * X-Tenant-Id}) and the inbound {@code X-Correlation-Id} forwarded.
  *
  * <p>Anything that is not an answer is 503 {@code SERVICE_UNAVAILABLE} with {@code Retry-After} ({@link
- * TaxServiceUnavailableException}): pos-tax unreachable, any 4xx or 5xx, or an unreadable body. A 4xx is not relayed:
- * the country is the server's own setting, so it is never the caller's fault (ADR-0017); it is logged at WARN with
- * pos-tax's status and code only. Nothing logs a response body.
+ * TaxServiceUnavailableException}): pos-tax unreachable, any 4xx or 5xx, or an unreadable body. The one exception is
+ * the use-tax quote's closed list of configuration 422s, relayed as 422 with the code ({@link TaxQuoteRefusedException};
+ * S43, #2604 ruling 4 amended). Every 4xx is logged at WARN with pos-tax's status and code only. Nothing logs a response
+ * body.
  */
 @Slf4j
 @Component
@@ -105,6 +107,7 @@ public class TaxReferenceClient {
     public @NonNull InformationReturnFormsResponse informationReturnForms(@NonNull String countryCode) {
         return call(
                 "an information-return forms read",
+                false,
                 () -> withHeaders(
                                 restClient
                                         .get()
@@ -129,6 +132,7 @@ public class TaxReferenceClient {
     public @NonNull TaxPurchaseRules purchaseRules(@NonNull String countryCode, @NonNull LocalDate asOf) {
         return call(
                 "a purchase-tax rules read",
+                false,
                 () -> withHeaders(
                                 restClient
                                         .get()
@@ -144,16 +148,22 @@ public class TaxReferenceClient {
 
     /**
      * The self-assessed (use) tax of {@code request}'s lines (CAP:550 S43, AW44): {@code POST /v1/tax/calculate} with
-     * {@code calculationType = USE}, under the authority {@value #CALCULATE_AUTHORITY}. Every value of the request is
-     * the server's own (the configured country and place, the ledger currency, the bill), so no pos-tax refusal is the
-     * caller's fault: any 4xx, 5xx or 501 is 503, never relayed (ADR-0017).
+     * {@code calculationType = USE}, under the authority {@value #CALCULATE_AUTHORITY} (#2604 ruling 4, amended in
+     * comment 6076230360). A pos-tax 422 from the closed list {@link TaxQuoteRefusedException#RELAYED_CODES} ({@code
+     * TAX_JURISDICTION_NOT_CONFIGURED}, {@code CURRENCY_NOT_SUPPORTED}, {@code TAX_CAPABILITY_UNSUPPORTED}) is a
+     * configuration state retrying cannot fix: it is relayed as {@link TaxQuoteRefusedException}, its code only, never
+     * pos-tax's message. Any other 422, any other 4xx, a 501, a 5xx, an unreachable pos-tax or an unreadable answer is
+     * 503 {@code SERVICE_UNAVAILABLE} with {@code Retry-After}.
      *
      * @param request the quote request
      * @return pos-tax's answer, amounts as returned
+     * @throws TaxQuoteRefusedException 422 with a relayed code, its message generic (the caller names the bill)
+     * @throws TaxServiceUnavailableException 503 for anything else that is not an answer
      */
     public TaxUseQuote.@NonNull Response useTax(TaxUseQuote.@NonNull Request request) {
         return call(
                 "a use-tax calculation",
+                true,
                 () -> withHeaders(
                                 restClient
                                         .post()
@@ -180,10 +190,11 @@ public class TaxReferenceClient {
 
     /**
      * Runs one pos-tax call: an empty body, any 4xx or 5xx, an unreachable pos-tax or an unreadable answer is 503
-     * {@code SERVICE_UNAVAILABLE} with {@code Retry-After}. Only the status and pos-tax's code are logged, never a body
-     * or a value.
+     * {@code SERVICE_UNAVAILABLE} with {@code Retry-After}, except, when {@code relayConfiguration} is set (the use-tax
+     * quote only), a 422 whose code is one of {@link TaxQuoteRefusedException#RELAYED_CODES}. Only the status and
+     * pos-tax's code are logged, never a body or a value.
      */
-    private <T> @NonNull T call(String what, Supplier<@Nullable T> exchange) {
+    private <T> @NonNull T call(String what, boolean relayConfiguration, Supplier<@Nullable T> exchange) {
         try {
             T answer = exchange.get();
             if (answer == null) {
@@ -191,12 +202,19 @@ public class TaxReferenceClient {
             }
             return answer;
         } catch (RestClientResponseException e) {
-            // The request is the server's own (TaxCountry, its settings), so no pos-tax answer here is the caller's
-            // fault: a 4xx (a rollout skew, a 404 before the stub is deployed, a refused service identity) is 503 like
-            // a 5xx, never relayed (ADR-0017).
+            // A configuration state of the use-tax quote (the closed list) is relayed as 422 with its code only. Every
+            // other 4xx (a rollout skew, a 404 before the stub is deployed, a refused service identity, a request the
+            // server built badly) is 503 like a 5xx, never relayed (ADR-0017).
             int status = e.getStatusCode().value();
+            String code = errorCode(e);
+            if (relayConfiguration
+                    && status == TaxQuoteRefusedException.STATUS.value()
+                    && TaxQuoteRefusedException.RELAYED_CODES.contains(code)) {
+                log.warn("pos-tax refused {}: status {}, code {}; relaying 422", what, status, code);
+                throw new TaxQuoteRefusedException(code, "The tax service refused the use-tax quote: " + code);
+            }
             if (e.getStatusCode().is4xxClientError()) {
-                log.warn("pos-tax refused {}: status {}, code {}; answering 503", what, status, errorCode(e));
+                log.warn("pos-tax refused {}: status {}, code {}; answering 503", what, status, code);
             } else {
                 log.error("pos-tax answered {} to {}; answering 503", status, what);
             }

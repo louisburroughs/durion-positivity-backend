@@ -10,6 +10,7 @@ import com.positivity.accounting.internal.entity.VendorBillMatchEvidence;
 import com.positivity.accounting.internal.enums.TaxOnResaleOverrideSource;
 import com.positivity.accounting.internal.enums.VendorBillApproverKind;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
+import com.positivity.accounting.internal.exception.TaxQuoteRefusedException;
 import com.positivity.accounting.internal.exception.TaxServiceUnavailableException;
 import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
@@ -53,7 +54,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * are built; the same answer builds the pre-check's legs and the posted ones. The hold for tax on goods for resale is
  * checked after the legs and before the pre-check transaction: the vendor setting {@code acceptTaxOnResaleGoods} is
  * honoured, but no person can override for the bill here, so a held bill is skipped with {@code
- * AP_BILL_TAX_ON_RESALE_GOODS}. pos-tax giving no answer skips with {@code SERVICE_UNAVAILABLE} (AW49).
+ * AP_BILL_TAX_ON_RESALE_GOODS}. pos-tax refusing the quote for a configuration state skips with its relayed code
+ * ({@code TAX_JURISDICTION_NOT_CONFIGURED}, {@code CURRENCY_NOT_SUPPORTED}, {@code TAX_CAPABILITY_UNSUPPORTED}); pos-tax
+ * giving no answer skips with {@code SERVICE_UNAVAILABLE} (AW49).
  *
  * <p><b>The savepoint.</b> {@link VendorBillPostingService#post} is {@code MANDATORY}: a refusal crossing it would
  * mark the match transaction rollback-only. The JPA dialect in use offers no savepoints ({@code PROPAGATION_NESTED}),
@@ -234,7 +237,8 @@ public class VendorBillAutoApproval {
                 if (basis.mayAccrue() && rules.selfAssessesUntaxedExpenses()) {
                     useTax = purchaseTax.quote(bill, basis, asOf);
                 }
-            } catch (TaxServiceUnavailableException unavailable) {
+            } catch (TaxServiceUnavailableException | TaxQuoteRefusedException unavailable) {
+                // AW49: the skip row carries the cause, a relayed configuration code or SERVICE_UNAVAILABLE.
                 return Precheck.refused(unavailable);
             }
         }

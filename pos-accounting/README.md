@@ -1521,9 +1521,23 @@ country.
   seeded in the generic chart), so accounts payable stays the gross; the audit row adds `useTaxAmount=…`. The void's
   reversal mirrors it. A missing `USE_TAX_PAYABLE` mapping is 422 `GL_MAPPING_NOT_CONFIGURED`. Automatic approval
   quotes once inside its pre-check, before the legs, and posts that same answer.
-- **pos-tax giving no answer** (unreachable, any 4xx, 5xx or 501), for the rules or the quote, is 503
+- **pos-tax refusing the quote for a configuration state** (#2604 ruling 4 as amended in comment 6076230360): a pos-tax
+  422 `TAX_JURISDICTION_NOT_CONFIGURED`, `CURRENCY_NOT_SUPPORTED` or `TAX_CAPABILITY_UNSUPPORTED` on the `USE` quote is
+  answered 422 with the same code (`TaxQuoteRefusedException`, ADR-0017 §2: a configuration to fix, retrying cannot).
+  The message is accounting's own, naming the bill and the setting to check; pos-tax's message is never echoed or
+  logged. Nothing is written (no posting, no `_REFUSED` row); automatic approval skips with that code.
+- **pos-tax giving no answer** (unreachable, any other 4xx including an unlisted 422, a 501, a 5xx, an unreadable or
+  empty answer, or a line tax finer than the ledger currency's minor unit), for the rules or the quote, is 503
   `SERVICE_UNAVAILABLE` with `Retry-After` and writes nothing (AW49: never read as "off"); automatic approval skips
-  with `SERVICE_UNAVAILABLE`. Decisions never use a cache.
+  with `SERVICE_UNAVAILABLE`. The purchase-rules read never relays. Decisions never use a cache.
+- **Amounts as returned** (ADR-0067 PC-6): each line tax is taken at the ledger currency's exponent
+  (`Currency#getDefaultFractionDigits`), never rounded; one that cannot be represented there is an unusable answer.
+- **Rollout.** With the shipped settings (`accounting.tax.country: US`, pos-tax's `US {HOLD, true}`) every tenant of
+  the deployment holds taxed goods-for-resale bills and accrues use tax on untaxed expense bills, at pos-tax's
+  placeholder rates for the placeholder purchase place. **The 2240 balances accrued at these placeholder rates must
+  not be filed or paid.** A US deployment whose pos-tax routes calculation to `EXTERNAL` or `AVALARA` cannot quote use
+  tax, so every untaxed expense approval there answers 503 (422 `TAX_CAPABILITY_UNSUPPORTED` once #2629 lands) until
+  the pos-tax `pos.tax.purchase-rules.US` row is removed. Removing that row is the off switch (`configured: false`).
 - **The bill check `TAX_ON_RESALE_GOODS`.** FAIL `{taxAmount, currencyCode}` in review when the rule holds a qualifying
   bill and the vendor setting is off; PASS `{acceptedBy: VENDOR_SETTING}` with it on, or `{acceptedBy}` of an approved
   override; NOT_APPLICABLE otherwise, with `{rulesUnavailable: true}` when pos-tax gives no rules (the read still
@@ -1535,7 +1549,7 @@ country.
 
 | Method | Path | Permission | Change and codes |
 | --- | --- | --- | --- |
-| POST | `/v1/accounting/vendor-bills/{billId}/approve` `{…, taxOnResaleOverrideJustification?}` | unchanged | adds 422 `AP_BILL_TAX_ON_RESALE_GOODS`, 400 for the field, 503 `SERVICE_UNAVAILABLE` |
+| POST | `/v1/accounting/vendor-bills/{billId}/approve` `{…, taxOnResaleOverrideJustification?}` | unchanged | adds 422 `AP_BILL_TAX_ON_RESALE_GOODS`, the relayed 422 `TAX_JURISDICTION_NOT_CONFIGURED` / `CURRENCY_NOT_SUPPORTED` / `TAX_CAPABILITY_UNSUPPORTED`, 400 `JUSTIFICATION_REQUIRED` / `VALIDATION_ERROR` (`fieldErrors[taxOnResaleOverrideJustification]`, over 1000 characters) for the field, 503 `SERVICE_UNAVAILABLE` |
 | POST | `/v1/accounting/vendor-bills/{billId}/resolve-exception` (`ACCEPT`) `{…, taxOnResaleOverrideJustification?}` | unchanged | as approve |
 | GET | `/v1/accounting/vendor-bills/{billId}` (every bill read) | unchanged | check `TAX_ON_RESALE_GOODS`; `taxOnResaleOverride` |
 | PUT | `/v1/accounting/vendors/{vendorId}/ap-settings` `{…, acceptTaxOnResaleGoods?}` | `accounting:ap_approval_policy:manage` | a boolean: absent unchanged, null 400 `VALIDATION_ERROR` (`fieldErrors[acceptTaxOnResaleGoods]`); in the fingerprint (409 `IDEMPOTENCY_CONFLICT`); each change one `AP_VENDOR_SETTINGS_SET` row |
@@ -1571,6 +1585,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `AP_MATCH_CANDIDATE_ALREADY_RESOLVED` | 409 | Someone else already resolved the ambiguous match (#2509) |
 | `AP_BILL_UNCLASSIFIED` | 422 | The bill (or a non-stock line) has no class and its vendor no default; the approval needs a `classification` (AW39, #2509) |
 | `AP_BILL_TAX_ON_RESALE_GOODS` | 422 | The bill charges tax on goods for resale, the tax country's purchase-tax rule holds such bills, its vendor does not accept the tax and no `taxOnResaleOverrideJustification` was given (approve, `ACCEPT`); audited `_REFUSED` (AW44, S43) |
+| `TAX_JURISDICTION_NOT_CONFIGURED`, `CURRENCY_NOT_SUPPORTED`, `TAX_CAPABILITY_UNSUPPORTED` | 422 | Relayed from pos-tax for a vendor bill's use-tax quote (approve, `ACCEPT`): a configuration state of the tax country, purchase place, ledger currency or provider; accounting's own message names the bill and the setting; nothing written (S43, #2604 ruling 4 amended) |
 | `AP_BILL_TOTALS_UNRECONCILED` | 422 | The vendor's gross differs from its net + tax beyond the rounding tolerance and the send, approval or acceptance gives no `difference`; nothing is written (AW47, #2509) |
 | `AP_BILL_ZERO_TOTAL` | 422 | A bill totalling 0.00 is sent, approved or accepted; correct it or void it (#2509) |
 | `AP_APPROVAL_LIMIT_EXCEEDED` | 403 | The bill's absolute total is over the clerk limit and the caller lacks `accounting:ap:approve_over_limit` (approve, `ACCEPT`, void of an approved bill); `nextAction` names the permission (#2510) |

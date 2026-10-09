@@ -509,7 +509,8 @@ public class VendorBillPostingService {
         BigDecimal rounding = balanceOnLargest(debits, gross);
         boolean accrues = useTax != null && useTax.amount().signum() > 0 && gross.signum() > 0;
         if (accrues) {
-            add(debits, useTax.expenseMappingKey(), round(useTax.amount()));
+            // As returned, at the ledger currency's exponent (PC-6): never rounded again here.
+            add(debits, useTax.expenseMappingKey(), useTax.amount());
         }
         List<Leg> legs = new ArrayList<>();
         debits.forEach((key, amount) -> {
@@ -519,7 +520,7 @@ public class VendorBillPostingService {
         });
         legs.add(new Leg(ACCOUNTS_PAYABLE_KEY, gross.negate()));
         if (accrues) {
-            legs.add(new Leg(USE_TAX_PAYABLE_KEY, round(useTax.amount()).negate()));
+            legs.add(new Leg(USE_TAX_PAYABLE_KEY, useTax.amount().negate()));
         }
         return new Entry(legs, rounding, posted, differenceAmount);
     }

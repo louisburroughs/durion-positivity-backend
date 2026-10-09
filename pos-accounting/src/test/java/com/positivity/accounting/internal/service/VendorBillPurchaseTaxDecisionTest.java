@@ -24,6 +24,7 @@ import com.positivity.accounting.internal.enums.TaxOnResaleOverrideSource;
 import com.positivity.accounting.internal.enums.VendorBillDebitClass;
 import com.positivity.accounting.internal.enums.VendorBillPostingDateRule;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
+import com.positivity.accounting.internal.exception.TaxQuoteRefusedException;
 import com.positivity.accounting.internal.exception.TaxServiceUnavailableException;
 import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.accounting.internal.repository.APPaymentAllocationRepository;
@@ -345,6 +346,44 @@ class VendorBillPurchaseTaxDecisionTest {
         assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.AWAITING_APPROVAL);
         verify(postingService, never()).post(any(), any(), any(), anyString(), any());
         verify(auditLogs, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("#2604 ruling 4 amended: a pos-tax configuration 422 on the quote is 422 with that code and"
+            + " accounting's own message naming the bill and the settings; nothing posted or audited")
+    void relayedConfigurationRefusal() {
+        untaxedExpense();
+        when(client.useTax(any()))
+                .thenThrow(new TaxQuoteRefusedException("TAX_JURISDICTION_NOT_CONFIGURED", "pos-tax said ZZ 00000"));
+
+        assertThatThrownBy(() -> approve(null)).isInstanceOfSatisfying(TaxQuoteRefusedException.class, e -> {
+            assertThat(e.getCode()).isEqualTo("TAX_JURISDICTION_NOT_CONFIGURED");
+            assertThat(e.getMessage())
+                    .contains("INV-43", "accounting.tax.country", "accounting.tax.purchase-place")
+                    .doesNotContain("pos-tax said");
+        });
+        assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.AWAITING_APPROVAL);
+        verify(postingService, never()).post(any(), any(), any(), anyString(), any());
+        verify(auditLogs, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("B5: a justification over 1000 characters after trimming is 400 VALIDATION_ERROR naming the field,"
+            + " never echoing the text; nothing is written")
+    void overlongJustification() {
+        taxedGoods();
+        String text = "q".repeat(1001);
+
+        assertThatThrownBy(() -> approve(text)).isInstanceOfSatisfying(VendorBillException.class, e -> {
+            assertThat(e.getCode()).isEqualTo(VendorBillException.Code.VALIDATION_ERROR);
+            assertThat(e.getFieldErrors())
+                    .extracting(VendorBillException.FieldError::field)
+                    .containsExactly("taxOnResaleOverrideJustification");
+            assertThat(e.getMessage()).doesNotContain("qqqq");
+        });
+        verify(auditLogs, never()).save(any());
+        approve("  " + "q".repeat(1000) + "  ");
+        assertThat(bill.getTaxOnResaleOverrideJustification()).hasSize(1000);
     }
 
     @Test

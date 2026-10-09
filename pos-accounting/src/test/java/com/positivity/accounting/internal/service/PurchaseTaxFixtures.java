@@ -47,12 +47,22 @@ final class PurchaseTaxFixtures {
             SupplierVendorCopies vendorCopies,
             VendorBillLineRepository billLines,
             Clock clock) {
-        LedgerCurrency usd = new LedgerCurrency("USD");
+        return purchaseTax(client, vendorCopies, billLines, clock, "USD");
+    }
+
+    /** As above, with the ledger in {@code currency} (an ISO 4217 code); the country ZZ maps no currency. */
+    static VendorBillPurchaseTax purchaseTax(
+            TaxReferenceClient client,
+            SupplierVendorCopies vendorCopies,
+            VendorBillLineRepository billLines,
+            Clock clock,
+            String currency) {
+        LedgerCurrency ledger = new LedgerCurrency(currency);
         return new VendorBillPurchaseTax(
                 client,
-                new TaxCountry("ZZ", usd),
+                new TaxCountry("ZZ", ledger),
                 new PurchasePlace("ZA", "00000"),
-                usd,
+                ledger,
                 vendorCopies,
                 billLines,
                 clock,

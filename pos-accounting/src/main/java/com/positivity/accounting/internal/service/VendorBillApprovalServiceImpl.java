@@ -21,6 +21,7 @@ import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
 import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
+import com.positivity.accounting.internal.exception.TaxQuoteRefusedException;
 import com.positivity.accounting.internal.exception.TaxServiceUnavailableException;
 import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.accounting.internal.repository.APPaymentAllocationRepository;
@@ -83,8 +84,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  * The identity guards come before the content guards, so someone who may not decide is never asked for a {@code
  * difference}. Each 403 of steps 3 and 4, {@code AP_BILL_UNCLASSIFIED} and every refused posting is audited in its own
  * transaction ({@code <operation>_REFUSED}), and so is {@code AP_BILL_TAX_ON_RESALE_GOODS}. pos-tax giving no answer, for the
- * rules or the quote, is 503 {@code SERVICE_UNAVAILABLE} with {@code Retry-After} and writes nothing, not even a refusal
- * row (AW49). Submit runs steps 2 and 5 only, without the purchase-tax check: the limit applies at decision time, never at
+ * rules or the quote, is 503 {@code SERVICE_UNAVAILABLE} with {@code Retry-After}, and pos-tax refusing the quote for a
+ * configuration state is 422 with its relayed code ({@code TAX_JURISDICTION_NOT_CONFIGURED}, {@code
+ * CURRENCY_NOT_SUPPORTED}, {@code TAX_CAPABILITY_UNSUPPORTED}; #2604 ruling 4 amended); either writes nothing, not even
+ * a refusal row (AW49). Submit runs steps 2 and 5 only, without the purchase-tax check: the limit applies at decision time, never at
  * submission.
  *
  * <p><b>Audit.</b> One {@code accounting_audit_log} row per decision (entity type {@value #AUDIT_ENTITY_TYPE}): the
@@ -605,7 +608,8 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
             Decision decision,
             PurchaseTaxDecision tax) {
         // 6. the posting's first act (CAP:550 S43): the self-assessed tax quote, once per decision. pos-tax giving no
-        // answer is 503 and writes nothing: it propagates as it is, never as a refused posting.
+        // answer (503) or refusing for a configuration state (relayed 422) writes nothing: it propagates as it is,
+        // never as a refused posting.
         VendorBillPostingService.UseTax useTax =
                 tax.accrual() == null ? null : purchaseTax.quote(bill, tax.accrual(), tax.asOf());
         VendorBillPostingService.Classification effective =
@@ -744,6 +748,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
             if (purchaseTax.vendorAccepts(bill)) {
                 override = TaxOnResaleOverrideSource.VENDOR_SETTING;
             } else if (justification != null && !justification.isBlank()) {
+                VendorBillPurchaseTax.requireOverrideLength(justification);
                 stored = VendorBillDecisions.required(justification, VendorBillPurchaseTax.OVERRIDE_FIELD);
                 override = TaxOnResaleOverrideSource.BILL;
             } else {
@@ -872,6 +877,9 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
         }
         if (cause instanceof TaxServiceUnavailableException) {
             return TaxServiceUnavailableException.CODE;
+        }
+        if (cause instanceof TaxQuoteRefusedException refused) {
+            return refused.getCode();
         }
         return cause.getClass().getSimpleName();
     }

@@ -25,6 +25,7 @@ import com.positivity.accounting.internal.enums.VendorBillPostingDateRule;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
+import com.positivity.accounting.internal.exception.TaxQuoteRefusedException;
 import com.positivity.accounting.internal.exception.TaxServiceUnavailableException;
 import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
@@ -452,6 +453,28 @@ class VendorBillAutoApprovalTest {
                     .get()
                     .satisfies(e ->
                             assertThat(VendorBillApprovalServiceImpl.codeOf(e)).isEqualTo("SERVICE_UNAVAILABLE"));
+        }
+
+        @Test
+        @DisplayName("#2604 ruling 4 amended: a relayed pos-tax 422 on the quote skips with that code: the bill stays"
+                + " AWAITING_APPROVAL, one VENDOR_BILL_AUTO_APPROVE_SKIPPED row, nothing posted")
+        void relayedCodeSkips() {
+            untaxedExpense();
+            doThrow(new TaxQuoteRefusedException("TAX_JURISDICTION_NOT_CONFIGURED", "no rates"))
+                    .when(client)
+                    .useTax(any());
+
+            assertThat(autoApproval.approveIfEligible(bill, evidence, 95)).isFalse();
+
+            assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.AWAITING_APPROVAL);
+            assertThat(bill.getApprovedBy()).isNull();
+            AccountingAuditLog row = onlyAudit();
+            assertThat(row.getOperation()).isEqualTo("VENDOR_BILL_AUTO_APPROVE_SKIPPED");
+            assertThat(row.getNewValue())
+                    .contains("code=TAX_JURISDICTION_NOT_CONFIGURED", "INV-7")
+                    .doesNotContain("no rates");
+            verify(postingService, never()).post(any(), any(), any(), anyString(), any());
+            verify(postingService, never()).requireMapped(any(), any(), any());
         }
 
         @Test

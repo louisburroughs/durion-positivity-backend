@@ -339,6 +339,11 @@ pos.tax:
 - **Startup check** (`PurchaseTaxRules`). Startup fails, naming the property, when a country key is not an upper-case ISO
   3166-1 alpha-2 code (assigned or user-assigned, so fixtures may use `ZZ`), a value is missing, or `tax-on-resale-goods` is
   not `HOLD` or `ALLOW`.
+- **Rollout.** With pos-accounting's shipped `accounting.tax.country: US`, the US row switches both behaviours on for
+  every tenant of the deployment: taxed goods-for-resale bills are held, and untaxed expense bills accrue use tax at the
+  placeholder rates. Those 2240 balances must not be filed or paid. A deployment whose US calculation goes to `EXTERNAL`
+  or `AVALARA` cannot price `USE` (501, or 422 `TAX_CAPABILITY_UNSUPPORTED` once #2629 lands), so every untaxed expense
+  approval answers 503 until this row is removed. Removing the row is the off switch (`configured: false`).
 
 ### Rounding reconciliation
 

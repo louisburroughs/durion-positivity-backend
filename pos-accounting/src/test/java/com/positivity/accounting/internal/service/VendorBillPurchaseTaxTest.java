@@ -13,6 +13,7 @@ import com.positivity.accounting.internal.dto.TaxUseQuote;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.entity.VendorBillLine;
 import com.positivity.accounting.internal.enums.VendorBillDebitClass;
+import com.positivity.accounting.internal.exception.TaxQuoteRefusedException;
 import com.positivity.accounting.internal.exception.TaxServiceUnavailableException;
 import com.positivity.accounting.internal.repository.VendorBillLineRepository;
 import java.math.BigDecimal;
@@ -246,6 +247,57 @@ class VendorBillPurchaseTaxTest {
 
             assertThat(purchaseTax.quote(header("250.00", null, null), basis, LocalDate.of(2026, 10, 1)))
                     .isEqualTo(new VendorBillPostingService.UseTax("EXPENSE_SHOP_SUPPLIES", new BigDecimal("21.25")));
+        }
+
+        @Test
+        @DisplayName("A2: the scale is the ledger currency's exponent: a 3-decimal ledger posts 1.235 as returned; a"
+                + " line tax finer than the minor unit is an unusable answer (503), never rounded")
+        void ledgerScale() {
+            VendorBillPurchaseTax kwd = PurchaseTaxFixtures.purchaseTax(
+                    client,
+                    mock(SupplierVendorCopies.class),
+                    mock(VendorBillLineRepository.class),
+                    java.time.Clock.systemUTC(),
+                    "KWD");
+            when(client.useTax(any()))
+                    .thenReturn(new TaxUseQuote.Response(
+                            new BigDecimal("1.235"), List.of(new TaxUseQuote.LineTax("2", new BigDecimal("1.235")))))
+                    .thenReturn(new TaxUseQuote.Response(
+                            new BigDecimal("1.2345"), List.of(new TaxUseQuote.LineTax("2", new BigDecimal("1.2345")))));
+
+            VendorBillPostingService.UseTax quoted =
+                    kwd.quote(header("250.000", null, null), basis, LocalDate.of(2026, 10, 1));
+            assertThat(quoted.amount()).isEqualTo(new BigDecimal("1.235"));
+            assertThatThrownBy(() -> kwd.quote(header("250.000", null, null), basis, LocalDate.of(2026, 10, 1)))
+                    .isInstanceOf(TaxServiceUnavailableException.class);
+
+            when(client.useTax(any()))
+                    .thenReturn(new TaxUseQuote.Response(
+                            new BigDecimal("17.005"), List.of(new TaxUseQuote.LineTax("2", new BigDecimal("17.005")))));
+            assertThatThrownBy(() -> purchaseTax.quote(header("250.00", null, null), basis, LocalDate.of(2026, 10, 1)))
+                    .as("USD has 2 decimals: 17.005 is not rounded to 17.01")
+                    .isInstanceOf(TaxServiceUnavailableException.class);
+        }
+
+        @Test
+        @DisplayName(
+                "A relayed refusal is rethrown with accounting's message per code, naming the bill and the setting")
+        void relayedRefusalMessages() {
+            when(client.useTax(any()))
+                    .thenThrow(new TaxQuoteRefusedException("CURRENCY_NOT_SUPPORTED", "pos-tax text"))
+                    .thenThrow(new TaxQuoteRefusedException("TAX_CAPABILITY_UNSUPPORTED", "pos-tax text"));
+
+            assertThatThrownBy(() -> purchaseTax.quote(header("250.00", null, null), basis, LocalDate.of(2026, 10, 1)))
+                    .isInstanceOfSatisfying(TaxQuoteRefusedException.class, e -> {
+                        assertThat(e.getCode()).isEqualTo("CURRENCY_NOT_SUPPORTED");
+                        assertThat(e.getMessage())
+                                .contains("INV-43", "accounting.ledger.base-currency")
+                                .doesNotContain("pos-tax text");
+                    });
+            assertThatThrownBy(() -> purchaseTax.quote(header("250.00", null, null), basis, LocalDate.of(2026, 10, 1)))
+                    .isInstanceOfSatisfying(
+                            TaxQuoteRefusedException.class,
+                            e -> assertThat(e.getMessage()).contains("provider"));
         }
 
         @Test

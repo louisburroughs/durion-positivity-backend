@@ -354,6 +354,21 @@ class VendorBillPostingServiceTest {
         }
 
         @Test
+        @DisplayName("A2: the accrual posts as returned, never rounded again: 1.235 stays 1.235")
+        void accrualIsNotRounded() {
+            VendorBill bill = bill("200.00");
+            bill.setNetAmount(new BigDecimal("200.00"));
+            bill.setTaxAmount(new BigDecimal("0.00"));
+            bill.setStatedLineCount(1);
+
+            assertThat(withUseTax(bill, List.of(), "1.235"))
+                    .containsExactly(
+                            "EXPENSE_SHOP_SUPPLIES Dr 201.235",
+                            "ACCOUNTS_PAYABLE Cr 200.00",
+                            "USE_TAX_PAYABLE Cr 1.235");
+        }
+
+        @Test
         @DisplayName("A goods-receipt bill: the accrual joins the expense lines' key; the goods line is untouched")
         void byLineAccrual() {
             List<VendorBillLine> lines =
