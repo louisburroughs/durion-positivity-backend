@@ -175,6 +175,8 @@ logging:
     # ADR-0072 (CAP:550 S24): at DEBUG Hibernate's EntityPrinter lists every flushed entity's property values, the
     # vendor copy's tax registrations (last4) included. Pinned to INFO whatever the root level.
     org.hibernate.internal.util.EntityPrinter: INFO
+    # Hibernate 7 logs that listing through its core logger.
+    org.hibernate.orm.core: INFO
     com:
       positivity:
         accounting: INFO

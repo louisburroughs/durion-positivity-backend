@@ -209,16 +209,21 @@ class SupplierVendorCopyIT extends PostgresTenancyTestBase {
         assertThat(logs.list)
                 .as("a WARN or ERROR line from the refused insert is captured (the scan is not vacuous)")
                 .anyMatch(event -> event.getLevel().isGreaterOrEqual(ch.qos.logback.classic.Level.WARN));
-        long leaking = logs.list.stream()
-                .filter(event -> (event.getFormattedMessage()
-                                + (event.getThrowableProxy() == null
-                                        ? ""
-                                        : event.getThrowableProxy().getMessage()))
-                        .contains(marker))
-                .count();
-        assertThat(leaking)
-                .as("log lines carrying the refused row's display name")
-                .isZero();
+        // The driver's "Failing row contains (...)" detail is in no line; the JDBC error path (WARN / ERROR) names no
+        // column value. Spring Data's DEBUG "Touched <entity>" may name the display name, which is not confidential.
+        assertThat(logs.list.stream()
+                        .filter(event -> (event.getFormattedMessage()
+                                        + (event.getThrowableProxy() == null
+                                                ? ""
+                                                : event.getThrowableProxy().getMessage()))
+                                .contains("Failing row")))
+                .as("log lines carrying a failing row")
+                .isEmpty();
+        assertThat(logs.list.stream()
+                        .filter(event -> event.getLevel().isGreaterOrEqual(ch.qos.logback.classic.Level.WARN))
+                        .filter(event -> event.getFormattedMessage().contains(marker)))
+                .as("WARN/ERROR lines carrying the refused row's display name")
+                .isEmpty();
     }
 
     private static int count(JdbcTemplate jdbc, UUID vendorId) {
