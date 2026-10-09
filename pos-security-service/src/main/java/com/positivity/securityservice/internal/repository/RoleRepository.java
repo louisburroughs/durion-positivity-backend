@@ -1,5 +1,6 @@
 package com.positivity.securityservice.internal.repository;
 
+import com.positivity.securityservice.internal.dto.PermissionHolderRow;
 import com.positivity.securityservice.internal.dto.RoleGrantRow;
 import com.positivity.securityservice.internal.dto.RolePersonaDto;
 import com.positivity.securityservice.internal.entity.Role;
@@ -87,6 +88,27 @@ public interface RoleRepository extends JpaRepository<Role, UUID> {
             WHERE UPPER(r.name) IN :names
             """)
     List<RoleGrantRow> findGrantRowsByRoleNames(@Param("names") Collection<String> names);
+
+    /**
+     * Every {@code role_permissions} row of the given permission codes, each carrying the granting
+     * role's name, template key and location scope (#2669, the permission-holders read).
+     *
+     * <p>The permission-side counterpart of {@link #findGrantRowsByRoleNames}, and a constructor
+     * projection for the same reason: {@code permissions} is {@code EAGER}, so a {@link Role} fetch
+     * would hydrate every grant of every holding role. Tenant isolation is row-level security's job,
+     * as for every read here (ADR-0062): there is no tenant parameter, and only the bound tenant's
+     * roles and grants are visible. It reads the configured grants at call time; nothing is cached.
+     *
+     * @param codes permission codes, already resolved to the catalog's spelling
+     * @return one row per (permission, role) grant; empty when no role holds any of the codes
+     */
+    @Query("""
+            SELECT new com.positivity.securityservice.internal.dto.PermissionHolderRow(
+                p.name, r.name, r.templateKey, r.locationScope)
+            FROM Role r JOIN r.permissions p
+            WHERE p.name IN :codes
+            """)
+    List<PermissionHolderRow> findHolderRowsByPermissionNames(@Param("codes") Collection<String> codes);
 
     /**
      * Every role's MCP persona metadata, ordered by rank then name (#1613).
