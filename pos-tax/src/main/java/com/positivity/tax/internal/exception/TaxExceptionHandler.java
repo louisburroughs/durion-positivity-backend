@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -70,6 +71,40 @@ public class TaxExceptionHandler {
         return build(HttpStatus.UNPROCESSABLE_CONTENT, "CURRENCY_NOT_SUPPORTED", ex.getMessage(), request);
     }
 
+    /**
+     * A request whose values do not fit the configuration it names (CAP:550 S32b): 400 with field errors
+     * that name the field and the rule, never the rejected value.
+     */
+    @ExceptionHandler(TaxRequestInvalidException.class)
+    public ResponseEntity<ApiError> handleRequestInvalid(TaxRequestInvalidException ex, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, VALIDATION_ERROR, ex.getMessage(), ex.getFieldErrors(), request);
+    }
+
+    /**
+     * A well-formed request that the configuration or currency it names refuses (CAP:550 S32b; ADR-0017 §2,
+     * ADR-0067 PC-6 and PC-9): 422 with the exception's code and field errors.
+     */
+    @ExceptionHandler(TaxRequestUnprocessableException.class)
+    public ResponseEntity<ApiError> handleRequestUnprocessable(
+            TaxRequestUnprocessableException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNPROCESSABLE_CONTENT, ex.getCode(), ex.getMessage(), ex.getFieldErrors(), request);
+    }
+
+    /**
+     * A stated tax amount that cannot be right for its receipt (CAP:550 S32b, AW55): 422 with one field
+     * error per offending amount, each carrying its maximum.
+     */
+    @ExceptionHandler(TaxAmountImplausibleException.class)
+    public ResponseEntity<ApiError> handleAmountImplausible(
+            TaxAmountImplausibleException ex, HttpServletRequest request) {
+        return build(
+                HttpStatus.UNPROCESSABLE_CONTENT,
+                "TAX_AMOUNT_IMPLAUSIBLE",
+                ex.getMessage(),
+                ex.getFieldErrors(),
+                request);
+    }
+
     /** {@code @Validated} query-parameter constraint failures (e.g. an invalid countryCode). */
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiError> handleConstraintViolation(
@@ -78,13 +113,23 @@ public class TaxExceptionHandler {
     }
 
     private ResponseEntity<ApiError> build(HttpStatus status, String code, String message, HttpServletRequest request) {
+        return build(status, code, message, List.of(), request);
+    }
+
+    private ResponseEntity<ApiError> build(
+            HttpStatus status,
+            String code,
+            String message,
+            List<ApiError.FieldError> fieldErrors,
+            HttpServletRequest request) {
         String correlationId = resolveCorrelationId(request);
         HttpHeaders headers = new HttpHeaders();
         headers.add(X_CORRELATION_ID, correlationId);
-        return new ResponseEntity<>(
-                ApiError.of(code, message, status.value(), Instant.now(clock).toString(), correlationId),
-                headers,
-                status);
+        String timestamp = Instant.now(clock).toString();
+        ApiError body = fieldErrors.isEmpty()
+                ? ApiError.of(code, message, status.value(), timestamp, correlationId)
+                : ApiError.withFieldErrors(code, message, status.value(), timestamp, correlationId, fieldErrors);
+        return new ResponseEntity<>(body, headers, status);
     }
 
     private String resolveCorrelationId(HttpServletRequest request) {
@@ -93,7 +138,7 @@ public class TaxExceptionHandler {
         }
         String header = request.getHeader(X_CORRELATION_ID);
         return (header != null && !header.isBlank())
-                ? header
+                ? header.trim()
                 : UUIDv7Generator.generate().toString();
     }
 }

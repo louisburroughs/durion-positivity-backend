@@ -117,6 +117,71 @@ paths:
       - Tax
       x-required-permissions:
       - tax:calculate
+  /v1/tax/evidence-rules:
+    get:
+      description: 'Returns the evidence rules a country''s tax profile configures that are in effect on a date: which
+
+        evidence a document type needs, such as the supplier''s registration number, from which total.
+
+        Use this tool when a drawer receipt or a vendor bill must know whether it needs evidence for an
+
+        input-tax claim; do not use it to check a receipt''s stated tax, which is checkTaxPlausibility
+
+        instead.
+
+        Preconditions: this endpoint is internal-only (ADR-0021/ADR-0014), reached by direct in-cluster
+
+        calls from pos-order and pos-accounting with the service authority, never through pos-api-gateway.
+
+        Required inputs: countryCode, two upper-case letters; asOf (ISO-8601 date) defaults to today.
+
+        No events are emitted and no state changes; every rule is configuration held for expert advice,
+
+        so source is always STUB, and amounts are in the returned currency.
+
+        A caller that cannot obtain the rules retries or holds, and never treats them as absent.
+
+        Returns 200 with an empty list for a country without a rule, and 400 VALIDATION_ERROR when
+
+        countryCode or asOf is missing or malformed.
+
+        '
+      operationId: getTaxEvidenceRules
+      parameters:
+      - in: query
+        name: countryCode
+        required: true
+        schema:
+          minLength: 1
+          pattern: ^[A-Z]{2}$
+          type: string
+      - in: query
+        name: asOf
+        required: false
+        schema:
+          format: date
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxEvidenceRulesResponse'
+          description: Rules in effect resolved (empty for a country without one)
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Missing or malformed countryCode or asOf
+      security:
+      - bearerAuth:
+        - tax:rates:view
+      summary: List a country's evidence rules
+      tags:
+      - Tax
+      x-required-permissions:
+      - tax:rates:view
   /v1/tax/exemption-certificates:
     get:
       description: 'Returns the registered tax exemption certificates, newest effective date first, optionally
@@ -388,6 +453,103 @@ paths:
       - Tax
       x-required-permissions:
       - tax:mode:view
+  /v1/tax/plausibility-checks:
+    post:
+      description: 'Checks the tax amounts stated on a receipt against its total, a bookkeeping control against typing
+
+        errors and not a tax rule, and answers whether the supplier''s registration number is needed and
+
+        well formed.
+
+        Use this tool when a drawer receipt with stated tax is recorded; do not use it to compute tax,
+
+        which is calculateTax, or to read the evidence threshold, which is getTaxEvidenceRules instead.
+
+        Preconditions: this endpoint is internal-only (ADR-0021/ADR-0014), reached by direct in-cluster
+
+        calls from pos-order with the service authority, never through pos-api-gateway.
+
+        Required inputs: countryCode, regionCode, postalCode, currencyCode (the country profile''s) and
+
+        receiptTotal (tax included, above zero); asOf defaults to today, and statedTaxes (each regime at
+
+        most once) and supplierRegistrationNumber are optional.
+
+        No events are emitted, no state changes and no tenant data is read; the supplier''s number is never
+
+        echoed, logged or stored, and source is always STUB.
+
+        Each stated amount must be below receiptTotal, as must their sum, and at most receiptTotal times r
+
+        over one plus r rounded up to the minor unit plus a configured tolerance, where r is the regime''s
+
+        row rate in the region, or 0 when the regime does not cover the region; a regime that covers the
+
+        region but has no row there is unrated, gets no rate bound, and makes the outcome RATE_UNAVAILABLE
+
+        when its amount is above zero.
+
+        Returns 400 VALIDATION_ERROR when a field is missing or malformed, an amount is negative or a
+
+        regime is repeated, and then, in this order with the first failing step listing all its fieldErrors,
+
+        422 TAX_JURISDICTION_NOT_CONFIGURED when the country has no tax profile, CURRENCY_NOT_SUPPORTED when
+
+        currencyCode is not the profile''s, AMOUNT_PRECISION_EXCEEDS_CURRENCY when an amount is finer than
+
+        the currency''s minor unit, TAX_REGIME_NOT_DECLARED when the country does not declare a regime, and
+
+        TAX_AMOUNT_IMPLAUSIBLE when an amount is implausible, with each offending amount''s maximum.
+
+        '
+      operationId: checkTaxPlausibility
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Receipt with one stated amount:
+                description: Receipt with one stated amount
+                value:
+                  asOf: '2026-10-08'
+                  countryCode: ZZ
+                  currencyCode: EUR
+                  postalCode: Z1Z 1Z1
+                  receiptTotal: 150.0
+                  regionCode: Z1
+                  statedTaxes:
+                  - amount: 19.5
+                    regime: REGIME_1
+            schema:
+              $ref: '#/components/schemas/TaxPlausibilityCheckRequest'
+        description: A receipt's address, total and stated tax amounts, with the supplier's registration number when one is printed
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxPlausibilityCheckResponse'
+          description: Stated tax plausible (PLAUSIBLE or RATE_UNAVAILABLE)
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Missing or malformed field, negative amount, or a repeated regime (VALIDATION_ERROR)
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The country has no tax profile (TAX_JURISDICTION_NOT_CONFIGURED), currencyCode is not the profile's currency (CURRENCY_NOT_SUPPORTED), an amount is finer than the currency's minor unit (AMOUNT_PRECISION_EXCEEDS_CURRENCY), a regime is not declared for the country (TAX_REGIME_NOT_DECLARED), or a stated amount is implausible (TAX_AMOUNT_IMPLAUSIBLE); fieldErrors name each offending field
+      security:
+      - bearerAuth:
+        - tax:rates:view
+      summary: Check a receipt's stated tax
+      tags:
+      - Tax
+      x-required-permissions:
+      - tax:rates:view
   /v1/tax/rates:
     get:
       description: 'Resolves the per-jurisdiction tax rates applicable to a destination address, without calculating
@@ -1245,6 +1407,79 @@ components:
       - total
       - totalTax
       type: object
+    TaxEvidenceRuleEntry:
+      description: From which amount a document type needs a piece of evidence
+      properties:
+        appliesTo:
+          description: Document types the rule applies to
+          items:
+            enum:
+            - DRAWER_RECEIPT
+            - VENDOR_BILL
+            type: string
+          type: array
+        effectiveFrom:
+          description: Inclusive first date the rule is in effect; null when it has no start
+          example: '2026-01-01'
+          format: date
+          type:
+          - string
+          - 'null'
+        effectiveTo:
+          description: Inclusive last date the rule is in effect; null when it is open-ended
+          example: '2026-12-31'
+          format: date
+          type:
+          - string
+          - 'null'
+        fromAmount:
+          description: Document total, tax included and in the response currency, from which the rule applies (inclusive)
+          example: 100.0
+          type: number
+        rule:
+          description: Evidence the rule requires
+          enum:
+          - SUPPLIER_REGISTRATION_NUMBER
+          example: SUPPLIER_REGISTRATION_NUMBER
+          type: string
+      required:
+      - appliesTo
+      - fromAmount
+      - rule
+      type: object
+    TaxEvidenceRulesResponse:
+      description: The evidence rules configured for one country on a date
+      properties:
+        asOf:
+          description: 'Date the rules are in effect on: the requested asOf, or today when it was omitted'
+          example: '2026-10-08'
+          format: date
+          type: string
+        countryCode:
+          description: Country code in ISO 3166-1 alpha-2 format, echoed from the request
+          example: ZZ
+          type: string
+        currency:
+          description: ISO 4217 currency of every amount, the country profile's; null when the country has no profile
+          example: EUR
+          type:
+          - string
+          - 'null'
+        rules:
+          description: Rules in effect on asOf, in configured order; empty when the country has none
+          items:
+            $ref: '#/components/schemas/TaxEvidenceRuleEntry'
+          type: array
+        source:
+          description: Origin of the answer; always STUB, because every value is a placeholder
+          example: STUB
+          type: string
+      required:
+      - asOf
+      - countryCode
+      - rules
+      - source
+      type: object
     TaxJurisdiction:
       description: Tax jurisdiction entry with normalized international location fields and calculated tax values
       properties:
@@ -1360,6 +1595,157 @@ components:
       - lineItemId
       - quantity
       - unitPrice
+      type: object
+    TaxPlausibilityCheckRequest:
+      description: A receipt's total and the tax amounts stated on it
+      properties:
+        asOf:
+          description: Business date of the receipt (ISO-8601); today when omitted
+          example: '2026-10-08'
+          format: date
+          type:
+          - string
+          - 'null'
+        city:
+          description: City of the receipt
+          example: Springfield
+          maxLength: 100
+          minLength: 0
+          type:
+          - string
+          - 'null'
+        countryCode:
+          description: Country of the receipt, ISO 3166-1 alpha-2 in upper case
+          example: ZZ
+          minLength: 1
+          pattern: ^[A-Z]{2}$
+          type: string
+        currencyCode:
+          description: ISO 4217 currency of every amount; must be the country profile's currency
+          example: EUR
+          minLength: 1
+          type: string
+        postalCode:
+          description: Postal code of the receipt
+          example: Z1Z 1Z1
+          maxLength: 20
+          minLength: 1
+          type: string
+        receiptTotal:
+          description: Receipt total, tax included, above zero and at most the currency's decimals
+          example: 150.0
+          exclusiveMinimum: 0
+          type: number
+        regionCode:
+          description: Region (subdivision) of the receipt, 1 to 3 letters or digits
+          example: Z1
+          minLength: 1
+          pattern: ^[A-Za-z0-9]{1,3}$
+          type: string
+        statedTaxes:
+          description: Tax amounts stated on the receipt, one per regime at most; absent or empty means none
+          items:
+            $ref: '#/components/schemas/TaxStatedTax'
+          maxItems: 32
+          minItems: 0
+          type:
+          - array
+          - 'null'
+        supplierRegistrationNumber:
+          description: Supplier's registration number as printed; it is checked against the country's supplier regime shape and is never echoed, logged or stored. A value longer than 128 characters is never well formed
+          maxLength: 128
+          type:
+          - string
+          - 'null'
+      required:
+      - countryCode
+      - currencyCode
+      - postalCode
+      - receiptTotal
+      - regionCode
+      type: object
+    TaxPlausibilityCheckResponse:
+      description: Whether a receipt's stated tax is plausible
+      properties:
+        asOf:
+          description: Date the check used
+          example: '2026-10-08'
+          format: date
+          type: string
+        maximums:
+          description: Plausible maximum of each rated or not-levied stated regime (a not-levied regime has r = 0, so its maximum is the tolerance); an unrated regime has none
+          items:
+            $ref: '#/components/schemas/TaxPlausibilityMaximum'
+          type: array
+        outcome:
+          description: RATE_UNAVAILABLE when a stated amount above zero is unrated (its regime covers the region but has no rate row on asOf), otherwise PLAUSIBLE; a caller never reads RATE_UNAVAILABLE as plausible for recovery
+          enum:
+          - PLAUSIBLE
+          - RATE_UNAVAILABLE
+          example: PLAUSIBLE
+          type: string
+        ratesUsed:
+          description: Rate row behind each rated stated regime (a row of the regime is in effect in the region on asOf); an unrated or not-levied regime has none
+          items:
+            $ref: '#/components/schemas/TaxPlausibilityRateUsed'
+          type: array
+        source:
+          description: Origin of the answer; always STUB, because every value is a placeholder
+          example: STUB
+          type: string
+        supplierRegistrationNumberWellFormed:
+          description: Whether the supplier's number matches the shape of the country's supplier regime; null when no number was sent or the country names no supplier regime. It never changes outcome
+          example: true
+          type:
+          - boolean
+          - 'null'
+        supplierRegistrationRequired:
+          description: Whether the receipt total reaches an evidence rule that requires the supplier's registration number on a drawer receipt on asOf; it never changes outcome
+          example: true
+          type: boolean
+      required:
+      - asOf
+      - maximums
+      - outcome
+      - ratesUsed
+      - source
+      - supplierRegistrationNumberWellFormed
+      - supplierRegistrationRequired
+      type: object
+    TaxPlausibilityMaximum:
+      description: The largest plausible amount for one stated regime
+      properties:
+        maximum:
+          description: 'Largest plausible amount: the total times r over one plus r, rounded up to the minor unit, plus the configured tolerance'
+          example: 9.87
+          type: number
+        regime:
+          description: Regime code
+          example: REGIME_1
+          type: string
+      required:
+      - maximum
+      - regime
+      type: object
+    TaxPlausibilityRateUsed:
+      description: The rate row one stated regime was bounded by
+      properties:
+        rate:
+          description: Rate as a decimal fraction
+          example: 0.07
+          type: number
+        regime:
+          description: Regime code
+          example: REGIME_1
+          type: string
+        taxType:
+          description: Tax-type code of the rate row
+          example: ZZ_LEVY
+          type: string
+      required:
+      - rate
+      - regime
+      - taxType
       type: object
     TaxProviderTransactionResult:
       description: Outcome of a provider tax-document lifecycle call
@@ -1482,6 +1868,24 @@ components:
       required:
       - regime
       - regions
+      type: object
+    TaxStatedTax:
+      description: One tax amount stated on a receipt, keyed by regime
+      properties:
+        amount:
+          description: Amount stated, zero or more, at most the currency's decimals
+          example: 19.5
+          minimum: 0
+          type: number
+        regime:
+          description: Regime code the amount is stated under; it must be declared for the country
+          example: REGIME_1
+          minLength: 1
+          pattern: ^[A-Z0-9_]{1,32}$
+          type: string
+      required:
+      - amount
+      - regime
       type: object
     TaxTypeEntry:
       description: One tax type a country declares, with its regime and level

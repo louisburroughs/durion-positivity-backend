@@ -1,0 +1,6 @@
+# CAP:550 S32b test fixture (RegistrationNumberShapesTest): a profile file that sets a shape. Not tax law.
+pos:
+  tax:
+    registration:
+      formats:
+        - { regime: R_1, shape: "ZZ#####" }
