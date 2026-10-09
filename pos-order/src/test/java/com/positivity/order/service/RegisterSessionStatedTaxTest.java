@@ -152,6 +152,7 @@ class RegisterSessionStatedTaxTest {
                 .build();
         lenient().when(sessions.findById(SESSION_ID)).thenReturn(Optional.of(session));
         lenient().when(sessions.findByIdForUpdate(SESSION_ID)).thenReturn(Optional.of(session));
+        lenient().when(sessions.save(any())).thenAnswer(inv -> inv.getArgument(0));
         lenient()
                 .when(policyService.current())
                 .thenReturn(new SessionPolicyView(
