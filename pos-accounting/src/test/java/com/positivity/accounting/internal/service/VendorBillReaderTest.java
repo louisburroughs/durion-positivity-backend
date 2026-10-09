@@ -649,7 +649,11 @@ class VendorBillReaderTest {
                 mock(AccountingCalendarZoneResolver.class),
                 new LedgerCurrency("USD"),
                 approvalPolicy,
-                copies);
+                copies,
+                mock(VendorBillTaxRepository.class),
+                mock(VendorBillTaxRecoveryRepository.class),
+                mock(GLMappingResolver.class),
+                mock(GLAccountRepository.class));
         UUID heldVendor = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a71");
         UUID freeVendor = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a72");
         VendorBill heldBill = billOf("100.00", "clerk.ana");
