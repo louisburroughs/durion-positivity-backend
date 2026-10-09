@@ -909,8 +909,8 @@ class CreditMemoServiceTest {
         when(invoiceBalanceCalculator.findInvoice(testInvoiceId)).thenReturn(java.util.Optional.of(testInvoice));
         when(invoiceBalanceCalculator.balanceDue(testInvoice)).thenReturn(new BigDecimal("110.00"));
         UUID gst = UUID.randomUUID();
-        // R3.2: the GST key is unmapped by the time of the void; the void still mirrors the memo's own lines.
-        when(typedOutputTax.typedAccounts(any())).thenReturn(Map.of());
+        // R3.2: the GST key is unmapped by the time of the void (the tenant's keys are never asked); the void still
+        // mirrors the memo's own lines.
         com.positivity.accounting.internal.entity.JournalEntry reversal =
                 new com.positivity.accounting.internal.entity.JournalEntry();
         reversal.setSourceEventType(JournalEntrySourceTypes.CREDIT_MEMO_REVERSAL);
@@ -936,6 +936,7 @@ class CreditMemoServiceTest {
                 .containsExactly(testRevenueAccountId, gst, testArAccountId);
         verify(glPostingService, org.mockito.Mockito.never())
                 .postCreditMemoVoid(any(), any(), any(), any(), any(), any(), anyString());
+        verify(typedOutputTax, org.mockito.Mockito.never()).typedAccounts(any());
     }
 
     private static com.positivity.accounting.internal.entity.JournalEntryLine memoLine(
