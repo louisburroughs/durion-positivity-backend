@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.positivity.order.internal.dto.purchaseorder.CreatePurchaseOrderRequest;
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderLineRequest;
+import com.positivity.order.internal.entity.ExtSupplierVendor;
+import com.positivity.order.internal.repository.ExtSupplierVendorRepository;
 import com.positivity.order.internal.repository.PurchaseOrderRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -57,9 +59,21 @@ class PurchaseOrderAuditingIT {
     @Autowired
     private PurchaseOrderRepository purchaseOrderRepository;
 
+    @Autowired
+    private ExtSupplierVendorRepository vendorRepository;
+
     @Test
     @DisplayName("createPurchaseOrder persists, and createdBy is populated by auditing")
     void createPopulatesCreatedBy() {
+        // A REST-created order names an active vendor of the copy (CAP:550 S24, #2517).
+        vendorRepository.saveAndFlush(ExtSupplierVendor.builder()
+                .vendorId(VENDOR_ID)
+                .vendorNumber("V-000001")
+                .displayName("Audited Vendor")
+                .status(ExtSupplierVendor.Status.ACTIVE)
+                .aggregateVersion(1L)
+                .updatedAt(java.time.Instant.parse("2026-10-08T00:00:00Z"))
+                .build());
         PurchaseOrderLineRequest line = new PurchaseOrderLineRequest();
         line.setLineNumber(1);
         line.setSkuId(SKU_ID);

@@ -108,6 +108,7 @@ public class VendorBillReader {
     private final AccountingCalendarZoneResolver zoneResolver;
     private final LedgerCurrency ledgerCurrency;
     private final ApApprovalPolicy policy;
+    private final SupplierVendorCopies vendorCopies;
 
     /** The full read of one bill, for the caller in the security context. */
     @Transactional(readOnly = true)
@@ -173,7 +174,11 @@ public class VendorBillReader {
                         awaitsInvoice(channel, matched),
                         nz(allocated).signum() != 0,
                         posting.isPresent(),
-                        blocks(bill, settings)))
+                        blocks(
+                                bill,
+                                settings,
+                                vendorCopies.isCreatorsFirstBill(
+                                        bill.getVendorId(), VendorBillDecisions.callerOrNull()))))
                 .posting(posting.map(this::posting).orElse(null))
                 .build();
     }
@@ -598,11 +603,22 @@ public class VendorBillReader {
         static final Blocks NONE = new Blocks(null, null, false);
     }
 
-    /** The caller's {@link Blocks} on {@code bill} under {@code settings}. */
+    /** The caller's {@link Blocks} on {@code bill} under {@code settings}, the caller not the vendor's creator. */
     static @NonNull Blocks blocks(@NonNull VendorBill bill, ApApprovalPolicy.@NonNull Settings settings) {
+        return blocks(bill, settings, false);
+    }
+
+    /**
+     * The caller's {@link Blocks} on {@code bill} under {@code settings}.
+     *
+     * @param vendorCreatorFirstBill whether the caller created the bill's vendor and none of its bills was ever approved
+     *     (CAP:550 S24 rule 9): the creator rule blocks them as it blocks the bill's creator
+     */
+    static @NonNull Blocks blocks(
+            @NonNull VendorBill bill, ApApprovalPolicy.@NonNull Settings settings, boolean vendorCreatorFirstBill) {
         boolean overLimit = !VendorBillDecisions.mayDecideTier(settings.tier(bill.getTotalAmount()));
         String caller = VendorBillDecisions.callerOrNull();
-        boolean creator = caller != null && caller.equals(bill.getCreatedBy());
+        boolean creator = vendorCreatorFirstBill || (caller != null && caller.equals(bill.getCreatedBy()));
         String approve;
         if (overLimit) {
             approve = BLOCKED_LIMIT;

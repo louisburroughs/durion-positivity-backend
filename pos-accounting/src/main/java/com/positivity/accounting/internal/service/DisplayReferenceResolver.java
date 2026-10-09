@@ -3,17 +3,17 @@ package com.positivity.accounting.internal.service;
 import com.positivity.accounting.internal.dto.ResolvedDisplayReference;
 import com.positivity.accounting.internal.entity.ExtCustomerParty;
 import com.positivity.accounting.internal.entity.ExtInvoice;
+import com.positivity.accounting.internal.entity.ExtSupplierVendor;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.LocationProfile;
-import com.positivity.accounting.internal.entity.Vendor;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.DisplayReferenceType;
 import com.positivity.accounting.internal.repository.ExtCustomerPartyRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
+import com.positivity.accounting.internal.repository.ExtSupplierVendorRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.LocationProfileRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
-import com.positivity.accounting.internal.repository.VendorRepository;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -54,7 +54,7 @@ public class DisplayReferenceResolver {
     private final ExtCustomerPartyRepository extCustomerPartyRepository;
     private final JournalEntryRepository journalEntryRepository;
     private final LocationProfileRepository locationProfileRepository;
-    private final VendorRepository vendorRepository;
+    private final ExtSupplierVendorRepository vendorRepository;
     private final VendorBillRepository vendorBillRepository;
 
     /**
@@ -100,8 +100,8 @@ public class DisplayReferenceResolver {
             case VENDOR ->
                 index(
                         vendorRepository.findAllById(distinct),
-                        Vendor::getVendorId,
-                        vendor -> new ResolvedDisplayReference(vendor.getName(), vendor.getVendorNumber()));
+                        ExtSupplierVendor::getVendorId,
+                        vendor -> new ResolvedDisplayReference(vendor.getDisplayName(), vendor.getVendorNumber()));
             case VENDOR_BILL ->
                 index(
                         vendorBillRepository.findAllById(distinct),

@@ -11,6 +11,7 @@ import com.positivity.accounting.BaseContractIntegrationTest;
 import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
 import com.positivity.accounting.internal.entity.APPayment;
 import com.positivity.accounting.internal.entity.APPaymentAllocation;
+import com.positivity.accounting.internal.entity.ExtSupplierVendor;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.entity.GLMapping;
 import com.positivity.accounting.internal.entity.JournalEntry;
@@ -24,6 +25,7 @@ import com.positivity.accounting.internal.enums.PaymentMethod;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.repository.APPaymentAllocationRepository;
 import com.positivity.accounting.internal.repository.APPaymentRepository;
+import com.positivity.accounting.internal.repository.ExtSupplierVendorRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.GLMappingRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
@@ -94,6 +96,10 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
     @Autowired
     private com.positivity.accounting.internal.repository.EventOutboxRepository outboxRepository;
 
+    /** Accounting's copy of the vendor master (S24): a payment must name an active vendor in it. */
+    @Autowired
+    private ExtSupplierVendorRepository vendorCopy;
+
     /** The BANK_CASH account every payment here is made from (CAP:550 S42, #2603). */
     private UUID bankAccountId;
 
@@ -124,6 +130,16 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
 
         // Setup test vendor and bills
         testVendorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        ExtSupplierVendor vendor = new ExtSupplierVendor();
+        vendor.setVendorId(testVendorId);
+        vendor.setVendorNumber("V-000001");
+        vendor.setDisplayName("Contract Vendor");
+        vendor.setStatus(ExtSupplierVendor.ACTIVE);
+        vendor.setRemitToVersion(0);
+        vendor.setCreatedBy("test-setup");
+        vendor.setAggregateVersion(1L);
+        vendor.setUpdatedAt(Instant.now(TEST_CLOCK));
+        vendorCopy.save(vendor);
 
         // Bill 1: Due oldest (30 days ago), $500
         bill1 = new VendorBill();
@@ -133,6 +149,7 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
         bill1.setDueDate(LocalDate.now(TEST_CLOCK).minusDays(10).atStartOfDay());
         bill1.setTotalAmount(new BigDecimal("500.00"));
         bill1.setStatus(VendorBillStatus.APPROVED);
+        bill1.setApprovedRemitToVersion(0); // approved at the copy's current remit-to (S24)
         bill1.setCreatedBy("test-setup");
         bill1.setModifiedBy("test-setup");
         bill1 = vendorBillRepository.save(bill1);
@@ -145,6 +162,7 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
         bill2.setDueDate(LocalDate.now(TEST_CLOCK).plusDays(15).atStartOfDay());
         bill2.setTotalAmount(new BigDecimal("300.00"));
         bill2.setStatus(VendorBillStatus.APPROVED);
+        bill2.setApprovedRemitToVersion(0);
         bill2.setCreatedBy("test-setup");
         bill2.setModifiedBy("test-setup");
         bill2 = vendorBillRepository.save(bill2);
@@ -160,6 +178,7 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
         apPaymentRepository.deleteAll();
         journalEntryRepository.deleteAll();
         vendorBillRepository.deleteAll();
+        vendorCopy.deleteAll();
         // S42: the AP_PAYMENT ledger this class added, so classes sharing the H2 context can clear the chart.
         postingCategoryRepository.findByCategoryName("AP_PAYMENT").ifPresent(category -> {
             glMappingRepository.findAll().stream()

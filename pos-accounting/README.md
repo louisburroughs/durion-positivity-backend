@@ -1326,14 +1326,10 @@ counts, `PAID` and `CURRENCY_HOLD` included.
   database.
 - **Connections under the counter lock**: the counter row stays locked from the draw to the end of the
   bill's transaction, so creates in one tenant queue on it, each holding a pooled connection. The create
-  therefore asks for no second connection while it holds the lock. The vendor-directory row, which used to be
-  written in a `REQUIRES_NEW` transaction of its own (a second connection), is written on the bill's
-  connection with a conflict-tolerant insert (`VendorDirectoryService.recordVendorInCurrentTransaction`,
-  `INSERT … ON CONFLICT DO NOTHING`), so it commits with the bill, a refused or rolled-back create writes no
-  directory row, and another tenant's `ap_vendor` row under the same vendor id (the table is keyed on
-  `vendor_id` alone) cannot abort the bill. Before, on a pool as small as Compose's (`maximum-pool-size 3`),
-  three concurrent creates left the lock holder waiting for a fourth connection until the pool's timeout,
-  with no connection free for any tenant meanwhile (`VendorBillGoodsReceiptSmallPoolIT`). Nothing else between
+  therefore asks for no second connection while it holds the lock: the vendor is read from the copy before
+  the number is drawn (S24), and the former vendor-directory write is retired with `ap_vendor`. Before, on a
+  pool as small as Compose's (`maximum-pool-size 3`), three concurrent creates left the lock holder waiting
+  for a fourth connection until the pool's timeout (`VendorBillGoodsReceiptSmallPoolIT`). Nothing else between
   the number and the commit leaves the bill's connection: the GL posting hook and event ingestion join the
   transaction. One bounded exception: a create that loses the race under the unique index *inside a caller's
   transaction* reads the original on one extra connection while the aborted transaction still holds the lock;
@@ -1344,10 +1340,88 @@ counts, `PAID` and `CURRENCY_HOLD` included.
   line: WARN for a refusal or a flag, DEBUG for an ignored duplicate (overlapping fetch windows republish by
   design), INFO for a retry. The counter is not tied to the transaction: a run that rolls back and is
   redelivered counts again.
-- **Limits**: the rule compares `vendor_id` as stored, so the same vendor under two ids is not detected
-  (one vendor key arrives with the vendor copies). The SQL backfill and the Java normaliser agree on every
+- **Limits**: the rule compares `vendor_id` as stored. Since S24 every channel stores the pos-supplier
+  vendor id, so one vendor has one key (EDI no longer keys on the vendor profile). The SQL backfill and the Java normaliser agree on every
   example above; a number with letters outside ASCII depends on the database's character classification
   in the backfill only, since Java is the key's sole producer afterwards.
+
+## Vendor copies and one vendor key (CAP:550 S24, #2517; AW23, AW39, AW48; ADR-0072)
+
+Bills, AP payments and the vendor reads name a vendor by its **pos-supplier vendor id**, read from
+`ext_supplier_vendor`, accounting's copy of the vendor master. `ap_vendor` and its first-sight sync are retired
+(V20). Neither this module nor pos-order calls pos-supplier (ADR-0044 R1); only the consumer writes the copy (R3).
+
+- **The copy.** `SupplierEventsListener` (formerly `SupplierInvoiceEventsListener`, still the module's one
+  `supplier.events.v1` consumer, group `pos-accounting-supplier-events`) upserts the copy on
+  `supplier.vendor.updated` under `ReplicaVersionGuard`: an equal `aggregateVersion` re-applies (a replay
+  repairs), an older one changes nothing. It holds every vendor, either status, with the remit-to and its
+  version and requester, the default terms and currency, `createdBy` and `tax_registrations`
+  (`[{scheme, region, last4}]`); no remit-to address or approver (ADR-0044 R3 minimum).
+  Every fact the consumer reads is marked `owner = "supplier"`.
+- **Schema version (Security ruling #2617, ADR-0072).** Only `schemaVersion` 2 or later is applied; the version
+  is read from the envelope before the payload is mapped. An older vendor fact is marked, counted as
+  `accounting.supplier_vendor.skipped{eventType, schemaVersion}` (those two tags only) and skipped; its payload
+  is never logged. No full registration number is received, stored, returned or logged, `last4` is never
+  logged or tagged, `ExtSupplierVendor.toString` leaves the registrations out, and a constraint refusal of the
+  copy propagates with the constraint's name only (Postgres would quote the failing row), and the datasource sets
+  pgjdbc's `logServerErrorDetail: false` so no driver message (which Hibernate logs at ERROR) carries a
+  `Failing row contains (…)` detail. (On the copy's row-level-security tables Postgres never sends the application role the failing
+  row anyway; the flag covers every other table and connection.) Hibernate's DEBUG entity listing
+  (`org.hibernate.orm.core`, `EntityPrinter`) is pinned to INFO, since it prints every flushed value, `last4` included. Nothing here reads
+  or validates the registrations (AW48; pos-tax is not called).
+- **Seeding.** On first deployment the operator calls pos-supplier's `POST /v1/supplier/vendors/facts/replay`
+  per tenant until it reports `complete` (`docs/OPERATIONS_RUNBOOK.md`). Until then bills and payments for
+  unseeded vendors are refused or held as below.
+- **EDI vendor key.** An invoice fact's vendor is its `vendorId`, never `vendorProfileId`. No `vendorId`: the fact
+  is held, reason `VENDOR_ID_MISSING` (S25 turns these into drafts). A vendor not in the copy: held,
+  `VENDOR_NOT_IN_COPY`, and released through the same bill creation, with its ingestion record, when the
+  vendor is copied (`accounting.supplier_invoice.hold_released`). An `INACTIVE` vendor: the bill is created
+  `MATCH_EXCEPTION`, `statusExplanation` "Vendor V-000123 is inactive"; an AW47 totals gap still reports
+  `TOTALS_ADD_UP` FAIL and needs its `difference`. A hold (`supplier_invoice_hold`: event id, reason, the whole
+  envelope) is written with the processed mark, so a fact is never dropped. `SupplierInvoiceHoldSweep`
+  retries releases and refreshes the gauge `accounting.supplier_invoice.held{reason}` hourly, and WARN-logs
+  holds older than 24 hours daily.
+- **New business.** `POST /v1/accounting/vendor-bills` (goods receipt) and `POST /v1/accounting/ap/payments`
+  (slot 1d) answer a vendor missing from the copy with 503 `VENDOR_REPLICATION_PENDING` (`Retry-After`; absence in an
+  event-fed copy is "not yet", ADR-0017 §1) and refuse an `INACTIVE` one (422 `VENDOR_INACTIVE`); both copy the vendor's display name into `vendorName`. `/match` is not guarded. An
+  inactive vendor's existing bill may still be approved or accepted, but is not paid.
+- **Remit-to at approval and payment.** Every approval (approve, `ACCEPT`, S13's automatic approval) stamps
+  `vendor_bill.approved_remit_to_version` with the copy's current `remitToVersion` (0 without a remit-to);
+  a void never clears it. Payment slot 4 compares each planned, locked bill's version with the current one:
+  a bill passes when they are equal, or when `ap_vendor_settings` holds a confirmation of the current version
+  by someone other than the payer. Otherwise the whole payment is refused, 409
+  `VENDOR_PAYMENT_DETAILS_CHANGED`, naming each bill and the vendor number, before any row is saved or the
+  gateway is called; oldest-first never skips such a bill. A bill approved before S24 has no version and is
+  refused until confirmed.
+- **Vendor creator's first bill (rule 9).** Approve and `ACCEPT` refuse the vendor's creator (the copy's
+  `createdBy`) while no bill or credit note of the vendor was ever approved, voided ones included: 403
+  `AP_BILL_SELF_APPROVAL`, reason `VENDOR_CREATOR_FIRST_BILL` in the message and the refusal audit, in S13's
+  guard position and under S13's `AP_ALLOW_CREATOR_APPROVAL` switch. Automatic approval and the void are exempt;
+  the available actions show `APPROVE` / `ACCEPT_EXCEPTION` blocked for that approver.
+- **Vendor AP defaults (rule 10, AW39).** `ap_vendor_settings.default_debit_class` (`GOODS` | `EXPENSE`) and
+  `default_expense_mapping_key` (an active `VENDOR_BILL` key `EXPENSE_<CODE>`). An approval's classification is
+  taken field by field: the approver's, then the proposal at submission, then the vendor default, then 422
+  `AP_BILL_UNCLASSIFIED`. The class applies to a bill whose lines are not stored, the key to `EXPENSE` and
+  non-stock lines; `RECEIPT_MATCHED` lines are never reclassified and a `GOODS` default never classes a credit
+  note. Automatic approval uses the same fallback.
+- **Reconciliation.** `SupplierManifestListener` compares each per-tenant `supplier.manifest.v1` manifest with
+  the `supplier`-owned marks; on drift it counts `replica.drift{owner="supplier"}` and sends
+  `supplier.outbox.replay-requested` on `supplier.commands.v1`. A tenantless manifest is skipped and counted.
+
+| Method | Path | Permission | Codes |
+| --- | --- | --- | --- |
+| GET | `/v1/accounting/vendors?name=&status=&limit=` | `accounting:ap:view` | 200, 400 `VALIDATION_ERROR` (status) |
+| GET | `/v1/accounting/vendors/{vendorId}` (with `apSettings`) | `accounting:ap:view` | 200, 503 `VENDOR_REPLICATION_PENDING` |
+| POST | `/v1/accounting/vendors/{vendorId}/remit-to-confirmation` `{remitToVersion, justification}` | `accounting:ap:approve` | 200, 400 `VALIDATION_ERROR` / `JUSTIFICATION_REQUIRED`, 403 `VENDOR_REMIT_TO_SELF_CONFIRMATION`, 409 `VENDOR_PAYMENT_DETAILS_CHANGED`, 503 `VENDOR_REPLICATION_PENDING` |
+| PUT | `/v1/accounting/vendors/{vendorId}/ap-settings` `{defaultDebitClass?, defaultExpenseMappingKey?, justification, requestId}` | `accounting:ap_approval_policy:manage` | 200, 400 `VALIDATION_ERROR` (`fieldErrors`) / `JUSTIFICATION_REQUIRED`, 403, 409 `IDEMPOTENCY_CONFLICT`, 503 `VENDOR_REPLICATION_PENDING` |
+
+The PUT's missing field is unchanged and an explicit null clears it; unknown body fields are refused. It is
+idempotent on `requestId`: the request row records the vendor and the normalised body, and a reused `requestId`
+with another vendor or body is 409 `IDEMPOTENCY_CONFLICT`. The remit-to confirmation refuses the remit-to's
+requester (`remitToRequestedBy`, 403 `VENDOR_REMIT_TO_SELF_CONFIRMATION`) before anything else is checked or written. Audit:
+entity `VENDOR`, operations `REMIT_TO_CONFIRM` and `AP_VENDOR_SETTINGS_SET` (old → new, actor, justification,
+`requestId`). The vendor read's `paymentDetailsChanged` is true while an approved, open bill was approved at
+another remit-to version and nobody confirmed the current one; S19's work item reads it.
 
 ## Error codes
 
@@ -1364,6 +1438,10 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `UNSUPPORTED_SORT_PROPERTY` | 400 | A `sort` parameter names a property the endpoint does not sort on |
 | `NO_MATCHING_VENDOR_BILL` | 400 | An inbound vendor invoice matched no pending receipt/bill for the vendor (a failed match, not a missing addressed resource) |
 | `JUSTIFICATION_REQUIRED` | 400 | A vendor-bill justification, reason or override justification absent or under 10 characters (#2509) |
+| `VENDOR_REPLICATION_PENDING` | 503 | A vendor read or command, a goods-receipt bill or an AP payment names a vendor not in the pos-supplier vendor copy yet; `Retry-After` set. Not-yet, never "no" (ADR-0017 §1; S24, #2517) |
+| `VENDOR_REMIT_TO_SELF_CONFIRMATION` | 403 | The caller requested the vendor's current remit-to in pos-supplier and may not confirm it (S24, Accounting ruling on PR #2648) |
+| `VENDOR_INACTIVE` | 422 | A new goods-receipt bill or AP payment names an `INACTIVE` vendor; an inactive vendor's existing bills are not paid either (S24, #2517) |
+| `VENDOR_PAYMENT_DETAILS_CHANGED` | 409 | A bill the payment would pay was approved at another remit-to version and no one but the payer confirmed the current one; or a confirmation names a version that is not the current one (S24, #2517) |
 | `VENDOR_BILL_NOT_FOUND` | 404 | No vendor bill with that id is visible to the caller (#2509) |
 | `AP_MATCH_CANDIDATE_NOT_FOUND` | 404 | No match candidate with that id is visible to the caller (#2509) |
 | `AP_BILL_NOT_APPROVABLE` | 409 | The bill's own status does not allow the decision (the message names it), a replayed command, an open ambiguous match naming the bill (pick the match first), or a `CURRENCY_HOLD` bill (#2509) |
@@ -1375,7 +1453,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `AP_BILL_TOTALS_UNRECONCILED` | 422 | The vendor's gross differs from its net + tax beyond the rounding tolerance and the send, approval or acceptance gives no `difference`; nothing is written (AW47, #2509) |
 | `AP_BILL_ZERO_TOTAL` | 422 | A bill totalling 0.00 is sent, approved or accepted; correct it or void it (#2509) |
 | `AP_APPROVAL_LIMIT_EXCEEDED` | 403 | The bill's absolute total is over the clerk limit and the caller lacks `accounting:ap:approve_over_limit` (approve, `ACCEPT`, void of an approved bill); `nextAction` names the permission (#2510) |
-| `AP_BILL_SELF_APPROVAL` | 403 | The caller created the bill and the policy does not allow a creator to approve it (approve, `ACCEPT`) (#2510) |
+| `AP_BILL_SELF_APPROVAL` | 403 | The caller created the bill, or created its vendor and no bill of that vendor was ever approved (`VENDOR_CREATOR_FIRST_BILL` in the message, S24), and the policy does not allow a creator to approve it (approve, `ACCEPT`) (#2510) |
 | `AP_PAYMENT_SELF_APPROVED_BILL` | 403 | The payer approved a bill the payment would pay; `fieldErrors[selfApprovedBillNumbers]` name them; nothing is paid (#2510) |
 | `AP_PAYMENT_METHOD_NOT_SUPPORTED` | 422 | An AP payment by `CREDIT_CARD` or `OTHER`: no funding account is modelled for them (OI-17); refused first, before the gateway (#2603) |
 | `AP_PAYMENT_NOT_RETRYABLE` | 409 | `gl-posting-retry` of an AP payment that is not `GL_POST_FAILED` (already posted, pending, or a gateway state) (#2603) |

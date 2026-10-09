@@ -73,6 +73,9 @@ public class PurchaseOrderTransmissionService {
 
     private final Clock clock;
 
+    /** An inactive vendor, or one outside the copy, is sent nothing (CAP:550 S24, #2517). */
+    private final SupplierVendorGuard vendorGuard;
+
     /**
      * Asks pos-supplier to transmit the order, publishing in the transaction that records the
      * request.
@@ -93,6 +96,8 @@ public class PurchaseOrderTransmissionService {
         }
 
         guardTransmittable(order);
+        // An inactive vendor, or one outside the copy, is sent nothing (S24, #2517).
+        vendorGuard.requireActive(order.getVendorId());
         List<SupplierOrderRequestedLine> lines = resolveLines(order);
         SupplierOrderRequestedV1.IntentType intentType = intentTypeFor(order);
 

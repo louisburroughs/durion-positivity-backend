@@ -4,6 +4,11 @@
 spring:
   application:
     name: pos-order-pg-test
+  datasource:
+    hikari:
+      # As production (ADR-0072, S24): no "Failing row contains" detail in driver messages.
+      data-source-properties:
+        logServerErrorDetail: false
   autoconfigure:
     exclude: org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration
   jpa:

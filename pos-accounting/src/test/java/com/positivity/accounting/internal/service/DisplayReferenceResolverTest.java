@@ -12,10 +12,10 @@ import com.positivity.accounting.internal.entity.LocationProfile;
 import com.positivity.accounting.internal.enums.DisplayReferenceType;
 import com.positivity.accounting.internal.repository.ExtCustomerPartyRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
+import com.positivity.accounting.internal.repository.ExtSupplierVendorRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.LocationProfileRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
-import com.positivity.accounting.internal.repository.VendorRepository;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
@@ -56,7 +56,7 @@ class DisplayReferenceResolverTest {
     private LocationProfileRepository locationProfileRepository;
 
     @Mock
-    private VendorRepository vendorRepository;
+    private ExtSupplierVendorRepository vendorRepository;
 
     @Mock
     private VendorBillRepository vendorBillRepository;

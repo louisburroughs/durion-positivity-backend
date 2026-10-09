@@ -33,6 +33,14 @@ public class CreatePersonResponse {
     private UUID personId;
 
     @NotNull
+    @Schema(
+            description = "Party id of the individual customer: the id getParty, vehicles, estimates and "
+                    + "appointments key on (personId is the pos-people identity, not the party)",
+            example = "01960026-0000-7000-8000-000000000001",
+            requiredMode = Schema.RequiredMode.REQUIRED)
+    private UUID partyId;
+
+    @NotNull
     @Schema(description = "First name", example = "John", requiredMode = Schema.RequiredMode.REQUIRED)
     private String firstName;
 
@@ -72,6 +80,7 @@ public class CreatePersonResponse {
             PersonParty person, String firstName, String lastName, int contactPointsCount) {
         return CreatePersonResponse.builder()
                 .personId(person.getPersonId())
+                .partyId(person.getPartyId())
                 .firstName(firstName)
                 .lastName(lastName)
                 .preferredContactMethod(person.getPreferredContactMethod())

@@ -44,8 +44,10 @@ import org.springframework.transaction.annotation.Transactional;
  *       AP_PAYMENT_METHOD_NOT_SUPPORTED} (OI-17); 1b the currency, not ISO 4217 → 400 {@code VALIDATION_ERROR}, other than
  *       the functional currency → 422 {@code CURRENCY_NOT_SUPPORTED} (ADR-0067 PC-9 (a)); 1c the bank account → 400
  *       {@code VALIDATION_ERROR} with {@code fieldErrors[bankAccountId]}. Currency comes before the bank account, so an
- *       eligibility check that depends on the functional currency never masks a currency refusal. S24 adds its vendor
- *       check at the end of this slot.
+ *       eligibility check that depends on the functional currency never masks a currency refusal. 1d, the vendor
+ *       (CAP:550 S24, #2517), ends the slot: {@link SupplierVendorCopies#requireForNewBusiness}, 503 {@code
+ *       VENDOR_REPLICATION_PENDING} or 422 {@code VENDOR_INACTIVE}. Slot 4, the remit-to check, is {@link
+ *       SupplierVendorCopies#requireRemitToUnchanged}.
  *   <li><b>Slot 5</b> ({@link #checkPeriodAndMapping}): 5a the time zone → 422 {@code ACCOUNTING_TIME_ZONE_UNSET} (fails
  *       closed, #2558); 5b the hard lock → 422 {@code PERIOD_HARD_LOCKED}; 5c a closed period without an accepted
  *       override → 422 {@code PERIOD_CLOSED}; 5d the {@code AP_PAYMENT} mappings → 422 {@code GL_MAPPING_NOT_CONFIGURED}

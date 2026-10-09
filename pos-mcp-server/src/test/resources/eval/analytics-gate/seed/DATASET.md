@@ -257,7 +257,7 @@ included since #1604): V1 800, V2 2600, V3 400; grand total 3800.00.
 | Q11/E2 | collections | `ext_invoice`, `payment_application(+reversal)`, `ext_invoice_payment_reversal`, `ext_invoice_deposit_credit_application`, `receivable_payment`, `customer_credit_transaction` (pos_accounting_db) |
 | Q12/E3 | payment-lag-cohorts | `ext_invoice` + `payment_application` (pos_accounting_db) |
 | Q13 | aged-receivables | `ext_invoice`, `payment_application(+reversal)`, `credit_memo`, `customer_credit_transaction` (pos_accounting_db) |
-| Q15/Q17/Q18 | E8 vendor-spend | `ap_payment`, `vendor_bill`, `ap_vendor` (pos_accounting_db) |
+| Q15/Q17/Q18 | E8 vendor-spend | `ap_payment`, `vendor_bill`, `ext_supplier_vendor` (pos_accounting_db; `ap_vendor` retired by S24) |
 | Q16 | E9 vendor-bill list + aged-payables | `vendor_bill` (+ `ap_payment_allocation` for open balance) |
 | E11 | invoice search | `invoices`, `ext_customer_party`, `ext_workorder` (pos_invoice_db) |
 

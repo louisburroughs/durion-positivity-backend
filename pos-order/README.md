@@ -174,6 +174,45 @@ pos-order reconciles `order.events.v1` the way every other fact owner does:
 - **Consumer.** pos-accounting (`OrderManifestListener`) compares each manifest with the `order` rows its
   `OrderEventsListener` records, which records every order fact it reads, not only the session facts it posts.
 
+## Vendor copy and the purchase-order vendor guard (CAP:550 S24, #2517)
+
+A purchase order names its vendor by the pos-supplier vendor id (ADR-0070, G15). pos-order never calls
+pos-supplier (ADR-0044 R1): it reads its own copy of the vendor master.
+
+- **Copy.** `ext_supplier_vendor` (`V7`, tenant-scoped with RLS) holds every vendor, active or inactive, at the
+  ADR-0044 R3 minimum: `vendor_id`, `vendor_number`, `display_name`, `status`, `status_changed_at`,
+  `aggregate_version`. It is written only by the `supplier.vendor.updated` branch of `SupplierOrderResultListener`
+  (`SupplierVendorReplica`), the module's one `supplier.events.v1` consumer, under `ReplicaVersionGuard`: an older
+  `aggregateVersion` changes nothing; an equal one re-applies, so a replay repairs the copy. No tax registration,
+  remit-to or payment term is copied.
+- **Schema version (Security ruling on #2617, ADR-0072).** The envelope's `schemaVersion` is read before the payload
+  is mapped. A fact below version 2 is marked processed (owner `supplier`), counted as
+  `order.supplier_vendor.skipped{eventType, schemaVersion}` (those two tags only) and skipped; its payload is never
+  logged, and an unreadable vendor fact (or any unparsable supplier event or manifest) is logged with its exception
+  class only. Every database failure of the copy propagates for retry without a mark; a constraint refusal propagates
+  as a `DataIntegrityViolationException` naming only the vendor number, the event and the constraint, with no cause.
+- **Driver detail off (ADR-0072).** `spring.datasource.hikari.data-source-properties.logServerErrorDetail: false`
+  (`application.yml`, and the `pg` test profile): pgjdbc otherwise appends the server's `DETAIL` ("Failing row contains
+  (...)") to every `SQLException` message, which Hibernate logs at ERROR before Spring translates it, so a refused row's
+  column values would reach the log. Proven by `SupplierVendorCopyIT#aRefusedCopyRowLeaksNoColumnValue`.
+- **Seeding.** On first deployment the operator calls pos-supplier's `POST /v1/supplier/vendors/facts/replay` per
+  tenant until it reports `complete`. Until then, purchase orders for unseeded vendors answer 503 as below.
+- **Guard.** `POST /v1/orders/purchase-orders`, `POST /{poId}/approve` and `POST /{poId}/transmit` refuse an `INACTIVE`
+  vendor (**422 `VENDOR_INACTIVE`**). A vendor id the copy does not hold may only not have replicated yet, so it is
+  never answered as absent (ADR-0017 §1): **503 `VENDOR_REPLICATION_PENDING`** with `Retry-After` (5 s), the platform
+  `ReplicationPendingException` (#1994), rendered by `GlobalApiExceptionHandler`.
+  `POST /{poId}/revisions` takes an optional `vendorId`: it changes the vendor of a `DRAFT` order only (another
+  vendor on an order past `DRAFT` is 409 `PURCHASE_ORDER_INVALID_STATE`), passes the same guard, and an absent
+  `vendorId` keeps the vendor.
+- **Requested orders.** An order requested on `order.commands.v1` (pos-inventory's purchase suggestions) is placed in
+  `DRAFT` whatever vendor it names, since a suggestion may still name a manufacturer or distributor feed id (S36);
+  approval answers 503 `VENDOR_REPLICATION_PENDING` until the buyer revises the vendor to one in the copy.
+- **Reconciliation.** `SupplierManifestListener` compares each per-tenant `supplier.manifest.v1` manifest with the
+  `processed_events` rows of owner `supplier`, which `SupplierOrderResultListener` stamps on every event it sees,
+  handled or ignored. On drift it counts `replica.drift{owner="supplier"}` and sends
+  `supplier.outbox.replay-requested` on `supplier.commands.v1` with the tenant header; a manifest without a tenant is
+  skipped and counted as `replica.manifest.skipped`.
+
 ## Tax registrations replica (CAP:550 S32c, #2638)
 
 pos-order keeps its own copy of the tenant's indirect-tax registrations, `ext_tax_registration` (V8), to decide which
@@ -287,6 +326,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `RETURN_WALK_IN_NOT_ALLOWED` | 422 | A return against a walk-in sale asked for `STORE_CREDIT` or `ON_ACCOUNT_CREDIT`; only `ORIGINAL_TENDER` is allowed |
 | `RETURN_UNPROCESSABLE` | 422 | A structurally valid return that a domain rule refuses: a refund method needing a customer the return lacks, no invoice to refund against, or insufficient settled original tender |
 | `UOM_CONVERSION_UNDEFINED` | 422 | A purchase-order line names a `uomCode` with no conversion row for the product |
+| `VENDOR_INACTIVE` | 422 | The purchase order's vendor is inactive and takes no new purchase order (create, approve, a vendor-changing revision, transmit) |
 | `SUPPLIER_REF_MISSING` | 422 | The purchase order cannot be transmitted: no supplier reference |
 | `PURCHASE_ORDER_NOT_APPROVED` | 422 | The purchase order cannot be transmitted: not approved |
 | `TRANSMISSION_IN_FLIGHT` | 422 | A transmission of this purchase order is already in flight (ADR-0052) |
@@ -295,6 +335,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `FRACTIONAL_QUANTITY` | 422 | A purchase-order line's quantity is not a whole number |
 | `TRANSMISSION_UNAVAILABLE` | 422 | The deployment has no event publishing wired, so nothing can reach the vendor |
 | `ORDER_CANCEL_REVIEW_REQUIRED` | 500 | The cancellation retry failed again and the order is parked at `CANCEL_REQUIRES_MANUAL_REVIEW`; `nextAction` carries the recovery |
+| `VENDOR_REPLICATION_PENDING` | 503 | The purchase order's vendor is not in pos-order's copy of the pos-supplier vendor master yet (create, approve, a vendor-changing revision, transmit); `Retry-After` is set, retry or seed the copy (ADR-0017 §1, #1994) |
 | `ORDER_TAX_UNAVAILABLE` | 503 | pos-tax could not be reached to price the order |
 | `ORDER_INVOICING_UNAVAILABLE` | 503 | pos-invoice could not be reached to complete the order |
 | `CASH_MOVEMENT_APPROVAL_UNAVAILABLE` | 503 | pos-security-service's step-up check could not be made (unreachable, timed out, or answered anything but a result or `STEP_UP_DENIED`) |
@@ -310,6 +351,8 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `POS_ORDER_SESSION_BOOTSTRAP_REPUBLISH_ENABLED` | `true` | At start, re-emit `order.session.opened` for every OPEN or CLOSING register session, per tenant (see [Register session facts](#register-session-facts-cap550-s40-2578)). |
 | `POS_ORDER_MANIFEST_TOPIC` | `order.manifest.v1` | Topic of the reconciliation manifests (`pos.order.manifest.topic`; see [Reconciliation manifest and replay](#reconciliation-manifest-and-replay-adr-0044-4-2579)) |
 | `POS_ORDER_MANIFEST_WINDOW` / `POS_ORDER_MANIFEST_GRACE` | `PT1H` / `PT5M` | Manifest window length, and how long after a window closes its manifest is published |
+| `POS_ORDER_SUPPLIER_MANIFEST_TOPIC` / `POS_ORDER_SUPPLIER_MANIFEST_CONSUMER_GROUP` | `supplier.manifest.v1` / `pos-order-supplier-manifests` | pos-supplier's reconciliation manifest and this module's group on it (see [Vendor copy](#vendor-copy-and-the-purchase-order-vendor-guard-cap550-s24-2517)) |
+| `POS_ORDER_SUPPLIER_COMMANDS_TOPIC` | `supplier.commands.v1` | Where `supplier.outbox.replay-requested` is sent on drift |
 | `pos.order.outbox.replay.max-lookback` | `P30D` | Oldest window start an `order.outbox.replay-requested` command is served for |
 | `POS_SECURITY_API_SECRET` | required for approvals | Sent as `X-Internal-Api-Secret` on the step-up call; unset, every approval is 503 `CASH_MOVEMENT_APPROVAL_UNAVAILABLE` |
 
@@ -359,7 +402,8 @@ Forward migrations include `V2__order_prior_transmitted_version.sql` (#2492),
 `V3__ext_customer_house_account.sql` (CAP:550 S8 — the nullable `ext_customer.house_account` flag that marks the
 tenant's CASH house account; filled by a party-fact replay), and
 `V6__event_outbox_published_window_index.sql` (#2579 — the partial `(topic, created_at) WHERE published_at IS NOT
-NULL` index the reconciliation manifest and its replay read `event_outbox` through, as the other fact owners have).
+NULL` index the reconciliation manifest and its replay read `event_outbox` through, as the other fact owners have), and
+`V7__ext_supplier_vendor.sql` (CAP:550 S24 — the tenant-scoped vendor copy `ext_supplier_vendor`, with RLS).
 
 ## Development
 

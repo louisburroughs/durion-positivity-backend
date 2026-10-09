@@ -883,8 +883,8 @@ public class EventIngestionServiceImpl implements EventIngestionService {
                         .onDuplicate(jeDuplicate)
                         .build(),
                 FactPostingKeyDescriptor.builder()
-                        .sourceSystem(SupplierInvoiceEventsListener.SOURCE_SYSTEM)
-                        .eventTypes(SupplierInvoiceEventsListener.RECORDED_EVENT_TYPES)
+                        .sourceSystem(SupplierEventsListener.SOURCE_SYSTEM)
+                        .eventTypes(SupplierEventsListener.RECORDED_EVENT_TYPES)
                         .postingKey("Vendor + vendor invoice number (the vendor bill's business key)")
                         .postsJournalEntry(false)
                         .duplicateOutcome(IdempotencyOutcome.DUPLICATE_IGNORED)

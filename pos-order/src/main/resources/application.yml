@@ -18,6 +18,12 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME:}
     password: ${SPRING_DATASOURCE_PASSWORD:}
     driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:org.postgresql.Driver}
+    hikari:
+      data-source-properties:
+        # ADR-0072 (CAP:550 S24): pgjdbc otherwise appends the server's DETAIL ("Failing row contains (...)") to
+        # every SQLException message, which Hibernate logs at ERROR before Spring translates it: a refused row would
+        # put its column values (the vendor copy's included) in a log line and in the exception a DLQ carries.
+        logServerErrorDetail: false
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
@@ -53,6 +59,13 @@ management:
 logging:
   level:
     root: INFO
+    # ADR-0072 (CAP:550 S24): at DEBUG Hibernate's EntityPrinter lists every flushed entity's property values, the
+    # vendor copy's tax registrations (last4) included. Pinned to INFO whatever the root level.
+    org.hibernate.internal.util.EntityPrinter: INFO
+    # Hibernate 7 logs that listing through its core logger.
+    org.hibernate.orm.core: INFO
+    # At TRACE the bind logger prints every bound parameter, the tax_registrations JSON (last4) included.
+    org.hibernate.orm.jdbc.bind: INFO
     com:
       positivity:
         order: INFO
@@ -106,6 +119,11 @@ pos:
       tax-manifest-topic: ${POS_ORDER_TAX_MANIFEST_TOPIC:tax.manifest.v1}
       tax-manifest-consumer-group: ${POS_ORDER_TAX_MANIFEST_CONSUMER_GROUP:pos-order-tax-manifests}
       tax-commands-topic: ${POS_ORDER_TAX_COMMANDS_TOPIC:tax.commands.v1}
+      # pos-supplier's reconciliation manifest of supplier.events.v1 (CAP:550 S24, #2517): the vendor copy and the
+      # purchase-order results; drift sends supplier.outbox.replay-requested on supplier.commands.v1.
+      supplier-manifest-topic: ${POS_ORDER_SUPPLIER_MANIFEST_TOPIC:supplier.manifest.v1}
+      supplier-manifest-consumer-group: ${POS_ORDER_SUPPLIER_MANIFEST_CONSUMER_GROUP:pos-order-supplier-manifests}
+      supplier-commands-topic: ${POS_ORDER_SUPPLIER_COMMANDS_TOPIC:supplier.commands.v1}
     # Reconciliation manifests of order.events.v1, one per tenant per closed window (ADR-0044 section 4,
     # #2579): consumers compare their processed-events log and send order.outbox.replay-requested on
     # order.commands.v1 when a window disagrees.

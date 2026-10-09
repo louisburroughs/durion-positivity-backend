@@ -72,6 +72,7 @@ class SupplierOrderResultListenerTest {
                 processedEventRepository,
                 purchaseOrderRepository,
                 transmissionEventRepository,
+                mock(SupplierVendorReplica.class),
                 mock(PlatformTransactionManager.class));
         when(processedEventRepository.existsById(any())).thenReturn(false);
         order = PurchaseOrderEntity.builder()

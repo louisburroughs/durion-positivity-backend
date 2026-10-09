@@ -82,6 +82,13 @@ class DiscoveryAuditWriteExclusionRealSpecsTest {
             && path.endsWith("/reveal")
             && path.contains("/tax-registrations/");
 
+    /**
+     * CAP:550 S24 (#2517): the remit-to confirmation, a separation-of-duties attestation only a person may give.
+     * Routing-prefixed, stated independently of the configured pattern.
+     */
+    private static final Predicate<String> REMIT_TO_CONFIRMATION =
+            path -> path.startsWith("/accounting/v1/accounting/vendors/") && path.endsWith("/remit-to-confirmation");
+
     private static final Predicate<String> IN_SCOPE = path -> (path.startsWith("/security-service/v1/audit/")
                     && !path.equals("/security-service/v1/audit/exports")
                     && !path.startsWith("/security-service/v1/audit/exports/"))
@@ -94,7 +101,9 @@ class DiscoveryAuditWriteExclusionRealSpecsTest {
             || path.startsWith("/mcp-server/v1/mcp/audit")
             || path.startsWith("/mcp-server/v1/nlt/audit")
             // #2621: the vendor tax-registration reveal returns a RESTRICTED number.
-            || REVEAL.test(path);
+            || REVEAL.test(path)
+            // CAP:550 S24: the remit-to confirmation is done by a person.
+            || REMIT_TO_CONFIRMATION.test(path);
 
     /** Write operations the specs carry today under the in-scope paths; each must be gone. */
     private static final Set<String> KNOWN_EXCLUDED_WRITES = Set.of(
@@ -273,6 +282,40 @@ class DiscoveryAuditWriteExclusionRealSpecsTest {
                 .as("the reveal audit read (metadata only) stays a tool")
                 .anyMatch(coordinates ->
                         coordinates.startsWith("GET ") && pathOf(coordinates).endsWith("/tax-id-reveals"));
+    }
+
+    @Test
+    @DisplayName("CAP:550 S24: the vendor remit-to confirmation is never a tool; the vendor reads and AP settings are")
+    void remitToConfirmationIsNeverATool() {
+        assertThat(allOperations.values())
+                .as("the accounting spec declares the confirmation, so this test is not vacuous")
+                .anyMatch(coordinates ->
+                        coordinates.startsWith("POST ") && REMIT_TO_CONFIRMATION.test(pathOf(coordinates)));
+        assertThat(discovered.values())
+                .as("no discovered operation confirms a vendor's remit-to")
+                .noneMatch(coordinates -> REMIT_TO_CONFIRMATION.test(pathOf(coordinates)));
+        assertThat(properties.excludesWrite(
+                        "/accounting/v1/accounting/vendors/0199c0de-7a1b-7c2d-8e3f-4a5b6c7d8e9f/remit-to-confirmation",
+                        org.springframework.http.HttpMethod.POST))
+                .as("the configured pattern matches a concrete confirmation path")
+                .isTrue();
+        assertThat(properties.excludesWrite(
+                        "/v1/accounting/vendors/0199c0de-7a1b-7c2d-8e3f-4a5b6c7d8e9f/remit-to-confirmation",
+                        org.springframework.http.HttpMethod.POST))
+                .as("and the same path without the routing prefix")
+                .isTrue();
+        assertThat(properties.excludesWrite(
+                        "/accounting/v1/accounting/vendors/0199c0de-7a1b-7c2d-8e3f-4a5b6c7d8e9f/ap-settings",
+                        org.springframework.http.HttpMethod.PUT))
+                .as("the AP-settings PUT is not caught by the confirmation pattern")
+                .isFalse();
+        assertThat(discovered.values())
+                .as("the single-vendor read stays a tool")
+                .anyMatch(coordinates -> coordinates.startsWith("GET ")
+                        && pathOf(coordinates).startsWith("/accounting/v1/accounting/vendors/")
+                        && !pathOf(coordinates)
+                                .substring("/accounting/v1/accounting/vendors/".length())
+                                .contains("/"));
     }
 
     @Test

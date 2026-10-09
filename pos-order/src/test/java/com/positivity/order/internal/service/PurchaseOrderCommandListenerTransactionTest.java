@@ -146,7 +146,7 @@ class PurchaseOrderCommandListenerTransactionTest {
         private final AtomicBoolean sawActiveTransaction = new AtomicBoolean(false);
 
         FailingPurchaseOrderService() {
-            super(null, null, null, null, null, null, null);
+            super(null, null, null, null, null, null, null, null);
         }
 
         public boolean sawActiveTransaction() {

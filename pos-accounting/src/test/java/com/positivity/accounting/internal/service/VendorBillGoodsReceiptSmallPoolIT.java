@@ -43,10 +43,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  * a pooled connection. Anything the lock holder does on a <em>second</em> connection while it holds
  * the lock therefore waits behind the writers that are waiting for it: with a pool the size the
  * service runs with under Compose ({@code maximum-pool-size 3}) the holder gets no connection until
- * the pool's timeout, and for that long nobody in any tenant does. The vendor-directory write
- * ran in a {@code REQUIRES_NEW} transaction of its own and was such a call; its failure was swallowed
- * as best effort, so the visible symptoms were a stall and a bill without its directory row. The same
- * defect was removed from the counter's own bootstrap in #2342.
+ * the pool's timeout, and for that long nobody in any tenant does. The retired vendor-directory write
+ * ran in a {@code REQUIRES_NEW} transaction of its own and was such a call (S24 replaced it with a read
+ * of the vendor copy, made before the number is drawn). The same defect was removed from the counter's
+ * own bootstrap in #2342.
  *
  * <p>The whole production wiring runs here, GL posting hook included, so any other call between the
  * number and the commit that reached for a second connection would fail this test the same way.
@@ -99,17 +99,17 @@ class VendorBillGoodsReceiptSmallPoolIT extends PostgresCommittingTestBase {
         // One bill first: the tenant's counter row, the accounting period and the warm code paths
         // exist before the clock starts, so the timing below measures the creates and nothing else.
         firstNumber =
-                sequenceOf(create(UUID.randomUUID(), Transactions.SERVICE_OWN).getBillNumber()) + 1;
+                sequenceOf(create(copiedVendor(), Transactions.SERVICE_OWN).getBillNumber()) + 1;
     }
 
     @ParameterizedTest(name = "{0}")
     @EnumSource(Transactions.class)
     @DisplayName(
-            "six writers on three connections: every bill is created with its directory row, numbered consecutively, with no wait for a connection")
+            "six writers on three connections: every bill is created naming its vendor from the copy, numbered consecutively, with no wait for a connection")
     void writersOutnumberingThePoolAllSucceedWithoutWaitingForAConnection(Transactions transactions) throws Exception {
         List<UUID> vendors = new ArrayList<>();
         for (int writer = 0; writer < WRITERS; writer++) {
-            vendors.add(UUID.randomUUID());
+            vendors.add(copiedVendor());
         }
         ExecutorService pool = Executors.newFixedThreadPool(WRITERS);
         CountDownLatch start = new CountDownLatch(1);
@@ -139,15 +139,15 @@ class VendorBillGoodsReceiptSmallPoolIT extends PostgresCommittingTestBase {
             assertThat(elapsed)
                     .as("a single wait for a connection that never comes lasts the pool's timeout")
                     .isLessThan(CONNECTION_TIMEOUT);
-            // The directory row commits with its bill: it is written on the bill's own connection.
+            // S24: each bill names its vendor as the copy does, read on the bill's own connection.
             for (UUID vendor : vendors) {
-                assertThat(jdbc.queryForObject(
-                                "SELECT count(*) FROM ap_vendor WHERE vendor_id = ? AND tenant_id = ?",
-                                Long.class,
+                assertThat(jdbc.queryForList(
+                                "SELECT vendor_name FROM vendor_bill WHERE vendor_id = ? AND tenant_id = ?",
+                                String.class,
                                 vendor,
                                 TENANT))
-                        .as("vendor-directory row of vendor " + vendor)
-                        .isEqualTo(1L);
+                        .as("bill of vendor " + vendor)
+                        .containsExactly(nameOf(vendor));
             }
             assertThat(jdbc.queryForObject(
                             "SELECT next_value FROM accounting_sequence WHERE tenant_id = ? AND scope_key = ?",
@@ -190,6 +190,24 @@ class VendorBillGoodsReceiptSmallPoolIT extends PostgresCommittingTestBase {
                 new TransactionTemplate(transactionManager)
                         .execute(_ -> vendorBillService.handleGoodsReceivedEvent(event));
         });
+    }
+
+    /** A new active vendor in the tenant's copy (S24): a goods-receipt bill must name one. */
+    private UUID copiedVendor() {
+        UUID vendor = UUID.randomUUID();
+        jdbc.update(
+                "INSERT INTO ext_supplier_vendor (tenant_id, vendor_id, vendor_number, display_name, status,"
+                        + " remit_to_version, tax_registrations, created_by, aggregate_version, updated_at)"
+                        + " VALUES (?, ?, ?, ?, 'ACTIVE', 0, '[]'::jsonb, 'buyer.ben', 1, now())",
+                TENANT,
+                vendor,
+                "V-" + vendor.toString().substring(0, 8),
+                nameOf(vendor));
+        return vendor;
+    }
+
+    private static String nameOf(UUID vendor) {
+        return "Vendor " + vendor.toString().substring(0, 8);
     }
 
     private static long sequenceOf(String billNumber) {

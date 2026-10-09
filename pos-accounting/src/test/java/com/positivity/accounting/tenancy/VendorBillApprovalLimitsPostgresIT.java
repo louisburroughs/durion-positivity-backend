@@ -471,7 +471,7 @@ class VendorBillApprovalLimitsPostgresIT extends PostgresTenancyTestBase {
                         .eventId(UUIDv7Generator.generate())
                         .organizationId(UUIDv7Generator.generate())
                         .purchaseOrderId(UUIDv7Generator.generate())
-                        .vendorId(vendor)
+                        .vendorId(copiedVendor(vendor)) // S24: in the tenant's vendor copy
                         .vendorName("Acme Parts Co")
                         .receivedDate(invoiced.atTime(9, 30))
                         .lineItems(List.of(GoodsReceivedEvent.ReceivedLineItem.builder()

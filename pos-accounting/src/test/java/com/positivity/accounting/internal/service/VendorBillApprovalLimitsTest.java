@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -75,11 +76,16 @@ class VendorBillApprovalLimitsTest {
     private final VendorBillPostingService postingService = mock();
     private final VendorBillReader reader = mock();
     private final ApApprovalPolicy policy = mock();
+    private final com.positivity.accounting.internal.repository.ExtSupplierVendorRepository vendorCopy = mock();
+    private final com.positivity.accounting.internal.repository.ApVendorSettingsRepository apSettings = mock();
+    private SupplierVendorCopies vendorCopies;
     private VendorBillApprovalServiceImpl service;
     private VendorBill bill;
 
     @BeforeEach
     void wire() {
+        // The real vendor rules over mocked repositories (S24): the copy, the vendor's settings and the bills.
+        vendorCopies = new SupplierVendorCopies(vendorCopy, apSettings, bills);
         service = new VendorBillApprovalServiceImpl(
                 CLOCK,
                 bills,
@@ -95,6 +101,7 @@ class VendorBillApprovalLimitsTest {
                 new LedgerCurrency("USD"),
                 policy,
                 mock(ApLockTimeout.class),
+                vendorCopies,
                 mock(PlatformTransactionManager.class));
         bill = new VendorBill(BILL_ID);
         bill.setVendorId(UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4c02"));
@@ -364,6 +371,145 @@ class VendorBillApprovalLimitsTest {
             signIn("controller.cfo", APPROVE, OVER_LIMIT, REJECT);
             service.voidBill(BILL_ID, new VendorBillCommands.VoidBill("Entered against the wrong vendor", null));
             assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.VOIDED);
+        }
+    }
+
+    @Nested
+    @DisplayName("S24: the vendor's creator and the remit-to stamp")
+    class VendorRules {
+
+        private static final String CREATOR = "buyer.uma";
+
+        private void vendorCreatedBy(String createdBy, int remitToVersion) {
+            com.positivity.accounting.internal.entity.ExtSupplierVendor vendor =
+                    new com.positivity.accounting.internal.entity.ExtSupplierVendor();
+            vendor.setVendorId(bill.getVendorId());
+            vendor.setVendorNumber("V-000123");
+            vendor.setDisplayName("Acme Parts");
+            vendor.setStatus("ACTIVE");
+            vendor.setRemitToVersion(remitToVersion);
+            vendor.setCreatedBy(createdBy);
+            when(vendorCopy.findById(bill.getVendorId())).thenReturn(Optional.of(vendor));
+        }
+
+        @Test
+        @DisplayName("AC 8: the vendor's creator may not approve its first bill: 403, reason VENDOR_CREATOR_FIRST_BILL")
+        void vendorCreatorFirstBillIsRefused() {
+            vendorCreatedBy(CREATOR, 1);
+            when(bills.existsByVendorIdAndApprovedAtIsNotNull(bill.getVendorId()))
+                    .thenReturn(false);
+            signIn(CREATOR, APPROVE, REJECT);
+            awaiting("100.00");
+
+            assertThatThrownBy(() -> service.approve(BILL_ID, approve("Checked against the delivery")))
+                    .satisfies(e -> {
+                        assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.AP_BILL_SELF_APPROVAL);
+                        assertThat(e.getMessage()).contains("VENDOR_CREATOR_FIRST_BILL");
+                    });
+            bill.setStatus(VendorBillStatus.MATCH_EXCEPTION);
+            assertThatThrownBy(() -> service.resolveException(BILL_ID, accept(null)))
+                    .satisfies(e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.AP_BILL_SELF_APPROVAL));
+            verify(postingService, never()).post(any(), any(), any(), anyString());
+            assertThat(auditRows())
+                    .allSatisfy(row -> assertThat(row.getNewValue()).contains("reason=VENDOR_CREATOR_FIRST_BILL"));
+        }
+
+        @Test
+        @DisplayName("AC 8: another approver approves the first bill; afterwards the creator approves the second")
+        void ruleLiftsOnceABillWasApproved() {
+            vendorCreatedBy(CREATOR, 1);
+            when(bills.existsByVendorIdAndApprovedAtIsNotNull(bill.getVendorId()))
+                    .thenReturn(false);
+            signIn(GM, APPROVE, OVER_LIMIT, REJECT);
+            awaiting("100.00");
+            assertThat(service.approve(BILL_ID, approve(null)).getStatus()).isEqualTo(VendorBillStatus.APPROVED);
+
+            // Approved once (by a person or SYSTEM, voided or not): the rule is lifted for the creator.
+            when(bills.existsByVendorIdAndApprovedAtIsNotNull(bill.getVendorId()))
+                    .thenReturn(true);
+            signIn(CREATOR, APPROVE, REJECT);
+            awaiting("100.00");
+            assertThat(service.approve(BILL_ID, approve(null)).getStatus()).isEqualTo(VendorBillStatus.APPROVED);
+        }
+
+        @Test
+        @DisplayName("AC 8: under AP_ALLOW_CREATOR_APPROVAL the vendor's creator approves with a justification,"
+                + " audited as an exception use")
+        void switchAllowsTheVendorCreator() {
+            limits("2500.00", "0.00", true);
+            vendorCreatedBy(CREATOR, 1);
+            when(bills.existsByVendorIdAndApprovedAtIsNotNull(bill.getVendorId()))
+                    .thenReturn(false);
+            signIn(CREATOR, APPROVE, REJECT);
+            awaiting("100.00");
+
+            service.approve(BILL_ID, approve("Only buyer on shift; vendor verified by phone"));
+
+            assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.APPROVED);
+            assertThat(auditRows())
+                    .extracting(AccountingAuditLog::getOperation)
+                    .containsExactly("VENDOR_BILL_APPROVE", "VENDOR_BILL_SOD_EXCEPTION");
+        }
+
+        @Test
+        @DisplayName("item 7: with no classification given or proposed, approve and ACCEPT post with the vendor's"
+                + " AP defaults (EXPENSE / EXPENSE_SHOP_SUPPLIES)")
+        void vendorDefaultsReachThePosting() {
+            com.positivity.accounting.internal.entity.ApVendorSettings defaults =
+                    new com.positivity.accounting.internal.entity.ApVendorSettings();
+            defaults.setVendorId(bill.getVendorId());
+            defaults.setDefaultDebitClass(VendorBillDebitClass.EXPENSE);
+            defaults.setDefaultExpenseMappingKey("EXPENSE_SHOP_SUPPLIES");
+            when(apSettings.findByVendorId(bill.getVendorId())).thenReturn(Optional.of(defaults));
+            bill.setProposedDebitClass(null);
+            VendorBillPostingService.Classification expected =
+                    new VendorBillPostingService.Classification(VendorBillDebitClass.EXPENSE, "EXPENSE_SHOP_SUPPLIES");
+            signIn(GM, APPROVE, OVER_LIMIT, REJECT);
+
+            awaiting("100.00");
+            service.approve(BILL_ID, approve(null));
+            verify(postingService).post(eq(bill), eq(expected), any(), anyString());
+
+            org.mockito.Mockito.clearInvocations(postingService);
+            bill.setStatus(VendorBillStatus.MATCH_EXCEPTION);
+            service.resolveException(
+                    BILL_ID,
+                    new VendorBillCommands.ResolveException(
+                            "ACCEPT", "Shop supplies as agreed with the vendor", null, null, null));
+            verify(postingService).post(eq(bill), eq(expected), any(), anyString());
+        }
+
+        @Test
+        @DisplayName("the vendor creator's refusal carries a machine-readable reason field")
+        void vendorCreatorReasonIsMachineReadable() {
+            vendorCreatedBy(CREATOR, 1);
+            when(bills.existsByVendorIdAndApprovedAtIsNotNull(bill.getVendorId()))
+                    .thenReturn(false);
+            signIn(CREATOR, APPROVE, REJECT);
+            awaiting("100.00");
+
+            assertThatThrownBy(() -> service.approve(BILL_ID, approve("Checked against the delivery")))
+                    .isInstanceOfSatisfying(
+                            VendorBillException.class,
+                            e -> assertThat(e.getFieldErrors())
+                                    .containsExactly(
+                                            new VendorBillException.FieldError("reason", "VENDOR_CREATOR_FIRST_BILL")));
+        }
+
+        @Test
+        @DisplayName("AC 9: approve and ACCEPT stamp the copy's current remit-to version")
+        void approvalsStampTheRemitToVersion() {
+            vendorCreatedBy("someone.else", 3);
+            signIn(GM, APPROVE, OVER_LIMIT, REJECT);
+            awaiting("100.00");
+            service.approve(BILL_ID, approve(null));
+            assertThat(bill.getApprovedRemitToVersion()).isEqualTo(3);
+
+            vendorCreatedBy("someone.else", 5);
+            bill.setStatus(VendorBillStatus.MATCH_EXCEPTION);
+            bill.setApprovedRemitToVersion(null);
+            service.resolveException(BILL_ID, accept(null));
+            assertThat(bill.getApprovedRemitToVersion()).isEqualTo(5);
         }
     }
 

@@ -7,8 +7,8 @@ import com.positivity.accounting.internal.dto.VendorSpendReport;
 import com.positivity.accounting.internal.dto.VendorSpendRow;
 import com.positivity.accounting.internal.entity.APPayment;
 import com.positivity.accounting.internal.entity.ExtInvoice;
+import com.positivity.accounting.internal.entity.ExtSupplierVendor;
 import com.positivity.accounting.internal.entity.PaymentApplication;
-import com.positivity.accounting.internal.entity.Vendor;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
 import com.positivity.accounting.internal.enums.CustomerCreditTransactionType;
@@ -19,11 +19,11 @@ import com.positivity.accounting.internal.repository.CustomerCreditTransactionRe
 import com.positivity.accounting.internal.repository.ExtInvoiceDepositCreditApplicationRepository;
 import com.positivity.accounting.internal.repository.ExtInvoicePaymentReversalRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
+import com.positivity.accounting.internal.repository.ExtSupplierVendorRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
-import com.positivity.accounting.internal.repository.VendorRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
@@ -105,7 +105,7 @@ public class AccountingAnalyticsServiceImpl implements AccountingAnalyticsServic
     private final CustomerCreditTransactionRepository customerCreditTransactionRepository;
     private final APPaymentRepository apPaymentRepository;
     private final VendorBillRepository vendorBillRepository;
-    private final VendorRepository vendorRepository;
+    private final ExtSupplierVendorRepository vendorRepository;
     private final InvoiceBalanceCalculator invoiceBalanceCalculator;
 
     public AccountingAnalyticsServiceImpl(
@@ -119,7 +119,7 @@ public class AccountingAnalyticsServiceImpl implements AccountingAnalyticsServic
             CustomerCreditTransactionRepository customerCreditTransactionRepository,
             APPaymentRepository apPaymentRepository,
             VendorBillRepository vendorBillRepository,
-            VendorRepository vendorRepository,
+            ExtSupplierVendorRepository vendorRepository,
             InvoiceBalanceCalculator invoiceBalanceCalculator) {
         this.clock = clock;
         this.extInvoiceRepository = extInvoiceRepository;
@@ -374,7 +374,7 @@ public class AccountingAnalyticsServiceImpl implements AccountingAnalyticsServic
         Map<UUID, String> directoryNameByVendor = vendorIds.isEmpty()
                 ? Map.of()
                 : vendorRepository.findAllById(vendorIds).stream()
-                        .collect(Collectors.toMap(Vendor::getVendorId, Vendor::getName));
+                        .collect(Collectors.toMap(ExtSupplierVendor::getVendorId, ExtSupplierVendor::getDisplayName));
 
         List<VendorSpendRow> allRows = new ArrayList<>();
         for (UUID vendorId : vendorIds) {

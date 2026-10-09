@@ -9,7 +9,7 @@ import com.positivity.accounting.internal.service.InvoiceEventsListener;
 import com.positivity.accounting.internal.service.InvoicePaymentEventProcessor;
 import com.positivity.accounting.internal.service.OrderEventsListener;
 import com.positivity.accounting.internal.service.SettlementEventsListener;
-import com.positivity.accounting.internal.service.SupplierInvoiceEventsListener;
+import com.positivity.accounting.internal.service.SupplierEventsListener;
 import com.positivity.accounting.internal.service.WarrantyEventsListener;
 import com.positivity.domainevents.inventory.GoodsReceiptRecordedV1;
 import com.positivity.domainevents.inventory.InventoryAdjustedV1;
@@ -63,7 +63,7 @@ class AccountingEventTypeRegistryTest {
                                 GoodsReceiptRecordedV1.EVENT_TYPE)),
                 Arguments.of(
                         "supplier",
-                        SupplierInvoiceEventsListener.RECORDED_EVENT_TYPES,
+                        SupplierEventsListener.RECORDED_EVENT_TYPES,
                         List.of(SupplierInvoiceReceivedV1.EVENT_TYPE)),
                 Arguments.of(
                         "warranty",

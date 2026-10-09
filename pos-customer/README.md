@@ -49,6 +49,11 @@ CRM service for the Durion Positivity ETSMS platform. Manages the customer party
 - Party-scoped detail reads now accept either party type for the same `partyId` domain.
 - Endpoints that are commercial-account oriented (for example `GET /v1/crm/commercial-accounts/{partyId}/contacts`) return an empty contact list for person parties instead of `404`.
 
+### Creating customers
+
+- An individual is created with `POST /v1/crm/persons` (`createCrmPerson`): the name and contact points go to pos-people and a person party links to them. The response carries `partyId` (what `getParty`, vehicles, estimates and appointments take) and `personId` (what `getPerson` takes).
+- A business is created with `POST /v1/crm/accounts/parties` (`createCrmCommercialAccount`). Its optional `partyType` must be `COMMERCIAL`; anything else, `PERSON` included, is a `400`. A commercial row typed `PERSON` has no person behind it, so it would list as an individual with no name, contact points or `personId`.
+
 ## Error codes
 
 Every non-2xx response carries the platform `ApiError` envelope (see
