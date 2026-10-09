@@ -299,7 +299,12 @@ class RegisterCashMovementPostingPostgresIT extends PostgresTenancyTestBase {
                         "clerk-1",
                         null,
                         null,
-                        closedAt.minusSeconds(600)));
+                        closedAt.minusSeconds(600),
+                        null,
+                        List.of(),
+                        null,
+                        null,
+                        null));
 
         asTenant(tenant, () -> listener.onOrderEvent(envelope(UUID.randomUUID().toString(), fact)));
 
@@ -436,7 +441,12 @@ class RegisterCashMovementPostingPostgresIT extends PostgresTenancyTestBase {
                 "clerk-1",
                 null,
                 null,
-                closedAt.minusSeconds(3600));
+                closedAt.minusSeconds(3600),
+                null,
+                List.of(),
+                null,
+                null,
+                null);
     }
 
     private Movement other(String reason, String direction, String amount) {
@@ -453,7 +463,12 @@ class RegisterCashMovementPostingPostgresIT extends PostgresTenancyTestBase {
                 "clerk-1",
                 null,
                 UUIDv7Generator.generate(),
-                closedAt.minusSeconds(1800));
+                closedAt.minusSeconds(1800),
+                null,
+                List.of(),
+                null,
+                null,
+                null);
     }
 
     private RegisterSessionClosedV1 fact(UUID session, String overShort, String currency, Movement... movements) {

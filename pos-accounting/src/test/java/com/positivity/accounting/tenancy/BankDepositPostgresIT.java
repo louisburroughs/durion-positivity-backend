@@ -637,7 +637,12 @@ class BankDepositPostgresIT extends PostgresTenancyTestBase {
                 "clerk-1",
                 null,
                 null,
-                closedAt.minusSeconds(3600));
+                closedAt.minusSeconds(3600),
+                null,
+                List.of(),
+                null,
+                null,
+                null);
     }
 
     private Movement drop(String amount, String bag) {
@@ -654,7 +659,12 @@ class BankDepositPostgresIT extends PostgresTenancyTestBase {
                 "clerk-1",
                 null,
                 null,
-                closedAt.minusSeconds(600));
+                closedAt.minusSeconds(600),
+                null,
+                List.of(),
+                null,
+                null,
+                null);
     }
 
     private RegisterSessionClosedV1 fact(

@@ -119,7 +119,12 @@ class RegisterCashMovementPostingServiceTest {
                 "clerk-1",
                 null,
                 null,
-                CLOSED_AT.minusSeconds(3600));
+                CLOSED_AT.minusSeconds(3600),
+                null,
+                List.of(),
+                null,
+                null,
+                null);
     }
 
     private static RegisterSessionClosedV1 fact(String currencyCode, UUID locationId, List<Movement> movements) {
