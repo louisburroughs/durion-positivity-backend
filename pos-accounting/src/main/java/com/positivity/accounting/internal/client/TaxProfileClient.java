@@ -96,7 +96,8 @@ public class TaxProfileClient {
                 body.countryCode() == null ? countryCode : body.countryCode(),
                 body.asOf() == null ? asOf : body.asOf(),
                 body.currency(),
-                body.rules() == null ? List.of() : List.copyOf(body.rules()));
+                body.rules() == null ? List.of() : List.copyOf(body.rules()),
+                body.supplierRegistrationRegime());
     }
 
     private <T> T get(String uri, Class<T> type, String what, Object... variables) {
@@ -187,12 +188,15 @@ public class TaxProfileClient {
      * @param asOf the date
      * @param currency the currency of every amount; null with no profile
      * @param rules the rules in effect
+     * @param supplierRegistrationRegime the regime whose registration a supplier's number is, when the country names
+     *     one: what the {@code SUPPLIER_REGISTRATION_NUMBER} rule asks the vendor to hold (AW53)
      */
     public record EvidenceRules(
             @NonNull String countryCode,
             @NonNull LocalDate asOf,
             @Nullable String currency,
-            @NonNull List<EvidenceRule> rules) {
+            @NonNull List<EvidenceRule> rules,
+            @Nullable String supplierRegistrationRegime) {
 
         /** The lowest threshold of a rule that applies to {@code documentType}, if any. */
         public @NonNull Optional<EvidenceRule> forDocument(@NonNull String documentType) {

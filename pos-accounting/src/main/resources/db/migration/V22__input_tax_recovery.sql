@@ -179,3 +179,76 @@ CREATE POLICY tenant_isolation ON public.register_cash_movement_tax_recovery
 -- 6. Output tax by type (item 11): pos-tax's tax type on each invoice tax row (S32a TaxBreakdownLine.taxType). Null
 --    on a row written before S32d or on a fact without it.
 ALTER TABLE public.ext_invoice_tax ADD COLUMN tax_type character varying(32);
+
+-- 7. Vendor bills (item 10; AW37-AW43, AW51, AW53).
+-- 7a. The tax a bill's document states, by tax type, as stated and never recalculated (closes G11): from the EDI
+--     fact's taxes (S23), the goods-receipt match request, or the approval's taxByType[] copied from the document.
+--     Signed like the bill's total (a credit note's are negative). A bill without any states no split.
+CREATE TABLE public.vendor_bill_tax (
+    tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,
+    vendor_bill_tax_id uuid NOT NULL,
+    vendor_bill_id uuid NOT NULL,
+    tax_type character varying(32) NOT NULL,
+    amount numeric(19,4) NOT NULL,
+    source character varying(20) NOT NULL,
+    created_at timestamp(6) with time zone NOT NULL,
+    CONSTRAINT vendor_bill_tax_type_check CHECK ((tax_type)::text ~ '^[A-Z0-9_]{1,32}$'),
+    CONSTRAINT vendor_bill_tax_source_check CHECK ((source)::text = ANY (ARRAY['DOCUMENT'::text, 'APPROVAL'::text]))
+);
+
+ALTER TABLE ONLY public.vendor_bill_tax
+    ADD CONSTRAINT vendor_bill_tax_pkey PRIMARY KEY (vendor_bill_tax_id);
+ALTER TABLE ONLY public.vendor_bill_tax
+    ADD CONSTRAINT vendor_bill_tax_tenant_key UNIQUE (tenant_id, vendor_bill_tax_id);
+ALTER TABLE ONLY public.vendor_bill_tax
+    ADD CONSTRAINT uq_vendor_bill_tax_type UNIQUE (tenant_id, vendor_bill_id, tax_type);
+ALTER TABLE ONLY public.vendor_bill_tax
+    ADD CONSTRAINT vendor_bill_tax_bill_fk FOREIGN KEY (vendor_bill_id)
+        REFERENCES public.vendor_bill(vendor_bill_id);
+CREATE INDEX vendor_bill_tax_tenant_idx ON public.vendor_bill_tax USING btree (tenant_id);
+
+ALTER TABLE public.vendor_bill_tax ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.vendor_bill_tax FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON public.vendor_bill_tax
+    USING (tenant_id = public.app_current_tenant())
+    WITH CHECK (tenant_id = public.app_current_tenant());
+
+-- 7b. What a bill's posting did with its tax, for a recovery-enabled tenant: one row per stated tax type (or one
+--     row, tax_type null, for a bill whose tax is not split), with the regime, the recovered amount and the mapping
+--     key it went to, or why nothing was recovered. Written with the posting; never updated. A tenant without
+--     recovery (every USD tenant) has none: its bill books the gross.
+CREATE TABLE public.vendor_bill_tax_recovery (
+    tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,
+    vendor_bill_tax_recovery_id uuid NOT NULL,
+    vendor_bill_id uuid NOT NULL,
+    vendor_bill_gl_posting_id uuid NOT NULL,
+    tax_type character varying(32),
+    regime character varying(32),
+    stated_amount numeric(19,4) NOT NULL,
+    recovered_amount numeric(19,4) NOT NULL,
+    mapping_key character varying(100),
+    recovery_withheld_reason character varying(40),
+    created_at timestamp(6) with time zone NOT NULL,
+    CONSTRAINT vendor_bill_tax_recovery_reason_check CHECK (
+        (recovery_withheld_reason IS NULL AND recovered_amount <> 0 AND mapping_key IS NOT NULL)
+        OR ((recovery_withheld_reason)::text = ANY (ARRAY['NOT_REGISTERED'::text, 'NOT_RECOVERABLE'::text,
+            'TAX_SPLIT_MISSING'::text, 'SUPPLIER_REGISTRATION_MISSING'::text])
+            AND recovered_amount = 0 AND mapping_key IS NULL))
+);
+
+ALTER TABLE ONLY public.vendor_bill_tax_recovery
+    ADD CONSTRAINT vendor_bill_tax_recovery_pkey PRIMARY KEY (vendor_bill_tax_recovery_id);
+ALTER TABLE ONLY public.vendor_bill_tax_recovery
+    ADD CONSTRAINT vendor_bill_tax_recovery_tenant_key UNIQUE (tenant_id, vendor_bill_tax_recovery_id);
+ALTER TABLE ONLY public.vendor_bill_tax_recovery
+    ADD CONSTRAINT vendor_bill_tax_recovery_posting_fk FOREIGN KEY (vendor_bill_gl_posting_id)
+        REFERENCES public.vendor_bill_gl_posting(vendor_bill_gl_posting_id);
+CREATE INDEX vendor_bill_tax_recovery_tenant_idx ON public.vendor_bill_tax_recovery USING btree (tenant_id);
+CREATE INDEX vendor_bill_tax_recovery_bill_idx
+    ON public.vendor_bill_tax_recovery USING btree (tenant_id, vendor_bill_id);
+
+ALTER TABLE public.vendor_bill_tax_recovery ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.vendor_bill_tax_recovery FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON public.vendor_bill_tax_recovery
+    USING (tenant_id = public.app_current_tenant())
+    WITH CHECK (tenant_id = public.app_current_tenant());

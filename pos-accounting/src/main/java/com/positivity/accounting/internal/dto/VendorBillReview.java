@@ -487,4 +487,85 @@ public final class VendorBillReview {
                     requiredMode = NOT_REQUIRED)
             @Nullable
             RequiredTier requiredTier) {}
+
+    /**
+     * One tax type the bill's document states (CAP:550 S32d item 10).
+     *
+     * @param taxType the configured tax-type code
+     * @param amount the stated amount, signed like the bill's total
+     * @param source {@code DOCUMENT} (the bill's channel) or {@code APPROVAL} (copied by the approver)
+     */
+    @Schema(name = "VendorBillTaxByType", description = "One tax type the vendor's document states, with its amount")
+    public record TaxByType(
+            @Schema(
+                    description = "The tax type as pos-tax's profile names it",
+                    example = "TAX_TYPE_1",
+                    requiredMode = REQUIRED)
+            String taxType,
+
+            @Schema(
+                    description = "The stated amount, signed like the bill's total",
+                    example = "50.00",
+                    requiredMode = REQUIRED)
+            BigDecimal amount,
+
+            @Schema(
+                    description = "Where it came from: DOCUMENT, the bill's own channel, or APPROVAL, copied from the"
+                            + " document by the approver",
+                    example = "DOCUMENT",
+                    allowableValues = {"DOCUMENT", "APPROVAL"},
+                    requiredMode = REQUIRED)
+            String source) {}
+
+    /**
+     * What the posting did with one stated tax amount, for a recovery-enabled tenant (CAP:550 S32d item 10).
+     *
+     * @param taxType the tax type; null for a tax that was not split
+     * @param regime its regime, when known
+     * @param statedAmount the stated amount, signed like the bill
+     * @param recoveredAmount the amount recovered, 0 when withheld
+     * @param accountCode the account it was recovered to, when recovered and still mapped
+     * @param accountName that account's name
+     * @param recoveryWithheldReason why nothing was recovered; null when it was
+     */
+    @Schema(name = "VendorBillInputTaxRecovery", description = "What the bill's posting did with one stated tax amount")
+    public record InputTaxRecovery(
+            @Schema(
+                    description = "The tax type; null for a tax stated without its type",
+                    example = "TAX_TYPE_1",
+                    requiredMode = NOT_REQUIRED)
+            @Nullable
+            String taxType,
+
+            @Schema(
+                    description = "The regime it is recovered under, when known",
+                    example = "REGIME_1",
+                    requiredMode = NOT_REQUIRED)
+            @Nullable
+            String regime,
+
+            @Schema(description = "The stated amount, signed like the bill", example = "50.00", requiredMode = REQUIRED)
+            BigDecimal statedAmount,
+
+            @Schema(
+                    description = "The amount recovered; 0.00 when withheld",
+                    example = "50.00",
+                    requiredMode = REQUIRED)
+            BigDecimal recoveredAmount,
+
+            @Schema(description = "The account it was recovered to", example = "1250", requiredMode = NOT_REQUIRED)
+            @Nullable
+            String accountCode,
+
+            @Schema(description = "That account's name", example = "Recoverable tax", requiredMode = NOT_REQUIRED)
+            @Nullable
+            String accountName,
+
+            @Schema(
+                    description = "Why nothing was recovered: NOT_REGISTERED, NOT_RECOVERABLE, TAX_SPLIT_MISSING or"
+                            + " SUPPLIER_REGISTRATION_MISSING; null when recovered",
+                    example = "NOT_RECOVERABLE",
+                    requiredMode = NOT_REQUIRED)
+            @Nullable
+            String recoveryWithheldReason) {}
 }

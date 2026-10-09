@@ -32,6 +32,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -102,6 +103,8 @@ class SupplierEventsListenerTest {
     @Mock
     private KafkaFactIngestionRecorder ingestionRecorder;
 
+    private final VendorBillStatedTax statedTax = mock(VendorBillStatedTax.class);
+
     private SupplierEventsListener listener;
 
     @BeforeEach
@@ -120,6 +123,7 @@ class SupplierEventsListenerTest {
                 new VendorBillDuplicateGuard(vendorBillRepository, noMeters),
                 reissueRepository,
                 locks,
+                statedTax,
                 noMeters,
                 mock(PlatformTransactionManager.class));
         // The lock re-reads the bill as it is now; here it is unchanged.
@@ -866,5 +870,48 @@ class SupplierEventsListenerTest {
             assertThat(existing.getCurrency()).isEqualTo("EUR");
             assertThat(existing.getRejectionReason()).contains("EUR").contains("CAD");
         }
+    }
+
+    // ---- CAP:550 S32d item 10, AC 9: every bill stores its stated tax by type (G11) ---------------------------
+
+    private static String withTaxes(String event, String taxes) {
+        return event.replace("\"vendorId\"", "\"taxes\":" + taxes + ",\"vendorId\"");
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, BigDecimal> storedTaxByType() {
+        ArgumentCaptor<Map<String, BigDecimal>> byType = ArgumentCaptor.forClass(Map.class);
+        verify(statedTax).storeFromDocument(any(VendorBill.class), byType.capture());
+        return byType.getValue();
+    }
+
+    @Test
+    @DisplayName("S32d AC 9: an EDI invoice stores its tax by type as stated, whatever the tenant")
+    void ediInvoiceStoresItsTaxByType() {
+        listener.onSupplierEvent(withTaxes(
+                event(EVENT_1, "INV-1", "INVOICE", "USD", "2026-08-14", "1120.00", "1000.00", "120.00", "[]"),
+                "[{\"taxType\":\"GST\",\"amount\":50.00},{\"taxType\":\"PST\",\"amount\":70.00}]"));
+
+        assertThat(captured().getNetAmount()).isEqualByComparingTo("1000.00");
+        assertThat(storedTaxByType())
+                .containsExactly(Map.entry("GST", new BigDecimal("50.00")), Map.entry("PST", new BigDecimal("70.00")));
+    }
+
+    @Test
+    @DisplayName("S32d AC 9: a credit note's tax by type is signed like its total; a type stated twice is added up")
+    void creditNoteTaxByTypeIsSigned() {
+        listener.onSupplierEvent(withTaxes(
+                event(EVENT_1, "CN-1", "CREDIT_NOTE", "USD", "2026-08-14", "105.00", "100.00", "5.00", "[]"),
+                "[{\"taxType\":\"GST\",\"amount\":2.00},{\"taxType\":\"GST\",\"amount\":3.00}]"));
+
+        assertThat(storedTaxByType()).containsExactly(Map.entry("GST", new BigDecimal("-5.00")));
+    }
+
+    @Test
+    @DisplayName("S32d AC 9: an invoice without tax by type stores none")
+    void invoiceWithoutTaxByType() {
+        listener.onSupplierEvent(event(EVENT_1, "INV-1", "INVOICE", "288.00"));
+
+        verify(statedTax).storeFromDocument(any(VendorBill.class), org.mockito.ArgumentMatchers.isNull());
     }
 }

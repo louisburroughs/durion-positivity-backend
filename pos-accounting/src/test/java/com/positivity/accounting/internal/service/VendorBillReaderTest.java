@@ -18,6 +18,7 @@ import com.positivity.accounting.internal.enums.VendorBillCheckOutcome;
 import com.positivity.accounting.internal.enums.VendorBillStage;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.repository.APPaymentAllocationRepository;
+import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.VendorBillGlPostingRepository;
 import com.positivity.accounting.internal.repository.VendorBillLineRepository;
@@ -25,6 +26,8 @@ import com.positivity.accounting.internal.repository.VendorBillMatchCandidateRep
 import com.positivity.accounting.internal.repository.VendorBillMatchEvidenceRepository;
 import com.positivity.accounting.internal.repository.VendorBillReissueRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
+import com.positivity.accounting.internal.repository.VendorBillTaxRecoveryRepository;
+import com.positivity.accounting.internal.repository.VendorBillTaxRepository;
 import com.positivity.security.common.GatewaySecurityConstants;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -545,7 +548,11 @@ class VendorBillReaderTest {
                 mock(AccountingCalendarZoneResolver.class),
                 new LedgerCurrency("USD"),
                 approvalPolicy,
-                mock(SupplierVendorCopies.class));
+                mock(SupplierVendorCopies.class),
+                mock(VendorBillTaxRepository.class),
+                mock(VendorBillTaxRecoveryRepository.class),
+                mock(GLMappingResolver.class),
+                mock(GLAccountRepository.class));
         VendorBill over = billOf("3000.00", "clerk.ana");
         over.setStatus(VendorBillStatus.AWAITING_APPROVAL);
         over.setBillNumber("INV-OVER");

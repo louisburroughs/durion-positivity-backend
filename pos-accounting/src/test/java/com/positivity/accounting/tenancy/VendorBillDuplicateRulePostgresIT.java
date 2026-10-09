@@ -37,6 +37,7 @@ import com.positivity.accounting.internal.service.VendorBillLocks;
 import com.positivity.accounting.internal.service.VendorBillReader;
 import com.positivity.accounting.internal.service.VendorBillService;
 import com.positivity.accounting.internal.service.VendorBillServiceImpl;
+import com.positivity.accounting.internal.service.VendorBillStatedTax;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -108,6 +109,9 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
 
     @Autowired
     private VendorBillLocks locks;
+
+    @Autowired
+    private VendorBillStatedTax statedTax;
 
     @Autowired
     private VendorBillAutoApproval autoApproval;
@@ -236,6 +240,7 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
                 duplicateGuard,
                 reissues,
                 locks,
+                statedTax,
                 meterRegistry,
                 transactionManager);
     }

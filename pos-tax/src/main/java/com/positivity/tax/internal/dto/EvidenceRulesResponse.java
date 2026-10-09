@@ -20,6 +20,10 @@ import org.jspecify.annotations.Nullable;
  *                    profile
  * @param rules       the rules in effect, in configured order
  * @param source      always {@code STUB}
+ * @param supplierRegistrationRegime the regime whose registration a supplier's number is
+ *                    ({@code pos.tax.countries.<country>.supplier-registration-regime}), the registration a
+ *                    {@code SUPPLIER_REGISTRATION_NUMBER} rule asks for; {@code null} when the country names none
+ *                    (CAP:550 S32d, AW53: a vendor bill's evidence is checked against the vendor's copy)
  */
 @Schema(name = "TaxEvidenceRulesResponse", description = "The evidence rules configured for one country on a date")
 public record EvidenceRulesResponse(
@@ -53,7 +57,17 @@ public record EvidenceRulesResponse(
                 description = "Origin of the answer; always STUB, because every value is a placeholder",
                 example = "STUB",
                 requiredMode = Schema.RequiredMode.REQUIRED)
-        String source) {
+        String source,
+
+        @Schema(
+                description = "Regime whose registration a supplier's number is, the registration a"
+                        + " SUPPLIER_REGISTRATION_NUMBER rule asks the supplier to hold; null when the country names"
+                        + " none",
+                example = "REGIME_1",
+                nullable = true,
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+        @Nullable
+        String supplierRegistrationRegime) {
 
     /**
      * One evidence rule.

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -16,6 +17,7 @@ import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.entity.VendorBillGlPosting;
 import com.positivity.accounting.internal.entity.VendorBillLine;
+import com.positivity.accounting.internal.entity.VendorBillTaxRecovery;
 import com.positivity.accounting.internal.enums.VendorBillDebitClass;
 import com.positivity.accounting.internal.enums.VendorBillDifferenceClass;
 import com.positivity.accounting.internal.enums.VendorBillPostingDateRule;
@@ -27,6 +29,7 @@ import com.positivity.accounting.internal.exception.GLMappingNotConfiguredExcept
 import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.accounting.internal.repository.VendorBillGlPostingRepository;
 import com.positivity.accounting.internal.repository.VendorBillLineRepository;
+import com.positivity.accounting.internal.repository.VendorBillTaxRecoveryRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -470,6 +473,8 @@ class VendorBillPostingServiceTest {
         private final VendorBillGlPostingRepository postings = mock();
         private final VendorBillLineRepository lines = mock();
         private final AccountingPeriodGate gate = mock();
+        private final VendorBillTaxSplit taxSplit = mock();
+        private final VendorBillTaxRecoveryRepository taxRecoveries = mock();
         private VendorBillPostingService service;
 
         private final UUID entryId = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a10");
@@ -485,7 +490,10 @@ class VendorBillPostingServiceTest {
                     lines,
                     TestZoneResolvers.utc(CLOCK),
                     gate,
-                    new LedgerCurrency("USD"));
+                    new LedgerCurrency("USD"),
+                    taxSplit,
+                    taxRecoveries);
+            lenient().when(taxSplit.plan(any())).thenReturn(VendorBillTaxSplit.Plan.NONE);
             when(resolver.resolveGLAccount(eq("VENDOR_BILL"), anyString(), any(LocalDateTime.class)))
                     .thenAnswer(inv -> UUID.nameUUIDFromBytes(
                             inv.getArgument(1, String.class).getBytes()));
@@ -531,6 +539,61 @@ class VendorBillPostingServiceTest {
             assertThat(posting.getRoundingAdjustment()).isEqualByComparingTo("0.00");
             assertThat(posting.getDifferenceClass()).isNull();
             assertThat(bill.getJournalEntryId()).isEqualTo(entryId);
+        }
+
+        @Test
+        @DisplayName("S32d AC 8: a recovery-enabled tenant's bill debits the recoverable key and records each stated"
+                + " amount with what it did; the posting writes them in its transaction")
+        void recordsTheRecovery() {
+            when(lines.findByVendorBill_VendorBillIdOrderByLineNumber(BILL_ID)).thenReturn(List.of());
+            VendorBill edi = ediBill("1120.00", "1000.00", "120.00", 1);
+            when(taxSplit.plan(edi))
+                    .thenReturn(new VendorBillTaxSplit.Plan(
+                            true,
+                            List.of(
+                                    new VendorBillTaxSplit.Item(
+                                            "GST", "GST_HST", new BigDecimal("50.00"), "TAX_RECOVERABLE_GST_HST", null),
+                                    new VendorBillTaxSplit.Item(
+                                            "PST",
+                                            null,
+                                            new BigDecimal("70.00"),
+                                            null,
+                                            VendorBillTaxSplit.Withheld.NOT_RECOVERABLE))));
+
+            service.post(edi, GOODS, null, "controller.cfo");
+
+            ArgumentCaptor<JournalEntryCreateRequest> request =
+                    ArgumentCaptor.forClass(JournalEntryCreateRequest.class);
+            verify(journalEntries).createJournalEntry(request.capture());
+            UUID recoverable = UUID.nameUUIDFromBytes("TAX_RECOVERABLE_GST_HST".getBytes());
+            assertThat(request.getValue().getLines())
+                    .filteredOn(line -> recoverable.equals(line.getGlAccountId()))
+                    .singleElement()
+                    .satisfies(line -> {
+                        assertThat(line.getDebitAmount()).isEqualByComparingTo("50.00");
+                        assertThat(line.getDescription()).startsWith("Recoverable tax GST_HST");
+                    });
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<List<VendorBillTaxRecovery>> rows = ArgumentCaptor.forClass(List.class);
+            verify(taxRecoveries).saveAll(rows.capture());
+            assertThat(rows.getValue())
+                    .extracting(
+                            VendorBillTaxRecovery::getTaxType,
+                            VendorBillTaxRecovery::getRecoveredAmount,
+                            VendorBillTaxRecovery::getMappingKey,
+                            VendorBillTaxRecovery::getRecoveryWithheldReason)
+                    .containsExactly(
+                            org.assertj.core.groups.Tuple.tuple(
+                                    "GST", new BigDecimal("50.00"), "TAX_RECOVERABLE_GST_HST", null),
+                            org.assertj.core.groups.Tuple.tuple("PST", BigDecimal.ZERO, null, "NOT_RECOVERABLE"));
+        }
+
+        @Test
+        @DisplayName("S32d AC 1 (bills): a tenant without recovery writes no recovery row")
+        void noRecoveryNoRows() {
+            service.post(bill("412.00"), null, null, "controller.cfo");
+
+            verify(taxRecoveries, never()).saveAll(any());
         }
 
         @Test

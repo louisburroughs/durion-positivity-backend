@@ -276,7 +276,7 @@ class VendorBillApprovalLimitsPostgresIT extends PostgresTenancyTestBase {
                 tenant,
                 () -> approvals.approve(
                         byPerson.getVendorBillId(),
-                        new VendorBillCommands.Approve("Checked against the delivery", null, null, null)));
+                        new VendorBillCommands.Approve("Checked against the delivery", null, null, null, null)));
 
         ExecuteAPPaymentRequest pay = payment(byPerson, "400.00");
         assertThatThrownBy(() -> asTenant(tenant, () -> payments.executePayment(pay, CONTROLLER)))
@@ -311,7 +311,7 @@ class VendorBillApprovalLimitsPostgresIT extends PostgresTenancyTestBase {
                     tenant,
                     CLERK,
                     CLERK_GRANTS,
-                    () -> approvals.approve(billId, new VendorBillCommands.Approve(null, null, null, null))));
+                    () -> approvals.approve(billId, new VendorBillCommands.Approve(null, null, null, null, null))));
             Future<Object> lower = pool.submit(inTenant(
                     start,
                     tenant,
@@ -359,7 +359,8 @@ class VendorBillApprovalLimitsPostgresIT extends PostgresTenancyTestBase {
                                 new VendorBillReview.Classification(VendorBillDebitClass.GOODS, null),
                                 null,
                                 new VendorBillReview.Difference(
-                                        VendorBillDifferenceClass.FREIGHT, null, "Freight not stated separately"))));
+                                        VendorBillDifferenceClass.FREIGHT, null, "Freight not stated separately"),
+                                null)));
 
         assertThat(accepted.getStatus()).isEqualTo(VendorBillStatus.APPROVED);
         assertThat(accepted.getApproval().approvedBy()).isEqualTo(CLERK);
@@ -388,7 +389,8 @@ class VendorBillApprovalLimitsPostgresIT extends PostgresTenancyTestBase {
                                         new VendorBillReview.Difference(
                                                 VendorBillDifferenceClass.FREIGHT,
                                                 null,
-                                                "Freight not stated separately")))))
+                                                "Freight not stated separately"),
+                                        null))))
                 .isInstanceOfSatisfying(
                         VendorBillException.class,
                         refusal -> assertThat(refusal.getCode())

@@ -40,6 +40,7 @@ public class TaxEvidenceRulesImpl implements TaxEvidenceRules {
     private static final String SOURCE = "STUB";
 
     private final Map<String, List<ConfiguredEvidenceRule>> rules;
+    private final Map<String, String> supplierRegimes;
     private final TaxCountryProfiles profiles;
     private final Clock clock;
 
@@ -48,11 +49,18 @@ public class TaxEvidenceRulesImpl implements TaxEvidenceRules {
         this.profiles = profiles;
         this.clock = clock;
         Map<String, List<ConfiguredEvidenceRule>> built = new LinkedHashMap<>();
+        Map<String, String> regimes = new LinkedHashMap<>();
         properties.getCountries().forEach((country, source) -> {
             CountryTaxProfile profile = profiles.profile(country).orElseThrow();
             built.put(profile.countryCode(), validateCountry(country, source, profile));
+            // Checked against the country's declared regimes at startup by RegistrationNumberShapes.
+            String regime = source == null ? null : source.getSupplierRegistrationRegime();
+            if (regime != null && !regime.isBlank()) {
+                regimes.put(profile.countryCode(), regime.trim());
+            }
         });
         this.rules = Map.copyOf(built);
+        this.supplierRegimes = Map.copyOf(regimes);
     }
 
     /**
@@ -76,7 +84,8 @@ public class TaxEvidenceRulesImpl implements TaxEvidenceRules {
                 .toList();
         String currency =
                 profiles.profile(countryCode).map(CountryTaxProfile::currency).orElse(null);
-        return new EvidenceRulesResponse(countryCode, date, currency, entries, SOURCE);
+        return new EvidenceRulesResponse(
+                countryCode, date, currency, entries, SOURCE, supplierRegimes.get(countryCode));
     }
 
     /**

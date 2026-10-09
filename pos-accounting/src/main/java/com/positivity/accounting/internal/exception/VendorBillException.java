@@ -46,6 +46,11 @@ public class VendorBillException extends RuntimeException {
          * the difference posts (AW47); nothing is written.
          */
         AP_BILL_TOTALS_UNRECONCILED(HttpStatus.UNPROCESSABLE_CONTENT),
+        /**
+         * The {@code taxByType[]} an approval or {@code ACCEPT} copied from the document does not add up to the bill's
+         * stated tax (CAP:550 S32d, AW51); nothing is written.
+         */
+        AP_BILL_TAX_SPLIT_MISMATCH(HttpStatus.UNPROCESSABLE_CONTENT),
         /** A bill totalling 0.00 has nothing to send, approve or post: correct it or void it. */
         AP_BILL_ZERO_TOTAL(HttpStatus.UNPROCESSABLE_CONTENT),
         /**

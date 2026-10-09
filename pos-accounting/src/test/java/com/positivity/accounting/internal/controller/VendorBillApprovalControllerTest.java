@@ -169,8 +169,8 @@ class VendorBillApprovalControllerTest extends BaseControllerSliceTest {
                 ArgumentCaptor.forClass(VendorBillCommands.ResolveException.class);
         verify(approvalService).resolveException(eq(BILL_ID), body.capture());
         org.assertj.core.api.Assertions.assertThat(body.getValue())
-                .isEqualTo(
-                        new VendorBillCommands.ResolveException("CORRECT", "Recount the delivery", null, null, null));
+                .isEqualTo(new VendorBillCommands.ResolveException(
+                        "CORRECT", "Recount the delivery", null, null, null, null));
     }
 
     static Stream<Arguments> refusals() {

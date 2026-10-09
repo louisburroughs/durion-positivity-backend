@@ -8,6 +8,7 @@ import com.positivity.accounting.internal.entity.VendorBillLine;
 import com.positivity.accounting.internal.entity.VendorBillMatchEvidence;
 import com.positivity.accounting.internal.enums.VendorBillApproverKind;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
+import com.positivity.accounting.internal.exception.TaxServiceUnavailableException;
 import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.VendorBillLineRepository;
@@ -41,8 +42,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * the vendor's AP defaults for its non-stock lines (CAP:550 S24, AW39), no difference and no override. Whatever would need one, and every refusal of the posting, skips
  * the approval: the bill stays {@code AWAITING_APPROVAL} with no approval field and one {@value #AUDIT_SKIPPED} row
  * carries the code ({@code AP_BILL_ZERO_TOTAL}, {@code AP_BILL_UNCLASSIFIED}, {@code AP_BILL_TOTALS_UNRECONCILED},
- * {@code PERIOD_CLOSED}, {@code PERIOD_HARD_LOCKED}, {@code GL_MAPPING_NOT_CONFIGURED}; S43 adds the tax-on-resale
- * hold). The match itself is kept.
+ * {@code PERIOD_CLOSED}, {@code PERIOD_HARD_LOCKED}, {@code GL_MAPPING_NOT_CONFIGURED}; S32d adds {@code TAX_SPLIT_MISSING}, {@code
+ * SUPPLIER_REGISTRATION_MISSING} and pos-tax's {@code SERVICE_UNAVAILABLE} for a recovery-enabled tenant; S43 adds the
+ * tax-on-resale hold). The match itself is kept.
  *
  * <p><b>The savepoint.</b> {@link VendorBillPostingService#post} is {@code MANDATORY}: a refusal crossing it would
  * mark the match transaction rollback-only. The JPA dialect in use offers no savepoints ({@code PROPAGATION_NESTED}),
@@ -166,7 +168,8 @@ public class VendorBillAutoApproval {
                 "limitApplied=" + limit.toPlainString() + ";journalEntryId=" + posting.getJournalEntryId()
                         + ";postingDate=" + posting.getPostingDate() + ";postingDateRule="
                         + posting.getPostingDateRule() + ";roundingAdjustment="
-                        + posting.getRoundingAdjustment().toPlainString());
+                        + posting.getRoundingAdjustment().toPlainString()
+                        + recoveryDetails(bill));
         log.info(
                 "Vendor bill {} approved automatically | billId={} | score={} | limit={} | entry={}",
                 bill.getBillNumber(),
@@ -189,11 +192,31 @@ public class VendorBillAutoApproval {
                     VendorBillException.Code.AP_BILL_NOT_APPROVABLE,
                     "Bill " + bill.getBillNumber() + " is not in the ledger currency " + ledgerCurrency.code()));
         }
+        // S32d item 10: a tax that is not split (AW51) or a bill without its evidence (AW53) waits for a person, and a
+        // profile pos-tax cannot answer holds the bill too: recovery is never read as "off" (AW49).
+        VendorBillTaxSplit.Plan plan;
+        try {
+            plan = postingService.taxPlan(bill);
+        } catch (TaxServiceUnavailableException unavailable) {
+            return Optional.of(unavailable);
+        }
+        Optional<VendorBillTaxSplit.Withheld> hold = plan.automaticApprovalHold();
+        if (hold.isPresent()) {
+            return Optional.of(new Skip(
+                    hold.get().name(),
+                    hold.get() == VendorBillTaxSplit.Withheld.TAX_SPLIT_MISSING
+                            ? "The bill states its tax without the tax by type; a person approves it with taxByType"
+                            : "The vendor holds no supplier registration the evidence rule asks for at this total"));
+        }
         List<VendorBillLine> lines = billLines.findByVendorBill_VendorBillIdOrderByLineNumber(bill.getVendorBillId());
         List<VendorBillPostingService.Leg> legs;
         try {
             legs = VendorBillPostingService.legs(
-                    bill, lines, classification(bill), VendorBillPostingService.difference(bill));
+                    bill,
+                    lines,
+                    classification(bill),
+                    VendorBillPostingService.difference(bill),
+                    plan.recoveredByKey());
         } catch (VendorBillException refused) {
             return Optional.of(refused);
         }
@@ -216,6 +239,12 @@ public class VendorBillAutoApproval {
             return Optional.of(refused);
         }
         return Optional.empty();
+    }
+
+    /** The recovery the posting recorded, for the audit row; empty when it recorded none. */
+    private String recoveryDetails(VendorBill bill) {
+        String recovery = postingService.recoveryAudit(bill.getVendorBillId());
+        return recovery == null ? "" : ";" + recovery;
     }
 
     /**
