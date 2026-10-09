@@ -71,7 +71,8 @@ public class PettyExpenseCategoryController {
                     Lists the tenant's petty-expense categories, active and inactive, in code order: per \
                     category its permanent code, label, examples, status, the expense account it posts to today \
                     (id, number, name, effective from), any account that takes over on a later date, and the \
-                    change history (date, actor, change old to new, justification).
+                    change history (date, actor and actorName, the actor's display name or null when not known, \
+                    change old to new, justification).
                     Use this tool to show what cashiers may spend drawer cash on and where each category posts; \
                     do not use listMappingKeysByCategory, which shows keys without their labels, accounts or \
                     history.
@@ -115,7 +116,8 @@ public class PettyExpenseCategoryController {
                     """ + JUSTIFICATION_RULE + """
                     ; examples is optional.
                     Emits an ACCOUNTING_PETTY_EXPENSE_CATEGORY_CREATE event, writes a history row naming the \
-                    caller, queues accounting.petty-expense-category.changed, and returns 201 with the category.
+                    caller, queues accounting.petty-expense-category.changed, and returns 201 with the category, \
+                    each history row's actorName resolved now (null when not known, a replayed requestId included).
                     """,
             tags = {"Accounting Petty-Expense Categories"})
     @ApiResponse(responseCode = "201", description = "The category was created")
@@ -174,7 +176,8 @@ public class PettyExpenseCategoryController {
                     """ + JUSTIFICATION_RULE + """
                     ; examples and version are optional.
                     Emits an ACCOUNTING_PETTY_EXPENSE_CATEGORY_UPDATE event, writes a history row naming the \
-                    caller, queues accounting.petty-expense-category.changed, and returns 200 with the category.
+                    caller, queues accounting.petty-expense-category.changed, and returns 200 with the category, \
+                    each history row's actorName resolved now (null when not known, a replayed requestId included).
                     """,
             tags = {"Accounting Petty-Expense Categories"})
     @ApiResponse(responseCode = "200", description = "The category was relabelled, or a replayed requestId")
@@ -232,7 +235,8 @@ public class PettyExpenseCategoryController {
                     """ + JUSTIFICATION_RULE + """
                     .
                     Emits an ACCOUNTING_PETTY_EXPENSE_CATEGORY_DEACTIVATE event, writes a history row naming the \
-                    caller, queues accounting.petty-expense-category.changed, and returns 200 with the category.
+                    caller, queues accounting.petty-expense-category.changed, and returns 200 with the category, \
+                    each history row's actorName resolved now (null when not known, a replayed requestId included).
                     """,
             tags = {"Accounting Petty-Expense Categories"})
     @ApiResponse(responseCode = "200", description = "The category is inactive, or a replayed requestId")
@@ -296,7 +300,8 @@ public class PettyExpenseCategoryController {
                     """ + JUSTIFICATION_RULE + """
                     .
                     Emits an ACCOUNTING_PETTY_EXPENSE_CATEGORY_REMAP event, writes a history row naming the \
-                    caller, queues accounting.petty-expense-category.changed, and returns 200 with the category.
+                    caller, queues accounting.petty-expense-category.changed, and returns 200 with the category, \
+                    each history row's actorName resolved now (null when not known, a replayed requestId included).
                     """,
             tags = {"Accounting Petty-Expense Categories"})
     @ApiResponse(responseCode = "200", description = "The new account is mapped, or a replayed requestId")

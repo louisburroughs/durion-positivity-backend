@@ -76,6 +76,7 @@ public class PettyExpenseCategoryServiceImpl implements PettyExpenseCategoryServ
     private final Clock clock;
     private final EntityManager entityManager;
     private final ObjectMapper objectMapper;
+    private final ActorDisplayNames actorNames;
 
     /** Whether a key belongs to a petty-expense category, so only this service may write it. */
     public static boolean isManagedKey(@Nullable String categoryName, @Nullable String keyName) {
@@ -90,9 +91,17 @@ public class PettyExpenseCategoryServiceImpl implements PettyExpenseCategoryServ
         LocalDate today = zoneResolver.today();
         Map<UUID, List<PettyExpenseCategoryChange>> history = changes.findAllByOrderByChangedAtAscChangeIdAsc().stream()
                 .collect(Collectors.groupingBy(PettyExpenseCategoryChange::getPettyExpenseCategoryId));
-        return new PettyExpenseCategoryListResponse(categories.findAllByOrderByCodeAsc().stream()
+        List<PettyExpenseCategoryResponse> views = categories.findAllByOrderByCodeAsc().stream()
                 .map(category ->
                         view(category, history.getOrDefault(category.getPettyExpenseCategoryId(), List.of()), today))
+                .toList();
+        // Every category's rows in one name lookup (#2670), never one per category.
+        Map<String, String> names = actorNames.namesOf(views.stream()
+                .flatMap(view -> view.history().stream())
+                .map(PettyExpenseCategoryResponse.HistoryItem::actor)
+                .toList());
+        return new PettyExpenseCategoryListResponse(views.stream()
+                .map(view -> view.withActorNames(actor -> ActorDisplayNames.nameOf(names, actor)))
                 .toList());
     }
 
@@ -361,12 +370,23 @@ public class PettyExpenseCategoryServiceImpl implements PettyExpenseCategoryServ
         return change;
     }
 
-    /** Keeps the command's response with its history row, so a replay returns exactly the first result. */
+    /**
+     * Keeps the command's response with its history row, so a replay returns exactly the first result. The kept copy
+     * carries no actor name (a name is CONFIDENTIAL and resolved when a response is built, #2670); the answer does.
+     */
     private PettyExpenseCategoryResponse remember(
             PettyExpenseCategoryChange change, PettyExpenseCategoryResponse response) {
-        change.setResponseJson(objectMapper.writeValueAsString(response));
+        change.setResponseJson(objectMapper.writeValueAsString(response.withActorNames(actor -> null)));
         changes.saveAndFlush(change);
-        return response;
+        return named(response);
+    }
+
+    /** {@code response} with each history row's actor name resolved now, in one lookup (#2670). */
+    private PettyExpenseCategoryResponse named(PettyExpenseCategoryResponse response) {
+        Map<String, String> names = actorNames.namesOf(response.history().stream()
+                .map(PettyExpenseCategoryResponse.HistoryItem::actor)
+                .toList());
+        return response.withActorNames(actor -> ActorDisplayNames.nameOf(names, actor));
     }
 
     // ---- reads ----------------------------------------------------------------------------------------------
@@ -378,9 +398,10 @@ public class PettyExpenseCategoryServiceImpl implements PettyExpenseCategoryServ
                         CashSetupException.Code.IDEMPOTENCY_CONFLICT,
                         "requestId " + requestId + " was already used with a different payload");
             }
-            return objectMapper
+            // The names are resolved now, never taken from the kept copy (#2670).
+            return named(objectMapper
                     .readValue(original.getResponseJson(), PettyExpenseCategoryResponse.class)
-                    .asReplay();
+                    .asReplay());
         });
     }
 
@@ -467,6 +488,7 @@ public class PettyExpenseCategoryServiceImpl implements PettyExpenseCategoryServ
                         .map(change -> new PettyExpenseCategoryResponse.HistoryItem(
                                 change.getChangedAt(),
                                 change.getActor(),
+                                null,
                                 change.getChangeType(),
                                 change.getOldValue(),
                                 change.getNewValue(),

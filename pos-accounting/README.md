@@ -1688,6 +1688,11 @@ showing sign-in names (P8, ADR-0064). Nothing here posts, and no decision, guard
   time, one query per response (`ActorDisplayNames`): username, through its `ACTIVE` link, to its person. It is null
   when the username has no `ACTIVE` link, the person is not in the copy or was deleted, both names are blank, or the
   actor is `SYSTEM` (a kind, rendered "Automatic"). The username is never the fallback, and stays in the API for audit.
+- **Petty-expense category history (C.1, S21 ruling Q2).** `PettyExpenseCategoryHistoryItem.actorName` beside
+  `actor`, on `GET /v1/accounting/petty-expense-categories` and on the create, update, deactivate and remap
+  responses, a replayed `requestId` included. Same resolver and rules; one lookup per response across every
+  category's rows. The name is resolved when the response is built: the kept replay copy (`response_json`) never
+  holds one, so a replay serves the person's current name.
 - **The people-contact copy** (V25, ADR-0044 §6; the pos-location / pos-customer precedent). pos-accounting never
   joins another database and never calls pos-people-contact or pos-security-service for a name.
   `PeopleContactEventsListener` consumes `people-contact.events.v1`
