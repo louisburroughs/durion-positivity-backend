@@ -18,8 +18,8 @@ import org.springframework.web.context.request.ServletRequestAttributes;
  * {@code register-with-eureka: false}, so its address cannot be discovered and stays an explicit
  * base URL on the plain builder.
  *
- * <p>Every call has explicit connect and read timeouts ({@code pos.tax.connect-timeout},
- * {@code pos.tax.read-timeout}), so a slow pos-tax never holds an order request thread, and
+ * <p>Every call has explicit connect and read timeouts ({@code pos.tax.connect-timeout-ms},
+ * {@code pos.tax.read-timeout-ms}), so a slow pos-tax never holds an order request thread, and
  * forwards the inbound {@code X-Correlation-Id} so pos-tax logs under the same id (ADR-0017 §4;
  * CAP:550 S32d).
  */
@@ -32,11 +32,11 @@ public class TaxClientConfig {
     public RestClient taxServiceRestClient(
             RestClient.Builder restClientBuilder,
             @Value("${pos.tax.base-url:http://pos-tax:8091}") String taxServiceBaseUrl,
-            @Value("${pos.tax.connect-timeout:2s}") Duration connectTimeout,
-            @Value("${pos.tax.read-timeout:5s}") Duration readTimeout) {
+            @Value("${pos.tax.connect-timeout-ms:2000}") long connectTimeoutMs,
+            @Value("${pos.tax.read-timeout-ms:5000}") long readTimeoutMs) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(connectTimeout);
-        factory.setReadTimeout(readTimeout);
+        factory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
+        factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
         return restClientBuilder
                 .clone()
                 .baseUrl(taxServiceBaseUrl)

@@ -82,6 +82,9 @@ class OrderClientBuilderTest {
             when(builder.baseUrl(PRICE_BASE_URL)).thenReturn(builder);
             when(builder.baseUrl(INVOICE_BASE_URL)).thenReturn(builder);
             when(builder.baseUrl(TAX_BASE_URL)).thenReturn(builder);
+            when(builder.clone()).thenReturn(builder);
+            when(builder.requestFactory(org.mockito.ArgumentMatchers.any())).thenReturn(builder);
+            when(builder.requestInterceptor(org.mockito.ArgumentMatchers.any())).thenReturn(builder);
             when(builder.build()).thenReturn(mock(RestClient.class));
             return builder;
         }

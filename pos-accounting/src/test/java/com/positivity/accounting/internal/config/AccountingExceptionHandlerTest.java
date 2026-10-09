@@ -158,6 +158,11 @@ class AccountingExceptionHandlerTest {
                                     new com.positivity.accounting.internal.exception.TaxServiceUnavailableException(
                                             "The tax registry is unavailable"),
                                     request)),
+                    Named.of("handleTaxTypeMissing", (HandlerInvocation)
+                            request -> handler.handleTaxTypeMissing(
+                                    new com.positivity.accounting.internal.exception.TaxTypeMissingException(
+                                            "The invoice's tax is not typed"),
+                                    request)),
                     Named.of("handleVendorBillDuplicate", (HandlerInvocation)
                             request -> handler.handleVendorBillDuplicate(vendorBillDuplicate(), request)),
                     Named.of("handleInvalidDateRange", (HandlerInvocation) request ->
