@@ -138,7 +138,7 @@ class McpServerPropertiesDefaultsTest {
                 .withUserConfiguration(Config.class)
                 .run(ctx -> {
                     McpServerProperties props = ctx.getBean(McpServerProperties.class);
-                    assertThat(props.excludedWritePathPatterns()).hasSize(8);
+                    assertThat(props.excludedWritePathPatterns()).hasSize(9);
                     assertThat(props.excludesWrite("/security-service/v1/audit/events", HttpMethod.POST))
                             .isTrue();
                 });

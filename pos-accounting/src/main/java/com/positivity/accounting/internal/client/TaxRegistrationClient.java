@@ -58,7 +58,6 @@ public class TaxRegistrationClient {
     /** Name of the counter of pos-tax 401s: this service's secret does not match pos-tax's. */
     public static final String SECRET_REFUSED_COUNTER = "accounting.tax_registration.front_door_secret_refused";
 
-    private static final String PATH = "/v1/tax/registrations";
     private static final Set<Integer> RELAYED = Set.of(400, 404, 409, 422);
 
     private final RestClient restClient;
