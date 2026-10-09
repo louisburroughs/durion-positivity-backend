@@ -158,6 +158,57 @@ class ApReadsPostgresIT extends PostgresTenancyTestBase {
     }
 
     @Test
+    @DisplayName("review A2: V26 gives a tenant provisioned before the change the plain labels, but only where the"
+            + " description still equals the old seeded text; a tenant's own description and the mappings stay")
+    void v26RelabelsOnlyTheSeededText() throws java.sql.SQLException {
+        UUID tenant = provisionedTenant();
+        Map<String, String> accountsBefore = expenseAccounts(tenant);
+        JdbcTemplate owner = owner();
+        String byKey = "UPDATE mapping_key SET description = ? WHERE tenant_id = ? AND key_name = ?";
+        // As a tenant provisioned before #2670 holds them: the old seeded text, and one description it edited.
+        for (String[] key : List.of(
+                new String[] {"EXPENSE_SHOP_SUPPLIES", "Shop supplies (AW18, AW30)"},
+                new String[] {"EXPENSE_VEHICLE_FUEL", "Vehicle fuel (AW18, AW30)"},
+                new String[] {"EXPENSE_SMALL_TOOLS", "Hand tools under 100"})) {
+            owner.update(byKey, key[1], tenant, key[0]);
+        }
+
+        try (java.sql.Connection connection = ownerDataSource().getConnection()) {
+            org.springframework.jdbc.datasource.init.ScriptUtils.executeSqlScript(
+                    connection,
+                    new org.springframework.core.io.ClassPathResource(
+                            "db/migration/V26__vendor_bill_expense_key_labels.sql"));
+        }
+
+        Map<String, String> descriptions = new java.util.TreeMap<>();
+        owner.query(
+                "SELECT k.key_name, k.description FROM mapping_key k JOIN posting_category c ON"
+                        + " c.posting_category_id = k.posting_category_id WHERE k.tenant_id = ? AND"
+                        + " c.category_name = 'VENDOR_BILL' AND k.key_name LIKE 'EXPENSE\\_%'",
+                (java.sql.ResultSet rs) -> {
+                    descriptions.put(rs.getString(1), rs.getString(2));
+                },
+                tenant);
+        assertThat(descriptions)
+                .containsEntry("EXPENSE_SHOP_SUPPLIES", "Shop supplies")
+                .containsEntry("EXPENSE_VEHICLE_FUEL", "Vehicle fuel")
+                .as("a description the tenant edited is never touched")
+                .containsEntry("EXPENSE_SMALL_TOOLS", "Hand tools under 100")
+                .containsEntry("EXPENSE_STAFF_MEALS", "Staff meals");
+        assertThat(owner.queryForObject(
+                        "SELECT modified_by FROM mapping_key WHERE tenant_id = ? AND key_name = 'EXPENSE_SHOP_SUPPLIES'",
+                        String.class,
+                        tenant))
+                .isEqualTo("v26-expense-labels");
+        assertThat(owner.queryForObject(
+                        "SELECT modified_by FROM mapping_key WHERE tenant_id = ? AND key_name = 'EXPENSE_SMALL_TOOLS'",
+                        String.class,
+                        tenant))
+                .isNotEqualTo("v26-expense-labels");
+        assertThat(expenseAccounts(tenant)).as("the mappings do not change").isEqualTo(accountsBefore);
+    }
+
+    @Test
     @DisplayName("AC 1: with EXPENSE_SMALL_TOOLS deactivated and EXPENSE_STAFF_MEALS without an effective mapping, the"
             + " read lists eight categories by label, Shop supplies on 6340 and Staff meals without an account")
     void expenseCategories() {
