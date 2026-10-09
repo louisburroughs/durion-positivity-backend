@@ -6,6 +6,7 @@ import com.positivity.accounting.internal.dto.VendorBillReview;
 import com.positivity.accounting.internal.enums.VendorBillStage;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.VendorBillApprovalService;
+import com.positivity.accounting.internal.service.VendorBillPurchaseTax;
 import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
@@ -194,9 +195,10 @@ public class VendorBillApprovalController {
                 AP_BILL_UNCLASSIFIED (only when neither the classification, the proposal nor the vendor's AP \
                 defaults give a class), AP_BILL_TAX_ON_RESALE_GOODS (audited as VENDOR_BILL_APPROVE_REFUSED), \
                 AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED or \
-                GL_MAPPING_NOT_CONFIGURED (guided: referenceId CATEGORY/KEY and nextAction); 503 \
-                SERVICE_UNAVAILABLE with Retry-After when pos-tax cannot give the rules or the quote; each leaving \
-                the bill as it was.
+                GL_MAPPING_NOT_CONFIGURED (guided: referenceId CATEGORY/KEY and nextAction), or, relayed from pos-tax \
+                for the use-tax quote, TAX_JURISDICTION_NOT_CONFIGURED, CURRENCY_NOT_SUPPORTED or \
+                TAX_CAPABILITY_UNSUPPORTED (a configuration to fix, not to retry); 503 SERVICE_UNAVAILABLE with \
+                Retry-After when pos-tax cannot give the rules or the quote; each leaving the bill as it was.
                 """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
@@ -228,8 +230,10 @@ public class VendorBillApprovalController {
             responseCode = "422",
             description = "AP_BILL_UNCLASSIFIED, AP_BILL_TAX_ON_RESALE_GOODS (the tax country's rules hold the bill's"
                     + " tax on goods for resale; override with taxOnResaleOverrideJustification),"
-                    + " AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED or"
-                    + " GL_MAPPING_NOT_CONFIGURED; the approval is rolled back",
+                    + " AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED,"
+                    + " GL_MAPPING_NOT_CONFIGURED, or relayed from pos-tax for the use-tax quote"
+                    + " TAX_JURISDICTION_NOT_CONFIGURED, CURRENCY_NOT_SUPPORTED or TAX_CAPABILITY_UNSUPPORTED (nothing"
+                    + " written); the approval is rolled back",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "503",
@@ -261,6 +265,8 @@ public class VendorBillApprovalController {
                     @Valid
                     @RequestBody
                     VendorBillCommands.@NonNull Approve request) {
+        // The override's upper bound is a request-shape check: 400 VALIDATION_ERROR naming the field (S43).
+        VendorBillPurchaseTax.requireOverrideLength(request.taxOnResaleOverrideJustification());
         return ResponseEntity.ok(approvalService.approve(billId, request));
     }
 
@@ -373,8 +379,9 @@ public class VendorBillApprovalController {
                 VENDOR_BILL_MATCH_EXCEPTION_RESOLVE_REFUSED); 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE or, for \
                 ACCEPT, AP_BILL_AWAITING_INVOICE; for ACCEPT, 422 AP_BILL_UNCLASSIFIED (no class given, proposed or \
                 defaulted for the vendor), AP_BILL_TAX_ON_RESALE_GOODS, AP_BILL_TOTALS_UNRECONCILED, \
-                AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED, and 503 \
-                SERVICE_UNAVAILABLE with Retry-After when pos-tax cannot answer, leaving the bill as it was.
+                AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED, GL_MAPPING_NOT_CONFIGURED or a relayed \
+                pos-tax TAX_JURISDICTION_NOT_CONFIGURED, CURRENCY_NOT_SUPPORTED or TAX_CAPABILITY_UNSUPPORTED, and \
+                503 SERVICE_UNAVAILABLE with Retry-After when pos-tax cannot answer, leaving the bill as it was.
                 """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
@@ -404,8 +411,9 @@ public class VendorBillApprovalController {
     @ApiResponse(
             responseCode = "422",
             description = "ACCEPT only: AP_BILL_UNCLASSIFIED, AP_BILL_TAX_ON_RESALE_GOODS, AP_BILL_TOTALS_UNRECONCILED,"
-                    + " AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED; the"
-                    + " approval is rolled back",
+                    + " AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED, GL_MAPPING_NOT_CONFIGURED, or relayed"
+                    + " from pos-tax for the use-tax quote TAX_JURISDICTION_NOT_CONFIGURED, CURRENCY_NOT_SUPPORTED or"
+                    + " TAX_CAPABILITY_UNSUPPORTED (nothing written); the approval is rolled back",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "503",
@@ -434,6 +442,7 @@ public class VendorBillApprovalController {
                     @Valid
                     @RequestBody
                     VendorBillCommands.@NonNull ResolveException request) {
+        VendorBillPurchaseTax.requireOverrideLength(request.taxOnResaleOverrideJustification());
         return ResponseEntity.ok(approvalService.resolveException(billId, request));
     }
 

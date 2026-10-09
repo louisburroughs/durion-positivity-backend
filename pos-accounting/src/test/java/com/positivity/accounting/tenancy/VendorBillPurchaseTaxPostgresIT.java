@@ -18,6 +18,7 @@ import com.positivity.accounting.internal.dto.VendorBillCommands;
 import com.positivity.accounting.internal.dto.VendorBillResponse;
 import com.positivity.accounting.internal.dto.VendorBillReview;
 import com.positivity.accounting.internal.entity.VendorBill;
+import com.positivity.accounting.internal.entity.VendorBillLine;
 import com.positivity.accounting.internal.enums.TaxOnResaleOverrideSource;
 import com.positivity.accounting.internal.enums.VendorBillCheckOutcome;
 import com.positivity.accounting.internal.enums.VendorBillDebitClass;
@@ -25,6 +26,7 @@ import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
 import com.positivity.accounting.internal.exception.TaxServiceUnavailableException;
 import com.positivity.accounting.internal.exception.VendorBillException;
+import com.positivity.accounting.internal.repository.VendorBillLineRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.accounting.internal.service.VendorBillApprovalService;
 import com.positivity.security.common.GatewaySecurityConstants;
@@ -84,6 +86,9 @@ class VendorBillPurchaseTaxPostgresIT extends PostgresTenancyTestBase {
 
     @Autowired
     private VendorBillRepository billRows;
+
+    @Autowired
+    private VendorBillLineRepository lineRows;
 
     @Autowired
     private PlatformTransactionManager transactionManager;
@@ -153,12 +158,17 @@ class VendorBillPurchaseTaxPostgresIT extends PostgresTenancyTestBase {
     }
 
     @Test
-    @DisplayName("AC1 [M]: the same bill unclassified answers AP_BILL_UNCLASSIFIED, the hold coming after"
-            + " requireClassified")
+    @DisplayName(
+            "AC1 [M]: a bill the hold would refuse (its tax prorated onto a stocked line) that also has a non-stock"
+                    + " line without a key answers AP_BILL_UNCLASSIFIED: the hold comes after requireClassified")
     void unclassifiedBeforeTheHold() {
         UUID tenant = tenant();
         rules(true, false);
-        UUID billId = submitted(tenant, goodsBill(tenant, "INV-4301"), null);
+        UUID billId = submitted(tenant, linedBill(tenant, "INV-4301"), null);
+        VendorBillResponse read = asTenant(tenant, () -> approvals.getBill(billId));
+        assertThat(check(read).outcome())
+                .as("the bill qualifies for the hold: its 30.00 tax prorates onto the stocked line")
+                .isEqualTo(VendorBillCheckOutcome.FAIL);
 
         assertThatThrownBy(() -> approve(tenant, billId, null))
                 .isInstanceOfSatisfying(
@@ -545,6 +555,51 @@ class VendorBillPurchaseTaxPostgresIT extends PostgresTenancyTestBase {
                     bill.setModifiedBy("supplier");
                     return billRows.saveAndFlush(bill).getVendorBillId();
                 }));
+    }
+
+    /**
+     * A bill with stored lines and no header net (it posts line by line, AW39): a stocked line of 4 x 100.00 received
+     * and billed, a non-stock line of 50.00, and a stated tax of 30.00 prorated onto both. The non-stock line has no
+     * expense key and the vendor no default, so the bill is unclassified.
+     */
+    private UUID linedBill(UUID tenant, String number) {
+        LocalDate billDate = today().minusDays(1);
+        return asTenant(
+                tenant,
+                () -> new TransactionTemplate(transactionManager).execute(_ -> {
+                    VendorBill bill = new VendorBill();
+                    bill.setVendorId(UUIDv7Generator.generate());
+                    bill.setVendorName("Supply House");
+                    bill.setBillNumber(number);
+                    bill.setBillDate(billDate.atStartOfDay());
+                    bill.setTotalAmount(new BigDecimal("480.00"));
+                    bill.setTaxAmount(new BigDecimal("30.00"));
+                    bill.setCurrency("USD");
+                    bill.setStatus(VendorBillStatus.PENDING_RECEIPT_MATCH);
+                    bill.setOriginEventId(UUIDv7Generator.generate());
+                    bill.setOriginEventType("SUPPLIER_INVOICE_RECEIVED");
+                    bill.setCreatedBy("supplier");
+                    bill.setModifiedBy("supplier");
+                    VendorBill saved = billRows.saveAndFlush(bill);
+                    lineRows.saveAndFlush(line(saved, 1, true, "4", "100.00"));
+                    lineRows.saveAndFlush(line(saved, 2, false, "1", "50.00"));
+                    return saved.getVendorBillId();
+                }));
+    }
+
+    private static VendorBillLine line(VendorBill bill, int number, boolean stocked, String quantity, String price) {
+        VendorBillLine line = new VendorBillLine();
+        line.setVendorBill(bill);
+        line.setLineNumber(number);
+        line.setProductId(UUIDv7Generator.generate());
+        line.setDescription(stocked ? "Brake pads" : "Shop rags");
+        line.setInventoryItem(stocked);
+        line.setQuantity(new BigDecimal(quantity));
+        line.setUnitPrice(new BigDecimal(price));
+        line.setLineTotal(new BigDecimal(quantity).multiply(new BigDecimal(price)));
+        line.setBilledQuantity(new BigDecimal(quantity));
+        line.setBilledUnitPrice(new BigDecimal(price));
+        return line;
     }
 
     /** The vendor's AP settings row with acceptTaxOnResaleGoods on, as the settings PUT leaves it. */

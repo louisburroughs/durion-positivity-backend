@@ -244,6 +244,44 @@ class VendorBillApprovalControllerTest extends BaseControllerSliceTest {
     }
 
     @Test
+    @DisplayName("S43 B5: a taxOnResaleOverrideJustification of 1001 characters is 400 VALIDATION_ERROR with"
+            + " fieldErrors[taxOnResaleOverrideJustification] on approve and ACCEPT, the text never echoed; the service is"
+            + " never called")
+    void overlongTaxOnResaleOverrideIsRefused() throws Exception {
+        String text = "Z".repeat(1001);
+        for (var request : List.of(
+                json(
+                        post(BASE + "/" + BILL_ID + "/approve"),
+                        "{\"taxOnResaleOverrideJustification\":\"" + text + "\"}"),
+                json(
+                        post(BASE + "/" + BILL_ID + "/resolve-exception"),
+                        "{\"resolutionAction\":\"ACCEPT\",\"reason\":\"Price agreed by phone\","
+                                + "\"taxOnResaleOverrideJustification\":\"" + text + "\"}"))) {
+            mockMvc.perform(withAuth(request, OVER_LIMIT))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                    .andExpect(jsonPath("$.fieldErrors[0].field").value("taxOnResaleOverrideJustification"))
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
+                            .string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("ZZZZZZZZZZ"))));
+        }
+        verifyNoInteractions(approvalService);
+    }
+
+    @Test
+    @DisplayName("S43 (#2604 ruling 4 amended): a relayed pos-tax configuration refusal answers 422 with its code")
+    void relayedTaxRefusalIs422() throws Exception {
+        when(approvalService.approve(eq(BILL_ID), any()))
+                .thenThrow(new com.positivity.accounting.internal.exception.TaxQuoteRefusedException(
+                        "CURRENCY_NOT_SUPPORTED", "Bill INV-1 cannot be quoted its self-assessed (use) tax"));
+
+        mockMvc.perform(withAuth(json(post(BASE + "/" + BILL_ID + "/approve"), "{}"), OVER_LIMIT))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("CURRENCY_NOT_SUPPORTED"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .doesNotExist("Retry-After"));
+    }
+
+    @Test
     @DisplayName("L2: the void gate is accounting:ap:reject; the approval tier alone never passes it")
     void voidGateIsReject() throws Exception {
         mockMvc.perform(withAuth(

@@ -78,8 +78,8 @@ public final class VendorBillCommands {
                             + " tax country's purchase-tax rules hold such bills (check TAX_ON_RESALE_GOODS FAIL): why"
                             + " it is accepted, 10-1000 characters; looked at only when the hold applies (CAP:550 S43)",
                     example = "Vendor resale certificate pending; tax recovered on the next statement",
+                    maxLength = 1000,
                     requiredMode = NOT_REQUIRED)
-            @Size(max = 1000)
             @Nullable
             String taxOnResaleOverrideJustification) {
 
@@ -166,8 +166,8 @@ public final class VendorBillCommands {
                             + " resale where the tax country's purchase-tax rules hold such bills, 10-1000 characters"
                             + " (CAP:550 S43)",
                     example = "Vendor resale certificate pending; tax recovered on the next statement",
+                    maxLength = 1000,
                     requiredMode = NOT_REQUIRED)
-            @Size(max = 1000)
             @Nullable
             String taxOnResaleOverrideJustification) {
 
