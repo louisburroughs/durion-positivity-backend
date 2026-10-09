@@ -416,6 +416,61 @@ paths:
       - Tax Exemption Certificates
       x-required-permissions:
       - tax:exemption:manage
+  /v1/tax/information-return-forms:
+    get:
+      description: 'Returns the information-return forms a country configures, each with its boxes and the payee-id
+
+        schemes a payee may be reported under, so a vendor can be marked reportable in a form and box.
+
+        Use this tool when pos-accounting validates or offers a vendor''s information-return flag; do not
+
+        use it to read tax rates or evidence rules, which are getTaxRates and getTaxEvidenceRules instead.
+
+        Preconditions: this endpoint is internal-only (ADR-0021/ADR-0014), reached by direct in-cluster
+
+        calls from pos-accounting with the service authority, never through pos-api-gateway.
+
+        Required inputs: countryCode, two upper-case letters.
+
+        No events are emitted, no state changes and no tenant data is read; every value is configuration
+
+        held for expert advice, so source is always STUB.
+
+        Returns 200 with an empty list for a country without a configured form, and 400 VALIDATION_ERROR
+
+        when countryCode is missing or malformed.
+
+        '
+      operationId: getTaxInformationReturnForms
+      parameters:
+      - in: query
+        name: countryCode
+        required: true
+        schema:
+          minLength: 1
+          pattern: ^[A-Z]{2}$
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxInformationReturnFormsResponse'
+          description: Forms resolved (empty for a country without one)
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Missing or malformed countryCode
+      security:
+      - bearerAuth:
+        - tax:rates:view
+      summary: List a country's information-return forms
+      tags:
+      - Tax
+      x-required-permissions:
+      - tax:rates:view
   /v1/tax/mode:
     get:
       description: 'Returns whether the tax service is running against the external provider or against the built-in
@@ -1478,6 +1533,70 @@ components:
       - asOf
       - countryCode
       - rules
+      - source
+      type: object
+    TaxInformationReturnBox:
+      description: One box of an information-return form
+      properties:
+        box:
+          description: Box code
+          example: '1'
+          type: string
+        label:
+          description: Box label
+          example: Box one
+          type: string
+      required:
+      - box
+      - label
+      type: object
+    TaxInformationReturnForm:
+      description: One configured information-return form
+      properties:
+        boxes:
+          description: Boxes of the form, never empty
+          items:
+            $ref: '#/components/schemas/TaxInformationReturnBox'
+          type: array
+        form:
+          description: Form code
+          example: ZZ_FORM_A
+          type: string
+        label:
+          description: Form label
+          example: Form A
+          type: string
+        payeeIdSchemes:
+          description: Tax-registration schemes a payee may be reported under
+          items:
+            example: ZZ_BUSINESS_ID
+            type: string
+          type: array
+      required:
+      - boxes
+      - form
+      - label
+      - payeeIdSchemes
+      type: object
+    TaxInformationReturnFormsResponse:
+      description: The information-return forms configured for one country
+      properties:
+        countryCode:
+          description: Country code in ISO 3166-1 alpha-2 format, echoed from the request
+          example: ZZ
+          type: string
+        forms:
+          description: Forms configured for the country, in configured order; empty when it has none
+          items:
+            $ref: '#/components/schemas/TaxInformationReturnForm'
+          type: array
+        source:
+          description: Origin of the answer; always STUB, because every value is a placeholder
+          example: STUB
+          type: string
+      required:
+      - countryCode
+      - forms
       - source
       type: object
     TaxJurisdiction:
