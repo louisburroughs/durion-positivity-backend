@@ -132,8 +132,8 @@ public class CrmPersonController {
                                                                     {"firstName":"Dana",
                                                                      "lastName":"Ortiz",
                                                                      "preferredContactMethod":"EMAIL",
-                                                                     "emails":[{"value":"dana.ortiz@example.com","isPrimary":true}],
-                                                                     "phones":[{"value":"+15125550142","type":"PHONE_MOBILE","isPrimary":true}]}
+                                                                     "emails":[{"value":"dana.ortiz@example.com","primary":true}],
+                                                                     "phones":[{"value":"+15125550142","type":"PHONE_MOBILE","primary":true}]}
                                                                     """)))
                     @Valid
                     @RequestBody
