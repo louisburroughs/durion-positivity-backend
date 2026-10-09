@@ -108,12 +108,6 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-kafka</artifactId>
         </dependency>
-        <!-- An in-JVM KRaft broker: the outbox publishing a registration fact to a real broker (S32c) -->
-        <dependency>
-            <groupId>org.springframework.kafka</groupId>
-            <artifactId>spring-kafka-test</artifactId>
-            <scope>test</scope>
-        </dependency>
         <!-- Testcontainers Postgres for the tenancy isolation and schema-conformance ITs (plan R-B7) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
