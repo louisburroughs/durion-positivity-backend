@@ -16,7 +16,8 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 168 event types (includes +3 from the tax-registration front door (CAP:550 S32c, Issue #2638):
+     * Total: 170 event types (includes +2 from input-tax recovery (CAP:550 S32d, Issue #2639):
+     * ACCOUNTING_INPUT_TAX_RECOVERY_VIEW, ACCOUNTING_PETTY_CATEGORY_TAX_RECOVERY_UPDATE, +3 from the tax-registration front door (CAP:550 S32c, Issue #2638):
      * ACCOUNTING_TAX_REGISTRATION_LIST, _CREATE, _UPDATE, +1 ACCOUNTING_AP_PAYMENT_GL_POSTING_RETRY and -1 for the retired
      * AP_PAYMENT_GL_POSTING (CAP:550 S42, Issue #2603), +3 from approval limits and separation of duties (CAP:550 S13, Issue #2510):
      * ACCOUNTING_VENDOR_BILL_DUE_DATE_SET, ACCOUNTING_AP_APPROVAL_POLICY_VIEW, ACCOUNTING_AP_APPROVAL_POLICY_SET,
