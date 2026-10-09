@@ -311,6 +311,64 @@ class VendorBillPostingServiceTest {
             new VendorBillPostingService.Classification(VendorBillDebitClass.GOODS, null);
 
     @Nested
+    @DisplayName("S43: the self-assessed (use) tax accrual (AW44)")
+    class UseTaxAccrual {
+
+        private final VendorBillPostingService.Classification shopSupplies =
+                new VendorBillPostingService.Classification(VendorBillDebitClass.EXPENSE, "EXPENSE_SHOP_SUPPLIES");
+
+        private List<String> withUseTax(VendorBill bill, List<VendorBillLine> lines, String amount) {
+            List<String> out = new ArrayList<>();
+            for (VendorBillPostingService.Leg leg : VendorBillPostingService.legs(
+                    bill,
+                    lines,
+                    shopSupplies,
+                    null,
+                    amount == null
+                            ? null
+                            : new VendorBillPostingService.UseTax("EXPENSE_SHOP_SUPPLIES", new BigDecimal(amount)))) {
+                BigDecimal signed = leg.signedAmount();
+                out.add(leg.mappingKey()
+                        + (signed.signum() > 0 ? " Dr " : " Cr ")
+                        + signed.abs().toPlainString());
+            }
+            return out;
+        }
+
+        @Test
+        @DisplayName("AC4: a header-only EXPENSE bill of 200.00 with 17.00 use tax: Dr EXPENSE 217.00 / Cr AP 200.00 /"
+                + " Cr USE_TAX_PAYABLE 17.00; accounts payable stays the billed gross")
+        void headerOnlyAccrual() {
+            VendorBill bill = bill("200.00");
+            bill.setNetAmount(new BigDecimal("200.00"));
+            bill.setTaxAmount(new BigDecimal("0.00"));
+            bill.setStatedLineCount(1);
+
+            assertThat(withUseTax(bill, List.of(), "17.00"))
+                    .containsExactly(
+                            "EXPENSE_SHOP_SUPPLIES Dr 217.00",
+                            "ACCOUNTS_PAYABLE Cr 200.00",
+                            "USE_TAX_PAYABLE Cr 17.00");
+            assertThat(withUseTax(bill, List.of(), null))
+                    .containsExactly("EXPENSE_SHOP_SUPPLIES Dr 200.00", "ACCOUNTS_PAYABLE Cr 200.00");
+        }
+
+        @Test
+        @DisplayName("A goods-receipt bill: the accrual joins the expense lines' key; the goods line is untouched")
+        void byLineAccrual() {
+            List<VendorBillLine> lines =
+                    List.of(line(1, true, "1", "100.00", "1", "100.00"), line(2, false, "0", "50.00", "1", "50.00"));
+
+            assertThat(withUseTax(bill("150.00"), lines, "4.25"))
+                    .containsExactly(
+                            "GOODS_RECEIVED_NOT_BILLED Dr 100.00",
+                            "EXPENSE_SHOP_SUPPLIES Dr 54.25",
+                            "ACCOUNTS_PAYABLE Cr 150.00",
+                            "USE_TAX_PAYABLE Cr 4.25");
+        }
+    }
+
+    @Nested
     @DisplayName("The vendor's own totals: gross vs net + tax (AW47)")
     class Totals {
 

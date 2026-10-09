@@ -11,17 +11,21 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.accounting.internal.client.TaxReferenceClient;
 import com.positivity.accounting.internal.config.LedgerCurrency;
+import com.positivity.accounting.internal.dto.TaxUseQuote;
 import com.positivity.accounting.internal.entity.AccountingAuditLog;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.entity.VendorBillGlPosting;
 import com.positivity.accounting.internal.entity.VendorBillLine;
 import com.positivity.accounting.internal.entity.VendorBillMatchEvidence;
+import com.positivity.accounting.internal.enums.TaxOnResaleOverrideSource;
 import com.positivity.accounting.internal.enums.VendorBillApproverKind;
 import com.positivity.accounting.internal.enums.VendorBillPostingDateRule;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
+import com.positivity.accounting.internal.exception.TaxServiceUnavailableException;
 import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.VendorBillLineRepository;
@@ -38,6 +42,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -320,5 +325,154 @@ class VendorBillAutoApprovalTest {
 
         assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.APPROVED);
         assertThat(bill.getApprovedBy()).isEqualTo("SYSTEM");
+    }
+
+    @Nested
+    @DisplayName("S43 (#2604, AW44): purchase tax in automatic approval; tax country ZZ, rule fixture HOLD /"
+            + " self-assess, use tax 8.5 % (not tax law)")
+    class PurchaseTax {
+
+        private final TaxReferenceClient client = mock();
+        private final UUID vendor = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4d02");
+
+        @BeforeEach
+        void wirePurchaseTax() {
+            autoApproval = new VendorBillAutoApproval(
+                    CLOCK,
+                    policy,
+                    postingService,
+                    periodGate,
+                    bills,
+                    billLines,
+                    auditLogs,
+                    new LedgerCurrency("USD"),
+                    vendorCopies,
+                    PurchaseTaxFixtures.purchaseTax(client, vendorCopies, billLines, CLOCK),
+                    mock(PlatformTransactionManager.class));
+            when(client.purchaseRules(any(), any())).thenReturn(PurchaseTaxFixtures.HOLD_AND_SELF_ASSESS);
+            bill.setVendorId(vendor);
+            limits("500.00", "500.00");
+        }
+
+        /** A goods-receipt bill of one stocked line billed at 400.00 with a stated tax of 28.00. */
+        private void taxedGoods() {
+            billed("428.00", true);
+            VendorBillLine line = billLines
+                    .findByVendorBill_VendorBillIdOrderByLineNumber(bill.getVendorBillId())
+                    .getFirst();
+            line.setUnitPrice(new BigDecimal("400.00"));
+            line.setBilledUnitPrice(new BigDecimal("400.00"));
+            bill.setTaxAmount(new BigDecimal("28.00"));
+        }
+
+        /** A goods-receipt bill of one non-stock line of 200.00, no tax, its vendor's key shop supplies. */
+        private void untaxedExpense() {
+            billed("200.00", false);
+            when(vendorCopies.apDefaults(vendor))
+                    .thenReturn(new VendorBillPostingService.Classification(null, "EXPENSE_SHOP_SUPPLIES"));
+            when(client.useTax(any()))
+                    .thenReturn(new TaxUseQuote.Response(
+                            new BigDecimal("17.00"), List.of(new TaxUseQuote.LineTax("1", new BigDecimal("17.00")))));
+        }
+
+        @Test
+        @DisplayName("AC3: a stated tax prorated onto a RECEIPT_MATCHED line within the limit leaves the bill"
+                + " AWAITING_APPROVAL with a skip row coded AP_BILL_TAX_ON_RESALE_GOODS, before the pre-check")
+        void holdSkips() {
+            taxedGoods();
+
+            assertThat(autoApproval.approveIfEligible(bill, evidence, 95)).isFalse();
+
+            assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.AWAITING_APPROVAL);
+            assertThat(bill.getApprovedBy()).isNull();
+            assertThat(onlyAudit().getNewValue()).contains("code=AP_BILL_TAX_ON_RESALE_GOODS");
+            verify(postingService, never()).requireMapped(any(), any(), any());
+            verify(postingService, never()).post(any(), any(), any(), anyString(), any());
+        }
+
+        @Test
+        @DisplayName("AC3: with the vendor's acceptTaxOnResaleGoods on, it is approved by SYSTEM, override"
+                + " VENDOR_SETTING")
+        void vendorSettingApproves() {
+            taxedGoods();
+            when(vendorCopies.acceptsTaxOnResaleGoods(vendor)).thenReturn(true);
+
+            assertThat(autoApproval.approveIfEligible(bill, evidence, 95)).isTrue();
+
+            assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.APPROVED);
+            assertThat(bill.getApprovedBy()).isEqualTo("SYSTEM");
+            assertThat(bill.getTaxOnResaleOverride()).isEqualTo(TaxOnResaleOverrideSource.VENDOR_SETTING);
+            assertThat(onlyAudit().getNewValue()).contains("taxOnResaleOverride=VENDOR_SETTING");
+        }
+
+        @Test
+        @DisplayName("AC8: an accruing bill asks pos-tax USE exactly once; the pre-check's legs and the posting"
+                + " carry the same 17.00 to USE_TAX_PAYABLE")
+        void oneQuote() {
+            untaxedExpense();
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<List<VendorBillPostingService.Leg>> legs = ArgumentCaptor.forClass(List.class);
+            ArgumentCaptor<VendorBillPostingService.UseTax> posted =
+                    ArgumentCaptor.forClass(VendorBillPostingService.UseTax.class);
+
+            assertThat(autoApproval.approveIfEligible(bill, evidence, 95)).isTrue();
+
+            verify(client).useTax(any());
+            verify(postingService).requireMapped(eq(bill), legs.capture(), eq(INVOICE_DATE));
+            verify(postingService).post(eq(bill), any(), eq(null), eq("SYSTEM"), posted.capture());
+            assertThat(legs.getValue())
+                    .contains(
+                            new VendorBillPostingService.Leg("EXPENSE_SHOP_SUPPLIES", new BigDecimal("217.00")),
+                            new VendorBillPostingService.Leg("USE_TAX_PAYABLE", new BigDecimal("-17.00")));
+            assertThat(posted.getValue())
+                    .isEqualTo(new VendorBillPostingService.UseTax("EXPENSE_SHOP_SUPPLIES", new BigDecimal("17.00")));
+            assertThat(onlyAudit().getNewValue()).contains("useTaxAmount=17.00");
+        }
+
+        @Test
+        @DisplayName("AC7 [M]: pos-tax unreachable for the rules skips with SERVICE_UNAVAILABLE, never read as off;"
+                + " the quote failing skips the same way")
+        void posTaxDownSkips() {
+            untaxedExpense();
+            when(client.purchaseRules(any(), any())).thenThrow(new TaxServiceUnavailableException("unavailable"));
+
+            assertThat(autoApproval.approveIfEligible(bill, evidence, 95)).isFalse();
+
+            assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.AWAITING_APPROVAL);
+            assertThat(onlyAudit().getNewValue()).contains("code=SERVICE_UNAVAILABLE");
+            verify(postingService, never()).post(any(), any(), any(), anyString(), any());
+
+            when(client.purchaseRules(any(), any())).thenReturn(PurchaseTaxFixtures.HOLD_AND_SELF_ASSESS);
+            when(client.useTax(any())).thenThrow(new TaxServiceUnavailableException("unavailable"));
+            assertThat(autoApproval.precheck(bill).refusal())
+                    .get()
+                    .satisfies(e ->
+                            assertThat(VendorBillApprovalServiceImpl.codeOf(e)).isEqualTo("SERVICE_UNAVAILABLE"));
+        }
+
+        @Test
+        @DisplayName("AC9: no USE_TAX_PAYABLE mapping skips with GL_MAPPING_NOT_CONFIGURED")
+        void useTaxMappingMissingSkips() {
+            untaxedExpense();
+            doThrow(new GLMappingNotConfiguredException("no mapping", "VENDOR_BILL", "USE_TAX_PAYABLE", "map it"))
+                    .when(postingService)
+                    .requireMapped(any(), any(), any());
+
+            assertThat(autoApproval.approveIfEligible(bill, evidence, 95)).isFalse();
+
+            assertThat(onlyAudit().getNewValue()).contains("code=GL_MAPPING_NOT_CONFIGURED");
+        }
+
+        @Test
+        @DisplayName("Rules switched off (configured false): the taxed goods bill is approved and nothing is quoted")
+        void rulesOff() {
+            taxedGoods();
+            when(client.purchaseRules(any(), any())).thenReturn(PurchaseTaxFixtures.OFF);
+
+            assertThat(autoApproval.approveIfEligible(bill, evidence, 95)).isTrue();
+
+            assertThat(bill.getTaxOnResaleOverride()).isNull();
+            verify(client, never()).useTax(any());
+        }
     }
 }
