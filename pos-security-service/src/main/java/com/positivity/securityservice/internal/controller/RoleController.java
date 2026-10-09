@@ -2,6 +2,7 @@ package com.positivity.securityservice.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.securityservice.internal.dto.PermissionDto;
+import com.positivity.securityservice.internal.dto.PermissionHoldersResponse;
 import com.positivity.securityservice.internal.dto.RoleAssignmentDto;
 import com.positivity.securityservice.internal.dto.RoleAssignmentRequest;
 import com.positivity.securityservice.internal.dto.RoleCreateRequest;
@@ -13,7 +14,9 @@ import com.positivity.securityservice.internal.dto.RolePersonasResponse;
 import com.positivity.securityservice.internal.dto.RoleUpdateRequest;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
 import com.positivity.securityservice.internal.exception.SecurityValidationException;
+import com.positivity.securityservice.internal.security.PermissionHolderReadScopes;
 import com.positivity.securityservice.internal.security.SecurityPermissions;
+import com.positivity.securityservice.internal.service.PermissionHolderService;
 import com.positivity.securityservice.internal.service.RoleAuthorityService;
 import com.positivity.securityservice.internal.service.RoleManagementService;
 import com.positivity.securityservice.internal.service.RolePermissionService;
@@ -29,8 +32,10 @@ import jakarta.validation.Valid;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -38,6 +43,9 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -56,6 +64,7 @@ public class RoleController {
     private final RoleManagementService roleManagementService;
     private final RolePermissionService rolePermissionService;
     private final RoleAuthorityService roleAuthorityService;
+    private final PermissionHolderService permissionHolderService;
 
     /**
      * Create a new role
@@ -186,6 +195,85 @@ public class RoleController {
     @ApiResponse(responseCode = "200", description = "Role persona snapshot returned")
     public ResponseEntity<RolePersonasResponse> getRolePersonas() {
         return ResponseEntity.ok(roleManagementService.getRolePersonas());
+    }
+
+    /**
+     * #2669: which of the caller's tenant's roles hold given permission codes — the "Who can do
+     * what" column of the Approval limits page. Roles only, no user data (decision D1); gated on
+     * {@code security:role:view} for any code, or on {@code accounting:ap_approval_policy:manage}
+     * for the codes that policy governs, the second checked in the service before any read (D2).
+     *
+     * <p>A literal path, so Spring prefers it over {@code GET /{id}}.
+     */
+    @GetMapping("/permission-holders")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"security:role:view", "accounting:ap_approval_policy:manage"})
+    @PreAuthorize("hasAnyAuthority('" + SecurityPermissions.ROLE_VIEW + "', '"
+            + PermissionHolderReadScopes.AP_APPROVAL_POLICY_MANAGE + "')")
+    @Operation(
+            operationId = "listPermissionHolders",
+            summary = "List the Roles That Hold Given Permissions",
+            description = """
+                    Returns, for each requested permission code, the roles of the caller's tenant that currently \
+                    hold it, each with its name, its templateKey (null for a custom role) and its locationScope; \
+                    roles are sorted by name, and a code no role holds is answered with an empty roles list.
+                    Use this tool to state a tenant's real separation of duties, as the Approval limits page does; \
+                    do not use listRoles or getRoleDefaultPermissions, which return every grant of every role or \
+                    one role at a time, and do not use it to find users, because it returns no user ids, names or \
+                    counts.
+                    Preconditions: the caller must hold security:role:view, which may ask about any registered \
+                    code, or accounting:ap_approval_policy:manage, which may ask only about accounting:ap:approve, \
+                    accounting:ap:approve_over_limit, accounting:ap:reject, accounting:ap:pay and \
+                    accounting:ap_approval_policy:manage.
+                    Required inputs: permission, repeated once per code, 1 to 20 distinct domain:resource:action \
+                    codes; codes are trimmed and lower-cased, and duplicates are answered once in first-seen order.
+                    No events are emitted and no state changes; the grants are read live for the caller's tenant \
+                    with no cache, so a token issued before a grant change keeps its old permissions until it is \
+                    reissued.
+                    Returns 400 VALIDATION_ERROR when permission is missing, names more than 20 distinct codes or \
+                    holds a malformed code, with fieldErrors on permission naming the bad values.
+                    Returns 403 when the caller holds neither permission, and 403 PERMISSION_HOLDER_SCOPE_DENIED, \
+                    naming the codes, before anything is read when a scoped caller asks about a code outside its \
+                    scope.
+                    Returns 422 PERMISSION_NOT_REGISTERED, with fieldErrors on permission, when a well-formed code \
+                    is not in the permission catalog, rather than answering that nobody holds it.
+                    """)
+    @ApiResponse(responseCode = "200", description = "Holding roles returned for every requested code")
+    @ApiResponse(
+            responseCode = "400",
+            description = "VALIDATION_ERROR: no code, more than 20 distinct codes, or a malformed code",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "The caller holds neither permission, or PERMISSION_HOLDER_SCOPE_DENIED: a code is"
+                    + " outside the caller's read scope",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "PERMISSION_NOT_REGISTERED: a well-formed code is not in the permission catalog",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<PermissionHoldersResponse> listPermissionHolders(
+            @Parameter(
+                            description = "A permission code (domain:resource:action) to report the holders of;"
+                                    + " repeat the parameter once per code, at most 20 distinct codes.",
+                            example = "accounting:ap:approve")
+                    @RequestParam(name = "permission", required = false)
+                    List<String> permission) {
+        return ResponseEntity.ok(permissionHolderService.listPermissionHolders(
+                permission == null ? List.of() : permission, callerAuthorities()));
+    }
+
+    /** The authority codes of the authenticated caller, as the gateway or token filter set them. */
+    private static Set<String> callerAuthorities() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) {
+            return Set.of();
+        }
+        return authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     /**

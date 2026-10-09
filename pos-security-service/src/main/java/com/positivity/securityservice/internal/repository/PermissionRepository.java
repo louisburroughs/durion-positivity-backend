@@ -1,8 +1,10 @@
 package com.positivity.securityservice.internal.repository;
 
 import com.positivity.securityservice.internal.entity.Permission;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -28,4 +30,14 @@ public interface PermissionRepository extends JpaRepository<Permission, UUID> {
             @Param("domain") String domain, @Param("resource") String resource, @Param("action") String action);
 
     List<Permission> findByRegisteredByService(String serviceName);
+
+    /**
+     * Which of the given codes are in the permission catalog (#2669). One query for the whole set,
+     * so the permission-holders read can refuse every unregistered code at once.
+     *
+     * @param names permission codes to look up
+     * @return the subset of {@code names} that is registered
+     */
+    @Query("SELECT p.name FROM Permission p WHERE p.name IN :names")
+    Set<String> findRegisteredNames(@Param("names") Collection<String> names);
 }

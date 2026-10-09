@@ -18,6 +18,7 @@ import com.positivity.securityservice.internal.exception.DuplicateRoleNameExcept
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
 import com.positivity.securityservice.internal.security.JwtAuthenticationFilter;
 import com.positivity.securityservice.internal.service.CustomUserDetailsService;
+import com.positivity.securityservice.internal.service.PermissionHolderService;
 import com.positivity.securityservice.internal.service.RoleAuthorityService;
 import com.positivity.securityservice.internal.service.RoleManagementService;
 import com.positivity.securityservice.internal.service.RolePermissionService;
@@ -153,6 +154,9 @@ class RoleManagementControllerTest {
 
     @MockitoBean
     private RoleAuthorityService roleAuthorityService;
+
+    @MockitoBean
+    private PermissionHolderService permissionHolderService;
 
     // Security infrastructure beans required by SecurityConfig
     @MockitoBean

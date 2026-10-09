@@ -9,7 +9,10 @@ import com.positivity.securityservice.internal.exception.DuplicateUsernameExcept
 import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
 import com.positivity.securityservice.internal.exception.InvalidTokenException;
 import com.positivity.securityservice.internal.exception.NoRolesAssignedException;
+import com.positivity.securityservice.internal.exception.PermissionHolderQueryInvalidException;
+import com.positivity.securityservice.internal.exception.PermissionHolderScopeDeniedException;
 import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
+import com.positivity.securityservice.internal.exception.PermissionNotRegisteredException;
 import com.positivity.securityservice.internal.exception.PlatformTenantRequiredException;
 import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
@@ -30,6 +33,7 @@ import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -126,8 +130,8 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
  *
  * <p>Every response built by this advice carries the correlation id in both the {@link ApiError}
  * body and the {@code X-Correlation-Id} response header (ADR-0017 §4, issue #1729). The private
- * {@code respond} helper is the sole path that builds an {@link ApiError}, so a handler added
- * later cannot forget the header.
+ * {@code build} helper, reached through {@code respond}, is the sole path that builds an
+ * {@link ApiError}, so a handler added later cannot forget the header.
  *
  * @since 1.0
  */
@@ -322,6 +326,81 @@ public class GlobalExceptionHandler {
         String correlationId = extractCorrelationId(request);
         log.warn("Step-up denied (correlationId={})", correlationId);
         return respond(HttpStatus.FORBIDDEN, "STEP_UP_DENIED", "The credentials could not be verified", correlationId);
+    }
+
+    /**
+     * Handles PermissionHolderQueryInvalidException — the {@code permission} query of the
+     * permission-holders read is missing, too long, or holds a code that is not
+     * {@code domain:resource:action} (#2669).
+     *
+     * **HTTP Status:** 400 Bad Request (VALIDATION_ERROR, ADR-0017 §1) with one {@code fieldErrors}
+     * entry on {@code permission} per problem.
+     *
+     * @param ex      the exception
+     * @param request the web request
+     * @return error response with 400 status, field errors and correlation ID
+     */
+    @ExceptionHandler(PermissionHolderQueryInvalidException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ResponseEntity<ApiError> handlePermissionHolderQueryInvalidException(
+            PermissionHolderQueryInvalidException ex, WebRequest request) {
+        String correlationId = extractCorrelationId(request);
+        log.warn("Validation error (correlationId={}): {}", correlationId, ex.getMessage());
+        return respondWithFieldErrors(
+                HttpStatus.BAD_REQUEST,
+                "VALIDATION_ERROR",
+                ex.getMessage(),
+                correlationId,
+                fieldErrors(PermissionHolderQueryInvalidException.FIELD, ex.fieldMessages()));
+    }
+
+    /**
+     * Handles PermissionHolderScopeDeniedException — a caller allowed the permission-holders read
+     * only through a scope entry asked about a code outside it (#2669, D2). Nothing was read.
+     *
+     * **HTTP Status:** 403 Forbidden (PERMISSION_HOLDER_SCOPE_DENIED, ADR-0017 §2 question 1). The
+     * message names the out-of-scope codes the caller sent.
+     *
+     * @param ex      the exception
+     * @param request the web request
+     * @return error response with 403 status and correlation ID
+     */
+    @ExceptionHandler(PermissionHolderScopeDeniedException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public ResponseEntity<ApiError> handlePermissionHolderScopeDeniedException(
+            PermissionHolderScopeDeniedException ex, WebRequest request) {
+        String correlationId = extractCorrelationId(request);
+        log.warn("Permission-holder read outside scope (correlationId={}): {}", correlationId, ex.getMessage());
+        return respond(HttpStatus.FORBIDDEN, "PERMISSION_HOLDER_SCOPE_DENIED", ex.getMessage(), correlationId);
+    }
+
+    /**
+     * Handles PermissionNotRegisteredException — the permission-holders read named a well-formed
+     * code the permission catalog does not hold (#2669).
+     *
+     * **HTTP Status:** 422 Unprocessable Entity (PERMISSION_NOT_REGISTERED, ADR-0017 §2) with one
+     * {@code fieldErrors} entry on {@code permission} per unregistered code.
+     *
+     * @param ex      the exception
+     * @param request the web request
+     * @return error response with 422 status, field errors and correlation ID
+     */
+    @ExceptionHandler(PermissionNotRegisteredException.class)
+    @ResponseStatus(HttpStatus.UNPROCESSABLE_ENTITY)
+    public ResponseEntity<ApiError> handlePermissionNotRegisteredException(
+            PermissionNotRegisteredException ex, WebRequest request) {
+        String correlationId = extractCorrelationId(request);
+        log.warn("Permission not registered (correlationId={}): {}", correlationId, ex.getMessage());
+        return respondWithFieldErrors(
+                HttpStatus.UNPROCESSABLE_ENTITY,
+                "PERMISSION_NOT_REGISTERED",
+                ex.getMessage(),
+                correlationId,
+                fieldErrors(
+                        PermissionHolderQueryInvalidException.FIELD,
+                        ex.unregistered().stream()
+                                .map(code -> "'" + code + "' is not a registered permission code")
+                                .toList()));
     }
 
     /**
@@ -790,9 +869,9 @@ public class GlobalExceptionHandler {
 
     /**
      * Builds the standardized error response, carrying the correlation id in both the
-     * {@link ApiError} body and the {@code X-Correlation-Id} response header (ADR-0017 §4). This
-     * is the only path in this advice that builds an {@link ApiError}, so a handler added later
-     * cannot forget the header.
+     * {@link ApiError} body and the {@code X-Correlation-Id} response header (ADR-0017 §4). It
+     * and {@code respondWithFieldErrors} both go through {@code build}, the only path in this advice
+     * that builds an {@link ApiError}, so a handler added later cannot forget the header.
      *
      * @param status        HTTP status for the response
      * @param code          error code for client processing
@@ -812,6 +891,27 @@ public class GlobalExceptionHandler {
             String referenceId,
             String nextAction,
             String supportAction) {
+        return build(status, code, message, correlationId, null, referenceId, nextAction, supportAction);
+    }
+
+    private ResponseEntity<ApiError> respondWithFieldErrors(
+            HttpStatus status,
+            String code,
+            String message,
+            String correlationId,
+            List<ApiError.FieldError> fieldErrors) {
+        return build(status, code, message, correlationId, fieldErrors, null, null, null);
+    }
+
+    private ResponseEntity<ApiError> build(
+            HttpStatus status,
+            String code,
+            String message,
+            String correlationId,
+            List<ApiError.FieldError> fieldErrors,
+            String referenceId,
+            String nextAction,
+            String supportAction) {
         return ResponseEntity.status(status)
                 .header(CORRELATION_ID_HEADER, correlationId)
                 .body(new ApiError(
@@ -820,10 +920,16 @@ public class GlobalExceptionHandler {
                         status.value(),
                         Instant.now(clock).toString(),
                         correlationId,
-                        null,
+                        fieldErrors,
                         referenceId,
                         nextAction,
                         supportAction));
+    }
+
+    private static List<ApiError.FieldError> fieldErrors(String field, List<String> messages) {
+        return messages.stream()
+                .map(message -> new ApiError.FieldError(field, message))
+                .toList();
     }
 
     private SelfRegistrationGuidance selfRegistrationGuidance(String errorCode) {
