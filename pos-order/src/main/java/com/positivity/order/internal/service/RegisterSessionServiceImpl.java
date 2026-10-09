@@ -1,8 +1,10 @@
 package com.positivity.order.internal.service;
 
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
+import com.positivity.order.internal.client.TaxPlausibilityPort.StatedAmount;
 import com.positivity.order.internal.config.FunctionalCurrency;
 import com.positivity.order.internal.config.OrderDomainEventPublisher;
+import com.positivity.order.internal.dto.CashMovementStatedTax;
 import com.positivity.order.internal.dto.CashMovementSummary;
 import com.positivity.order.internal.dto.RegisterSessionSummary;
 import com.positivity.order.internal.dto.SessionReport;
@@ -21,6 +23,7 @@ import com.positivity.order.internal.entity.SessionPolicyType;
 import com.positivity.order.internal.exception.CashMovementIdempotencyConflictException;
 import com.positivity.order.internal.exception.CashMovementRefusedException;
 import com.positivity.order.internal.exception.CashMovementRefusedException.Refusal;
+import com.positivity.order.internal.exception.CashMovementTaxRefusedException;
 import com.positivity.order.internal.exception.CurrencyNotSupportedException;
 import com.positivity.order.internal.exception.RegisterFloatLocationMismatchException;
 import com.positivity.order.internal.exception.RegisterSessionConflictException;
@@ -40,12 +43,14 @@ import com.positivity.order.internal.service.model.CashMovementResult;
 import com.positivity.order.internal.service.model.OpenSessionCommand;
 import com.positivity.order.internal.service.model.SessionPolicyView;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.error.ApiError;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -112,6 +117,7 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
     private final ExtAccountingRegisterFloatRepository registerFloatRepository;
     private final ExtAccountingPettyExpenseCategoryRepository categoryRepository;
     private final FunctionalCurrency functionalCurrency;
+    private final DrawerStatedTax drawerStatedTax;
     private final Clock clock;
     private final @Nullable MeterRegistry meterRegistry;
 
@@ -124,6 +130,11 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
     private static final int MAX_CODE_LENGTH = 64;
     private static final int MAX_RECEIPT_REFERENCE_LENGTH = 128;
     private static final int MAX_NOTE_LENGTH = 500;
+    private static final int MAX_SUPPLIER_NAME_LENGTH = 200;
+    private static final java.util.regex.Pattern REGIME_CODE = java.util.regex.Pattern.compile("^[A-Z0-9_]{1,32}$");
+    private static final String STATED_TAXES = "statedTaxes";
+    private static final String SUPPLIER_NAME = "supplierName";
+    private static final String SUPPLIER_REGISTRATION_NUMBER = "supplierRegistrationNumber";
 
     @SuppressWarnings("java:S107") // one collaborator per concern of the drawer; grouping them would hide them
     public RegisterSessionServiceImpl(
@@ -138,6 +149,7 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
             ExtAccountingRegisterFloatRepository registerFloatRepository,
             ExtAccountingPettyExpenseCategoryRepository categoryRepository,
             FunctionalCurrency functionalCurrency,
+            DrawerStatedTax drawerStatedTax,
             Clock clock,
             ObjectProvider<MeterRegistry> meterRegistry) {
         this.registerSessionRepository = registerSessionRepository;
@@ -151,6 +163,7 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
         this.registerFloatRepository = registerFloatRepository;
         this.categoryRepository = categoryRepository;
         this.functionalCurrency = functionalCurrency;
+        this.drawerStatedTax = drawerStatedTax;
         this.clock = clock;
         this.meterRegistry = meterRegistry.getIfAvailable();
     }
@@ -241,23 +254,62 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
     @Override
     @Transactional
     public @NonNull CashMovementResult recordCashMovement(@NonNull CashMovementCommand command) {
-        ValidMovement movement = validate(command);
+        // CAP:550 S32d item 6, the binding call order: validate, replay, local checks, the pos-tax call (outside the
+        // row lock, before the token is used), then lock and record. A refusal before the record leaves the token
+        // unspent, so the register may resend the same requestId with a corrected payload.
+        ValidMovement shaped = validate(command);
         // ADR-0061: 404 first, then the caller's reach at the drawer's location — a scoped cashier
         // cannot record (or replay) a movement on another shop's drawer.
         RegisterSession drawer = require(command.sessionId());
         requireInScope(drawer, OrderPermissions.ORDER_SESSION_CASH_MOVEMENT);
         // ADR-0067: the drawer's own currency, stamped when it opened (never the live configuration).
-        if (!drawer.getCurrencyCode().equals(movement.currencyCode())) {
+        if (!drawer.getCurrencyCode().equals(shaped.currencyCode())) {
             throw new CurrencyNotSupportedException("This drawer's cash is counted in " + drawer.getCurrencyCode()
-                    + "; " + movement.currencyCode() + " is not supported");
+                    + "; " + shaped.currencyCode() + " is not supported");
         }
+        // ADR-0067 PC-6: every amount fits the drawer currency's minor unit, refused in one 422, never rounded.
+        ValidMovement movement = atCurrencyExponent(shaped, drawer.getCurrencyCode());
 
         // Idempotent replay first (§8.2): a retry returns the first result, even after its approval
-        // token was used, and is never re-checked against today's policy.
+        // token was used, and is never re-checked against today's policy or pos-tax.
         Optional<CashMovementResult> replay = replay(movement);
         if (replay.isPresent()) {
             return replay.get();
         }
+
+        // Local checks, before pos-tax is asked and before any lock.
+        requireOpen(drawer);
+        CashMovementReason reason = movement.reason();
+        SessionPolicyType type = reason.policyType();
+        SessionPolicyView policy = sessionPolicyService.current();
+        if (!policy.allowed(type)) {
+            // Never retroactive: recorded movements of the type stand and are carried on the close fact.
+            throw refused(Refusal.TYPE_NOT_ALLOWED, reason + " movements are switched off in the drawer policy");
+        }
+        Instant occurredAt = Instant.now(clock);
+        LocalDate movementDate = DrawerStatedTax.movementDate(occurredAt);
+        if (reason == CashMovementReason.PETTY_EXPENSE) {
+            ExtAccountingPettyExpenseCategory category =
+                    categoryRepository.findByCode(movement.categoryCode()).orElse(null);
+            if (category == null || !category.isActive()) {
+                throw refused(
+                        Refusal.CATEGORY_UNKNOWN,
+                        "Petty-expense category " + movement.categoryCode() + " is not an active category");
+            }
+            requireOffered(movement, drawerStatedTax.offeredRegimes(drawer, category, movementDate));
+            requireWithinTotal(movement);
+        }
+
+        // The plausibility call: only with stated tax, outside the session's row lock, before approvalService.use.
+        DrawerStatedTax.TaxCheck taxCheck = movement.statedTaxes().isEmpty()
+                ? null
+                : drawerStatedTax.check(
+                        drawer,
+                        movementDate,
+                        movement.amount(),
+                        movement.statedTaxes(),
+                        movement.supplierRegistrationNumber());
+
         RegisterSession session = registerSessionRepository
                 .findByIdForUpdate(command.sessionId())
                 .orElseThrow(() -> new RegisterSessionNotFoundException(command.sessionId()));
@@ -267,31 +319,10 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
         if (replay.isPresent()) {
             return replay.get();
         }
-        if (session.getStatus() != RegisterSessionStatus.OPEN) {
-            throw new RegisterSessionConflictException("Cash movements require an OPEN session; session "
-                    + session.getSessionId() + " is " + session.getStatus());
-        }
+        requireOpen(session);
 
-        CashMovementReason reason = movement.reason();
-        SessionPolicyType type = reason.policyType();
-        SessionPolicyView policy = sessionPolicyService.current();
-        if (!policy.allowed(type)) {
-            // Never retroactive: recorded movements of the type stand and are carried on the close fact.
-            throw refused(Refusal.TYPE_NOT_ALLOWED, reason + " movements are switched off in the drawer policy");
-        }
         List<CashMovement> recorded =
                 cashMovementRepository.findBySessionIdOrderByOccurredAtAsc(session.getSessionId());
-        if (reason == CashMovementReason.PETTY_EXPENSE) {
-            boolean active = categoryRepository
-                    .findByCode(movement.categoryCode())
-                    .map(ExtAccountingPettyExpenseCategory::isActive)
-                    .orElse(false);
-            if (!active) {
-                throw refused(
-                        Refusal.CATEGORY_UNKNOWN,
-                        "Petty-expense category " + movement.categoryCode() + " is not an active category");
-            }
-        }
         if (reason.isFloatChange()) {
             requireRecordedFloatChange(session, recorded, reason, movement.amount());
         }
@@ -341,7 +372,11 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                     .clerkUserId(currentUserId())
                     .approvedBy(approval == null ? null : approval.getApproverUserId())
                     .approvalId(approval == null ? null : approval.getApprovalId())
-                    .occurredAt(Instant.now(clock))
+                    .occurredAt(occurredAt)
+                    .supplierName(movement.supplierName())
+                    .supplierRegistrationNumber(movement.supplierRegistrationNumber())
+                    .taxPlausibility(taxCheck == null ? null : taxCheck.taxPlausibility())
+                    .supplierRegistrationRequired(taxCheck == null ? null : taxCheck.supplierRegistrationRequired())
                     .build());
         } catch (DataIntegrityViolationException e) {
             if (!violates(e, REQUEST_ID_CONSTRAINT)) {
@@ -351,10 +386,64 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
             throw new CashMovementIdempotencyConflictException(
                     "requestId " + movement.requestId() + " was already used for another cash movement");
         }
+        drawerStatedTax.record(saved.getMovementId(), movement.statedTaxes());
         if (approval != null) {
             approval.setUsedByMovementId(saved.getMovementId());
         }
-        return new CashMovementResult(toMovementSummary(saved), false);
+        return new CashMovementResult(toMovementSummary(saved, movement.statedTaxesView()), false);
+    }
+
+    private static void requireOpen(RegisterSession session) {
+        if (session.getStatus() != RegisterSessionStatus.OPEN) {
+            throw new RegisterSessionConflictException("Cash movements require an OPEN session; session "
+                    + session.getSessionId() + " is " + session.getStatus());
+        }
+    }
+
+    /** Amendment A1: every stated regime is one the session offers for the category today, else one 422. */
+    private static void requireOffered(ValidMovement movement, List<String> offered) {
+        List<ApiError.FieldError> errors = new ArrayList<>();
+        List<StatedAmount> taxes = movement.statedTaxes();
+        for (int i = 0; i < taxes.size(); i++) {
+            if (!offered.contains(taxes.get(i).regime())) {
+                errors.add(new ApiError.FieldError(
+                        STATED_TAXES + "[" + i + "].regime", "is not offered for this category here and today"));
+            }
+        }
+        if (!errors.isEmpty()) {
+            throw new CashMovementTaxRefusedException(
+                    CashMovementTaxRefusedException.Code.TAX_REGIME_NOT_OFFERED,
+                    "A stated tax regime is not offered for this category, location, currency and date",
+                    errors);
+        }
+    }
+
+    /**
+     * The local arithmetic bound (S32b's check (a), the same code and keys): each stated amount is below the receipt
+     * total, and so is their sum, checked only when more than one amount is stated.
+     */
+    private static void requireWithinTotal(ValidMovement movement) {
+        List<StatedAmount> taxes = movement.statedTaxes();
+        List<ApiError.FieldError> errors = new ArrayList<>();
+        BigDecimal sum = BigDecimal.ZERO;
+        for (int i = 0; i < taxes.size(); i++) {
+            BigDecimal amount = taxes.get(i).amount();
+            sum = sum.add(amount);
+            if (amount.compareTo(movement.amount()) >= 0) {
+                errors.add(new ApiError.FieldError(
+                        STATED_TAXES + "[" + i + "].amount", "must be below the movement's amount"));
+            }
+        }
+        if (taxes.size() > 1 && sum.compareTo(movement.amount()) >= 0) {
+            errors.add(new ApiError.FieldError(
+                    STATED_TAXES, "the stated amounts must sum to below the movement's amount"));
+        }
+        if (!errors.isEmpty()) {
+            throw new CashMovementTaxRefusedException(
+                    CashMovementTaxRefusedException.Code.TAX_AMOUNT_IMPLAUSIBLE,
+                    "The stated tax is not plausible for the movement's amount",
+                    errors);
+        }
     }
 
     @Override
@@ -379,21 +468,28 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                     policy.alwaysNeedsManager(type) || (!limitsApply && limit != null),
                     requiredFields(reason)));
         }
+        // CAP:550 S32d: offered regimes come from local replicas only; the evidence rule is asked of pos-tax only
+        // when some regime is registered, and a pos-tax that does not answer gives null, never a failed read.
+        LocalDate today = DrawerStatedTax.movementDate(Instant.now(clock));
+        List<String> registered = drawerStatedTax.registeredRegimes(session, today);
         List<CashMovementOptions.CategoryOption> categories =
                 categoryRepository.findByStatusOrderByCodeAsc(ExtAccountingPettyExpenseCategory.ACTIVE).stream()
                         .map(category -> new CashMovementOptions.CategoryOption(
-                                category.getCode(), category.getLabel(), category.getExamples()))
+                                category.getCode(),
+                                category.getLabel(),
+                                category.getExamples(),
+                                category.isTaxRecoverable() ? registered : List.of()))
                         .toList();
-        return new CashMovementOptions(sessionId, session.getCurrencyCode(), reasons, categories);
+        CashMovementOptions.EvidenceRule evidenceRule =
+                registered.isEmpty() ? null : drawerStatedTax.evidenceRule(session, today);
+        return new CashMovementOptions(sessionId, session.getCurrencyCode(), reasons, categories, evidenceRule);
     }
 
     @Override
     @Transactional(readOnly = true)
     public @NonNull List<CashMovementSummary> listCashMovements(@NonNull UUID sessionId) {
-        require(sessionId);
-        return cashMovementRepository.findBySessionIdOrderByOccurredAtAsc(sessionId).stream()
-                .map(RegisterSessionServiceImpl::toMovementSummary)
-                .toList();
+        RegisterSession session = require(sessionId);
+        return summaries(cashMovementRepository.findBySessionIdOrderByOccurredAtAsc(sessionId), session);
     }
 
     @Override
@@ -475,9 +571,7 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                         cashMovementTotal,
                         saved.getOpenedAt(),
                         now,
-                        cashMovementRepository.findBySessionIdOrderByOccurredAtAsc(sessionId).stream()
-                                .map(m -> toFactMovement(m, saved.getCurrencyCode()))
-                                .toList()));
+                        factMovements(cashMovementRepository.findBySessionIdOrderByOccurredAtAsc(sessionId), saved)));
         return toSummary(saved);
     }
 
@@ -507,9 +601,7 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                 .map(e -> new SessionReport.TenderTotal(e.getKey(), e.getValue()))
                 .toList();
         List<CashMovementSummary> movements =
-                cashMovementRepository.findBySessionIdOrderByOccurredAtAsc(sessionId).stream()
-                        .map(RegisterSessionServiceImpl::toMovementSummary)
-                        .toList();
+                summaries(cashMovementRepository.findBySessionIdOrderByOccurredAtAsc(sessionId), session);
         List<SalesOrder> sessionOrders = salesOrderRepository.findBySessionId(sessionId);
         long orderCount = sessionOrders.size();
         return new SessionReport(
@@ -700,7 +792,10 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
         };
     }
 
-    /** A validated movement request. */
+    /**
+     * A validated movement request. {@link #toString()} never prints the approval token, the supplier's name or the
+     * supplier's number.
+     */
     private record ValidMovement(
             UUID sessionId,
             UUID requestId,
@@ -712,10 +807,17 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
             @Nullable String bagNumber,
             @Nullable String receiptReference,
             @Nullable String note,
-            @Nullable String approvalToken) {
+            @Nullable String approvalToken,
+            @Nullable String supplierName,
+            List<StatedAmount> statedTaxes,
+            @Nullable String supplierRegistrationNumber) {
 
-        /** Whether {@code m} records this same request (the approval token is not part of the payload). */
-        boolean samePayloadAs(CashMovement m) {
+        /**
+         * Whether {@code m}, with its recorded stated taxes, records this same request (the approval token is not part
+         * of the payload). Stated taxes compare as a set by regime, amounts by {@code compareTo}; the number in its
+         * normalised form.
+         */
+        boolean samePayloadAs(CashMovement m, List<CashMovementStatedTax> recordedTaxes) {
             return sessionId.equals(m.getSessionId())
                     && reason == m.getReasonCode()
                     && amount.compareTo(m.getAmount()) == 0
@@ -724,7 +826,39 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                     && Objects.equals(vendorId, m.getVendorId())
                     && Objects.equals(bagNumber, m.getBagNumber())
                     && Objects.equals(receiptReference, m.getReceiptReference())
-                    && Objects.equals(note, m.getNote());
+                    && Objects.equals(note, m.getNote())
+                    && Objects.equals(supplierName, m.getSupplierName())
+                    && Objects.equals(supplierRegistrationNumber, m.getSupplierRegistrationNumber())
+                    && sameStatedTaxes(recordedTaxes);
+        }
+
+        private boolean sameStatedTaxes(List<CashMovementStatedTax> recordedTaxes) {
+            if (statedTaxes.size() != recordedTaxes.size()) {
+                return false;
+            }
+            Map<String, BigDecimal> recordedByRegime = new LinkedHashMap<>();
+            recordedTaxes.forEach(tax -> recordedByRegime.put(tax.regime(), tax.amount()));
+            return statedTaxes.stream()
+                    .allMatch(tax -> recordedByRegime.containsKey(tax.regime())
+                            && recordedByRegime.get(tax.regime()).compareTo(tax.amount()) == 0);
+        }
+
+        /** The stated taxes as a read shows them. */
+        List<CashMovementStatedTax> statedTaxesView() {
+            return statedTaxes.stream()
+                    .sorted(java.util.Comparator.comparing(StatedAmount::regime))
+                    .map(tax -> new CashMovementStatedTax(tax.regime(), tax.amount()))
+                    .toList();
+        }
+
+        @Override
+        public String toString() {
+            return "ValidMovement[sessionId=" + sessionId + ", requestId=" + requestId + ", reason=" + reason
+                    + ", amount=" + amount + ", currencyCode=" + currencyCode + ", categoryCode=" + categoryCode
+                    + ", vendorId=" + vendorId + ", bagNumber=" + bagNumber + ", receiptReference=" + receiptReference
+                    + ", approvalToken=" + (approvalToken == null ? "absent" : "present")
+                    + ", supplierNameProvided=" + (supplierName != null) + ", statedTaxes=" + statedTaxes
+                    + ", supplierRegistrationNumberProvided=" + (supplierRegistrationNumber != null) + "]";
         }
     }
 
@@ -765,6 +899,7 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                 // No reason field: the amount must match a recorded float change.
             }
         }
+        StatedTaxShape statedTax = statedTaxShape(command, reason);
         String token =
                 command.approvalToken() == null || command.approvalToken().isBlank()
                         ? null
@@ -773,14 +908,148 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                 command.sessionId(),
                 command.requestId(),
                 reason,
-                scale(command.amount()),
+                command.amount(),
                 command.currencyCode().trim(),
                 reason == CashMovementReason.PETTY_EXPENSE ? categoryCode : null,
                 reason == CashMovementReason.VENDOR_COD ? command.vendorId() : null,
                 reason == CashMovementReason.BANK_DROP ? bagNumber : null,
                 reason == CashMovementReason.PETTY_EXPENSE ? receiptReference : null,
                 note,
-                token);
+                token,
+                statedTax.supplierName(),
+                statedTax.amounts(),
+                statedTax.registrationNumber());
+    }
+
+    /** The stated-tax fields after the shape rules (S32d item 5, amendment A2). */
+    private record StatedTaxShape(
+            @Nullable String supplierName,
+            List<StatedAmount> amounts,
+            @Nullable String registrationNumber) {}
+
+    /**
+     * The shape rules of the three stated-tax fields, every failure in one 400 {@code
+     * REGISTER_SESSION_INVALID_ARGUMENT} with {@code fieldErrors[]} (ADR-0017 §3). The messages are value-free: the
+     * handler logs the exception at WARN.
+     */
+    private static StatedTaxShape statedTaxShape(CashMovementCommand command, CashMovementReason reason) {
+        List<CashMovementCommand.StatedTax> sent = command.statedTaxes() == null ? List.of() : command.statedTaxes();
+        boolean nameSent =
+                command.supplierName() != null && !command.supplierName().isBlank();
+        boolean numberSent = command.supplierRegistrationNumber() != null;
+        if (reason != CashMovementReason.PETTY_EXPENSE) {
+            List<ApiError.FieldError> errors = new ArrayList<>();
+            if (!sent.isEmpty()) {
+                errors.add(new ApiError.FieldError(STATED_TAXES, "is accepted on PETTY_EXPENSE only"));
+            }
+            if (nameSent) {
+                errors.add(new ApiError.FieldError(SUPPLIER_NAME, "is accepted on PETTY_EXPENSE only"));
+            }
+            if (numberSent) {
+                errors.add(new ApiError.FieldError(SUPPLIER_REGISTRATION_NUMBER, "is accepted on PETTY_EXPENSE only"));
+            }
+            invalidIfAny(errors);
+            return new StatedTaxShape(null, List.of(), null);
+        }
+        List<ApiError.FieldError> errors = new ArrayList<>();
+        List<StatedAmount> amounts = new ArrayList<>();
+        java.util.Set<String> regimes = new java.util.HashSet<>();
+        for (int i = 0; i < sent.size(); i++) {
+            CashMovementCommand.StatedTax tax = sent.get(i);
+            String regime = tax == null ? null : tax.regime();
+            BigDecimal amount = tax == null ? null : tax.amount();
+            String key = STATED_TAXES + "[" + i + "]";
+            boolean regimeValid = regime != null && REGIME_CODE.matcher(regime).matches();
+            if (!regimeValid) {
+                errors.add(new ApiError.FieldError(
+                        key + ".regime", "is required: 1 to 32 upper-case letters, digits or underscores"));
+            } else if (!regimes.add(regime)) {
+                errors.add(new ApiError.FieldError(key + ".regime", "is stated more than once"));
+            }
+            if (amount == null || amount.signum() <= 0) {
+                errors.add(new ApiError.FieldError(key + ".amount", "is required and must be positive"));
+            }
+            if (regimeValid && amount != null) {
+                amounts.add(new StatedAmount(regime, amount));
+            }
+        }
+        String supplierName = nameSent ? command.supplierName().trim() : null;
+        if (supplierName != null && supplierName.length() > MAX_SUPPLIER_NAME_LENGTH) {
+            errors.add(new ApiError.FieldError(
+                    SUPPLIER_NAME, "must be at most " + MAX_SUPPLIER_NAME_LENGTH + " characters"));
+        }
+        if (!sent.isEmpty() && supplierName == null) {
+            errors.add(new ApiError.FieldError(SUPPLIER_NAME, "is required when a tax amount is stated"));
+        }
+        String registrationNumber = null;
+        if (numberSent) {
+            if (sent.isEmpty()) {
+                errors.add(new ApiError.FieldError(
+                        SUPPLIER_REGISTRATION_NUMBER, "is accepted only with at least one stated tax amount"));
+            } else {
+                registrationNumber = SupplierRegistrationNumbers.locallyAccepted(command.supplierRegistrationNumber())
+                        .orElse(null);
+                if (registrationNumber == null) {
+                    errors.add(new ApiError.FieldError(
+                            SUPPLIER_REGISTRATION_NUMBER,
+                            "must be 1 to " + SupplierRegistrationNumbers.MAX_LENGTH
+                                    + " characters without whitespace or control characters"));
+                }
+            }
+        }
+        invalidIfAny(errors);
+        return new StatedTaxShape(supplierName, List.copyOf(amounts), registrationNumber);
+    }
+
+    private static void invalidIfAny(List<ApiError.FieldError> errors) {
+        if (!errors.isEmpty()) {
+            throw new RegisterSessionRequestValidationException(
+                    "The cash movement's stated-tax fields are malformed", errors);
+        }
+    }
+
+    /**
+     * Step 1's precision check (ADR-0067 PC-6; S32d revisions (2) and (4)): the movement's amount and each stated
+     * amount fit the drawer currency's minor unit, every offending one named in one 422 {@code
+     * AMOUNT_PRECISION_EXCEEDS_CURRENCY}. Nothing is rounded: a representable amount is only stated at the exponent
+     * ({@code 40.000} CAD is {@code 40.00}).
+     */
+    private static ValidMovement atCurrencyExponent(ValidMovement movement, String currencyCode) {
+        List<ApiError.FieldError> errors = new ArrayList<>();
+        if (!DrawerAmounts.representable(movement.amount(), currencyCode)) {
+            errors.add(new ApiError.FieldError("amount", "has more decimals than " + currencyCode + " allows"));
+        }
+        List<StatedAmount> taxes = movement.statedTaxes();
+        for (int i = 0; i < taxes.size(); i++) {
+            if (!DrawerAmounts.representable(taxes.get(i).amount(), currencyCode)) {
+                errors.add(new ApiError.FieldError(
+                        STATED_TAXES + "[" + i + "].amount", "has more decimals than " + currencyCode + " allows"));
+            }
+        }
+        if (!errors.isEmpty()) {
+            throw new CashMovementTaxRefusedException(
+                    CashMovementTaxRefusedException.Code.AMOUNT_PRECISION_EXCEEDS_CURRENCY,
+                    "An amount has more decimals than the drawer's currency allows; nothing is rounded",
+                    errors);
+        }
+        return new ValidMovement(
+                movement.sessionId(),
+                movement.requestId(),
+                movement.reason(),
+                DrawerAmounts.atExponent(movement.amount(), currencyCode),
+                movement.currencyCode(),
+                movement.categoryCode(),
+                movement.vendorId(),
+                movement.bagNumber(),
+                movement.receiptReference(),
+                movement.note(),
+                movement.approvalToken(),
+                movement.supplierName(),
+                taxes.stream()
+                        .map(tax ->
+                                new StatedAmount(tax.regime(), DrawerAmounts.atExponent(tax.amount(), currencyCode)))
+                        .toList(),
+                movement.supplierRegistrationNumber());
     }
 
     private static void require(@Nullable String value, String field, CashMovementReason reason) {
@@ -804,11 +1073,15 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
     /** The first result of the same request, or a conflict when the id was used for another payload. */
     private Optional<CashMovementResult> replay(ValidMovement movement) {
         return cashMovementRepository.findByRequestId(movement.requestId()).map(existing -> {
-            if (!movement.samePayloadAs(existing)) {
+            List<CashMovementStatedTax> recordedTaxes = drawerStatedTax
+                    .statedTaxes(List.of(existing.getMovementId()), movement.currencyCode())
+                    .getOrDefault(existing.getMovementId(), List.of());
+            if (!movement.samePayloadAs(existing, recordedTaxes)) {
+                // Value-free (S32d item 7): the handler may log this message, so it names no field's value.
                 throw new CashMovementIdempotencyConflictException(
                         "requestId " + movement.requestId() + " was already used for a different cash movement");
             }
-            return new CashMovementResult(toMovementSummary(existing), true);
+            return new CashMovementResult(toMovementSummary(existing, recordedTaxes), true);
         });
     }
 
@@ -892,7 +1165,16 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                 s.getClosedAt());
     }
 
-    private static CashMovementSummary toMovementSummary(CashMovement m) {
+    /** The session's movements as reads show them, each with its stated taxes. */
+    private List<CashMovementSummary> summaries(List<CashMovement> movements, RegisterSession session) {
+        Map<UUID, List<CashMovementStatedTax>> taxes = drawerStatedTax.statedTaxes(
+                movements.stream().map(CashMovement::getMovementId).toList(), session.getCurrencyCode());
+        return movements.stream()
+                .map(m -> toMovementSummary(m, taxes.getOrDefault(m.getMovementId(), List.of())))
+                .toList();
+    }
+
+    private static CashMovementSummary toMovementSummary(CashMovement m, List<CashMovementStatedTax> statedTaxes) {
         return new CashMovementSummary(
                 m.getMovementId(),
                 m.getSessionId(),
@@ -909,11 +1191,28 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                 m.getClerkId(),
                 m.getClerkUserId(),
                 m.getApprovedBy(),
-                m.getOccurredAt());
+                m.getOccurredAt(),
+                m.getSupplierName(),
+                statedTaxes,
+                m.getSupplierRegistrationNumber() != null,
+                m.getTaxPlausibility(),
+                m.getSupplierRegistrationRequired());
     }
 
-    /** One movement on the close fact (schema version 2). */
-    private static RegisterSessionClosedV1.Movement toFactMovement(CashMovement m, String sessionCurrency) {
+    /** The session's movements on the close fact, each with its stated taxes, never null. */
+    private List<RegisterSessionClosedV1.Movement> factMovements(
+            List<CashMovement> movements, RegisterSession session) {
+        Map<UUID, List<CashMovementStatedTax>> taxes = drawerStatedTax.statedTaxes(
+                movements.stream().map(CashMovement::getMovementId).toList(), session.getCurrencyCode());
+        return movements.stream()
+                .map(m ->
+                        toFactMovement(m, session.getCurrencyCode(), taxes.getOrDefault(m.getMovementId(), List.of())))
+                .toList();
+    }
+
+    /** One movement on the close fact (schema version 2; the five S32d fields appended, {@code statedTaxes} never null). */
+    private static RegisterSessionClosedV1.Movement toFactMovement(
+            CashMovement m, String sessionCurrency, List<CashMovementStatedTax> statedTaxes) {
         return new RegisterSessionClosedV1.Movement(
                 m.getMovementId(),
                 m.getReasonCode() == null ? null : m.getReasonCode().name(),
@@ -929,6 +1228,13 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                 m.getClerkId(),
                 m.getClerkUserId(),
                 m.getApprovedBy(),
-                m.getOccurredAt());
+                m.getOccurredAt(),
+                m.getSupplierName(),
+                statedTaxes.stream()
+                        .map(tax -> new RegisterSessionClosedV1.StatedTax(tax.regime(), tax.amount()))
+                        .toList(),
+                m.getSupplierRegistrationNumber(),
+                m.getTaxPlausibility(),
+                m.getSupplierRegistrationRequired());
     }
 }

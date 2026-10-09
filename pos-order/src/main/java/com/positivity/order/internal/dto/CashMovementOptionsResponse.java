@@ -20,7 +20,13 @@ public record CashMovementOptionsResponse(
         @Schema(description = "One entry per fixed reason") List<ReasonOption> reasons,
 
         @Schema(description = "The ACTIVE petty-expense categories")
-        List<CategoryOption> categories) {
+        List<CategoryOption> categories,
+
+        @Schema(
+                description = "From which receipt total the supplier's registration number is asked for; null when"
+                        + " pos-tax did not answer or no regime is offered",
+                nullable = true)
+        EvidenceRule evidenceRule) {
 
     @Schema(description = "One reason's options")
     public record ReasonOption(
@@ -55,5 +61,19 @@ public record CashMovementOptionsResponse(
             @Schema(example = "Shop supplies") String label,
 
             @Schema(description = "What belongs in the category")
-            String examples) {}
+            String examples,
+
+            @Schema(
+                    description = "Regimes whose tax the register may state on this category's receipts here and"
+                            + " today; empty when none",
+                    example = "[\"REGIME_1\"]")
+            List<String> offeredRegimes) {}
+
+    @Schema(description = "The drawer receipt's evidence threshold for the supplier's registration number")
+    public record EvidenceRule(
+            @Schema(description = "Receipt total, tax included, from which the number is asked for", example = "100.00")
+            BigDecimal threshold,
+
+            @Schema(description = "ISO 4217 code of the threshold", example = "EUR")
+            String currencyCode) {}
 }

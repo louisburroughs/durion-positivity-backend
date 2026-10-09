@@ -1,6 +1,7 @@
 package com.positivity.order.internal.service.model;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -22,6 +23,9 @@ import org.jspecify.annotations.Nullable;
  * @param receiptReference the receipt, for {@code PETTY_EXPENSE}
  * @param note optional free text; required for {@code PETTY_EXPENSE}
  * @param approvalToken a manager's single-use approval token from the step-up, when one is needed
+ * @param supplierName the supplier on a petty-expense receipt (CAP:550 S32d); CONFIDENTIAL
+ * @param statedTaxes the tax the receipt states, per regime; null or empty for none
+ * @param supplierRegistrationNumber the supplier's registration number as sent; INTERNAL (ADR-0072 Decision 1)
  */
 public record CashMovementCommand(
         @NonNull UUID sessionId,
@@ -34,19 +38,33 @@ public record CashMovementCommand(
         @Nullable String bagNumber,
         @Nullable String receiptReference,
         @Nullable String note,
-        @Nullable String approvalToken) {
+        @Nullable String approvalToken,
+        @Nullable String supplierName,
+        @Nullable List<StatedTax> statedTaxes,
+        @Nullable String supplierRegistrationNumber) {
 
     public CashMovementCommand {
         Objects.requireNonNull(sessionId, "sessionId must not be null");
     }
 
-    /** Never prints the approval token. */
+    /**
+     * One stated amount as sent.
+     *
+     * @param regime the regime code
+     * @param amount the amount
+     */
+    public record StatedTax(
+            @Nullable String regime, @Nullable BigDecimal amount) {}
+
+    /** Never prints the approval token, the supplier's name or the supplier's number. */
     @Override
     public String toString() {
         return "CashMovementCommand[sessionId=" + sessionId + ", requestId=" + requestId + ", reason=" + reason
                 + ", amount=" + amount + ", currencyCode=" + currencyCode + ", categoryCode=" + categoryCode
                 + ", vendorId=" + vendorId + ", bagNumber="
                 + bagNumber + ", receiptReference=" + receiptReference + ", approvalToken="
-                + (approvalToken == null ? "absent" : "present") + "]";
+                + (approvalToken == null ? "absent" : "present") + ", supplierNameProvided=" + (supplierName != null)
+                + ", statedTaxes=" + statedTaxes + ", supplierRegistrationNumberProvided="
+                + (supplierRegistrationNumber != null) + "]";
     }
 }

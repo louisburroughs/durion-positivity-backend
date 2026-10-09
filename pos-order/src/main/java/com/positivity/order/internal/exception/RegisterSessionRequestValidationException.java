@@ -1,5 +1,6 @@
 package com.positivity.order.internal.exception;
 
+
 /**
  * A register-session request is malformed on its face: a non-positive cash-movement amount, or a
  * {@code movementType} that does not name a {@link com.positivity.order.internal.entity.CashMovementType}

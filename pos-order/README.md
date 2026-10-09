@@ -230,6 +230,57 @@ drawer fields to show; it never calls pos-tax for registrations (ADR-0071 §7, A
   that day, in regime order (at most one per regime): the regimes a drawer may offer (S32d), under the same caveat.
 - The copy keeps no registration number: the drawer needs only whether a regime is registered on a date.
 
+## Stated tax on drawer expenses (CAP:550 S32d, #2639)
+
+A `PETTY_EXPENSE` on `POST /v1/orders/sessions/{sessionId}/cash-movements` may carry the tax its receipt states, so
+pos-accounting can recover the claimable part at close. Three optional fields, accepted on `PETTY_EXPENSE` only:
+`statedTaxes[{regime, amount}]` (absent and `[]` both mean none), `supplierName` (required once any amount is stated,
+trimmed, at most 200 characters; CONFIDENTIAL) and `supplierRegistrationNumber` (only with a stated amount; INTERNAL
+under ADR-0072 Decision 1). The drawer still counts the whole `amount`: limits, running totals, the approval token,
+theoretical cash and the bank drop are unchanged, and the token is not bound to the stated tax.
+
+**Call order (binding).** Validate (shape 400, then 404 and scope, then currency, then precision 422) → idempotent
+replay (never calls pos-tax) → local checks (OPEN, policy, category, regime offered, arithmetic bound) → pos-tax's
+`POST /v1/tax/plausibility-checks`, only with stated tax, outside the session's row lock and before the approval
+token is used → lock, re-check the replay and OPEN, use the token, record. A refusal records nothing and leaves the
+token unspent, so the register may resend the same `requestId` with a corrected payload.
+
+- **Precision (ADR-0067 PC-6).** The movement's `amount` and each stated amount must fit the drawer currency's minor
+  unit (`DrawerAmounts`: trailing zeros do not count); otherwise one 422 `AMOUNT_PRECISION_EXCEEDS_CURRENCY` names
+  `amount` and each `statedTaxes[i].amount`. Nothing is rounded: S16's silent `setScale(4, HALF_UP)` on the movement's
+  amount is gone, and `40.000` CAD is recorded as `40.00`. pos-order's other rounding sites are #2651.
+- **Offered regimes (amendment A1).** From local replicas only (`DrawerStatedTax`): the session has a location; the
+  category is `taxRecoverable` in the category copy; the regime's registration is in effect on the movement's date in
+  `ext_tax_registration`; its `jurisdictionCode` is the session location's country or region (`ext_location`); and the
+  drawer's currency is the registration country's currency (JDK ISO 3166 → 4217). The movement's date is its instant's
+  UTC date. Anything else → 422 `TAX_REGIME_NOT_OFFERED`. Only the posting decides what is claimed.
+- **Local bound.** Each stated amount, and their sum when there are several, must be below `amount`; otherwise 422
+  `TAX_AMOUNT_IMPLAUSIBLE` (`fieldErrors[statedTaxes[i].amount]`, `fieldErrors[statedTaxes]`), before pos-tax is asked.
+- **The supplier's number.** Normalised exactly as pos-tax's `normalize` does (`SupplierRegistrationNumbers`; the
+  same matrix runs in both modules' tests), then 1–32 characters without whitespace or controls, else 400. Stored
+  normalised, only after pos-tax found it well formed; never in a response (`supplierRegistrationNumberProvided`
+  instead), a message, a log or a metric. `toString` of the request, command, entity and fact movement omit both the
+  number and the supplier name.
+- **pos-tax's answers, keyed on `code`.** 200 well-formed `false` → 400 on `supplierRegistrationNumber`; well-formed
+  `null` with a number → 422 `SUPPLIER_REGISTRATION_NOT_ACCEPTED`; 422 `TAX_AMOUNT_IMPLAUSIBLE` → relayed with
+  pos-tax's field errors; any other 4xx is a disagreement (WARN with pos-tax's code, counted on
+  `pos.order.tax_check.disagreement` with a `code` tag bounded to `AMOUNT_PRECISION_EXCEEDS_CURRENCY`,
+  `CURRENCY_NOT_SUPPORTED`, `TAX_JURISDICTION_NOT_CONFIGURED`, `TAX_REGIME_NOT_DECLARED`, `VALIDATION_ERROR` or
+  `OTHER`). A disagreement, a timeout, a 5xx or an unreachable pos-tax is 503 `TAX_CHECK_UNAVAILABLE` with
+  `Retry-After` when the number was sent, and otherwise records the amounts as `RATE_UNAVAILABLE` with
+  `supplierRegistrationRequired = null`. A missing required number is recorded; the posting withholds recovery.
+- **Replay.** `samePayloadAs` compares `supplierName`, the stated taxes as a set by regime (amounts by `compareTo`)
+  and the normalised number; a difference is 409 `IDEMPOTENCY_CONFLICT`.
+- **Reads.** Record, replay, list and the X/Z reports carry `supplierName`, `statedTaxes`,
+  `supplierRegistrationNumberProvided`, `taxPlausibility` and `supplierRegistrationRequired`. The cashier options
+  (`GET …/cash-movement-options`) give each category its `offeredRegimes[]` and the session an `evidenceRule
+  {threshold, currencyCode}` from pos-tax's `GET /v1/tax/evidence-rules` (the `DRAWER_RECEIPT` rule), `null` when
+  pos-tax does not answer; the read never fails because of pos-tax.
+- **Close fact.** `order.session.closed` stays schema version 2; each movement gains `supplierName`, `statedTaxes`
+  (always a list), `supplierRegistrationNumber`, `taxPlausibility` and `supplierRegistrationRequired`.
+- **Category copy.** `accounting.petty-expense-category.changed` now carries `taxRecoverable` and
+  `recoverablePercent`; a fact without them maps to not recoverable. pos-order decides only on `taxRecoverable`.
+
 ## Purchase order transmission timeline (issue #1638)
 
 - `GET /v1/orders/purchase-orders/{poId}/transmission-events` (`listPurchaseOrderTransmissionEvents`,
@@ -282,7 +333,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `ORDER_PRICE_OVERRIDE_BAD_REQUEST` | 400 | Price-override request validation failure |
 | `VALIDATION_FAILED` | 400 | Bean-validation rejection of a price-override body, with `fieldErrors` |
 | `PURCHASE_ORDER_BAD_REQUEST` | 400 | Purchase-order request validation failure, including a currency that is not an ISO 4217 code |
-| `REGISTER_SESSION_INVALID_ARGUMENT` | 400 | Register-session request validation failure |
+| `REGISTER_SESSION_INVALID_ARGUMENT` | 400 | Register-session request validation failure; on a cash movement's stated-tax fields (CAP:550 S32d) with `fieldErrors`, including a supplier's number pos-tax found malformed (never echoed) |
 | `VALIDATION_ERROR` | 400 | `PUT /v1/orders/session-policy`: justification under 10 characters, a negative limit or tolerance, an allowed type without a cashier limit, vendor cash on delivery switched on (not until S24), or a missing / non-ISO `currencyCode`; also a non-ISO `currencyCode` on a cash-movement or approval body (CAP:550 S16) |
 | `RETURN_INVALID_ARGUMENT` | 400 | Return request validation failure |
 | `ORDER_FORBIDDEN` | 403 | Caller lacks required order permissions (sales orders, cancellations, price overrides, register sessions) |
@@ -313,6 +364,10 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `ORDER_PRICE_OVERRIDE_INVALID` | 422 | Price override failed business validation |
 | `ORDER_INVALID_CUSTOMER` | 422 | The customer referenced by the order is not valid for it |
 | `REGISTER_FLOAT_LOCATION_MISMATCH` | 422 | `POST /v1/orders/sessions` at a location other than the one the register's configured float is held at (#2573: no register moves during an open session); `fieldErrors` name `terminalId`, `requestedLocationId` and, only when the caller's scope covers it, `floatLocationId`. No session is opened |
+| `AMOUNT_PRECISION_EXCEEDS_CURRENCY` | 422 | A cash movement's `amount` or a stated tax amount has more decimals than the drawer's currency allows; `fieldErrors` name each, nothing is rounded (CAP:550 S32d, ADR-0067 PC-6) |
+| `TAX_REGIME_NOT_OFFERED` | 422 | A stated tax regime the session does not offer for the category, location, currency and date; `fieldErrors[statedTaxes[i].regime]` (CAP:550 S32d) |
+| `TAX_AMOUNT_IMPLAUSIBLE` | 422 | A stated tax amount, or their sum, at or above the movement's amount, or above pos-tax's plausible maximum (relayed with pos-tax's `fieldErrors`) (CAP:550 S32d) |
+| `SUPPLIER_REGISTRATION_NOT_ACCEPTED` | 422 | A supplier's registration number for a country that names no supplier regime; never recorded unchecked (CAP:550 S32d) |
 | `CASH_MOVEMENT_TYPE_NOT_ALLOWED` | 422 | The movement's reason is switched off in the tenant's drawer policy (CAP:550 S16) |
 | `PETTY_EXPENSE_CATEGORY_UNKNOWN` | 422 | A petty expense names no ACTIVE category of pos-order's copy of accounting's categories |
 | `FLOAT_CHANGE_NOT_RECORDED` | 422 | A float movement that does not close the gap between the register's configured float and the drawer's float exactly, that moves toward a negative float, or on a drawer whose register float is held at another location |
@@ -340,6 +395,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `VENDOR_REPLICATION_PENDING` | 503 | The purchase order's vendor is not in pos-order's copy of the pos-supplier vendor master yet (create, approve, a vendor-changing revision, transmit); `Retry-After` is set, retry or seed the copy (ADR-0017 §1, #1994) |
 | `ORDER_TAX_UNAVAILABLE` | 503 | pos-tax could not be reached to price the order |
 | `ORDER_INVOICING_UNAVAILABLE` | 503 | pos-invoice could not be reached to complete the order |
+| `TAX_CHECK_UNAVAILABLE` | 503 | A petty expense carried the supplier's number and pos-tax could not check it (unreachable, timed out, failed, or disagreed with pos-order's replicas); `Retry-After` is set (`pos.order.tax-check.retry-after-seconds`); nothing recorded (CAP:550 S32d) |
 | `CASH_MOVEMENT_APPROVAL_UNAVAILABLE` | 503 | pos-security-service's step-up check could not be made (unreachable, timed out, or answered anything but a result or `STEP_UP_DENIED`) |
 
 ## Configuration
@@ -356,6 +412,8 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `POS_ORDER_SUPPLIER_MANIFEST_TOPIC` / `POS_ORDER_SUPPLIER_MANIFEST_CONSUMER_GROUP` | `supplier.manifest.v1` / `pos-order-supplier-manifests` | pos-supplier's reconciliation manifest and this module's group on it (see [Vendor copy](#vendor-copy-and-the-purchase-order-vendor-guard-cap550-s24-2517)) |
 | `POS_ORDER_SUPPLIER_COMMANDS_TOPIC` | `supplier.commands.v1` | Where `supplier.outbox.replay-requested` is sent on drift |
 | `pos.order.outbox.replay.max-lookback` | `P30D` | Oldest window start an `order.outbox.replay-requested` command is served for |
+| `POS_ORDER_TAX_CHECK_CONNECT_TIMEOUT_MS` / `POS_ORDER_TAX_CHECK_READ_TIMEOUT_MS` | `1000` / `3000` | Timeouts of pos-tax's plausibility check and evidence-rules read (CAP:550 S32d) |
+| `POS_ORDER_TAX_CHECK_RETRY_AFTER_SECONDS` | `5` | `Retry-After` of 503 `TAX_CHECK_UNAVAILABLE`; startup fails, naming `pos.order.tax-check.retry-after-seconds`, when it is below connect + read rounded up to whole seconds (ADR-0017 §1) |
 | `POS_SECURITY_API_SECRET` | required for approvals | Sent as `X-Internal-Api-Secret` on the step-up call; unset, every approval is 503 `CASH_MOVEMENT_APPROVAL_UNAVAILABLE` |
 
 ## Multitenancy (ADR-0062, WS3 wave 5)
@@ -405,7 +463,11 @@ Forward migrations include `V2__order_prior_transmitted_version.sql` (#2492),
 tenant's CASH house account; filled by a party-fact replay), and
 `V6__event_outbox_published_window_index.sql` (#2579 — the partial `(topic, created_at) WHERE published_at IS NOT
 NULL` index the reconciliation manifest and its replay read `event_outbox` through, as the other fact owners have), and
-`V7__ext_supplier_vendor.sql` (CAP:550 S24 — the tenant-scoped vendor copy `ext_supplier_vendor`, with RLS).
+`V7__ext_supplier_vendor.sql` (CAP:550 S24 — the tenant-scoped vendor copy `ext_supplier_vendor`, with RLS),
+`V8__ext_tax_registration.sql` (CAP:550 S32c — the tax-registration copy), and `V9__drawer_stated_tax.sql` (CAP:550
+S32d — the supplier and plausibility columns on `cash_movement`, the tenant table `cash_movement_stated_tax` with
+UNIQUE `(tenant_id, movement_id, regime)` and `amount > 0`, and `tax_recoverable` / `recoverable_percent` on
+`ext_accounting_petty_expense_category`; no backfill).
 
 ## Development
 

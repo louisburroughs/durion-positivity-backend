@@ -87,6 +87,12 @@ pos:
   tenancy:
     default-tenant-id: ${POS_TENANCY_DEFAULT_TENANT_ID:01900000-0000-7000-8000-000000000001}
   order:
+    # CAP:550 S32d (ADR-0017 §1): pos-tax's plausibility check and evidence-rules read. Retry-After on 503
+    # TAX_CHECK_UNAVAILABLE must be at least connect + read, rounded up to whole seconds, or startup fails.
+    tax-check:
+      connect-timeout-ms: ${POS_ORDER_TAX_CHECK_CONNECT_TIMEOUT_MS:1000}
+      read-timeout-ms: ${POS_ORDER_TAX_CHECK_READ_TIMEOUT_MS:3000}
+      retry-after-seconds: ${POS_ORDER_TAX_CHECK_RETRY_AFTER_SECONDS:5}
     kafka:
       # Domain-event publishing + replica feeds (ADR-0044, parity stories D1/I2): tier-1 rails, no flag.
       # CRM replica feeds (ADR-0044 §6): ext_customer / ext_vehicle

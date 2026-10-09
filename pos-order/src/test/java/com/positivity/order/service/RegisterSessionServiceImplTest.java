@@ -131,6 +131,7 @@ class RegisterSessionServiceImplTest {
                 registerFloatRepository,
                 categoryRepository,
                 new com.positivity.order.internal.config.FunctionalCurrency("USD"),
+                org.mockito.Mockito.mock(DrawerStatedTax.class),
                 clock,
                 meters);
         org.mockito.Mockito.lenient().when(sessionPolicyService.current()).thenReturn(DEFAULT_POLICY);
@@ -478,6 +479,9 @@ class RegisterSessionServiceImplTest {
                         null,
                         null,
                         "BAG-1",
+                        null,
+                        null,
+                        null,
                         null,
                         null,
                         null)))

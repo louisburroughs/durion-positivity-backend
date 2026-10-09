@@ -17,6 +17,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -108,6 +109,30 @@ public class CashMovement extends TenantScopedEntity {
 
     @Column(name = "occurred_at", nullable = false)
     private Instant occurredAt;
+
+    /**
+     * The supplier on a petty-expense receipt (CAP:550 S32d); CONFIDENTIAL, so never in {@link #toString()}, an
+     * INFO-or-higher log or a metric tag.
+     */
+    @ToString.Exclude
+    @Column(name = "supplier_name", length = 200, updatable = false)
+    private String supplierName;
+
+    /**
+     * The supplier's indirect-tax registration number, normalised, stored only after pos-tax found it well formed
+     * (S32d item 7; INTERNAL under ADR-0072 Decision 1). Never in {@link #toString()}, a response, a log or a metric.
+     */
+    @ToString.Exclude
+    @Column(name = "supplier_registration_number", length = 32, updatable = false)
+    private String supplierRegistrationNumber;
+
+    /** {@code PLAUSIBLE} or {@code RATE_UNAVAILABLE}; null when no check was made (S32d item 6). */
+    @Column(name = "tax_plausibility", length = 16, updatable = false)
+    private String taxPlausibility;
+
+    /** Whether an evidence rule asked for the supplier's number; null when no check was made, never a default. */
+    @Column(name = "supplier_registration_required", updatable = false)
+    private Boolean supplierRegistrationRequired;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

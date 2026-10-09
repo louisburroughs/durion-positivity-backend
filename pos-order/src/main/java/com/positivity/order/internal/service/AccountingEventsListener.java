@@ -179,6 +179,9 @@ public class AccountingEventsListener {
         copy.setStatus(fact.status().name());
         copy.setAccountCode(fact.accountCode());
         copy.setAccountName(fact.accountName());
+        // CAP:550 S32d item 4: a fact produced before S32d carries neither field, which means not recoverable.
+        copy.setTaxRecoverable(Boolean.TRUE.equals(fact.taxRecoverable()));
+        copy.setRecoverablePercent(Boolean.TRUE.equals(fact.taxRecoverable()) ? fact.recoverablePercent() : null);
         copy.setAggregateVersion(aggregateVersion);
         copy.setSyncedAt(Instant.now(clock));
         categoryRepository.save(copy);
