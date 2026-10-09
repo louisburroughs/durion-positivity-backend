@@ -5,7 +5,6 @@ import com.positivity.accounting.internal.dto.TaxPurchaseRules;
 import com.positivity.accounting.internal.dto.TaxUseQuote;
 import com.positivity.accounting.internal.exception.TaxQuoteRefusedException;
 import com.positivity.accounting.internal.exception.TaxServiceUnavailableException;
-import com.positivity.shared.error.ApiError;
 import com.positivity.tenancy.TenantContext;
 import com.positivity.tenancy.TenantHeaders;
 import java.time.Duration;
@@ -29,6 +28,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -243,11 +243,13 @@ public class TaxReferenceClient {
     /** pos-tax's error code when its envelope carries a well-formed one, else {@code "-"}; never anything else. */
     private String errorCode(RestClientResponseException e) {
         try {
-            ApiError error = objectMapper.readValue(e.getResponseBodyAsByteArray(), ApiError.class);
-            if (error != null
-                    && error.code() != null
-                    && ERROR_CODE.matcher(error.code()).matches()) {
-                return error.code();
+            // Only the envelope's code is read (a tree, so an envelope missing other fields still yields its code).
+            JsonNode code =
+                    objectMapper.readTree(e.getResponseBodyAsByteArray()).get("code");
+            if (code != null
+                    && code.isString()
+                    && ERROR_CODE.matcher(code.asString()).matches()) {
+                return code.asString();
             }
         } catch (RuntimeException parse) {
             // No readable envelope: the status alone is logged.
