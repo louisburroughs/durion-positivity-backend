@@ -721,6 +721,7 @@ ADR-0071 §5). Nothing here names a country or a regime: they come from pos-tax'
 | `GET /v1/accounting/tax-registrations[?asOf=]` | `accounting:tax_registration:view` | 200; 400 (malformed `asOf`); 403 |
 | `POST /v1/accounting/tax-registrations` | `accounting:tax_registration:manage` | 201; 200 (replayed `requestId`); 400; 403; 409 and 422 relayed; 503 `SERVICE_UNAVAILABLE` + `Retry-After` |
 | `PUT /v1/accounting/tax-registrations/{registrationId}` | `accounting:tax_registration:manage` | 200; 400; 403; 404, 409 and 422 relayed; 503 `SERVICE_UNAVAILABLE` + `Retry-After` |
+| `GET /v1/accounting/tax-regimes[?countryCode=]` (#2659) | `accounting:tax_registration:view` | 200; 400 (malformed `countryCode`); 403; 503 `SERVICE_UNAVAILABLE` + `Retry-After` |
 
 - **Writes.** The front door checks the justification (10 to 1000 characters) and the `requestId` (400
   `VALIDATION_ERROR`), then calls pos-tax (`TaxRegistrationClient`, ADR-0044 R2) with its per-caller secret
@@ -742,6 +743,15 @@ ADR-0071 §5). Nothing here names a country or a regime: they come from pos-tax'
   is derived on `asOf`, else today in UTC. A write appears in the GET once its fact arrives. A fact whose payload
   names another tenant than the one its record header bound is skipped and logged.
 - **Data.** The copy keeps the shape-checked, normalised number: INTERNAL under ADR-0072 Decision 1. Nothing logs it.
+- **Regime choices (#2659).** `GET /v1/accounting/tax-regimes` lists the regimes pos-tax configures for `countryCode`
+  (two upper-case letters, else 400 `VALIDATION_ERROR`), or for the tax country (`accounting.tax.country`) when it is
+  omitted: each regime in configured order with the region codes it covers (empty = the whole country) and the tax
+  types registered and recovered under it (code and jurisdiction level). A tax type with no regime cannot be
+  registered for and is not listed. It is read on every call from pos-tax's `GET /v1/tax/tax-types` through
+  `TaxReferenceClient` (`tax:rates:view`, tenant and correlation id forwarded, the timeouts above) and not cached. A
+  country without a profile answers an empty list. Anything that is not an answer (pos-tax unreachable, any 4xx or
+  5xx, or an answer missing a required list or field or naming an undeclared regime) is 503 `SERVICE_UNAVAILABLE`
+  with `Retry-After`, never an empty list; nothing is relayed, since the country is validated here first.
 
 ## Input-tax recovery and typed output tax (CAP:550 S32d, #2639)
 

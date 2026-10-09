@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.client;
 
 import com.positivity.accounting.internal.dto.InformationReturnFormsResponse;
 import com.positivity.accounting.internal.dto.TaxPurchaseRules;
+import com.positivity.accounting.internal.dto.TaxTypesReference;
 import com.positivity.accounting.internal.dto.TaxUseQuote;
 import com.positivity.accounting.internal.exception.TaxQuoteRefusedException;
 import com.positivity.accounting.internal.exception.TaxServiceUnavailableException;
@@ -33,8 +34,8 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * pos-accounting's utility client for pos-tax's configured references (CAP:550 #2615; ADR-0044 R2): today the
- * information-return forms of a country, and (CAP:550 S43, #2604) its purchase-tax rules and the self-assessed
- * ({@code USE}) tax of a vendor bill.
+ * information-return forms of a country, (CAP:550 S43, #2604) its purchase-tax rules and the self-assessed
+ * ({@code USE}) tax of a vendor bill, and (CAP:550 #2659) its tax types and regimes.
  *
  * <p>pos-tax is internal-only and not on Eureka, so it is reached on a fixed base URL ({@code pos.accounting.tax.base-url},
  * the S32c precedent) with bounded connect and read timeouts (defaults 2 s and 5 s). Each call is a service call:
@@ -64,6 +65,7 @@ public class TaxReferenceClient {
     static final String INFORMATION_RETURN_FORMS = "/v1/tax/information-return-forms";
     static final String PURCHASE_RULES = "/v1/tax/purchase-rules";
     static final String CALCULATE = "/v1/tax/calculate";
+    static final String TAX_TYPES = "/v1/tax/tax-types";
 
     /** The shape of an error code worth logging; anything else is logged as {@code "-"}. */
     private static final Pattern ERROR_CODE = Pattern.compile("^[A-Z][A-Z0-9_]{0,63}$");
@@ -144,6 +146,30 @@ public class TaxReferenceClient {
                                 SERVICE_AUTHORITY)
                         .retrieve()
                         .body(TaxPurchaseRules.class));
+    }
+
+    /**
+     * The tax types and regimes pos-tax configures for {@code countryCode} (CAP:550 S32a's read, for #2659's front
+     * door). A country without a profile answers empty lists: a defined answer. Anything that is not an answer, any 4xx
+     * included (the country is validated before the call, so pos-tax's 400 is never the caller's), is 503.
+     *
+     * @param countryCode an upper-case ISO 3166-1 alpha-2 code
+     * @return pos-tax's answer as read; the caller checks its required fields
+     */
+    public @NonNull TaxTypesReference taxTypes(@NonNull String countryCode) {
+        return call(
+                "a tax-types read",
+                false,
+                () -> withHeaders(
+                                restClient
+                                        .get()
+                                        .uri(uri -> uri.path(TAX_TYPES)
+                                                .queryParam("countryCode", countryCode)
+                                                .build())
+                                        .accept(MediaType.APPLICATION_JSON),
+                                SERVICE_AUTHORITY)
+                        .retrieve()
+                        .body(TaxTypesReference.class));
     }
 
     /**
