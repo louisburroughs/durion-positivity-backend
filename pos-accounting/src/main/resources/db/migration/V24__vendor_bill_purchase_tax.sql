@@ -18,7 +18,8 @@ ALTER TABLE public.vendor_bill
     ADD CONSTRAINT vendor_bill_tax_on_resale_override_check CHECK (
         (tax_on_resale_override IS NULL AND tax_on_resale_override_justification IS NULL)
         OR (tax_on_resale_override = 'VENDOR_SETTING' AND tax_on_resale_override_justification IS NULL)
-        OR (tax_on_resale_override = 'BILL'
+        OR (tax_on_resale_override IS NOT DISTINCT FROM 'BILL'
+            AND tax_on_resale_override_justification IS NOT NULL
             AND char_length(btrim(tax_on_resale_override_justification)) >= 10));
 
 COMMENT ON COLUMN public.vendor_bill.tax_on_resale_override IS
