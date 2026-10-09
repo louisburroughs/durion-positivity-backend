@@ -181,3 +181,7 @@ CREATE POLICY tenant_isolation ON public.register_cash_movement_tax_recovery
 -- 6. Output tax by type (item 11): pos-tax's tax type on each invoice tax row (S32a TaxBreakdownLine.taxType). Null
 --    on a row written before S32d or on a fact without it.
 ALTER TABLE public.ext_invoice_tax ADD COLUMN tax_type character varying(32);
+
+-- The tax-liability snapshot freezes the codes of every account the tax-payable keys map to, comma-joined (a typed
+-- tenant has several), never a literal 2200: the column the entity already declares at 200 characters.
+ALTER TABLE public.tax_liability_snapshot ALTER COLUMN tax_payable_account_code TYPE character varying(200);
