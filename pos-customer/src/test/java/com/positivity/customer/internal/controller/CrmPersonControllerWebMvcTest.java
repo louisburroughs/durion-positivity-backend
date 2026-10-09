@@ -75,12 +75,13 @@ class CrmPersonControllerWebMvcTest {
     @Test
     void contactPointInputs_withoutPrimary_defaultToNotPrimary() {
         CreatePersonRequest request = objectMapper.readValue("""
-                {"firstName":"Dana","lastName":"Ortiz","preferredContactMethod":"PHONE",
+                {"firstName":"Dana","lastName":"Ortiz","preferredContactMethod":"PHONE_CALL",
                  "phones":[{"value":"(512) 555-0142"}]}
                 """, CreatePersonRequest.class);
 
-        assertThat(request.getPhones()).singleElement().satisfies(phone -> assertThat(phone.isPrimary())
-                .isFalse());
+        assertThat(request.getPhones())
+                .singleElement()
+                .satisfies(phone -> assertThat(phone.isPrimary()).isFalse());
     }
 
     @Test
