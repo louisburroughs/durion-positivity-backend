@@ -4,8 +4,15 @@
 -- platform template and tenants provisioned after it; this carries the change to the tenants provisioned before.
 --
 -- Only a description that still equals the old seeded text changes: a description a tenant edited is left alone. Keys
--- and mappings do not change. Flyway runs as the owner, which row-level security does not restrict, so every tenant's
--- rows are reached. A fixed timestamp, as V11's renumbering: no SQL clock (ADR-0024).
+-- and mappings do not change. A fixed timestamp, as V11's renumbering: no SQL clock (ADR-0024).
+--
+-- Tenancy: the tables read and written here are under FORCE ROW LEVEL SECURITY, and the owner running Flyway would
+-- otherwise see only its bound tenant (none here), so the UPDATE would match nothing and still succeed. As V10 and V11
+-- do, the migration lifts FORCE for its own statement and restores it; it is one transaction, so nobody observes a
+-- table without it. Each row is matched within its own tenant (the join is on tenant_id).
+
+ALTER TABLE public.mapping_key NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE public.posting_category NO FORCE ROW LEVEL SECURITY;
 
 UPDATE public.mapping_key k
 SET description = t.label,
@@ -28,3 +35,6 @@ WHERE c.posting_category_id = k.posting_category_id
   AND c.category_name = 'VENDOR_BILL'
   AND k.key_name = t.key_name
   AND k.description = t.seeded;
+
+ALTER TABLE public.mapping_key FORCE ROW LEVEL SECURITY;
+ALTER TABLE public.posting_category FORCE ROW LEVEL SECURITY;
