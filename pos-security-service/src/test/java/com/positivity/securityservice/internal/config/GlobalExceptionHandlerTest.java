@@ -531,6 +531,65 @@ class GlobalExceptionHandlerTest {
     }
 
     // ---------------------------------------------------------------
+    // permission-holders read (#2669)
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("permission-holders read handlers (#2669)")
+    class PermissionHolderHandlers {
+
+        @Test
+        @DisplayName("400 VALIDATION_ERROR with one fieldErrors entry on permission per problem")
+        void queryInvalidIs400WithFieldErrors() {
+            ResponseEntity<ApiError> response = sut.handlePermissionHolderQueryInvalidException(
+                    new com.positivity.securityservice.internal.exception.PermissionHolderQueryInvalidException(
+                            java.util.List.of("'a::b' is not a domain:resource:action permission code", "too many")),
+                    requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("VALIDATION_ERROR");
+            assertThat(response.getBody().fieldErrors())
+                    .containsExactly(
+                            new ApiError.FieldError(
+                                    "permission", "'a::b' is not a domain:resource:action permission code"),
+                            new ApiError.FieldError("permission", "too many"));
+            assertThat(response.getHeaders().getFirst("X-Correlation-Id")).isEqualTo(CORRELATION_ID);
+        }
+
+        @Test
+        @DisplayName("403 PERMISSION_HOLDER_SCOPE_DENIED naming the out-of-scope codes")
+        void scopeDeniedIs403NamingTheCodes() {
+            ResponseEntity<ApiError> response = sut.handlePermissionHolderScopeDeniedException(
+                    new com.positivity.securityservice.internal.exception.PermissionHolderScopeDeniedException(
+                            java.util.List.of("security:role:edit")),
+                    requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("PERMISSION_HOLDER_SCOPE_DENIED");
+            assertThat(response.getBody().message()).contains("security:role:edit");
+        }
+
+        @Test
+        @DisplayName("422 PERMISSION_NOT_REGISTERED with a fieldErrors entry naming each code")
+        void notRegisteredIs422WithFieldErrors() {
+            ResponseEntity<ApiError> response = sut.handlePermissionNotRegisteredException(
+                    new com.positivity.securityservice.internal.exception.PermissionNotRegisteredException(
+                            java.util.List.of("accounting:ap:aprove")),
+                    requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("PERMISSION_NOT_REGISTERED");
+            assertThat(response.getBody().fieldErrors()).singleElement().satisfies(fe -> {
+                assertThat(fe.field()).isEqualTo("permission");
+                assertThat(fe.message()).contains("accounting:ap:aprove");
+            });
+        }
+    }
+
+    // ---------------------------------------------------------------
     // handleStepUpDeniedException
     // ---------------------------------------------------------------
 
@@ -1107,6 +1166,24 @@ class GlobalExceptionHandlerTest {
                             request -> handler.handleStepUpDeniedException(
                                     new com.positivity.securityservice.internal.exception.StepUpDeniedException(
                                             "bad_credentials"),
+                                    request)),
+                    Named.of("handlePermissionHolderQueryInvalidException", (HandlerInvocation)
+                            request -> handler.handlePermissionHolderQueryInvalidException(
+                                    new com.positivity.securityservice.internal.exception
+                                            .PermissionHolderQueryInvalidException(
+                                            java.util.List.of("at least one permission code is required")),
+                                    request)),
+                    Named.of("handlePermissionHolderScopeDeniedException", (HandlerInvocation)
+                            request -> handler.handlePermissionHolderScopeDeniedException(
+                                    new com.positivity.securityservice.internal.exception
+                                            .PermissionHolderScopeDeniedException(
+                                            java.util.List.of("security:role:edit")),
+                                    request)),
+                    Named.of("handlePermissionNotRegisteredException", (HandlerInvocation)
+                            request -> handler.handlePermissionNotRegisteredException(
+                                    new com.positivity.securityservice.internal.exception
+                                            .PermissionNotRegisteredException(
+                                            java.util.List.of("accounting:ap:aprove")),
                                     request)),
                     Named.of("handleTokenUserIdMissingException", (HandlerInvocation)
                             request -> handler.handleTokenUserIdMissingException(

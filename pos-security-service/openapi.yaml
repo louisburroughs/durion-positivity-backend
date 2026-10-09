@@ -2686,6 +2686,77 @@ paths:
       - Role Management
       x-required-permissions:
       - security:role:view
+  /v1/roles/permission-holders:
+    get:
+      description: 'Returns, for each requested permission code, the roles of the caller''s tenant that currently hold it, each with its name, its templateKey (null for a custom role) and its locationScope; roles are sorted by name, and a code no role holds is answered with an empty roles list.
+
+        Use this tool to state a tenant''s real separation of duties, as the Approval limits page does; do not use listRoles or getRoleDefaultPermissions, which return every grant of every role or one role at a time, and do not use it to find users, because it returns no user ids, names or counts.
+
+        Preconditions: the caller must hold security:role:view, which may ask about any registered code, or accounting:ap_approval_policy:manage, which may ask only about accounting:ap:approve, accounting:ap:approve_over_limit, accounting:ap:reject, accounting:ap:pay and accounting:ap_approval_policy:manage.
+
+        Required inputs: permission, repeated once per code, 1 to 20 distinct domain:resource:action codes; codes are trimmed, matched case-insensitively and answered in the catalog''s spelling, and duplicates are answered once in first-seen order.
+
+        No events are emitted and no state changes; the grants are read live for the caller''s tenant with no cache, so a token issued before a grant change keeps its old permissions until it is reissued.
+
+        Returns 400 VALIDATION_ERROR when permission is missing, names more than 20 distinct codes or holds a malformed code, with fieldErrors on permission naming the bad values.
+
+        Returns 403 when the caller holds neither permission, and 403 PERMISSION_HOLDER_SCOPE_DENIED, naming the codes, before anything is read when a scoped caller asks about a code outside its scope.
+
+        Returns 422 PERMISSION_NOT_REGISTERED, with fieldErrors on permission, when a well-formed code is not in the permission catalog, rather than answering that nobody holds it.
+
+        '
+      operationId: listPermissionHolders
+      parameters:
+      - description: A permission code (domain:resource:action) to report the holders of; repeat the parameter once per code, at least one and at most 20 distinct codes. Matched case-insensitively and answered in the catalog's spelling.
+        example: accounting:ap:approve
+        in: query
+        name: permission
+        required: true
+        schema:
+          items:
+            type: string
+          type: array
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionHoldersResponse'
+          description: Holding roles returned for every requested code
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VALIDATION_ERROR: no code, more than 20 distinct codes, or a malformed code'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'The caller holds neither permission, or PERMISSION_HOLDER_SCOPE_DENIED: a code is outside the caller''s read scope'
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'PERMISSION_NOT_REGISTERED: a well-formed code is not in the permission catalog'
+      security:
+      - bearerAuth:
+        - security:role:view
+        - accounting:ap_approval_policy:manage
+      summary: List the Roles That Hold Given Permissions
+      tags:
+      - Role Management
+      x-required-permissions:
+      - security:role:view
+      - accounting:ap_approval_policy:manage
   /v1/roles/permissions:
     put:
       description: 'Replaces a role''s entire permission set with the supplied list of permission names.
@@ -5866,6 +5937,58 @@ components:
       - domain
       - id
       - name
+      type: object
+    PermissionHolderRole:
+      description: A role of the caller's tenant that holds the permission, as currently configured
+      properties:
+        locationScope:
+          description: ALL when the role holds its permissions at every location; LOCATION when it holds them only at the locations its holder is assigned to (ADR-0061 §2).
+          enum:
+          - ALL
+          - LOCATION
+          example: ALL
+          type: string
+        name:
+          description: The role's name as the tenant stores it. For a custom role this is tenant-authored text; show it as typed.
+          example: CONTROLLER
+          type: string
+        templateKey:
+          description: The canonical template name when the role was provisioned from the platform role template, for the client to translate; null for a tenant's custom role.
+          example: CONTROLLER
+          type:
+          - string
+          - 'null'
+      required:
+      - locationScope
+      - name
+      - templateKey
+      type: object
+    PermissionHolders:
+      description: The roles of the caller's tenant that hold one requested permission code
+      properties:
+        permission:
+          description: The requested permission code, matched case-insensitively and answered in the catalog's spelling (for example people:timeEntry:approve)
+          example: accounting:ap:approve
+          type: string
+        roles:
+          description: The roles that hold the code, sorted by name ignoring case. Empty when no role holds it, which is a real separation-of-duties answer, not an error.
+          items:
+            $ref: '#/components/schemas/PermissionHolderRole'
+          type: array
+      required:
+      - permission
+      - roles
+      type: object
+    PermissionHoldersResponse:
+      description: Which of the caller's tenant's roles hold each requested permission code
+      properties:
+        permissions:
+          description: One entry per distinct requested code, in the order first requested. Every requested code appears, with an empty roles list when no role holds it.
+          items:
+            $ref: '#/components/schemas/PermissionHolders'
+          type: array
+      required:
+      - permissions
       type: object
     PermissionRegistrationRequest:
       description: Request to register the permission catalog published by a domain service

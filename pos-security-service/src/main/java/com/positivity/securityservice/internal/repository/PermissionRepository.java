@@ -1,6 +1,7 @@
 package com.positivity.securityservice.internal.repository;
 
 import com.positivity.securityservice.internal.entity.Permission;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -28,4 +29,16 @@ public interface PermissionRepository extends JpaRepository<Permission, UUID> {
             @Param("domain") String domain, @Param("resource") String resource, @Param("action") String action);
 
     List<Permission> findByRegisteredByService(String serviceName);
+
+    /**
+     * The catalog's own spelling of each code whose lower-cased name is in {@code lowered} (#2669).
+     * One query for the whole set, so the permission-holders read can refuse every unregistered code
+     * at once and answer a registered one in its canonical spelling — the catalog holds camelCase
+     * codes such as {@code people:timeEntry:approve}.
+     *
+     * @param lowered permission codes, lower-cased
+     * @return the registered names matching any of them ignoring case, as the catalog spells them
+     */
+    @Query("SELECT p.name FROM Permission p WHERE LOWER(p.name) IN :lowered")
+    List<String> findNamesIgnoreCase(@Param("lowered") Collection<String> lowered);
 }

@@ -308,6 +308,52 @@ plus the pos-people staffing assignment, carried as the scope claims described u
 role a user holds, and location-sensitive decisions are enforced by the owning service from
 those claims.
 
+### Permission holders
+
+`GET /v1/roles/permission-holders` (`listPermissionHolders`, #2669) answers which of the caller's
+tenant's roles hold each requested permission code — the "Who can do what" column of the
+accounting workspace's Approval limits page. Through the gateway it is
+`/security-service/v1/roles/permission-holders`.
+
+- **Roles only.** Each entry lists `{name, templateKey, locationScope}` per holding role:
+  `templateKey` is the canonical template name, or `null` for a tenant's custom role;
+  `locationScope` is `ALL` or `LOCATION` (ADR-0061 §2). No user ids, names or holder counts —
+  roles are the only path to a permission, and counts re-identify people in a small shop. Who
+  holds a role stays behind `listUserRoleAssignments` (`security:role:view`).
+- **Configured grants, now.** It reads `role_permissions` for the caller's tenant at request time
+  under row-level security (ADR-0062), with no cache. A token issued before a grant change keeps
+  its `perm_bits` until it is reissued.
+- **Input.** `permission`, repeated, 1–20 distinct `domain:resource:action` codes (each part
+  `[A-Za-z][A-Za-z0-9_-]*`, at most 255 characters); trimmed, matched case-insensitively and
+  answered in the catalog's spelling (`people:timeEntry:approve` is found as
+  `PEOPLE:TIMEENTRY:APPROVE` and answered as `people:timeEntry:approve`), de-duplicated ignoring
+  case in first-seen order. One response entry per code, in request order; a registered code no
+  role holds answers `roles: []`. The OpenAPI parameter is marked required; the binding is
+  optional only so that a missing parameter answers this endpoint's 400 `VALIDATION_ERROR`.
+- **Gate.** `@PreAuthorize(hasAnyAuthority('security:role:view', 'accounting:ap_approval_policy:manage'))`
+  plus a scope check in `PermissionHolderService`:
+
+  | Caller holds | May ask about |
+  | --- | --- |
+  | `security:role:view` | any registered code |
+  | `accounting:ap_approval_policy:manage` only | `accounting:ap:approve`, `accounting:ap:approve_over_limit`, `accounting:ap:reject`, `accounting:ap:pay`, `accounting:ap_approval_policy:manage` |
+  | neither | nothing (403 `FORBIDDEN`) |
+
+  The scope map is `PermissionHolderReadScopes` (one entry). Adding an entry is a security-domain
+  decision that needs its own reviewed story; it is not configuration. No permission bit was added
+  for this read: `accounting:ap_approval_policy:manage` is a cross-domain reference that already
+  exists in the catalog.
+- **Errors, in check order.** 403 `FORBIDDEN` (neither authority; the `@PreAuthorize`, so it
+  comes before the input is looked at) → 400 `VALIDATION_ERROR` (no code, more than 20, or a
+  malformed code; `fieldErrors[permission]` names each bad value) → 403
+  `PERMISSION_HOLDER_SCOPE_DENIED` (a scoped caller asked about a code outside its scope; the
+  message names those codes, and nothing is read) → 422 `PERMISSION_NOT_REGISTERED` (a well-formed
+  code that is not in the catalog; `fieldErrors[permission]` names it — refused rather than
+  answered empty, so a typo never reads as "nobody holds this"). Scope is checked before
+  registration, so a scoped caller cannot probe which codes exist.
+- No events, no writes, and no role name is logged (a custom role's name is tenant-authored text,
+  ADR-0072).
+
 ## Key Classes
 
 - `JwtService` — issues and validates JWTs; encodes `perm_bits` and the `loc_fin_bits` / `loc_oth_bits` / `loc_scope` scope claims via `PermissionBitsetCodec`, and clamps `exp` to the earliest contributing staffing assignment
@@ -334,6 +380,7 @@ those claims.
 - `DELETE /v1/roles/{roleId}/permissions/{permissionKey}` — remove permission from role
 - `POST /v1/roles/assignments` / `DELETE /v1/roles/assignments/{assignmentId}` — create / revoke an effective-dated role assignment
 - `GET /v1/roles/assignments/user/{userId}` — list a user's role assignments (there is no `check-permission` probe; location scope is decided from the token's scope claims)
+- `GET /v1/roles/permission-holders?permission=<code>&permission=<code>…` — which of the caller's tenant's roles hold each code; see [Permission holders](#permission-holders)
 - `GET /v1/users/{id}` — retrieve a user
 - `POST /v1/users/{id}/unlock` — admin: unlock account
 - `POST /v1/users/{id}/enable` / `disable` — admin: enable/disable account
