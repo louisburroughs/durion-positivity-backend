@@ -5483,7 +5483,7 @@ paths:
 
         Required inputs: none. A tenant without a registration, every USD tenant today, gets an empty regimes list.
 
-        The read never fails because of the tax service: evidenceRules is then null and enabled is null (unknown, never off). Emits an ACCOUNTING_INPUT_TAX_RECOVERY_VIEW event and returns 200.
+        The read never fails because of the tax service: evidenceRules is then null and enabled is null, meaning it cannot be determined now, never false. Emits an ACCOUNTING_INPUT_TAX_RECOVERY_VIEW event and returns 200.
 
         '
       operationId: getInputTaxRecovery
@@ -7869,7 +7869,7 @@ paths:
 
         Use this tool when the accountant decides how much of a category''s stated tax may be claimed; do not use updatePettyExpenseCategory, which changes only the label and examples.
 
-        Preconditions: caller holds accounting:mapping-key:edit; the category exists (404); recovery under at least one regime is on today (422 INPUT_TAX_RECOVERY_NOT_ENABLED); version is the one last read, 0 for a category never set (409 OPTIMISTIC_LOCK).
+        Preconditions: caller holds accounting:mapping-key:edit; the category exists (404); recovery under at least one regime is on today (422 INPUT_TAX_RECOVERY_NOT_ENABLED); version is the one last read, 0 for a category never set (409 OPTIMISTIC_LOCK); the tax service answers whether a regime''s recovery is on (503 SERVICE_UNAVAILABLE with Retry-After when it cannot).
 
         Required inputs: code (path), taxRecoverable, recoverablePercent in (0, 100] when recoverable and absent otherwise, version, justification (at least 10 characters) and requestId (a replay returns the first result with 200; the same requestId with another body is 409 IDEMPOTENCY_CONFLICT).
 
@@ -7938,6 +7938,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: INPUT_TAX_RECOVERY_NOT_ENABLED or ACCOUNTING_TIME_ZONE_UNSET
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'SERVICE_UNAVAILABLE: whether a regime''s recovery is on cannot be determined now (the tax service did not answer); nothing was changed, retry after Retry-After seconds'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                example: 30
+                type: integer
+              style: simple
       security:
       - bearerAuth:
         - accounting:mapping-key:edit
@@ -20484,7 +20497,7 @@ components:
           example: ZZ
           type: string
         enabled:
-          description: 'Whether recovery is on today: a registration in effect and the country''s currency equal to the functional currency; null when the tax service could not say'
+          description: 'Whether recovery is on today: a registration in effect and the country''s currency equal to the functional currency. Null means it cannot be determined now (the tax service did not answer), never false: read it as unknown, not off'
           type:
           - boolean
           - 'null'
