@@ -712,7 +712,8 @@ class VendorBillReaderTest {
                 readTaxes,
                 readRecoveries,
                 readResolver,
-                readAccounts);
+                readAccounts,
+                PurchaseTaxFixtures.off());
     }
 
     private VendorBill postedBill(UUID id, String net, String tax, String gross) {
