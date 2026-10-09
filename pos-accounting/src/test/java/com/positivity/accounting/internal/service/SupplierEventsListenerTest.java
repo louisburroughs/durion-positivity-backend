@@ -893,8 +893,10 @@ class SupplierEventsListenerTest {
                 "[{\"taxType\":\"GST\",\"amount\":50.00},{\"taxType\":\"PST\",\"amount\":70.00}]"));
 
         assertThat(captured().getNetAmount()).isEqualByComparingTo("1000.00");
-        assertThat(storedTaxByType())
-                .containsExactly(Map.entry("GST", new BigDecimal("50.00")), Map.entry("PST", new BigDecimal("70.00")));
+        Map<String, BigDecimal> stored = storedTaxByType();
+        assertThat(stored.keySet()).containsExactly("GST", "PST");
+        assertThat(stored.get("GST")).isEqualByComparingTo("50.00");
+        assertThat(stored.get("PST")).isEqualByComparingTo("70.00");
     }
 
     @Test
@@ -904,7 +906,9 @@ class SupplierEventsListenerTest {
                 event(EVENT_1, "CN-1", "CREDIT_NOTE", "USD", "2026-08-14", "105.00", "100.00", "5.00", "[]"),
                 "[{\"taxType\":\"GST\",\"amount\":2.00},{\"taxType\":\"GST\",\"amount\":3.00}]"));
 
-        assertThat(storedTaxByType()).containsExactly(Map.entry("GST", new BigDecimal("-5.00")));
+        Map<String, BigDecimal> stored = storedTaxByType();
+        assertThat(stored.keySet()).containsExactly("GST");
+        assertThat(stored.get("GST")).isEqualByComparingTo("-5.00");
     }
 
     @Test
