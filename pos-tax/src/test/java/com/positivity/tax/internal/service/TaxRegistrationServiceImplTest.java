@@ -275,9 +275,10 @@ class TaxRegistrationServiceImplTest {
         @Test
         @DisplayName("two concurrent writes stopped by the exclusion constraint answer the same 409")
         void exclusionViolationIsTheSameConflict() {
-            when(registrations.saveAndFlush(any()))
-                    .thenThrow(new DataIntegrityViolationException(
-                            "no overlap", new SQLException("conflicting key value", "23P01")));
+            org.mockito.Mockito.doThrow(new DataIntegrityViolationException(
+                            "no overlap", new SQLException("conflicting key value", "23P01")))
+                    .when(registrations)
+                    .saveAndFlush(any());
 
             assertThatThrownBy(() -> zz().create(create("ZZ", "R_1", ZZ_NUMBER, JAN_1)))
                     .isInstanceOfSatisfying(

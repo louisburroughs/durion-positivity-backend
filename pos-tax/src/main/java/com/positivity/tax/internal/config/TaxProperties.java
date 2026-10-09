@@ -105,28 +105,6 @@ public class TaxProperties {
     private Plausibility plausibility = new Plausibility();
 
     /**
-     * The per-caller secrets of the front doors that may write tenant tax data (CAP:550 S32c; ADR-0071 §6). Each
-     * write endpoint accepts exactly one caller. Deliberately outside {@code pos.tax.registration}, whose values
-     * must come from the shipped configuration only.
-     */
-    private FrontDoors frontDoors = new FrontDoors();
-
-    /**
-     * Per-caller shared secrets (CAP:550 S32c; ADR-0071 §6, the pos-platform-sender pattern). Each comes from the
-     * environment or a secret store, never from code or a shipped file. A blank secret refuses every request of
-     * its caller (ADR-0017 §1, fail closed).
-     */
-    @Data
-    public static class FrontDoors {
-        /**
-         * pos-accounting's secret, the only caller of the tax-registration writes
-         * ({@code POS_TAX_ACCOUNTING_SECRET}). Never logged, and kept out of {@code toString}.
-         */
-        @lombok.ToString.Exclude
-        private String accountingSecret = "";
-    }
-
-    /**
      * Registration-number configuration (CAP:550 S32b).
      */
     @Data

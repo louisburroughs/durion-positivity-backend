@@ -207,6 +207,13 @@ class TaxExceptionHandlerTest {
                             new TaxAmountImplausibleException(List.of(new ApiError.FieldError(
                                     "statedTaxes[0].amount", "must not exceed the plausible maximum 4.82"))),
                             request)),
+                    Named.of("handleRegistrationConflict", (HandlerInvocation) request ->
+                            handler.handleRegistrationConflict(TaxRegistrationConflictException.overlap(), request)),
+                    Named.of("handleRegistrationNotFound", (HandlerInvocation)
+                            request -> handler.handleRegistrationNotFound(
+                                    new TaxRegistrationNotFoundException(
+                                            java.util.UUID.fromString("01990000-0000-7000-8000-0000000000a1")),
+                                    request)),
                     Named.of("handleConstraintViolation", (HandlerInvocation)
                             request -> handler.handleConstraintViolation(
                                     new ConstraintViolationException("bad countryCode", Collections.emptySet()),
